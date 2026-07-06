@@ -1,0 +1,216 @@
+/**
+ * Krusty KMS WASM adapter. Wallet cryptography must enter through this boundary.
+ */
+import { WalletError } from "../shared/errors";
+import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
+
+/**
+ * Extension-relative path for the vendored Krusty KMS WASM module.
+ */
+export const KRUSTY_KMS_WASM_PATH = "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+
+/**
+ * Stark key material returned only inside privileged wallet flows.
+ */
+export type StarkKeypair = {
+  readonly privateKey: string;
+  readonly publicKeyX: string;
+  readonly publicKeyY: string;
+};
+
+/**
+ * Stark signature result returned by Krusty KMS.
+ */
+export type StarkSignature = {
+  readonly publicKey: string;
+  readonly r: string;
+  readonly s: string;
+};
+
+/**
+ * Minimal Krusty KMS API surface used by the wallet.
+ */
+export type KrustyKms = {
+  readonly deriveOzAccountAddress: (
+    publicKeyX: string,
+    classHash: string,
+    salt?: string,
+  ) => Promise<string>;
+  readonly deriveStarknetKeypair: (
+    mnemonic: string,
+    addressIndex: number,
+    accountIndex: number,
+    passphrase?: string,
+  ) => Promise<StarkKeypair>;
+  readonly generateMnemonic: (wordCount?: number) => Promise<string>;
+  readonly getAccountClassHashes: () => Promise<string>;
+  readonly signStarkHash: (privateKey: string, messageHash: string) => Promise<StarkSignature>;
+  readonly validateMnemonic: (mnemonic: string) => Promise<boolean>;
+};
+
+type Callable = (...args: unknown[]) => unknown;
+const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
+
+const asRecord = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null) {
+    throw new WalletError("Krusty KMS module did not load as an object");
+  }
+  return value as Record<string, unknown>;
+};
+
+const requireFunction = (module: Record<string, unknown>, name: string): Callable => {
+  const value = module[name];
+  if (typeof value !== "function") {
+    throw new WalletError(`Krusty KMS export missing: ${name}`);
+  }
+  return value as Callable;
+};
+
+const requireStringField = (value: unknown, field: string): string => {
+  const record = asRecord(value);
+  const fieldValue = record[field];
+  if (typeof fieldValue !== "string") {
+    throw new WalletError(`Krusty KMS result missing string field: ${field}`);
+  }
+  return fieldValue;
+};
+
+const requireFieldElementField = (value: unknown, field: string): string => {
+  const fieldValue = requireStringField(value, field);
+  if (!isStarkFieldElement(fieldValue)) {
+    throw new WalletError(`Krusty KMS result missing field element: ${field}`);
+  }
+  return fieldValue;
+};
+
+const requirePrivateKeyField = (value: unknown, field: string): string => {
+  const fieldValue = requireFieldElementField(value, field);
+  if (!isNonZeroStarkFieldElement(fieldValue)) {
+    throw new WalletError(`Krusty KMS result missing non-zero private key: ${field}`);
+  }
+  return fieldValue;
+};
+
+const requireNonZeroFieldElementField = (value: unknown, field: string): string => {
+  const fieldValue = requireFieldElementField(value, field);
+  if (!isNonZeroStarkFieldElement(fieldValue)) {
+    throw new WalletError(`Krusty KMS result missing non-zero field element: ${field}`);
+  }
+  return fieldValue;
+};
+
+const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
+const isMnemonicWordCount = (value: number): boolean =>
+  Number.isSafeInteger(value) && MNEMONIC_WORD_COUNTS.some((count) => count === value);
+const isMnemonicText = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+/**
+ * Wraps an unknown WASM module and validates required Krusty exports.
+ */
+export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
+  const module = asRecord(moduleValue);
+  const init = module.default;
+  const ready =
+    typeof init === "function" ? Promise.resolve((init as Callable)()) : Promise.resolve();
+
+  const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
+  const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
+  const generateMnemonic = requireFunction(module, "generateMnemonic");
+  const getAccountClassHashes = requireFunction(module, "getAccountClassHashes");
+  const signStarkHash = requireFunction(module, "signStarkHash");
+  const validateMnemonic = requireFunction(module, "validateMnemonic");
+
+  return {
+    async deriveOzAccountAddress(publicKeyX, classHash, salt) {
+      await ready;
+      if (
+        !isStarkFieldElement(publicKeyX) ||
+        !isStarkFieldElement(classHash) ||
+        (salt !== undefined && !isStarkFieldElement(salt))
+      ) {
+        throw new WalletError("Invalid Stark address derivation input");
+      }
+
+      const result = await deriveOzAccountAddress(publicKeyX, classHash, salt);
+      if (typeof result !== "string" || !isStarkFieldElement(result)) {
+        throw new WalletError("Krusty KMS returned an invalid account address");
+      }
+      return result;
+    },
+    async deriveStarknetKeypair(mnemonic, addressIndex, accountIndex, passphrase) {
+      await ready;
+      if (
+        !isMnemonicText(mnemonic) ||
+        !isDerivationIndex(addressIndex) ||
+        !isDerivationIndex(accountIndex)
+      ) {
+        throw new WalletError("Invalid Stark derivation input");
+      }
+
+      const result = await deriveStarknetKeypair(mnemonic, addressIndex, accountIndex, passphrase);
+      return {
+        privateKey: requirePrivateKeyField(result, "private_key"),
+        publicKeyX: requireFieldElementField(result, "public_key_x"),
+        publicKeyY: requireFieldElementField(result, "public_key_y"),
+      };
+    },
+    async generateMnemonic(wordCount = 12) {
+      if (!isMnemonicWordCount(wordCount)) {
+        throw new WalletError("Invalid mnemonic word count");
+      }
+
+      await ready;
+      const result = await generateMnemonic(wordCount);
+      if (typeof result !== "string" || result.trim().length === 0) {
+        throw new WalletError("Krusty KMS returned an invalid mnemonic");
+      }
+      return result;
+    },
+    async getAccountClassHashes() {
+      await ready;
+      const result = await getAccountClassHashes();
+      if (typeof result !== "string") {
+        throw new WalletError("Krusty KMS returned invalid class hashes");
+      }
+      return result;
+    },
+    async signStarkHash(privateKey, messageHash) {
+      await ready;
+      if (!isNonZeroStarkFieldElement(privateKey) || !isStarkFieldElement(messageHash)) {
+        throw new WalletError("Invalid Stark signing input");
+      }
+
+      const result = await signStarkHash(privateKey, messageHash);
+      return {
+        publicKey: requireNonZeroFieldElementField(result, "publicKey"),
+        r: requireNonZeroFieldElementField(result, "r"),
+        s: requireNonZeroFieldElementField(result, "s"),
+      };
+    },
+    async validateMnemonic(mnemonic) {
+      if (!isMnemonicText(mnemonic)) {
+        throw new WalletError("Invalid mnemonic");
+      }
+
+      await ready;
+      const result = await validateMnemonic(mnemonic);
+      if (typeof result !== "boolean") {
+        throw new WalletError("Krusty KMS returned an invalid mnemonic validation result");
+      }
+      return result;
+    },
+  };
+};
+
+/**
+ * Loads the vendored Krusty KMS WASM adapter for browser cryptography.
+ */
+export const loadKrustyKms = async (modulePath = KRUSTY_KMS_WASM_PATH): Promise<KrustyKms> => {
+  if (modulePath !== KRUSTY_KMS_WASM_PATH) {
+    throw new WalletError("Invalid Krusty KMS module path");
+  }
+
+  const module = await import(modulePath);
+  return createKrustyKms(module);
+};

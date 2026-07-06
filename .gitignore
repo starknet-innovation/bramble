@@ -1,0 +1,6 @@
+artifacts/
+dist/
+node_modules/
+vendor/krusty-kms/
+*.log
+.DS_Store
