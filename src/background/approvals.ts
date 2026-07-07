@@ -29,10 +29,14 @@ export type WatchAssetToken = {
 };
 
 /**
- * Pending dapp approval. `token` is present only for watch-asset approvals.
+ * Pending dapp approval. `kind` and `token` describe watch-asset prompts;
+ * `blocked` and `insights` are attached by the reputation layer when the
+ * queue is listed to the UI — the queue itself never sets them.
  */
 export type PendingApproval = {
+  readonly blocked?: boolean;
   readonly id: string;
+  readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
   readonly origin: string;
   readonly token?: WatchAssetToken;

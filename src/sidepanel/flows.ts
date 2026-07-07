@@ -4,7 +4,7 @@
  * returns through its back control, so journeys never blur into the home
  * screen.
  */
-import type { WalletStatus } from "../popup/responses";
+import type { ConnectedSite, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { isStarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
@@ -225,6 +225,36 @@ export const backupFlow = (status: WalletStatus): string =>
       <p class="hint">Replaces current preferences with a backup file exported from this wallet.</p>
       <label><span>Backup file</span><input id="backup-file" type="file" accept="application/json" /></label>
       <button id="backup-import" class="secondary" type="button">${icon("check")}Restore backup</button>
+    </section>`,
+  );
+
+/**
+ * Connected sites flow: list origins with active grants and revoke access.
+ * Reachable from settings; reads its list from the background permissions
+ * store and returns through the flow header back control.
+ */
+export const connectedSitesFlow = (status: WalletStatus, sites: readonly ConnectedSite[]): string =>
+  flowHeader("Connected sites", "settings", status, `${sites.length} connected`) +
+  flowScreen(
+    "connected-sites",
+    `<section class="section">
+      <p class="hint">Connected sites can see your granted account addresses. Revoke any you no longer trust; the site is asked to reconnect next time.</p>
+      ${
+        sites.length === 0
+          ? '<p class="empty">No sites are connected yet. Approving a connection request lists the site here.</p>'
+          : `<ul class="address-book">${sites
+              .map(
+                (site) => `<li class="address-line">
+                    <div class="stack-tight">
+                      <strong class="request-origin">${escapeHtml(site.origin)}</strong>
+                      <span class="hint">${site.accountCount} account${site.accountCount === 1 ? "" : "s"} shared</span>
+                    </div>
+                    <button class="icon-button danger" data-revoke-origin="${escapeHtml(site.origin)}" type="button" aria-label="Revoke ${escapeHtml(site.origin)}" title="Revoke ${escapeHtml(site.origin)}">${icon("x")}</button>
+                  </li>`,
+              )
+              .join("")}</ul>`
+      }
+      <p id="connected-sites-result" role="status"></p>
     </section>`,
   );
 

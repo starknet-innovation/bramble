@@ -5,7 +5,7 @@
  * journey has a distinct place to complete its goal.
  */
 
-import type { PendingApproval, WalletStatus } from "../popup/responses";
+import type { ConnectedSite, PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { WalletPreferences } from "../storage/preferences-store";
@@ -14,6 +14,7 @@ import {
   accountFlow,
   addressBookFlow,
   backupFlow,
+  connectedSitesFlow,
   networkFlow,
   receiveFlow,
   sendFlow,
@@ -155,6 +156,16 @@ const homeScreen = (
     ${balancePanel(balances)}`,
   );
 
+const approvalInsights = (approval: PendingApproval): string => {
+  const insights = approval.insights ?? [];
+  if (insights.length === 0) {
+    return "";
+  }
+  return `<div class="review-panel" role="note">
+      ${insights.map((insight) => `<p class="review-flag">${icon("alert")}${escapeHtml(insight)}</p>`).join("")}
+    </div>`;
+};
+
 const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -162,8 +173,9 @@ const connectCard = (approval: PendingApproval, status: WalletStatus): string =>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">${status.locked ? "Unlock the wallet to approve this site." : "Once approved, this site can see your granted account addresses."}</p>
     </div>
+    ${approvalInsights(approval)}
     <div class="button-row">
-      <button data-approval-action="approve" data-approval-id="${escapeHtml(approval.id)}" type="button" ${status.locked ? "disabled" : ""}>${icon("check")}Approve</button>
+      <button data-approval-action="approve" data-approval-id="${escapeHtml(approval.id)}" type="button" ${status.locked || approval.blocked ? "disabled" : ""}>${icon("check")}Approve</button>
       <button class="secondary danger" data-approval-action="deny" data-approval-id="${escapeHtml(approval.id)}" type="button">${icon("x")}Deny</button>
     </div>
   </li>`;
@@ -265,6 +277,7 @@ const settingsScreen = (
         ${menuRow("network", "Network", status.network, "globe")}
         ${menuRow("account", "Account", account ? accountDisplayName(account, preferences) : "No account", "wallet")}
         ${menuRow("address-book", "Address book", `${addresses.length} saved`, "book")}
+        ${menuRow("connected-sites", "Connected sites", "Manage dapp access", "link")}
         ${menuRow("backup", "Backup & restore", "Non-secret wallet data", "receive")}
       </div>
       <div class="detail-grid">
@@ -322,6 +335,7 @@ export const dashboard = (
   balances: BalanceState,
   deployment: boolean | null = null,
   transactions: readonly ActivityEntry[] = [],
+  connectedSites: readonly ConnectedSite[] = [],
 ): string => {
   const account = activeAccount(status);
   if (activeView === "send") {
@@ -338,6 +352,9 @@ export const dashboard = (
   }
   if (activeView === "address-book") {
     return addressBookFlow(status, preferences);
+  }
+  if (activeView === "connected-sites") {
+    return connectedSitesFlow(status, connectedSites);
   }
   if (activeView === "backup") {
     return backupFlow(status);

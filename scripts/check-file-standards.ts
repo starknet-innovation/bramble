@@ -35,6 +35,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/message-inputs.ts",
   "src/background/messages.ts",
   "src/background/provider-ops.ts",
+  "src/background/origins-ops.ts",
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
   "src/background/session.ts",

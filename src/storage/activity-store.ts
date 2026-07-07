@@ -18,6 +18,13 @@ export const ACTIVITY_STORE_KEY = "mc-wallet:activity";
 const MAX_ENTRIES = 200;
 
 /**
+ * System wall-clock reader. Lives in this clock-boundary module so other
+ * stores (for example origin history) can inject a real clock without
+ * touching `Date.now` themselves.
+ */
+export const systemClock = (): number => Date.now();
+
+/**
  * Lifecycle status of a submitted transaction.
  */
 export type ActivityStatus = "accepted" | "pending" | "rejected" | "reverted";

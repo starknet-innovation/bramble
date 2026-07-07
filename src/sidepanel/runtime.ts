@@ -3,10 +3,12 @@
  */
 import {
   type ActivityResponse,
+  type ConnectedSitesResponse,
   type DeploymentStatusResponse,
   isActivityResponse,
   isApprovalDecisionResponse,
   isBalancesResponse,
+  isConnectedSitesResponse,
   isCreateAccountResponse,
   isDeploymentStatusResponse,
   isErrorResponse,
@@ -102,6 +104,17 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "approval failed");
+    },
+    async connectedSites(): Promise<ConnectedSitesResponse["sites"]> {
+      const response = await sendMessage({ type: "wallet.connectedSites" });
+      return isConnectedSitesResponse(response) ? response.sites : [];
+    },
+    async revokeOrigin(origin: string): Promise<ConnectedSitesResponse["sites"]> {
+      const response = await sendMessage({ origin, type: "wallet.revokeOrigin" });
+      if (isConnectedSitesResponse(response)) {
+        return response.sites;
+      }
+      throw responseError(response, "revoke failed");
     },
     async generateMnemonic(): Promise<string> {
       const response = await sendMessage({ type: "wallet.generateMnemonic" });
