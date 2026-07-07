@@ -223,6 +223,9 @@ describe("background network messages", () => {
         async getDeploymentStatus() {
           return true;
         },
+        async getNftOwner() {
+          return "0x0";
+        },
         async getTransactionStatuses() {
           return {};
         },

@@ -3,14 +3,16 @@
  */
 
 import { isBlockedOrigin } from "../security/blocklist";
-import { DEFAULT_NETWORK, networkIdForChainId, STARKNET_NETWORKS } from "../starknet/networks";
+import { DEFAULT_NETWORK, STARKNET_NETWORKS } from "../starknet/networks";
 import { type PriceService, unavailablePriceService } from "../starknet/prices";
-import { typedDataHash } from "../starknet/typed-data";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
+import { type AllowanceStore, memoryAllowanceStore } from "../storage/allowance-store";
 import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-history";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { handleAllowanceOps, recordApproveAllowances } from "./allowance-ops";
 import { enrichApprovals } from "./approval-insights";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
+import { handleChainOps } from "./chain-ops";
 import {
   readAddInvokeTransactionInput,
   readApprovalIdInput,
@@ -21,11 +23,10 @@ import {
   readSetActiveAccountInput,
   readSetActiveNetworkInput,
   readSignHashInput,
-  readSignTypedDataInput,
-  readSwitchChainInput,
   readTypeOnlyInput,
   readUnlockInput,
 } from "./message-inputs";
+import { handleNftOps } from "./nft-ops";
 import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
 import { handleProviderOps } from "./provider-ops";
@@ -79,6 +80,7 @@ const handleRuntimeMessage = async (
   activity: ActivityLog,
   originHistory: OriginHistoryStore,
   prices: PriceService,
+  allowanceStore: AllowanceStore,
   message: unknown,
   sender?: RuntimeSender,
 ): Promise<RuntimeResponse> => {
@@ -95,18 +97,36 @@ const handleRuntimeMessage = async (
     return { error: "privileged sender required" };
   }
 
-  const opsResponse = await handleWalletOps(
-    { activity, preferencesStore, runtimeRpc, session, wallet },
-    messageType,
-    message,
-  );
+  const opsDeps = { activity, allowanceStore, preferencesStore, runtimeRpc, session, wallet };
+
+  const opsResponse = await handleWalletOps(opsDeps, messageType, message);
   if (opsResponse) {
     return opsResponse;
+  }
+
+  const allowanceResponse = await handleAllowanceOps(opsDeps, messageType, message);
+  if (allowanceResponse) {
+    return allowanceResponse;
+  }
+
+  const nftResponse = await handleNftOps(opsDeps, messageType, message);
+  if (nftResponse) {
+    return nftResponse;
   }
 
   const preferenceResponse = await handlePreferenceOps(preferencesStore, messageType, message);
   if (preferenceResponse) {
     return preferenceResponse;
+  }
+
+  const chainResponse = await handleChainOps(
+    { extensionId, preferencesStore, session, wallet },
+    messageType,
+    message,
+    sender,
+  );
+  if (chainResponse) {
+    return chainResponse;
   }
 
   const providerOpsResponse = await handleProviderOps(
@@ -224,77 +244,8 @@ const handleRuntimeMessage = async (
       networkId: account.networkId,
       summary: `${input.origin} submitted ${input.calls.length} call${input.calls.length === 1 ? "" : "s"}`,
     });
+    await recordApproveAllowances(allowanceStore, input.calls, account);
     return { ok: true, transactionHash: result.transactionHash };
-  }
-
-  if (messageType === "wallet.signTypedData") {
-    const input = readSignTypedDataInput(message);
-    const passphrase = session.getPassphrase();
-    if (!input) {
-      return { error: "invalid sign typed data request" };
-    }
-    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
-      return { error: "sender origin mismatch" };
-    }
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    const preferences = await preferencesStore.read();
-    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-    const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-    if (!account) {
-      return { error: "origin not connected" };
-    }
-    let messageHash: string;
-    try {
-      messageHash = typedDataHash(input.typedData, account.address);
-    } catch {
-      return { error: "invalid typed data" };
-    }
-    const signature = await wallet.signHash({
-      accountId: account.id,
-      messageHash,
-      vaultPassphrase: passphrase,
-    });
-    return { ok: true, signature };
-  }
-
-  if (messageType === "wallet.getChainId") {
-    if (!readTypeOnlyInput(message, "wallet.getChainId")) {
-      return { error: "invalid chain id request" };
-    }
-    const preferences = await preferencesStore.read();
-    return { chainId: STARKNET_NETWORKS[preferences.activeNetworkId].chainId, ok: true };
-  }
-
-  if (messageType === "wallet.switchChain") {
-    const input = readSwitchChainInput(message);
-    if (!input) {
-      return { error: "invalid switch chain request" };
-    }
-    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
-      return { error: "sender origin mismatch" };
-    }
-    const networkId = networkIdForChainId(input.chainId);
-    if (!networkId) {
-      return { error: "unsupported chain" };
-    }
-    const passphrase = session.getPassphrase();
-    const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
-    const account = await switchActiveNetwork(wallet, session, preferencesStore, networkId);
-    if (
-      passphrase &&
-      account &&
-      granted.length > 0 &&
-      !granted.some((item) => item.id === account.id)
-    ) {
-      await wallet.grantOrigin({
-        accountId: account.id,
-        origin: input.origin,
-        vaultPassphrase: passphrase,
-      });
-    }
-    return { chainId: STARKNET_NETWORKS[networkId].chainId, ok: true };
   }
 
   if (messageType === "wallet.grantOrigin") {
@@ -436,6 +387,7 @@ export const createMessageHandler =
     activity: ActivityLog = memoryActivityLog(),
     originHistory: OriginHistoryStore = memoryOriginHistory(),
     prices: PriceService = unavailablePriceService,
+    allowanceStore: AllowanceStore = memoryAllowanceStore(),
   ) =>
   async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
@@ -449,6 +401,7 @@ export const createMessageHandler =
         activity,
         originHistory,
         prices,
+        allowanceStore,
         message,
         sender,
       );

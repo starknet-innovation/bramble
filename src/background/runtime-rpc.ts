@@ -8,10 +8,12 @@ import {
   type DeploymentStatusInput,
   estimateInvokeFee,
   getDeploymentStatus,
+  getNftOwner,
   getTokenBalances,
   getTokenMetadata,
   getTransactionStatuses,
   type InvokeInput,
+  type NftOwnerInput,
   submitAccountDeployment,
   submitErc20Transfer,
   submitInvokeTransaction,
@@ -28,6 +30,7 @@ export type RuntimeRpc = {
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
+  readonly getNftOwner: (input: NftOwnerInput) => ReturnType<typeof getNftOwner>;
   readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
   readonly getTransactionStatuses: (
@@ -48,6 +51,7 @@ export type RuntimeRpc = {
 export const defaultRuntimeRpc: RuntimeRpc = {
   estimateInvokeFee,
   getDeploymentStatus,
+  getNftOwner,
   getTokenBalances,
   getTokenMetadata,
   getTransactionStatuses,

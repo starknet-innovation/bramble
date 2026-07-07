@@ -97,6 +97,9 @@ const makeHandler = (
       async getDeploymentStatus() {
         return true;
       },
+      async getNftOwner() {
+        return "0x1";
+      },
       async getTokenBalances({ tokens }) {
         return tokens.map((token, index) => ({
           ...token,

@@ -5,6 +5,7 @@ import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 import { createKrustyKms } from "../crypto/krusty";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
 import { createActivityLog, systemClock } from "../storage/activity-store";
+import { createAllowanceStore } from "../storage/allowance-store";
 import { createBrowserLocalStore, createBrowserSessionStore } from "../storage/browser-storage";
 import { createEncryptedStore } from "../storage/encrypted-store";
 import { createOriginHistoryStore } from "../storage/origin-history";
@@ -104,6 +105,13 @@ const originHistory = (() => {
     return undefined;
   }
 })();
+const allowanceLog = (() => {
+  try {
+    return createAllowanceStore({ store: createBrowserLocalStore() });
+  } catch {
+    return undefined;
+  }
+})();
 const priceService = (() => {
   try {
     return createPriceService({ http: (url) => fetch(url), store: createBrowserLocalStore() });
@@ -194,6 +202,13 @@ const handleMessage = createMessageHandler(
   session,
   approvals,
   {
+    async addNft(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.addNft(input);
+    },
     async importPreferences(input) {
       const store = await preferences;
       if (!store) {
@@ -214,6 +229,20 @@ const handleMessage = createMessageHandler(
         throw new Error("preferences unavailable");
       }
       return store.removeAddress(input);
+    },
+    async removeNft(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.removeNft(input);
+    },
+    async setNftSpam(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setNftSpam(input);
     },
     async setAccountLabel(input) {
       const store = await preferences;
@@ -269,6 +298,7 @@ const handleMessage = createMessageHandler(
   activityLog,
   originHistory,
   priceService,
+  allowanceLog,
 );
 
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {

@@ -11,6 +11,7 @@ import {
   type StarknetNetworkId,
 } from "../starknet/networks";
 import type { KeyValueStore } from "./kv";
+import { isWatchedNft, type WatchedNft, withNftId } from "./nft";
 import { assertStoreAccess, type StoreActor } from "./permissioned-store";
 import { isAccountId } from "./vault-schema";
 
@@ -71,6 +72,7 @@ export type WalletPreferences = {
   readonly addressBook: readonly AddressBookEntry[];
   readonly displayCurrency?: DisplayCurrency;
   readonly hiddenTokens?: readonly string[];
+  readonly nfts?: readonly WatchedNft[];
   readonly rpcOverrides?: RpcOverrides;
   readonly schemaVersion: 1;
   readonly theme?: ThemeChoice;
@@ -81,10 +83,16 @@ export type WalletPreferences = {
  * Plain preferences store methods exposed to the background worker.
  */
 export type WalletPreferencesStore = {
+  readonly addNft: (nft: Omit<WatchedNft, "id">) => Promise<WalletPreferences>;
   readonly importPreferences: (candidate: unknown) => Promise<WalletPreferences>;
   readonly read: () => Promise<WalletPreferences>;
   readonly removeAddress: (id: string) => Promise<WalletPreferences>;
+  readonly removeNft: (id: string) => Promise<WalletPreferences>;
   readonly saveAddress: (entry: Omit<AddressBookEntry, "id">) => Promise<WalletPreferences>;
+  readonly setNftSpam: (input: {
+    readonly id: string;
+    readonly spam: boolean;
+  }) => Promise<WalletPreferences>;
   readonly setAccountLabel: (input: {
     readonly accountId: string;
     readonly label: string;
@@ -215,6 +223,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
     "addressBook",
     "displayCurrency",
     "hiddenTokens",
+    "nfts",
     "rpcOverrides",
     "schemaVersion",
     "theme",
@@ -225,6 +234,10 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
   (value.hiddenTokens === undefined || isHiddenTokens(value.hiddenTokens)) &&
   (value.theme === undefined || isThemeChoice(value.theme)) &&
   (value.rpcOverrides === undefined || isRpcOverrides(value.rpcOverrides)) &&
+  (value.nfts === undefined ||
+    (Array.isArray(value.nfts) &&
+      value.nfts.every(isWatchedNft) &&
+      hasUniqueStrings(value.nfts.map((nft) => nft.id)))) &&
   value.schemaVersion === 1 &&
   isStarknetNetworkId(value.activeNetworkId) &&
   Array.isArray(value.addressBook) &&
@@ -243,6 +256,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   addressBook: [],
   displayCurrency: "usd",
   hiddenTokens: [],
+  nfts: [],
   rpcOverrides: {},
   schemaVersion: 1,
   theme: "light",
@@ -280,6 +294,17 @@ export const createPreferencesStore = ({
   };
 
   return {
+    async addNft(nft) {
+      const nextNft = withNftId(nft);
+      if (!isWatchedNft(nextNft)) {
+        throw new WalletError("Invalid NFT");
+      }
+      const preferences = await read();
+      const nfts = (preferences.nfts ?? []).filter((stored) => stored.id !== nextNft.id);
+      const next = { ...preferences, nfts: [...nfts, nextNft] };
+      await writePreferences(store, next);
+      return next;
+    },
     async importPreferences(candidate) {
       if (!isWalletPreferences(candidate)) {
         throw new WalletError("Invalid preferences backup");
@@ -296,6 +321,32 @@ export const createPreferencesStore = ({
       const next = {
         ...preferences,
         addressBook: preferences.addressBook.filter((stored) => stored.id !== id),
+      };
+      await writePreferences(store, next);
+      return next;
+    },
+    async removeNft(id) {
+      if (typeof id !== "string" || id.length === 0) {
+        throw new WalletError("Invalid NFT");
+      }
+      const preferences = await read();
+      const next = {
+        ...preferences,
+        nfts: (preferences.nfts ?? []).filter((stored) => stored.id !== id),
+      };
+      await writePreferences(store, next);
+      return next;
+    },
+    async setNftSpam({ id, spam }) {
+      if (typeof id !== "string" || id.length === 0) {
+        throw new WalletError("Invalid NFT");
+      }
+      const preferences = await read();
+      const next = {
+        ...preferences,
+        nfts: (preferences.nfts ?? []).map((stored) =>
+          stored.id === id ? { ...stored, spam } : stored,
+        ),
       };
       await writePreferences(store, next);
       return next;

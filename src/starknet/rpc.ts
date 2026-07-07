@@ -37,6 +37,15 @@ export {
   withRpcFallback,
 } from "./provider";
 
+/**
+ * Re-exported asset helpers so callers keep one RPC import path.
+ */
+export {
+  buildErc20ApproveCall,
+  getNftOwner,
+  type NftOwnerInput,
+} from "./rpc-assets";
+
 const UINT_128_SHIFT = 128n;
 
 /**

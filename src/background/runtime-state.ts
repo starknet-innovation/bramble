@@ -26,6 +26,9 @@ const networkOptions = (): readonly NetworkOption[] =>
  * Fallback preferences store used by tests that do not wire browser storage.
  */
 export const unavailablePreferencesStore: WalletPreferencesStore = {
+  async addNft() {
+    throw new Error("preferences unavailable");
+  },
   async importPreferences() {
     throw new Error("preferences unavailable");
   },
@@ -35,10 +38,16 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async removeAddress() {
     throw new Error("preferences unavailable");
   },
+  async removeNft() {
+    throw new Error("preferences unavailable");
+  },
   async setAccountLabel() {
     throw new Error("preferences unavailable");
   },
   async setDisplay() {
+    throw new Error("preferences unavailable");
+  },
+  async setNftSpam() {
     throw new Error("preferences unavailable");
   },
   async saveAddress() {

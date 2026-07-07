@@ -6,6 +6,7 @@ import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks"
 import { buildErc20TransferCall, parseTokenAmount } from "../starknet/rpc";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
+import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { readReviewTransferInput, readTransferInput, readTypeOnlyInput } from "./message-inputs";
@@ -15,21 +16,35 @@ import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import type { UnlockSession } from "./session";
 
 /**
- * Dependencies shared by the wallet operations handlers.
+ * Dependencies shared by the wallet, allowance, and NFT operations handlers.
  */
 export type WalletOpsDeps = {
   readonly activity: ActivityLog;
+  readonly allowanceStore: AllowanceStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
 };
 
-const verificationContext = (account: AccountRef, preferences: WalletPreferences) => ({
+/**
+ * Builds the wallet context the verifier checks calls against, scoped to the
+ * account's network. Shared by the transfer, allowance, and NFT flows.
+ */
+export const verificationContext = (account: AccountRef, preferences: WalletPreferences) => ({
   account,
   addressBook: preferences.addressBook.filter((entry) => entry.networkId === account.networkId),
   tokens: preferences.tokens.filter((token) => token.networkId === account.networkId),
 });
+
+/**
+ * Builds a hash signer for a resolved active-account context without exposing
+ * the vault secret to caller modules.
+ */
+export const signerForContext = (
+  deps: WalletOpsDeps,
+  context: { readonly account: AccountRef; readonly vaultPassphrase: string },
+) => signerFor(deps, context.account, context.vaultPassphrase);
 
 const transferContext = async (
   deps: WalletOpsDeps,

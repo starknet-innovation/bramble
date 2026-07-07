@@ -92,6 +92,9 @@ const makeHarness = (options?: { readonly deployed?: boolean }) => {
       async getDeploymentStatus() {
         return options?.deployed ?? true;
       },
+      async getNftOwner() {
+        return "0x0";
+      },
       async getTokenBalances() {
         return [];
       },

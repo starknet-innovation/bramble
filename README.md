@@ -62,6 +62,39 @@ lists; fiat prices depend on CoinGecko's Starknet coverage and address normaliza
 tokens show no price; spam-flagged tokens cannot yet be force-pinned to home (they stay on the
 tokens flow); custom tokens whose on-chain symbol is not a `[A-Z0-9]{2,12}` ticker are rejected;
 there is no dedicated remove-token action (hide instead).
+## Account class
+
+Accounts use the OpenZeppelin `AccountUpgradeable` preset, pinned by Krusty KMS.
+
+- Preset: OpenZeppelin `AccountUpgradeable`, Cairo `openzeppelin_presets` v3.0.0.
+- Pinned class hash:
+  `0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381`
+  (identical on Mainnet and Sepolia). Source of truth: the vendored Krusty KMS
+  manifest `crates/kms/src/oz_account_class_manifest.json` at the commit pinned
+  in `scripts/vendor-krusty.ts`. Address derivation matches `ozAccountDeployment`
+  in `src/starknet/deployment.ts` (constructor `constructor(public_key: felt252)`).
+- Audit: OpenZeppelin Contracts for Cairo audit reports —
+  <https://github.com/OpenZeppelin/cairo-contracts/tree/main/audits> (API docs:
+  <https://docs.openzeppelin.com/contracts-cairo/3.x/api/account#AccountUpgradeable>).
+
+### Verification
+
+Verified DECLARED on both networks with `starknet_getClass` against the Cartridge
+endpoints on 2026-07-07 (RPC spec `0.10.2` mainnet, `0.9.0` sepolia); the class
+resolved with the `UpgradeableImpl` + `AccountMixinImpl` ABI on both. Re-run:
+
+```bash
+for NET in mainnet sepolia; do
+  curl -s -X POST "https://api.cartridge.gg/x/starknet/$NET" \
+    -H 'content-type: application/json' \
+    -d '{"jsonrpc":"2.0","id":1,"method":"starknet_getClass","params":{"block_id":"latest","class_hash":"0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"}}' \
+    | head -c 80; echo " <- $NET";
+done
+```
+
+A non-empty `result` (not a `Class hash not found` error) confirms the class is
+declared. If the RPC endpoint is unreachable from a sandbox, run the command from
+a networked host and expect the same result.
 
 ## Migration Workflow
 
@@ -165,6 +198,38 @@ Release zips and SHA-256 checksum files are written to `artifacts/` by
 `bun run package:extension`.
 
 CI uploads those same files as the `mc-wallet-extension` workflow artifact.
+
+## Transaction replacement
+
+Starknet has no mempool fee-bump or replace-by-nonce as of RPC 0.8: once
+broadcast, a transaction is accepted, reverted, or dropped, and cannot be sped
+up, replaced, or cancelled. Pending activity rows surface this with a hint line
+and a tooltip; they typically settle within a few minutes. If a transaction is
+dropped, the next transaction on that nonce proceeds normally. This is a protocol
+constraint, not a wallet limitation.
+
+## Allowance manager
+
+Settings → Allowances lists the ERC20 approvals granted through this wallet
+(spender, token, amount, account, network) and revokes any with one tap by
+submitting `approve(spender, 0)` through the same verified send path as
+transfers. Approvals are recorded from decoded `approve` calls when a dapp invoke
+is submitted; the plain store lives at `mc-wallet:allowances`, outside the
+encrypted vault. Enumerating allowances granted on other sites requires an
+on-chain indexer and is a follow-up — only approvals made through this wallet are
+tracked today.
+
+## NFT gallery
+
+Home → NFTs is a gallery of watched collectibles, kept as an optional `nfts` list
+in preferences (contract, token id, network, optional label, spam flag). Adding
+an NFT proves ownership on-chain (`owner_of`/`ownerOf`) against the active account
+before it is stored; each NFT has a spam-hide toggle, and the detail screen sends
+with `transfer_from` through the same verification + invoke path as transfers.
+Limitations (follow-ups): metadata images are not fetched — the extension ships a
+tight `host_permissions`/CSP allowlist, so remote image and `token_uri` loading
+is out of scope for v1 — and sends use snake_case `transfer_from` only
+(`safe_transfer_from` and camelCase entrypoints are not yet probed from the ABI).
 
 ## Reproducible Builds
 

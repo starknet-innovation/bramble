@@ -24,6 +24,9 @@ export const WALLET_VIEWS = [
   "connected-sites",
   "tokens",
   "token-detail",
+  "allowances",
+  "nfts",
+  "nft-detail",
 ] as const;
 
 /**

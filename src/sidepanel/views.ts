@@ -13,8 +13,10 @@ import type {
 } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { ActivityEntry } from "../storage/activity-store";
+import type { AllowanceRecord } from "../storage/allowance-store";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { allowancesFlow } from "./allowance-views";
 import { formatFiat, portfolioTotal, tokenFiatValue } from "./fiat";
 import {
   accountFlow,
@@ -26,6 +28,7 @@ import {
   sendFlow,
 } from "./flows";
 import { type IconName, icon } from "./icons";
+import { nftDetailFlow, nftGalleryFlow } from "./nft-views";
 import {
   accountAvatar,
   accountDisplayName,
@@ -209,6 +212,7 @@ const homeScreen = (
       <div class="button-row">
         <button data-view="send" type="button" ${account ? "" : "disabled"}>${icon("send")}Send</button>
         <button class="secondary" data-view="receive" type="button" ${account ? "" : "disabled"}>${icon("receive")}Receive</button>
+        <button class="secondary" data-view="nfts" type="button">${icon("wallet")}NFTs</button>
       </div>
     </section>
     ${balancePanel(balances, preferences, prices, currency)}`,
@@ -266,13 +270,16 @@ const watchAssetCard = (approval: PendingApproval): string => {
 
 const approvalCard = (approval: PendingApproval, status: WalletStatus): string =>
   approval.kind === "watch-asset" ? watchAssetCard(approval) : connectCard(approval, status);
+const PENDING_TX_HINT =
+  "Pending Starknet transactions cannot be sped up or cancelled and usually settle within a few minutes.";
 
 const transactionRow = (entry: ActivityEntry): string => `
   <li class="tx-row">
-    <span class="tx-status ${entry.status}">${escapeHtml(entry.status)}</span>
+    <span class="tx-status ${entry.status}"${entry.status === "pending" ? ` title="${escapeHtml(PENDING_TX_HINT)}"` : ""}>${escapeHtml(entry.status)}</span>
     <div class="tx-copy">
       <strong>${escapeHtml(entry.summary)}</strong>
       <code>${escapeHtml(`${entry.hash.slice(0, 10)}…${entry.hash.slice(-6)}`)}</code>
+      ${entry.status === "pending" ? `<span class="tx-hint">${escapeHtml(PENDING_TX_HINT)}</span>` : ""}
     </div>
     ${copyButton(entry.hash, "Copy transaction hash")}
   </li>`;
@@ -337,6 +344,7 @@ const settingsScreen = (
         ${menuRow("account", "Account", account ? accountDisplayName(account, preferences) : "No account", "wallet")}
         ${menuRow("address-book", "Address book", `${addresses.length} saved`, "book")}
         ${menuRow("connected-sites", "Connected sites", "Manage dapp access", "link")}
+        ${menuRow("allowances", "Allowances", "Review & revoke approvals", "lock")}
         ${menuRow("backup", "Backup & restore", "Non-secret wallet data", "receive")}
       </div>
       <div class="detail-grid">
@@ -398,6 +406,8 @@ export const dashboard = (
   prices: Readonly<Record<string, number>> = {},
   chart: readonly number[] = [],
   selectedTokenId: string | null = null,
+  allowances: readonly AllowanceRecord[] = [],
+  selectedNftId: string | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -419,6 +429,15 @@ export const dashboard = (
   }
   if (activeView === "connected-sites") {
     return connectedSitesFlow(status, connectedSites);
+  }
+  if (activeView === "allowances") {
+    return allowancesFlow(status, account, allowances);
+  }
+  if (activeView === "nfts") {
+    return nftGalleryFlow(status, account, preferences);
+  }
+  if (activeView === "nft-detail") {
+    return nftDetailFlow(status, account, preferences, selectedNftId);
   }
   if (activeView === "backup") {
     return backupFlow(status);

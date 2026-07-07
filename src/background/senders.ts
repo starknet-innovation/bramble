@@ -77,6 +77,8 @@ export const isClaimedSenderOrigin = (
 export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.activity" ||
   type === "wallet.addToken" ||
+  type === "wallet.addNft" ||
+  type === "wallet.allowances" ||
   type === "wallet.approveOrigin" ||
   type === "wallet.connectedSites" ||
   type === "wallet.createAccount" ||
@@ -94,16 +96,20 @@ export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.prices" ||
   type === "wallet.removeAddress" ||
   type === "wallet.revokeOrigin" ||
+  type === "wallet.removeNft" ||
   type === "wallet.reviewTransfer" ||
+  type === "wallet.revokeAllowance" ||
   type === "wallet.saveAddress" ||
   type === "wallet.setAccountLabel" ||
   type === "wallet.setActiveAccount" ||
   type === "wallet.setActiveNetwork" ||
   type === "wallet.setDisplay" ||
+  type === "wallet.setNftSpam" ||
   type === "wallet.setRpcOverride" ||
   type === "wallet.setTokenHidden" ||
   type === "wallet.signHash" ||
   type === "wallet.status" ||
   type === "wallet.tokenChart" ||
   type === "wallet.transfer" ||
+  type === "wallet.transferNft" ||
   type === "wallet.unlock";

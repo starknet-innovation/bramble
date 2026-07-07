@@ -13,6 +13,7 @@ import {
   readSetRpcOverrideInput,
   readTypeOnlyInput,
 } from "./message-inputs";
+import { readRemoveNftInput, readSetNftSpamInput } from "./nft-inputs";
 import type { RuntimeResponse } from "./runtime-types";
 
 /**
@@ -44,6 +45,22 @@ export const handlePreferenceOps = async (
       return { error: "invalid address book request" };
     }
     return { ok: true, preferences: await preferencesStore.removeAddress(input.id) };
+  }
+
+  if (messageType === "wallet.removeNft") {
+    const input = readRemoveNftInput(message);
+    if (!input) {
+      return { error: "invalid nft request" };
+    }
+    return { ok: true, preferences: await preferencesStore.removeNft(input.id) };
+  }
+
+  if (messageType === "wallet.setNftSpam") {
+    const input = readSetNftSpamInput(message);
+    if (!input) {
+      return { error: "invalid nft request" };
+    }
+    return { ok: true, preferences: await preferencesStore.setNftSpam(input) };
   }
 
   if (messageType === "wallet.setAccountLabel") {

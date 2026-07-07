@@ -13,24 +13,23 @@ import type { WalletPreferences } from "../storage/preferences-store";
 import { darkSkin } from "../ui/dark-skin";
 import { defaultSkin } from "../ui/default-skin";
 import { applySkin } from "../ui/skin";
+import { bindClusterScreens } from "./cluster-ui";
 import { buttonBusy, errorMessage, focusMemo, restoreFocus, scopedStatus, showToast } from "./dom";
 import { locked, onboarding } from "./gate-views";
-import { bindConnectedSites } from "./origins-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { bindAccountLabel, bindAppearance, bindBackup, bindContacts } from "./settings-ui";
 import { SIDEPANEL_STYLES } from "./styles";
-import { bindTokens } from "./tokens-ui";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: { readonly runtime?: RuntimeApi };
 };
-
 const app = document.querySelector("#app");
 const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
 const wallet = createSidepanelRuntime(runtime);
 let activeView: WalletView = "home";
+let selectedNftId: string | null = null;
 let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
@@ -405,6 +404,10 @@ const render = async (status: WalletStatus): Promise<void> => {
     activeView === "token-detail" && selectedToken
       ? await wallet.loadTokenChart(selectedToken.address).catch(() => [])
       : [];
+  const allowances =
+    activeView === "allowances" && status.hasVault && !status.locked
+      ? await wallet.loadAllowances().catch(() => [])
+      : [];
   const scene = !status.hasVault
     ? "onboarding"
     : status.locked
@@ -429,6 +432,8 @@ const render = async (status: WalletStatus): Promise<void> => {
             prices,
             chart,
             selectedTokenId,
+            allowances,
+            selectedNftId,
           ),
     animate,
   );
@@ -455,15 +460,18 @@ const render = async (status: WalletStatus): Promise<void> => {
   bindContacts(settingsDeps);
   bindAddressBook();
   bindApprovals();
-  bindConnectedSites({ app, render, wallet });
-  bindTokens({
+  bindClusterScreens({
     app,
+    openNft: (id) => {
+      selectedNftId = id;
+      activeView = "nft-detail";
+      void wallet.loadStatus().then(render);
+    },
     openToken: (tokenId) => {
       selectedTokenId = tokenId;
       activeView = "token-detail";
       void wallet.loadStatus().then(render);
     },
-    refresh: () => wallet.loadStatus(),
     render,
     wallet,
   });

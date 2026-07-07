@@ -79,6 +79,9 @@ const throwingRpc = (): RuntimeRpc => ({
   async getDeploymentStatus() {
     return true;
   },
+  async getNftOwner() {
+    return "0x1";
+  },
   async getTokenBalances() {
     return [];
   },
