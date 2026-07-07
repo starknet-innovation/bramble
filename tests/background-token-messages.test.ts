@@ -74,7 +74,11 @@ const walletStub = {
 
 const prices: PriceService = {
   async getPrices({ addresses, currency }) {
-    return { currency, prices: Object.fromEntries(addresses.map((address) => [address, 2])) };
+    return {
+      changes: {},
+      currency,
+      prices: Object.fromEntries(addresses.map((address) => [address, 2])),
+    };
   },
   async getTokenChart({ currency }) {
     return { currency, points: [1, 2, 3] };

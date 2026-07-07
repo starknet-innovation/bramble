@@ -17,7 +17,7 @@ import type { AllowanceRecord } from "../storage/allowance-store";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { allowancesFlow } from "./allowance-views";
-import { formatFiat, portfolioTotal, tokenFiatValue } from "./fiat";
+import { formatFiat, portfolioTotal } from "./fiat";
 import {
   accountFlow,
   addressBookFlow,
@@ -44,6 +44,7 @@ import {
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
 import { DEFAULT_CURRENCY, isHiddenFromHome, tokenDetailFlow, tokensFlow } from "./token-flows";
+import { balanceRow } from "./token-row";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
@@ -116,38 +117,6 @@ const visibleBalances = (
   });
 };
 
-const groupThousands = (whole: string): string => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-
-const compactAmount = (formatted: string): string => {
-  const [whole = "0", fraction = ""] = formatted.split(".");
-  const grouped = groupThousands(whole);
-  if (fraction.length === 0) {
-    return grouped;
-  }
-  const trimmed = fraction.slice(0, 5).replace(/0+$/, "");
-  return trimmed.length === 0 ? grouped : `${grouped}.${trimmed}`;
-};
-
-const balanceRow = (
-  token: TokenBalance,
-  price: number | undefined,
-  currency: DisplayCurrency,
-): string => {
-  const fiat = tokenFiatValue(token.formatted, price);
-  return `<li class="token-row">
-    <button class="token-open" type="button" data-token-detail="${escapeHtml(token.id)}">
-      <span class="token-mark">${escapeHtml(token.symbol.slice(0, 3))}</span>
-      <div class="token-copy">
-        <strong>${escapeHtml(token.symbol)}</strong>
-        <p>${escapeHtml(compactAmount(token.formatted))}</p>
-      </div>
-      <div class="token-side">
-        <span class="token-amount">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>
-      </div>
-    </button>
-  </li>`;
-};
-
 const quickAction = (
   view: WalletView,
   label: string,
@@ -164,6 +133,7 @@ const balancePanel = (
   state: BalanceState,
   preferences: WalletPreferences | null,
   prices: Readonly<Record<string, number>>,
+  changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
 ): string => {
   const visible = visibleBalances(state, preferences);
@@ -183,7 +153,9 @@ const balancePanel = (
         : visible.length === 0
           ? '<p class="empty">No tracked balances yet. Add or detect tokens to see them here.</p>'
           : `<ul class="token-list">${visible
-              .map((token) => balanceRow(token, prices[token.address], currency))
+              .map((token) =>
+                balanceRow(token, prices[token.address], changes[token.address], currency),
+              )
               .join("")}</ul>`
     }
     ${
@@ -213,6 +185,7 @@ const homeScreen = (
   deployment: boolean | null,
   preferences: WalletPreferences | null,
   prices: Readonly<Record<string, number>>,
+  changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
 ): string => {
   const showTotal = account !== null && Object.keys(prices).length > 0;
@@ -234,7 +207,7 @@ const homeScreen = (
       ${quickAction("receive", "Receive", "receive", false, account !== null)}
       ${quickAction("nfts", "NFTs", "image", false, true)}
     </div>
-    ${balancePanel(balances, preferences, prices, currency)}`,
+    ${balancePanel(balances, preferences, prices, changes, currency)}`,
   );
 };
 
@@ -418,6 +391,7 @@ export const dashboard = (
   selectedTokenId: string | null = null,
   allowances: readonly AllowanceRecord[] = [],
   selectedNftId: string | null = null,
+  changes: Readonly<Record<string, number>> = {},
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -488,6 +462,7 @@ export const dashboard = (
             deployment,
             preferences,
             prices,
+            changes,
             currency,
           );
   return `

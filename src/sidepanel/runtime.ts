@@ -252,9 +252,15 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "token detection failed");
     },
-    async loadPrices(): Promise<Readonly<Record<string, number>>> {
+    async loadPrices(): Promise<{
+      readonly changes: Readonly<Record<string, number>>;
+      readonly prices: Readonly<Record<string, number>>;
+    }> {
       const response = await sendMessage({ type: "wallet.prices" });
-      return isPricesResponse(response) ? response.prices : {};
+      if (!isPricesResponse(response)) {
+        return { changes: {}, prices: {} };
+      }
+      return { changes: response.changes ?? {}, prices: response.prices };
     },
     async loadTokenChart(address: string): Promise<readonly number[]> {
       const response = await sendMessage({ address, type: "wallet.tokenChart" });

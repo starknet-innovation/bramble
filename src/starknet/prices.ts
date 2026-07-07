@@ -63,6 +63,7 @@ export type TokenPriceInput = {
  * Fiat prices keyed by the requested contract address.
  */
 export type TokenPrices = {
+  readonly changes: Readonly<Record<string, number>>;
   readonly currency: DisplayCurrency;
   readonly prices: Readonly<Record<string, number>>;
 };
@@ -97,6 +98,7 @@ type PriceEntry = Readonly<Record<DisplayCurrency, number>>;
 // address CoinGecko never prices (custom/spam tokens) still counts as covered
 // until the TTL lapses instead of forcing a refetch on every call.
 type PriceCache = {
+  readonly changes?: Readonly<Record<string, number>>;
   readonly checked?: readonly string[];
   readonly fetchedAt: number;
   readonly prices: Readonly<Record<string, PriceEntry>>;
@@ -127,9 +129,11 @@ const isStringArray = (value: unknown): value is readonly string[] =>
 
 const isPriceCache = (value: unknown): value is PriceCache =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["checked", "fetchedAt", "prices"]) &&
+  hasOnlyKnownKeys(value, ["changes", "checked", "fetchedAt", "prices"]) &&
   isFiniteNumber(value.fetchedAt) &&
   (value.checked === undefined || isStringArray(value.checked)) &&
+  (value.changes === undefined ||
+    (isRecord(value.changes) && Object.values(value.changes).every(isFiniteNumber))) &&
   isRecord(value.prices) &&
   Object.values(value.prices).every(isPriceEntry);
 
@@ -184,6 +188,33 @@ const sliceCurrency = (
     const entry = prices[normalizeAddress(address)];
     if (entry) {
       slice[address] = entry[currency];
+    }
+  }
+  return slice;
+};
+
+// Extracts the 24h percent change per address from a CoinGecko body carrying
+// include_24hr_change=true (usd_24h_change).
+const parseChanges = (body: Record<string, unknown>): Record<string, number> => {
+  const parsed: Record<string, number> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (isRecord(value) && isFiniteNumber(value.usd_24h_change)) {
+      parsed[normalizeAddress(key)] = value.usd_24h_change;
+    }
+  }
+  return parsed;
+};
+
+// Maps cached 24h changes back onto the caller's original address keys.
+const sliceChanges = (
+  changes: Readonly<Record<string, number>>,
+  addresses: readonly string[],
+): Record<string, number> => {
+  const slice: Record<string, number> = {};
+  for (const address of addresses) {
+    const change = changes[normalizeAddress(address)];
+    if (change !== undefined) {
+      slice[address] = change;
     }
   }
   return slice;
@@ -248,7 +279,11 @@ export const createPriceService = ({
       const known = new Set([...Object.keys(cache.prices), ...(cache.checked ?? [])]);
       const covered = wanted.every((address) => known.has(address));
       if (!platform || wanted.length === 0 || (fresh && covered)) {
-        return { currency, prices: sliceCurrency(cache.prices, addresses, currency) };
+        return {
+          changes: sliceChanges(cache.changes ?? {}, addresses),
+          currency,
+          prices: sliceCurrency(cache.prices, addresses, currency),
+        };
       }
       // CoinGecko's free simple/token_price endpoint now accepts only one
       // contract address per request, so query each address on its own request
@@ -259,26 +294,52 @@ export const createPriceService = ({
         wanted.map((address) =>
           readJsonRecord(
             http,
-            `${COINGECKO_BASE}/simple/token_price/${platform}?contract_addresses=${encodeURIComponent(address)}&vs_currencies=usd,eur,gbp`,
+            `${COINGECKO_BASE}/simple/token_price/${platform}?contract_addresses=${encodeURIComponent(address)}&vs_currencies=usd,eur,gbp&include_24hr_change=true`,
           )
-            .then((body) => ({ address, ok: true, prices: parsePriceBody(body) }) as const)
+            .then(
+              (body) =>
+                ({
+                  address,
+                  changes: parseChanges(body),
+                  ok: true,
+                  prices: parsePriceBody(body),
+                }) as const,
+            )
             .catch(() => ({ address, ok: false }) as const),
         ),
       );
       const answered = outcomes.filter((outcome) => outcome.ok);
       if (answered.length === 0) {
-        return { currency, prices: sliceCurrency(cache.prices, addresses, currency) };
+        return {
+          changes: sliceChanges(cache.changes ?? {}, addresses),
+          currency,
+          prices: sliceCurrency(cache.prices, addresses, currency),
+        };
       }
       const fetched = Object.assign(
         {},
         ...answered.map((outcome) => (outcome.ok ? outcome.prices : {})),
       ) as Record<string, PriceEntry>;
+      const fetchedChanges = Object.assign(
+        {},
+        ...answered.map((outcome) => (outcome.ok ? outcome.changes : {})),
+      ) as Record<string, number>;
       const merged = { ...cache.prices, ...fetched };
+      const mergedChanges = { ...(cache.changes ?? {}), ...fetchedChanges };
       const checked = [...new Set([...(cache.checked ?? []), ...answered.map((o) => o.address)])];
       await store
-        .set(PRICES_STORE_KEY, { checked, fetchedAt: now(), prices: merged })
+        .set(PRICES_STORE_KEY, {
+          changes: mergedChanges,
+          checked,
+          fetchedAt: now(),
+          prices: merged,
+        })
         .catch(() => undefined);
-      return { currency, prices: sliceCurrency(merged, addresses, currency) };
+      return {
+        changes: sliceChanges(mergedChanges, addresses),
+        currency,
+        prices: sliceCurrency(merged, addresses, currency),
+      };
     },
     async getTokenChart({ address, currency, networkId }) {
       const platform = PLATFORM_FOR_NETWORK[networkId];
@@ -315,7 +376,7 @@ export const createPriceService = ({
  */
 export const unavailablePriceService: PriceService = {
   async getPrices({ currency }) {
-    return { currency, prices: {} };
+    return { changes: {}, currency, prices: {} };
   },
   async getTokenChart({ currency }) {
     return { currency, points: [] };

@@ -272,6 +272,7 @@ type RenderData = {
   deployment: boolean | null;
   pending: Awaited<ReturnType<typeof wallet.loadPendingApprovals>>;
   preferences: WalletPreferences | null;
+  changes: Readonly<Record<string, number>>;
   prices: Readonly<Record<string, number>>;
   status: WalletStatus;
   transactions: Awaited<ReturnType<typeof wallet.loadActivity>>;
@@ -284,6 +285,7 @@ const cache: RenderData = {
   connectedSites: [],
   deployment: null,
   pending: [],
+  changes: {},
   preferences: null,
   prices: {},
   status: emptyStatus(),
@@ -369,6 +371,7 @@ const paint = (): void => {
             selectedTokenId,
             cache.allowances,
             selectedNftId,
+            cache.changes,
           ),
     animate,
   );
@@ -389,6 +392,7 @@ const render = async (status: WalletStatus): Promise<void> => {
     cache.transactions = [];
     cache.connectedSites = [];
     cache.prices = {};
+    cache.changes = {};
     cache.chart = [];
     cache.allowances = [];
     paint();
@@ -404,7 +408,8 @@ const render = async (status: WalletStatus): Promise<void> => {
       cache.balances = value;
     });
     fill(wallet.loadPrices(), (value) => {
-      cache.prices = value;
+      cache.prices = value.prices;
+      cache.changes = value.changes;
     });
   }
   if (activeView === "home") {

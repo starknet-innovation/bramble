@@ -41,7 +41,7 @@ describe("createPriceService.getPrices", () => {
       currency: "usd",
       networkId: "SN_MAIN",
     });
-    expect(first).toEqual({ currency: "usd", prices: { [USDC]: 2 } });
+    expect(first).toEqual({ changes: {}, currency: "usd", prices: { [USDC]: 2 } });
 
     clock.value += 1000;
     const second = await service.getPrices({
@@ -62,10 +62,10 @@ describe("createPriceService.getPrices", () => {
 
     expect(
       await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_SEPOLIA" }),
-    ).toEqual({ currency: "usd", prices: {} });
+    ).toEqual({ changes: {}, currency: "usd", prices: {} });
     expect(
       await service.getPrices({ addresses: [], currency: "usd", networkId: "SN_MAIN" }),
-    ).toEqual({ currency: "usd", prices: {} });
+    ).toEqual({ changes: {}, currency: "usd", prices: {} });
     expect(calls).toHaveLength(0);
   });
 
@@ -76,7 +76,7 @@ describe("createPriceService.getPrices", () => {
 
     expect(
       await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" }),
-    ).toEqual({ currency: "usd", prices: {} });
+    ).toEqual({ changes: {}, currency: "usd", prices: {} });
   });
 });
 

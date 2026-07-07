@@ -307,6 +307,7 @@ export type DetectTokensResponse = {
  * Fiat prices keyed by contract address accepted from the background boundary.
  */
 export type PricesResponse = {
+  readonly changes?: Readonly<Record<string, number>>;
   readonly currency: "eur" | "gbp" | "usd";
   readonly ok: true;
   readonly prices: Readonly<Record<string, number>>;
@@ -351,10 +352,11 @@ export const isDetectTokensResponse = (value: unknown): value is DetectTokensRes
 export const isPricesResponse = (value: unknown): value is PricesResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["currency", "ok", "prices"]) &&
+  hasOnlyKnownKeys(value, ["changes", "currency", "ok", "prices"]) &&
   value.ok === true &&
   isDisplayCurrencyValue(value.currency) &&
-  isPriceMap(value.prices);
+  isPriceMap(value.prices) &&
+  (value.changes === undefined || isPriceMap(value.changes));
 
 /**
  * Checks token chart responses before drawing a sparkline.
