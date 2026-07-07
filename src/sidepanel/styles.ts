@@ -123,6 +123,26 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
   .lede { color: var(--mc-muted); }
   [role="status"] { color: var(--mc-muted); font-size: ${TYPE.caption.size}; min-height: 16px; overflow-wrap: anywhere; }
 
+  /* Gate screens: centered brand, big heading, primary action at the bottom */
+  .gate { align-items: center; display: flex; flex: 1; flex-direction: column; gap: ${SPACE.lg}; padding-top: ${SPACE.xl}; text-align: center; }
+  .gate-brand {
+    align-items: center;
+    background: var(--mc-accent);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-accent-text);
+    display: inline-flex;
+    height: 64px;
+    justify-content: center;
+    margin-top: ${SPACE.xl};
+    width: 64px;
+  }
+  .gate-brand .icon { height: 30px; width: 30px; }
+  .gate-head { display: grid; gap: 6px; max-width: 34ch; }
+  .gate-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; text-wrap: balance; }
+  .gate-form { display: flex; flex: 1; flex-direction: column; gap: ${SPACE.md}; text-align: left; width: 100%; }
+  .gate-cta { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.lg}; }
+  .gate-cta button { width: 100%; }
+
   /* Content groups are flush — spacing only, no nested card borders. Genuine
      cards (callout, review panel, request/nft cards) carry their own single
      border below. */

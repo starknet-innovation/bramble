@@ -142,7 +142,7 @@ export const tokenDetailFlow = (
     flowHeader(token.symbol, "home", status, token.name) +
     flowScreen(
       "token-detail",
-      `<section class="section hero">
+      `<section class="section">
         <p class="eyebrow">Price</p>
         <p class="token-detail-price">${escapeHtml(price === null ? "Unavailable" : formatFiat(price, currency))}</p>
         ${sparkline(chart)}
