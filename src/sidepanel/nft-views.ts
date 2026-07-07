@@ -119,7 +119,7 @@ export const nftDetailFlow = (
               <input name="tokenId" type="hidden" value="${escapeHtml(nft.tokenId)}" />
               <input name="networkId" type="hidden" value="${escapeHtml(nft.networkId)}" />
               <label><span>Recipient</span><input class="mono" name="recipient" placeholder="0x…" required autocomplete="off" spellcheck="false" ${account ? "" : "disabled"} /></label>
-              <span class="hint">Sends this token with transfer_from through pre-sign verification.</span>
+              <span class="hint">Sends this token with transfer_from. Ownership is re-checked and the recipient is screened for address-poisoning before signing.</span>
               <button type="submit" ${account ? "" : "disabled"}>${icon("send")}Send NFT</button>
               <p id="nft-send-result" role="status"></p>
             </form>

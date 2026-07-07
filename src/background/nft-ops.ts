@@ -65,6 +65,18 @@ export const handleNftOps = async (
       return { error: "switch to the NFT's network first" };
     }
     const preferences = await deps.preferencesStore.read();
+    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
+    // Watched NFTs are not scoped to an account, so re-prove ownership for the
+    // active account before signing rather than letting transfer_from revert
+    // on-chain (or, worse, submitting for the wrong account).
+    const owner = await deps.runtimeRpc.getNftOwner({
+      contractAddress: input.contract,
+      rpcUrls,
+      tokenId: input.tokenId,
+    });
+    if (BigInt(owner) !== BigInt(context.account.address)) {
+      return { error: "this account does not own that NFT" };
+    }
     const call = buildErc721TransferCall(
       input.contract,
       context.account.address,
@@ -72,10 +84,16 @@ export const handleNftOps = async (
       BigInt(input.tokenId),
     );
     const report = verifyCalls([call], verificationContext(context.account, preferences));
+    // NFT sends now run through pre-sign verification: block a recipient that
+    // mimics one of the wallet's saved addresses before anything is signed.
+    const poisoning = report.flags.find((flag) => flag.code === "address-poisoning");
+    if (poisoning) {
+      return { error: poisoning.message };
+    }
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
       calls: [call],
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
+      rpcUrls,
       signHash: signerForContext(deps, context),
     });
     await deps.activity.record({
