@@ -6,9 +6,12 @@ import { DEFAULT_NETWORK, isStarkFieldElement } from "../src/starknet/networks";
 import { deriveAccount } from "../src/wallet/accounts";
 
 const wasmPackage = "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js";
+const wasmBinary = "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm_bg.wasm";
 
-if (!(await Bun.file(wasmPackage).exists())) {
-  throw new Error("Krusty KMS WASM package missing; run bun run vendor:krusty");
+for (const path of [wasmPackage, wasmBinary]) {
+  if (!(await Bun.file(path).exists())) {
+    throw new Error(`Krusty KMS runtime file missing: ${path}; run bun run vendor:krusty`);
+  }
 }
 
 const kms = createKrustyKms(await import(`../${wasmPackage}`));

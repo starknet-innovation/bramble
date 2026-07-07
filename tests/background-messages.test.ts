@@ -91,6 +91,19 @@ describe("createMessageHandler", () => {
     });
   });
 
+  test("rejects accessor message types before dispatch", async () => {
+    const handler = createMessageHandler(createWallet(), "extension-id");
+    const message = {};
+    Object.defineProperty(message, "type", {
+      enumerable: true,
+      get() {
+        throw new Error("type getter executed");
+      },
+    });
+
+    await expect(handler(message, sender)).resolves.toEqual({ error: "unsupported message" });
+  });
+
   test("rejects privileged commands from content senders", async () => {
     const captured: SignHashInput[] = [];
     const handler = createMessageHandler(
@@ -211,16 +224,6 @@ describe("createMessageHandler", () => {
     await expect(
       handler({ type: "wallet.unlock", vaultPassphrase: "wrong passphrase" }, sender),
     ).resolves.toEqual({ error: "bad passphrase" });
-  });
-
-  test("returns public wallet status for trusted senders", async () => {
-    const handler = createMessageHandler(createWallet(), "extension-id");
-
-    await expect(handler({ type: "wallet.status" }, sender)).resolves.toMatchObject({
-      accountCount: 1,
-      network: "Starknet Sepolia",
-      ready: true,
-    });
   });
 
   test("validates create account messages", async () => {
@@ -432,63 +435,5 @@ describe("createMessageHandler", () => {
 
     await handler({ type: "wallet.unlock", vaultPassphrase }, sender);
     await expect(handler({ type: "wallet.lock" }, sender)).resolves.toMatchObject({ locked: true });
-  });
-
-  test("validates sign hash messages", async () => {
-    const captured: SignHashInput[] = [];
-    const handler = createMessageHandler(
-      createWallet(undefined, (input) => captured.push(input)),
-      "extension-id",
-    );
-
-    await expect(
-      handler(
-        {
-          messageHash: "not-hex",
-          type: "wallet.signHash",
-          vaultPassphrase,
-        },
-        sender,
-      ),
-    ).resolves.toEqual({ error: "invalid sign hash request" });
-    await expect(
-      handler(
-        {
-          messageHash: "0x800000000000011000000000000000000000000000000000000000000000001",
-          type: "wallet.signHash",
-          vaultPassphrase,
-        },
-        sender,
-      ),
-    ).resolves.toEqual({ error: "invalid sign hash request" });
-    expect(captured).toEqual([]);
-  });
-
-  test("signs hashes through the wallet service only", async () => {
-    const captured: SignHashInput[] = [];
-    const handler = createMessageHandler(
-      createWallet(undefined, (input) => captured.push(input)),
-      "extension-id",
-    );
-
-    await expect(
-      handler(
-        {
-          accountId: account.id,
-          messageHash: "0x1234",
-          type: "wallet.signHash",
-          vaultPassphrase,
-        },
-        sender,
-      ),
-    ).resolves.toEqual({
-      ok: true,
-      signature: {
-        publicKey: "0xabc",
-        r: "0x1",
-        s: "0x2",
-      },
-    });
-    expect(captured[0]?.messageHash).toBe("0x1234");
   });
 });

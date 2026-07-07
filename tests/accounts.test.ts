@@ -42,6 +42,23 @@ describe("deriveAccountRef", () => {
     ).rejects.toThrow("Invalid derivation index");
   });
 
+  test("rejects invalid networks even with explicit class hashes", async () => {
+    await expect(
+      deriveAccountRef(fakeKms(), {
+        classHash: "0xabcdef",
+        mnemonic,
+        networkId: "toString" as never,
+      }),
+    ).rejects.toThrow("Invalid Starknet network");
+    await expect(
+      deriveAccountRef(fakeKms(), {
+        classHash: "0xabcdef",
+        mnemonic,
+        networkId: "SN_BAD" as never,
+      }),
+    ).rejects.toThrow("Invalid Starknet network");
+  });
+
   test("rejects invalid class hashes before storing account metadata", async () => {
     await expect(
       deriveAccountRef(fakeKms(), {
@@ -83,6 +100,35 @@ describe("deriveAccountRef", () => {
         { mnemonic },
       ),
     ).rejects.toThrow("Krusty KMS returned an invalid class hash");
+  });
+
+  test("rejects inherited Krusty class hash fields", async () => {
+    const previousDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, "SN_SEPOLIA");
+    Object.defineProperty(Object.prototype, "SN_SEPOLIA", {
+      configurable: true,
+      enumerable: true,
+      value: "0xabcdef",
+    });
+
+    try {
+      await expect(
+        deriveAccountRef(
+          {
+            ...fakeKms(),
+            async getAccountClassHashes() {
+              return JSON.stringify({ oz: { "3.0.0": {} } });
+            },
+          },
+          { mnemonic },
+        ),
+      ).rejects.toThrow("Krusty KMS class hashes are missing SN_SEPOLIA");
+    } finally {
+      if (previousDescriptor) {
+        Object.defineProperty(Object.prototype, "SN_SEPOLIA", previousDescriptor);
+      } else {
+        Reflect.deleteProperty(Object.prototype, "SN_SEPOLIA");
+      }
+    }
   });
 
   test("rejects invalid KMS account outputs", async () => {

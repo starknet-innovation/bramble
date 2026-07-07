@@ -5,7 +5,7 @@ import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import {
   isNonZeroStarkFieldElement,
-  STARKNET_NETWORKS,
+  isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
 
@@ -76,9 +76,6 @@ const isDerivation = (value: unknown): value is AccountRef["derivation"] =>
   isSafeIndex(value.accountIndex) &&
   isSafeIndex(value.addressIndex);
 
-const isNetworkId = (value: unknown): value is StarknetNetworkId =>
-  typeof value === "string" && value in STARKNET_NETWORKS;
-
 /**
  * Validates account ids used in public metadata and references.
  */
@@ -90,7 +87,7 @@ export const isAccountId = (value: unknown): value is string => {
   const parts = value.split(":");
   const networkId = parts[0];
   const address = parts[1];
-  return parts.length === 2 && isNetworkId(networkId) && isNonZeroFelt(address);
+  return parts.length === 2 && isStarknetNetworkId(networkId) && isNonZeroFelt(address);
 };
 
 /**
@@ -111,7 +108,7 @@ export const isAccountRef = (value: unknown): value is AccountRef =>
   isNonZeroFelt(value.classHash) &&
   isDerivation(value.derivation) &&
   isAccountId(value.id) &&
-  isNetworkId(value.networkId) &&
+  isStarknetNetworkId(value.networkId) &&
   value.id === `${value.networkId}:${value.address}` &&
   isNonZeroFelt(value.publicKeyX) &&
   isNonZeroFelt(value.publicKeyY);
@@ -127,6 +124,7 @@ const isOriginGrant = (value: unknown): value is OriginGrant =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountIds", "origin"]) &&
   Array.isArray(value.accountIds) &&
+  value.accountIds.length > 0 &&
   value.accountIds.every(isAccountId) &&
   typeof value.origin === "string" &&
   isWalletOrigin(value.origin);
@@ -185,7 +183,9 @@ export const isVaultV1 = (value: unknown): value is VaultV1 => {
     hasUniqueStrings(signingKeys.map((key) => key.accountId)) &&
     signingKeys.every((key) => accounts.some((account) => account.id === key.accountId)) &&
     accounts.every((account) => signingKeys.some((key) => key.accountId === account.id)) &&
-    (value.activeAccountId === null ||
-      accounts.some((account) => account.id === value.activeAccountId))
+    (accounts.length === 0
+      ? value.activeAccountId === null
+      : value.activeAccountId !== null &&
+        accounts.some((account) => account.id === value.activeAccountId))
   );
 };

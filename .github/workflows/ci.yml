@@ -19,6 +19,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
+      - run: bun run check:files
       - run: bun run vendor:krusty
       - run: bun run check
       - run: bun run build

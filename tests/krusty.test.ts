@@ -34,6 +34,23 @@ const createModule = (signatureR = "0x1") => ({
 });
 
 describe("createKrustyKms", () => {
+  test("requires every Krusty export at construction", () => {
+    expect(() => createKrustyKms({ ...createModule(), signStarkHash: undefined })).toThrow(
+      "Krusty KMS export missing: signStarkHash",
+    );
+  });
+
+  test("rejects inherited Krusty exports", () => {
+    const { signStarkHash, ...moduleExports } = createModule();
+    const module = Object.create({ signStarkHash: createModule().signStarkHash }) as Record<
+      string,
+      unknown
+    >;
+    Object.assign(module, moduleExports);
+
+    expect(() => createKrustyKms(module)).toThrow("Krusty KMS export missing: signStarkHash");
+  });
+
   test("returns field-element account derivation results", async () => {
     const kms = createKrustyKms(createModule());
 
@@ -136,6 +153,23 @@ describe("createKrustyKms", () => {
     await expect(
       createKrustyKms(createModule("0x0")).signStarkHash("0x123", "0x1"),
     ).rejects.toThrow("Krusty KMS result missing non-zero field element: r");
+  });
+
+  test("rejects inherited Krusty result fields", async () => {
+    await expect(
+      createKrustyKms({
+        ...createModule(),
+        signStarkHash() {
+          return Object.create(
+            { r: "0x1" },
+            {
+              publicKey: { enumerable: true, value: "0xabc" },
+              s: { enumerable: true, value: "0x2" },
+            },
+          );
+        },
+      }).signStarkHash("0x123", "0x1"),
+    ).rejects.toThrow("Krusty KMS result missing string field: r");
   });
 
   test("rejects invalid signing inputs before WASM signing", async () => {

@@ -9,8 +9,12 @@ const readJson = async (path: string): Promise<Record<string, unknown>> =>
 const manifest = await readJson("public/manifest.json");
 const packageJson = await readJson("package.json");
 
+const expectedBackgroundServiceWorker = "background/index.js";
 const expectedExtensionCsp = "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';";
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
+const expectedPopup = "popup.html";
+const expectedProviderResource = "provider/inpage.js";
+const expectedContentScript = "content/index.js";
 const failures: string[] = [];
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -27,7 +31,7 @@ const hasOnlyKeys = (
 const hasOnly = (value: unknown, expected: readonly string[]): boolean =>
   Array.isArray(value) &&
   value.length === expected.length &&
-  expected.every((entry) => value.includes(entry));
+  expected.every((entry, index) => value[index] === entry);
 
 const requireFile = async (path: string): Promise<void> => {
   if (!(await Bun.file(path).exists())) {
@@ -84,6 +88,9 @@ if (background?.type !== "module") {
 }
 const backgroundPath =
   typeof background?.service_worker === "string" ? background.service_worker : "";
+if (backgroundPath !== expectedBackgroundServiceWorker) {
+  failures.push("manifest background worker path must stay pinned");
+}
 await requireFile(`src/${backgroundPath.replace(/\.js$/, ".ts")}`);
 
 const action = hasOnlyKeys(manifest.action, ["default_popup"]) ? manifest.action : null;
@@ -91,6 +98,9 @@ if (!action) {
   failures.push("manifest action must expose only the popup");
 }
 const popupPath = typeof action?.default_popup === "string" ? action.default_popup : "";
+if (popupPath !== expectedPopup) {
+  failures.push("manifest popup path must stay pinned");
+}
 await requireFile(`public/${popupPath}`);
 if (popupPath) {
   const popupHtml = await readFile(`public/${popupPath}`, "utf8");
@@ -117,6 +127,9 @@ if (!Array.isArray(contentScripts) || contentScripts.length !== 1) {
   ) {
     failures.push("content script matches or run_at changed");
   }
+  if (!hasOnly(contentScript?.js, [expectedContentScript])) {
+    failures.push("content script path must stay pinned");
+  }
   const [contentPath] = Array.isArray(contentScript?.js) ? contentScript.js : [];
   await requireFile(`src/${contentPath?.toString().replace(/\.js$/, ".ts")}`);
 }
@@ -129,6 +142,9 @@ if (!Array.isArray(resources) || resources.length !== 1) {
   const resourceGroup = hasOnlyKeys(resource, ["matches", "resources"]) ? resource : null;
   if (!resourceGroup || !hasOnly(resourceGroup.matches, expectedMatches)) {
     failures.push("web-accessible resource matches changed");
+  }
+  if (!hasOnly(resourceGroup?.resources, [expectedProviderResource])) {
+    failures.push("web-accessible provider path must stay pinned");
   }
   const [providerPath] = Array.isArray(resourceGroup?.resources) ? resourceGroup.resources : [];
   await requireFile(`src/${providerPath?.toString().replace(/\.js$/, ".ts")}`);

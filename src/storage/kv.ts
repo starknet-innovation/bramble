@@ -33,6 +33,8 @@ export function assertJsonValue(value: unknown): asserts value is Json {
   }
 }
 
+const cloneJson = (value: Json): Json => structuredClone(value) as Json;
+
 /**
  * Creates an in-memory key-value store for deterministic tests.
  */
@@ -42,7 +44,8 @@ export const createMemoryStore = (): KeyValueStore => {
   return {
     async get(key) {
       assertStorageKey(key);
-      return values.get(key);
+      const value = values.get(key);
+      return value === undefined ? undefined : cloneJson(value);
     },
     async remove(key) {
       assertStorageKey(key);
@@ -51,7 +54,7 @@ export const createMemoryStore = (): KeyValueStore => {
     async set(key, value) {
       assertStorageKey(key);
       assertJsonValue(value);
-      values.set(key, value);
+      values.set(key, cloneJson(value));
     },
   };
 };

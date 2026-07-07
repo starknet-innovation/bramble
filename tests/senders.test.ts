@@ -74,4 +74,11 @@ describe("runtime sender trust", () => {
       false,
     );
   });
+
+  test("does not trust senders without an origin signal", () => {
+    expect(isTrustedSender({ id: extensionId }, extensionId)).toBe(false);
+    expect(isTrustedSender({ id: extensionId, origin: "https://example.com" }, extensionId)).toBe(
+      true,
+    );
+  });
 });

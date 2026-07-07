@@ -71,6 +71,9 @@ const isPendingApproval = (value: unknown): value is PendingApproval =>
   typeof value.origin === "string" &&
   isWalletOrigin(value.origin);
 
+const hasUniqueStrings = (values: readonly string[]): boolean =>
+  new Set(values).size === values.length;
+
 /**
  * Checks popup status responses before rendering.
  */
@@ -114,7 +117,8 @@ export const isAccountsResponse = (value: unknown): value is AccountsResponse =>
   hasOnlyKnownKeys(value, ["accounts", "ok"]) &&
   value.ok === true &&
   Array.isArray(value.accounts) &&
-  value.accounts.every(isAccountRef);
+  value.accounts.every(isAccountRef) &&
+  hasUniqueStrings(value.accounts.map((account) => account.id));
 
 /**
  * Checks error responses before displaying text.
@@ -134,7 +138,9 @@ export const isPendingApprovalsResponse = (value: unknown): value is PendingAppr
   hasOnlyKnownKeys(value, ["ok", "pending"]) &&
   value.ok === true &&
   Array.isArray(value.pending) &&
-  value.pending.every(isPendingApproval);
+  value.pending.every(isPendingApproval) &&
+  hasUniqueStrings(value.pending.map((approval) => approval.id)) &&
+  hasUniqueStrings(value.pending.map((approval) => approval.origin));
 
 /**
  * Checks approval decision responses before updating popup state.

@@ -4,6 +4,7 @@
 export const escapeHtml = (value: string): string =>
   value
     .replaceAll("&", "&amp;")
+    .replaceAll("'", "&#39;")
     .replaceAll('"', "&quot;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");

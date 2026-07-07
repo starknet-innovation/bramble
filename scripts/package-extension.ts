@@ -4,19 +4,11 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
 
 const distDir = "dist";
 const artifactDir = "artifacts";
-const EXPECTED_RUNTIME_FILES = [
-  "background/index.js",
-  "content/index.js",
-  "manifest.json",
-  "popup.html",
-  "popup/index.js",
-  "provider/inpage.js",
-  "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
-  "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
-];
+const reproducibleZipTime = "198001010000";
 
 const readJson = async (path: string): Promise<Record<string, unknown>> =>
   JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
@@ -46,8 +38,6 @@ const run = async (cmd: string[], cwd = "."): Promise<void> => {
   }
 };
 
-await run(["bun", "run", "check:extension"]);
-await run(["bun", "run", "check:krusty"]);
 await run(["bun", "run", "build"]);
 await rm(artifactDir, { force: true, recursive: true });
 await mkdir(artifactDir, { recursive: true });
@@ -64,6 +54,7 @@ if (files.join("\n") !== EXPECTED_RUNTIME_FILES.join("\n")) {
 const zipName = `mc-wallet-${manifest.version}.zip`;
 const zipPath = resolve(artifactDir, zipName);
 
+await run(["touch", "-t", reproducibleZipTime, ...files], distDir);
 await run(["zip", "-X", "-q", zipPath, ...files], distDir);
 
 const digest = createHash("sha256")

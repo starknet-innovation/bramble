@@ -1,0 +1,96 @@
+/**
+ * Static repository configuration policy enforced by check-config-standards.
+ */
+export const SEMVER = /^\d+\.\d+\.\d+$/;
+
+export const DEPENDENCY_FIELDS = [
+  "bundledDependencies",
+  "dependencies",
+  "optionalDependencies",
+  "peerDependencies",
+] as const;
+
+export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
+
+export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
+  "@biomejs/biome": "2.5.2",
+  "@types/bun": "1.3.14",
+  typescript: "6.0.3",
+};
+
+export const PINNED_RUNTIME_FILES = [
+  "background/index.js",
+  "content/index.js",
+  "manifest.json",
+  "popup.html",
+  "popup/index.js",
+  "provider/inpage.js",
+  "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
+  "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
+] as const;
+
+export const EXPECTED_GITIGNORE_ENTRIES = [
+  "artifacts/",
+  "dist/",
+  "node_modules/",
+  "vendor/krusty-kms/",
+] as const;
+
+export const EXPECTED_README_SECTIONS = [
+  "## Architecture",
+  "## Migration Workflow",
+  "## UI Skin",
+  "## Krusty KMS",
+  "## Extension",
+] as const;
+
+export const EXPECTED_CONTRIBUTING_SECTIONS = [
+  "## Required Gates",
+  "## Architecture Rules",
+  "## Security Rules",
+  "## Code Style",
+  "## Documentation",
+] as const;
+
+export const EXPECTED_CONTRIBUTING_RULES = [
+  "Pure code is the default.",
+  "Krusty KMS owns wallet cryptography.",
+  "Encrypted stores must validate decrypted data before use.",
+  "Stored data access must go through permission checks.",
+  "Migrations must be deterministic functions with tests for old, current, and invalid data.",
+  "UI code must depend on skin tokens, not hard-coded component-library details.",
+  "Runtime dependencies are blocked by `bun run check`",
+] as const;
+
+export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
+  build: "bun run scripts/build-extension.ts",
+  check:
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun test",
+  "check:extension": "bun run scripts/check-extension-manifest.ts",
+  "check:files":
+    "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
+  "check:krusty": "bun run scripts/check-krusty-adapter.ts",
+  "check:lint": "biome check .",
+  "check:types": "tsc --noEmit",
+  format: "biome check --write .",
+  "package:extension": "bun run scripts/package-extension.ts",
+  test: "bun test",
+  "vendor:krusty": "bun run scripts/vendor-krusty.ts",
+};
+
+export const REQUIRED_COMPILER_OPTIONS: Readonly<Record<string, boolean>> = {
+  allowJs: false,
+  exactOptionalPropertyTypes: true,
+  forceConsistentCasingInFileNames: true,
+  isolatedModules: true,
+  noEmit: true,
+  noFallthroughCasesInSwitch: true,
+  noImplicitOverride: true,
+  noUncheckedIndexedAccess: true,
+  noUnusedLocals: true,
+  noUnusedParameters: true,
+  skipLibCheck: false,
+  strict: true,
+  useUnknownInCatchVariables: true,
+  verbatimModuleSyntax: true,
+};

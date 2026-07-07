@@ -25,7 +25,16 @@ export const isRecord = (value: unknown): value is Record<string, unknown> => {
 export const hasOnlyKnownKeys = (
   value: Record<string, unknown>,
   keys: readonly string[],
-): boolean => Reflect.ownKeys(value).every((key) => typeof key === "string" && keys.includes(key));
+): boolean =>
+  Reflect.ownKeys(value).every((key) => {
+    if (typeof key !== "string" || !keys.includes(key)) {
+      return false;
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return (
+      descriptor?.enumerable === true && "value" in descriptor && descriptor.value !== undefined
+    );
+  });
 
 const isArrayIndexKey = (key: string, length: number): boolean => {
   const index = Number(key);
@@ -98,7 +107,7 @@ const isJsonValue = (value: unknown, ancestors: WeakSet<object>): value is Json 
     return true;
   }
   if (typeof value === "number") {
-    return Number.isFinite(value);
+    return Number.isFinite(value) && !Object.is(value, -0);
   }
   if (Array.isArray(value)) {
     return isJsonArray(value, ancestors);
@@ -118,4 +127,4 @@ export const isJson = (value: unknown): value is Json => isJsonValue(value, new 
  * Checks for arrays containing only strings.
  */
 export const isStringArray = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
+  Array.isArray(value) && isJson(value) && value.every((item) => typeof item === "string");

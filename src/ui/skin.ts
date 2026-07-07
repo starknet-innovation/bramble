@@ -1,6 +1,11 @@
 /**
  * Swappable UI skin tokens for popup rendering.
  */
+import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+
+/**
+ * CSS variable tokens every replaceable skin must provide.
+ */
 export const SKIN_TOKENS = [
   "--mc-accent",
   "--mc-accent-text",
@@ -28,14 +33,30 @@ export type Skin = {
 const isSkinToken = (value: string): value is SkinToken =>
   SKIN_TOKENS.some((token) => token === value);
 
-const hasExactSkinTokens = (skin: Skin): boolean => {
-  const tokens = Reflect.ownKeys(skin.tokens);
+const hasExactSkinTokens = (skin: unknown): skin is Skin => {
+  if (
+    !isRecord(skin) ||
+    !hasOnlyKnownKeys(skin, ["name", "tokens"]) ||
+    typeof skin.name !== "string" ||
+    skin.name.trim().length === 0 ||
+    !isRecord(skin.tokens)
+  ) {
+    return false;
+  }
+
+  const skinTokens = skin.tokens;
+  const tokens = Reflect.ownKeys(skinTokens);
   return (
     tokens.length === SKIN_TOKENS.length &&
     tokens.every((token) => typeof token === "string" && isSkinToken(token)) &&
     SKIN_TOKENS.every((token) => {
-      const value = skin.tokens[token];
-      return typeof value === "string" && value.length > 0;
+      const descriptor = Object.getOwnPropertyDescriptor(skinTokens, token);
+      return (
+        descriptor?.enumerable === true &&
+        "value" in descriptor &&
+        typeof descriptor.value === "string" &&
+        descriptor.value.length > 0
+      );
     })
   );
 };

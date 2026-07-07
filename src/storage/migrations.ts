@@ -11,7 +11,7 @@ import { CURRENT_SCHEMA_VERSION, emptyVault, isVaultV1, type Vault } from "./vau
 export { CURRENT_SCHEMA_VERSION } from "./vault-schema";
 
 const isLegacyEmptyVault = (value: unknown): boolean =>
-  isRecord(value) && !("schemaVersion" in value) && Reflect.ownKeys(value).length === 0;
+  isRecord(value) && Reflect.ownKeys(value).length === 0;
 
 /**
  * Deterministic schema migration from one numbered vault version to the next.
@@ -43,8 +43,16 @@ const schemaVersionOf = (value: unknown): number | null => {
     return 0;
   }
 
-  if (isRecord(value) && Number.isSafeInteger(value.schemaVersion)) {
-    return Number(value.schemaVersion);
+  if (isRecord(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, "schemaVersion");
+    if (
+      descriptor?.enumerable === true &&
+      "value" in descriptor &&
+      Number.isSafeInteger(descriptor.value) &&
+      Number(descriptor.value) >= 0
+    ) {
+      return Number(descriptor.value);
+    }
   }
 
   return null;

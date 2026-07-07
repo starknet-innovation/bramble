@@ -7,6 +7,7 @@ import { isRecord } from "../shared/json";
 import {
   DEFAULT_NETWORK,
   isNonZeroStarkFieldElement,
+  isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
 import type { AccountRef } from "../storage/vault-schema";
@@ -43,6 +44,11 @@ const parseClassHashes = (json: string): unknown => {
 
 const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
 
+const ownValue = (record: Record<string, unknown>, field: string): unknown => {
+  const descriptor = Object.getOwnPropertyDescriptor(record, field);
+  return descriptor?.enumerable === true && "value" in descriptor ? descriptor.value : undefined;
+};
+
 /**
  * Reads the OpenZeppelin account class hash from Krusty for a network.
  */
@@ -51,17 +57,18 @@ export const getOzAccountClassHash = async (
   networkId: StarknetNetworkId,
 ): Promise<string> => {
   const hashes = parseClassHashes(await kms.getAccountClassHashes());
+  const ozHashes = isRecord(hashes) ? ownValue(hashes, "oz") : null;
 
-  if (!isRecord(hashes) || !isRecord(hashes.oz)) {
+  if (!isRecord(ozHashes)) {
     throw new WalletError("Krusty KMS class hashes are missing oz accounts");
   }
 
-  const version = hashes.oz[OZ_ACCOUNT_VERSION];
-  if (!isRecord(version) || typeof version[networkId] !== "string") {
+  const version = ownValue(ozHashes, OZ_ACCOUNT_VERSION);
+  const classHash = isRecord(version) ? ownValue(version, networkId) : null;
+  if (typeof classHash !== "string") {
     throw new WalletError(`Krusty KMS class hashes are missing ${networkId}`);
   }
 
-  const classHash = version[networkId];
   if (!isNonZeroStarkFieldElement(classHash)) {
     throw new WalletError("Krusty KMS returned an invalid class hash");
   }
@@ -86,6 +93,10 @@ export const deriveAccount = async (
   }
 
   const networkId = input.networkId ?? DEFAULT_NETWORK.id;
+  if (!isStarknetNetworkId(networkId)) {
+    throw new WalletError("Invalid Starknet network");
+  }
+
   const classHash = input.classHash ?? (await getOzAccountClassHash(kms, networkId));
   if (!isNonZeroStarkFieldElement(classHash)) {
     throw new WalletError("Invalid account class hash");

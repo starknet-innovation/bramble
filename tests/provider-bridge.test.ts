@@ -30,7 +30,7 @@ const account = {
   publicKeyX: "0xabc",
   publicKeyY: "0xdef",
 };
-const accountResult = { accounts: [account], ok: true };
+const accountResult = { accounts: [account], ok: true as const };
 
 describe("provider bridge", () => {
   test("caps unresolved in-page provider requests", () => {
@@ -63,6 +63,9 @@ describe("provider bridge", () => {
       id: requestId,
       method: "mc_accounts",
     });
+    expect(
+      readProviderRequest({ id: requestId, method: "wallet.signHash", target: CONTENT_TARGET }),
+    ).toBeNull();
   });
 
   test("rejects messages without the content target", () => {
@@ -119,15 +122,7 @@ describe("provider bridge", () => {
   });
 
   test("forwards only explicitly supported safe methods", () => {
-    expect(
-      toRuntimeMessage(
-        { id: "1", method: "mc_status", params: { ignored: true } },
-        "https://a.test",
-      ),
-    ).toBeNull();
-    expect(
-      toRuntimeMessage({ id: "6", method: "mc_accounts", params: [] }, "https://a.test"),
-    ).toBeNull();
+    expect(toRuntimeMessage({ id: "7", method: "mc_accounts" }, "http://a.test")).toBeNull();
     expect(toRuntimeMessage({ id: "4", method: "mc_accounts" }, "https://a.test")).toEqual({
       origin: "https://a.test",
       type: "wallet.getGrantedAccounts",
@@ -136,10 +131,6 @@ describe("provider bridge", () => {
       origin: "https://a.test",
       type: "wallet.requestAccounts",
     });
-    expect(toRuntimeMessage({ id: "2", method: "wallet.signHash" }, "https://a.test")).toBeNull();
-    expect(
-      toRuntimeMessage({ id: "3", method: "wallet.createAccount" }, "https://a.test"),
-    ).toBeNull();
   });
 
   test("creates page-targeted responses", () => {
@@ -152,7 +143,7 @@ describe("provider bridge", () => {
     });
     expect(
       providerResponse(
-        { id: requestId, method: "mc_status" },
+        { id: requestId, method: "mc_accounts" },
         { error: "wallet locked", result: { ready: true } },
       ),
     ).toEqual({
@@ -161,18 +152,18 @@ describe("provider bridge", () => {
       target: PAGE_TARGET,
     });
     expect(
-      providerResponse({ id: requestId, method: "mc_status" }, { result: { ready: true } }),
+      providerResponse({ id: requestId, method: "mc_accounts" }, { result: { ready: true } }),
     ).toEqual({
       error: "invalid provider response",
       id: requestId,
       target: PAGE_TARGET,
     });
-    expect(providerResponse({ id: requestId, method: "mc_status" }, {})).toEqual({
+    expect(providerResponse({ id: requestId, method: "mc_accounts" }, {})).toEqual({
       error: "invalid provider response",
       id: requestId,
       target: PAGE_TARGET,
     });
-    expect(providerResponse({ id: requestId, method: "mc_status" }, { error: "" })).toEqual({
+    expect(providerResponse({ id: requestId, method: "mc_accounts" }, { error: "" })).toEqual({
       error: "invalid provider response",
       id: requestId,
       target: PAGE_TARGET,
@@ -204,6 +195,17 @@ describe("provider bridge", () => {
       readProviderResponse({ id: requestId, result: { ready: true }, target: PAGE_TARGET }),
     ).toBeNull();
     expect(
+      readProviderResponse(
+        Object.create(
+          { result: accountResult },
+          {
+            id: { enumerable: true, value: requestId },
+            target: { enumerable: true, value: PAGE_TARGET },
+          },
+        ),
+      ),
+    ).toBeNull();
+    expect(
       readProviderResponse({
         error: "wallet locked",
         id: requestId,
@@ -228,6 +230,9 @@ describe("provider bridge", () => {
 
     expect(toProviderPayload({ accounts: [account], ok: true })).toEqual({
       result: { accounts: [account], ok: true },
+    });
+    expect(toProviderPayload({ accounts: [account, account], ok: true })).toEqual({
+      error: "invalid provider response",
     });
     expect(toProviderPayload({ accounts: sparseAccounts, ok: true })).toEqual({
       error: "invalid provider response",

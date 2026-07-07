@@ -3,7 +3,7 @@
  */
 
 import type { StarkSignature } from "../crypto/krusty";
-import { DEFAULT_NETWORK } from "../starknet/networks";
+import { DEFAULT_NETWORK, STARKNET_NETWORKS } from "../starknet/networks";
 import type { AccountRef, Vault } from "../storage/vault-schema";
 import type {
   CreateVaultAccountInput,
@@ -115,6 +115,11 @@ const unavailableVaultStatus = (): VaultStatus => ({
   ready: false,
 });
 
+const activeNetworkName = (vault: Vault): string => {
+  const activeAccount = vault.accounts.find((account) => account.id === vault.activeAccountId);
+  return activeAccount ? STARKNET_NETWORKS[activeAccount.networkId].name : DEFAULT_NETWORK.name;
+};
+
 const statusResponse = async (
   wallet: WalletStatusReader,
   session: UnlockSession,
@@ -132,7 +137,7 @@ const statusResponse = async (
       accountCount: vault.accounts.length,
       activeAccountId: vault.activeAccountId,
       locked: false,
-      network: DEFAULT_NETWORK.name,
+      network: activeNetworkName(vault),
     };
   } catch {
     session.lock();
@@ -146,6 +151,19 @@ const isClaimedSenderOrigin = (
   origin: string,
 ): boolean => isExtensionPageSender(sender, extensionId) || isSenderOrigin(sender, origin);
 
+const readMessageType = (message: unknown): string | null => {
+  if (typeof message !== "object" || message === null) {
+    return null;
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(message, "type");
+  return descriptor?.enumerable === true &&
+    "value" in descriptor &&
+    typeof descriptor.value === "string"
+    ? descriptor.value
+    : null;
+};
+
 const handleRuntimeMessage = async (
   wallet: WalletStatusReader,
   extensionId: string,
@@ -158,15 +176,16 @@ const handleRuntimeMessage = async (
     return { error: "untrusted sender" };
   }
 
-  if (typeof message !== "object" || message === null || !("type" in message)) {
+  const messageType = readMessageType(message);
+  if (!messageType) {
     return { error: "unsupported message" };
   }
 
-  if (isPrivilegedMessage(message.type) && !isExtensionPageSender(sender, extensionId)) {
+  if (isPrivilegedMessage(messageType) && !isExtensionPageSender(sender, extensionId)) {
     return { error: "privileged sender required" };
   }
 
-  if (message.type === "wallet.createAccount") {
+  if (messageType === "wallet.createAccount") {
     const input = readCreateAccountInput(message);
     if (!input) {
       return { error: "invalid create account request" };
@@ -176,7 +195,7 @@ const handleRuntimeMessage = async (
     return { account, ok: true };
   }
 
-  if (message.type === "wallet.approveOrigin") {
+  if (messageType === "wallet.approveOrigin") {
     const input = readApprovalIdInput(message);
     const passphrase = session.getPassphrase();
     if (!input) {
@@ -200,7 +219,7 @@ const handleRuntimeMessage = async (
     };
   }
 
-  if (message.type === "wallet.denyOrigin") {
+  if (messageType === "wallet.denyOrigin") {
     const input = readApprovalIdInput(message);
     if (!input) {
       return { error: "invalid approval request" };
@@ -209,7 +228,7 @@ const handleRuntimeMessage = async (
     return { ok: true, pending: approvals.list() };
   }
 
-  if (message.type === "wallet.grantOrigin") {
+  if (messageType === "wallet.grantOrigin") {
     const input = readGrantOriginInput(message);
     if (!input) {
       return { error: "invalid grant origin request" };
@@ -217,7 +236,7 @@ const handleRuntimeMessage = async (
     return { accounts: await wallet.grantOrigin(input), ok: true };
   }
 
-  if (message.type === "wallet.getGrantedAccounts") {
+  if (messageType === "wallet.getGrantedAccounts") {
     const input = readGetGrantedAccountsInput(message);
     if (!input) {
       return { error: "invalid granted accounts request" };
@@ -238,14 +257,14 @@ const handleRuntimeMessage = async (
     };
   }
 
-  if (message.type === "wallet.pendingApprovals") {
+  if (messageType === "wallet.pendingApprovals") {
     if (!readTypeOnlyInput(message, "wallet.pendingApprovals")) {
       return { error: "invalid pending approvals request" };
     }
     return { ok: true, pending: approvals.list() };
   }
 
-  if (message.type === "wallet.requestAccounts") {
+  if (messageType === "wallet.requestAccounts") {
     const input = readRequestAccountsInput(message);
     if (!input) {
       return { error: "invalid request accounts request" };
@@ -263,7 +282,7 @@ const handleRuntimeMessage = async (
     return { ok: false, pending: approvals.request(input.origin) };
   }
 
-  if (message.type === "wallet.signHash") {
+  if (messageType === "wallet.signHash") {
     const input = readSignHashInput(message);
     if (!input) {
       return { error: "invalid sign hash request" };
@@ -271,7 +290,7 @@ const handleRuntimeMessage = async (
     return { ok: true, signature: await wallet.signHash(input) };
   }
 
-  if (message.type === "wallet.lock") {
+  if (messageType === "wallet.lock") {
     if (!readTypeOnlyInput(message, "wallet.lock")) {
       return { error: "invalid lock request" };
     }
@@ -279,14 +298,14 @@ const handleRuntimeMessage = async (
     return statusResponse(wallet, session);
   }
 
-  if (message.type === "wallet.status") {
+  if (messageType === "wallet.status") {
     if (!readTypeOnlyInput(message, "wallet.status")) {
       return { error: "invalid status request" };
     }
     return statusResponse(wallet, session);
   }
 
-  if (message.type === "wallet.unlock") {
+  if (messageType === "wallet.unlock") {
     const input = readUnlockInput(message);
     if (!input) {
       return { error: "invalid unlock request" };

@@ -16,6 +16,17 @@ const requireBuild = (result: Bun.BuildOutput): void => {
   }
 };
 
+const run = async (cmd: string[]): Promise<void> => {
+  const child = Bun.spawn(cmd, { stderr: "inherit", stdout: "inherit" });
+  const exitCode = await child.exited;
+
+  if (exitCode !== 0) {
+    throw new Error(`${cmd.join(" ")} failed with exit code ${exitCode}`);
+  }
+};
+
+await run(["bun", "run", "check:extension"]);
+await run(["bun", "run", "check:krusty"]);
 await rm(outdir, { force: true, recursive: true });
 await mkdir(outdir, { recursive: true });
 

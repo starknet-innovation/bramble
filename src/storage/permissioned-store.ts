@@ -18,7 +18,7 @@ const STORE_PERMISSIONS: Readonly<Record<StoreScope, readonly StoreActor[]>> = {
 };
 
 const isStoreScope = (scope: unknown): scope is StoreScope =>
-  typeof scope === "string" && scope in STORE_PERMISSIONS;
+  typeof scope === "string" && Object.hasOwn(STORE_PERMISSIONS, scope);
 
 const isStoreActor = (actor: unknown): actor is StoreActor =>
   actor === "background" || actor === "popup";

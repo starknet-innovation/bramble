@@ -71,6 +71,14 @@ describe("background message parsers", () => {
 
   test("reject malformed account ids before service calls", () => {
     expect(
+      readCreateAccountInput({
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        networkId: "toString",
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
       readGrantOriginInput({
         accountId: "not-an-account",
         origin: "https://example.com",

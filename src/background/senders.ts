@@ -59,8 +59,7 @@ export const isSenderOrigin = (sender: RuntimeSender | undefined, origin: string
  * Checks whether a runtime message came from this extension or its pages.
  */
 export const isTrustedSender = (sender: RuntimeSender | undefined, extensionId: string): boolean =>
-  extensionId.length > 0 &&
-  (sender?.id === extensionId || isExtensionPageSender(sender, extensionId));
+  extensionId.length > 0 && sender?.id === extensionId && senderOrigins(sender).length > 0;
 
 /**
  * Marks messages that must only come from extension-controlled pages.

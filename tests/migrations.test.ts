@@ -68,7 +68,33 @@ describe("migrateVault", () => {
     }
   });
 
+  test("ignores inherited schema versions for legacy empty vaults", () => {
+    const previousDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, "schemaVersion");
+    Object.defineProperty(Object.prototype, "schemaVersion", {
+      configurable: true,
+      enumerable: true,
+      value: 999,
+    });
+
+    try {
+      expect(migrateVault({})).toEqual({
+        accounts: [],
+        activeAccountId: null,
+        originGrants: [],
+        schemaVersion: CURRENT_SCHEMA_VERSION,
+        signingKeys: [],
+      });
+    } finally {
+      if (previousDescriptor) {
+        Object.defineProperty(Object.prototype, "schemaVersion", previousDescriptor);
+      } else {
+        Reflect.deleteProperty(Object.prototype, "schemaVersion");
+      }
+    }
+  });
+
   test("rejects unknown schemas", () => {
+    expect(() => migrateVault({ schemaVersion: -1 })).toThrow("Unsupported vault schema");
     expect(() => migrateVault({ schemaVersion: 999 })).toThrow("Unsupported vault schema");
   });
 

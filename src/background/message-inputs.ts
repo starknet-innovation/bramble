@@ -5,11 +5,7 @@
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
-import {
-  isStarkFieldElement,
-  STARKNET_NETWORKS,
-  type StarknetNetworkId,
-} from "../starknet/networks";
+import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
 import { isVaultPassphrase } from "../storage/encrypted-store";
 import { isAccountId } from "../storage/vault-schema";
 import type {
@@ -24,9 +20,6 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
   }
   return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
 };
-
-const isNetworkId = (value: unknown): value is StarknetNetworkId =>
-  typeof value === "string" && value in STARKNET_NETWORKS;
 
 const isMnemonicText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
@@ -69,7 +62,7 @@ export const readCreateAccountInput = (message: unknown): CreateVaultAccountInpu
     return null;
   }
 
-  if (message.networkId !== undefined && !isNetworkId(message.networkId)) {
+  if (message.networkId !== undefined && !isStarknetNetworkId(message.networkId)) {
     return null;
   }
 

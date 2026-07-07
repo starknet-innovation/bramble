@@ -3,6 +3,7 @@
  */
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
+import { isWalletOrigin } from "../shared/origin";
 import { type AccountRef, isAccountRef } from "../storage/vault-schema";
 
 /**
@@ -35,19 +36,30 @@ export type ProviderRequestArguments = {
  */
 export type ProviderRequest = {
   readonly id: string;
-  readonly method: string;
-  readonly params?: unknown;
+  readonly method: ProviderMethod;
+};
+
+type ProviderAccountsResult = {
+  readonly accounts: readonly AccountRef[];
+  readonly ok: true;
 };
 
 /**
  * Page-targeted provider response shape.
  */
-export type ProviderResponse = {
-  readonly error?: string;
-  readonly id: string;
-  readonly result?: unknown;
-  readonly target: typeof PAGE_TARGET;
-};
+export type ProviderResponse =
+  | {
+      readonly error: string;
+      readonly id: string;
+      readonly result?: never;
+      readonly target: typeof PAGE_TARGET;
+    }
+  | {
+      readonly error?: never;
+      readonly id: string;
+      readonly result: ProviderAccountsResult;
+      readonly target: typeof PAGE_TARGET;
+    };
 
 /**
  * Minimal message-event fields needed for page trust checks.
@@ -110,8 +122,7 @@ export const readProviderRequest = (value: unknown): ProviderRequest | null => {
     value.target !== CONTENT_TARGET ||
     typeof value.id !== "string" ||
     !isUuid(value.id) ||
-    typeof value.method !== "string" ||
-    value.method.length === 0
+    !isProviderMethod(value.method)
   ) {
     return null;
   }
@@ -136,16 +147,18 @@ const sanitizeAccountRef = (account: AccountRef): AccountRef => ({
   publicKeyY: account.publicKeyY,
 });
 
-const providerAccountsResult = (
-  result: unknown,
-): { readonly accounts: readonly AccountRef[]; readonly ok: true } | null => {
+const hasUniqueStrings = (values: readonly string[]): boolean =>
+  new Set(values).size === values.length;
+
+const providerAccountsResult = (result: unknown): ProviderAccountsResult | null => {
   if (
     !isRecord(result) ||
     !isJson(result) ||
     !hasOnlyKnownKeys(result, ["accounts", "ok"]) ||
     result.ok !== true ||
     !Array.isArray(result.accounts) ||
-    !result.accounts.every(isAccountRef)
+    !result.accounts.every(isAccountRef) ||
+    !hasUniqueStrings(result.accounts.map((account) => account.id))
   ) {
     return null;
   }
@@ -164,8 +177,8 @@ export const readProviderResponse = (value: unknown): ProviderResponse | null =>
     typeof value.id !== "string" ||
     !isUuid(value.id) ||
     (value.error !== undefined && (typeof value.error !== "string" || value.error.length === 0)) ||
-    (value.error !== undefined && "result" in value) ||
-    (value.error === undefined && !("result" in value))
+    (value.error !== undefined && Object.hasOwn(value, "result")) ||
+    (value.error === undefined && !Object.hasOwn(value, "result"))
   ) {
     return null;
   }
@@ -189,7 +202,7 @@ export const toRuntimeMessage = (
   request: ProviderRequest,
   origin: string,
 ): RuntimeMessage | null => {
-  if (request.params !== undefined || !isProviderMethod(request.method)) {
+  if (!isProviderMethod(request.method) || !isWalletOrigin(origin)) {
     return null;
   }
   if (request.method === "mc_accounts") {

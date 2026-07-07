@@ -29,6 +29,12 @@ export const STARKNET_NETWORKS: Readonly<Record<StarknetNetworkId, StarknetNetwo
 };
 
 /**
+ * Checks whether an untrusted value is one of the supported Starknet network ids.
+ */
+export const isStarknetNetworkId = (value: unknown): value is StarknetNetworkId =>
+  typeof value === "string" && Object.hasOwn(STARKNET_NETWORKS, value);
+
+/**
  * Stark curve field modulus for validating hashes before signing.
  */
 export const STARK_FIELD_PRIME = BigInt(
@@ -41,7 +47,7 @@ const MAX_STARK_FIELD_HEX_DIGITS = 64;
  * Checks whether a hex string is a Stark field element.
  */
 export const isStarkFieldElement = (value: string): boolean =>
-  /^0x[0-9a-fA-F]+$/.test(value) &&
+  /^0x[0-9a-f]+$/.test(value) &&
   value.length <= 2 + MAX_STARK_FIELD_HEX_DIGITS &&
   BigInt(value) < STARK_FIELD_PRIME;
 

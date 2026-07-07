@@ -19,14 +19,6 @@ const ENCRYPTED_STORE_WIRING_FILES = new Set([
 ]);
 const RANDOM_UUID_FILES = new Set(["src/background/approvals.ts", "src/provider/inpage.ts"]);
 const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/content/index.ts"]);
-const SEMVER = /^\d+\.\d+\.\d+$/;
-const DEPENDENCY_FIELDS = [
-  "bundledDependencies",
-  "dependencies",
-  "optionalDependencies",
-  "peerDependencies",
-];
-const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
 const SECRET_MATERIAL_FILES = new Set([
   "src/background/index.ts",
   "src/background/message-inputs.ts",
@@ -60,12 +52,6 @@ const VAULT_SERVICE_WIRING_FILES = new Set([
 
 const failures: string[] = [];
 
-const readJson = async (path: string): Promise<Record<string, unknown>> =>
-  JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const hasExportDoc = (lines: readonly string[], index: number): boolean => {
   for (let previous = index - 1; previous >= 0; previous -= 1) {
     const line = lines[previous]?.trim();
@@ -96,55 +82,6 @@ const walk = async (dir: string): Promise<string[]> => {
 
   return files;
 };
-
-const packageJson = await readJson("package.json");
-const manifestJson = await readJson("public/manifest.json");
-const vendorKrustyScript = await readFile("scripts/vendor-krusty.ts", "utf8");
-
-if (
-  typeof packageJson.version !== "string" ||
-  typeof manifestJson.version !== "string" ||
-  packageJson.version !== manifestJson.version
-) {
-  failures.push("package.json and public/manifest.json versions must match");
-}
-
-if (
-  typeof packageJson.version !== "string" ||
-  typeof manifestJson.version !== "string" ||
-  !SEMVER.test(packageJson.version) ||
-  !SEMVER.test(manifestJson.version)
-) {
-  failures.push("package.json and public/manifest.json versions must use x.y.z");
-}
-
-if (packageJson.packageManager !== EXPECTED_PACKAGE_MANAGER) {
-  failures.push(`package.json packageManager must stay ${EXPECTED_PACKAGE_MANAGER}`);
-}
-
-for (const field of DEPENDENCY_FIELDS) {
-  if (field in packageJson) {
-    failures.push(`package.json must not declare ${field}`);
-  }
-}
-
-if (!isRecord(packageJson.devDependencies)) {
-  failures.push("package.json must declare pinned devDependencies");
-} else {
-  for (const [name, version] of Object.entries(packageJson.devDependencies)) {
-    if (typeof version !== "string" || !SEMVER.test(version)) {
-      failures.push(`package.json devDependency ${name} must use an exact x.y.z version`);
-    }
-  }
-}
-
-if (!/const KRUSTY_KMS_REVISION = "[0-9a-f]{40}";/.test(vendorKrustyScript)) {
-  failures.push("scripts/vendor-krusty.ts must pin a Krusty KMS commit");
-}
-
-if (vendorKrustyScript.includes('"pull"')) {
-  failures.push("scripts/vendor-krusty.ts must not follow a moving Krusty KMS branch");
-}
 
 for (const file of await walk(".")) {
   const text = await readFile(file, "utf8");

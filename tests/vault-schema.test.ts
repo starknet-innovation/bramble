@@ -44,7 +44,9 @@ describe("isVaultV1", () => {
     expect(isAccountId(account.id)).toBe(true);
     expect(isAccountId("not-an-account")).toBe(false);
     expect(isAccountId("SN_SEPOLIA:not-hex")).toBe(false);
+    expect(isAccountId("SN_SEPOLIA:0xABC")).toBe(false);
     expect(isAccountId("SN_SEPOLIA:0x0")).toBe(false);
+    expect(isAccountId("toString:0x123")).toBe(false);
   });
 
   test("rejects extra fields in current vault records", () => {
@@ -92,6 +94,7 @@ describe("isVaultV1", () => {
     expect(isVaultV1({ ...vault, accounts: [{ ...account, id: "SN_MAIN:0x123" }] })).toBe(false);
     expect(isVaultV1({ ...vault, accounts: [{ ...account, networkId: "UNKNOWN" }] })).toBe(false);
     expect(isVaultV1({ ...vault, activeAccountId: "not-an-account" })).toBe(false);
+    expect(isVaultV1({ ...vault, activeAccountId: null })).toBe(false);
   });
 
   test("rejects malformed account ids in vault references", () => {
@@ -151,6 +154,12 @@ describe("isVaultV1", () => {
   });
 
   test("rejects duplicate origin grants and duplicate grant accounts", () => {
+    expect(
+      isVaultV1({
+        ...vault,
+        originGrants: [{ accountIds: [], origin: "https://example.com" }],
+      }),
+    ).toBe(false);
     expect(
       isVaultV1({
         ...vault,

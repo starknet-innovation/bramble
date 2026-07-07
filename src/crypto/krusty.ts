@@ -50,6 +50,7 @@ export type KrustyKms = {
 
 type Callable = (...args: unknown[]) => unknown;
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
+const KRUSTY_RESULT_CLASSES = new Set(["WasmKeypair", "WasmStarkSignature"]);
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (typeof value !== "object" || value === null) {
@@ -58,8 +59,31 @@ const asRecord = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
+const ownValue = (record: Record<string, unknown>, field: string): unknown => {
+  const descriptor = Object.getOwnPropertyDescriptor(record, field);
+  return descriptor?.enumerable === true && "value" in descriptor ? descriptor.value : undefined;
+};
+
+const krustyResultValue = (record: Record<string, unknown>, field: string): unknown => {
+  const value = ownValue(record, field);
+  if (value !== undefined) {
+    return value;
+  }
+
+  const prototype = Object.getPrototypeOf(record);
+  const prototypeConstructor = prototype
+    ? Object.getOwnPropertyDescriptor(prototype, "constructor")?.value
+    : null;
+  const descriptor = prototype ? Object.getOwnPropertyDescriptor(prototype, field) : null;
+  return typeof prototypeConstructor === "function" &&
+    KRUSTY_RESULT_CLASSES.has(prototypeConstructor.name) &&
+    typeof descriptor?.get === "function"
+    ? descriptor.get.call(record)
+    : undefined;
+};
+
 const requireFunction = (module: Record<string, unknown>, name: string): Callable => {
-  const value = module[name];
+  const value = ownValue(module, name);
   if (typeof value !== "function") {
     throw new WalletError(`Krusty KMS export missing: ${name}`);
   }
@@ -68,7 +92,7 @@ const requireFunction = (module: Record<string, unknown>, name: string): Callabl
 
 const requireStringField = (value: unknown, field: string): string => {
   const record = asRecord(value);
-  const fieldValue = record[field];
+  const fieldValue = krustyResultValue(record, field);
   if (typeof fieldValue !== "string") {
     throw new WalletError(`Krusty KMS result missing string field: ${field}`);
   }
@@ -110,7 +134,7 @@ const isMnemonicText = (value: unknown): value is string =>
  */
 export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
   const module = asRecord(moduleValue);
-  const init = module.default;
+  const init = ownValue(module, "default");
   const ready =
     typeof init === "function" ? Promise.resolve((init as Callable)()) : Promise.resolve();
 

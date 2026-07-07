@@ -12,5 +12,7 @@ describe("storage permissions", () => {
     expect(canAccessStore("vault", "content-script")).toBe(false);
     expect(canAccessStore("private-keys", "background")).toBe(false);
     expect(() => assertStoreAccess("private-keys", "background")).toThrow("Storage access denied");
+    expect(canAccessStore("toString", "background")).toBe(false);
+    expect(() => assertStoreAccess("toString", "background")).toThrow("Storage access denied");
   });
 });

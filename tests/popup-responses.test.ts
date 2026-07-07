@@ -136,6 +136,24 @@ describe("popup response validators", () => {
     ).toBe(false);
     expect(
       isPendingApprovalsResponse({
+        ok: true,
+        pending: [
+          { id: approvalId, origin: "https://example.com" },
+          { id: approvalId, origin: "https://other.example" },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [
+          { id: approvalId, origin: "https://example.com" },
+          { id: "123e4567-e89b-42d3-a456-426614174001", origin: "https://example.com" },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse({
         debug: true,
         ok: true,
         pending: [{ id: approvalId, origin: "https://example.com" }],
@@ -162,6 +180,7 @@ describe("popup response validators", () => {
     const sparseAccounts = new Array<unknown>(1);
 
     expect(isAccountsResponse({ accounts: [account], ok: true })).toBe(true);
+    expect(isAccountsResponse({ accounts: [account, account], ok: true })).toBe(false);
     expect(isAccountsResponse({ accounts: sparseAccounts, ok: true })).toBe(false);
     expect(isAccountsResponse({ accounts: [{ ...account, privateKey: "0x456" }], ok: true })).toBe(
       false,
