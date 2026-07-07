@@ -33,6 +33,7 @@ export const PINNED_RUNTIME_FILES = [
 ] as const;
 
 export const EXPECTED_GITIGNORE_ENTRIES = [
+  ".claude/",
   "artifacts/",
   "dist/",
   "node_modules/",

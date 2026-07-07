@@ -111,7 +111,14 @@ const biomeFiles = isRecord(biomeJson.files) ? biomeJson.files : null;
 if (
   !biomeFiles ||
   !hasOnlyKeys(biomeFiles, ["includes"]) ||
-  !hasStringList(biomeFiles?.includes, ["**", "!bun.lock", "!dist", "!node_modules", "!vendor"])
+  !hasStringList(biomeFiles?.includes, [
+    "**",
+    "!.claude",
+    "!bun.lock",
+    "!dist",
+    "!node_modules",
+    "!vendor",
+  ])
 ) {
   failures.push("biome.json must check the repository while excluding generated files");
 }

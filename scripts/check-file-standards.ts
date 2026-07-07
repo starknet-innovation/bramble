@@ -5,7 +5,15 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const MAX_LINES = 500;
-const EXCLUDED = new Set([".git", "artifacts", "bun.lock", "dist", "node_modules", "vendor"]);
+const EXCLUDED = new Set([
+  ".claude",
+  ".git",
+  "artifacts",
+  "bun.lock",
+  "dist",
+  "node_modules",
+  "vendor",
+]);
 const BROWSER_GLOBAL_FILES = new Set([
   "src/background/index.ts",
   "src/content/index.ts",
