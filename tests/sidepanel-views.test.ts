@@ -222,6 +222,33 @@ describe("sidepanel views", () => {
     expect(html).not.toContain('class="wallet-dock"');
   });
 
+  test("account flow offers adding a derived account", () => {
+    const html = dashboard("account", status, [], preferences, { balances: [] });
+
+    expect(html).toContain('id="new-account"');
+    expect(html).toContain("Add account");
+  });
+
+  test("settings links to the reveal-secrets flow", () => {
+    expect(WALLET_VIEWS).toContain("reveal");
+    const html = dashboard("settings", status, [], preferences, { balances: [] });
+
+    expect(html).toContain('data-view="reveal"');
+    expect(html).toContain("Reveal secrets");
+  });
+
+  test("reveal flow re-authenticates and masks secrets until tapped", () => {
+    const html = dashboard("reveal", status, [], preferences, { balances: [] });
+
+    expect(html).toContain('id="wallet-screen-reveal"');
+    expect(html).toContain('id="reveal-form"');
+    expect(html).toContain('name="vaultPassphrase"');
+    expect(html).toContain('id="reveal-phrase"');
+    expect(html).toContain("is-masked");
+    expect(html).toMatch(/data-view="settings"[^>]*aria-label="Back"/);
+    expect(html).not.toContain("wallet-dock");
+  });
+
   test("contacts can be removed from the address book flow", () => {
     const withContact = {
       ...preferences,

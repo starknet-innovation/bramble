@@ -33,6 +33,7 @@ import {
   WALLET_VIEWS,
   type WalletView,
 } from "./parts";
+import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
 
 /**
@@ -238,6 +239,7 @@ const settingsScreen = (
         ${menuRow("account", "Account", account ? accountDisplayName(account, preferences) : "No account", "wallet")}
         ${menuRow("address-book", "Address book", `${addresses.length} saved`, "book")}
         ${menuRow("backup", "Backup & restore", "Non-secret wallet data", "receive")}
+        ${menuRow("reveal", "Reveal secrets", "Recovery phrase & key", "lock")}
       </div>
       <div class="detail-grid">
         <div class="detail"><p>Accounts</p><p class="value">${status.accountCount}</p></div>
@@ -313,6 +315,9 @@ export const dashboard = (
   }
   if (activeView === "backup") {
     return backupFlow(status);
+  }
+  if (activeView === "reveal") {
+    return revealFlow(status);
   }
   const screen =
     activeView === "activity"

@@ -27,8 +27,9 @@ const account: AccountRef = {
 const vault = {
   accounts: [account],
   activeAccountId: account.id,
+  mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 1,
+  schemaVersion: 2,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -39,6 +40,9 @@ const extensionSender: RuntimeSender = {
 const contentSender: RuntimeSender = { id: "extension-id", url: "https://dapp.example/swap" };
 
 const walletStub = {
+  async addDerivedAccount() {
+    return account;
+  },
   async createAccount() {
     return account;
   },
@@ -155,6 +159,10 @@ const MESSAGES: readonly {
     sender: extensionSender,
   },
   {
+    message: { type: "wallet.revealSecrets", vaultPassphrase: SECRET_PASSPHRASE },
+    sender: extensionSender,
+  },
+  {
     message: {
       accountId: account.id,
       amount: "1.0",
@@ -187,16 +195,20 @@ describe("key boundary", () => {
     for (const { message, sender } of MESSAGES) {
       const response = await handler(message, sender);
       const serialized = JSON.stringify(response);
-      expect(serialized).not.toContain(SECRET_PRIVATE_KEY);
+      const sanctionedReveal =
+        message.type === "wallet.generateMnemonic" || message.type === "wallet.revealSecrets";
       expect(serialized).not.toContain(SECRET_PASSPHRASE);
       expect(serialized).not.toContain("signingKeys");
-      if (message.type !== "wallet.generateMnemonic") {
+      if (message.type !== "wallet.revealSecrets") {
+        expect(serialized).not.toContain(SECRET_PRIVATE_KEY);
+      }
+      if (!sanctionedReveal) {
         expect(serialized).not.toContain(SECRET_MNEMONIC);
       }
     }
   });
 
-  test("mnemonic generation is the only reveal and needs an extension page", async () => {
+  test("mnemonic generation reveals only to extension pages", async () => {
     const session = createUnlockSession();
     const handler = createMessageHandler(
       walletStub,
@@ -214,5 +226,36 @@ describe("key boundary", () => {
       mnemonic: SECRET_MNEMONIC,
       ok: true,
     });
+  });
+
+  test("reveal secrets require an extension page and the re-entered passphrase", async () => {
+    const session = createUnlockSession();
+    const handler = createMessageHandler(
+      walletStub,
+      "extension-id",
+      session,
+      undefined,
+      undefined,
+      runtimeRpcStub,
+    );
+
+    expect(
+      await handler(
+        { type: "wallet.revealSecrets", vaultPassphrase: SECRET_PASSPHRASE },
+        contentSender,
+      ),
+    ).toEqual({ error: "privileged sender required" });
+    expect(
+      await handler(
+        { type: "wallet.revealSecrets", vaultPassphrase: "wrong passphrase!!" },
+        extensionSender,
+      ),
+    ).toEqual({ error: "bad passphrase" });
+    expect(
+      await handler(
+        { type: "wallet.revealSecrets", vaultPassphrase: SECRET_PASSPHRASE },
+        extensionSender,
+      ),
+    ).toEqual({ mnemonic: SECRET_MNEMONIC, ok: true, privateKey: SECRET_PRIVATE_KEY });
   });
 });

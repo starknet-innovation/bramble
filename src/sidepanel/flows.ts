@@ -180,6 +180,12 @@ export const accountFlow = (
         }
         <p id="picker-result" role="status"></p>
       </section>
+      <section class="section">
+        <h2>Add account</h2>
+        <p class="hint">Derives the next account on ${escapeHtml(status.network)} from this wallet's recovery phrase.</p>
+        <button id="new-account" class="secondary" type="button">${icon("wallet")}Add account</button>
+        <p id="new-account-result" role="status"></p>
+      </section>
       ${
         account
           ? `<section class="section">

@@ -78,9 +78,29 @@ export type EnsureNetworkAccountInput = {
 };
 
 /**
+ * Input for adding a freshly derived account on a network using the vault's
+ * retained recovery phrase.
+ */
+export type AddDerivedAccountInput = {
+  readonly networkId: StarknetNetworkId;
+  readonly vaultPassphrase: string;
+};
+
+/**
+ * Re-authenticated secret export for the active account. Returned only to the
+ * privileged reveal flow and never persisted or logged. `mnemonic` is `null`
+ * when the vault predates recovery-phrase retention.
+ */
+export type RevealedSecrets = {
+  readonly mnemonic: string | null;
+  readonly privateKey: string;
+};
+
+/**
  * Privileged encrypted-vault wallet service surface.
  */
 export type WalletVaultService = {
+  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
@@ -127,6 +147,39 @@ const sameWalletKey = (left: AccountRef, right: AccountRef): boolean =>
   left.derivation.accountIndex === right.derivation.accountIndex &&
   left.derivation.addressIndex === right.derivation.addressIndex;
 
+const nextAccountIndex = (
+  accounts: readonly AccountRef[],
+  networkId: StarknetNetworkId,
+): number => {
+  const used = new Set(
+    accounts
+      .filter((account) => account.networkId === networkId)
+      .map((account) => account.derivation.accountIndex),
+  );
+  let index = 0;
+  while (used.has(index)) {
+    index += 1;
+  }
+  return index;
+};
+
+/**
+ * Extracts the active account's private key and the vault recovery phrase for
+ * the re-authenticated reveal flow. Throws when no account is selected or its
+ * signing key is missing; never persists or logs the returned material.
+ */
+export const activeAccountSecrets = (vault: Vault): RevealedSecrets => {
+  const accountId = vault.activeAccountId;
+  if (!accountId) {
+    throw new WalletError("No account selected");
+  }
+  const signingKey = vault.signingKeys.find((key) => key.accountId === accountId);
+  if (!signingKey) {
+    throw new WalletError("Signing key unavailable");
+  }
+  return { mnemonic: vault.mnemonic, privateKey: signingKey.privateKey };
+};
+
 /**
  * Creates the background-only wallet service over encrypted storage and KMS.
  */
@@ -145,6 +198,34 @@ export const createWalletVaultService = ({
   };
 
   return {
+    async addDerivedAccount(input) {
+      const vault = await readVault(input.vaultPassphrase);
+      if (!vault.mnemonic) {
+        throw new WalletError("No recovery phrase stored for this wallet");
+      }
+
+      const { account, privateKey } = await deriveAccount(kms, {
+        accountIndex: nextAccountIndex(vault.accounts, input.networkId),
+        mnemonic: vault.mnemonic,
+        networkId: input.networkId,
+      });
+      if (vault.accounts.some((stored) => stored.id === account.id)) {
+        throw new WalletError("Account already exists");
+      }
+
+      await writeVault(
+        encryptedStore,
+        {
+          ...vault,
+          accounts: [...vault.accounts, account],
+          activeAccountId: account.id,
+          signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
+        },
+        input.vaultPassphrase,
+      );
+
+      return account;
+    },
     async createAccount(input) {
       const vault = await readVault(input.vaultPassphrase);
       const { account, privateKey } = await deriveAccount(kms, input);
@@ -158,6 +239,7 @@ export const createWalletVaultService = ({
         {
           accounts: [...vault.accounts, account],
           activeAccountId: vault.activeAccountId ?? account.id,
+          mnemonic: vault.mnemonic ?? input.mnemonic,
           originGrants: vault.originGrants,
           schemaVersion: CURRENT_SCHEMA_VERSION,
           signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],

@@ -3,7 +3,7 @@
  */
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
-import { CURRENT_SCHEMA_VERSION, emptyVault, isVaultV1, type Vault } from "./vault-schema";
+import { CURRENT_SCHEMA_VERSION, isVaultV1, isVaultV2, type Vault } from "./vault-schema";
 
 /**
  * Current schema version re-exported for migration tests and callers.
@@ -30,11 +30,27 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     fromVersion: 0,
     migrate(value) {
       if (value === null || value === undefined || isLegacyEmptyVault(value)) {
-        return emptyVault();
+        return {
+          accounts: [],
+          activeAccountId: null,
+          originGrants: [],
+          schemaVersion: 1,
+          signingKeys: [],
+        };
       }
       throw new WalletError("Unsupported vault schema");
     },
     toVersion: 1,
+  },
+  {
+    fromVersion: 1,
+    migrate(value) {
+      if (!isVaultV1(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, mnemonic: null, schemaVersion: 2 };
+    },
+    toVersion: 2,
   },
 ];
 
@@ -65,7 +81,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV1(value)) {
+  if (isVaultV2(value)) {
     return value;
   }
 
@@ -83,7 +99,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV1(migrated)) {
+  if (!isVaultV2(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

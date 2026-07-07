@@ -97,6 +97,13 @@ const activityLog = (() => {
 })();
 const handleMessage = createMessageHandler(
   {
+    async addDerivedAccount(input) {
+      const service = await wallet;
+      if (!service) {
+        throw new Error("wallet unavailable");
+      }
+      return service.addDerivedAccount(input);
+    },
     async createAccount(input) {
       const service = await wallet;
       if (!service) {

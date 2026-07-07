@@ -13,10 +13,12 @@ import {
   isGenerateMnemonicResponse,
   isPendingApprovalsResponse,
   isPreferencesResponse,
+  isRevealSecretsResponse,
   isTransferResponse,
   isTransferReviewResponse,
   isWalletStatus,
   type PendingApproval,
+  type RevealSecretsResponse,
   type TokenBalance,
   type TransferReviewResponse,
   type WalletStatus,
@@ -66,6 +68,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
 
   return {
+    async addAccount(networkId: string): Promise<void> {
+      const response = await sendMessage({ networkId, type: "wallet.addAccount" });
+      if (isCreateAccountResponse(response)) {
+        return;
+      }
+      throw responseError(response, "add account failed");
+    },
     async createAccount(
       mnemonic: string,
       networkId: string,
@@ -109,6 +118,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return response.mnemonic;
       }
       throw responseError(response, "wallet unavailable");
+    },
+    async revealSecrets(vaultPassphrase: string): Promise<RevealSecretsResponse> {
+      const response = await sendMessage({ type: "wallet.revealSecrets", vaultPassphrase });
+      if (isRevealSecretsResponse(response)) {
+        return response;
+      }
+      throw responseError(response, "reveal failed");
     },
     async loadActivity(): Promise<ActivityResponse["activity"]> {
       const response = await sendMessage({ type: "wallet.activity" });

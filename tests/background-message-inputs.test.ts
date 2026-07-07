@@ -3,12 +3,14 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  readAddAccountInput,
   readAddInvokeTransactionInput,
   readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
   readGrantOriginInput,
   readRequestAccountsInput,
+  readRevealSecretsInput,
   readSaveAddressInput,
   readSetActiveAccountInput,
   readSetActiveNetworkInput,
@@ -275,5 +277,27 @@ describe("background message parsers", () => {
         vaultPassphrase,
       }),
     ).toBeNull();
+  });
+
+  test("reads add-account messages carrying only a network", () => {
+    expect(readAddAccountInput({ networkId: "SN_MAIN", type: "wallet.addAccount" })).toEqual({
+      networkId: "SN_MAIN",
+    });
+    expect(readAddAccountInput({ networkId: "SN_BAD", type: "wallet.addAccount" })).toBeNull();
+    expect(readAddAccountInput({ type: "wallet.addAccount" })).toBeNull();
+    expect(
+      readAddAccountInput({ networkId: "SN_MAIN", type: "wallet.addAccount", vaultPassphrase }),
+    ).toBeNull();
+  });
+
+  test("reads reveal-secrets messages requiring a re-entered passphrase", () => {
+    expect(readRevealSecretsInput({ type: "wallet.revealSecrets", vaultPassphrase })).toEqual({
+      vaultPassphrase,
+    });
+    expect(
+      readRevealSecretsInput({ type: "wallet.revealSecrets", vaultPassphrase: "too short" }),
+    ).toBeNull();
+    expect(readRevealSecretsInput({ type: "wallet.revealSecrets" })).toBeNull();
+    expect(readRevealSecretsInput({ type: "wallet.unlock", vaultPassphrase })).toBeNull();
   });
 });

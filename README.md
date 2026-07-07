@@ -38,6 +38,40 @@ bun run package:extension
 3. Update schema validators and tests for old, current, and invalid vault data.
 4. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
+The vault schema is currently at **v2**. v2 adds a `mnemonic: string | null` field so the
+wallet can derive more accounts and reveal the recovery phrase after re-authentication. Vaults
+migrated from v1 (which never stored the phrase) carry `mnemonic: null` and cannot add accounts or
+reveal a phrase until re-created; each migration step advances exactly one version
+(`v0 → v1 → v2`) so a v1 vault produces a v1-shaped value before the v1→v2 step attaches the null
+phrase. `mnemonic` only ever exists inside the encrypted vault envelope.
+
+## Account Lifecycle and Secret Reveal
+
+- **Backup verification (onboarding).** Generating a fresh phrase reveals confirmation inputs for
+  words 3, 7, and 11. Those positions are deterministic on purpose: randomness would need a
+  clock/entropy boundary that repo standards keep out of pure UI code, and fixed positions keep the
+  predicate (`verifyBackupWords` in `src/sidepanel/backup-verify.ts`) pure and exhaustively
+  testable. Create stays disabled until the words match. Pasting an existing phrase skips
+  verification.
+- **Add account.** `wallet.addAccount { networkId }` (privileged, session-authenticated) delegates
+  to `WalletVaultService.addDerivedAccount`, which derives the next unused `accountIndex` for that
+  network from the stored phrase, appends the account plus its signing key, and selects it.
+- **Reveal seed / export key.** `wallet.revealSecrets { vaultPassphrase }` is privileged, requires
+  the passphrase re-entered in the message (never the cached session), verifies it via `readVault`,
+  and returns `{ mnemonic, privateKey }` for the active account. The settings-reachable reveal
+  screen re-authenticates, warns strongly, blurs the values until tapped, and never persists them —
+  they are wiped on the next render. `tests/key-boundary.test.ts` sanctions this reveal only for an
+  extension-page sender with the correct passphrase.
+
+### Import private key (not shipped)
+
+Importing a raw private key is intentionally omitted. Krusty KMS exposes no
+private-key-to-public-key derivation, so the wallet cannot compute an imported key's public key or
+account address without adding local key-derivation crypto — which `CONTRIBUTING.md` forbids
+("Do not add fallback signing, key derivation, or mnemonic validation code"). Shipping it would
+require a new vendored Krusty KMS export and an `"imported"` account-derivation kind across the
+schema, validators, and UI. It is deferred rather than shipped half-tested.
+
 ## Design System
 
 Side panel styling is layered so each axis can be updated in one place:

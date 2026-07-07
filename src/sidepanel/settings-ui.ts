@@ -12,6 +12,7 @@ import type { SidepanelWallet } from "./runtime";
 export type SettingsUiDeps = {
   readonly activeAccountId: () => string | null;
   readonly app: Element | null;
+  readonly networkId: () => string;
   readonly refresh: () => Promise<WalletStatus>;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly wallet: SidepanelWallet;
@@ -48,6 +49,32 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
           result.textContent = errorMessage(error, "Label update failed");
         }
         buttonBusy(submitButton, false);
+      },
+    );
+  });
+};
+
+/**
+ * Binds the "Add account" button on the account flow. Derives the next account
+ * on the current network from the wallet's stored recovery phrase.
+ */
+export const bindAddAccount = (deps: SettingsUiDeps): void => {
+  const button = deps.app?.querySelector<HTMLButtonElement>("#new-account");
+  const result = deps.app?.querySelector<HTMLElement>("#new-account-result");
+
+  button?.addEventListener("click", () => {
+    buttonBusy(button, true);
+    void deps.wallet.addAccount(deps.networkId()).then(
+      async () => {
+        showToast("Account added", "success");
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        showToast(errorMessage(error, "Add account failed"), "error");
+        if (result) {
+          result.textContent = errorMessage(error, "Add account failed");
+        }
+        buttonBusy(button, false);
       },
     );
   });

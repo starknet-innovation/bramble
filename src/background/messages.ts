@@ -6,14 +6,17 @@ import { DEFAULT_NETWORK, networkIdForChainId, STARKNET_NETWORKS } from "../star
 import { typedDataHash } from "../starknet/typed-data";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { activeAccountSecrets } from "../wallet/vault-service";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import {
+  readAddAccountInput,
   readAddInvokeTransactionInput,
   readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
   readGrantOriginInput,
   readRequestAccountsInput,
+  readRevealSecretsInput,
   readSetActiveAccountInput,
   readSetActiveNetworkInput,
   readSignHashInput,
@@ -117,6 +120,22 @@ const handleRuntimeMessage = async (
     return { account, ok: true };
   }
 
+  if (messageType === "wallet.addAccount") {
+    const input = readAddAccountInput(message);
+    const passphrase = session.getPassphrase();
+    if (!input) {
+      return { error: "invalid add account request" };
+    }
+    if (!passphrase) {
+      return { error: "wallet locked" };
+    }
+    const account = await wallet.addDerivedAccount({
+      networkId: input.networkId,
+      vaultPassphrase: passphrase,
+    });
+    return { account, ok: true };
+  }
+
   if (messageType === "wallet.approveOrigin") {
     const input = readApprovalIdInput(message);
     const passphrase = session.getPassphrase();
@@ -155,6 +174,17 @@ const handleRuntimeMessage = async (
       return { error: "invalid generate mnemonic request" };
     }
     return { mnemonic: await wallet.generateMnemonic(), ok: true };
+  }
+
+  if (messageType === "wallet.revealSecrets") {
+    const input = readRevealSecretsInput(message);
+    if (!input) {
+      return { error: "invalid reveal request" };
+    }
+    const { mnemonic, privateKey } = activeAccountSecrets(
+      await wallet.readVault(input.vaultPassphrase),
+    );
+    return { mnemonic, ok: true, privateKey };
   }
 
   if (messageType === "wallet.addInvokeTransaction") {
@@ -419,6 +449,9 @@ export const createMessageHandler =
  */
 export const handleMessage = createMessageHandler(
   {
+    async addDerivedAccount() {
+      throw new Error("wallet unavailable");
+    },
     async createAccount() {
       throw new Error("wallet unavailable");
     },

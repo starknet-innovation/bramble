@@ -38,6 +38,9 @@ const wallet = {
   async createAccount() {
     return account;
   },
+  async addDerivedAccount() {
+    return account;
+  },
   async ensureNetworkAccount() {
     return account;
   },

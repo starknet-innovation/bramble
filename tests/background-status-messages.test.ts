@@ -40,6 +40,9 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
   async createAccount() {
     return statusAccount;
   },
+  async addDerivedAccount() {
+    return statusAccount;
+  },
   async ensureNetworkAccount() {
     return statusAccount;
   },
@@ -59,8 +62,9 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
     return {
       accounts: [statusAccount],
       activeAccountId: statusAccount.id,
+      mnemonic: null,
       originGrants: [],
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       signingKeys: [{ accountId: statusAccount.id, privateKey: "0x123456" }],
     };
   },
