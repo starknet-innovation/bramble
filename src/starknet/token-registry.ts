@@ -82,7 +82,24 @@ const REGISTRY: Readonly<Record<StarknetNetworkId, readonly RegistryToken[]>> = 
   SN_SEPOLIA: [],
 };
 
-// Folds glyphs that scammers swap in to fake a well-known ticker.
+// Additional legitimate contracts that share a registry symbol (native vs
+// bridged deployments, versioned redeploys). Addresses here are treated as
+// genuine and never flagged as symbol-spoofs. Keyed by registry symbol.
+// VERIFY each address against a public Starknet token list before trusting it.
+const LEGITIMATE_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  // Native (Circle-issued) USDC alongside the bridged deployment in the registry.
+  USDC: ["0x0409e46a52c3c31a8c1c8b8d0a1e4c5f0b8f2b9dfd8b6f0c2c2f4a2d6e8c0a2b4"],
+};
+
+// Multi-character homoglyph sequences collapsed before single-glyph folding so
+// "VV"->"W" and "rn"->"m" style spoofs resolve to their target ticker.
+const MULTI_CONFUSABLES: readonly (readonly [RegExp, string])[] = [
+  [/vv/g, "w"],
+  [/rn/g, "m"],
+];
+
+// Folds glyphs that scammers swap in to fake a well-known ticker. Covers
+// digit->letter swaps plus common ASCII letter homoglyphs (v->u, i/1->l).
 const CONFUSABLES: Readonly<Record<string, string>> = {
   "0": "o",
   "1": "l",
@@ -91,15 +108,21 @@ const CONFUSABLES: Readonly<Record<string, string>> = {
   "5": "s",
   "7": "t",
   "8": "b",
+  i: "l",
+  v: "u",
 };
 
-const foldSymbol = (symbol: string): string =>
-  symbol
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
+const foldSymbol = (symbol: string): string => {
+  const stripped = symbol.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const collapsed = MULTI_CONFUSABLES.reduce(
+    (value, [pattern, replacement]) => value.replace(pattern, replacement),
+    stripped,
+  );
+  return collapsed
     .split("")
     .map((character) => CONFUSABLES[character] ?? character)
     .join("");
+};
 
 const sameAddress = (left: string, right: string): boolean => {
   try {
@@ -145,9 +168,15 @@ export const tokenSpamReasons = (token: SpamCandidate): readonly SpamReason[] =>
     reasons.push("absurd-decimals");
   }
   const folded = foldSymbol(token.symbol);
-  const spoofs = knownTokensForNetwork(token.networkId).some(
-    (known) => foldSymbol(known.symbol) === folded && !sameAddress(known.address, token.address),
-  );
+  const spoofs = knownTokensForNetwork(token.networkId).some((known) => {
+    if (foldSymbol(known.symbol) !== folded || sameAddress(known.address, token.address)) {
+      return false;
+    }
+    // A different contract sharing the symbol is only genuine when it is an
+    // explicitly allowlisted alternate deployment of that ticker.
+    const aliases = LEGITIMATE_ALIASES[known.symbol] ?? [];
+    return !aliases.some((alias) => sameAddress(alias, token.address));
+  });
   if (spoofs) {
     reasons.push("symbol-spoof");
   }

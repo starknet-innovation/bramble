@@ -12,8 +12,15 @@ export const CURRENCY_SYMBOLS: Readonly<Record<DisplayCurrency, string>> = {
   usd: "$",
 };
 
-const withThousands = (integerPart: string): string =>
-  integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+// Locale grouping with fixed 2 decimals. Unlike `toFixed`, this never switches
+// to exponential notation for very large magnitudes (>=1e21), so huge balances
+// still render as plain grouped digits rather than a garbled "$1e+21.00".
+const groupWithThousands = (amount: number): string =>
+  amount.toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    useGrouping: true,
+  });
 
 /**
  * Formats a fiat amount with its currency glyph, thousands separators, and two
@@ -28,8 +35,7 @@ export const formatFiat = (amount: number, currency: DisplayCurrency): string =>
   if (amount < 0.01) {
     return `${symbol}<0.01`;
   }
-  const [integerPart = "0", decimalPart = "00"] = amount.toFixed(2).split(".");
-  return `${symbol}${withThousands(integerPart)}.${decimalPart}`;
+  return `${symbol}${groupWithThousands(amount)}`;
 };
 
 /**

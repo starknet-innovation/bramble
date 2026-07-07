@@ -28,6 +28,9 @@ const CHART_TTL_MS = 30 * 60 * 1000;
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const MAX_ADDRESSES = 50;
 const CHART_DAYS = 7;
+// Bounds the persisted chart cache so a churn of one-off token views cannot grow
+// storage without limit; the oldest-fetched entries are evicted first.
+const MAX_CHART_ENTRIES = 50;
 
 // CoinGecko platform id; only Starknet mainnet has fiat coverage.
 const PLATFORM_FOR_NETWORK: Readonly<Partial<Record<StarknetNetworkId, string>>> = {
@@ -90,7 +93,11 @@ export type PriceService = {
 };
 
 type PriceEntry = Readonly<Record<DisplayCurrency, number>>;
+// `checked` records every address queried at `fetchedAt`, priced or not, so an
+// address CoinGecko never prices (custom/spam tokens) still counts as covered
+// until the TTL lapses instead of forcing a refetch on every call.
 type PriceCache = {
+  readonly checked?: readonly string[];
   readonly fetchedAt: number;
   readonly prices: Readonly<Record<string, PriceEntry>>;
 };
@@ -115,10 +122,14 @@ const isFiniteNumber = (value: unknown): value is number =>
 const isPriceEntry = (value: unknown): value is PriceEntry =>
   isRecord(value) && CURRENCIES.every((currency) => isFiniteNumber(value[currency]));
 
+const isStringArray = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
+
 const isPriceCache = (value: unknown): value is PriceCache =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["fetchedAt", "prices"]) &&
+  hasOnlyKnownKeys(value, ["checked", "fetchedAt", "prices"]) &&
   isFiniteNumber(value.fetchedAt) &&
+  (value.checked === undefined || isStringArray(value.checked)) &&
   isRecord(value.prices) &&
   Object.values(value.prices).every(isPriceEntry);
 
@@ -211,13 +222,31 @@ export const createPriceService = ({
     return entries;
   };
 
+  // Keeps only the most recently fetched entries so the persisted chart cache
+  // stays bounded regardless of how many distinct tokens are ever viewed.
+  const capChartCache = (
+    entries: Readonly<Record<string, ChartEntry>>,
+  ): Record<string, ChartEntry> => {
+    const pairs = Object.entries(entries);
+    if (pairs.length <= MAX_CHART_ENTRIES) {
+      return { ...entries };
+    }
+    const kept = pairs
+      .sort(([, left], [, right]) => right.fetchedAt - left.fetchedAt)
+      .slice(0, MAX_CHART_ENTRIES);
+    return Object.fromEntries(kept);
+  };
+
   return {
     async getPrices({ addresses, currency, networkId }) {
       const platform = PLATFORM_FOR_NETWORK[networkId];
       const wanted = [...new Set(addresses.map(normalizeAddress))].slice(0, MAX_ADDRESSES);
       const cache = await readPriceCache();
       const fresh = now() - cache.fetchedAt < PRICE_TTL_MS;
-      const covered = wanted.every((address) => cache.prices[address] !== undefined);
+      // An address is "covered" if it is priced OR was queried at the last fetch
+      // and simply has no CoinGecko listing; both stay valid until the TTL ends.
+      const known = new Set([...Object.keys(cache.prices), ...(cache.checked ?? [])]);
+      const covered = wanted.every((address) => known.has(address));
       if (!platform || wanted.length === 0 || (fresh && covered)) {
         return { currency, prices: sliceCurrency(cache.prices, addresses, currency) };
       }
@@ -226,7 +255,7 @@ export const createPriceService = ({
         const fetched = parsePriceBody(await readJsonRecord(http, url));
         const merged = { ...cache.prices, ...fetched };
         await store
-          .set(PRICES_STORE_KEY, { fetchedAt: now(), prices: merged })
+          .set(PRICES_STORE_KEY, { checked: wanted, fetchedAt: now(), prices: merged })
           .catch(() => undefined);
         return { currency, prices: sliceCurrency(merged, addresses, currency) };
       } catch {
@@ -247,8 +276,13 @@ export const createPriceService = ({
       try {
         const url = `${COINGECKO_BASE}/coins/${platform}/contract/${normalizeAddress(address)}/market_chart?vs_currency=${currency}&days=${CHART_DAYS}`;
         const points = parseChartBody(await readJsonRecord(http, url));
+        // Never cache an empty series: caching [] would suppress retries until
+        // the TTL and hide a chart that a transient failure merely omitted.
+        if (points.length === 0) {
+          return { currency, points: cached?.points ?? [] };
+        }
         await store
-          .set(CHARTS_STORE_KEY, { ...cache, [key]: { fetchedAt: now(), points } })
+          .set(CHARTS_STORE_KEY, capChartCache({ ...cache, [key]: { fetchedAt: now(), points } }))
           .catch(() => undefined);
         return { currency, points };
       } catch {
