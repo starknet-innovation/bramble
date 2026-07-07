@@ -20,11 +20,17 @@ import { BASE_STYLES } from "./styles-base";
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
-export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circular icon buttons; feedback is color-only */
+export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circular icon buttons; feedback is color-only.
+     appearance:none removes the native button bevel (a light top edge + dark
+     bottom edge) so controls are genuinely borderless. */
   button {
     align-items: center;
+    appearance: none;
+    -webkit-appearance: none;
     background: var(--mc-accent);
+    border: 0;
     border-radius: ${RADIUS.full};
+    box-shadow: none;
     color: var(--mc-accent-text);
     cursor: pointer;
     display: inline-flex;
@@ -83,7 +89,10 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
   }
   .eyebrow { letter-spacing: 0.02em; text-transform: uppercase; font-size: ${TYPE.caption.size}; }
   input, select, textarea {
+    appearance: none;
+    -webkit-appearance: none;
     background: var(--mc-elevated);
+    border: 0;
     border-radius: ${RADIUS.md};
     color: var(--mc-text);
     font: inherit;
@@ -95,6 +104,12 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
   }
   input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 1px; }
   input::placeholder, textarea::placeholder { color: var(--mc-muted); opacity: 0.7; }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238b95a5' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: right ${SPACE.md} center;
+    background-repeat: no-repeat;
+    padding-right: 36px;
+  }
   textarea {
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.mono.size};

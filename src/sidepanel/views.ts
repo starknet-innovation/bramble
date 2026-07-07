@@ -58,14 +58,12 @@ const walletHeader = (
 ): string => {
   const label = account ? preferences?.accountLabels?.[account.id] : undefined;
   const title = account ? (label ?? accountLabel(account.address)) : "MC Wallet";
-  const subtitle = account && label ? accountLabel(account.address) : "";
   return `
   <header class="wallet-header">
     <div class="brand">
       <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
       <div class="brand-copy">
         <h1>${escapeHtml(title)}</h1>
-        ${subtitle ? `<p class="brand-context">${escapeHtml(subtitle)}</p>` : ""}
       </div>
     </div>
     <div class="header-actions">
@@ -82,9 +80,8 @@ const dockItem = (
   name: IconName,
   pendingCount = 0,
 ): string =>
-  `<button class="nav-item" data-view="${view}" type="button" role="tab" aria-controls="wallet-screen-${view}" aria-selected="${activeView === view}">
+  `<button class="nav-item" data-view="${view}" type="button" role="tab" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" aria-controls="wallet-screen-${view}" aria-selected="${activeView === view}">
     <span class="tab-icon">${icon(name)}${pendingCount > 0 && view === "activity" ? `<span class="badge">${pendingCount}</span>` : ""}</span>
-    <span class="tab-label">${escapeHtml(label)}</span>
   </button>`;
 
 const walletDock = (activeView: WalletView, pendingCount: number): string => `

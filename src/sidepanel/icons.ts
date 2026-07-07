@@ -3,7 +3,7 @@
  */
 
 const ICONS = {
-  activity: '<path d="M3 12h4l3-8 4 16 3-8h4" />',
+  activity: '<circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" />',
   alert:
     '<path d="M12 4 2.7 19.3a1 1 0 0 0 .9 1.7h16.8a1 1 0 0 0 .9-1.7z" /><path d="M12 10v4" /><path d="M12 17.5h.01" />',
   book: '<path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z" /><path d="M4 17a3 3 0 0 1 3-3h11" /><path d="M8 8h6" />',
@@ -24,7 +24,7 @@ const ICONS = {
   refresh: '<path d="M20 11a8 8 0 1 0-.6 4" /><path d="M20 4v6h-6" />',
   send: '<path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4 20-7z" />',
   settings:
-    '<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" /><path d="M4 12h2" /><path d="M18 12h2" /><path d="m6.3 6.3 1.4 1.4" /><path d="m16.3 16.3 1.4 1.4" /><path d="m17.7 6.3-1.4 1.4" /><path d="m7.7 16.3-1.4 1.4" />',
+    '<path d="M4 8h9" /><path d="M17 8h3" /><path d="M4 16h3" /><path d="M11 16h9" /><circle cx="15" cy="8" r="2.2" /><circle cx="9" cy="16" r="2.2" />',
   wallet: '<path d="M3 7h18v12H3z" /><path d="M3 7l3-4h12l3 4" /><path d="M16 13h2" />',
   x: '<path d="m6 6 12 12" /><path d="m18 6-12 12" />',
 } as const;
