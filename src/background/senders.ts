@@ -79,6 +79,7 @@ export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.addToken" ||
   type === "wallet.addNft" ||
   type === "wallet.allowances" ||
+  type === "wallet.addAccount" ||
   type === "wallet.approveOrigin" ||
   type === "wallet.connectedSites" ||
   type === "wallet.createAccount" ||
@@ -97,6 +98,7 @@ export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.removeAddress" ||
   type === "wallet.revokeOrigin" ||
   type === "wallet.removeNft" ||
+  type === "wallet.revealSecrets" ||
   type === "wallet.reviewTransfer" ||
   type === "wallet.revokeAllowance" ||
   type === "wallet.saveAddress" ||

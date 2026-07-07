@@ -62,6 +62,9 @@ describe("background network messages", () => {
         async createAccount() {
           return account;
         },
+        async addDerivedAccount() {
+          return account;
+        },
         async ensureNetworkAccount(input) {
           ensured.push(input);
           accounts = [account, mainnetAccount];
@@ -84,8 +87,9 @@ describe("background network messages", () => {
           return {
             accounts,
             activeAccountId,
+            mnemonic: null,
             originGrants: [],
-            schemaVersion: 1 as const,
+            schemaVersion: 2 as const,
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",
@@ -154,6 +158,9 @@ describe("background network messages", () => {
         async createAccount() {
           return account;
         },
+        async addDerivedAccount() {
+          return account;
+        },
         async ensureNetworkAccount() {
           accounts = [account, mainnetAccount];
           activeAccountId = mainnetAccount.id;
@@ -175,8 +182,9 @@ describe("background network messages", () => {
           return {
             accounts,
             activeAccountId,
+            mnemonic: null,
             originGrants: [{ accountIds: grantedAccountIds, origin: "https://example.com" }],
-            schemaVersion: 1 as const,
+            schemaVersion: 2 as const,
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",

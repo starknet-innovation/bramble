@@ -41,6 +41,9 @@ const vault = {
 } as unknown as Vault;
 
 const wallet = {
+  async addDerivedAccount() {
+    return account;
+  },
   async createAccount() {
     return account;
   },

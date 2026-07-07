@@ -42,6 +42,9 @@ const grantsByOrigin: Readonly<Record<string, readonly AccountRef[]>> = {
 const senderFor = (origin: string): RuntimeSender => ({ id: "extension-id", url: `${origin}/app` });
 
 const wallet = {
+  async addDerivedAccount() {
+    return accountA;
+  },
   async createAccount() {
     return accountA;
   },

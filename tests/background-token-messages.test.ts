@@ -34,6 +34,9 @@ const sender: RuntimeSender = {
 const contentSender: RuntimeSender = { id: "extension-id", url: "https://example.com/app" };
 
 const walletStub = {
+  async addDerivedAccount() {
+    return account;
+  },
   async createAccount() {
     return account;
   },

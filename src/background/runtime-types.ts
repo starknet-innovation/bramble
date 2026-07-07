@@ -10,6 +10,7 @@ import type { AllowanceRecord } from "../storage/allowance-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef, Vault } from "../storage/vault-schema";
 import type {
+  AddDerivedAccountInput,
   ConnectedSite,
   CreateVaultAccountInput,
   EnsureNetworkAccountInput,
@@ -53,6 +54,15 @@ export type CreateAccountResponse = {
 export type GenerateMnemonicResponse = {
   readonly mnemonic: string;
   readonly ok: true;
+};
+
+/**
+ * Re-authenticated secret reveal returned only to the extension reveal flow.
+ */
+export type RevealSecretsResponse = {
+  readonly mnemonic: string | null;
+  readonly ok: true;
+  readonly privateKey: string;
 };
 
 /**
@@ -233,6 +243,7 @@ export type RuntimeResponse =
   | PreferencesResponse
   | PricesResponse
   | RequestAccountsResponse
+  | RevealSecretsResponse
   | SignHashResponse
   | TokenChartResponse
   | TransferResponse
@@ -244,6 +255,7 @@ export type RuntimeResponse =
  * Narrow wallet service surface consumed by background message dispatch.
  */
 export type WalletStatusReader = {
+  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;

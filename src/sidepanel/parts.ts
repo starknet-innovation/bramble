@@ -27,6 +27,7 @@ export const WALLET_VIEWS = [
   "allowances",
   "nfts",
   "nft-detail",
+  "reveal",
 ] as const;
 
 /**

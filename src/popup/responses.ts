@@ -79,6 +79,15 @@ export type GenerateMnemonicResponse = {
 };
 
 /**
+ * Re-authenticated secret reveal accepted only by the extension reveal flow.
+ */
+export type RevealSecretsResponse = {
+  readonly mnemonic: string | null;
+  readonly ok: true;
+  readonly privateKey: string;
+};
+
+/**
  * Popup preferences response accepted from the background boundary.
  */
 export type PreferencesResponse = {
@@ -249,6 +258,18 @@ export const isGenerateMnemonicResponse = (value: unknown): value is GenerateMne
   value.ok === true &&
   typeof value.mnemonic === "string" &&
   value.mnemonic.trim().split(/\s+/).length >= 12;
+
+/**
+ * Checks re-authenticated reveal responses before showing secret material.
+ */
+export const isRevealSecretsResponse = (value: unknown): value is RevealSecretsResponse =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["mnemonic", "ok", "privateKey"]) &&
+  value.ok === true &&
+  (value.mnemonic === null ||
+    (typeof value.mnemonic === "string" && value.mnemonic.trim().split(/\s+/).length >= 12)) &&
+  typeof value.privateKey === "string" &&
+  isStarkFieldElement(value.privateKey);
 
 /**
  * Checks plain preferences responses before rendering.

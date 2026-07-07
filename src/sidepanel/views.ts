@@ -43,6 +43,7 @@ import {
   WALLET_VIEWS,
   type WalletView,
 } from "./parts";
+import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
 import { DEFAULT_CURRENCY, isHiddenFromHome, tokenDetailFlow, tokensFlow } from "./token-flows";
 
@@ -346,6 +347,7 @@ const settingsScreen = (
         ${menuRow("connected-sites", "Connected sites", "Manage dapp access", "link")}
         ${menuRow("allowances", "Allowances", "Review & revoke approvals", "lock")}
         ${menuRow("backup", "Backup & restore", "Non-secret wallet data", "receive")}
+        ${menuRow("reveal", "Reveal secrets", "Recovery phrase & key", "lock")}
       </div>
       <div class="detail-grid">
         <div class="detail"><p>Accounts</p><p class="value">${status.accountCount}</p></div>
@@ -461,6 +463,9 @@ export const dashboard = (
         currency,
       );
     }
+  }
+  if (activeView === "reveal") {
+    return revealFlow(status);
   }
   const screen =
     activeView === "activity"

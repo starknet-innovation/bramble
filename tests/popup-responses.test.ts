@@ -11,6 +11,7 @@ import {
   isGenerateMnemonicResponse,
   isPendingApprovalsResponse,
   isPreferencesResponse,
+  isRevealSecretsResponse,
   isTransferResponse,
   isWalletStatus,
 } from "../src/popup/responses";
@@ -153,6 +154,18 @@ describe("popup response validators", () => {
     expect(isGenerateMnemonicResponse({ mnemonic: "too short", ok: true })).toBe(false);
     expect(isGenerateMnemonicResponse({ mnemonic, ok: false })).toBe(false);
     expect(isGenerateMnemonicResponse({ debug: true, mnemonic, ok: true })).toBe(false);
+  });
+
+  test("validates reveal-secrets responses", () => {
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+    const privateKey = "0x123456";
+
+    expect(isRevealSecretsResponse({ mnemonic, ok: true, privateKey })).toBe(true);
+    expect(isRevealSecretsResponse({ mnemonic: null, ok: true, privateKey })).toBe(true);
+    expect(isRevealSecretsResponse({ mnemonic: "too short", ok: true, privateKey })).toBe(false);
+    expect(isRevealSecretsResponse({ mnemonic, ok: true, privateKey: "nope" })).toBe(false);
+    expect(isRevealSecretsResponse({ mnemonic, ok: false, privateKey })).toBe(false);
+    expect(isRevealSecretsResponse({ debug: true, mnemonic, ok: true, privateKey })).toBe(false);
   });
 
   test("validates pending approval items before popup rendering", () => {

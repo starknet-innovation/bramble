@@ -278,6 +278,27 @@ export const readSetActiveNetworkInput = (
 };
 
 /**
+ * Parses add-account messages; the passphrase comes from the unlocked session,
+ * not the message, so only the target network is carried.
+ */
+export const readAddAccountInput = (
+  message: unknown,
+): { readonly networkId: StarknetNetworkId } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["networkId", "type"]) ||
+    message.type !== "wallet.addAccount" ||
+    !isStarknetNetworkId(message.networkId)
+  ) {
+    return null;
+  }
+
+  return {
+    networkId: message.networkId,
+  };
+};
+
+/**
  * Parses dapp chain-switch requests from content-script traffic.
  */
 export const readSwitchChainInput = (
@@ -398,6 +419,24 @@ export const readUnlockInput = (message: unknown): { readonly vaultPassphrase: s
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["type", "vaultPassphrase"]) ||
     message.type !== "wallet.unlock" ||
+    !isVaultPassphrase(message.vaultPassphrase)
+  ) {
+    return null;
+  }
+  return { vaultPassphrase: message.vaultPassphrase };
+};
+
+/**
+ * Parses reveal-secrets messages. The passphrase must be re-entered in the
+ * message and is never taken from the cached session.
+ */
+export const readRevealSecretsInput = (
+  message: unknown,
+): { readonly vaultPassphrase: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["type", "vaultPassphrase"]) ||
+    message.type !== "wallet.revealSecrets" ||
     !isVaultPassphrase(message.vaultPassphrase)
   ) {
     return null;

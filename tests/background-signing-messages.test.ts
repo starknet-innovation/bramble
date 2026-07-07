@@ -37,6 +37,9 @@ const createSigningWallet = (captureSign?: (input: SignHashInput) => void) => ({
   async createAccount() {
     return account;
   },
+  async addDerivedAccount() {
+    return account;
+  },
   async ensureNetworkAccount() {
     return account;
   },
@@ -56,8 +59,9 @@ const createSigningWallet = (captureSign?: (input: SignHashInput) => void) => ({
     return {
       accounts: [account],
       activeAccountId: account.id,
+      mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin: "https://example.com" }],
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

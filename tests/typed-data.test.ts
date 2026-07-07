@@ -104,6 +104,9 @@ describe("wallet.signTypedData handler", () => {
     session.unlock("correct horse battery staple");
     return createMessageHandler(
       {
+        async addDerivedAccount() {
+          return account;
+        },
         async createAccount() {
           return account;
         },

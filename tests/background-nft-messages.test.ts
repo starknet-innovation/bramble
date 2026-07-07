@@ -28,6 +28,9 @@ const sender: RuntimeSender = {
 };
 
 const walletStub = {
+  async addDerivedAccount() {
+    return account;
+  },
   async createAccount() {
     return account;
   },

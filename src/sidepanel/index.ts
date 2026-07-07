@@ -16,8 +16,16 @@ import { applySkin } from "../ui/skin";
 import { bindClusterScreens } from "./cluster-ui";
 import { buttonBusy, errorMessage, focusMemo, restoreFocus, scopedStatus, showToast } from "./dom";
 import { locked, onboarding } from "./gate-views";
+import { bindOnboarding } from "./onboarding-ui";
+import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
-import { bindAccountLabel, bindAppearance, bindBackup, bindContacts } from "./settings-ui";
+import {
+  bindAccountLabel,
+  bindAddAccount,
+  bindAppearance,
+  bindBackup,
+  bindContacts,
+} from "./settings-ui";
 import { SIDEPANEL_STYLES } from "./styles";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
@@ -70,63 +78,6 @@ const bindCopy = (): void => {
         },
       );
     });
-  });
-};
-
-const bindOnboarding = (): void => {
-  const form = app?.querySelector<HTMLFormElement>("#create-form");
-  const generateButton = app?.querySelector<HTMLButtonElement>("#generate-button");
-  const result = app?.querySelector<HTMLElement>("#form-result");
-  const mnemonicInput = form?.querySelector<HTMLTextAreaElement>('textarea[name="mnemonic"]');
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-
-  generateButton?.addEventListener("click", () => {
-    buttonBusy(generateButton, true);
-    void wallet.generateMnemonic().then(
-      (mnemonic) => {
-        if (mnemonicInput) {
-          mnemonicInput.value = mnemonic;
-        }
-        if (result) {
-          result.textContent = "Recovery phrase generated";
-        }
-        showToast("Recovery phrase generated", "success");
-        buttonBusy(generateButton, false);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Recovery phrase failed"), "error");
-        if (result) {
-          result.textContent = errorMessage(error, "Recovery phrase failed");
-        }
-        buttonBusy(generateButton, false);
-      },
-    );
-  });
-
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    buttonBusy(submitButton, true);
-    void wallet
-      .createAccount(
-        String(data.get("mnemonic") ?? "").trim(),
-        String(data.get("networkId") ?? "SN_MAIN"),
-        String(data.get("vaultPassphrase") ?? ""),
-      )
-      .then(
-        async () => {
-          activeView = "home";
-          showToast("Wallet created", "success");
-          await render(await wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Account import failed"), "error");
-          if (result) {
-            result.textContent = errorMessage(error, "Account import failed");
-          }
-          buttonBusy(submitButton, false);
-        },
-      );
   });
 };
 
@@ -439,22 +390,25 @@ const render = async (status: WalletStatus): Promise<void> => {
   );
   bindNavigation();
   bindCopy();
-  bindOnboarding();
+  bindOnboarding({ app, render, wallet });
   bindUnlock();
   bindDashboard();
   bindDeploy();
   bindPickers();
   bindRpcOverride();
+  bindReveal({ app, wallet });
   bindActivity({ app, render, wallet });
   bindTransfer({ app, render, wallet });
   const settingsDeps = {
     activeAccountId: () => lastAccountId,
     app,
+    networkId: () => lastNetworkId,
     refresh: () => wallet.loadStatus(),
     render,
     wallet,
   };
   bindAccountLabel(settingsDeps);
+  bindAddAccount(settingsDeps);
   bindAppearance(settingsDeps);
   bindBackup(settingsDeps);
   bindContacts(settingsDeps);

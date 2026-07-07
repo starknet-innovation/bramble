@@ -29,6 +29,9 @@ const extensionSender: RuntimeSender = {
 const contentSender: RuntimeSender = { id: "extension-id", url: "https://dapp.example/app" };
 
 const walletStub = {
+  async addDerivedAccount() {
+    return account;
+  },
   async createAccount() {
     return account;
   },

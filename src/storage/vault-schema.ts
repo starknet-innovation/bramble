@@ -12,7 +12,7 @@ import {
 /**
  * Current vault schema version accepted by validators and writers.
  */
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 /**
  * Public account metadata safe to expose to granted origins.
@@ -48,7 +48,8 @@ export type OriginGrant = {
 };
 
 /**
- * Current encrypted vault schema.
+ * Legacy vault schema without a retained recovery phrase. Only reachable
+ * through migration; new writes always use the current schema.
  */
 export type VaultV1 = {
   readonly accounts: readonly AccountRef[];
@@ -59,9 +60,25 @@ export type VaultV1 = {
 };
 
 /**
+ * Current encrypted vault schema. `mnemonic` retains the wallet recovery
+ * phrase so more accounts can be derived and the phrase can be revealed after
+ * re-authentication; it is `null` for vaults migrated from schema v1 (where
+ * the phrase was never stored) so those wallets stay read-only for those
+ * operations without failing closed.
+ */
+export type VaultV2 = {
+  readonly accounts: readonly AccountRef[];
+  readonly activeAccountId: string | null;
+  readonly mnemonic: string | null;
+  readonly originGrants: readonly OriginGrant[];
+  readonly schemaVersion: 2;
+  readonly signingKeys: readonly SigningKeyRef[];
+};
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV1;
+export type Vault = VaultV2;
 
 const isSafeIndex = (value: unknown): value is number =>
   Number.isSafeInteger(value) && Number(value) >= 0;
@@ -135,29 +152,20 @@ const hasUniqueStrings = (values: readonly string[]): boolean =>
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV1 => ({
+export const emptyVault = (): VaultV2 => ({
   accounts: [],
   activeAccountId: null,
+  mnemonic: null,
   originGrants: [],
   schemaVersion: CURRENT_SCHEMA_VERSION,
   signingKeys: [],
 });
 
-/**
- * Validates the current vault schema and internal references.
- */
-export const isVaultV1 = (value: unknown): value is VaultV1 => {
+const isRetainedMnemonic = (value: unknown): value is string | null =>
+  value === null || (typeof value === "string" && value.trim().length > 0);
+
+const hasValidVaultReferences = (value: Record<string, unknown>): boolean => {
   if (
-    !isRecord(value) ||
-    !isJson(value) ||
-    !hasOnlyKnownKeys(value, [
-      "accounts",
-      "activeAccountId",
-      "originGrants",
-      "schemaVersion",
-      "signingKeys",
-    ]) ||
-    value.schemaVersion !== CURRENT_SCHEMA_VERSION ||
     (!isAccountId(value.activeAccountId) && value.activeAccountId !== null) ||
     !Array.isArray(value.accounts) ||
     !Array.isArray(value.originGrants) ||
@@ -189,3 +197,37 @@ export const isVaultV1 = (value: unknown): value is VaultV1 => {
         accounts.some((account) => account.id === value.activeAccountId))
   );
 };
+
+/**
+ * Validates the legacy schema-v1 vault used only as a migration source.
+ */
+export const isVaultV1 = (value: unknown): value is VaultV1 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, [
+    "accounts",
+    "activeAccountId",
+    "originGrants",
+    "schemaVersion",
+    "signingKeys",
+  ]) &&
+  value.schemaVersion === 1 &&
+  hasValidVaultReferences(value);
+
+/**
+ * Validates the current vault schema and internal references.
+ */
+export const isVaultV2 = (value: unknown): value is VaultV2 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, [
+    "accounts",
+    "activeAccountId",
+    "mnemonic",
+    "originGrants",
+    "schemaVersion",
+    "signingKeys",
+  ]) &&
+  value.schemaVersion === CURRENT_SCHEMA_VERSION &&
+  isRetainedMnemonic(value.mnemonic) &&
+  hasValidVaultReferences(value);

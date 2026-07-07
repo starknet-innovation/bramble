@@ -2,14 +2,27 @@
  * Vault service checks prove encrypted, permissioned account persistence.
  */
 import { describe, expect, test } from "bun:test";
+import type { KrustyKms } from "../src/crypto/krusty";
 import { createEncryptedStore } from "../src/storage/encrypted-store";
 import { createMemoryStore } from "../src/storage/kv";
-import { createWalletVaultService } from "../src/wallet/vault-service";
+import { activeAccountSecrets, createWalletVaultService } from "../src/wallet/vault-service";
 import { fakeKms } from "./fake-kms";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultKey = "mc-wallet:vault";
 const vaultPassphrase = "correct horse battery staple";
+
+// KMS whose keypair varies by account index so derived accounts stay distinct.
+const indexedKms = (): KrustyKms => ({
+  ...fakeKms(),
+  async deriveStarknetKeypair(_mnemonic, _addressIndex, accountIndex) {
+    return {
+      privateKey: `0x1234${accountIndex + 1}`,
+      publicKeyX: `0xabc${accountIndex}`,
+      publicKeyY: "0xdef",
+    };
+  },
+});
 
 describe("createWalletVaultService", () => {
   test("creates encrypted account metadata", async () => {
@@ -29,6 +42,78 @@ describe("createWalletVaultService", () => {
     expect(vault.activeAccountId).toBe(account.id);
     expect(vault.originGrants).toEqual([]);
     expect(vault.signingKeys).toEqual([{ accountId: account.id, privateKey: "0x123456" }]);
+  });
+
+  test("stores the recovery phrase in the encrypted vault", async () => {
+    const store = createMemoryStore();
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(store, vaultKey),
+      kms: fakeKms(),
+    });
+
+    await service.createAccount({ mnemonic, vaultPassphrase });
+    const vault = await service.readVault(vaultPassphrase);
+
+    expect(vault.mnemonic).toBe(mnemonic);
+    expect(JSON.stringify(await store.get(vaultKey))).not.toContain(mnemonic);
+  });
+
+  test("adds the next derived account on a network from the stored phrase", async () => {
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: indexedKms(),
+    });
+
+    const first = await service.createAccount({ mnemonic, vaultPassphrase });
+    const second = await service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase });
+    const third = await service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase });
+
+    expect(second.derivation.accountIndex).toBe(1);
+    expect(third.derivation.accountIndex).toBe(2);
+    expect(new Set([first.id, second.id, third.id]).size).toBe(3);
+
+    const vault = await service.readVault(vaultPassphrase);
+    expect(vault.accounts).toEqual([first, second, third]);
+    expect(vault.activeAccountId).toBe(third.id);
+    expect(vault.signingKeys.map((key) => key.accountId)).toEqual([first.id, second.id, third.id]);
+  });
+
+  test("counts unused account indexes per network independently", async () => {
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: indexedKms(),
+    });
+
+    await service.createAccount({ mnemonic, networkId: "SN_MAIN", vaultPassphrase });
+    const sepolia = await service.addDerivedAccount({ networkId: "SN_SEPOLIA", vaultPassphrase });
+
+    expect(sepolia.derivation.accountIndex).toBe(0);
+    expect(sepolia.networkId).toBe("SN_SEPOLIA");
+  });
+
+  test("refuses to add accounts without a stored recovery phrase", async () => {
+    const encryptedStore = createEncryptedStore(createMemoryStore(), vaultKey);
+    await encryptedStore.write(
+      { accounts: [], activeAccountId: null, originGrants: [], schemaVersion: 1, signingKeys: [] },
+      vaultPassphrase,
+    );
+    const service = createWalletVaultService({ encryptedStore, kms: indexedKms() });
+
+    await expect(
+      service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase }),
+    ).rejects.toThrow("No recovery phrase stored for this wallet");
+  });
+
+  test("exposes the active account key and phrase to the reveal flow", async () => {
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: fakeKms(),
+    });
+
+    await service.createAccount({ mnemonic, vaultPassphrase });
+    const secrets = activeAccountSecrets(await service.readVault(vaultPassphrase));
+
+    expect(secrets).toEqual({ mnemonic, privateKey: "0x123456" });
   });
 
   test("grants origins access only to selected accounts", async () => {

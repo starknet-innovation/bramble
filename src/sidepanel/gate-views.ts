@@ -4,8 +4,15 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 import { icon } from "./icons";
 import { networkOptions } from "./parts";
+
+const backupVerifyInputs = (): string =>
+  BACKUP_VERIFY_POSITIONS.map(
+    (position, index) =>
+      `<label><span>Word ${position}</span><input name="verify-${index}" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" /></label>`,
+  ).join("");
 
 const standaloneHeader = (status: WalletStatus): string => `
   <header class="wallet-header">
@@ -37,6 +44,11 @@ export const onboarding = (status: WalletStatus): string => `
           <input name="vaultPassphrase" type="password" minlength="12" required autocomplete="new-password" />
           <span class="hint">At least 12 characters. Unlocks the wallet on this device.</span>
         </label>
+        <div id="backup-verify" class="stack" hidden>
+          <span class="hint">Confirm you saved the phrase by re-typing these words.</span>
+          <div class="verify-grid">${backupVerifyInputs()}</div>
+          <p id="verify-result" role="status"></p>
+        </div>
         <div class="button-row">
           <button id="generate-button" class="secondary" type="button" ${status.ready ? "" : "disabled"}>${icon("refresh")}Generate phrase</button>
           <button type="submit" ${status.ready ? "" : "disabled"}>${icon("wallet")}Create wallet</button>

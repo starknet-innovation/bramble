@@ -7,6 +7,7 @@ import {
   emptyVault,
   isAccountId,
   isVaultV1,
+  isVaultV2,
 } from "../src/storage/vault-schema";
 
 const account = {
@@ -30,6 +31,41 @@ const vault = {
   schemaVersion: 1 as const,
   signingKeys: [{ accountId: account.id, privateKey: "0x456" }],
 };
+
+const currentVault = { ...vault, mnemonic: null, schemaVersion: 2 as const };
+
+describe("isVaultV2", () => {
+  test("accepts current vaults with or without a stored phrase", () => {
+    expect(isVaultV2(currentVault)).toBe(true);
+    expect(isVaultV2({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
+    expect(emptyVault().schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
+    expect(isVaultV2(emptyVault())).toBe(true);
+  });
+
+  test("rejects legacy v1 vaults and version mismatches", () => {
+    expect(isVaultV2(vault)).toBe(false);
+    expect(isVaultV2({ ...currentVault, schemaVersion: 1 })).toBe(false);
+    expect(isVaultV1(currentVault)).toBe(false);
+  });
+
+  test("rejects a missing or malformed recovery phrase", () => {
+    const withoutMnemonic = {
+      accounts: currentVault.accounts,
+      activeAccountId: currentVault.activeAccountId,
+      originGrants: currentVault.originGrants,
+      schemaVersion: 2 as const,
+      signingKeys: currentVault.signingKeys,
+    };
+
+    expect(isVaultV2(withoutMnemonic)).toBe(false);
+    expect(isVaultV2({ ...currentVault, mnemonic: "" })).toBe(false);
+    expect(isVaultV2({ ...currentVault, mnemonic: 42 })).toBe(false);
+  });
+
+  test("rejects unexpected keys", () => {
+    expect(isVaultV2({ ...currentVault, label: "unexpected" })).toBe(false);
+  });
+});
 
 describe("isVaultV1", () => {
   test("creates empty vaults with the current schema version", () => {

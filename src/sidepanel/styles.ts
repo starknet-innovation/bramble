@@ -368,6 +368,24 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     padding: ${SPACE.lg} ${SPACE.md};
     text-align: center;
   }
+
+  /* Reveal secrets: blurred until tapped; wiped whenever the shell re-renders */
+  [hidden] { display: none !important; }
+  .reveal-warning { border-color: var(--mc-danger-border); }
+  .reveal-danger { color: var(--mc-danger); font-weight: 650; }
+  .reveal-output { display: grid; gap: ${SPACE.sm}; }
+  .reveal-value {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.md};
+    font-family: var(--mc-font-mono);
+    font-size: ${TYPE.mono.size};
+    line-height: ${TYPE.mono.line};
+    overflow-wrap: anywhere;
+    padding: ${SPACE.sm} ${SPACE.md};
+    word-break: break-all;
+  }
+  .reveal-value.is-masked { filter: blur(7px); user-select: none; }
+  .verify-grid { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .icon {
     fill: none;
     height: ${CONTROL.icon};
