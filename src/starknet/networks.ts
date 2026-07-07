@@ -31,7 +31,13 @@ export const STARKNET_NETWORKS: Readonly<Record<StarknetNetworkId, StarknetNetwo
     rpcUrls: ["https://api.cartridge.gg/x/starknet/sepolia"],
   },
   SN_DEVNET: {
-    chainId: "0x534e5f5345504f4c4941",
+    // starknet-devnet ships with SN_SEPOLIA's on-chain chain id
+    // (0x534e5f5345504f4c4941) by default, which collides with the Sepolia
+    // network above and makes `networkIdForChainId` non-deterministic. We use a
+    // distinct sentinel — the short-string encoding of "SN_DEVNET" — so devnet
+    // resolves unambiguously and chain switching cannot silently alias Sepolia.
+    // Nothing in the wallet depends on the literal devnet chain id.
+    chainId: "0x534e5f4445564e4554",
     id: "SN_DEVNET",
     name: "Local Devnet",
     rpcUrls: ["http://127.0.0.1:5050/rpc"],
@@ -108,6 +114,11 @@ export const isStarknetNetworkId = (value: unknown): value is StarknetNetworkId 
 
 /**
  * Resolves a configured network id from a Starknet chain id.
+ *
+ * Each configured network carries a distinct `chainId` (devnet uses a sentinel
+ * rather than reusing Sepolia's on-chain id), so this lookup is deterministic:
+ * insertion order is stable and no two networks share a chain id. Returns
+ * `null` for any chain id the wallet is not configured for.
  */
 export const networkIdForChainId = (chainId: string): StarknetNetworkId | null =>
   Object.values(STARKNET_NETWORKS).find((network) => network.chainId === chainId)?.id ?? null;

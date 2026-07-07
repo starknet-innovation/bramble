@@ -7,6 +7,8 @@ import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
+  networkIdForChainId,
+  STARKNET_NETWORKS,
 } from "../src/starknet/networks";
 
 test("validates bounded Stark field elements", () => {
@@ -23,4 +25,17 @@ test("validates bounded Stark field elements", () => {
 test("validates Starknet network ids by owned configured keys only", () => {
   expect(isStarknetNetworkId("SN_SEPOLIA")).toBe(true);
   expect(isStarknetNetworkId("toString")).toBe(false);
+});
+
+test("gives every network a distinct chain id so devnet never aliases Sepolia", () => {
+  const chainIds = Object.values(STARKNET_NETWORKS).map((network) => network.chainId);
+  expect(new Set(chainIds).size).toBe(chainIds.length);
+  expect(STARKNET_NETWORKS.SN_DEVNET.chainId).not.toBe(STARKNET_NETWORKS.SN_SEPOLIA.chainId);
+});
+
+test("resolves each configured chain id deterministically to its network", () => {
+  expect(networkIdForChainId(STARKNET_NETWORKS.SN_MAIN.chainId)).toBe("SN_MAIN");
+  expect(networkIdForChainId(STARKNET_NETWORKS.SN_SEPOLIA.chainId)).toBe("SN_SEPOLIA");
+  expect(networkIdForChainId(STARKNET_NETWORKS.SN_DEVNET.chainId)).toBe("SN_DEVNET");
+  expect(networkIdForChainId("0xdeadbeef")).toBeNull();
 });

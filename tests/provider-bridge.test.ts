@@ -31,6 +31,9 @@ const account = {
   publicKeyY: "0xdef",
 };
 const accountResult = { accounts: [account], ok: true as const };
+// Page-facing view: only address + networkId survive sanitization.
+const publicAccount = { address: account.address, networkId: account.networkId };
+const publicAccountResult = { accounts: [publicAccount], ok: true as const };
 const invokeParams = {
   calls: [{ calldata: ["0x1"], contractAddress: "0x123", entrypoint: "transfer" }],
 };
@@ -241,10 +244,10 @@ describe("provider bridge", () => {
 
   test("creates page-targeted responses", () => {
     expect(
-      providerResponse({ id: requestId, method: "mc_accounts" }, { result: accountResult }),
+      providerResponse({ id: requestId, method: "mc_accounts" }, { result: publicAccountResult }),
     ).toEqual({
       id: requestId,
-      result: accountResult,
+      result: publicAccountResult,
       target: PAGE_TARGET,
     });
     expect(
@@ -318,12 +321,16 @@ describe("provider bridge", () => {
 
   test("reads exact page-targeted responses", () => {
     expect(
-      readProviderResponse({ id: requestId, result: accountResult, target: PAGE_TARGET }),
+      readProviderResponse({ id: requestId, result: publicAccountResult, target: PAGE_TARGET }),
     ).toEqual({
       id: requestId,
-      result: accountResult,
+      result: publicAccountResult,
       target: PAGE_TARGET,
     });
+    // A page-wire accounts result carrying derivation/public-key fields is rejected.
+    expect(
+      readProviderResponse({ id: requestId, result: accountResult, target: PAGE_TARGET }),
+    ).toBeNull();
     expect(
       readProviderResponse({ error: "wallet locked", id: requestId, target: PAGE_TARGET }),
     ).toEqual({
@@ -386,7 +393,7 @@ describe("provider bridge", () => {
     const sparseAccounts = new Array<unknown>(1);
 
     expect(toProviderPayload({ accounts: [account], ok: true })).toEqual({
-      result: { accounts: [account], ok: true },
+      result: publicAccountResult,
     });
     expect(toProviderPayload({ accounts: [account, account], ok: true })).toEqual({
       error: "invalid provider response",
@@ -401,6 +408,27 @@ describe("provider bridge", () => {
     });
     expect(toProviderPayload({ accounts: [account], ok: true, signature: "0x123" })).toEqual({
       error: "invalid provider response",
+    });
+  });
+
+  test("strips derivation indices and public keys from page-facing accounts", () => {
+    const payload = toProviderPayload({ accounts: [account], ok: true });
+    expect(payload).toEqual({ result: publicAccountResult });
+
+    const result = payload.result as { readonly accounts: readonly Record<string, unknown>[] };
+    for (const forwarded of result.accounts) {
+      expect(Object.keys(forwarded).sort()).toEqual(["address", "networkId"]);
+      expect(forwarded).not.toHaveProperty("derivation");
+      expect(forwarded).not.toHaveProperty("publicKeyX");
+      expect(forwarded).not.toHaveProperty("publicKeyY");
+      expect(forwarded).not.toHaveProperty("classHash");
+      expect(forwarded).not.toHaveProperty("id");
+    }
+  });
+
+  test("wallet_requestAccounts still returns addresses only", () => {
+    expect(toProviderPayload({ accounts: [account], ok: true }, "wallet_requestAccounts")).toEqual({
+      result: [account.address],
     });
   });
 
