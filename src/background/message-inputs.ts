@@ -200,13 +200,17 @@ export const readApprovalIdInput = (message: unknown): { readonly id: string } |
 };
 
 /**
- * Parses dapp account requests from content-script traffic.
+ * Parses an origin-bearing dapp message of a given type (`{ origin, type }`)
+ * from content-script traffic, normalizing the origin.
  */
-export const readRequestAccountsInput = (message: unknown): { readonly origin: string } | null => {
+export const readOriginRequestInput = (
+  message: unknown,
+  type: string,
+): { readonly origin: string } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["origin", "type"]) ||
-    message.type !== "wallet.requestAccounts"
+    message.type !== type
   ) {
     return null;
   }
@@ -214,6 +218,12 @@ export const readRequestAccountsInput = (message: unknown): { readonly origin: s
   const origin = normalizeWalletOrigin(message.origin);
   return origin ? { origin } : null;
 };
+
+/**
+ * Parses dapp account requests from content-script traffic.
+ */
+export const readRequestAccountsInput = (message: unknown): { readonly origin: string } | null =>
+  readOriginRequestInput(message, "wallet.requestAccounts");
 
 /**
  * Parses dapp invoke transaction requests from content-script traffic.

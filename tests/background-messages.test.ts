@@ -296,7 +296,9 @@ describe("createMessageHandler", () => {
     session.unlock(vaultPassphrase);
     const handler = createMessageHandler(createWallet(), "extension-id", session);
 
-    await expect(handler({ type: "wallet.getChainId" }, contentSender)).resolves.toEqual({
+    await expect(
+      handler({ origin: "https://dapp.example", type: "wallet.getChainId" }, contentSender),
+    ).resolves.toEqual({
       chainId: "0x534e5f4d41494e",
       ok: true,
     });

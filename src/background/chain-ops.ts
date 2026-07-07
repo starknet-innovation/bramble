@@ -8,7 +8,11 @@ import { typedDataHash } from "../starknet/typed-data";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
-import { readSignTypedDataInput, readSwitchChainInput, readTypeOnlyInput } from "./message-inputs";
+import {
+  readOriginRequestInput,
+  readSignTypedDataInput,
+  readSwitchChainInput,
+} from "./message-inputs";
 import { switchActiveNetwork } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
@@ -128,7 +132,9 @@ export const handleChainOps = async (
   }
 
   if (messageType === "wallet.getChainId") {
-    if (!readTypeOnlyInput(message, "wallet.getChainId")) {
+    // The content bridge sends { origin, type }; chain id is public data so the
+    // origin is not gated, but the message must still be well-formed.
+    if (!readOriginRequestInput(message, "wallet.getChainId")) {
       return { error: "invalid chain id request" };
     }
     const preferences = await preferencesStore.read();
