@@ -31,6 +31,7 @@ import { type IconName, icon } from "./icons";
 import { nftDetailFlow, nftGalleryFlow } from "./nft-views";
 import {
   accountAvatar,
+  accountDisplayName,
   accountLabel,
   activeAccount,
   copyButton,
@@ -56,8 +57,10 @@ const walletHeader = (
   account: AccountRef | null,
   preferences: WalletPreferences | null,
 ): string => {
-  const label = account ? preferences?.accountLabels?.[account.id] : undefined;
-  const name = account ? (label ?? accountLabel(account.address)) : "MC Wallet";
+  const name = account ? accountDisplayName(account, preferences) : "MC Wallet";
+  const network = status.network
+    .replace(/^Starknet Mainnet$/, "Starknet")
+    .replace(/^Starknet\s+/, "");
   return `
   <header class="wallet-header">
     <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
@@ -65,7 +68,7 @@ const walletHeader = (
       <strong>${escapeHtml(name)}</strong>
       <span class="account-sep">|</span>
       <span class="dot"></span>
-      <span class="account-net">${escapeHtml(status.network)}</span>
+      <span class="account-net">${escapeHtml(network)}</span>
     </div>
     <button id="lock-button" class="icon-button" type="button" aria-label="Lock wallet" title="Lock wallet">${icon("lock")}</button>
   </header>`;

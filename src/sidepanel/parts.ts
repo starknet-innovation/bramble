@@ -52,14 +52,96 @@ export const isWalletView = (value: unknown): value is WalletView =>
 export const accountLabel = (address: string): string =>
   `${address.slice(0, 6)}…${address.slice(-4)}`;
 
+const NAME_ADJECTIVES = [
+  "Amber",
+  "Bold",
+  "Brave",
+  "Bright",
+  "Calm",
+  "Clever",
+  "Cosmic",
+  "Eager",
+  "Gentle",
+  "Golden",
+  "Happy",
+  "Keen",
+  "Lively",
+  "Loyal",
+  "Lucky",
+  "Mighty",
+  "Noble",
+  "Quiet",
+  "Rapid",
+  "Royal",
+  "Sunny",
+  "Swift",
+  "Vivid",
+  "Witty",
+  "Zesty",
+  "Steady",
+  "Choppy",
+  "Learned",
+  "Masterful",
+  "Chief",
+] as const;
+const NAME_ANIMALS = [
+  "Otter",
+  "Falcon",
+  "Lynx",
+  "Heron",
+  "Bison",
+  "Marten",
+  "Osprey",
+  "Panda",
+  "Raven",
+  "Sable",
+  "Tapir",
+  "Viper",
+  "Walrus",
+  "Yak",
+  "Zebra",
+  "Badger",
+  "Cobra",
+  "Dingo",
+  "Egret",
+  "Ferret",
+  "Gecko",
+  "Ibis",
+  "Jackal",
+  "Koala",
+  "Ladybird",
+  "Snail",
+  "Chilli",
+  "Lobster",
+  "Mouse",
+  "Cheese",
+] as const;
+
 /**
- * Resolves the user-chosen display name for an account, falling back to the
- * truncated address.
+ * Deterministic two-word account nickname (adjective + animal) derived from the
+ * address, so an account without a user label still reads as a friendly name
+ * rather than a raw hex string.
+ */
+export const friendlyAccountName = (address: string): string => {
+  let bits: bigint;
+  try {
+    bits = BigInt(address);
+  } catch {
+    bits = 0n;
+  }
+  const adjective = NAME_ADJECTIVES[Number(bits % BigInt(NAME_ADJECTIVES.length))] ?? "Amber";
+  const animal = NAME_ANIMALS[Number((bits / 131n) % BigInt(NAME_ANIMALS.length))] ?? "Otter";
+  return `${adjective} ${animal}`;
+};
+
+/**
+ * Resolves the user-chosen display name for an account, falling back to a
+ * deterministic friendly nickname derived from the address.
  */
 export const accountDisplayName = (
   account: AccountRef,
   preferences: WalletPreferences | null,
-): string => preferences?.accountLabels?.[account.id] ?? accountLabel(account.address);
+): string => preferences?.accountLabels?.[account.id] ?? friendlyAccountName(account.address);
 
 /**
  * Renders a deterministic identicon for an address: a symmetric 5x5 grid
