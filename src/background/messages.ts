@@ -4,6 +4,7 @@
 
 import { isBlockedOrigin } from "../security/blocklist";
 import { DEFAULT_NETWORK, networkIdForChainId, STARKNET_NETWORKS } from "../starknet/networks";
+import { type PriceService, unavailablePriceService } from "../starknet/prices";
 import { typedDataHash } from "../starknet/typed-data";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
 import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-history";
@@ -44,6 +45,7 @@ import {
   type RuntimeSender,
 } from "./senders";
 import { createUnlockSession, type UnlockSession } from "./session";
+import { handleTokenOps } from "./token-ops";
 import { handleWalletOps } from "./wallet-ops";
 
 const unavailableVaultStatus = () => ({
@@ -76,6 +78,7 @@ const handleRuntimeMessage = async (
   runtimeRpc: RuntimeRpc,
   activity: ActivityLog,
   originHistory: OriginHistoryStore,
+  prices: PriceService,
   message: unknown,
   sender?: RuntimeSender,
 ): Promise<RuntimeResponse> => {
@@ -119,6 +122,15 @@ const handleRuntimeMessage = async (
   const originResponse = await handleOriginOps({ session, wallet }, messageType, message);
   if (originResponse) {
     return originResponse;
+  }
+
+  const tokenResponse = await handleTokenOps(
+    { preferencesStore, prices, runtimeRpc, session, wallet },
+    messageType,
+    message,
+  );
+  if (tokenResponse) {
+    return tokenResponse;
   }
 
   if (messageType === "wallet.createAccount") {
@@ -423,6 +435,7 @@ export const createMessageHandler =
     runtimeRpc: RuntimeRpc = defaultRuntimeRpc,
     activity: ActivityLog = memoryActivityLog(),
     originHistory: OriginHistoryStore = memoryOriginHistory(),
+    prices: PriceService = unavailablePriceService,
   ) =>
   async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
@@ -435,6 +448,7 @@ export const createMessageHandler =
         runtimeRpc,
         activity,
         originHistory,
+        prices,
         message,
         sender,
       );

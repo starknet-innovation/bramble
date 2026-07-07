@@ -31,6 +31,38 @@ bun run package:extension
 - `src/ui` defines the design system: the replaceable color skin contract plus the shared scale
   tokens (spacing, radius, type, motion, control metrics) consumed by side panel styling.
 
+## Tokens, Prices, and Spam Filtering
+
+Token tracking spans a few narrow modules:
+
+- Custom tokens: the privileged `wallet.addToken { address }` message reads `name`, `symbol`, and
+  `decimals` on-chain through `getTokenMetadata` in `src/starknet/rpc.ts` (felt short-string and
+  Cairo ByteArray decoding), normalizes the symbol, and stores it through `preferencesStore`. The
+  UI lives on the tokens flow (`src/sidepanel/token-flows.ts`), reachable from the home Balances
+  header and Settings.
+- Auto-detection: `src/starknet/token-registry.ts` vendors a curated mainnet registry (ETH, STRK,
+  USDC, USDT, DAI, WBTC). `wallet.detectTokens` probes `balanceOf` for registry tokens not yet
+  tracked and returns held ones as one-tap suggestions. Registry addresses marked `VERIFY` are
+  advisory; a wrong address simply fails its probe and is never surfaced, and detection never
+  authorizes a transfer.
+- Spam filtering: the same registry module exports heuristics (registry-symbol spoofing with
+  confusable folding, absurd decimals, empty names). Flagged tokens are hidden from home by
+  default; the tokens flow reveals them with a warning. A backwards-compatible optional
+  `hiddenTokens` preference (like `rpcOverrides`) records user hide/show choices.
+- Prices: `src/starknet/prices.ts` fetches CoinGecko `simple/token_price` and `market_chart` for
+  the `starknet` platform (host permission `https://api.coingecko.com/*`), cached in storage with a
+  ~5 minute TTL behind an injected clock. Fetching happens only in the background worker through an
+  injected `fetch`; every failure degrades to cached-or-empty so the UI omits fiat when offline.
+  Home balance rows and the hero portfolio total use `preferences.displayCurrency`.
+- Token detail: tapping a balance row opens a detail flow with the current price, a self-drawn
+  7-day SVG sparkline (`src/sidepanel/sparkline.ts`), holdings, and contract facts.
+
+Known limitations (v1): registry coverage is mainnet-only and address-verified from public token
+lists; fiat prices depend on CoinGecko's Starknet coverage and address normalization, so some
+tokens show no price; spam-flagged tokens cannot yet be force-pinned to home (they stay on the
+tokens flow); custom tokens whose on-chain symbol is not a `[A-Z0-9]{2,12}` ticker are rejected;
+there is no dedicated remove-token action (hide instead).
+
 ## Migration Workflow
 
 1. Bump `CURRENT_SCHEMA_VERSION` in `src/storage/vault-schema.ts`.

@@ -19,6 +19,7 @@ import { bindConnectedSites } from "./origins-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { bindAccountLabel, bindAppearance, bindBackup, bindContacts } from "./settings-ui";
 import { SIDEPANEL_STYLES } from "./styles";
+import { bindTokens } from "./tokens-ui";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
@@ -34,6 +35,7 @@ let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
 let lastTheme = "";
+let selectedTokenId: string | null = null;
 
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
@@ -396,6 +398,13 @@ const render = async (status: WalletStatus): Promise<void> => {
     activeView === "connected-sites" && status.hasVault && !status.locked
       ? await wallet.connectedSites().catch(() => [])
       : [];
+  const prices: Readonly<Record<string, number>> =
+    status.hasVault && !status.locked ? await wallet.loadPrices().catch(() => ({})) : {};
+  const selectedToken = preferences?.tokens.find((token) => token.id === selectedTokenId) ?? null;
+  const chart: readonly number[] =
+    activeView === "token-detail" && selectedToken
+      ? await wallet.loadTokenChart(selectedToken.address).catch(() => [])
+      : [];
   const scene = !status.hasVault
     ? "onboarding"
     : status.locked
@@ -417,6 +426,9 @@ const render = async (status: WalletStatus): Promise<void> => {
             deployment,
             transactions,
             connectedSites,
+            prices,
+            chart,
+            selectedTokenId,
           ),
     animate,
   );
@@ -444,6 +456,17 @@ const render = async (status: WalletStatus): Promise<void> => {
   bindAddressBook();
   bindApprovals();
   bindConnectedSites({ app, render, wallet });
+  bindTokens({
+    app,
+    openToken: (tokenId) => {
+      selectedTokenId = tokenId;
+      activeView = "token-detail";
+      void wallet.loadStatus().then(render);
+    },
+    refresh: () => wallet.loadStatus(),
+    render,
+    wallet,
+  });
 };
 
 let refreshQueued = false;

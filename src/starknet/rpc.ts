@@ -73,23 +73,6 @@ export type BalanceInput = {
 };
 
 /**
- * On-chain ERC20 metadata read before a dapp watch-asset request is queued.
- */
-export type TokenMetadata = {
-  readonly decimals: number;
-  readonly name: string;
-  readonly symbol: string;
-};
-
-/**
- * Inputs for reading ERC20 metadata for a watch-asset request.
- */
-export type TokenMetadataInput = {
-  readonly address: string;
-  readonly rpcUrls: readonly string[];
-};
-
-/**
  * Inputs for submitting one ERC20 transfer.
  */
 export type TransferInput = {
@@ -244,36 +227,66 @@ export const getTokenBalances = async ({
 };
 
 /**
- * Decodes an ERC20 name/symbol response, accepting both Cairo felt short
- * strings (single felt) and Cairo 1 ByteArray encodings (multi-felt).
+ * On-chain ERC20 metadata fetched for custom-token tracking.
  */
-export const decodeErc20String = (response: readonly string[]): string => {
-  const head = response[0];
-  if (typeof head !== "string" || !/^0x[0-9a-fA-F]+$/.test(head)) {
-    throw new WalletError("Invalid token string");
-  }
-  if (response.length === 1) {
-    return shortString.decodeShortString(head).trim();
-  }
-  const fullWords = Number(BigInt(head));
-  if (!Number.isSafeInteger(fullWords) || fullWords < 0 || fullWords + 1 >= response.length) {
-    throw new WalletError("Invalid token string");
-  }
-  const words = response.slice(1, 1 + fullWords);
-  const pending = response[1 + fullWords];
-  const decoded = words
-    .map((word) => (typeof word === "string" ? shortString.decodeShortString(word) : ""))
-    .join("");
-  const tail =
-    typeof pending === "string" && BigInt(pending) > 0n
-      ? shortString.decodeShortString(pending)
-      : "";
-  return `${decoded}${tail}`.trim();
+export type TokenMetadata = {
+  readonly decimals: number;
+  readonly name: string;
+  readonly symbol: string;
 };
 
 /**
- * Reads ERC20 name, symbol, and decimals through Starknet RPC so watch-asset
- * requests can show authoritative token metadata before they are queued.
+ * Inputs for reading ERC20 metadata by contract address.
+ */
+export type TokenMetadataInput = {
+  readonly address: string;
+  readonly rpcUrls: readonly string[];
+};
+
+// Decodes a Cairo short string (felt bytes) into ASCII, ignoring bad felts.
+const decodeShortFelt = (value: string | undefined): string => {
+  if (typeof value !== "string" || !isStarkFieldElement(value) || BigInt(value) === 0n) {
+    return "";
+  }
+  try {
+    return shortString.decodeShortString(value);
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * Decodes an ERC20 name/symbol response into text: either a single felt short
+ * string, or the Cairo ByteArray layout
+ * `[words_len, ...words, pending_word, pending_len]`. Malformed felts decode to
+ * empty rather than throwing.
+ */
+export const decodeErc20String = (response: readonly string[]): string => {
+  if (response.length <= 1) {
+    return decodeShortFelt(response[0]).trim();
+  }
+  let wordCount: number;
+  try {
+    wordCount = Number(BigInt(response[0] ?? "0"));
+  } catch {
+    return decodeShortFelt(response[0]).trim();
+  }
+  if (Number.isSafeInteger(wordCount) && wordCount >= 0 && response.length === wordCount + 3) {
+    let text = "";
+    for (let index = 1; index <= wordCount; index += 1) {
+      text += decodeShortFelt(response[index]);
+    }
+    text += decodeShortFelt(response[wordCount + 1]);
+    return text.trim();
+  }
+  return decodeShortFelt(response[0]).trim();
+};
+
+/**
+ * Reads ERC20 name, symbol, and decimals for a contract through Starknet RPC.
+ * Throws when the address is invalid or the contract exposes no usable
+ * decimals; name and symbol decode both felt short strings and Cairo
+ * ByteArrays.
  */
 export const getTokenMetadata = async ({
   address,
@@ -298,11 +311,15 @@ export const getTokenMetadata = async ({
       ),
     ]);
     const rawDecimals = decimalsResponse[0];
-    if (typeof rawDecimals !== "string" || !/^0x[0-9a-fA-F]+$/.test(rawDecimals)) {
+    if (typeof rawDecimals !== "string" || !isStarkFieldElement(rawDecimals)) {
+      throw new WalletError("Invalid token decimals");
+    }
+    const decimals = Number(BigInt(rawDecimals));
+    if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 36) {
       throw new WalletError("Invalid token decimals");
     }
     return {
-      decimals: Number(BigInt(rawDecimals)),
+      decimals,
       name: decodeErc20String(nameResponse),
       symbol: decodeErc20String(symbolResponse),
     };

@@ -3,6 +3,7 @@
  */
 import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 import { createKrustyKms } from "../crypto/krusty";
+import { createPriceService, unavailablePriceService } from "../starknet/prices";
 import { createActivityLog, systemClock } from "../storage/activity-store";
 import { createBrowserLocalStore, createBrowserSessionStore } from "../storage/browser-storage";
 import { createEncryptedStore } from "../storage/encrypted-store";
@@ -101,6 +102,13 @@ const originHistory = (() => {
     return createOriginHistoryStore({ now: systemClock, store: createBrowserLocalStore() });
   } catch {
     return undefined;
+  }
+})();
+const priceService = (() => {
+  try {
+    return createPriceService({ http: (url) => fetch(url), store: createBrowserLocalStore() });
+  } catch {
+    return unavailablePriceService;
   }
 })();
 const handleMessage = createMessageHandler(
@@ -242,6 +250,13 @@ const handleMessage = createMessageHandler(
       }
       return store.setRpcOverride(input);
     },
+    async setTokenHidden(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setTokenHidden(input);
+    },
     async upsertToken(input) {
       const store = await preferences;
       if (!store) {
@@ -253,6 +268,7 @@ const handleMessage = createMessageHandler(
   defaultRuntimeRpc,
   activityLog,
   originHistory,
+  priceService,
 );
 
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {

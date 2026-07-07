@@ -6,7 +6,7 @@ import type { StarknetNetworkId } from "../starknet/networks";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
 import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
-import type { WalletPreferences } from "../storage/preferences-store";
+import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef, Vault } from "../storage/vault-schema";
 import type {
   ConnectedSite,
@@ -131,6 +131,32 @@ export type WatchAssetResponse = {
 };
 
 /**
+ * Auto-detected token suggestions with balances returned to extension pages.
+ */
+export type DetectTokensResponse = {
+  readonly ok: true;
+  readonly suggestions: readonly TokenBalance[];
+};
+
+/**
+ * Fiat prices keyed by contract address returned to extension pages.
+ */
+export type PricesResponse = {
+  readonly currency: DisplayCurrency;
+  readonly ok: true;
+  readonly prices: Readonly<Record<string, number>>;
+};
+
+/**
+ * Token price series for a sparkline returned to extension pages.
+ */
+export type TokenChartResponse = {
+  readonly currency: DisplayCurrency;
+  readonly ok: true;
+  readonly points: readonly number[];
+};
+
+/**
  * Transfer submission response returned to extension pages.
  */
 export type TransferResponse = {
@@ -189,13 +215,16 @@ export type RuntimeResponse =
   | ConnectedSitesResponse
   | CreateAccountResponse
   | DeploymentStatusResponse
+  | DetectTokensResponse
   | TransferReviewResponse
   | GenerateMnemonicResponse
   | PendingApprovalResponse
   | PermissionsResponse
   | PreferencesResponse
+  | PricesResponse
   | RequestAccountsResponse
   | SignHashResponse
+  | TokenChartResponse
   | TransferResponse
   | WalletStatus
   | WatchAssetResponse

@@ -148,7 +148,7 @@ describe("starknet RPC helpers", () => {
         "0x2",
       ]),
     ).toBe(`${"A".repeat(31)}BC`);
-    expect(() => decodeErc20String(["not-hex"])).toThrow(WalletError);
-    expect(() => decodeErc20String([])).toThrow(WalletError);
+    expect(decodeErc20String(["not-hex"])).toBe("");
+    expect(decodeErc20String([])).toBe("");
   });
 });

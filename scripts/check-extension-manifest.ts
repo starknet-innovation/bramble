@@ -14,6 +14,7 @@ const expectedExtensionCsp = "script-src 'self' 'wasm-unsafe-eval'; object-src '
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
 const expectedHostPermissions = [
   "https://api.cartridge.gg/*",
+  "https://api.coingecko.com/*",
   "http://127.0.0.1:5050/*",
   "http://localhost:5050/*",
 ];

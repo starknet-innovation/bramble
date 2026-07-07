@@ -189,6 +189,56 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     font-variant-numeric: tabular-nums;
     font-weight: 650;
   }
+  .token-side { align-items: flex-end; display: grid; flex: none; gap: 1px; text-align: right; }
+  .token-fiat { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .token-row .token-open {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: ${RADIUS.md};
+    color: var(--mc-text);
+    flex: 1;
+    justify-content: flex-start;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+    text-align: left;
+  }
+  .token-row .token-open:not(:disabled):hover,
+  .token-row .token-open:not(:disabled):active {
+    background: transparent;
+    border-color: transparent;
+  }
+  .token-row .token-open:not(:disabled):hover strong { color: var(--mc-accent); }
+  .token-row.token-hidden { opacity: 0.6; }
+  .token-flag {
+    border: 1px solid var(--mc-danger-border);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-danger);
+    flex: none;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 3px 8px;
+    text-transform: uppercase;
+  }
+  .hero-total {
+    font-size: ${TYPE.display.size};
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: ${TYPE.display.line};
+  }
+  .token-detail-price { font-size: ${TYPE.display.size}; font-weight: 700; }
+  .sparkline { display: block; height: 48px; width: 100%; }
+  .sparkline polyline {
+    fill: none;
+    stroke: var(--mc-muted);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+  }
+  .sparkline-up polyline { stroke: var(--mc-accent); }
+  .sparkline-down polyline { stroke: var(--mc-danger); }
   .request-list { gap: ${SPACE.md}; }
   .tx-list { display: grid; gap: ${SPACE.sm}; }
   .tx-row {

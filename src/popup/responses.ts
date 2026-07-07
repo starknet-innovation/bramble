@@ -2,13 +2,26 @@
  * Pure popup response validators for background runtime data.
  */
 
-import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
-import { isWalletOrigin } from "../shared/origin";
 import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
 import { type ActivityEntry, isActivityEntry } from "../storage/activity-store";
+
+/**
+ * Re-exported approval and connected-site validators for one import path.
+ */
+export {
+  type ConnectedSite,
+  type ConnectedSitesResponse,
+  isConnectedSitesResponse,
+  isPendingApprovalsResponse,
+  type PendingApproval,
+  type PendingApprovalsResponse,
+  type WatchAssetToken,
+} from "./approvals-responses";
+
 import { isWalletPreferences, type WalletPreferences } from "../storage/preferences-store";
 import { type AccountRef, isAccountId, isAccountRef } from "../storage/vault-schema";
+import { isPendingApprovalsResponse, type PendingApprovalsResponse } from "./approvals-responses";
 
 /**
  * Popup wallet status response accepted from the background boundary.
@@ -65,56 +78,6 @@ export type GenerateMnemonicResponse = {
 };
 
 /**
- * ERC20 token metadata carried by a watch-asset approval.
- */
-export type WatchAssetToken = {
-  readonly address: string;
-  readonly decimals: number;
-  readonly name: string;
-  readonly networkId: string;
-  readonly symbol: string;
-};
-
-/**
- * Pending dapp approval item shown in the popup. `kind` defaults to a
- * connection prompt when absent; watch-asset prompts also carry `token`;
- * `blocked`/`insights` carry phishing and site-reputation signals.
- */
-export type PendingApproval = {
-  readonly blocked?: boolean;
-  readonly id: string;
-  readonly insights?: readonly string[];
-  readonly kind?: "connect" | "watch-asset";
-  readonly origin: string;
-  readonly token?: WatchAssetToken;
-};
-
-/**
- * A site with an active connection grant plus the number of accounts it can
- * see, shown in the connected-sites manager.
- */
-export type ConnectedSite = {
-  readonly accountCount: number;
-  readonly origin: string;
-};
-
-/**
- * Connected-sites response accepted from the background boundary.
- */
-export type ConnectedSitesResponse = {
-  readonly ok: true;
-  readonly sites: readonly ConnectedSite[];
-};
-
-/**
- * Pending approval response accepted from the background boundary.
- */
-export type PendingApprovalsResponse = {
-  readonly ok: true;
-  readonly pending: readonly PendingApproval[];
-};
-
-/**
  * Popup preferences response accepted from the background boundary.
  */
 export type PreferencesResponse = {
@@ -167,52 +130,6 @@ export type DeploymentStatusResponse = {
  * Popup approval decision response accepted from the background boundary.
  */
 export type ApprovalDecisionResponse = AccountsResponse | PendingApprovalsResponse;
-
-const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "decimals", "name", "networkId", "symbol"]) &&
-  typeof value.address === "string" &&
-  isStarkFieldElement(value.address) &&
-  typeof value.decimals === "number" &&
-  Number.isSafeInteger(value.decimals) &&
-  value.decimals >= 0 &&
-  value.decimals <= 36 &&
-  typeof value.name === "string" &&
-  value.name.length > 0 &&
-  value.name.length <= 64 &&
-  isStarknetNetworkId(value.networkId) &&
-  typeof value.symbol === "string" &&
-  /^[A-Z0-9]{2,12}$/.test(value.symbol);
-
-const isInsightText = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= 200;
-
-const isPendingApproval = (value: unknown): value is PendingApproval => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["blocked", "id", "insights", "kind", "origin", "token"]) ||
-    typeof value.id !== "string" ||
-    !isUuid(value.id) ||
-    typeof value.origin !== "string" ||
-    !isWalletOrigin(value.origin) ||
-    (value.kind !== undefined && value.kind !== "connect" && value.kind !== "watch-asset") ||
-    (value.blocked !== undefined && typeof value.blocked !== "boolean") ||
-    (value.insights !== undefined &&
-      !(Array.isArray(value.insights) && value.insights.every(isInsightText)))
-  ) {
-    return false;
-  }
-  return value.kind === "watch-asset" ? isWatchAssetToken(value.token) : value.token === undefined;
-};
-
-const isConnectedSite = (value: unknown): value is ConnectedSite =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountCount", "origin"]) &&
-  typeof value.accountCount === "number" &&
-  Number.isSafeInteger(value.accountCount) &&
-  value.accountCount >= 0 &&
-  typeof value.origin === "string" &&
-  isWalletOrigin(value.origin);
 
 const hasUniqueStrings = (values: readonly string[]): boolean =>
   new Set(values).size === values.length;
@@ -333,35 +250,6 @@ export const isGenerateMnemonicResponse = (value: unknown): value is GenerateMne
   value.mnemonic.trim().split(/\s+/).length >= 12;
 
 /**
- * Checks pending approval responses before rendering.
- */
-export const isPendingApprovalsResponse = (value: unknown): value is PendingApprovalsResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["ok", "pending"]) &&
-  value.ok === true &&
-  Array.isArray(value.pending) &&
-  value.pending.every(isPendingApproval) &&
-  hasUniqueStrings(value.pending.map((approval) => approval.id)) &&
-  hasUniqueStrings(
-    value.pending
-      .filter((approval) => approval.kind !== "watch-asset")
-      .map((approval) => approval.origin),
-  );
-
-/**
- * Checks connected-sites responses before rendering the permissions manager.
- */
-export const isConnectedSitesResponse = (value: unknown): value is ConnectedSitesResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["ok", "sites"]) &&
-  value.ok === true &&
-  Array.isArray(value.sites) &&
-  value.sites.every(isConnectedSite) &&
-  hasUniqueStrings(value.sites.map((site) => site.origin));
-
-/**
  * Checks plain preferences responses before rendering.
  */
 export const isPreferencesResponse = (value: unknown): value is PreferencesResponse =>
@@ -384,6 +272,78 @@ export const isBalancesResponse = (value: unknown): value is BalancesResponse =>
   value.balances.every(isTokenBalance) &&
   hasUniqueStrings(value.balances.map((balance) => balance.id)) &&
   isStarknetNetworkId(value.networkId);
+
+/**
+ * Auto-detected token suggestions accepted from the background boundary.
+ */
+export type DetectTokensResponse = {
+  readonly ok: true;
+  readonly suggestions: readonly TokenBalance[];
+};
+
+/**
+ * Fiat prices keyed by contract address accepted from the background boundary.
+ */
+export type PricesResponse = {
+  readonly currency: "eur" | "gbp" | "usd";
+  readonly ok: true;
+  readonly prices: Readonly<Record<string, number>>;
+};
+
+/**
+ * Token price series accepted from the background boundary.
+ */
+export type TokenChartResponse = {
+  readonly currency: "eur" | "gbp" | "usd";
+  readonly ok: true;
+  readonly points: readonly number[];
+};
+
+const isDisplayCurrencyValue = (value: unknown): value is "eur" | "gbp" | "usd" =>
+  value === "eur" || value === "gbp" || value === "usd";
+
+const isFiniteNumberValue = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const isPriceMap = (value: unknown): value is Readonly<Record<string, number>> =>
+  isRecord(value) && Object.values(value).every(isFiniteNumberValue);
+
+const isNumberArray = (value: unknown): value is readonly number[] =>
+  Array.isArray(value) && value.every(isFiniteNumberValue);
+
+/**
+ * Checks auto-detected token responses before rendering suggestions.
+ */
+export const isDetectTokensResponse = (value: unknown): value is DetectTokensResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "suggestions"]) &&
+  value.ok === true &&
+  Array.isArray(value.suggestions) &&
+  value.suggestions.every(isTokenBalance) &&
+  hasUniqueStrings(value.suggestions.map((token) => token.id));
+
+/**
+ * Checks fiat price responses before applying values to balances.
+ */
+export const isPricesResponse = (value: unknown): value is PricesResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["currency", "ok", "prices"]) &&
+  value.ok === true &&
+  isDisplayCurrencyValue(value.currency) &&
+  isPriceMap(value.prices);
+
+/**
+ * Checks token chart responses before drawing a sparkline.
+ */
+export const isTokenChartResponse = (value: unknown): value is TokenChartResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["currency", "ok", "points"]) &&
+  value.ok === true &&
+  isDisplayCurrencyValue(value.currency) &&
+  isNumberArray(value.points);
 
 /**
  * Checks transfer submission responses before rendering.

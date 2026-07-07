@@ -114,6 +114,25 @@ describe("createPreferencesStore", () => {
     expect((await preferences.read()).accountLabels).toEqual({});
   });
 
+  test("hides and reveals tokens and stays compatible with legacy backups", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+    const tokenId =
+      "SN_MAIN:ETH:0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+
+    await preferences.setTokenHidden({ hidden: true, tokenId });
+    expect((await preferences.read()).hiddenTokens).toEqual([tokenId]);
+    await preferences.setTokenHidden({ hidden: true, tokenId });
+    expect((await preferences.read()).hiddenTokens).toEqual([tokenId]);
+    await preferences.setTokenHidden({ hidden: false, tokenId });
+    expect((await preferences.read()).hiddenTokens).toEqual([]);
+
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>).hiddenTokens;
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+    expect((await createPreferencesStore({ store }).read()).hiddenTokens).toBeUndefined();
+  });
+
   test("imports only fully valid preference backups", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });
