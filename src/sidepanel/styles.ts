@@ -231,6 +231,39 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
   .review-panel p { color: var(--mc-text); font-size: ${TYPE.label.size}; }
   .review-flag { color: var(--mc-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .tx-hint { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .allowance-list, .nft-grid { display: grid; gap: ${SPACE.sm}; }
+  .allowance-row {
+    align-items: center;
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.md};
+    display: flex;
+    gap: ${SPACE.sm};
+    padding: ${SPACE.sm} ${SPACE.md};
+  }
+  .allowance-copy { display: grid; flex: 1; gap: 2px; min-width: 0; }
+  .allowance-copy code { overflow-wrap: anywhere; }
+  .nft-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nft-card {
+    border: 1px solid var(--mc-border);
+    border-radius: ${RADIUS.md};
+    display: grid;
+    gap: ${SPACE.sm};
+    min-width: 0;
+    padding: ${SPACE.sm};
+  }
+  button.nft-open {
+    align-items: start;
+    justify-content: flex-start;
+    min-height: 0;
+    padding: ${SPACE.sm};
+    text-align: left;
+  }
+  .nft-mark { align-items: center; color: var(--mc-muted); display: inline-flex; flex: none; }
+  .nft-copy { display: grid; gap: 2px; min-width: 0; }
+  .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .nft-actions { display: flex; gap: ${SPACE.sm}; }
+  .nft-actions button { flex: 1; }
   .request-card {
     border: 1px solid var(--mc-border);
     border-radius: ${RADIUS.md};

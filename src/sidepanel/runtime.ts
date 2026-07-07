@@ -3,8 +3,10 @@
  */
 import {
   type ActivityResponse,
+  type AllowancesResponse,
   type DeploymentStatusResponse,
   isActivityResponse,
+  isAllowancesResponse,
   isApprovalDecisionResponse,
   isBalancesResponse,
   isCreateAccountResponse,
@@ -113,6 +115,67 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async loadActivity(): Promise<ActivityResponse["activity"]> {
       const response = await sendMessage({ type: "wallet.activity" });
       return isActivityResponse(response) ? response.activity : [];
+    },
+    async addNft(
+      contract: string,
+      tokenId: string,
+      networkId: string,
+      label: string,
+    ): Promise<void> {
+      const response = await sendMessage({
+        contract,
+        ...(label ? { label } : {}),
+        networkId,
+        tokenId,
+        type: "wallet.addNft",
+      });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "add NFT failed");
+    },
+    async loadAllowances(): Promise<AllowancesResponse["allowances"]> {
+      const response = await sendMessage({ type: "wallet.allowances" });
+      return isAllowancesResponse(response) ? response.allowances : [];
+    },
+    async removeNft(id: string): Promise<void> {
+      const response = await sendMessage({ id, type: "wallet.removeNft" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "remove NFT failed");
+    },
+    async revokeAllowance(id: string): Promise<string> {
+      const response = await sendMessage({ id, type: "wallet.revokeAllowance" });
+      if (isTransferResponse(response)) {
+        return response.transactionHash;
+      }
+      throw responseError(response, "revoke failed");
+    },
+    async setNftSpam(id: string, spam: boolean): Promise<void> {
+      const response = await sendMessage({ id, spam, type: "wallet.setNftSpam" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "NFT update failed");
+    },
+    async transferNft(
+      contract: string,
+      tokenId: string,
+      networkId: string,
+      recipient: string,
+    ): Promise<string> {
+      const response = await sendMessage({
+        contract,
+        networkId,
+        recipient,
+        tokenId,
+        type: "wallet.transferNft",
+      });
+      if (isTransferResponse(response)) {
+        return response.transactionHash;
+      }
+      throw responseError(response, "NFT transfer failed");
     },
     async reviewTransfer(
       accountId: string,

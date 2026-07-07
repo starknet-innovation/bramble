@@ -7,6 +7,7 @@ import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
 import { type ActivityEntry, isActivityEntry } from "../storage/activity-store";
+import { type AllowanceRecord, isAllowanceRecord } from "../storage/allowance-store";
 import { isWalletPreferences, type WalletPreferences } from "../storage/preferences-store";
 import { type AccountRef, isAccountId, isAccountRef } from "../storage/vault-schema";
 
@@ -362,6 +363,25 @@ export const isActivityResponse = (value: unknown): value is ActivityResponse =>
   value.ok === true &&
   Array.isArray(value.activity) &&
   value.activity.every(isActivityEntry);
+
+/**
+ * Tracked allowances response accepted from the background boundary.
+ */
+export type AllowancesResponse = {
+  readonly allowances: readonly AllowanceRecord[];
+  readonly ok: true;
+};
+
+/**
+ * Checks allowance manager responses before rendering.
+ */
+export const isAllowancesResponse = (value: unknown): value is AllowancesResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["allowances", "ok"]) &&
+  value.ok === true &&
+  Array.isArray(value.allowances) &&
+  value.allowances.every(isAllowanceRecord);
 
 /**
  * Checks transfer review responses before rendering the review step.

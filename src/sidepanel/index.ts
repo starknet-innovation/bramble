@@ -13,8 +13,10 @@ import type { WalletPreferences } from "../storage/preferences-store";
 import { darkSkin } from "../ui/dark-skin";
 import { defaultSkin } from "../ui/default-skin";
 import { applySkin } from "../ui/skin";
+import { bindAllowances } from "./allowance-ui";
 import { buttonBusy, errorMessage, focusMemo, restoreFocus, scopedStatus, showToast } from "./dom";
 import { locked, onboarding } from "./gate-views";
+import { bindNfts } from "./nft-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { bindAccountLabel, bindAppearance, bindBackup, bindContacts } from "./settings-ui";
 import { SIDEPANEL_STYLES } from "./styles";
@@ -29,6 +31,7 @@ const app = document.querySelector("#app");
 const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
 const wallet = createSidepanelRuntime(runtime);
 let activeView: WalletView = "home";
+let selectedNftId: string | null = null;
 let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
@@ -391,6 +394,10 @@ const render = async (status: WalletStatus): Promise<void> => {
     activeView === "activity" && status.hasVault && !status.locked
       ? await wallet.loadActivity().catch(() => [])
       : [];
+  const allowances =
+    activeView === "allowances" && status.hasVault && !status.locked
+      ? await wallet.loadAllowances().catch(() => [])
+      : [];
   const scene = !status.hasVault
     ? "onboarding"
     : status.locked
@@ -403,7 +410,17 @@ const render = async (status: WalletStatus): Promise<void> => {
       ? onboarding(status)
       : status.locked
         ? locked(status)
-        : dashboard(activeView, status, pending, preferences, balances, deployment, transactions),
+        : dashboard(
+            activeView,
+            status,
+            pending,
+            preferences,
+            balances,
+            deployment,
+            transactions,
+            allowances,
+            selectedNftId,
+          ),
     animate,
   );
   bindNavigation();
@@ -429,6 +446,17 @@ const render = async (status: WalletStatus): Promise<void> => {
   bindContacts(settingsDeps);
   bindAddressBook();
   bindApprovals();
+  bindAllowances({ app, render, wallet });
+  bindNfts({
+    app,
+    openDetail: (id) => {
+      selectedNftId = id;
+      activeView = "nft-detail";
+      void wallet.loadStatus().then(render);
+    },
+    render,
+    wallet,
+  });
 };
 
 let refreshQueued = false;

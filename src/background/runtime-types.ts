@@ -6,6 +6,7 @@ import type { StarknetNetworkId } from "../starknet/networks";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
 import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
+import type { AllowanceRecord } from "../storage/allowance-store";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef, Vault } from "../storage/vault-schema";
 import type {
@@ -132,6 +133,14 @@ export type ActivityResponse = {
 };
 
 /**
+ * Tracked allowances returned to extension pages.
+ */
+export type AllowancesResponse = {
+  readonly allowances: readonly AllowanceRecord[];
+  readonly ok: true;
+};
+
+/**
  * Account contract deployment status returned to extension pages.
  */
 export type DeploymentStatusResponse = {
@@ -156,6 +165,7 @@ export type RequestAccountsResponse =
 export type RuntimeResponse =
   | AccountsResponse
   | ActivityResponse
+  | AllowancesResponse
   | BalancesResponse
   | ChainIdResponse
   | CreateAccountResponse

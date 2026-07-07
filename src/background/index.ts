@@ -4,6 +4,7 @@
 import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 import { createKrustyKms } from "../crypto/krusty";
 import { createActivityLog } from "../storage/activity-store";
+import { createAllowanceStore } from "../storage/allowance-store";
 import { createBrowserLocalStore, createBrowserSessionStore } from "../storage/browser-storage";
 import { createEncryptedStore } from "../storage/encrypted-store";
 import { createPreferencesStore } from "../storage/preferences-store";
@@ -95,6 +96,13 @@ const activityLog = (() => {
     return undefined;
   }
 })();
+const allowanceLog = (() => {
+  try {
+    return createAllowanceStore({ store: createBrowserLocalStore() });
+  } catch {
+    return undefined;
+  }
+})();
 const handleMessage = createMessageHandler(
   {
     async createAccount(input) {
@@ -171,6 +179,13 @@ const handleMessage = createMessageHandler(
   session,
   approvals,
   {
+    async addNft(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.addNft(input);
+    },
     async importPreferences(input) {
       const store = await preferences;
       if (!store) {
@@ -191,6 +206,20 @@ const handleMessage = createMessageHandler(
         throw new Error("preferences unavailable");
       }
       return store.removeAddress(input);
+    },
+    async removeNft(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.removeNft(input);
+    },
+    async setNftSpam(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setNftSpam(input);
     },
     async setAccountLabel(input) {
       const store = await preferences;
@@ -237,6 +266,7 @@ const handleMessage = createMessageHandler(
   },
   defaultRuntimeRpc,
   activityLog,
+  allowanceLog,
 );
 
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {

@@ -21,6 +21,9 @@ export const WALLET_VIEWS = [
   "account",
   "address-book",
   "backup",
+  "allowances",
+  "nfts",
+  "nft-detail",
 ] as const;
 
 /**

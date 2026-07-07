@@ -5,7 +5,9 @@
 import { DEFAULT_NETWORK, networkIdForChainId, STARKNET_NETWORKS } from "../starknet/networks";
 import { typedDataHash } from "../starknet/typed-data";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
+import { type AllowanceStore, memoryAllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { handleAllowanceOps, recordApproveAllowances } from "./allowance-ops";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import {
   readAddInvokeTransactionInput,
@@ -22,6 +24,7 @@ import {
   readTypeOnlyInput,
   readUnlockInput,
 } from "./message-inputs";
+import { handleNftOps } from "./nft-ops";
 import { handlePreferenceOps } from "./preference-ops";
 import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
 import {
@@ -76,6 +79,7 @@ const handleRuntimeMessage = async (
   preferencesStore: WalletPreferencesStore,
   runtimeRpc: RuntimeRpc,
   activity: ActivityLog,
+  allowanceStore: AllowanceStore,
   message: unknown,
   sender?: RuntimeSender,
 ): Promise<RuntimeResponse> => {
@@ -92,13 +96,21 @@ const handleRuntimeMessage = async (
     return { error: "privileged sender required" };
   }
 
-  const opsResponse = await handleWalletOps(
-    { activity, preferencesStore, runtimeRpc, session, wallet },
-    messageType,
-    message,
-  );
+  const opsDeps = { activity, allowanceStore, preferencesStore, runtimeRpc, session, wallet };
+
+  const opsResponse = await handleWalletOps(opsDeps, messageType, message);
   if (opsResponse) {
     return opsResponse;
+  }
+
+  const allowanceResponse = await handleAllowanceOps(opsDeps, messageType, message);
+  if (allowanceResponse) {
+    return allowanceResponse;
+  }
+
+  const nftResponse = await handleNftOps(opsDeps, messageType, message);
+  if (nftResponse) {
+    return nftResponse;
   }
 
   const preferenceResponse = await handlePreferenceOps(preferencesStore, messageType, message);
@@ -189,6 +201,7 @@ const handleRuntimeMessage = async (
       networkId: account.networkId,
       summary: `${input.origin} submitted ${input.calls.length} call${input.calls.length === 1 ? "" : "s"}`,
     });
+    await recordApproveAllowances(allowanceStore, input.calls, account);
     return { ok: true, transactionHash: result.transactionHash };
   }
 
@@ -395,6 +408,7 @@ export const createMessageHandler =
     preferencesStore: WalletPreferencesStore = unavailablePreferencesStore,
     runtimeRpc: RuntimeRpc = defaultRuntimeRpc,
     activity: ActivityLog = memoryActivityLog(),
+    allowanceStore: AllowanceStore = memoryAllowanceStore(),
   ) =>
   async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
@@ -406,6 +420,7 @@ export const createMessageHandler =
         preferencesStore,
         runtimeRpc,
         activity,
+        allowanceStore,
         message,
         sender,
       );

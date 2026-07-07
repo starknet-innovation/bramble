@@ -82,6 +82,9 @@ const makeHandler = (unlocked: boolean) => {
       statusCalls.push(input);
       return false;
     },
+    async getNftOwner() {
+      return "0x0";
+    },
     async getTokenBalances() {
       return [];
     },
