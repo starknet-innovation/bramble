@@ -6,20 +6,77 @@
 import { networkIdForChainId, STARKNET_NETWORKS } from "../starknet/networks";
 import { typedDataHash } from "../starknet/typed-data";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { notifyApprovalsChanged } from "./approval-notifier";
+import type { ApprovalQueue } from "./approvals";
 import { readSignTypedDataInput, readSwitchChainInput, readTypeOnlyInput } from "./message-inputs";
 import { switchActiveNetwork } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
+import type { SignatureWaiters } from "./signature-waiters";
 
 /**
  * Dependencies for the provider chain and signing operations.
  */
 export type ChainOpsDeps = {
+  readonly approvals: ApprovalQueue;
   readonly extensionId: string;
   readonly preferencesStore: WalletPreferencesStore;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
+  readonly waiters: SignatureWaiters;
+};
+
+/**
+ * Builds a short, user-facing summary of a SNIP-12 typed-data request for the
+ * approval card (primary type and, when present, the domain name).
+ */
+const describeTypedData = (typedData: unknown): string => {
+  if (typeof typedData !== "object" || typedData === null) {
+    return "typed data";
+  }
+  const record = typedData as Record<string, unknown>;
+  const primaryType = typeof record.primaryType === "string" ? record.primaryType : "message";
+  const domain =
+    typeof record.domain === "object" && record.domain !== null
+      ? (record.domain as Record<string, unknown>)
+      : {};
+  const name = typeof domain.name === "string" ? domain.name : "";
+  return name ? `${primaryType} · ${name}` : primaryType;
+};
+
+/**
+ * Signs a user-approved SNIP-12 request: re-resolves the active account for the
+ * origin (a locked wallet or revoked grant fails safely) and returns the
+ * signature, or an error response the caller can deliver back to the dapp.
+ */
+export const executeSignApproval = async (
+  deps: Pick<ChainOpsDeps, "preferencesStore" | "session" | "wallet">,
+  input: { readonly origin: string; readonly typedData: unknown },
+): Promise<RuntimeResponse> => {
+  const { preferencesStore, session, wallet } = deps;
+  const passphrase = session.getPassphrase();
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const preferences = await preferencesStore.read();
+  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  if (!account) {
+    return { error: "origin not connected" };
+  }
+  let messageHash: string;
+  try {
+    messageHash = typedDataHash(input.typedData, account.address);
+  } catch {
+    return { error: "invalid typed data" };
+  }
+  const signature = await wallet.signHash({
+    accountId: account.id,
+    messageHash,
+    vaultPassphrase: passphrase,
+  });
+  return { ok: true, signature };
 };
 
 /**
@@ -32,7 +89,7 @@ export const handleChainOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const { extensionId, preferencesStore, session, wallet } = deps;
+  const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
 
   if (messageType === "wallet.signTypedData") {
     const input = readSignTypedDataInput(message);
@@ -52,18 +109,22 @@ export const handleChainOps = async (
     if (!account) {
       return { error: "origin not connected" };
     }
-    let messageHash: string;
     try {
-      messageHash = typedDataHash(input.typedData, account.address);
+      typedDataHash(input.typedData, account.address);
     } catch {
       return { error: "invalid typed data" };
     }
-    const signature = await wallet.signHash({
-      accountId: account.id,
-      messageHash,
-      vaultPassphrase: passphrase,
+    // Never auto-sign: queue a per-request approval and hold this response until
+    // the user decides in the side panel. The signature is computed and returned
+    // through this same channel on approval, so it reaches only the requesting
+    // origin and tab.
+    const approval = approvals.requestSignTypedData({
+      origin: input.origin,
+      summary: describeTypedData(input.typedData),
+      typedData: input.typedData,
     });
-    return { ok: true, signature };
+    notifyApprovalsChanged();
+    return waiters.register(approval.id);
   }
 
   if (messageType === "wallet.getChainId") {

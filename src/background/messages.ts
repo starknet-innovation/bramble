@@ -13,7 +13,7 @@ import { activeAccountSecrets } from "../wallet/vault-service";
 import { handleAllowanceOps } from "./allowance-ops";
 import { enrichApprovals } from "./approval-insights";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
-import { handleChainOps } from "./chain-ops";
+import { executeSignApproval, handleChainOps } from "./chain-ops";
 import {
   readAddAccountInput,
   readApprovalIdInput,
@@ -43,6 +43,7 @@ import {
   type RuntimeSender,
 } from "./senders";
 import { createUnlockSession, type UnlockSession } from "./session";
+import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
 import { handleTokenOps } from "./token-ops";
 import { handleWalletOps } from "./wallet-ops";
 
@@ -78,6 +79,7 @@ const handleRuntimeMessage = async (
   originHistory: OriginHistoryStore,
   prices: PriceService,
   allowanceStore: AllowanceStore,
+  waiters: SignatureWaiters,
   message: unknown,
   sender?: RuntimeSender,
 ): Promise<RuntimeResponse> => {
@@ -117,7 +119,7 @@ const handleRuntimeMessage = async (
   }
 
   const chainResponse = await handleChainOps(
-    { extensionId, preferencesStore, session, wallet },
+    { approvals, extensionId, preferencesStore, session, waiters, wallet },
     messageType,
     message,
     sender,
@@ -209,6 +211,24 @@ const handleRuntimeMessage = async (
       approvals.approve(input.id);
       return { ok: true, pending: approvals.list() };
     }
+    if (approval.kind === "sign-typed-data") {
+      const payload = approvals.payload(input.id);
+      if (payload?.typedData === undefined) {
+        return { error: "approval not found" };
+      }
+      const result = await executeSignApproval(
+        { preferencesStore, session, wallet },
+        { origin: approval.origin, typedData: payload.typedData },
+      );
+      // Deliver the outcome back through the dapp's held request channel, then
+      // clear the approval regardless (the request is resolved either way).
+      waiters.settle(input.id, result);
+      approvals.approve(input.id);
+      if ("error" in result) {
+        return result;
+      }
+      return { ok: true, pending: approvals.list() };
+    }
     const passphrase = session.getPassphrase();
     if (!passphrase) {
       return { error: "wallet locked" };
@@ -229,7 +249,11 @@ const handleRuntimeMessage = async (
     if (!input) {
       return { error: "invalid approval request" };
     }
+    const denied = approvals.get(input.id);
     approvals.deny(input.id);
+    if (denied?.kind === "sign-typed-data") {
+      waiters.settle(input.id, { error: "signature request denied" });
+    }
     return { ok: true, pending: approvals.list() };
   }
 
@@ -386,20 +410,20 @@ const runtimeErrorResponse = (
 /**
  * Creates the trusted background runtime message dispatcher.
  */
-export const createMessageHandler =
-  (
-    wallet: WalletStatusReader,
-    extensionId: string,
-    session: UnlockSession = createUnlockSession(),
-    approvals: ApprovalQueue = createApprovalQueue(),
-    preferencesStore: WalletPreferencesStore = unavailablePreferencesStore,
-    runtimeRpc: RuntimeRpc = defaultRuntimeRpc,
-    activity: ActivityLog = memoryActivityLog(),
-    originHistory: OriginHistoryStore = memoryOriginHistory(),
-    prices: PriceService = unavailablePriceService,
-    allowanceStore: AllowanceStore = memoryAllowanceStore(),
-  ) =>
-  async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
+export const createMessageHandler = (
+  wallet: WalletStatusReader,
+  extensionId: string,
+  session: UnlockSession = createUnlockSession(),
+  approvals: ApprovalQueue = createApprovalQueue(),
+  preferencesStore: WalletPreferencesStore = unavailablePreferencesStore,
+  runtimeRpc: RuntimeRpc = defaultRuntimeRpc,
+  activity: ActivityLog = memoryActivityLog(),
+  originHistory: OriginHistoryStore = memoryOriginHistory(),
+  prices: PriceService = unavailablePriceService,
+  allowanceStore: AllowanceStore = memoryAllowanceStore(),
+) => {
+  const waiters = createSignatureWaiters();
+  return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
       return await handleRuntimeMessage(
         wallet,
@@ -412,6 +436,7 @@ export const createMessageHandler =
         originHistory,
         prices,
         allowanceStore,
+        waiters,
         message,
         sender,
       );
@@ -419,6 +444,7 @@ export const createMessageHandler =
       return runtimeErrorResponse(error, isExtensionPageSender(sender, extensionId));
     }
   };
+};
 
 /**
  * Test fallback handler used when no real background wallet service is wired.

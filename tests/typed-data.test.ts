@@ -147,12 +147,31 @@ describe("wallet.signTypedData handler", () => {
     );
   })();
 
-  test("signs the SNIP-12 hash for a connected origin", async () => {
-    const response = await handler(
+  test("holds the request, queues an approval, and signs only on approval", async () => {
+    const pageSender: RuntimeSender = {
+      id: "extension-id",
+      url: "chrome-extension://extension-id/sidepanel.html",
+    };
+    let settled = false;
+    const held = handler(
       { origin: "https://dapp.example", type: "wallet.signTypedData", typedData },
       contentSender,
-    );
-    expect(response).toEqual({
+    ).then((response) => {
+      settled = true;
+      return response;
+    });
+    // Never auto-signs: the request stays pending and nothing is signed yet.
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(signedHashes).toHaveLength(0);
+
+    const queued = (await handler({ type: "wallet.pendingApprovals" }, pageSender)) as {
+      readonly pending: readonly { readonly id: string; readonly kind: string }[];
+    };
+    expect(queued.pending[0]?.kind).toBe("sign-typed-data");
+
+    await handler({ id: queued.pending[0]?.id, type: "wallet.approveOrigin" }, pageSender);
+    expect(await held).toEqual({
       ok: true,
       signature: { publicKey: account.publicKeyX, r: "0x1a", s: "0x2b" },
     });

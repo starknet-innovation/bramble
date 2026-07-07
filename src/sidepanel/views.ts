@@ -271,12 +271,26 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     ${decisionRow(approval, "Approve", status.locked)}
   </li>`;
 
+const signCard = (approval: PendingApproval, status: WalletStatus): string => `
+  <li class="request-card">
+    <div class="request-copy">
+      <p class="eyebrow">Sign request</p>
+      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "This site asked you to sign a typed message. Signing does not move funds, but only sign messages you understand."}</p>
+      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+    </div>
+    ${reviewPanel(approval.insights ?? [])}
+    ${decisionRow(approval, "Sign", status.locked)}
+  </li>`;
+
 const approvalCard = (approval: PendingApproval, status: WalletStatus): string =>
   approval.kind === "watch-asset"
     ? watchAssetCard(approval)
     : approval.kind === "invoke"
       ? invokeCard(approval, status)
-      : connectCard(approval, status);
+      : approval.kind === "sign-typed-data"
+        ? signCard(approval, status)
+        : connectCard(approval, status);
 const PENDING_TX_HINT =
   "Pending Starknet transactions cannot be sped up or cancelled and usually settle within a few minutes.";
 

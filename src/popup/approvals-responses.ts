@@ -41,7 +41,7 @@ export type PendingApproval = {
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
-  readonly kind?: "connect" | "invoke" | "watch-asset";
+  readonly kind?: "connect" | "invoke" | "sign-typed-data" | "watch-asset";
   readonly origin: string;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
@@ -123,6 +123,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     (value.kind !== undefined &&
       value.kind !== "connect" &&
       value.kind !== "invoke" &&
+      value.kind !== "sign-typed-data" &&
       value.kind !== "watch-asset") ||
     (value.blocked !== undefined && typeof value.blocked !== "boolean") ||
     (value.insights !== undefined &&

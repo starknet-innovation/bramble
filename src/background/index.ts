@@ -3,6 +3,7 @@
  */
 import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 import { createKrustyKms } from "../crypto/krusty";
+import type { WalletEventMessage } from "../provider/events";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
 import { createActivityLog, systemClock } from "../storage/activity-store";
 import { createAllowanceStore } from "../storage/allowance-store";
@@ -11,6 +12,7 @@ import { createEncryptedStore } from "../storage/encrypted-store";
 import { createOriginHistoryStore } from "../storage/origin-history";
 import { createPreferencesStore } from "../storage/preferences-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
+import { setApprovalNotifier } from "./approval-notifier";
 import { createApprovalQueue } from "./approvals";
 import { walletEventBroadcasts } from "./events";
 import { createMessageHandler } from "./messages";
@@ -308,21 +310,29 @@ const handleMessage = createMessageHandler(
   allowanceLog,
 );
 
+const broadcastEvent = (event: WalletEventMessage): void => {
+  void runtime?.sendMessage?.(event).catch(() => undefined);
+  void tabs
+    ?.query({})
+    .then((openTabs) => {
+      for (const tab of openTabs) {
+        if (typeof tab.id === "number") {
+          void tabs.sendMessage(tab.id, event).catch(() => undefined);
+        }
+      }
+    })
+    .catch(() => undefined);
+};
+
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {
   for (const event of walletEventBroadcasts(message, response)) {
-    void runtime?.sendMessage?.(event).catch(() => undefined);
-    void tabs
-      ?.query({})
-      .then((openTabs) => {
-        for (const tab of openTabs) {
-          if (typeof tab.id === "number") {
-            void tabs.sendMessage(tab.id, event).catch(() => undefined);
-          }
-        }
-      })
-      .catch(() => undefined);
+    broadcastEvent(event);
   }
 };
+
+// A held signTypedData request queues an approval and defers its response, so
+// it pushes an approvals-changed signal at queue time via this notifier.
+setApprovalNotifier(() => broadcastEvent({ event: "approvalsChanged", type: "wallet.event" }));
 
 runtime?.onInstalled.addListener(() => undefined);
 void extensionApi?.sidePanel

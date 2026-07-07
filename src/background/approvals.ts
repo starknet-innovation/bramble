@@ -16,7 +16,7 @@ export const MAX_PENDING_APPROVALS = 50;
  * Approval kinds distinguishing a connection prompt, a watch-asset prompt, and
  * a per-transaction invoke prompt that must be signed off before it executes.
  */
-export type ApprovalKind = "connect" | "invoke" | "watch-asset";
+export type ApprovalKind = "connect" | "invoke" | "sign-typed-data" | "watch-asset";
 
 /**
  * ERC20 token metadata carried by a watch-asset approval, in the shape the
@@ -61,6 +61,7 @@ export type PendingApproval = {
  */
 export type ApprovalPayload = {
   readonly calls?: readonly Call[];
+  readonly typedData?: unknown;
 };
 
 type ApprovalEntry = PendingApproval & ApprovalPayload;
@@ -80,6 +81,11 @@ export type ApprovalQueue = {
     readonly flags: readonly ApprovalRiskFlag[];
     readonly origin: string;
     readonly summaries: readonly string[];
+  }) => PendingApproval;
+  readonly requestSignTypedData: (input: {
+    readonly origin: string;
+    readonly summary: string;
+    readonly typedData: unknown;
   }) => PendingApproval;
   readonly requestWatchAsset: (input: {
     readonly origin: string;
@@ -143,7 +149,13 @@ export const createApprovalQueue = (): ApprovalQueue => {
     },
     payload(id) {
       const approval = entry(id);
-      if (!approval || approval.calls === undefined) {
+      if (!approval) {
+        return null;
+      }
+      if (approval.typedData !== undefined) {
+        return { typedData: approval.typedData };
+      }
+      if (approval.calls === undefined) {
         return null;
       }
       return { calls: approval.calls.map(cloneCall) };
@@ -173,6 +185,19 @@ export const createApprovalQueue = (): ApprovalQueue => {
         kind: "invoke",
         origin,
         summaries: [...summaries],
+      });
+    },
+    requestSignTypedData({ origin, summary, typedData }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+
+      return enqueue({
+        id: crypto.randomUUID(),
+        kind: "sign-typed-data",
+        origin,
+        summaries: [summary],
+        typedData,
       });
     },
     requestWatchAsset({ origin, token }) {
