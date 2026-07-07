@@ -45,7 +45,17 @@ export const handleAllowanceOps = async (
     if (!readTypeOnlyInput(message, "wallet.allowances")) {
       return { error: "invalid allowances request" };
     }
-    return { allowances: await deps.allowanceStore.list(), ok: true };
+    // Scope the list to the active account: allowances granted by one account
+    // must not appear (or be revocable) under another account.
+    const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+    if (context.error !== undefined) {
+      return { allowances: [], ok: true };
+    }
+    const all = await deps.allowanceStore.list();
+    return {
+      allowances: all.filter((entry) => entry.accountId === context.account.id),
+      ok: true,
+    };
   }
 
   if (messageType === "wallet.revokeAllowance") {

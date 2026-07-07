@@ -39,7 +39,9 @@ export const allowancesFlow = (
   account: AccountRef | null,
   allowances: readonly AllowanceRecord[],
 ): string => {
-  const scoped = allowances.filter((allowance) => allowance.networkId === status.networkId);
+  const scoped = allowances.filter(
+    (allowance) => allowance.networkId === status.networkId && allowance.accountId === account?.id,
+  );
   return (
     flowHeader("Allowances", "settings", status, `${scoped.length} tracked`) +
     flowScreen(

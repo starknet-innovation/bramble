@@ -109,6 +109,23 @@ const amountLabel = (amount: bigint, token: TokenConfig | undefined): string =>
 const decodeCall = (call: Call, context: VerificationContext): DecodedCall => {
   const calldata = Array.isArray(call.calldata) ? call.calldata : [];
   const token = tokenFor(context.tokens, call.contractAddress);
+  if (call.entrypoint === "transfer_from" && calldata.length >= 4) {
+    // ERC721 transfer_from(from, to, token_id): calldata is
+    // [from, to, tokenId_low, tokenId_high]. The recipient is calldata[1].
+    const recipient = typeof calldata[1] === "string" ? calldata[1] : "";
+    const low = asFelt(calldata[2]);
+    const high = asFelt(calldata[3]);
+    const tokenId = low === null || high === null ? null : low + (high << UINT_128_SHIFT);
+    if (recipient && tokenId !== null) {
+      return {
+        contractAddress: call.contractAddress,
+        entrypoint: call.entrypoint,
+        // Treated as a transfer so self-send and address-poisoning checks run.
+        kind: "transfer",
+        summary: `Send NFT #${tokenId} to ${shortAddress(canonical(recipient))}`,
+      };
+    }
+  }
   if ((call.entrypoint === "transfer" || call.entrypoint === "approve") && calldata.length >= 3) {
     const amount = uint256Amount(calldata);
     const counterparty = typeof calldata[0] === "string" ? calldata[0] : "";
@@ -162,7 +179,10 @@ const flagsForCall = (
   }
 
   if (decoded.kind === "transfer") {
-    const recipient = typeof calldata[0] === "string" ? calldata[0] : "";
+    // ERC20 transfer(to, ...) puts the recipient first; ERC721
+    // transfer_from(from, to, ...) puts it second.
+    const recipientIndex = call.entrypoint === "transfer_from" ? 1 : 0;
+    const recipient = typeof calldata[recipientIndex] === "string" ? calldata[recipientIndex] : "";
     if (recipient && sameFelt(recipient, context.account.address)) {
       flags.push({
         code: "self-transfer",
