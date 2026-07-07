@@ -7,7 +7,7 @@
 
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { PriceService } from "../starknet/prices";
-import { knownTokensForNetwork } from "../starknet/token-registry";
+import { isLikelySpam, knownTokensForNetwork } from "../starknet/token-registry";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -64,14 +64,31 @@ export const handleTokenOps = async (
     if (!/^[A-Z0-9]{2,12}$/.test(symbol)) {
       return { error: "unsupported token symbol" };
     }
+    // Run the full spam heuristics (not just the symbol regex) so a spoofed or
+    // malformed token is still added but hidden by default rather than
+    // presented as trusted; the user can always reveal it later.
+    const spam = isLikelySpam({
+      address: input.address,
+      decimals: metadata.decimals,
+      name,
+      networkId: network.id,
+      symbol,
+    });
+    const preferencesWithToken = await preferencesStore.upsertToken({
+      address: input.address,
+      decimals: metadata.decimals,
+      name,
+      networkId: network.id,
+      symbol,
+    });
+    if (!spam) {
+      return { ok: true, preferences: preferencesWithToken };
+    }
     return {
       ok: true,
-      preferences: await preferencesStore.upsertToken({
-        address: input.address,
-        decimals: metadata.decimals,
-        name,
-        networkId: network.id,
-        symbol,
+      preferences: await preferencesStore.setTokenHidden({
+        hidden: true,
+        tokenId: `${network.id}:${symbol}:${input.address}`,
       }),
     };
   }
