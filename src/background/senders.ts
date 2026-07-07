@@ -62,6 +62,16 @@ export const isTrustedSender = (sender: RuntimeSender | undefined, extensionId: 
   extensionId.length > 0 && sender?.id === extensionId && senderOrigins(sender).length > 0;
 
 /**
+ * Checks whether a sender may act for a claimed page origin: either an
+ * extension page or a content script whose own origin matches.
+ */
+export const isClaimedSenderOrigin = (
+  sender: RuntimeSender | undefined,
+  extensionId: string,
+  origin: string,
+): boolean => isExtensionPageSender(sender, extensionId) || isSenderOrigin(sender, origin);
+
+/**
  * Marks messages that must only come from extension-controlled pages.
  */
 export const isPrivilegedMessage = (type: unknown): boolean =>

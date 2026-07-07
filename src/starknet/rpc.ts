@@ -1,7 +1,7 @@
 /**
  * Starknet RPC wallet operations backed by starknet-js and Krusty signatures.
  */
-import { type Account, type Call, CallData, cairo } from "starknet";
+import { type Account, type Call, CallData, cairo, shortString } from "starknet";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
 import type { TokenConfig } from "../storage/preferences-store";
@@ -70,6 +70,23 @@ export type BalanceInput = {
   readonly accountAddress: string;
   readonly rpcUrls: readonly string[];
   readonly tokens: readonly TokenConfig[];
+};
+
+/**
+ * On-chain ERC20 metadata read before a dapp watch-asset request is queued.
+ */
+export type TokenMetadata = {
+  readonly decimals: number;
+  readonly name: string;
+  readonly symbol: string;
+};
+
+/**
+ * Inputs for reading ERC20 metadata for a watch-asset request.
+ */
+export type TokenMetadataInput = {
+  readonly address: string;
+  readonly rpcUrls: readonly string[];
 };
 
 /**
@@ -223,6 +240,72 @@ export const getTokenBalances = async ({
       }),
     );
     return balances;
+  });
+};
+
+/**
+ * Decodes an ERC20 name/symbol response, accepting both Cairo felt short
+ * strings (single felt) and Cairo 1 ByteArray encodings (multi-felt).
+ */
+export const decodeErc20String = (response: readonly string[]): string => {
+  const head = response[0];
+  if (typeof head !== "string" || !/^0x[0-9a-fA-F]+$/.test(head)) {
+    throw new WalletError("Invalid token string");
+  }
+  if (response.length === 1) {
+    return shortString.decodeShortString(head).trim();
+  }
+  const fullWords = Number(BigInt(head));
+  if (!Number.isSafeInteger(fullWords) || fullWords < 0 || fullWords + 1 >= response.length) {
+    throw new WalletError("Invalid token string");
+  }
+  const words = response.slice(1, 1 + fullWords);
+  const pending = response[1 + fullWords];
+  const decoded = words
+    .map((word) => (typeof word === "string" ? shortString.decodeShortString(word) : ""))
+    .join("");
+  const tail =
+    typeof pending === "string" && BigInt(pending) > 0n
+      ? shortString.decodeShortString(pending)
+      : "";
+  return `${decoded}${tail}`.trim();
+};
+
+/**
+ * Reads ERC20 name, symbol, and decimals through Starknet RPC so watch-asset
+ * requests can show authoritative token metadata before they are queued.
+ */
+export const getTokenMetadata = async ({
+  address,
+  rpcUrls,
+}: TokenMetadataInput): Promise<TokenMetadata> => {
+  if (!isNonZeroStarkFieldElement(address)) {
+    throw new WalletError("Invalid token address");
+  }
+  return withRpcFallback(rpcUrls, async (provider) => {
+    const [nameResponse, symbolResponse, decimalsResponse] = await Promise.all([
+      provider.callContract(
+        { calldata: [], contractAddress: address, entrypoint: "name" },
+        "latest",
+      ),
+      provider.callContract(
+        { calldata: [], contractAddress: address, entrypoint: "symbol" },
+        "latest",
+      ),
+      provider.callContract(
+        { calldata: [], contractAddress: address, entrypoint: "decimals" },
+        "latest",
+      ),
+    ]);
+    const rawDecimals = decimalsResponse[0];
+    if (typeof rawDecimals !== "string" || !/^0x[0-9a-fA-F]+$/.test(rawDecimals)) {
+      throw new WalletError("Invalid token decimals");
+    }
+    return {
+      decimals: Number(BigInt(rawDecimals)),
+      name: decodeErc20String(nameResponse),
+      symbol: decodeErc20String(symbolResponse),
+    };
   });
 };
 

@@ -47,7 +47,7 @@ export const walletEventBroadcasts = (
   if (message.type === "wallet.denyOrigin") {
     return [approvalsChanged];
   }
-  if (message.type === "wallet.requestAccounts") {
+  if (message.type === "wallet.requestAccounts" || message.type === "wallet.watchAsset") {
     return response.ok === false && isRecord(response.pending) ? [approvalsChanged] : [];
   }
   if (message.type === "wallet.setActiveAccount") {

@@ -229,6 +229,9 @@ describe("background network messages", () => {
         async getTokenBalances() {
           return [];
         },
+        async getTokenMetadata() {
+          return { decimals: 18, name: "Token", symbol: "TKN" };
+        },
         async submitAccountDeployment() {
           throw new Error("unused");
         },

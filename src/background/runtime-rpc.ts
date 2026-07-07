@@ -9,11 +9,13 @@ import {
   estimateInvokeFee,
   getDeploymentStatus,
   getTokenBalances,
+  getTokenMetadata,
   getTransactionStatuses,
   type InvokeInput,
   submitAccountDeployment,
   submitErc20Transfer,
   submitInvokeTransaction,
+  type TokenMetadataInput,
   type TransactionStatusInput,
   type TransferInput,
 } from "../starknet/rpc";
@@ -27,6 +29,7 @@ export type RuntimeRpc = {
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
   readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
+  readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;
@@ -46,6 +49,7 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   estimateInvokeFee,
   getDeploymentStatus,
   getTokenBalances,
+  getTokenMetadata,
   getTransactionStatuses,
   submitAccountDeployment,
   submitErc20Transfer,

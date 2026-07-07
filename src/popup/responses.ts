@@ -65,11 +65,25 @@ export type GenerateMnemonicResponse = {
 };
 
 /**
- * Pending dapp approval item shown in the popup.
+ * ERC20 token metadata carried by a watch-asset approval.
+ */
+export type WatchAssetToken = {
+  readonly address: string;
+  readonly decimals: number;
+  readonly name: string;
+  readonly networkId: string;
+  readonly symbol: string;
+};
+
+/**
+ * Pending dapp approval item shown in the popup. `kind` defaults to a
+ * connection prompt when absent; watch-asset prompts also carry `token`.
  */
 export type PendingApproval = {
   readonly id: string;
+  readonly kind?: "connect" | "watch-asset";
   readonly origin: string;
+  readonly token?: WatchAssetToken;
 };
 
 /**
@@ -134,13 +148,36 @@ export type DeploymentStatusResponse = {
  */
 export type ApprovalDecisionResponse = AccountsResponse | PendingApprovalsResponse;
 
-const isPendingApproval = (value: unknown): value is PendingApproval =>
+const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["id", "origin"]) &&
-  typeof value.id === "string" &&
-  isUuid(value.id) &&
-  typeof value.origin === "string" &&
-  isWalletOrigin(value.origin);
+  hasOnlyKnownKeys(value, ["address", "decimals", "name", "networkId", "symbol"]) &&
+  typeof value.address === "string" &&
+  isStarkFieldElement(value.address) &&
+  typeof value.decimals === "number" &&
+  Number.isSafeInteger(value.decimals) &&
+  value.decimals >= 0 &&
+  value.decimals <= 36 &&
+  typeof value.name === "string" &&
+  value.name.length > 0 &&
+  value.name.length <= 64 &&
+  isStarknetNetworkId(value.networkId) &&
+  typeof value.symbol === "string" &&
+  /^[A-Z0-9]{2,12}$/.test(value.symbol);
+
+const isPendingApproval = (value: unknown): value is PendingApproval => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["id", "kind", "origin", "token"]) ||
+    typeof value.id !== "string" ||
+    !isUuid(value.id) ||
+    typeof value.origin !== "string" ||
+    !isWalletOrigin(value.origin) ||
+    (value.kind !== undefined && value.kind !== "connect" && value.kind !== "watch-asset")
+  ) {
+    return false;
+  }
+  return value.kind === "watch-asset" ? isWatchAssetToken(value.token) : value.token === undefined;
+};
 
 const hasUniqueStrings = (values: readonly string[]): boolean =>
   new Set(values).size === values.length;
@@ -271,7 +308,11 @@ export const isPendingApprovalsResponse = (value: unknown): value is PendingAppr
   Array.isArray(value.pending) &&
   value.pending.every(isPendingApproval) &&
   hasUniqueStrings(value.pending.map((approval) => approval.id)) &&
-  hasUniqueStrings(value.pending.map((approval) => approval.origin));
+  hasUniqueStrings(
+    value.pending
+      .filter((approval) => approval.kind !== "watch-asset")
+      .map((approval) => approval.origin),
+  );
 
 /**
  * Checks plain preferences responses before rendering.

@@ -3,10 +3,11 @@
  * and counterfactual account deployment parameters.
  */
 import { describe, expect, test } from "bun:test";
-import { CallData, hash } from "starknet";
+import { CallData, hash, shortString } from "starknet";
 import { WalletError } from "../src/shared/errors";
 import {
   buildErc20TransferCall,
+  decodeErc20String,
   formatTokenAmount,
   isContractNotFoundError,
   isTransportRpcError,
@@ -131,5 +132,23 @@ describe("starknet RPC helpers", () => {
     ).toBe(true);
     expect(isContractNotFoundError(new Error("connection reset"))).toBe(false);
     expect(isContractNotFoundError("Contract not found")).toBe(false);
+  });
+
+  test("decodes ERC20 name/symbol from felt short strings and byte arrays", () => {
+    expect(decodeErc20String(["0x55534443"])).toBe("USDC");
+    expect(decodeErc20String([shortString.encodeShortString("Ether")])).toBe("Ether");
+    expect(decodeErc20String(["0x0", shortString.encodeShortString("USD Coin"), "0x8"])).toBe(
+      "USD Coin",
+    );
+    expect(
+      decodeErc20String([
+        "0x1",
+        shortString.encodeShortString("A".repeat(31)),
+        shortString.encodeShortString("BC"),
+        "0x2",
+      ]),
+    ).toBe(`${"A".repeat(31)}BC`);
+    expect(() => decodeErc20String(["not-hex"])).toThrow(WalletError);
+    expect(() => decodeErc20String([])).toThrow(WalletError);
   });
 });

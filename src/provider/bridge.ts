@@ -5,6 +5,7 @@ import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import { type AccountRef, isAccountRef } from "../storage/vault-schema";
+import { type ProviderWatchAsset, readProviderWatchAsset } from "./watch-asset-params";
 
 /**
  * Marker for page-to-content wallet provider requests.
@@ -26,10 +27,12 @@ export type ProviderMethod =
   | "mc_accounts"
   | "mc_requestAccounts"
   | "wallet_addInvokeTransaction"
+  | "wallet_getPermissions"
   | "wallet_requestAccounts"
   | "wallet_requestChainId"
   | "wallet_signTypedData"
-  | "wallet_switchStarknetChain";
+  | "wallet_switchStarknetChain"
+  | "wallet_watchAsset";
 
 /**
  * Page-originated provider request shape.
@@ -114,6 +117,10 @@ export type RuntimeMessage =
     }
   | {
       readonly origin: string;
+      readonly type: "wallet.getPermissions";
+    }
+  | {
+      readonly origin: string;
       readonly type: "wallet.requestAccounts";
     }
   | {
@@ -125,6 +132,11 @@ export type RuntimeMessage =
       readonly chainId: string;
       readonly origin: string;
       readonly type: "wallet.switchChain";
+    }
+  | {
+      readonly asset: ProviderWatchAsset;
+      readonly origin: string;
+      readonly type: "wallet.watchAsset";
     };
 
 /**
@@ -140,10 +152,12 @@ const isProviderMethod = (value: unknown): value is ProviderMethod =>
   value === "mc_accounts" ||
   value === "mc_requestAccounts" ||
   value === "wallet_addInvokeTransaction" ||
+  value === "wallet_getPermissions" ||
   value === "wallet_requestAccounts" ||
   value === "wallet_requestChainId" ||
   value === "wallet_signTypedData" ||
-  value === "wallet_switchStarknetChain";
+  value === "wallet_switchStarknetChain" ||
+  value === "wallet_watchAsset";
 
 const readProviderParams = (method: ProviderMethod, params: unknown): Json | null | undefined => {
   if (params === undefined) {
@@ -151,7 +165,8 @@ const readProviderParams = (method: ProviderMethod, params: unknown): Json | nul
   }
   return (method === "wallet_addInvokeTransaction" ||
     method === "wallet_signTypedData" ||
-    method === "wallet_switchStarknetChain") &&
+    method === "wallet_switchStarknetChain" ||
+    method === "wallet_watchAsset") &&
     isJson(params)
     ? params
     : null;
@@ -364,6 +379,13 @@ export const toRuntimeMessage = (
   if (request.method === "mc_accounts") {
     return { origin, type: "wallet.getGrantedAccounts" };
   }
+  if (request.method === "wallet_getPermissions") {
+    return { origin, type: "wallet.getPermissions" };
+  }
+  if (request.method === "wallet_watchAsset") {
+    const asset = readProviderWatchAsset(request.params);
+    return asset ? { asset, origin, type: "wallet.watchAsset" } : null;
+  }
   if (request.method === "wallet_addInvokeTransaction") {
     const calls = providerInvokeCalls(request.params);
     return calls ? { calls, origin, type: "wallet.addInvokeTransaction" } : null;
@@ -395,6 +417,16 @@ export const toProviderPayload = (
   }
   if (isRecord(result) && result.ok === false && isRecord(result.pending)) {
     return { error: "approval pending" };
+  }
+  if (method === "wallet_getPermissions") {
+    const permissions =
+      isRecord(result) && result.ok === true ? providerStringArrayResult(result.permissions) : null;
+    return permissions ? { result: permissions } : { error: "invalid provider response" };
+  }
+  if (method === "wallet_watchAsset") {
+    return isRecord(result) && result.ok === true && result.watched === true
+      ? { result: true }
+      : { error: "invalid provider response" };
   }
   if (method === "wallet_signTypedData") {
     const signature = isRecord(result) && result.ok === true ? result.signature : null;

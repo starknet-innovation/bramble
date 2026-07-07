@@ -23,6 +23,7 @@ import {
   readUnlockInput,
 } from "./message-inputs";
 import { handlePreferenceOps } from "./preference-ops";
+import { handleProviderOps } from "./provider-ops";
 import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
 import {
   networkRpcUrls,
@@ -32,9 +33,9 @@ import {
 } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import {
+  isClaimedSenderOrigin,
   isExtensionPageSender,
   isPrivilegedMessage,
-  isSenderOrigin,
   isTrustedSender,
   type RuntimeSender,
 } from "./senders";
@@ -48,12 +49,6 @@ const unavailableVaultStatus = () => ({
   locked: true,
   ready: false,
 });
-
-const isClaimedSenderOrigin = (
-  sender: RuntimeSender | undefined,
-  extensionId: string,
-  origin: string,
-): boolean => isExtensionPageSender(sender, extensionId) || isSenderOrigin(sender, origin);
 
 const readMessageType = (message: unknown): string | null => {
   if (typeof message !== "object" || message === null) {
@@ -106,6 +101,16 @@ const handleRuntimeMessage = async (
     return preferenceResponse;
   }
 
+  const providerOpsResponse = await handleProviderOps(
+    { approvals, extensionId, preferencesStore, runtimeRpc, session, wallet },
+    messageType,
+    message,
+    sender,
+  );
+  if (providerOpsResponse) {
+    return providerOpsResponse;
+  }
+
   if (messageType === "wallet.createAccount") {
     const input = readCreateAccountInput(message);
     if (!input) {
@@ -119,16 +124,24 @@ const handleRuntimeMessage = async (
 
   if (messageType === "wallet.approveOrigin") {
     const input = readApprovalIdInput(message);
-    const passphrase = session.getPassphrase();
     if (!input) {
       return { error: "invalid approval request" };
-    }
-    if (!passphrase) {
-      return { error: "wallet locked" };
     }
     const approval = approvals.get(input.id);
     if (!approval) {
       return { error: "approval not found" };
+    }
+    if (approval.kind === "watch-asset") {
+      if (!approval.token) {
+        return { error: "approval not found" };
+      }
+      await preferencesStore.upsertToken(approval.token);
+      approvals.approve(input.id);
+      return { ok: true, pending: approvals.list() };
+    }
+    const passphrase = session.getPassphrase();
+    if (!passphrase) {
+      return { error: "wallet locked" };
     }
     const accounts = await wallet.grantOrigin({
       origin: approval.origin,

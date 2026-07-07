@@ -103,6 +103,24 @@ export type ChainIdResponse = {
 };
 
 /**
+ * Origin permission list returned through the dapp provider bridge. Contains
+ * "accounts" when the origin holds a grant, otherwise an empty list.
+ */
+export type PermissionsResponse = {
+  readonly ok: true;
+  readonly permissions: readonly string[];
+};
+
+/**
+ * Watch-asset outcome returned when the requested token is already tracked and
+ * no approval prompt is needed.
+ */
+export type WatchAssetResponse = {
+  readonly ok: true;
+  readonly watched: true;
+};
+
+/**
  * Transfer submission response returned to extension pages.
  */
 export type TransferResponse = {
@@ -163,11 +181,13 @@ export type RuntimeResponse =
   | TransferReviewResponse
   | GenerateMnemonicResponse
   | PendingApprovalResponse
+  | PermissionsResponse
   | PreferencesResponse
   | RequestAccountsResponse
   | SignHashResponse
   | TransferResponse
   | WalletStatus
+  | WatchAssetResponse
   | { readonly error: string };
 
 /**

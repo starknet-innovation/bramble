@@ -4,6 +4,7 @@
 import { WalletError } from "../shared/errors";
 import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
+import type { StarknetNetworkId } from "../starknet/networks";
 
 /**
  * Maximum queued dapp connection approvals kept in background memory.
@@ -11,15 +12,34 @@ import { isWalletOrigin } from "../shared/origin";
 export const MAX_PENDING_APPROVALS = 50;
 
 /**
- * Pending dapp connection approval.
+ * Approval kinds distinguishing a connection prompt from a watch-asset prompt.
  */
-export type PendingApproval = {
-  readonly id: string;
-  readonly origin: string;
+export type ApprovalKind = "connect" | "watch-asset";
+
+/**
+ * ERC20 token metadata carried by a watch-asset approval, in the shape the
+ * preferences store accepts when the request is approved.
+ */
+export type WatchAssetToken = {
+  readonly address: string;
+  readonly decimals: number;
+  readonly name: string;
+  readonly networkId: StarknetNetworkId;
+  readonly symbol: string;
 };
 
 /**
- * In-memory dapp connection approval queue.
+ * Pending dapp approval. `token` is present only for watch-asset approvals.
+ */
+export type PendingApproval = {
+  readonly id: string;
+  readonly kind: ApprovalKind;
+  readonly origin: string;
+  readonly token?: WatchAssetToken;
+};
+
+/**
+ * In-memory dapp approval queue for connection and watch-asset prompts.
  */
 export type ApprovalQueue = {
   readonly approve: (id: string) => PendingApproval | null;
@@ -27,15 +47,23 @@ export type ApprovalQueue = {
   readonly get: (id: string) => PendingApproval | null;
   readonly list: () => readonly PendingApproval[];
   readonly request: (origin: string) => PendingApproval;
+  readonly requestWatchAsset: (input: {
+    readonly origin: string;
+    readonly token: WatchAssetToken;
+  }) => PendingApproval;
 };
 
 const approvalSnapshot = (approval: PendingApproval): PendingApproval => ({
   id: approval.id,
+  kind: approval.kind,
   origin: approval.origin,
+  ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
 });
 
 /**
- * Creates a deduplicating approval queue keyed by requesting origin.
+ * Creates a deduplicating approval queue. Connection prompts dedupe per origin;
+ * watch-asset prompts dedupe per origin and token address so different tokens
+ * from the same site queue independently.
  */
 export const createApprovalQueue = (): ApprovalQueue => {
   const pending = new Map<string, PendingApproval>();
@@ -55,6 +83,14 @@ export const createApprovalQueue = (): ApprovalQueue => {
     return approval;
   };
 
+  const enqueue = (approval: PendingApproval): PendingApproval => {
+    if (pending.size >= MAX_PENDING_APPROVALS) {
+      throw new WalletError("Too many pending approvals");
+    }
+    pending.set(approval.id, approval);
+    return approvalSnapshot(approval);
+  };
+
   return {
     approve: remove,
     deny: remove,
@@ -67,17 +103,30 @@ export const createApprovalQueue = (): ApprovalQueue => {
         throw new WalletError("Invalid origin");
       }
 
-      const existing = [...pending.values()].find((approval) => approval.origin === origin);
+      const existing = [...pending.values()].find(
+        (approval) => approval.kind === "connect" && approval.origin === origin,
+      );
       if (existing) {
         return approvalSnapshot(existing);
       }
-      if (pending.size >= MAX_PENDING_APPROVALS) {
-        throw new WalletError("Too many pending approvals");
+      return enqueue({ id: crypto.randomUUID(), kind: "connect", origin });
+    },
+    requestWatchAsset({ origin, token }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
       }
 
-      const approval = { id: crypto.randomUUID(), origin };
-      pending.set(approval.id, approval);
-      return approvalSnapshot(approval);
+      const existing = [...pending.values()].find(
+        (approval) =>
+          approval.kind === "watch-asset" &&
+          approval.origin === origin &&
+          approval.token?.address === token.address &&
+          approval.token?.networkId === token.networkId,
+      );
+      if (existing) {
+        return approvalSnapshot(existing);
+      }
+      return enqueue({ id: crypto.randomUUID(), kind: "watch-asset", origin, token: { ...token } });
     },
   };
 };

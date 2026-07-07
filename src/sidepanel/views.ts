@@ -155,7 +155,7 @@ const homeScreen = (
     ${balancePanel(balances)}`,
   );
 
-const approvalCard = (approval: PendingApproval, status: WalletStatus): string => `
+const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
       <p class="eyebrow">Connection request</p>
@@ -167,6 +167,34 @@ const approvalCard = (approval: PendingApproval, status: WalletStatus): string =
       <button class="secondary danger" data-approval-action="deny" data-approval-id="${escapeHtml(approval.id)}" type="button">${icon("x")}Deny</button>
     </div>
   </li>`;
+
+const watchAssetCard = (approval: PendingApproval): string => {
+  const token = approval.token;
+  if (!token) {
+    return "";
+  }
+  return `
+  <li class="request-card">
+    <div class="request-copy">
+      <p class="eyebrow">Add token request</p>
+      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      <dl class="request-detail">
+        <div><dt>Symbol</dt><dd>${escapeHtml(token.symbol)}</dd></div>
+        <div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div>
+        <div><dt>Decimals</dt><dd>${escapeHtml(String(token.decimals))}</dd></div>
+        <div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(token.address))}</code></dd></div>
+      </dl>
+      <p class="hint">Approve to track this ERC20 token in your wallet.</p>
+    </div>
+    <div class="button-row">
+      <button data-approval-action="approve" data-approval-id="${escapeHtml(approval.id)}" type="button">${icon("check")}Add token</button>
+      <button class="secondary danger" data-approval-action="deny" data-approval-id="${escapeHtml(approval.id)}" type="button">${icon("x")}Deny</button>
+    </div>
+  </li>`;
+};
+
+const approvalCard = (approval: PendingApproval, status: WalletStatus): string =>
+  approval.kind === "watch-asset" ? watchAssetCard(approval) : connectCard(approval, status);
 
 const transactionRow = (entry: ActivityEntry): string => `
   <li class="tx-row">

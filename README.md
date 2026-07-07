@@ -60,6 +60,34 @@ scripts forward `accountsChanged`/`networkChanged` to connected pages through th
 provider's `on`/`off` subscription API — after re-querying which addresses each origin may see,
 so events never leak wallet state to unconnected sites.
 
+## dApp Provider
+
+The injected `window.starknet_mcWallet` object follows the get-starknet/starknetkit
+`StarknetWindowObject` shape: `id`, `name`, `version`, an inline `data:` URI `icon`, `isConnected`,
+`selectedAddress`, `on`/`off`, `enable`, and `request`. `chainId` is initialized lazily from
+`wallet_requestChainId` after `enable` and kept current from `networkChanged` events;
+`isPreauthorized()` resolves `true` when the origin already holds an account grant. The object is
+frozen and installed as a non-configurable global.
+
+`request` accepts these methods, mapped to safe background messages by `src/provider/bridge.ts`:
+`wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
+`wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
+`wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
+`wallet_watchAsset`.
+
+Grants and provider events are isolated per origin: each origin reads only its own accounts
+(`wallet.getGrantedAccounts`) and each content script derives page events from its own history
+(`pageEventsFor`), so multiple connected sites never observe each other's state.
+
+`wallet_watchAsset` (SNIP-compatible ERC20, `options.address`) fetches the token's on-chain
+`name`/`symbol`/`decimals` via RPC (falling back to the caller's options), then queues a
+`watch-asset` approval rendered in the side panel. Approving calls `preferencesStore.upsertToken`;
+denying leaves the token untracked. Like `wallet_requestAccounts`, this uses the queue-and-pending
+model rather than a persistent open promise: an already-tracked asset resolves `true` immediately,
+otherwise the current call rejects with `approval pending` and the dapp receives `true` on a repeat
+call after approval. Holding the dapp promise open across the side-panel decision within a single
+service-worker lifetime is a possible future enhancement.
+
 ## Krusty KMS
 
 Wallet checks and cryptography require vendored WASM from Krusty KMS.

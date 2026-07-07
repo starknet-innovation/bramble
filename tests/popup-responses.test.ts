@@ -212,6 +212,69 @@ describe("popup response validators", () => {
     expect(isPendingApprovalsResponse({ ok: true, pending: [null] })).toBe(false);
   });
 
+  test("validates watch-asset pending approvals and shared-origin prompts", () => {
+    const token = {
+      address: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+      decimals: 6,
+      name: "USD Coin",
+      networkId: "SN_MAIN",
+      symbol: "USDC",
+    };
+
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [{ id: approvalId, kind: "watch-asset", origin: "https://example.com", token }],
+      }),
+    ).toBe(true);
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [
+          { id: approvalId, kind: "connect", origin: "https://example.com" },
+          {
+            id: "123e4567-e89b-42d3-a456-426614174001",
+            kind: "watch-asset",
+            origin: "https://example.com",
+            token,
+          },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [{ id: approvalId, kind: "watch-asset", origin: "https://example.com" }],
+      }),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [
+          { id: approvalId, kind: "connect", origin: "https://example.com" },
+          {
+            id: "123e4567-e89b-42d3-a456-426614174001",
+            kind: "connect",
+            origin: "https://example.com",
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [
+          {
+            id: approvalId,
+            kind: "watch-asset",
+            origin: "https://example.com",
+            token: { ...token, symbol: "bad symbol" },
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
   test("validates approval decision responses before popup state updates", () => {
     const sparseAccounts = new Array<unknown>(1);
 

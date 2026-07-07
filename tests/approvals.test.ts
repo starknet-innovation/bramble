@@ -43,7 +43,9 @@ describe("createApprovalQueue", () => {
     listed.origin = "https://listed.example";
     peeked.origin = "https://peeked.example";
 
-    expect(queue.list()).toEqual([{ id: approval.id, origin: "https://example.com" }]);
+    expect(queue.list()).toEqual([
+      { id: approval.id, kind: "connect", origin: "https://example.com" },
+    ]);
   });
 
   test("caps pending approvals without breaking origin deduplication", () => {
@@ -57,5 +59,61 @@ describe("createApprovalQueue", () => {
     expect(queue.request("https://app-0.example")).toEqual(first);
     expect(() => queue.request("https://overflow.example")).toThrow("Too many pending approvals");
     expect(queue.list()).toHaveLength(MAX_PENDING_APPROVALS);
+  });
+
+  test("queues watch-asset prompts per origin and token", () => {
+    const queue = createApprovalQueue();
+    const token = {
+      address: "0x1",
+      decimals: 18,
+      name: "Test Token",
+      networkId: "SN_MAIN" as const,
+      symbol: "TST",
+    };
+    const other = { ...token, address: "0x2", symbol: "OTH" };
+
+    const first = queue.requestWatchAsset({ origin: "https://example.com", token });
+    const repeat = queue.requestWatchAsset({ origin: "https://example.com", token });
+    const second = queue.requestWatchAsset({ origin: "https://example.com", token: other });
+
+    expect(first.kind).toBe("watch-asset");
+    expect(first.token).toEqual(token);
+    expect(repeat).toEqual(first);
+    expect(second.id).not.toBe(first.id);
+    expect(queue.list()).toHaveLength(2);
+  });
+
+  test("keeps watch-asset snapshots isolated from queue state", () => {
+    const queue = createApprovalQueue();
+    const approval = queue.requestWatchAsset({
+      origin: "https://example.com",
+      token: {
+        address: "0x1",
+        decimals: 18,
+        name: "Test Token",
+        networkId: "SN_MAIN",
+        symbol: "TST",
+      },
+    });
+    (approval.token as { symbol: string }).symbol = "HACK";
+
+    expect(queue.get(approval.id)?.token?.symbol).toBe("TST");
+  });
+
+  test("rejects watch-asset requests from invalid origins", () => {
+    const queue = createApprovalQueue();
+
+    expect(() =>
+      queue.requestWatchAsset({
+        origin: "http://example.com",
+        token: {
+          address: "0x1",
+          decimals: 18,
+          name: "Test Token",
+          networkId: "SN_MAIN",
+          symbol: "TST",
+        },
+      }),
+    ).toThrow("Invalid origin");
   });
 });
