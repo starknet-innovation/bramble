@@ -18,6 +18,7 @@ import { locked, onboarding } from "./gate-views";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { bindAccountLabel, bindAppearance, bindBackup, bindContacts } from "./settings-ui";
 import { SIDEPANEL_STYLES } from "./styles";
+import { bindTokens } from "./tokens-ui";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
@@ -33,6 +34,7 @@ let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
 let lastTheme = "";
+let selectedTokenId: string | null = null;
 
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
@@ -391,6 +393,13 @@ const render = async (status: WalletStatus): Promise<void> => {
     activeView === "activity" && status.hasVault && !status.locked
       ? await wallet.loadActivity().catch(() => [])
       : [];
+  const prices: Readonly<Record<string, number>> =
+    status.hasVault && !status.locked ? await wallet.loadPrices().catch(() => ({})) : {};
+  const selectedToken = preferences?.tokens.find((token) => token.id === selectedTokenId) ?? null;
+  const chart: readonly number[] =
+    activeView === "token-detail" && selectedToken
+      ? await wallet.loadTokenChart(selectedToken.address).catch(() => [])
+      : [];
   const scene = !status.hasVault
     ? "onboarding"
     : status.locked
@@ -403,7 +412,18 @@ const render = async (status: WalletStatus): Promise<void> => {
       ? onboarding(status)
       : status.locked
         ? locked(status)
-        : dashboard(activeView, status, pending, preferences, balances, deployment, transactions),
+        : dashboard(
+            activeView,
+            status,
+            pending,
+            preferences,
+            balances,
+            deployment,
+            transactions,
+            prices,
+            chart,
+            selectedTokenId,
+          ),
     animate,
   );
   bindNavigation();
@@ -429,6 +449,17 @@ const render = async (status: WalletStatus): Promise<void> => {
   bindContacts(settingsDeps);
   bindAddressBook();
   bindApprovals();
+  bindTokens({
+    app,
+    openToken: (tokenId) => {
+      selectedTokenId = tokenId;
+      activeView = "token-detail";
+      void wallet.loadStatus().then(render);
+    },
+    refresh: () => wallet.loadStatus(),
+    render,
+    wallet,
+  });
 };
 
 let refreshQueued = false;

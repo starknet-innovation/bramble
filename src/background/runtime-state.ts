@@ -50,6 +50,9 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async setRpcOverride() {
     throw new Error("preferences unavailable");
   },
+  async setTokenHidden() {
+    throw new Error("preferences unavailable");
+  },
   async upsertToken() {
     throw new Error("preferences unavailable");
   },

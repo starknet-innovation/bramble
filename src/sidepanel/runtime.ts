@@ -9,10 +9,13 @@ import {
   isBalancesResponse,
   isCreateAccountResponse,
   isDeploymentStatusResponse,
+  isDetectTokensResponse,
   isErrorResponse,
   isGenerateMnemonicResponse,
   isPendingApprovalsResponse,
   isPreferencesResponse,
+  isPricesResponse,
+  isTokenChartResponse,
   isTransferResponse,
   isTransferReviewResponse,
   isWalletStatus,
@@ -66,6 +69,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
 
   return {
+    async addToken(address: string): Promise<void> {
+      const response = await sendMessage({ address, type: "wallet.addToken" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "add token failed");
+    },
     async createAccount(
       mnemonic: string,
       networkId: string,
@@ -138,6 +148,28 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return { balances: response.balances };
       }
       return { error: isErrorResponse(response) ? response.error : "balances unavailable" };
+    },
+    async detectTokens(): Promise<readonly TokenBalance[]> {
+      const response = await sendMessage({ type: "wallet.detectTokens" });
+      if (isDetectTokensResponse(response)) {
+        return response.suggestions;
+      }
+      throw responseError(response, "token detection failed");
+    },
+    async loadPrices(): Promise<Readonly<Record<string, number>>> {
+      const response = await sendMessage({ type: "wallet.prices" });
+      return isPricesResponse(response) ? response.prices : {};
+    },
+    async loadTokenChart(address: string): Promise<readonly number[]> {
+      const response = await sendMessage({ address, type: "wallet.tokenChart" });
+      return isTokenChartResponse(response) ? response.points : [];
+    },
+    async setTokenHidden(tokenId: string, hidden: boolean): Promise<void> {
+      const response = await sendMessage({ hidden, tokenId, type: "wallet.setTokenHidden" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "token visibility update failed");
     },
     async loadPendingApprovals(): Promise<readonly PendingApproval[]> {
       const response = await sendMessage({ type: "wallet.pendingApprovals" });

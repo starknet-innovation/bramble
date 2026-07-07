@@ -66,11 +66,13 @@ export const isTrustedSender = (sender: RuntimeSender | undefined, extensionId: 
  */
 export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.activity" ||
+  type === "wallet.addToken" ||
   type === "wallet.approveOrigin" ||
   type === "wallet.createAccount" ||
   type === "wallet.denyOrigin" ||
   type === "wallet.deployAccount" ||
   type === "wallet.deploymentStatus" ||
+  type === "wallet.detectTokens" ||
   type === "wallet.generateMnemonic" ||
   type === "wallet.grantOrigin" ||
   type === "wallet.getBalances" ||
@@ -78,6 +80,7 @@ export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.lock" ||
   type === "wallet.pendingApprovals" ||
   type === "wallet.preferences" ||
+  type === "wallet.prices" ||
   type === "wallet.removeAddress" ||
   type === "wallet.reviewTransfer" ||
   type === "wallet.saveAddress" ||
@@ -86,7 +89,9 @@ export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.setActiveNetwork" ||
   type === "wallet.setDisplay" ||
   type === "wallet.setRpcOverride" ||
+  type === "wallet.setTokenHidden" ||
   type === "wallet.signHash" ||
   type === "wallet.status" ||
+  type === "wallet.tokenChart" ||
   type === "wallet.transfer" ||
   type === "wallet.unlock";

@@ -5,11 +5,12 @@
  * journey has a distinct place to complete its goal.
  */
 
-import type { PendingApproval, WalletStatus } from "../popup/responses";
+import type { PendingApproval, TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { ActivityEntry } from "../storage/activity-store";
-import type { WalletPreferences } from "../storage/preferences-store";
+import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { formatFiat, portfolioTotal, tokenFiatValue } from "./fiat";
 import {
   accountFlow,
   addressBookFlow,
@@ -34,6 +35,7 @@ import {
   type WalletView,
 } from "./parts";
 import type { BalanceState } from "./runtime";
+import { DEFAULT_CURRENCY, isHiddenFromHome, tokenDetailFlow, tokensFlow } from "./token-flows";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
@@ -89,32 +91,77 @@ const pendingCallout = (pendingCount: number): string =>
         <button class="secondary small" data-view="activity" type="button">Review</button>
       </section>`;
 
-const balancePanel = (state: BalanceState): string => `
+const visibleBalances = (
+  state: BalanceState,
+  preferences: WalletPreferences | null,
+): readonly TokenBalance[] => {
+  if ("error" in state) {
+    return [];
+  }
+  const trackedById = new Map<string, TokenConfig>(
+    (preferences?.tokens ?? []).map((token) => [token.id, token]),
+  );
+  return state.balances.filter((balance) => {
+    const token = trackedById.get(balance.id);
+    return !token || !isHiddenFromHome(token, preferences);
+  });
+};
+
+const balanceRow = (
+  token: TokenBalance,
+  price: number | undefined,
+  currency: DisplayCurrency,
+): string => {
+  const fiat = tokenFiatValue(token.formatted, price);
+  return `<li class="token-row">
+    <button class="token-open" type="button" data-token-detail="${escapeHtml(token.id)}">
+      <span class="token-mark">${escapeHtml(token.symbol.slice(0, 3))}</span>
+      <div class="token-copy">
+        <strong>${escapeHtml(token.symbol)}</strong>
+        <p>${escapeHtml(token.name)}</p>
+      </div>
+      <div class="token-side">
+        <span class="token-amount">${escapeHtml(token.formatted)}</span>
+        ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
+      </div>
+    </button>
+  </li>`;
+};
+
+const balancePanel = (
+  state: BalanceState,
+  preferences: WalletPreferences | null,
+  prices: Readonly<Record<string, number>>,
+  currency: DisplayCurrency,
+): string => {
+  const visible = visibleBalances(state, preferences);
+  const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
+  return `
   <section class="section">
     <div class="row">
       <h2>Balances</h2>
-      <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh balances" title="Refresh balances">${icon("refresh")}</button>
+      <div class="header-actions">
+        <button class="icon-button" data-view="tokens" type="button" aria-label="Manage tokens" title="Manage tokens">${icon("wallet")}</button>
+        <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh balances" title="Refresh balances">${icon("refresh")}</button>
+      </div>
     </div>
     ${
       "error" in state
         ? `<p class="empty">${escapeHtml(state.error)}</p>`
-        : state.balances.length === 0
-          ? '<p class="empty">No tracked balances yet. Tokens you hold appear here.</p>'
-          : `<ul class="token-list">${state.balances
-              .map(
-                (token) => `<li class="token-row">
-                  <span class="token-mark">${escapeHtml(token.symbol.slice(0, 3))}</span>
-                  <div class="token-copy">
-                    <strong>${escapeHtml(token.symbol)}</strong>
-                    <p>${escapeHtml(token.name)}</p>
-                  </div>
-                  <span class="token-amount">${escapeHtml(token.formatted)}</span>
-                </li>`,
-              )
+        : visible.length === 0
+          ? '<p class="empty">No tracked balances yet. Add or detect tokens to see them here.</p>'
+          : `<ul class="token-list">${visible
+              .map((token) => balanceRow(token, prices[token.address], currency))
               .join("")}</ul>`
+    }
+    ${
+      hiddenCount > 0
+        ? `<button class="menu-row" data-view="tokens" type="button"><span class="menu-copy"><span class="menu-label">Hidden tokens</span><strong>${hiddenCount} hidden</strong></span><span class="menu-chevron">${icon("chevronRight")}</span></button>`
+        : ""
     }
     <p id="panel-result" role="status"></p>
   </section>`;
+};
 
 const deployNotice = (account: AccountRef | null, deployment: boolean | null): string =>
   account === null || deployment !== false
@@ -132,8 +179,13 @@ const homeScreen = (
   balances: BalanceState,
   pendingCount: number,
   deployment: boolean | null,
-): string =>
-  dockScreen(
+  preferences: WalletPreferences | null,
+  prices: Readonly<Record<string, number>>,
+  currency: DisplayCurrency,
+): string => {
+  const showTotal = account !== null && Object.keys(prices).length > 0;
+  const total = showTotal ? portfolioTotal(visibleBalances(balances, preferences), prices) : 0;
+  return dockScreen(
     "home",
     `${pendingCallout(pendingCount)}
     <section class="section hero">
@@ -141,6 +193,7 @@ const homeScreen = (
         <p class="eyebrow">Active account</p>
         ${networkPill(status)}
       </div>
+      ${showTotal ? `<p class="hero-total">${escapeHtml(formatFiat(total, currency))}</p>` : ""}
       ${
         account
           ? `<p class="hero-address"><code>${escapeHtml(accountLabel(account.address))}</code></p>`
@@ -152,8 +205,9 @@ const homeScreen = (
         <button class="secondary" data-view="receive" type="button" ${account ? "" : "disabled"}>${icon("receive")}Receive</button>
       </div>
     </section>
-    ${balancePanel(balances)}`,
+    ${balancePanel(balances, preferences, prices, currency)}`,
   );
+};
 
 const approvalCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
@@ -294,8 +348,13 @@ export const dashboard = (
   balances: BalanceState,
   deployment: boolean | null = null,
   transactions: readonly ActivityEntry[] = [],
+  prices: Readonly<Record<string, number>> = {},
+  chart: readonly number[] = [],
+  selectedTokenId: string | null = null,
 ): string => {
   const account = activeAccount(status);
+  const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
+  const trackedBalances = "balances" in balances ? balances.balances : [];
   if (activeView === "send") {
     return sendFlow(status, account, preferences);
   }
@@ -314,12 +373,41 @@ export const dashboard = (
   if (activeView === "backup") {
     return backupFlow(status);
   }
+  if (activeView === "tokens") {
+    return tokensFlow(status, preferences, trackedBalances, prices, currency);
+  }
+  if (activeView === "token-detail") {
+    const token = (preferences?.tokens ?? []).find(
+      (stored) => stored.id === selectedTokenId && stored.networkId === status.networkId,
+    );
+    if (token) {
+      const price =
+        chart.length > 0 ? (chart[chart.length - 1] ?? null) : (prices[token.address] ?? null);
+      return tokenDetailFlow(
+        status,
+        token,
+        trackedBalances.find((balance) => balance.id === token.id),
+        chart,
+        price,
+        currency,
+      );
+    }
+  }
   const screen =
     activeView === "activity"
       ? activityScreen(pending, status, transactions)
       : activeView === "settings"
         ? settingsScreen(status, account, preferences)
-        : homeScreen(status, account, balances, pending.length, deployment);
+        : homeScreen(
+            status,
+            account,
+            balances,
+            pending.length,
+            deployment,
+            preferences,
+            prices,
+            currency,
+          );
   return `
     ${walletHeader(status, account, preferences)}
     ${screen}

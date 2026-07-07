@@ -70,6 +70,7 @@ export type WalletPreferences = {
   readonly activeNetworkId: StarknetNetworkId;
   readonly addressBook: readonly AddressBookEntry[];
   readonly displayCurrency?: DisplayCurrency;
+  readonly hiddenTokens?: readonly string[];
   readonly rpcOverrides?: RpcOverrides;
   readonly schemaVersion: 1;
   readonly theme?: ThemeChoice;
@@ -96,6 +97,10 @@ export type WalletPreferencesStore = {
   readonly setRpcOverride: (input: {
     readonly networkId: StarknetNetworkId;
     readonly rpcUrl: string;
+  }) => Promise<WalletPreferences>;
+  readonly setTokenHidden: (input: {
+    readonly hidden: boolean;
+    readonly tokenId: string;
   }) => Promise<WalletPreferences>;
   readonly upsertToken: (token: Omit<TokenConfig, "id">) => Promise<WalletPreferences>;
 };
@@ -186,6 +191,12 @@ const isDisplayCurrency = (value: unknown): value is DisplayCurrency =>
 const isThemeChoice = (value: unknown): value is ThemeChoice =>
   value === "dark" || value === "light";
 
+const isTokenId = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= 200;
+
+const isHiddenTokens = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.every(isTokenId) && hasUniqueStrings(value);
+
 const isRpcOverrides = (value: unknown): value is RpcOverrides =>
   isRecord(value) &&
   Reflect.ownKeys(value).every(
@@ -203,6 +214,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
     "activeNetworkId",
     "addressBook",
     "displayCurrency",
+    "hiddenTokens",
     "rpcOverrides",
     "schemaVersion",
     "theme",
@@ -210,6 +222,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
   ]) &&
   (value.accountLabels === undefined || isAccountLabels(value.accountLabels)) &&
   (value.displayCurrency === undefined || isDisplayCurrency(value.displayCurrency)) &&
+  (value.hiddenTokens === undefined || isHiddenTokens(value.hiddenTokens)) &&
   (value.theme === undefined || isThemeChoice(value.theme)) &&
   (value.rpcOverrides === undefined || isRpcOverrides(value.rpcOverrides)) &&
   value.schemaVersion === 1 &&
@@ -229,6 +242,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   activeNetworkId: DEFAULT_NETWORK.id,
   addressBook: [],
   displayCurrency: "usd",
+  hiddenTokens: [],
   rpcOverrides: {},
   schemaVersion: 1,
   theme: "light",
@@ -356,6 +370,19 @@ export const createPreferencesStore = ({
         throw new WalletError("Invalid Starknet network");
       }
       const next = { ...(await read()), activeNetworkId: networkId };
+      await writePreferences(store, next);
+      return next;
+    },
+    async setTokenHidden({ hidden, tokenId }) {
+      if (!isTokenId(tokenId)) {
+        throw new WalletError("Invalid token");
+      }
+      const preferences = await read();
+      const current = preferences.hiddenTokens ?? [];
+      const hiddenTokens = hidden
+        ? [...new Set([...current, tokenId])]
+        : current.filter((stored) => stored !== tokenId);
+      const next = { ...preferences, hiddenTokens };
       await writePreferences(store, next);
       return next;
     },

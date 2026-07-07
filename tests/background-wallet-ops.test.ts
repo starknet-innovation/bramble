@@ -95,6 +95,9 @@ const makeHarness = (options?: { readonly deployed?: boolean }) => {
       async getTokenBalances() {
         return [];
       },
+      async getTokenMetadata() {
+        return { decimals: 18, name: "Token", symbol: "TKN" };
+      },
       async getTransactionStatuses({ hashes }) {
         statusRequests.push([...hashes]);
         return Object.fromEntries(hashes.map((hash) => [hash, "accepted" as const]));

@@ -298,6 +298,78 @@ export const isBalancesResponse = (value: unknown): value is BalancesResponse =>
   isStarknetNetworkId(value.networkId);
 
 /**
+ * Auto-detected token suggestions accepted from the background boundary.
+ */
+export type DetectTokensResponse = {
+  readonly ok: true;
+  readonly suggestions: readonly TokenBalance[];
+};
+
+/**
+ * Fiat prices keyed by contract address accepted from the background boundary.
+ */
+export type PricesResponse = {
+  readonly currency: "eur" | "gbp" | "usd";
+  readonly ok: true;
+  readonly prices: Readonly<Record<string, number>>;
+};
+
+/**
+ * Token price series accepted from the background boundary.
+ */
+export type TokenChartResponse = {
+  readonly currency: "eur" | "gbp" | "usd";
+  readonly ok: true;
+  readonly points: readonly number[];
+};
+
+const isDisplayCurrencyValue = (value: unknown): value is "eur" | "gbp" | "usd" =>
+  value === "eur" || value === "gbp" || value === "usd";
+
+const isFiniteNumberValue = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const isPriceMap = (value: unknown): value is Readonly<Record<string, number>> =>
+  isRecord(value) && Object.values(value).every(isFiniteNumberValue);
+
+const isNumberArray = (value: unknown): value is readonly number[] =>
+  Array.isArray(value) && value.every(isFiniteNumberValue);
+
+/**
+ * Checks auto-detected token responses before rendering suggestions.
+ */
+export const isDetectTokensResponse = (value: unknown): value is DetectTokensResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "suggestions"]) &&
+  value.ok === true &&
+  Array.isArray(value.suggestions) &&
+  value.suggestions.every(isTokenBalance) &&
+  hasUniqueStrings(value.suggestions.map((token) => token.id));
+
+/**
+ * Checks fiat price responses before applying values to balances.
+ */
+export const isPricesResponse = (value: unknown): value is PricesResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["currency", "ok", "prices"]) &&
+  value.ok === true &&
+  isDisplayCurrencyValue(value.currency) &&
+  isPriceMap(value.prices);
+
+/**
+ * Checks token chart responses before drawing a sparkline.
+ */
+export const isTokenChartResponse = (value: unknown): value is TokenChartResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["currency", "ok", "points"]) &&
+  value.ok === true &&
+  isDisplayCurrencyValue(value.currency) &&
+  isNumberArray(value.points);
+
+/**
  * Checks transfer submission responses before rendering.
  */
 export const isTransferResponse = (value: unknown): value is TransferResponse =>

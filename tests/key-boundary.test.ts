@@ -87,6 +87,9 @@ const runtimeRpcStub = {
   async getTokenBalances() {
     return [];
   },
+  async getTokenMetadata() {
+    return { decimals: 18, name: "Token", symbol: "TKN" };
+  },
   async getTransactionStatuses() {
     return {};
   },

@@ -58,6 +58,7 @@ const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40
 const HTML_SINK_FILES = new Set([
   "src/sidepanel/dom.ts",
   "src/sidepanel/index.ts",
+  "src/sidepanel/tokens-ui.ts",
   "src/sidepanel/transfer-ui.ts",
 ]);
 const HTML_SINK_PATTERN =
@@ -185,6 +186,7 @@ for (const file of await walk(".")) {
   if (
     file.startsWith("src/") &&
     file !== "src/background/session.ts" &&
+    file !== "src/starknet/prices.ts" &&
     file !== "src/storage/activity-store.ts" &&
     /\bDate\.now\(/.test(text)
   ) {
