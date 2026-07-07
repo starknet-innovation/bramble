@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MC Wallet — Provider Tester</title>
+    <style>
+      :root {
+        --bg: #0b0d10;
+        --panel: #14161b;
+        --elevated: #181b21;
+        --border: #23262e;
+        --text: #f4f6fb;
+        --muted: #8b95a5;
+        --accent: #2fcf8e;
+        --accent-ink: #04150d;
+        --danger: #ff6b6b;
+        --ok: #2fcf8e;
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+        margin: 0;
+        padding: 24px 16px 64px;
+      }
+      main { margin: 0 auto; max-width: 860px; }
+      h1 { font-size: 24px; letter-spacing: -0.02em; margin: 0 0 4px; }
+      .lede { color: var(--muted); margin: 0 0 20px; }
+      code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+      a { color: var(--accent); }
+
+      .status {
+        background: var(--panel);
+        border-radius: 16px;
+        display: grid;
+        gap: 10px 24px;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        margin-bottom: 20px;
+        padding: 18px 20px;
+      }
+      .status div { display: flex; gap: 8px; justify-content: space-between; min-width: 0; }
+      .status dt { color: var(--muted); }
+      .status dd { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pill {
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 2px 10px;
+      }
+      .pill.on { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
+      .pill.off { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
+
+      .banner {
+        background: color-mix(in srgb, var(--danger) 14%, var(--panel));
+        border-radius: 12px;
+        color: var(--text);
+        margin-bottom: 20px;
+        padding: 14px 18px;
+      }
+      .banner.hidden { display: none; }
+
+      .scenario {
+        background: var(--panel);
+        border-radius: 16px;
+        margin-bottom: 12px;
+        padding: 18px 20px;
+      }
+      .scenario header { align-items: baseline; display: flex; gap: 10px; justify-content: space-between; }
+      .scenario h2 { font-size: 16px; margin: 0; }
+      .scenario .why { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+      .scenario .expect { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+      .scenario .expect b { color: var(--text); font-weight: 600; }
+      .controls { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
+      button {
+        appearance: none;
+        background: var(--accent);
+        border: 0;
+        border-radius: 999px;
+        color: var(--accent-ink);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        padding: 9px 18px;
+      }
+      button.ghost { background: var(--elevated); color: var(--text); }
+      button:disabled { cursor: not-allowed; opacity: 0.5; }
+      input {
+        appearance: none;
+        background: var(--bg);
+        border: 0;
+        border-radius: 10px;
+        color: var(--text);
+        font: inherit;
+        padding: 9px 12px;
+        width: 100%;
+      }
+      .field { display: grid; gap: 4px; margin-bottom: 10px; }
+      .field label { color: var(--muted); font-size: 12px; }
+      .result {
+        background: var(--bg);
+        border-radius: 10px;
+        color: var(--muted);
+        margin-top: 12px;
+        max-height: 220px;
+        overflow: auto;
+        padding: 10px 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .result:empty { display: none; }
+      .result.ok { color: var(--ok); }
+      .result.err { color: var(--danger); }
+
+      .log {
+        background: var(--panel);
+        border-radius: 16px;
+        margin-top: 20px;
+        padding: 18px 20px;
+      }
+      .log h2 { font-size: 16px; margin: 0 0 10px; }
+      #event-log {
+        background: var(--bg);
+        border-radius: 10px;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: 12px;
+        max-height: 280px;
+        overflow: auto;
+        padding: 10px 12px;
+      }
+      #event-log div { padding: 2px 0; }
+      #event-log .t { color: var(--muted); }
+      #event-log .ev { color: var(--accent); }
+      #event-log .er { color: var(--danger); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>MC Wallet — Provider Tester</h1>
+      <p class="lede">
+        Walk through every injected-provider scenario end to end. Serve this page on
+        <code>http://localhost</code> (the extension injects on localhost and https), open it in a tab
+        with MC Wallet installed and unlocked, then run each step top to bottom.
+      </p>
+
+      <div id="no-provider" class="banner">
+        Waiting for the injected provider… If this stays, the content script isn't running here.
+        Make sure the extension is installed and this page is served from
+        <code>http://localhost:&lt;port&gt;</code> or <code>https://</code> (not <code>file://</code>).
+      </div>
+
+      <dl class="status" id="status">
+        <div><dt>Provider</dt><dd id="s-detected"><span class="pill off">not detected</span></dd></div>
+        <div><dt>Name</dt><dd id="s-name">—</dd></div>
+        <div><dt>Version</dt><dd id="s-version">—</dd></div>
+        <div><dt>Connected</dt><dd id="s-connected"><span class="pill off">no</span></dd></div>
+        <div><dt>Address</dt><dd class="mono" id="s-address">—</dd></div>
+        <div><dt>Chain</dt><dd class="mono" id="s-chain">—</dd></div>
+      </dl>
+
+      <section class="scenario" data-step="1">
+        <header><h2>1 · Detect provider</h2></header>
+        <p class="why">Reads <code>window.starknet_mcWallet</code> and its get-starknet metadata (id, name, version, icon).</p>
+        <p class="expect"><b>Expect:</b> id <code>mc-wallet</code>, name <code>MC Wallet</code>, version <code>0.1.0</code>, and an inline icon.</p>
+        <div class="controls"><button type="button" data-run="detect">Detect</button></div>
+        <div class="result" id="r-detect"></div>
+      </section>
+
+      <section class="scenario" data-step="2">
+        <header><h2>2 · Connect</h2></header>
+        <p class="why"><code>enable()</code> → <code>wallet_requestAccounts</code>. First time, the wallet queues a connection request.</p>
+        <p class="expect"><b>Expect:</b> the wallet shows a <b>Connection request</b> card. After you Approve, this returns your account address(es).</p>
+        <div class="controls"><button type="button" data-run="connect">Connect</button></div>
+        <div class="result" id="r-connect"></div>
+      </section>
+
+      <section class="scenario" data-step="3">
+        <header><h2>3 · Authorization state</h2></header>
+        <p class="why"><code>isPreauthorized()</code> (via <code>mc_accounts</code>) and <code>wallet_getPermissions</code>.</p>
+        <p class="expect"><b>Expect:</b> <code>isPreauthorized: true</code> and permissions <code>["accounts"]</code> once connected; both empty/false before connecting.</p>
+        <div class="controls">
+          <button type="button" class="ghost" data-run="preauth">isPreauthorized</button>
+          <button type="button" class="ghost" data-run="permissions">getPermissions</button>
+        </div>
+        <div class="result" id="r-authz"></div>
+      </section>
+
+      <section class="scenario" data-step="4">
+        <header><h2>4 · Chain id</h2></header>
+        <p class="why"><code>wallet_requestChainId</code>.</p>
+        <p class="expect"><b>Expect:</b> <code>0x534e5f4d41494e</code> on Mainnet, <code>0x534e5f5345504f4c4941</code> on Sepolia.</p>
+        <div class="controls"><button type="button" class="ghost" data-run="chainId">Get chain id</button></div>
+        <div class="result" id="r-chain"></div>
+      </section>
+
+      <section class="scenario" data-step="5">
+        <header><h2>5 · Sign typed data (SNIP-12)</h2></header>
+        <p class="why"><code>wallet_signTypedData</code> with a well-formed SNIP-12 message.</p>
+        <p class="expect"><b>Expect:</b> the wallet shows a <b>Sign request</b> card and <b>this call hangs</b> until you decide. Approve → returns <code>[r, s]</code>; Deny → rejects with <code>signature request denied</code>. It must <b>never</b> sign without your approval.</p>
+        <div class="controls"><button type="button" data-run="sign">Sign typed data</button></div>
+        <div class="result" id="r-sign"></div>
+      </section>
+
+      <section class="scenario" data-step="6">
+        <header><h2>6 · Send transaction (invoke)</h2></header>
+        <p class="why"><code>wallet_addInvokeTransaction</code> with an ERC20 <code>transfer</code> call (self-transfer of 1 wei STRK by default).</p>
+        <p class="expect"><b>Expect:</b> the wallet shows a <b>Transaction request</b> card with the decoded call. The dapp call rejects with <code>approval pending</code> — approve in the wallet and the tx is submitted and appears in <b>Activity</b>. It must <b>never</b> auto-submit. (On-chain success needs a deployed, funded account.)</p>
+        <div class="field"><label for="i-recipient">Recipient (defaults to your own address)</label><input id="i-recipient" placeholder="0x…" /></div>
+        <div class="field"><label for="i-amount">Amount (wei)</label><input id="i-amount" value="1" /></div>
+        <div class="controls"><button type="button" data-run="invoke">Send invoke</button></div>
+        <div class="result" id="r-invoke"></div>
+      </section>
+
+      <section class="scenario" data-step="7">
+        <header><h2>7 · Switch chain</h2></header>
+        <p class="why"><code>wallet_switchStarknetChain</code> — only a connected origin may switch.</p>
+        <p class="expect"><b>Expect:</b> returns <code>true</code> and fires <code>networkChanged</code> (watch the log). An unconnected origin is refused. Devnet is a distinct chain id.</p>
+        <div class="controls">
+          <button type="button" class="ghost" data-run="switch" data-chain="0x534e5f5345504f4c4941">Switch to Sepolia</button>
+          <button type="button" class="ghost" data-run="switch" data-chain="0x534e5f4d41494e">Switch to Mainnet</button>
+        </div>
+        <div class="result" id="r-switch"></div>
+      </section>
+
+      <section class="scenario" data-step="8">
+        <header><h2>8 · Watch asset</h2></header>
+        <p class="why"><code>wallet_watchAsset</code> (ERC20). Adds a token to the wallet's tracked list.</p>
+        <p class="expect"><b>Expect:</b> the wallet shows an <b>Add token</b> card (with blocklist/reputation notes if any). Approve → returns <code>true</code> and the token appears under Tokens. Malformed names are rejected.</p>
+        <div class="field"><label for="i-token">Token address</label><input id="i-token" value="0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d" /></div>
+        <div class="field"><label for="i-symbol">Symbol</label><input id="i-symbol" value="STRK" /></div>
+        <div class="controls"><button type="button" data-run="watch">Watch asset</button></div>
+        <div class="result" id="r-watch"></div>
+      </section>
+
+      <section class="scenario" data-step="9">
+        <header><h2>9 · Live events</h2></header>
+        <p class="why">Subscribes to <code>accountsChanged</code> and <code>networkChanged</code>.</p>
+        <p class="expect"><b>Expect:</b> switching account or network <b>in the wallet</b>, or revoking this site under Connected sites, emits an event below. An unconnected origin receives nothing.</p>
+        <div class="controls">
+          <button type="button" class="ghost" data-run="subscribe">Subscribe</button>
+          <button type="button" class="ghost" data-run="unsubscribe">Unsubscribe</button>
+        </div>
+        <div class="result" id="r-events"></div>
+      </section>
+
+      <div class="log">
+        <h2>Event &amp; request log</h2>
+        <div id="event-log"></div>
+      </div>
+    </main>
+
+    <script>
+      const MAINNET = "0x534e5f4d41494e";
+      const $ = (id) => document.getElementById(id);
+      const logEl = $("event-log");
+
+      const stamp = () => new Date().toISOString().slice(11, 23);
+      const log = (msg, cls = "") => {
+        const line = document.createElement("div");
+        line.innerHTML = `<span class="t">${stamp()}</span> <span class="${cls}">${msg}</span>`;
+        logEl.prepend(line);
+      };
+      const show = (id, value, cls = "") => {
+        const el = $(id);
+        el.className = `result ${cls}`;
+        el.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      };
+
+      const provider = () => window.starknet_mcWallet;
+
+      // Wait for the injected provider (it dispatches starknet#initialized).
+      const ready = new Promise((resolve) => {
+        if (provider()) return resolve(provider());
+        const onInit = () => provider() && resolve(provider());
+        window.addEventListener("starknet#initialized", onInit);
+        window.addEventListener("mc-wallet#initialized", onInit);
+        // Fallback poll for late injection.
+        const iv = setInterval(() => {
+          if (provider()) {
+            clearInterval(iv);
+            resolve(provider());
+          }
+        }, 200);
+      });
+
+      let connected = [];
+
+      const refreshStatus = async () => {
+        const p = provider();
+        if (!p) return;
+        $("no-provider").classList.add("hidden");
+        $("s-detected").innerHTML = '<span class="pill on">detected</span>';
+        $("s-name").textContent = p.name;
+        $("s-version").textContent = p.version;
+        const isConn = connected.length > 0 || p.isConnected;
+        $("s-connected").innerHTML = isConn
+          ? '<span class="pill on">yes</span>'
+          : '<span class="pill off">no</span>';
+        $("s-address").textContent = connected[0] ?? p.selectedAddress ?? "—";
+        $("s-chain").textContent = p.chainId ?? "—";
+      };
+
+      const call = async (label, id, type, params) => {
+        const p = provider();
+        if (!p) return show(id, "Provider not detected.", "err");
+        show(id, "…");
+        log(`→ ${type}`);
+        try {
+          const result = await p.request(params === undefined ? { type } : { type, params });
+          show(id, result ?? "(no result)", "ok");
+          log(`← ${type}: ${JSON.stringify(result)}`);
+          return result;
+        } catch (error) {
+          show(id, String(error?.message ?? error), "err");
+          log(`✕ ${type}: ${error?.message ?? error}`, "er");
+          throw error;
+        }
+      };
+
+      const runners = {
+        async detect() {
+          const p = provider();
+          if (!p) return show("r-detect", "Provider not detected.", "err");
+          show(
+            "r-detect",
+            {
+              id: p.id,
+              name: p.name,
+              version: p.version,
+              isConnected: p.isConnected,
+              selectedAddress: p.selectedAddress ?? null,
+              chainId: p.chainId ?? null,
+              icon: `${p.icon.slice(0, 42)}…`,
+            },
+            "ok",
+          );
+        },
+        async connect() {
+          const p = provider();
+          if (!p) return show("r-connect", "Provider not detected.", "err");
+          show("r-connect", "Awaiting approval in the wallet…");
+          log("→ enable() / wallet_requestAccounts");
+          try {
+            connected = await p.enable();
+            show("r-connect", connected, "ok");
+            log(`← accounts: ${JSON.stringify(connected)}`);
+            await refreshStatus();
+          } catch (error) {
+            show("r-connect", String(error?.message ?? error), "err");
+            log(`✕ connect: ${error?.message ?? error}`, "er");
+          }
+        },
+        async preauth() {
+          const p = provider();
+          const value = await p.isPreauthorized();
+          show("r-authz", `isPreauthorized: ${value}`, value ? "ok" : "err");
+          log(`← isPreauthorized: ${value}`);
+        },
+        permissions: () => call("permissions", "r-authz", "wallet_getPermissions"),
+        chainId: () => call("chainId", "r-chain", "wallet_requestChainId"),
+        async sign() {
+          const address = connected[0] ?? provider()?.selectedAddress ?? "0x0";
+          const typedData = {
+            domain: { name: "MC Wallet Tester", version: "1", chainId: provider()?.chainId ?? MAINNET },
+            primaryType: "Message",
+            types: {
+              StarkNetDomain: [
+                { name: "name", type: "felt" },
+                { name: "version", type: "felt" },
+                { name: "chainId", type: "felt" },
+              ],
+              Message: [{ name: "contents", type: "felt" }],
+            },
+            message: { contents: "MC Wallet provider test" },
+          };
+          show("r-sign", "Awaiting your decision in the wallet (this call holds)…");
+          void address;
+          await call("sign", "r-sign", "wallet_signTypedData", typedData);
+        },
+        async invoke() {
+          const recipient = ($("i-recipient").value.trim() || connected[0] || "0x0");
+          const amount = $("i-amount").value.trim() || "1";
+          let low = "0x0";
+          try {
+            low = "0x" + BigInt(amount).toString(16);
+          } catch {
+            return show("r-invoke", "Amount must be a whole number.", "err");
+          }
+          const params = {
+            calls: [
+              {
+                contractAddress:
+                  "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+                entrypoint: "transfer",
+                calldata: [recipient, low, "0x0"],
+              },
+            ],
+          };
+          await call("invoke", "r-invoke", "wallet_addInvokeTransaction", params).catch(() => {});
+        },
+        async switch(button) {
+          const chainId = button.dataset.chain;
+          await call("switch", "r-switch", "wallet_switchStarknetChain", { chainId }).catch(() => {});
+        },
+        async watch() {
+          const address = $("i-token").value.trim();
+          const symbol = $("i-symbol").value.trim();
+          const params = { type: "ERC20", options: { address, symbol, decimals: 18, name: symbol } };
+          await call("watch", "r-watch", "wallet_watchAsset", params).catch(() => {});
+        },
+        subscribe() {
+          const p = provider();
+          if (!p) return;
+          p.on("accountsChanged", onAccounts);
+          p.on("networkChanged", onNetwork);
+          show("r-events", "Subscribed. Change account/network in the wallet to see events.", "ok");
+          log("subscribed to accountsChanged + networkChanged", "ev");
+        },
+        unsubscribe() {
+          const p = provider();
+          if (!p) return;
+          p.off("accountsChanged", onAccounts);
+          p.off("networkChanged", onNetwork);
+          show("r-events", "Unsubscribed.", "");
+          log("unsubscribed", "ev");
+        },
+      };
+
+      const onAccounts = (accounts) => {
+        connected = Array.isArray(accounts) ? accounts : [];
+        log(`event accountsChanged: ${JSON.stringify(accounts)}`, "ev");
+        show("r-events", { accountsChanged: accounts }, "ok");
+        void refreshStatus();
+      };
+      const onNetwork = (chainId) => {
+        log(`event networkChanged: ${chainId}`, "ev");
+        show("r-events", { networkChanged: chainId }, "ok");
+        void refreshStatus();
+      };
+
+      document.querySelectorAll("[data-run]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const fn = runners[button.dataset.run];
+          if (fn) void fn(button);
+        });
+      });
+
+      ready.then(() => {
+        log("provider detected", "ev");
+        void refreshStatus();
+      });
+    </script>
+  </body>
+</html>
