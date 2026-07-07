@@ -1,22 +1,25 @@
 /**
- * Dark wallet skin: the banknote palette inverted onto deep viridian-tinted
- * ink, keeping the same eight-token contract as the light default.
+ * Default wallet skin — a premium near-black theme: deep ink background, two
+ * lifted surfaces, a fresh emerald signal color, and dedicated up/down
+ * semantics for gains and losses. All contrasts meet WCAG AA on their ground.
  */
 import type { Skin } from "./skin";
 
 /**
- * Built-in dark skin selected through the theme preference.
+ * Built-in dark skin used by the default extension build.
  */
 export const darkSkin: Skin = {
-  name: "banknote-dark",
+  name: "midnight",
   tokens: {
-    "--mc-accent": "#3aa98d",
-    "--mc-accent-text": "#0c1512",
-    "--mc-bg": "#0f1413",
-    "--mc-border": "#2a3330",
-    "--mc-danger": "#e5484d",
-    "--mc-muted": "#93a09b",
-    "--mc-panel": "#171d1b",
-    "--mc-text": "#e8edeb",
+    "--mc-accent": "#2fcf8e",
+    "--mc-accent-text": "#04150d",
+    "--mc-bg": "#0b0d10",
+    "--mc-border": "#23262e",
+    "--mc-danger": "#ff6b6b",
+    "--mc-elevated": "#181b21",
+    "--mc-muted": "#8b95a5",
+    "--mc-panel": "#14161b",
+    "--mc-positive": "#2fcf8e",
+    "--mc-text": "#f4f6fb",
   },
 };

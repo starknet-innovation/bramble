@@ -165,7 +165,7 @@ export const flowHeader = (
   subtitle?: string,
 ): string => `
   <header class="flow-header">
-    <button class="icon-button" data-view="${backView}" type="button" aria-label="Back" title="Back">${icon("chevronLeft")}</button>
+    <button class="icon-button ghost" data-view="${backView}" type="button" aria-label="Back" title="Back">${icon("chevronLeft")}</button>
     <div class="flow-title">
       <h1>${escapeHtml(title)}</h1>
       ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}

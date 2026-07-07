@@ -19,13 +19,15 @@ export const SPACE = {
 } as const;
 
 /**
- * Corner radius scale for controls, cards, and pills.
+ * Corner radius scale for controls, cards, and pills. Generous rounding for
+ * soft, premium surfaces.
  */
 export const RADIUS = {
   full: "999px",
-  lg: "14px",
-  md: "10px",
-  sm: "8px",
+  lg: "20px",
+  md: "14px",
+  sm: "10px",
+  xl: "24px",
 } as const;
 
 /**
@@ -38,15 +40,17 @@ export const FONT = {
 } as const;
 
 /**
- * Type scale with matched line heights.
+ * Type scale with matched line heights. Bolder, larger display sizes give the
+ * portfolio total and headings a confident presence.
  */
 export const TYPE = {
-  body: { line: "1.45", size: "13px" },
-  caption: { line: "1.35", size: "11px" },
-  display: { line: "1.15", size: "20px" },
-  label: { line: "1.3", size: "12px" },
+  amount: { line: "1.1", size: "36px" },
+  body: { line: "1.45", size: "14px" },
+  caption: { line: "1.35", size: "12px" },
+  display: { line: "1.2", size: "22px" },
+  label: { line: "1.3", size: "13px" },
   mono: { line: "1.5", size: "12px" },
-  title: { line: "1.2", size: "15px" },
+  title: { line: "1.2", size: "17px" },
 } as const;
 
 /**

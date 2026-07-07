@@ -48,7 +48,11 @@ export type BalanceState =
   | { readonly balances: readonly TokenBalance[]; readonly error?: never }
   | { readonly balances?: never; readonly error: string };
 
-const emptyStatus = (): WalletStatus => ({
+/**
+ * A locked, account-less status used before the first load resolves and as the
+ * fallback when the background is unavailable.
+ */
+export const emptyStatus = (): WalletStatus => ({
   accountCount: 0,
   accounts: [],
   activeAccountId: null,

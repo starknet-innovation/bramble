@@ -6,7 +6,6 @@
  * restored across re-renders so controls never jump under the user.
  */
 
-import { readApprovalAction } from "../popup/actions";
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
 import type { WalletPreferences } from "../storage/preferences-store";
@@ -14,11 +13,12 @@ import { darkSkin } from "../ui/dark-skin";
 import { defaultSkin } from "../ui/default-skin";
 import { applySkin } from "../ui/skin";
 import { bindClusterScreens } from "./cluster-ui";
+import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { buttonBusy, errorMessage, focusMemo, restoreFocus, scopedStatus, showToast } from "./dom";
 import { locked, onboarding } from "./gate-views";
 import { bindOnboarding } from "./onboarding-ui";
 import { bindReveal } from "./reveal-ui";
-import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
+import { createSidepanelRuntime, emptyStatus, type RuntimeApi } from "./runtime";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -51,8 +51,7 @@ const bindNavigation = (): void => {
       if (!isWalletView(view)) {
         return;
       }
-      activeView = view;
-      void wallet.loadStatus().then(render);
+      navigate(view);
     });
   });
 };
@@ -212,40 +211,6 @@ const bindPickers = (): void => {
   });
 };
 
-const bindAddressBook = (): void => {
-  const form = app?.querySelector<HTMLFormElement>("#address-form");
-  const result = app?.querySelector<HTMLElement>("#address-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    buttonBusy(submitButton, true);
-    void wallet
-      .saveAddress(
-        String(data.get("label") ?? ""),
-        String(data.get("address") ?? "").trim(),
-        String(data.get("networkId") ?? ""),
-      )
-      .then(
-        async () => {
-          showToast("Address saved", "success");
-          if (result) {
-            result.textContent = "Address saved";
-          }
-          await render(await wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Address save failed"), "error");
-          if (result) {
-            result.textContent = errorMessage(error, "Address save failed");
-          }
-          buttonBusy(submitButton, false);
-        },
-      );
-  });
-};
-
 const bindUnlock = (): void => {
   const form = app?.querySelector<HTMLFormElement>("#unlock-form");
   const result = app?.querySelector<HTMLElement>("#form-result");
@@ -269,33 +234,6 @@ const bindUnlock = (): void => {
         buttonBusy(submitButton, false);
       },
     );
-  });
-};
-
-const bindApprovals = (): void => {
-  const result = app?.querySelector<HTMLElement>("#approval-result");
-  app?.querySelectorAll<HTMLButtonElement>("[data-approval-id]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = button.dataset.approvalId;
-      const action = readApprovalAction(button.dataset.approvalAction);
-      if (!id || !action) {
-        return;
-      }
-      buttonBusy(button, true);
-      void wallet.decideApproval(id, action === "approve").then(
-        async () => {
-          showToast(action === "approve" ? "Connection approved" : "Connection denied", "success");
-          await render(await wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Approval failed"), "error");
-          if (result) {
-            result.textContent = errorMessage(error, "Approval failed");
-          }
-          buttonBusy(button, false);
-        },
-      );
-    });
   });
 };
 
@@ -326,68 +264,33 @@ const loadDeployment = async (status: WalletStatus): Promise<boolean | null> => 
   return result ? result.deployed : null;
 };
 
-const render = async (status: WalletStatus): Promise<void> => {
-  lastNetworkId = status.networkId;
-  lastAccountId = status.activeAccountId;
-  const pending = await wallet.loadPendingApprovals();
-  const preferences: WalletPreferences | null =
-    status.hasVault && !status.locked ? await wallet.loadPreferences().catch(() => null) : null;
-  const theme = preferences?.theme ?? "light";
-  if (theme !== lastTheme) {
-    lastTheme = theme;
-    applySkin(theme === "dark" ? darkSkin : defaultSkin, document.documentElement);
-  }
-  const balances =
-    status.hasVault && !status.locked ? await wallet.loadBalances() : { error: "wallet locked" };
-  const deployment = await loadDeployment(status).catch(() => null);
-  const transactions =
-    activeView === "activity" && status.hasVault && !status.locked
-      ? await wallet.loadActivity().catch(() => [])
-      : [];
-  const connectedSites =
-    activeView === "connected-sites" && status.hasVault && !status.locked
-      ? await wallet.connectedSites().catch(() => [])
-      : [];
-  const prices: Readonly<Record<string, number>> =
-    status.hasVault && !status.locked ? await wallet.loadPrices().catch(() => ({})) : {};
-  const selectedToken = preferences?.tokens.find((token) => token.id === selectedTokenId) ?? null;
-  const chart: readonly number[] =
-    activeView === "token-detail" && selectedToken
-      ? await wallet.loadTokenChart(selectedToken.address).catch(() => [])
-      : [];
-  const allowances =
-    activeView === "allowances" && status.hasVault && !status.locked
-      ? await wallet.loadAllowances().catch(() => [])
-      : [];
-  const scene = !status.hasVault
-    ? "onboarding"
-    : status.locked
-      ? "locked"
-      : `dashboard:${activeView}`;
-  const animate = scene !== lastScene;
-  lastScene = scene;
-  renderShell(
-    !status.hasVault
-      ? onboarding(status)
-      : status.locked
-        ? locked(status)
-        : dashboard(
-            activeView,
-            status,
-            pending,
-            preferences,
-            balances,
-            deployment,
-            transactions,
-            connectedSites,
-            prices,
-            chart,
-            selectedTokenId,
-            allowances,
-            selectedNftId,
-          ),
-    animate,
-  );
+type RenderData = {
+  allowances: Awaited<ReturnType<typeof wallet.loadAllowances>>;
+  balances: Awaited<ReturnType<typeof wallet.loadBalances>>;
+  chart: readonly number[];
+  connectedSites: Awaited<ReturnType<typeof wallet.connectedSites>>;
+  deployment: boolean | null;
+  pending: Awaited<ReturnType<typeof wallet.loadPendingApprovals>>;
+  preferences: WalletPreferences | null;
+  prices: Readonly<Record<string, number>>;
+  status: WalletStatus;
+  transactions: Awaited<ReturnType<typeof wallet.loadActivity>>;
+};
+
+const cache: RenderData = {
+  allowances: [],
+  balances: { error: "wallet locked" },
+  chart: [],
+  connectedSites: [],
+  deployment: null,
+  pending: [],
+  preferences: null,
+  prices: {},
+  status: emptyStatus(),
+  transactions: [],
+};
+
+const bindAll = (): void => {
   bindNavigation();
   bindCopy();
   bindOnboarding({ app, render, wallet });
@@ -412,23 +315,137 @@ const render = async (status: WalletStatus): Promise<void> => {
   bindAppearance(settingsDeps);
   bindBackup(settingsDeps);
   bindContacts(settingsDeps);
-  bindAddressBook();
-  bindApprovals();
+  bindAddressBook({ app, render, wallet });
+  bindApprovals({ app, render, wallet });
   bindClusterScreens({
     app,
     openNft: (id) => {
       selectedNftId = id;
-      activeView = "nft-detail";
-      void wallet.loadStatus().then(render);
+      navigate("nft-detail");
     },
     openToken: (tokenId) => {
       selectedTokenId = tokenId;
-      activeView = "token-detail";
-      void wallet.loadStatus().then(render);
+      navigate("token-detail");
     },
     render,
     wallet,
   });
+};
+
+// Synchronous paint from the current cache. Navigation calls this first so the
+// screen swaps instantly, then hydrate() streams fresh data in and repaints.
+const paint = (): void => {
+  const { status } = cache;
+  lastNetworkId = status.networkId;
+  lastAccountId = status.activeAccountId;
+  const theme = cache.preferences?.theme ?? "dark";
+  if (theme !== lastTheme) {
+    lastTheme = theme;
+    applySkin(theme === "light" ? defaultSkin : darkSkin, document.documentElement);
+  }
+  const scene = !status.hasVault
+    ? "onboarding"
+    : status.locked
+      ? "locked"
+      : `dashboard:${activeView}`;
+  const animate = scene !== lastScene;
+  lastScene = scene;
+  renderShell(
+    !status.hasVault
+      ? onboarding(status)
+      : status.locked
+        ? locked(status)
+        : dashboard(
+            activeView,
+            status,
+            cache.pending,
+            cache.preferences,
+            cache.balances,
+            cache.deployment,
+            cache.transactions,
+            cache.connectedSites,
+            cache.prices,
+            cache.chart,
+            selectedTokenId,
+            cache.allowances,
+            selectedNftId,
+          ),
+    animate,
+  );
+  bindAll();
+};
+
+// Refreshes cache from the background, painting once from fast local data and
+// again after view-scoped network data (balances, prices, activity) resolves
+// in parallel — so the screen is never blocked on RPC or price round-trips.
+const render = async (status: WalletStatus): Promise<void> => {
+  cache.status = status;
+  cache.pending = await wallet.loadPendingApprovals();
+  cache.preferences =
+    status.hasVault && !status.locked ? await wallet.loadPreferences().catch(() => null) : null;
+  if (!status.hasVault || status.locked) {
+    cache.balances = { error: "wallet locked" };
+    cache.deployment = null;
+    cache.transactions = [];
+    cache.connectedSites = [];
+    cache.prices = {};
+    cache.chart = [];
+    cache.allowances = [];
+    paint();
+    return;
+  }
+  paint();
+  const jobs: Promise<unknown>[] = [];
+  const fill = <T>(load: Promise<T>, assign: (value: T) => void): void => {
+    jobs.push(load.then(assign).catch(() => undefined));
+  };
+  if (activeView === "home" || activeView === "tokens" || activeView === "token-detail") {
+    fill(wallet.loadBalances(), (value) => {
+      cache.balances = value;
+    });
+    fill(wallet.loadPrices(), (value) => {
+      cache.prices = value;
+    });
+  }
+  if (activeView === "home") {
+    fill(loadDeployment(status), (value) => {
+      cache.deployment = value;
+    });
+  }
+  if (activeView === "activity") {
+    fill(wallet.loadActivity(), (value) => {
+      cache.transactions = value;
+    });
+  }
+  if (activeView === "connected-sites") {
+    fill(wallet.connectedSites(), (value) => {
+      cache.connectedSites = value;
+    });
+  }
+  if (activeView === "allowances") {
+    fill(wallet.loadAllowances(), (value) => {
+      cache.allowances = value;
+    });
+  }
+  if (activeView === "token-detail") {
+    const selected = cache.preferences?.tokens.find((token) => token.id === selectedTokenId);
+    if (selected) {
+      fill(wallet.loadTokenChart(selected.address), (value) => {
+        cache.chart = value;
+      });
+    }
+  }
+  if (jobs.length > 0) {
+    await Promise.all(jobs);
+    paint();
+  }
+};
+
+// Instant navigation: swap the visible screen from cache now, hydrate after.
+const navigate = (view: WalletView): void => {
+  activeView = view;
+  paint();
+  void wallet.loadStatus().then(render);
 };
 
 let refreshQueued = false;
@@ -449,5 +466,5 @@ runtime?.onMessage?.addListener((message) => {
   }
 });
 
-applySkin(defaultSkin, document.documentElement);
+applySkin(darkSkin, document.documentElement);
 void render(await wallet.loadStatus());

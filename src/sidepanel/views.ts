@@ -31,7 +31,6 @@ import { type IconName, icon } from "./icons";
 import { nftDetailFlow, nftGalleryFlow } from "./nft-views";
 import {
   accountAvatar,
-  accountDisplayName,
   accountLabel,
   activeAccount,
   copyButton,
@@ -56,19 +55,25 @@ const walletHeader = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
-): string => `
+): string => {
+  const label = account ? preferences?.accountLabels?.[account.id] : undefined;
+  const title = account ? (label ?? accountLabel(account.address)) : "MC Wallet";
+  const subtitle = account && label ? accountLabel(account.address) : "";
+  return `
   <header class="wallet-header">
     <div class="brand">
       <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
       <div class="brand-copy">
-        <h1>${escapeHtml(account ? accountDisplayName(account, preferences) : "MC Wallet")}</h1>
-        <p class="brand-context">${escapeHtml(account ? accountLabel(account.address) : status.network)}</p>
+        <h1>${escapeHtml(title)}</h1>
+        ${subtitle ? `<p class="brand-context">${escapeHtml(subtitle)}</p>` : ""}
       </div>
     </div>
     <div class="header-actions">
+      ${networkPill(status)}
       <button id="lock-button" class="icon-button" type="button" aria-label="Lock wallet" title="Lock wallet">${icon("lock")}</button>
     </div>
   </header>`;
+};
 
 const dockItem = (
   activeView: WalletView,
@@ -117,6 +122,18 @@ const visibleBalances = (
   });
 };
 
+const groupThousands = (whole: string): string => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+const compactAmount = (formatted: string): string => {
+  const [whole = "0", fraction = ""] = formatted.split(".");
+  const grouped = groupThousands(whole);
+  if (fraction.length === 0) {
+    return grouped;
+  }
+  const trimmed = fraction.slice(0, 5).replace(/0+$/, "");
+  return trimmed.length === 0 ? grouped : `${grouped}.${trimmed}`;
+};
+
 const balanceRow = (
   token: TokenBalance,
   price: number | undefined,
@@ -128,15 +145,26 @@ const balanceRow = (
       <span class="token-mark">${escapeHtml(token.symbol.slice(0, 3))}</span>
       <div class="token-copy">
         <strong>${escapeHtml(token.symbol)}</strong>
-        <p>${escapeHtml(token.name)}</p>
+        <p>${escapeHtml(compactAmount(token.formatted))} ${escapeHtml(token.symbol)}</p>
       </div>
       <div class="token-side">
-        <span class="token-amount">${escapeHtml(token.formatted)}</span>
-        ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
+        <span class="token-amount">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>
       </div>
     </button>
   </li>`;
 };
+
+const quickAction = (
+  view: WalletView,
+  label: string,
+  name: IconName,
+  primary: boolean,
+  enabled: boolean,
+): string =>
+  `<button class="quick-action${primary ? " primary" : ""}" data-view="${view}" type="button" ${enabled ? "" : "disabled"}>
+    <span class="quick-disc">${icon(name)}</span>
+    <span class="quick-label">${escapeHtml(label)}</span>
+  </button>`;
 
 const balancePanel = (
   state: BalanceState,
@@ -147,11 +175,11 @@ const balancePanel = (
   const visible = visibleBalances(state, preferences);
   const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
   return `
-  <section class="section">
-    <div class="row">
-      <h2>Balances</h2>
+  <section class="stack" aria-label="Balances">
+    <div class="section-head">
+      <h2>Tokens</h2>
       <div class="header-actions">
-        <button class="icon-button" data-view="tokens" type="button" aria-label="Manage tokens" title="Manage tokens">${icon("wallet")}</button>
+        <button class="icon-button" data-view="tokens" type="button" aria-label="Manage tokens" title="Manage tokens">${icon("plus")}</button>
         <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh balances" title="Refresh balances">${icon("refresh")}</button>
       </div>
     </div>
@@ -166,7 +194,7 @@ const balancePanel = (
     }
     ${
       hiddenCount > 0
-        ? `<button class="menu-row" data-view="tokens" type="button"><span class="menu-copy"><span class="menu-label">Hidden tokens</span><strong>${hiddenCount} hidden</strong></span><span class="menu-chevron">${icon("chevronRight")}</span></button>`
+        ? `<button class="menu-row" data-view="tokens" type="button"><span class="menu-copy"><strong>Hidden tokens</strong></span><span class="menu-value">${hiddenCount} hidden</span><span class="menu-chevron">${icon("chevronRight")}</span></button>`
         : ""
     }
     <p id="panel-result" role="status"></p>
@@ -198,24 +226,20 @@ const homeScreen = (
   return dockScreen(
     "home",
     `${pendingCallout(pendingCount)}
-    <section class="section hero">
-      <div class="row">
-        <p class="eyebrow">Active account</p>
-        ${networkPill(status)}
-      </div>
-      ${showTotal ? `<p class="hero-total">${escapeHtml(formatFiat(total, currency))}</p>` : ""}
+    <section class="hero">
+      <p class="hero-total">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${
         account
-          ? `<p class="hero-address"><code>${escapeHtml(accountLabel(account.address))}</code></p>`
+          ? `<button class="hero-chip" data-copy="${escapeHtml(account.address)}" type="button" title="Copy address">${escapeHtml(accountLabel(account.address))}${icon("copy")}</button>`
           : noAccountEmpty(status)
       }
       ${deployNotice(account, deployment)}
-      <div class="button-row">
-        <button data-view="send" type="button" ${account ? "" : "disabled"}>${icon("send")}Send</button>
-        <button class="secondary" data-view="receive" type="button" ${account ? "" : "disabled"}>${icon("receive")}Receive</button>
-        <button class="secondary" data-view="nfts" type="button">${icon("wallet")}NFTs</button>
-      </div>
     </section>
+    <div class="quick-actions">
+      ${quickAction("send", "Send", "send", true, account !== null)}
+      ${quickAction("receive", "Receive", "receive", false, account !== null)}
+      ${quickAction("nfts", "NFTs", "image", false, true)}
+    </div>
     ${balancePanel(balances, preferences, prices, currency)}`,
   );
 };
@@ -318,78 +342,56 @@ const activityScreen = (
     </section>`,
   );
 
-const menuRow = (view: WalletView, label: string, value: string, name: IconName): string =>
+const menuRow = (view: WalletView, label: string, name: IconName): string =>
   `<button class="menu-row" data-view="${view}" type="button">
     <span class="menu-icon">${icon(name)}</span>
-    <span class="menu-copy">
-      <span class="menu-label">${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value)}</strong>
-    </span>
+    <span class="menu-copy"><strong>${escapeHtml(label)}</strong></span>
     <span class="menu-chevron">${icon("chevronRight")}</span>
   </button>`;
 
-const settingsScreen = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  preferences: WalletPreferences | null,
-): string => {
-  const networkAccounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
-  const addresses =
-    preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
-  return dockScreen(
+const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | null): string =>
+  dockScreen(
     "settings",
-    `<section class="section">
-      <div class="row"><h2>Settings</h2>${networkPill(status)}</div>
-      <div class="menu-list" role="group" aria-label="Wallet settings">
-        ${menuRow("network", "Network", status.network, "globe")}
-        ${menuRow("account", "Account", account ? accountDisplayName(account, preferences) : "No account", "wallet")}
-        ${menuRow("address-book", "Address book", `${addresses.length} saved`, "book")}
-        ${menuRow("connected-sites", "Connected sites", "Manage dapp access", "link")}
-        ${menuRow("allowances", "Allowances", "Review & revoke approvals", "lock")}
-        ${menuRow("backup", "Backup & restore", "Non-secret wallet data", "receive")}
-        ${menuRow("reveal", "Reveal secrets", "Recovery phrase & key", "lock")}
-      </div>
-      <div class="detail-grid">
-        <div class="detail"><p>Accounts</p><p class="value">${status.accountCount}</p></div>
-        <div class="detail"><p>On this network</p><p class="value">${networkAccounts.length}</p></div>
-      </div>
-    </section>
-    <section class="section">
-      <h2>Appearance</h2>
-      <div class="option-list" role="group" aria-label="Theme">
-        ${(["light", "dark"] as const)
+    `<h2>Settings</h2>
+    <div class="menu-list" role="group" aria-label="Wallet settings">
+      ${menuRow("network", "Network", "globe")}
+      ${menuRow("account", "Account", "wallet")}
+      ${menuRow("address-book", "Address book", "book")}
+      ${menuRow("connected-sites", "Connected sites", "link")}
+      ${menuRow("allowances", "Allowances", "lock")}
+      ${menuRow("backup", "Backup & restore", "receive")}
+      ${menuRow("reveal", "Reveal secrets", "lock")}
+    </div>
+    <p class="eyebrow">Appearance</p>
+    <div class="option-list" role="group" aria-label="Theme">
+      ${(["dark", "light"] as const)
+        .map(
+          (
+            theme,
+          ) => `<button class="option-row" data-theme-id="${theme}" type="button" aria-pressed="${(preferences?.theme ?? "dark") === theme}">
+            <span class="option-copy"><strong>${theme === "light" ? "Light" : "Dark"}</strong></span>
+            ${(preferences?.theme ?? "dark") === theme ? `<span class="option-mark">${icon("check")}</span>` : ""}
+          </button>`,
+        )
+        .join("")}
+    </div>
+    <label><span>Display currency</span>
+      <select id="currency-select">
+        ${(["usd", "eur", "gbp"] as const)
           .map(
-            (
-              theme,
-            ) => `<button class="option-row" data-theme-id="${theme}" type="button" aria-pressed="${(preferences?.theme ?? "light") === theme}">
-              <span class="option-copy"><strong>${theme === "light" ? "Light" : "Dark"}</strong></span>
-              ${(preferences?.theme ?? "light") === theme ? `<span class="option-mark">${icon("check")}</span>` : ""}
-            </button>`,
+            (currency) =>
+              `<option value="${currency}" ${(preferences?.displayCurrency ?? "usd") === currency ? "selected" : ""}>${currency.toUpperCase()}</option>`,
           )
           .join("")}
-      </div>
-      <label><span>Display currency</span>
-        <select id="currency-select">
-          ${(["usd", "eur", "gbp"] as const)
-            .map(
-              (currency) =>
-                `<option value="${currency}" ${(preferences?.displayCurrency ?? "usd") === currency ? "selected" : ""}>${currency.toUpperCase()}</option>`,
-            )
-            .join("")}
-        </select>
-      </label>
-      <a class="menu-row" href="https://github.com/mc-wallet/mc-wallet#readme" target="_blank" rel="noreferrer">
-        <span class="menu-icon">${icon("book")}</span>
-        <span class="menu-copy">
-          <span class="menu-label">Help</span>
-          <strong>Documentation</strong>
-        </span>
-        <span class="menu-chevron">${icon("chevronRight")}</span>
-      </a>
-      <p id="display-result" role="status"></p>
-    </section>`,
+      </select>
+    </label>
+    <a class="menu-row" href="https://github.com/mc-wallet/mc-wallet#readme" target="_blank" rel="noreferrer">
+      <span class="menu-icon">${icon("book")}</span>
+      <span class="menu-copy"><strong>Help &amp; docs</strong></span>
+      <span class="menu-chevron">${icon("chevronRight")}</span>
+    </a>
+    <p id="display-result" role="status"></p>`,
   );
-};
 
 /**
  * Renders the unlocked wallet for the active screen: dock screens with the
@@ -471,7 +473,7 @@ export const dashboard = (
     activeView === "activity"
       ? activityScreen(pending, status, transactions)
       : activeView === "settings"
-        ? settingsScreen(status, account, preferences)
+        ? settingsScreen(status, preferences)
         : homeScreen(
             status,
             account,

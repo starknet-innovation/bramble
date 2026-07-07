@@ -74,7 +74,10 @@ describe("sidepanel views", () => {
     expect(hero).toContain('data-view="receive"');
     expect(hero).not.toContain('data-view="settings"');
     expect(html).not.toContain('id="wallet-screen-receive"');
-    expect(html).not.toContain(account.address);
+    // Home shows the truncated address and offers copy; the full address is
+    // only a copy affordance (data-copy), never rendered as visible text.
+    expect(html).not.toContain(`<code>${account.address}`);
+    expect(html).toContain(`data-copy="${account.address}"`);
   });
 
   test("receive is a dedicated flow screen with back navigation and no dock", () => {
@@ -91,7 +94,7 @@ describe("sidepanel views", () => {
   test("settings is a menu of dedicated flows instead of inline controls", () => {
     const html = dashboard("settings", status, [], preferences, { balances: [] });
 
-    expect(html).toMatch(/menu-row" data-view="network"[\s\S]*?Starknet Mainnet/);
+    expect(html).toMatch(/menu-row" data-view="network"[\s\S]*?Network/);
     expect(html).toContain('data-view="account"');
     expect(html).toContain('data-view="address-book"');
     expect(html).toContain('data-view="backup"');
@@ -278,7 +281,8 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="refresh-button"');
     expect(html).toContain("ETH");
-    expect(html).toContain("Ether");
-    expect(html).toContain('class="token-amount">1.0</span>');
+    // The token amount sits under the symbol; the fiat value fills the right side.
+    expect(html).toContain(">1 ETH</p>");
+    expect(html).toContain('class="token-amount"');
   });
 });

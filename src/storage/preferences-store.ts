@@ -259,7 +259,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   nfts: [],
   rpcOverrides: {},
   schemaVersion: 1,
-  theme: "light",
+  theme: "dark",
   tokens: DEFAULT_TOKENS.map(withTokenId),
 });
 

@@ -10,10 +10,9 @@
  * 200ms   a newly opened screen fades in and rises 4px into place
  * 220ms   toasts slide into the fixed stack above the shell
  *
- * Press stability contract: interactive controls keep a constant 1px border
- * in every state and transition only paint properties (background, border
- * color, text color, shadow). Nothing scales, translates, or reflows on
- * hover, press, or selection.
+ * Press stability contract: interactive controls are borderless and change
+ * only paint properties (background, text color) on hover and press. Nothing
+ * scales, translates, or reflows on hover, press, or selection.
  */
 import { CONTROL, MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
 import { BASE_STYLES } from "./styles-base";
@@ -21,20 +20,20 @@ import { BASE_STYLES } from "./styles-base";
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
-export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border in every state; feedback is color-only */
+export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circular icon buttons; feedback is color-only */
   button {
     align-items: center;
     background: var(--mc-accent);
-    border: 1px solid var(--mc-accent);
-    border-radius: ${RADIUS.md};
+    border-radius: ${RADIUS.full};
     color: var(--mc-accent-text);
     cursor: pointer;
     display: inline-flex;
     font: inherit;
-    font-weight: 650;
+    font-weight: 700;
     gap: ${SPACE.sm};
     justify-content: center;
-    min-height: ${CONTROL.hit};
+    letter-spacing: -0.01em;
+    min-height: 46px;
     min-width: 0;
     padding: 0 ${SPACE.lg};
     transition:
@@ -42,29 +41,35 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
       border-color ${MOTION.pressMs}ms ${MOTION.ease},
       color ${MOTION.pressMs}ms ${MOTION.ease};
   }
-  button:not(:disabled):hover { background: var(--mc-accent-hover); border-color: var(--mc-accent-hover); }
-  button:not(:disabled):active { background: var(--mc-accent-press); border-color: var(--mc-accent-press); }
-  button.secondary, button.icon-button {
-    background: var(--mc-panel);
-    border-color: var(--mc-border);
+  button:not(:disabled):hover { background: var(--mc-accent-hover); }
+  button:not(:disabled):active { background: var(--mc-accent-press); }
+  button.secondary {
+    background: var(--mc-elevated);
+    color: var(--mc-text);
+  }
+  button.icon-button {
+    background: var(--mc-elevated);
     color: var(--mc-text);
   }
   button.secondary:not(:disabled):hover, button.icon-button:not(:disabled):hover {
-    background: var(--mc-soft);
-    border-color: var(--mc-border);
+    background: var(--mc-hover);
   }
   button.secondary:not(:disabled):active, button.icon-button:not(:disabled):active {
     background: var(--mc-soft-press);
-    border-color: var(--mc-border);
   }
-  button.danger { color: var(--mc-danger); }
-  button.danger:not(:disabled):hover { background: var(--mc-danger-soft); border-color: var(--mc-danger-border); }
-  button.danger:not(:disabled):active { background: var(--mc-danger-soft); border-color: var(--mc-danger); }
+  button.ghost {
+    background: transparent;
+    color: var(--mc-muted);
+  }
+  button.ghost:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  button.danger { background: var(--mc-elevated); color: var(--mc-danger); }
+  button.danger:not(:disabled):hover { background: var(--mc-danger-soft); }
+  button.danger:not(:disabled):active { background: var(--mc-danger-soft); }
   button.icon-button { flex: none; height: ${CONTROL.hit}; padding: 0; width: ${CONTROL.hit}; }
   button.small { font-size: ${TYPE.label.size}; min-height: ${CONTROL.hitSmall}; padding: 0 ${SPACE.md}; }
   button:disabled, input:disabled, select:disabled, textarea:disabled {
     cursor: not-allowed;
-    opacity: 0.55;
+    opacity: 0.5;
   }
   button[data-busy] { opacity: 0.7; }
 
@@ -78,18 +83,18 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
   }
   .eyebrow { letter-spacing: 0.02em; text-transform: uppercase; font-size: ${TYPE.caption.size}; }
   input, select, textarea {
-    background: var(--mc-panel);
-    border: 1px solid var(--mc-border);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
     color: var(--mc-text);
     font: inherit;
-    min-height: ${CONTROL.hit};
+    min-height: 46px;
     min-width: 0;
     padding: 0 ${SPACE.md};
     transition: border-color ${MOTION.pressMs}ms ${MOTION.ease};
     width: 100%;
   }
-  input:hover, select:hover, textarea:hover { border-color: color-mix(in srgb, var(--mc-muted) 42%, var(--mc-border)); }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 1px; }
+  input::placeholder, textarea::placeholder { color: var(--mc-muted); opacity: 0.7; }
   textarea {
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.mono.size};
@@ -103,37 +108,20 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
   .lede { color: var(--mc-muted); }
   [role="status"] { color: var(--mc-muted); font-size: ${TYPE.caption.size}; min-height: 16px; overflow-wrap: anywhere; }
 
-  /* Cards and sections */
-  .section {
-    background: var(--mc-panel);
-    border: 1px solid var(--mc-border);
-    border-radius: ${RADIUS.lg};
-    display: grid;
-    gap: ${SPACE.md};
-    padding: ${SPACE.lg};
-  }
-  .section.hero {
-    background: linear-gradient(180deg, var(--mc-accent-soft), var(--mc-panel) 72%);
-    border-color: var(--mc-accent-border);
-  }
-  .hero-address code {
-    font-size: ${TYPE.display.size};
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    line-height: ${TYPE.display.line};
-  }
+  /* Content groups are flush — spacing only, no nested card borders. Genuine
+     cards (callout, review panel, request/nft cards) carry their own single
+     border below. */
+  .section { display: grid; gap: ${SPACE.md}; }
   .callout {
     background: var(--mc-accent-soft);
-    border: 1px solid var(--mc-accent-border);
     border-radius: ${RADIUS.lg};
     padding: ${SPACE.md} ${SPACE.lg};
   }
   .callout-icon { color: var(--mc-accent); display: inline-flex; flex: none; }
   .deploy-notice { display: grid; gap: 2px; justify-items: start; }
-  button.deploy-chip { border-color: var(--mc-danger-border); color: var(--mc-danger); }
+  button.deploy-chip { color: var(--mc-danger); }
   button.deploy-chip:not(:disabled):hover, button.deploy-chip:not(:disabled):active {
     background: var(--mc-danger-soft);
-    border-color: var(--mc-danger-border);
   }
   .callout-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .callout-copy strong { font-size: ${TYPE.body.size}; }
@@ -156,28 +144,29 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     padding: ${SPACE.sm} ${SPACE.sm} ${SPACE.sm} ${SPACE.md};
   }
   .address-line code { flex: 1; }
-  .token-list, .request-list, .address-book { display: grid; gap: ${SPACE.sm}; }
+  .token-list, .request-list, .address-book { display: grid; gap: 6px; }
   .token-row {
-    background: var(--mc-soft);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
-    padding: ${SPACE.sm} ${SPACE.md};
+    gap: ${SPACE.md};
+    padding: ${SPACE.md};
   }
   .token-mark {
     align-items: center;
-    background: var(--mc-panel);
-    border: 1px solid var(--mc-border);
+    background: var(--mc-accent-soft);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--mc-accent);
     display: inline-flex;
     flex: none;
-    font-size: 10px;
-    font-weight: 700;
-    height: 30px;
+    font-size: 11px;
+    font-weight: 800;
+    height: 40px;
     justify-content: center;
-    letter-spacing: 0.04em;
-    width: 30px;
+    letter-spacing: 0.02em;
+    width: 40px;
   }
-  .token-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
+  .token-copy { display: grid; flex: 1; gap: 2px; min-width: 0; }
+  .token-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; }
   .token-copy p {
     font-size: ${TYPE.caption.size};
     overflow: hidden;
@@ -185,15 +174,16 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     text-wrap: nowrap;
   }
   .token-amount {
-    font-family: var(--mc-font-mono);
     font-variant-numeric: tabular-nums;
-    font-weight: 650;
+    font-weight: 700;
   }
-  .token-side { align-items: flex-end; display: grid; flex: none; gap: 1px; text-align: right; }
-  .token-fiat { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .token-side { align-items: flex-end; display: grid; flex: none; gap: 2px; text-align: right; }
+  .token-fiat { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-variant-numeric: tabular-nums; }
+  .token-change { font-size: ${TYPE.caption.size}; font-variant-numeric: tabular-nums; font-weight: 650; }
+  .token-change.up { color: var(--mc-positive); }
+  .token-change.down { color: var(--mc-danger); }
   .token-row .token-open {
     background: transparent;
-    border: 1px solid transparent;
     border-radius: ${RADIUS.md};
     color: var(--mc-text);
     flex: 1;
@@ -206,12 +196,11 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
   .token-row .token-open:not(:disabled):hover,
   .token-row .token-open:not(:disabled):active {
     background: transparent;
-    border-color: transparent;
   }
   .token-row .token-open:not(:disabled):hover strong { color: var(--mc-accent); }
   .token-row.token-hidden { opacity: 0.6; }
   .token-flag {
-    border: 1px solid var(--mc-danger-border);
+    background: var(--mc-danger-soft);
     border-radius: ${RADIUS.full};
     color: var(--mc-danger);
     flex: none;
@@ -221,13 +210,7 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     padding: 3px 8px;
     text-transform: uppercase;
   }
-  .hero-total {
-    font-size: ${TYPE.display.size};
-    font-weight: 700;
-    letter-spacing: 0.01em;
-    line-height: ${TYPE.display.line};
-  }
-  .token-detail-price { font-size: ${TYPE.display.size}; font-weight: 700; }
+  .token-detail-price { font-size: ${TYPE.amount.size}; font-weight: 800; letter-spacing: -0.02em; }
   .sparkline { display: block; height: 48px; width: 100%; }
   .sparkline polyline {
     fill: none;
@@ -258,7 +241,7 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     text-wrap: nowrap;
   }
   .tx-status {
-    border: 1px solid var(--mc-border);
+    background: var(--mc-soft);
     border-radius: ${RADIUS.full};
     color: var(--mc-muted);
     flex: none;
@@ -268,11 +251,10 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     padding: 3px 8px;
     text-transform: uppercase;
   }
-  .tx-status.accepted { border-color: var(--mc-accent-border); color: var(--mc-accent); }
-  .tx-status.reverted, .tx-status.rejected { border-color: var(--mc-danger-border); color: var(--mc-danger); }
+  .tx-status.accepted { color: var(--mc-accent); }
+  .tx-status.reverted, .tx-status.rejected { color: var(--mc-danger); }
   .review-panel {
     background: var(--mc-accent-soft);
-    border: 1px solid var(--mc-accent-border);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.sm};
@@ -295,7 +277,7 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
   .allowance-copy code { overflow-wrap: anywhere; }
   .nft-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nft-card {
-    border: 1px solid var(--mc-border);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.sm};
@@ -304,18 +286,21 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
   }
   button.nft-open {
     align-items: start;
+    background: var(--mc-elevated);
     justify-content: flex-start;
     min-height: 0;
     padding: ${SPACE.sm};
     text-align: left;
   }
+  button.nft-open:not(:disabled):hover { background: var(--mc-hover); }
+  button.nft-open:not(:disabled):active { background: var(--mc-soft-press); }
   .nft-mark { align-items: center; color: var(--mc-muted); display: inline-flex; flex: none; }
   .nft-copy { display: grid; gap: 2px; min-width: 0; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .nft-actions { display: flex; gap: ${SPACE.sm}; }
   .nft-actions button { flex: 1; }
   .request-card {
-    border: 1px solid var(--mc-border);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.md};
@@ -336,19 +321,19 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
   .detail .value { font-family: var(--mc-font-mono); font-size: ${TYPE.title.size}; }
   .pill {
     align-items: center;
-    border: 1px solid var(--mc-border);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
+    color: var(--mc-text);
     display: inline-flex;
     flex: none;
     font-size: ${TYPE.caption.size};
     font-weight: 600;
     gap: 6px;
-    min-height: 26px;
-    padding: 2px ${SPACE.md};
+    min-height: 28px;
+    padding: 3px ${SPACE.md};
     text-wrap: nowrap;
   }
-  .dot { background: var(--mc-accent); border-radius: ${RADIUS.full}; height: 6px; width: 6px; }
+  .dot { background: var(--mc-positive); border-radius: ${RADIUS.full}; height: 7px; width: 7px; }
   .badge {
     background: var(--mc-danger);
     border-radius: ${RADIUS.full};
@@ -361,7 +346,7 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     text-align: center;
   }
   .empty {
-    border: 1px dashed var(--mc-border);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
     color: var(--mc-muted);
     font-size: ${TYPE.label.size};
@@ -371,7 +356,7 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
 
   /* Reveal secrets: blurred until tapped; wiped whenever the shell re-renders */
   [hidden] { display: none !important; }
-  .reveal-warning { border-color: var(--mc-danger-border); }
+  .reveal-warning { }
   .reveal-danger { color: var(--mc-danger); font-weight: 650; }
   .reveal-output { display: grid; gap: ${SPACE.sm}; }
   .reveal-value {
@@ -399,7 +384,6 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
   /* QR: fixed light card so codes scan identically in both themes */
   .qr-card {
     background: hsl(0 0% 100%);
-    border: 1px solid var(--mc-border);
     border-radius: ${RADIUS.md};
     color: hsl(0 0% 8%);
     justify-self: center;
@@ -423,8 +407,6 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     align-items: center;
     animation: toast-enter ${MOTION.toastMs}ms ${MOTION.ease} both;
     background: var(--mc-panel);
-    border: 1px solid var(--mc-border);
-    border-left: 3px solid var(--mc-accent);
     border-radius: ${RADIUS.md};
     box-shadow: var(--mc-shadow);
     color: var(--mc-text);
@@ -434,12 +416,11 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: constant 1px border
     padding: ${SPACE.sm} ${SPACE.md};
     pointer-events: auto;
   }
-  .toast.error { border-left-color: var(--mc-danger); }
+  .toast.error { box-shadow: var(--mc-shadow); }
   .toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   button.toast-copy { height: 30px; min-height: 30px; width: 30px; }
 
   /* Motion: screens animate only when the scene changes, never on re-render */
-  .screen { align-content: start; display: grid; flex: 1; gap: ${SPACE.md}; }
   .shell-animate .screen { animation: screen-enter ${MOTION.enterMs}ms ${MOTION.ease} both; }
   @keyframes screen-enter {
     from { opacity: 0; transform: translateY(4px); }

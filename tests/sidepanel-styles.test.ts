@@ -14,11 +14,13 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/transition:[^;]*transform/s);
   });
 
-  test("interactive controls keep a constant border in every state", () => {
-    expect(SIDEPANEL_STYLES).toMatch(/button \{[^}]*border: 1px solid/s);
-    expect(SIDEPANEL_STYLES).not.toMatch(/:active[^}]*border-width/s);
-    expect(SIDEPANEL_STYLES).not.toMatch(/\[aria-selected="true"\][^}]*border-width/s);
-    expect(SIDEPANEL_STYLES).not.toMatch(/\[aria-pressed="true"\][^}]*border-width/s);
+  test("interactive controls stay put — borderless, color-only feedback", () => {
+    // The system is borderless; press stability comes from never transforming
+    // or reflowing a control on hover, press, or selection.
+    expect(SIDEPANEL_STYLES).not.toMatch(/border: 1px solid/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/:hover\s*\{[^}]*transform/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/:active\s*\{[^}]*transform/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/\[aria-selected="true"\][^}]*transform/s);
   });
 
   test("colors come only from skin tokens, never literals", () => {
