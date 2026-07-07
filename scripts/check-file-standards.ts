@@ -9,8 +9,11 @@ const EXCLUDED = new Set([".git", "artifacts", "bun.lock", "dist", "node_modules
 const BROWSER_GLOBAL_FILES = new Set([
   "src/background/index.ts",
   "src/content/index.ts",
-  "src/popup/index.ts",
   "src/provider/inpage.ts",
+  "src/sidepanel/dom.ts",
+  "src/sidepanel/index.ts",
+  "src/sidepanel/settings-ui.ts",
+  "src/sidepanel/transfer-ui.ts",
   "src/storage/browser-storage.ts",
 ]);
 const ENCRYPTED_STORE_WIRING_FILES = new Set([
@@ -23,9 +26,19 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/index.ts",
   "src/background/message-inputs.ts",
   "src/background/messages.ts",
+  "src/background/runtime-state.ts",
+  "src/background/runtime-types.ts",
   "src/background/session.ts",
+  "src/background/wallet-ops.ts",
   "src/crypto/krusty.ts",
-  "src/popup/index.ts",
+  "src/popup/responses.ts",
+  "src/provider/bridge.ts",
+  "src/sidepanel/dom.ts",
+  "src/sidepanel/gate-views.ts",
+  "src/sidepanel/index.ts",
+  "src/sidepanel/runtime.ts",
+  "src/starknet/provider.ts",
+  "src/starknet/rpc.ts",
   "src/storage/encrypted-store.ts",
   "src/storage/vault-schema.ts",
   "src/wallet/accounts.ts",
@@ -42,7 +55,11 @@ const SUPPRESSION_MARKERS = [
 const DYNAMIC_CODE_PATTERN =
   /\b(?:eval|importScripts)\s*\(|\bnew Function\b|\b(?:setTimeout|setInterval)\s*\(\s*["']|import\s*\(\s*["']https?:\/\//;
 const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
-const HTML_SINK_FILES = new Set(["src/popup/index.ts"]);
+const HTML_SINK_FILES = new Set([
+  "src/sidepanel/dom.ts",
+  "src/sidepanel/index.ts",
+  "src/sidepanel/transfer-ui.ts",
+]);
 const HTML_SINK_PATTERN =
   /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML)\b/;
 const VAULT_SERVICE_WIRING_FILES = new Set([
@@ -158,13 +175,17 @@ for (const file of await walk(".")) {
     failures.push(`${file} must keep secret material in approved boundary modules`);
   }
 
-  if (file.startsWith("src/popup/") && /#[0-9a-fA-F]{3,8}\b|\b(?:black|white)\b/.test(text)) {
+  if (
+    (file.startsWith("src/popup/") || file.startsWith("src/sidepanel/")) &&
+    /#[0-9a-fA-F]{3,8}\b|\b(?:black|white)\b/.test(text)
+  ) {
     failures.push(`${file} must use skin tokens for colors`);
   }
 
   if (
     file.startsWith("src/") &&
     file !== "src/background/session.ts" &&
+    file !== "src/storage/activity-store.ts" &&
     /\bDate\.now\(/.test(text)
   ) {
     failures.push(`${file} must keep clock access behind an explicit boundary`);
@@ -212,7 +233,7 @@ for (const file of await walk(".")) {
     file.endsWith(".ts") &&
     file !== "src/background/index.ts" &&
     file !== "src/storage/browser-storage.ts" &&
-    /createBrowserLocalStore/.test(text)
+    /createBrowser(?:Local|Session)Store/.test(text)
   ) {
     failures.push(`${file} must not construct browser storage directly`);
   }

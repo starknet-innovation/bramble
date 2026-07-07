@@ -3,12 +3,18 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  readAddInvokeTransactionInput,
   readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
   readGrantOriginInput,
   readRequestAccountsInput,
+  readSaveAddressInput,
+  readSetActiveAccountInput,
+  readSetActiveNetworkInput,
   readSignHashInput,
+  readSwitchChainInput,
+  readTransferInput,
   readTypeOnlyInput,
   readUnlockInput,
 } from "../src/background/message-inputs";
@@ -66,6 +72,46 @@ describe("background message parsers", () => {
         vaultPassphrase,
       }),
     ).toBeNull();
+    expect(
+      readSetActiveAccountInput({
+        accountId,
+        debug: true,
+        type: "wallet.setActiveAccount",
+      }),
+    ).toBeNull();
+    expect(
+      readSetActiveNetworkInput({
+        debug: true,
+        networkId: "SN_MAIN",
+        type: "wallet.setActiveNetwork",
+      }),
+    ).toBeNull();
+    expect(
+      readSwitchChainInput({
+        chainId: "0x534e5f4d41494e",
+        debug: true,
+        origin: "https://example.com",
+        type: "wallet.switchChain",
+      }),
+    ).toBeNull();
+    expect(
+      readTransferInput({
+        accountId,
+        amount: "1",
+        debug: true,
+        recipient: "0x456",
+        tokenId: "SN_SEPOLIA:ETH:0x123",
+        type: "wallet.transfer",
+      }),
+    ).toBeNull();
+    expect(
+      readAddInvokeTransactionInput({
+        calls: [{ calldata: [], contractAddress: "0x123", entrypoint: "transfer" }],
+        debug: true,
+        origin: "https://example.com",
+        type: "wallet.addInvokeTransaction",
+      }),
+    ).toBeNull();
     expect(readUnlockInput({ debug: true, type: "wallet.unlock", vaultPassphrase })).toBeNull();
   });
 
@@ -92,6 +138,89 @@ describe("background message parsers", () => {
         messageHash: "0x1234",
         type: "wallet.signHash",
         vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
+      readSetActiveAccountInput({
+        accountId: "not-an-account",
+        type: "wallet.setActiveAccount",
+      }),
+    ).toBeNull();
+    expect(readSetActiveAccountInput({ accountId, type: "wallet.setActiveAccount" })).toEqual({
+      accountId,
+    });
+    expect(
+      readSetActiveNetworkInput({ networkId: "SN_DEVNET", type: "wallet.setActiveNetwork" }),
+    ).toEqual({
+      networkId: "SN_DEVNET",
+    });
+    expect(
+      readSetActiveNetworkInput({ networkId: "toString", type: "wallet.setActiveNetwork" }),
+    ).toBeNull();
+    expect(
+      readSwitchChainInput({
+        chainId: "0x534e5f4d41494e",
+        origin: "https://example.com",
+        type: "wallet.switchChain",
+      }),
+    ).toEqual({
+      chainId: "0x534e5f4d41494e",
+      origin: "https://example.com",
+    });
+    expect(
+      readSwitchChainInput({
+        chainId: "SN_MAIN",
+        origin: "https://example.com",
+        type: "wallet.switchChain",
+      }),
+    ).toBeNull();
+    expect(
+      readTransferInput({
+        accountId,
+        amount: "1.25",
+        recipient: "0x456",
+        tokenId: "SN_SEPOLIA:ETH:0x123",
+        type: "wallet.transfer",
+      }),
+    ).toEqual({
+      accountId,
+      amount: "1.25",
+      recipient: "0x456",
+      speed: "standard",
+      tokenId: "SN_SEPOLIA:ETH:0x123",
+    });
+    expect(
+      readSaveAddressInput({
+        address: "0x456",
+        label: "Treasury",
+        networkId: "SN_SEPOLIA",
+        type: "wallet.saveAddress",
+      }),
+    ).toEqual({ address: "0x456", label: "Treasury", networkId: "SN_SEPOLIA" });
+    expect(
+      readAddInvokeTransactionInput({
+        calls: [{ calldata: ["0x1", "2"], contractAddress: "0x123", entrypoint: "transfer" }],
+        origin: "https://example.com",
+        type: "wallet.addInvokeTransaction",
+      }),
+    ).toEqual({
+      calls: [{ calldata: ["0x1", "2"], contractAddress: "0x123", entrypoint: "transfer" }],
+      origin: "https://example.com",
+    });
+    expect(
+      readAddInvokeTransactionInput({
+        calls: [{ calldata: ["-1"], contractAddress: "0x123", entrypoint: "transfer" }],
+        origin: "https://example.com",
+        type: "wallet.addInvokeTransaction",
+      }),
+    ).toBeNull();
+    expect(
+      readTransferInput({
+        accountId,
+        amount: "1e3",
+        recipient: "0x456",
+        tokenId: "SN_SEPOLIA:ETH:0x123",
+        type: "wallet.transfer",
       }),
     ).toBeNull();
     expect(

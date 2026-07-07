@@ -1,0 +1,53 @@
+/**
+ * Starknet RPC surface consumed by background message dispatch, injectable so
+ * tests can stub network access.
+ */
+import {
+  type BalanceInput,
+  type DeployAccountInput,
+  type DeploymentStatusInput,
+  estimateInvokeFee,
+  getDeploymentStatus,
+  getTokenBalances,
+  getTransactionStatuses,
+  type InvokeInput,
+  submitAccountDeployment,
+  submitErc20Transfer,
+  submitInvokeTransaction,
+  type TransactionStatusInput,
+  type TransferInput,
+} from "../starknet/rpc";
+
+/**
+ * Injectable Starknet RPC operations used by the message handler.
+ */
+export type RuntimeRpc = {
+  readonly estimateInvokeFee: (input: InvokeInput) => ReturnType<typeof estimateInvokeFee>;
+  readonly getDeploymentStatus: (
+    input: DeploymentStatusInput,
+  ) => ReturnType<typeof getDeploymentStatus>;
+  readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
+  readonly getTransactionStatuses: (
+    input: TransactionStatusInput,
+  ) => ReturnType<typeof getTransactionStatuses>;
+  readonly submitAccountDeployment: (
+    input: DeployAccountInput,
+  ) => ReturnType<typeof submitAccountDeployment>;
+  readonly submitErc20Transfer: (input: TransferInput) => ReturnType<typeof submitErc20Transfer>;
+  readonly submitInvokeTransaction: (
+    input: InvokeInput,
+  ) => ReturnType<typeof submitInvokeTransaction>;
+};
+
+/**
+ * Production RPC wiring used when no stub is injected.
+ */
+export const defaultRuntimeRpc: RuntimeRpc = {
+  estimateInvokeFee,
+  getDeploymentStatus,
+  getTokenBalances,
+  getTransactionStatuses,
+  submitAccountDeployment,
+  submitErc20Transfer,
+  submitInvokeTransaction,
+};

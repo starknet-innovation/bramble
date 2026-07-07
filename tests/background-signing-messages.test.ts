@@ -37,8 +37,14 @@ const createSigningWallet = (captureSign?: (input: SignHashInput) => void) => ({
   async createAccount() {
     return account;
   },
+  async ensureNetworkAccount() {
+    return account;
+  },
   async getGrantedAccounts() {
     return [];
+  },
+  async generateMnemonic() {
+    return "habit hope tip crystal because grunt nation idea electric witness alert like";
   },
   async grantOrigin() {
     return [account];
@@ -54,6 +60,9 @@ const createSigningWallet = (captureSign?: (input: SignHashInput) => void) => ({
       schemaVersion: 1 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
+  },
+  async setActiveAccount() {
+    return account;
   },
   async signHash(input: SignHashInput) {
     captureSign?.(input);

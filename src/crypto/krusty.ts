@@ -5,11 +5,6 @@ import { WalletError } from "../shared/errors";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
 
 /**
- * Extension-relative path for the vendored Krusty KMS WASM module.
- */
-export const KRUSTY_KMS_WASM_PATH = "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
-
-/**
  * Stark key material returned only inside privileged wallet flows.
  */
 export type StarkKeypair = {
@@ -225,16 +220,4 @@ export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
       return result;
     },
   };
-};
-
-/**
- * Loads the vendored Krusty KMS WASM adapter for browser cryptography.
- */
-export const loadKrustyKms = async (modulePath = KRUSTY_KMS_WASM_PATH): Promise<KrustyKms> => {
-  if (modulePath !== KRUSTY_KMS_WASM_PATH) {
-    throw new WalletError("Invalid Krusty KMS module path");
-  }
-
-  const module = await import(modulePath);
-  return createKrustyKms(module);
 };

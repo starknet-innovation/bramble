@@ -5,11 +5,16 @@ import { describe, expect, test } from "bun:test";
 import {
   isAccountsResponse,
   isApprovalDecisionResponse,
+  isBalancesResponse,
   isCreateAccountResponse,
   isErrorResponse,
+  isGenerateMnemonicResponse,
   isPendingApprovalsResponse,
+  isPreferencesResponse,
+  isTransferResponse,
   isWalletStatus,
 } from "../src/popup/responses";
+import { defaultWalletPreferences } from "../src/storage/preferences-store";
 
 describe("popup response validators", () => {
   const approvalId = "123e4567-e89b-42d3-a456-426614174000";
@@ -26,14 +31,18 @@ describe("popup response validators", () => {
     publicKeyX: "0xabc",
     publicKeyY: "0xdef",
   };
+  const networks = [{ id: "SN_SEPOLIA", name: "Starknet Sepolia" }];
 
   test("validates wallet status shape", () => {
     const hiddenDebug = {
       accountCount: 1,
       activeAccountId: account.id,
+      accounts: [account],
       hasVault: true,
       locked: false,
       network: "Starknet Sepolia",
+      networkId: "SN_SEPOLIA",
+      networks,
       ready: true,
     };
     Object.defineProperty(hiddenDebug, "debug", { value: true });
@@ -42,9 +51,12 @@ describe("popup response validators", () => {
       isWalletStatus({
         accountCount: 1,
         activeAccountId: account.id,
+        accounts: [account],
         hasVault: true,
         locked: false,
         network: "Starknet Sepolia",
+        networkId: "SN_SEPOLIA",
+        networks,
         ready: true,
       }),
     ).toBe(true);
@@ -54,9 +66,12 @@ describe("popup response validators", () => {
       isWalletStatus({
         accountCount: 1,
         activeAccountId: "not-an-account",
+        accounts: [account],
         hasVault: true,
         locked: false,
         network: "Starknet Sepolia",
+        networkId: "SN_SEPOLIA",
+        networks,
         ready: true,
       }),
     ).toBe(false);
@@ -65,9 +80,12 @@ describe("popup response validators", () => {
       isWalletStatus({
         accountCount: 0,
         activeAccountId: account.id,
+        accounts: [],
         hasVault: true,
         locked: false,
         network: "Starknet Sepolia",
+        networkId: "SN_SEPOLIA",
+        networks,
         ready: true,
       }),
     ).toBe(false);
@@ -75,9 +93,12 @@ describe("popup response validators", () => {
       isWalletStatus({
         accountCount: 1,
         activeAccountId: null,
+        accounts: [account],
         hasVault: false,
         locked: false,
         network: "Starknet Sepolia",
+        networkId: "SN_SEPOLIA",
+        networks,
         ready: true,
       }),
     ).toBe(false);
@@ -85,10 +106,13 @@ describe("popup response validators", () => {
       isWalletStatus({
         accountCount: 1,
         activeAccountId: account.id,
+        accounts: [account],
         debug: true,
         hasVault: true,
         locked: false,
         network: "Starknet Sepolia",
+        networkId: "SN_SEPOLIA",
+        networks,
         ready: true,
       }),
     ).toBe(false);
@@ -96,9 +120,12 @@ describe("popup response validators", () => {
       isWalletStatus({
         accountCount: 1,
         activeAccountId: null,
+        accounts: [account],
         hasVault: true,
         locked: false,
         network: "",
+        networkId: "SN_SEPOLIA",
+        networks,
         ready: true,
       }),
     ).toBe(false);
@@ -117,6 +144,15 @@ describe("popup response validators", () => {
     expect(isErrorResponse({ code: "bad", error: "bad passphrase" })).toBe(false);
     expect(isErrorResponse({ error: 1 })).toBe(false);
     expect(isErrorResponse({ error: "" })).toBe(false);
+  });
+
+  test("validates generated mnemonic responses", () => {
+    const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
+
+    expect(isGenerateMnemonicResponse({ mnemonic, ok: true })).toBe(true);
+    expect(isGenerateMnemonicResponse({ mnemonic: "too short", ok: true })).toBe(false);
+    expect(isGenerateMnemonicResponse({ mnemonic, ok: false })).toBe(false);
+    expect(isGenerateMnemonicResponse({ debug: true, mnemonic, ok: true })).toBe(false);
   });
 
   test("validates pending approval items before popup rendering", () => {
@@ -192,5 +228,31 @@ describe("popup response validators", () => {
       }),
     ).toBe(true);
     expect(isApprovalDecisionResponse({ ok: true })).toBe(false);
+  });
+
+  test("validates preferences, balance, and transfer responses", () => {
+    const preferences = defaultWalletPreferences();
+    const token = preferences.tokens[0];
+
+    expect(isPreferencesResponse({ ok: true, preferences })).toBe(true);
+    expect(isPreferencesResponse({ ok: true, preferences: { schemaVersion: 1 } })).toBe(false);
+    expect(
+      isBalancesResponse({
+        accountId: account.id,
+        balances: [{ ...token, balance: "100", formatted: "0.0000000000000001" }],
+        networkId: "SN_SEPOLIA",
+        ok: true,
+      }),
+    ).toBe(true);
+    expect(
+      isBalancesResponse({
+        accountId: account.id,
+        balances: [{ ...token, balance: "-1", formatted: "0" }],
+        networkId: "SN_SEPOLIA",
+        ok: true,
+      }),
+    ).toBe(false);
+    expect(isTransferResponse({ ok: true, transactionHash: "0x123" })).toBe(true);
+    expect(isTransferResponse({ ok: true, transactionHash: "not-hex" })).toBe(false);
   });
 });

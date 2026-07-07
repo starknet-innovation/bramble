@@ -5,7 +5,6 @@ export const SEMVER = /^\d+\.\d+\.\d+$/;
 
 export const DEPENDENCY_FIELDS = [
   "bundledDependencies",
-  "dependencies",
   "optionalDependencies",
   "peerDependencies",
 ] as const;
@@ -18,13 +17,17 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   typescript: "6.0.3",
 };
 
+export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
+  starknet: "10.0.2",
+};
+
 export const PINNED_RUNTIME_FILES = [
   "background/index.js",
   "content/index.js",
   "manifest.json",
-  "popup.html",
-  "popup/index.js",
   "provider/inpage.js",
+  "sidepanel.html",
+  "sidepanel/index.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
 ] as const;
@@ -39,7 +42,7 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
 export const EXPECTED_README_SECTIONS = [
   "## Architecture",
   "## Migration Workflow",
-  "## UI Skin",
+  "## Design System",
   "## Krusty KMS",
   "## Extension",
 ] as const;
@@ -59,7 +62,7 @@ export const EXPECTED_CONTRIBUTING_RULES = [
   "Stored data access must go through permission checks.",
   "Migrations must be deterministic functions with tests for old, current, and invalid data.",
   "UI code must depend on skin tokens, not hard-coded component-library details.",
-  "Runtime dependencies are blocked by `bun run check`",
+  "Runtime dependencies must stay pinned and explicit.",
 ] as const;
 
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {

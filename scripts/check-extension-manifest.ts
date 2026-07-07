@@ -12,7 +12,13 @@ const packageJson = await readJson("package.json");
 const expectedBackgroundServiceWorker = "background/index.js";
 const expectedExtensionCsp = "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';";
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
-const expectedPopup = "popup.html";
+const expectedHostPermissions = [
+  "https://api.cartridge.gg/*",
+  "http://127.0.0.1:5050/*",
+  "http://localhost:5050/*",
+];
+const expectedActionTitle = "Open MC Wallet";
+const expectedSidePanel = "sidepanel.html";
 const expectedProviderResource = "provider/inpage.js";
 const expectedContentScript = "content/index.js";
 const failures: string[] = [];
@@ -58,6 +64,7 @@ if (
     "manifest_version",
     "name",
     "permissions",
+    "side_panel",
     "version",
     "web_accessible_resources",
   ])
@@ -65,12 +72,12 @@ if (
   failures.push("manifest top-level capabilities must stay explicit");
 }
 
-if (!hasOnly(manifest.permissions, ["storage"])) {
-  failures.push("manifest permissions must stay storage-only");
+if (!hasOnly(manifest.permissions, ["sidePanel", "storage"])) {
+  failures.push("manifest permissions must stay sidePanel and storage only");
 }
 
-if (!hasOnly(manifest.host_permissions, [])) {
-  failures.push("manifest host_permissions must stay empty");
+if (!hasOnly(manifest.host_permissions, expectedHostPermissions)) {
+  failures.push("manifest host_permissions must stay pinned to Starknet RPC endpoints");
 }
 
 const contentSecurityPolicy = hasOnlyKeys(manifest.content_security_policy, ["extension_pages"])
@@ -93,24 +100,26 @@ if (backgroundPath !== expectedBackgroundServiceWorker) {
 }
 await requireFile(`src/${backgroundPath.replace(/\.js$/, ".ts")}`);
 
-const action = hasOnlyKeys(manifest.action, ["default_popup"]) ? manifest.action : null;
-if (!action) {
-  failures.push("manifest action must expose only the popup");
+const action = hasOnlyKeys(manifest.action, ["default_title"]) ? manifest.action : null;
+if (action?.default_title !== expectedActionTitle) {
+  failures.push("manifest action must open the wallet side panel");
 }
-const popupPath = typeof action?.default_popup === "string" ? action.default_popup : "";
-if (popupPath !== expectedPopup) {
-  failures.push("manifest popup path must stay pinned");
+
+const sidePanel = hasOnlyKeys(manifest.side_panel, ["default_path"]) ? manifest.side_panel : null;
+const sidePanelPath = typeof sidePanel?.default_path === "string" ? sidePanel.default_path : "";
+if (sidePanelPath !== expectedSidePanel) {
+  failures.push("manifest side panel path must stay pinned");
 }
-await requireFile(`public/${popupPath}`);
-if (popupPath) {
-  const popupHtml = await readFile(`public/${popupPath}`, "utf8");
-  const scriptTags = popupHtml.match(/<script\b/gi) ?? [];
+await requireFile(`public/${sidePanelPath}`);
+if (sidePanelPath) {
+  const sidePanelHtml = await readFile(`public/${sidePanelPath}`, "utf8");
+  const scriptTags = sidePanelHtml.match(/<script\b/gi) ?? [];
   if (
     scriptTags.length !== 1 ||
-    !popupHtml.includes('<script type="module" src="./popup/index.js"></script>') ||
-    /\son[a-z]+\s*=|javascript:/i.test(popupHtml)
+    !sidePanelHtml.includes('<script type="module" src="./sidepanel/index.js"></script>') ||
+    /\son[a-z]+\s*=|javascript:/i.test(sidePanelHtml)
   ) {
-    failures.push("popup HTML must load only the packaged popup module");
+    failures.push("side panel HTML must load only the packaged side panel module");
   }
 }
 

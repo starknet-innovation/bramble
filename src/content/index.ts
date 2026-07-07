@@ -8,9 +8,13 @@ import {
   toProviderPayload,
   toRuntimeMessage,
 } from "../provider/bridge";
+import { addressesFromPayload, isWalletEventMessage, pageEventsFor } from "../provider/events";
 
 type RuntimeApi = {
   readonly getURL: (path: string) => string;
+  readonly onMessage?: {
+    readonly addListener: (listener: (message: unknown) => void) => void;
+  };
   readonly sendMessage: (message: unknown) => Promise<unknown>;
 };
 
@@ -21,6 +25,7 @@ type ExtensionGlobal = typeof globalThis & {
 };
 
 const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
+let lastAddresses: readonly string[] | null = null;
 
 const injectProvider = (): void => {
   if (!runtime || document.documentElement.dataset.mcWalletInjected === "true") {
@@ -46,6 +51,10 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
   }
 
   const postToPage = (payload: Parameters<typeof providerResponse>[1]): void => {
+    const known = addressesFromPayload(payload);
+    if (known) {
+      lastAddresses = known;
+    }
     window.postMessage(providerResponse(request, payload), pageOrigin);
   };
 
@@ -56,9 +65,31 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
   }
 
   void runtime.sendMessage(runtimeMessage).then(
-    (result) => postToPage(toProviderPayload(result)),
+    (result) => postToPage(toProviderPayload(result, request.method)),
     () => postToPage({ error: "provider request failed" }),
   );
+});
+
+runtime?.onMessage?.addListener((message) => {
+  if (!runtime || !isWalletEventMessage(message) || message.event === "approvalsChanged") {
+    return;
+  }
+
+  const pageOrigin = window.location.origin;
+  void runtime
+    .sendMessage({ origin: pageOrigin, type: "wallet.getGrantedAccounts" })
+    .then(
+      (result) => toProviderPayload(result, "wallet_requestAccounts"),
+      () => toProviderPayload({ error: "provider request failed" }),
+    )
+    .then((payload) => {
+      const addresses = addressesFromPayload(payload) ?? [];
+      const forwards = pageEventsFor({ addresses, lastAddresses, message });
+      lastAddresses = addresses;
+      for (const forward of forwards) {
+        window.postMessage(forward, pageOrigin);
+      }
+    });
 });
 
 injectProvider();

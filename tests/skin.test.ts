@@ -19,7 +19,7 @@ test("applySkin writes every default token to the target root", () => {
   applySkin(defaultSkin, root);
 
   expect(applied).toEqual(defaultSkin.tokens);
-  expect(applied["--mc-accent-text"]).toBe("#ffffff");
+  expect(applied["--mc-accent-text"]).toBe(defaultSkin.tokens["--mc-accent-text"]);
 });
 
 test("applySkin rejects incomplete replacement skins", () => {

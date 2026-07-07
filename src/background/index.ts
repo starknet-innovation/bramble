@@ -1,14 +1,19 @@
 /**
  * MV3 background entrypoint. All privileged wallet state stays behind this worker.
  */
-import { loadKrustyKms } from "../crypto/krusty";
-import { createBrowserLocalStore } from "../storage/browser-storage";
+import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+import { createKrustyKms } from "../crypto/krusty";
+import { createActivityLog } from "../storage/activity-store";
+import { createBrowserLocalStore, createBrowserSessionStore } from "../storage/browser-storage";
 import { createEncryptedStore } from "../storage/encrypted-store";
+import { createPreferencesStore } from "../storage/preferences-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { createApprovalQueue } from "./approvals";
+import { walletEventBroadcasts } from "./events";
 import { createMessageHandler } from "./messages";
+import { defaultRuntimeRpc } from "./runtime-rpc";
 import type { RuntimeSender } from "./senders";
-import { createUnlockSession } from "./session";
+import { createUnlockSession, type UnlockSessionStore } from "./session";
 
 type RuntimeApi = {
   readonly id: string;
@@ -24,25 +29,72 @@ type RuntimeApi = {
       ) => true,
     ) => void;
   };
+  readonly sendMessage?: (message: unknown) => Promise<unknown>;
+};
+
+type TabsApi = {
+  readonly query: (
+    queryInfo: Record<string, never>,
+  ) => Promise<readonly { readonly id?: number }[]>;
+  readonly sendMessage: (tabId: number, message: unknown) => Promise<unknown>;
 };
 
 type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: {
     readonly runtime?: RuntimeApi;
+    readonly sidePanel?: {
+      readonly setPanelBehavior: (behavior: {
+        readonly openPanelOnActionClick: boolean;
+      }) => Promise<void>;
+    };
+    readonly tabs?: TabsApi;
   };
 };
 
-const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
+const SESSION_STORE_KEY = "mc-wallet:session";
+
+const extensionApi = (globalThis as ExtensionGlobal).chrome;
+const runtime = extensionApi?.runtime;
+const tabs = extensionApi?.tabs;
 const approvals = createApprovalQueue();
-const session = createUnlockSession();
-const wallet = loadKrustyKms()
-  .then((kms) =>
+const sessionStore: UnlockSessionStore | undefined = (() => {
+  try {
+    const store = createBrowserSessionStore();
+    return {
+      async clear() {
+        await store.remove(SESSION_STORE_KEY);
+      },
+      async load() {
+        return store.get(SESSION_STORE_KEY);
+      },
+      async save(state) {
+        await store.set(SESSION_STORE_KEY, state);
+      },
+    };
+  } catch {
+    return undefined;
+  }
+})();
+const session = createUnlockSession(undefined, undefined, sessionStore);
+const sessionReady = session.restore().catch(() => undefined);
+const wallet = Promise.resolve()
+  .then(() =>
     createWalletVaultService({
       encryptedStore: createEncryptedStore(createBrowserLocalStore(), VAULT_STORE_KEY),
-      kms,
+      kms: createKrustyKms(krustyModule),
     }),
   )
   .catch(() => null);
+const preferences = Promise.resolve()
+  .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
+  .catch(() => null);
+const activityLog = (() => {
+  try {
+    return createActivityLog({ store: createBrowserLocalStore() });
+  } catch {
+    return undefined;
+  }
+})();
 const handleMessage = createMessageHandler(
   {
     async createAccount(input) {
@@ -52,12 +104,26 @@ const handleMessage = createMessageHandler(
       }
       return service.createAccount(input);
     },
+    async ensureNetworkAccount(input) {
+      const service = await wallet;
+      if (!service) {
+        throw new Error("wallet unavailable");
+      }
+      return service.ensureNetworkAccount(input);
+    },
     async getGrantedAccounts(origin, vaultPassphrase) {
       const service = await wallet;
       if (!service) {
         throw new Error("wallet unavailable");
       }
       return service.getGrantedAccounts(origin, vaultPassphrase);
+    },
+    async generateMnemonic() {
+      const service = await wallet;
+      if (!service) {
+        throw new Error("wallet unavailable");
+      }
+      return service.generateMnemonic();
     },
     async grantOrigin(input) {
       const service = await wallet;
@@ -72,6 +138,13 @@ const handleMessage = createMessageHandler(
         throw new Error("wallet unavailable");
       }
       return service.readVault(vaultPassphrase);
+    },
+    async setActiveAccount(input) {
+      const service = await wallet;
+      if (!service) {
+        throw new Error("wallet unavailable");
+      }
+      return service.setActiveAccount(input);
     },
     async signHash(input) {
       const service = await wallet;
@@ -97,12 +170,106 @@ const handleMessage = createMessageHandler(
   runtime?.id ?? "",
   session,
   approvals,
+  {
+    async importPreferences(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.importPreferences(input);
+    },
+    async read() {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.read();
+    },
+    async removeAddress(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.removeAddress(input);
+    },
+    async setAccountLabel(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setAccountLabel(input);
+    },
+    async setDisplay(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setDisplay(input);
+    },
+    async saveAddress(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.saveAddress(input);
+    },
+    async setActiveNetwork(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setActiveNetwork(input);
+    },
+    async setRpcOverride(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setRpcOverride(input);
+    },
+    async upsertToken(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.upsertToken(input);
+    },
+  },
+  defaultRuntimeRpc,
+  activityLog,
 );
 
+const broadcastWalletEvents = (message: unknown, response: unknown): void => {
+  for (const event of walletEventBroadcasts(message, response)) {
+    void runtime?.sendMessage?.(event).catch(() => undefined);
+    void tabs
+      ?.query({})
+      .then((openTabs) => {
+        for (const tab of openTabs) {
+          if (typeof tab.id === "number") {
+            void tabs.sendMessage(tab.id, event).catch(() => undefined);
+          }
+        }
+      })
+      .catch(() => undefined);
+  }
+};
+
 runtime?.onInstalled.addListener(() => undefined);
+void extensionApi?.sidePanel
+  ?.setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(() => undefined);
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
-  void handleMessage(message, sender).then(sendResponse, () => {
-    sendResponse({ error: "wallet request failed" });
-  });
+  void sessionReady
+    .then(() => handleMessage(message, sender))
+    .then(
+      (response) => {
+        sendResponse(response);
+        broadcastWalletEvents(message, response);
+      },
+      () => {
+        sendResponse({ error: "wallet request failed" });
+      },
+    );
   return true;
 });

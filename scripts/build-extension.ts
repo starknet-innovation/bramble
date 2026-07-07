@@ -5,6 +5,7 @@ import { cp, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 const outdir = "dist";
+const krustyModule = "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 const vendorOutdir = join(outdir, "vendor/krusty-kms/pkg");
 
 const requireBuild = (result: Bun.BuildOutput): void => {
@@ -33,6 +34,7 @@ await mkdir(outdir, { recursive: true });
 requireBuild(
   await Bun.build({
     entrypoints: ["src/background/index.ts"],
+    external: [krustyModule],
     format: "esm",
     minify: true,
     outdir: join(outdir, "background"),
@@ -42,10 +44,10 @@ requireBuild(
 
 requireBuild(
   await Bun.build({
-    entrypoints: ["src/popup/index.ts"],
+    entrypoints: ["src/sidepanel/index.ts"],
     format: "esm",
     minify: true,
-    outdir: join(outdir, "popup"),
+    outdir: join(outdir, "sidepanel"),
     target: "browser",
   }),
 );
@@ -71,7 +73,7 @@ requireBuild(
 );
 
 await cp("public/manifest.json", join(outdir, "manifest.json"));
-await cp("public/popup.html", join(outdir, "popup.html"));
+await cp("public/sidepanel.html", join(outdir, "sidepanel.html"));
 await mkdir(vendorOutdir, { recursive: true });
 await cp(
   "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js",

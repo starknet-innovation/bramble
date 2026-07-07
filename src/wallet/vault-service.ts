@@ -4,7 +4,11 @@
 import type { KrustyKms, StarkSignature } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import { isWalletOrigin } from "../shared/origin";
-import { isStarkFieldElement } from "../starknet/networks";
+import {
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  type StarknetNetworkId,
+} from "../starknet/networks";
 import { type EncryptedStore, isVaultPassphrase } from "../storage/encrypted-store";
 import { migrateVault } from "../storage/migrations";
 import { assertStoreAccess, type StoreActor } from "../storage/permissioned-store";
@@ -14,7 +18,7 @@ import {
   isAccountId,
   type Vault,
 } from "../storage/vault-schema";
-import { type AccountDerivationInput, deriveAccount } from "./accounts";
+import { type AccountDerivationInput, deriveAccount, getOzAccountClassHash } from "./accounts";
 
 /**
  * Browser storage key for the encrypted wallet vault.
@@ -58,16 +62,35 @@ export type OriginGrantInput = {
 };
 
 /**
+ * Active account selection input.
+ */
+export type SetActiveAccountInput = {
+  readonly accountId: string;
+  readonly vaultPassphrase: string;
+};
+
+/**
+ * Input for deriving the selected wallet account onto another Starknet network.
+ */
+export type EnsureNetworkAccountInput = {
+  readonly networkId: StarknetNetworkId;
+  readonly vaultPassphrase: string;
+};
+
+/**
  * Privileged encrypted-vault wallet service surface.
  */
 export type WalletVaultService = {
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
+  readonly generateMnemonic: () => Promise<string>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
   readonly status: () => Promise<WalletStatus>;
 };
@@ -97,6 +120,12 @@ const findAccount = (vault: Vault, accountId: string): AccountRef => {
   }
   return account;
 };
+
+const sameWalletKey = (left: AccountRef, right: AccountRef): boolean =>
+  left.publicKeyX === right.publicKeyX &&
+  left.publicKeyY === right.publicKeyY &&
+  left.derivation.accountIndex === right.derivation.accountIndex &&
+  left.derivation.addressIndex === right.derivation.addressIndex;
 
 /**
  * Creates the background-only wallet service over encrypted storage and KMS.
@@ -138,6 +167,69 @@ export const createWalletVaultService = ({
 
       return account;
     },
+    async ensureNetworkAccount(input) {
+      const vault = await readVault(input.vaultPassphrase);
+      const source =
+        (vault.activeAccountId
+          ? vault.accounts.find((stored) => stored.id === vault.activeAccountId)
+          : null) ?? vault.accounts[0];
+      if (!source) {
+        throw new WalletError("No account selected");
+      }
+
+      const existing = vault.accounts.find(
+        (stored) => stored.networkId === input.networkId && sameWalletKey(stored, source),
+      );
+      if (existing) {
+        await writeVault(
+          encryptedStore,
+          { ...vault, activeAccountId: existing.id },
+          input.vaultPassphrase,
+        );
+        return existing;
+      }
+
+      const signingKey = vault.signingKeys.find((stored) => stored.accountId === source.id);
+      if (!signingKey) {
+        throw new WalletError("Signing key unavailable");
+      }
+
+      const classHash = await getOzAccountClassHash(kms, input.networkId);
+      const address = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
+      if (!isNonZeroStarkFieldElement(address)) {
+        throw new WalletError("Krusty KMS returned invalid account address");
+      }
+
+      const account: AccountRef = {
+        ...source,
+        address,
+        classHash,
+        id: `${input.networkId}:${address}`,
+        networkId: input.networkId,
+      };
+      if (vault.accounts.some((stored) => stored.id === account.id)) {
+        throw new WalletError("Account already exists");
+      }
+
+      await writeVault(
+        encryptedStore,
+        {
+          ...vault,
+          accounts: [...vault.accounts, account],
+          activeAccountId: account.id,
+          signingKeys: [
+            ...vault.signingKeys,
+            { accountId: account.id, privateKey: signingKey.privateKey },
+          ],
+        },
+        input.vaultPassphrase,
+      );
+
+      return account;
+    },
+    generateMnemonic() {
+      return kms.generateMnemonic();
+    },
     async grantOrigin(input) {
       if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");
@@ -178,6 +270,21 @@ export const createWalletVaultService = ({
       return grant.accountIds.map((accountId) => findAccount(vault, accountId));
     },
     readVault,
+    async setActiveAccount(input) {
+      const vault = await readVault(input.vaultPassphrase);
+      const account = findAccount(vault, input.accountId);
+
+      await writeVault(
+        encryptedStore,
+        {
+          ...vault,
+          activeAccountId: account.id,
+        },
+        input.vaultPassphrase,
+      );
+
+      return account;
+    },
     async signHash(input) {
       if (!isStarkFieldElement(input.messageHash)) {
         throw new WalletError("Invalid message hash");

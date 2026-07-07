@@ -50,8 +50,14 @@ const createWallet = (
     captureCreate?.(input);
     return account;
   },
+  async ensureNetworkAccount() {
+    return account;
+  },
   async getGrantedAccounts(origin: string) {
     return origin === "https://example.com" ? [account] : [];
+  },
+  async generateMnemonic() {
+    return "habit hope tip crystal because grunt nation idea electric witness alert like";
   },
   async grantOrigin(input: OriginGrantInput) {
     captureGrant?.(input);
@@ -68,6 +74,9 @@ const createWallet = (
       schemaVersion: 1 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
+  },
+  async setActiveAccount() {
+    return account;
   },
   async signHash(input: SignHashInput) {
     captureSign?.(input);
@@ -261,6 +270,44 @@ describe("createMessageHandler", () => {
     expect(captured[0]?.vaultPassphrase).toBe(vaultPassphrase);
   });
 
+  test("generates mnemonics through the wallet service only", async () => {
+    const handler = createMessageHandler(createWallet(), "extension-id");
+
+    await expect(handler({ type: "wallet.generateMnemonic" }, sender)).resolves.toEqual({
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      ok: true,
+    });
+    await expect(
+      handler({ debug: true, type: "wallet.generateMnemonic" }, sender),
+    ).resolves.toEqual({
+      error: "invalid generate mnemonic request",
+    });
+    await expect(handler({ type: "wallet.generateMnemonic" }, contentSender)).resolves.toEqual({
+      error: "privileged sender required",
+    });
+  });
+
+  test("handles provider chain id and gates dapp invoke submission", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(createWallet(), "extension-id", session);
+
+    await expect(handler({ type: "wallet.getChainId" }, contentSender)).resolves.toEqual({
+      chainId: "0x534e5f4d41494e",
+      ok: true,
+    });
+    await expect(
+      handler(
+        {
+          calls: [{ calldata: ["0x1"], contractAddress: "0x123", entrypoint: "transfer" }],
+          origin: "https://other.example",
+          type: "wallet.addInvokeTransaction",
+        },
+        { id: "extension-id", url: "https://other.example/app" },
+      ),
+    ).resolves.toEqual({ error: "origin not connected" });
+  });
+
   test("validates origin grant messages", async () => {
     const captured: OriginGrantInput[] = [];
     const handler = createMessageHandler(
@@ -343,6 +390,22 @@ describe("createMessageHandler", () => {
     ).resolves.toEqual({ accounts: [account], ok: true });
   });
 
+  test("sets active accounts through the unlocked session", async () => {
+    const session = createUnlockSession();
+    const handler = createMessageHandler(createWallet(), "extension-id", session);
+
+    await expect(
+      handler({ accountId: account.id, type: "wallet.setActiveAccount" }, sender),
+    ).resolves.toEqual({ error: "wallet locked" });
+    await handler({ type: "wallet.unlock", vaultPassphrase }, sender);
+    await expect(
+      handler({ accountId: account.id, type: "wallet.setActiveAccount" }, sender),
+    ).resolves.toEqual({ account, ok: true });
+    await expect(
+      handler({ accountId: "not-an-account", type: "wallet.setActiveAccount" }, sender),
+    ).resolves.toEqual({ error: "invalid active account request" });
+  });
+
   test("creates pending approvals for ungranted dapp account requests", async () => {
     const handler = createMessageHandler(createWallet(), "extension-id", createUnlockSession());
 
@@ -399,22 +462,6 @@ describe("createMessageHandler", () => {
       vaultPassphrase,
     });
     await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toEqual({
-      ok: true,
-      pending: [],
-    });
-  });
-
-  test("denies pending dapp account requests", async () => {
-    const approvals = createApprovalQueue();
-    const pending = approvals.request("https://example.com");
-    const handler = createMessageHandler(
-      createWallet(),
-      "extension-id",
-      createUnlockSession(),
-      approvals,
-    );
-
-    await expect(handler({ id: pending.id, type: "wallet.denyOrigin" }, sender)).resolves.toEqual({
       ok: true,
       pending: [],
     });

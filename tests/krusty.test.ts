@@ -2,7 +2,7 @@
  * Krusty adapter checks prove WASM outputs are validated at the crypto boundary.
  */
 import { describe, expect, test } from "bun:test";
-import { createKrustyKms, loadKrustyKms } from "../src/crypto/krusty";
+import { createKrustyKms } from "../src/crypto/krusty";
 
 const createModule = (signatureR = "0x1") => ({
   deriveOzAccountAddress() {
@@ -234,11 +234,5 @@ describe("createKrustyKms", () => {
 
     await expect(createKrustyKms(module).validateMnemonic(" ")).rejects.toThrow("Invalid mnemonic");
     expect(validated).toBe(false);
-  });
-
-  test("rejects unexpected Krusty module paths before dynamic import", async () => {
-    await expect(loadKrustyKms("https://example.com/krusty.js")).rejects.toThrow(
-      "Invalid Krusty KMS module path",
-    );
   });
 });

@@ -49,7 +49,7 @@ CI runs the same gates. Do not merge around them.
 - Request the smallest browser permissions possible.
 - Prefer deny-by-default switches and allow lists over block lists.
 - Do not use eval-style dynamic code execution; packaged scripts only.
-- Runtime dependencies are blocked by `bun run check`; dev-tool dependencies must be pinned exactly.
+- Runtime dependencies must stay pinned and explicit. Dev-tool dependencies must be pinned exactly.
 - Any dependency addition needs a reason in the pull request and must be used immediately.
 - Any change to key derivation, signing, encryption, storage schema, or permissions needs tests.
 

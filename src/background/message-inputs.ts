@@ -2,10 +2,12 @@
  * Pure parsers for untrusted background runtime messages.
  */
 
+import type { Call } from "starknet";
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
-import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
+import type { StarknetNetworkId } from "../starknet/networks";
+import { isStarkFieldElement, isStarknetNetworkId, STARK_FIELD_PRIME } from "../starknet/networks";
 import { isVaultPassphrase } from "../storage/encrypted-store";
 import { isAccountId } from "../storage/vault-schema";
 import type {
@@ -23,6 +25,42 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
 
 const isMnemonicText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
+
+const isTransferAmount = (value: unknown): value is string =>
+  typeof value === "string" && /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value.trim());
+
+const isFeltLikeString = (value: unknown): value is string => {
+  if (typeof value !== "string" || !/^(?:0x[0-9a-fA-F]+|0|[1-9][0-9]*)$/.test(value)) {
+    return false;
+  }
+  return BigInt(value) < STARK_FIELD_PRIME;
+};
+
+const isEntrypoint = (value: unknown): value is string =>
+  typeof value === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
+
+const isChainId = (value: unknown): value is string =>
+  typeof value === "string" && /^0x[0-9a-f]+$/.test(value);
+
+const readInvokeCall = (value: unknown): Call | null => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["calldata", "contractAddress", "entrypoint"]) ||
+    !isFeltLikeString(value.contractAddress) ||
+    BigInt(value.contractAddress) <= 0n ||
+    !isEntrypoint(value.entrypoint) ||
+    !Array.isArray(value.calldata) ||
+    !value.calldata.every(isFeltLikeString)
+  ) {
+    return null;
+  }
+
+  return {
+    calldata: [...value.calldata],
+    contractAddress: value.contractAddress,
+    entrypoint: value.entrypoint,
+  };
+};
 
 /**
  * Parses no-payload runtime messages by exact type.
@@ -162,6 +200,155 @@ export const readRequestAccountsInput = (message: unknown): { readonly origin: s
 };
 
 /**
+ * Parses dapp invoke transaction requests from content-script traffic.
+ */
+export const readAddInvokeTransactionInput = (
+  message: unknown,
+): { readonly calls: readonly Call[]; readonly origin: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["calls", "origin", "type"]) ||
+    message.type !== "wallet.addInvokeTransaction" ||
+    !Array.isArray(message.calls) ||
+    message.calls.length === 0 ||
+    message.calls.length > 16
+  ) {
+    return null;
+  }
+
+  const origin = normalizeWalletOrigin(message.origin);
+  const calls = message.calls.map(readInvokeCall);
+  return origin && calls.every((call): call is Call => call !== null) ? { calls, origin } : null;
+};
+
+/**
+ * Parses active-account selection messages from extension pages.
+ */
+export const readSetActiveAccountInput = (
+  message: unknown,
+): { readonly accountId: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["accountId", "type"]) ||
+    message.type !== "wallet.setActiveAccount" ||
+    !isAccountId(message.accountId)
+  ) {
+    return null;
+  }
+
+  return {
+    accountId: message.accountId,
+  };
+};
+
+/**
+ * Parses active-network selection messages from extension pages.
+ */
+export const readSetActiveNetworkInput = (
+  message: unknown,
+): { readonly networkId: StarknetNetworkId } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["networkId", "type"]) ||
+    message.type !== "wallet.setActiveNetwork" ||
+    !isStarknetNetworkId(message.networkId)
+  ) {
+    return null;
+  }
+
+  return {
+    networkId: message.networkId,
+  };
+};
+
+/**
+ * Parses dapp chain-switch requests from content-script traffic.
+ */
+export const readSwitchChainInput = (
+  message: unknown,
+): { readonly chainId: string; readonly origin: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["chainId", "origin", "type"]) ||
+    message.type !== "wallet.switchChain" ||
+    !isChainId(message.chainId)
+  ) {
+    return null;
+  }
+
+  const origin = normalizeWalletOrigin(message.origin);
+  return origin ? { chainId: message.chainId, origin } : null;
+};
+
+/**
+ * Parses ERC20 transfer messages from extension pages.
+ */
+const readTransferFields = (
+  message: unknown,
+  type: "wallet.reviewTransfer" | "wallet.transfer",
+): {
+  readonly accountId: string;
+  readonly amount: string;
+  readonly recipient: string;
+  readonly speed: "fast" | "standard";
+  readonly tokenId: string;
+} | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["accountId", "amount", "recipient", "speed", "tokenId", "type"]) ||
+    message.type !== type ||
+    !isAccountId(message.accountId) ||
+    !isTransferAmount(message.amount) ||
+    typeof message.recipient !== "string" ||
+    !isStarkFieldElement(message.recipient) ||
+    typeof message.tokenId !== "string" ||
+    message.tokenId.length === 0 ||
+    (message.speed !== undefined && message.speed !== "fast" && message.speed !== "standard")
+  ) {
+    return null;
+  }
+
+  return {
+    accountId: message.accountId,
+    amount: message.amount.trim(),
+    recipient: message.recipient,
+    speed: message.speed === "fast" ? "fast" : "standard",
+    tokenId: message.tokenId,
+  };
+};
+
+/**
+ * Parses dapp typed-data signing requests from the provider bridge.
+ */
+export const readSignTypedDataInput = (
+  message: unknown,
+): { readonly origin: string; readonly typedData: unknown } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["origin", "type", "typedData"]) ||
+    message.type !== "wallet.signTypedData" ||
+    message.typedData === undefined
+  ) {
+    return null;
+  }
+
+  const origin = normalizeWalletOrigin(message.origin);
+  return origin ? { origin, typedData: message.typedData } : null;
+};
+
+/**
+ * Parses side panel transfer requests before touching wallet state.
+ */
+export const readTransferInput = (message: unknown): ReturnType<typeof readTransferFields> =>
+  readTransferFields(message, "wallet.transfer");
+
+/**
+ * Parses pre-sign transfer review requests from extension pages.
+ */
+export const readReviewTransferInput = (message: unknown): ReturnType<typeof readTransferFields> =>
+  readTransferFields(message, "wallet.reviewTransfer");
+
+/**
  * Parses privileged hash-signing requests without accepting non-hex hashes.
  */
 export const readSignHashInput = (message: unknown): SignHashInput | null => {
@@ -201,3 +388,15 @@ export const readUnlockInput = (message: unknown): { readonly vaultPassphrase: s
   }
   return { vaultPassphrase: message.vaultPassphrase };
 };
+
+/**
+ * Re-exported preference input readers so callers keep one import path.
+ */
+export {
+  readImportPreferencesInput,
+  readRemoveAddressInput,
+  readSaveAddressInput,
+  readSetAccountLabelInput,
+  readSetDisplayInput,
+  readSetRpcOverrideInput,
+} from "./preference-inputs";

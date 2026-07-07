@@ -65,12 +65,28 @@ export const isTrustedSender = (sender: RuntimeSender | undefined, extensionId: 
  * Marks messages that must only come from extension-controlled pages.
  */
 export const isPrivilegedMessage = (type: unknown): boolean =>
+  type === "wallet.activity" ||
   type === "wallet.approveOrigin" ||
   type === "wallet.createAccount" ||
   type === "wallet.denyOrigin" ||
+  type === "wallet.deployAccount" ||
+  type === "wallet.deploymentStatus" ||
+  type === "wallet.generateMnemonic" ||
   type === "wallet.grantOrigin" ||
+  type === "wallet.getBalances" ||
+  type === "wallet.importPreferences" ||
   type === "wallet.lock" ||
   type === "wallet.pendingApprovals" ||
+  type === "wallet.preferences" ||
+  type === "wallet.removeAddress" ||
+  type === "wallet.reviewTransfer" ||
+  type === "wallet.saveAddress" ||
+  type === "wallet.setAccountLabel" ||
+  type === "wallet.setActiveAccount" ||
+  type === "wallet.setActiveNetwork" ||
+  type === "wallet.setDisplay" ||
+  type === "wallet.setRpcOverride" ||
   type === "wallet.signHash" ||
   type === "wallet.status" ||
+  type === "wallet.transfer" ||
   type === "wallet.unlock";

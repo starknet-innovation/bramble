@@ -28,7 +28,8 @@ bun run package:extension
   or vault operations to dapps.
 - `src/storage` owns encrypted persistence, permission checks, schema validation, and migrations.
 - `src/crypto` adapts Krusty KMS and rejects invalid inputs or WASM outputs at the boundary.
-- `src/ui` defines the replaceable skin contract used by popup rendering.
+- `src/ui` defines the design system: the replaceable color skin contract plus the shared scale
+  tokens (spacing, radius, type, motion, control metrics) consumed by side panel styling.
 
 ## Migration Workflow
 
@@ -37,11 +38,27 @@ bun run package:extension
 3. Update schema validators and tests for old, current, and invalid vault data.
 4. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-## UI Skin
+## Design System
 
-Popup styling flows through `Skin` tokens in `src/ui/skin.ts`. Replace `defaultSkin` in
-`src/popup/index.ts` to swap the skin; `applySkin` rejects missing, extra, hidden, or accessor
-tokens.
+Side panel styling is layered so each axis can be updated in one place:
+
+- Colors: `Skin` tokens in `src/ui/skin.ts`. Replace `defaultSkin` in `src/sidepanel/index.ts`
+  to swap the palette; `applySkin` rejects missing, extra, hidden, or accessor tokens.
+- Scales: spacing, radius, type, motion, and control metrics live in `src/ui/tokens.ts` and are
+  interpolated into the stylesheet.
+- Components: `src/sidepanel/styles.ts` composes tokens into component classes used by the pure
+  templates in `src/sidepanel/views.ts`.
+
+Interaction contract: controls keep a constant 1px border and transition only paint properties,
+so nothing moves on hover or press; screens animate only when the visible scene changes, and
+`prefers-reduced-motion` disables motion entirely. `tests/sidepanel-styles.test.ts` enforces
+these rules.
+
+The background broadcasts `wallet.event` messages (`accountsChanged`, `networkChanged`,
+`approvalsChanged`) after mutations. The side panel refreshes live from those events, and content
+scripts forward `accountsChanged`/`networkChanged` to connected pages through the injected
+provider's `on`/`off` subscription API — after re-querying which addresses each origin may see,
+so events never leak wallet state to unconnected sites.
 
 ## Krusty KMS
 
@@ -59,8 +76,21 @@ The build requires `vendor/krusty-kms/crates/wasm/pkg` and copies its runtime fi
 ## Extension
 
 Load `dist/` as an unpacked extension after `bun run build`.
+Click the extension action to open the Chrome side panel wallet.
 
 Release zips and SHA-256 checksum files are written to `artifacts/` by
 `bun run package:extension`.
 
 CI uploads those same files as the `mc-wallet-extension` workflow artifact.
+
+## Reproducible Builds
+
+Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen
+lockfile, `wasm-pack 0.13.1`, GitHub Actions by commit SHA, and the Krusty KMS
+source at the commit recorded in `scripts/vendor-krusty.ts`. To reproduce a
+release, run the Commands section above on those versions and compare
+`artifacts/*.zip.sha256` against the CI artifact checksum:
+
+```bash
+cd artifacts && shasum -a 256 -c mc-wallet-0.1.0.zip.sha256
+```

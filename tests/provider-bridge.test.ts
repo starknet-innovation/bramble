@@ -31,6 +31,9 @@ const account = {
   publicKeyY: "0xdef",
 };
 const accountResult = { accounts: [account], ok: true as const };
+const invokeParams = {
+  calls: [{ calldata: ["0x1"], contractAddress: "0x123", entrypoint: "transfer" }],
+};
 
 describe("provider bridge", () => {
   test("caps unresolved in-page provider requests", () => {
@@ -53,6 +56,27 @@ describe("provider bridge", () => {
     expect(readProviderRequestArguments({ method: "mc_requestAccounts" })).toEqual({
       method: "mc_requestAccounts",
     });
+    expect(readProviderRequestArguments({ type: "wallet_requestAccounts" })).toEqual({
+      method: "wallet_requestAccounts",
+    });
+    expect(readProviderRequestArguments({ type: "wallet_requestChainId" })).toEqual({
+      method: "wallet_requestChainId",
+    });
+    expect(
+      readProviderRequestArguments({
+        params: { chainId: "0x534e5f4d41494e" },
+        type: "wallet_switchStarknetChain",
+      }),
+    ).toEqual({
+      method: "wallet_switchStarknetChain",
+      params: { chainId: "0x534e5f4d41494e" },
+    });
+    expect(
+      readProviderRequestArguments({ params: invokeParams, type: "wallet_addInvokeTransaction" }),
+    ).toEqual({
+      method: "wallet_addInvokeTransaction",
+      params: invokeParams,
+    });
     expect(readProviderRequestArguments({ debug: true, method: "mc_accounts" })).toBeNull();
   });
 
@@ -66,6 +90,40 @@ describe("provider bridge", () => {
     expect(
       readProviderRequest({ id: requestId, method: "wallet.signHash", target: CONTENT_TARGET }),
     ).toBeNull();
+    expect(
+      readProviderRequest({
+        id: requestId,
+        params: invokeParams,
+        method: "wallet_addInvokeTransaction",
+        target: CONTENT_TARGET,
+      }),
+    ).toEqual({
+      id: requestId,
+      method: "wallet_addInvokeTransaction",
+      params: invokeParams,
+    });
+    expect(
+      readProviderRequest({
+        id: requestId,
+        method: "wallet_requestChainId",
+        target: CONTENT_TARGET,
+      }),
+    ).toEqual({
+      id: requestId,
+      method: "wallet_requestChainId",
+    });
+    expect(
+      readProviderRequest({
+        id: requestId,
+        method: "wallet_switchStarknetChain",
+        params: { chainId: "0x534e5f4d41494e" },
+        target: CONTENT_TARGET,
+      }),
+    ).toEqual({
+      id: requestId,
+      method: "wallet_switchStarknetChain",
+      params: { chainId: "0x534e5f4d41494e" },
+    });
   });
 
   test("rejects messages without the content target", () => {
@@ -131,6 +189,54 @@ describe("provider bridge", () => {
       origin: "https://a.test",
       type: "wallet.requestAccounts",
     });
+    expect(
+      toRuntimeMessage({ id: "6", method: "wallet_requestAccounts" }, "https://a.test"),
+    ).toEqual({
+      origin: "https://a.test",
+      type: "wallet.requestAccounts",
+    });
+    expect(
+      toRuntimeMessage({ id: "7", method: "wallet_requestChainId" }, "https://a.test"),
+    ).toEqual({
+      origin: "https://a.test",
+      type: "wallet.getChainId",
+    });
+    expect(
+      toRuntimeMessage(
+        {
+          id: "7",
+          method: "wallet_switchStarknetChain",
+          params: { chainId: "0x534e5f4d41494e" },
+        },
+        "https://a.test",
+      ),
+    ).toEqual({
+      chainId: "0x534e5f4d41494e",
+      origin: "https://a.test",
+      type: "wallet.switchChain",
+    });
+    expect(
+      toRuntimeMessage(
+        { id: "7", method: "wallet_switchStarknetChain", params: { chainId: "SN_MAIN" } },
+        "https://a.test",
+      ),
+    ).toBeNull();
+    expect(
+      toRuntimeMessage(
+        { id: "8", method: "wallet_addInvokeTransaction", params: invokeParams },
+        "https://a.test",
+      ),
+    ).toEqual({
+      calls: invokeParams.calls,
+      origin: "https://a.test",
+      type: "wallet.addInvokeTransaction",
+    });
+    expect(
+      toRuntimeMessage(
+        { id: "9", method: "wallet_addInvokeTransaction", params: { calls: [] } },
+        "https://a.test",
+      ),
+    ).toBeNull();
   });
 
   test("creates page-targeted responses", () => {
@@ -156,6 +262,46 @@ describe("provider bridge", () => {
     ).toEqual({
       error: "invalid provider response",
       id: requestId,
+      target: PAGE_TARGET,
+    });
+    expect(
+      providerResponse(
+        { id: requestId, method: "wallet_requestAccounts" },
+        { result: [account.address] },
+      ),
+    ).toEqual({
+      id: requestId,
+      result: [account.address],
+      target: PAGE_TARGET,
+    });
+    expect(
+      providerResponse(
+        { id: requestId, method: "wallet_requestChainId" },
+        { result: "0x534e5f5345504f4c4941" },
+      ),
+    ).toEqual({
+      id: requestId,
+      result: "0x534e5f5345504f4c4941",
+      target: PAGE_TARGET,
+    });
+    expect(
+      providerResponse(
+        { id: requestId, method: "wallet_switchStarknetChain" },
+        { result: "0x534e5f4d41494e" },
+      ),
+    ).toEqual({
+      id: requestId,
+      result: "0x534e5f4d41494e",
+      target: PAGE_TARGET,
+    });
+    expect(
+      providerResponse(
+        { id: requestId, method: "wallet_addInvokeTransaction" },
+        { result: { transaction_hash: "0x123" } },
+      ),
+    ).toEqual({
+      id: requestId,
+      result: { transaction_hash: "0x123" },
       target: PAGE_TARGET,
     });
     expect(providerResponse({ id: requestId, method: "mc_accounts" }, {})).toEqual({
@@ -219,6 +365,17 @@ describe("provider bridge", () => {
     expect(toProviderPayload({ error: "wallet locked" })).toEqual({ error: "wallet locked" });
     expect(toProviderPayload({ accounts: [], ok: true })).toEqual({
       result: { accounts: [], ok: true },
+    });
+    expect(toProviderPayload({ accounts: [account], ok: true }, "wallet_requestAccounts")).toEqual({
+      result: [account.address],
+    });
+    expect(toProviderPayload({ chainId: "0x534e5f5345504f4c4941", ok: true })).toEqual({
+      result: "0x534e5f5345504f4c4941",
+    });
+    expect(
+      toProviderPayload({ ok: true, transactionHash: "0x123" }, "wallet_addInvokeTransaction"),
+    ).toEqual({
+      result: { transaction_hash: "0x123" },
     });
     expect(toProviderPayload({ ok: true, signature: { r: "0x1", s: "0x2" } })).toEqual({
       error: "invalid provider response",

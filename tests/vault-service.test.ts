@@ -21,7 +21,7 @@ describe("createWalletVaultService", () => {
     const raw = JSON.stringify(await store.get(vaultKey));
     const vault = await service.readVault(vaultPassphrase);
 
-    expect(account.id).toBe("SN_SEPOLIA:0xabcabcdef");
+    expect(account.id).toBe("SN_MAIN:0xabc111111");
     expect(raw).not.toContain(mnemonic);
     expect(raw).not.toContain(account.address);
     expect(raw).not.toContain("0x123456");
@@ -122,6 +122,71 @@ describe("createWalletVaultService", () => {
       }),
     ).rejects.toThrow("Passphrase must be at least 12 characters");
     expect(derived).toBe(false);
+  });
+
+  test("generates mnemonics through KMS", async () => {
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: fakeKms(),
+    });
+
+    await expect(service.generateMnemonic()).resolves.toBe(mnemonic);
+  });
+
+  test("sets the active account in the encrypted vault", async () => {
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: fakeKms(),
+    });
+
+    const sepolia = await service.createAccount({
+      mnemonic,
+      networkId: "SN_SEPOLIA",
+      vaultPassphrase,
+    });
+    const mainnet = await service.createAccount({
+      mnemonic,
+      networkId: "SN_MAIN",
+      vaultPassphrase,
+    });
+
+    await expect(
+      service.setActiveAccount({ accountId: mainnet.id, vaultPassphrase }),
+    ).resolves.toEqual(mainnet);
+    await expect(service.readVault(vaultPassphrase)).resolves.toMatchObject({
+      accounts: [sepolia, mainnet],
+      activeAccountId: mainnet.id,
+    });
+  });
+
+  test("derives the selected account onto another network without the mnemonic", async () => {
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: fakeKms(),
+    });
+
+    const mainnet = await service.createAccount({ mnemonic, vaultPassphrase });
+    const sepolia = await service.ensureNetworkAccount({
+      networkId: "SN_SEPOLIA",
+      vaultPassphrase,
+    });
+
+    expect(sepolia).toMatchObject({
+      address: "0xabcabcdef",
+      classHash: "0xabcdef",
+      derivation: mainnet.derivation,
+      networkId: "SN_SEPOLIA",
+      publicKeyX: mainnet.publicKeyX,
+      publicKeyY: mainnet.publicKeyY,
+    });
+    await expect(service.readVault(vaultPassphrase)).resolves.toMatchObject({
+      activeAccountId: sepolia.id,
+      accounts: [mainnet, sepolia],
+      signingKeys: [
+        { accountId: mainnet.id, privateKey: "0x123456" },
+        { accountId: sepolia.id, privateKey: "0x123456" },
+      ],
+    });
   });
 
   test("signs hashes with the encrypted account key", async () => {

@@ -6,6 +6,7 @@ import {
   DEPENDENCY_FIELDS,
   EXPECTED_CONTRIBUTING_RULES,
   EXPECTED_CONTRIBUTING_SECTIONS,
+  EXPECTED_DEPENDENCIES,
   EXPECTED_DEV_DEPENDENCIES,
   EXPECTED_GITIGNORE_ENTRIES,
   EXPECTED_PACKAGE_MANAGER,
@@ -47,6 +48,7 @@ const vendorKrustyScript = await readFile("scripts/vendor-krusty.ts", "utf8");
 
 if (
   !hasOnlyKeys(packageJson, [
+    "dependencies",
     "devDependencies",
     "name",
     "packageManager",
@@ -261,6 +263,20 @@ for (const field of DEPENDENCY_FIELDS) {
 }
 
 const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : null;
+const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : null;
+if (
+  !dependencies ||
+  Reflect.ownKeys(dependencies).length !== Object.keys(EXPECTED_DEPENDENCIES).length
+) {
+  failures.push("package.json dependencies must stay explicit");
+} else {
+  for (const [name, version] of Object.entries(EXPECTED_DEPENDENCIES)) {
+    if (dependencies[name] !== version) {
+      failures.push(`package.json dependency ${name} must stay ${version}`);
+    }
+  }
+}
+
 if (
   !devDependencies ||
   Reflect.ownKeys(devDependencies).length !== Object.keys(EXPECTED_DEV_DEPENDENCIES).length

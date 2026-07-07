@@ -2,26 +2,35 @@
  * Typed extension message handling for the background service worker.
  */
 
-import type { StarkSignature } from "../crypto/krusty";
-import { DEFAULT_NETWORK, STARKNET_NETWORKS } from "../starknet/networks";
-import type { AccountRef, Vault } from "../storage/vault-schema";
-import type {
-  CreateVaultAccountInput,
-  OriginGrantInput,
-  SignHashInput,
-  WalletStatus as VaultStatus,
-} from "../wallet/vault-service";
-import { type ApprovalQueue, createApprovalQueue, type PendingApproval } from "./approvals";
+import { DEFAULT_NETWORK, networkIdForChainId, STARKNET_NETWORKS } from "../starknet/networks";
+import { typedDataHash } from "../starknet/typed-data";
+import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
+import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import {
+  readAddInvokeTransactionInput,
   readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
   readGrantOriginInput,
   readRequestAccountsInput,
+  readSetActiveAccountInput,
+  readSetActiveNetworkInput,
   readSignHashInput,
+  readSignTypedDataInput,
+  readSwitchChainInput,
   readTypeOnlyInput,
   readUnlockInput,
 } from "./message-inputs";
+import { handlePreferenceOps } from "./preference-ops";
+import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
+import {
+  networkRpcUrls,
+  statusResponse,
+  switchActiveNetwork,
+  unavailablePreferencesStore,
+} from "./runtime-state";
+import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import {
   isExtensionPageSender,
   isPrivilegedMessage,
@@ -30,120 +39,15 @@ import {
   type RuntimeSender,
 } from "./senders";
 import { createUnlockSession, type UnlockSession } from "./session";
+import { handleWalletOps } from "./wallet-ops";
 
-/**
- * Public status returned to popup and provider callers.
- */
-export type WalletStatus = VaultStatus & {
-  readonly network: string;
-};
-
-/**
- * Successful account-import response.
- */
-export type CreateAccountResponse = {
-  readonly account: AccountRef;
-  readonly ok: true;
-};
-
-/**
- * Account list response scoped by origin grants.
- */
-export type AccountsResponse = {
-  readonly accounts: readonly AccountRef[];
-  readonly ok: true;
-};
-
-/**
- * Successful signing response from the wallet service.
- */
-export type SignHashResponse = {
-  readonly ok: true;
-  readonly signature: StarkSignature;
-};
-
-/**
- * Popup response containing dapp connection approvals.
- */
-export type PendingApprovalResponse = {
-  readonly ok: true;
-  readonly pending: readonly PendingApproval[];
-};
-
-/**
- * Dapp account-request response, either granted or queued for approval.
- */
-export type RequestAccountsResponse =
-  | AccountsResponse
-  | {
-      readonly ok: false;
-      readonly pending: PendingApproval;
-    };
-
-/**
- * Union of supported background message responses.
- */
-export type RuntimeResponse =
-  | AccountsResponse
-  | CreateAccountResponse
-  | PendingApprovalResponse
-  | RequestAccountsResponse
-  | SignHashResponse
-  | WalletStatus
-  | { readonly error: string };
-
-/**
- * Narrow wallet service surface consumed by background message dispatch.
- */
-export type WalletStatusReader = {
-  readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
-  readonly getGrantedAccounts: (
-    origin: string,
-    vaultPassphrase: string,
-  ) => Promise<readonly AccountRef[]>;
-  readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
-  readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
-  readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
-  readonly status: () => Promise<VaultStatus>;
-};
-
-const unavailableVaultStatus = (): VaultStatus => ({
+const unavailableVaultStatus = () => ({
   accountCount: 0,
   activeAccountId: null,
   hasVault: false,
   locked: true,
   ready: false,
 });
-
-const activeNetworkName = (vault: Vault): string => {
-  const activeAccount = vault.accounts.find((account) => account.id === vault.activeAccountId);
-  return activeAccount ? STARKNET_NETWORKS[activeAccount.networkId].name : DEFAULT_NETWORK.name;
-};
-
-const statusResponse = async (
-  wallet: WalletStatusReader,
-  session: UnlockSession,
-): Promise<WalletStatus> => {
-  const status = await wallet.status();
-  const passphrase = session.getPassphrase();
-  if (!passphrase) {
-    return { ...status, network: DEFAULT_NETWORK.name };
-  }
-
-  try {
-    const vault = await wallet.readVault(passphrase);
-    return {
-      ...status,
-      accountCount: vault.accounts.length,
-      activeAccountId: vault.activeAccountId,
-      locked: false,
-      network: activeNetworkName(vault),
-    };
-  } catch {
-    session.lock();
-    return { ...status, network: DEFAULT_NETWORK.name };
-  }
-};
 
 const isClaimedSenderOrigin = (
   sender: RuntimeSender | undefined,
@@ -169,6 +73,9 @@ const handleRuntimeMessage = async (
   extensionId: string,
   session: UnlockSession,
   approvals: ApprovalQueue,
+  preferencesStore: WalletPreferencesStore,
+  runtimeRpc: RuntimeRpc,
+  activity: ActivityLog,
   message: unknown,
   sender?: RuntimeSender,
 ): Promise<RuntimeResponse> => {
@@ -185,12 +92,27 @@ const handleRuntimeMessage = async (
     return { error: "privileged sender required" };
   }
 
+  const opsResponse = await handleWalletOps(
+    { activity, preferencesStore, runtimeRpc, session, wallet },
+    messageType,
+    message,
+  );
+  if (opsResponse) {
+    return opsResponse;
+  }
+
+  const preferenceResponse = await handlePreferenceOps(preferencesStore, messageType, message);
+  if (preferenceResponse) {
+    return preferenceResponse;
+  }
+
   if (messageType === "wallet.createAccount") {
     const input = readCreateAccountInput(message);
     if (!input) {
       return { error: "invalid create account request" };
     }
     const account = await wallet.createAccount(input);
+    await preferencesStore.setActiveNetwork(input.networkId ?? DEFAULT_NETWORK.id);
     session.unlock(input.vaultPassphrase);
     return { account, ok: true };
   }
@@ -226,6 +148,118 @@ const handleRuntimeMessage = async (
     }
     approvals.deny(input.id);
     return { ok: true, pending: approvals.list() };
+  }
+
+  if (messageType === "wallet.generateMnemonic") {
+    if (!readTypeOnlyInput(message, "wallet.generateMnemonic")) {
+      return { error: "invalid generate mnemonic request" };
+    }
+    return { mnemonic: await wallet.generateMnemonic(), ok: true };
+  }
+
+  if (messageType === "wallet.addInvokeTransaction") {
+    const input = readAddInvokeTransactionInput(message);
+    const passphrase = session.getPassphrase();
+    if (!input) {
+      return { error: "invalid invoke request" };
+    }
+    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+      return { error: "sender origin mismatch" };
+    }
+    if (!passphrase) {
+      return { error: "wallet locked" };
+    }
+    const preferences = await preferencesStore.read();
+    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+    const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+    if (!account) {
+      return { error: "origin not connected" };
+    }
+    const result = await runtimeRpc.submitInvokeTransaction({
+      account,
+      calls: input.calls,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+      signHash: (messageHash) =>
+        wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase: passphrase }),
+    });
+    await activity.record({
+      accountId: account.id,
+      hash: result.transactionHash,
+      kind: "invoke",
+      networkId: account.networkId,
+      summary: `${input.origin} submitted ${input.calls.length} call${input.calls.length === 1 ? "" : "s"}`,
+    });
+    return { ok: true, transactionHash: result.transactionHash };
+  }
+
+  if (messageType === "wallet.signTypedData") {
+    const input = readSignTypedDataInput(message);
+    const passphrase = session.getPassphrase();
+    if (!input) {
+      return { error: "invalid sign typed data request" };
+    }
+    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+      return { error: "sender origin mismatch" };
+    }
+    if (!passphrase) {
+      return { error: "wallet locked" };
+    }
+    const preferences = await preferencesStore.read();
+    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+    const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+    if (!account) {
+      return { error: "origin not connected" };
+    }
+    let messageHash: string;
+    try {
+      messageHash = typedDataHash(input.typedData, account.address);
+    } catch {
+      return { error: "invalid typed data" };
+    }
+    const signature = await wallet.signHash({
+      accountId: account.id,
+      messageHash,
+      vaultPassphrase: passphrase,
+    });
+    return { ok: true, signature };
+  }
+
+  if (messageType === "wallet.getChainId") {
+    if (!readTypeOnlyInput(message, "wallet.getChainId")) {
+      return { error: "invalid chain id request" };
+    }
+    const preferences = await preferencesStore.read();
+    return { chainId: STARKNET_NETWORKS[preferences.activeNetworkId].chainId, ok: true };
+  }
+
+  if (messageType === "wallet.switchChain") {
+    const input = readSwitchChainInput(message);
+    if (!input) {
+      return { error: "invalid switch chain request" };
+    }
+    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+      return { error: "sender origin mismatch" };
+    }
+    const networkId = networkIdForChainId(input.chainId);
+    if (!networkId) {
+      return { error: "unsupported chain" };
+    }
+    const passphrase = session.getPassphrase();
+    const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
+    const account = await switchActiveNetwork(wallet, session, preferencesStore, networkId);
+    if (
+      passphrase &&
+      account &&
+      granted.length > 0 &&
+      !granted.some((item) => item.id === account.id)
+    ) {
+      await wallet.grantOrigin({
+        accountId: account.id,
+        origin: input.origin,
+        vaultPassphrase: passphrase,
+      });
+    }
+    return { chainId: STARKNET_NETWORKS[networkId].chainId, ok: true };
   }
 
   if (messageType === "wallet.grantOrigin") {
@@ -282,6 +316,30 @@ const handleRuntimeMessage = async (
     return { ok: false, pending: approvals.request(input.origin) };
   }
 
+  if (messageType === "wallet.setActiveAccount") {
+    const input = readSetActiveAccountInput(message);
+    const passphrase = session.getPassphrase();
+    if (!input) {
+      return { error: "invalid active account request" };
+    }
+    if (!passphrase) {
+      return { error: "wallet locked" };
+    }
+    return {
+      account: await wallet.setActiveAccount({ ...input, vaultPassphrase: passphrase }),
+      ok: true,
+    };
+  }
+
+  if (messageType === "wallet.setActiveNetwork") {
+    const input = readSetActiveNetworkInput(message);
+    if (!input) {
+      return { error: "invalid network request" };
+    }
+    await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
+    return statusResponse(wallet, session, preferencesStore);
+  }
+
   if (messageType === "wallet.signHash") {
     const input = readSignHashInput(message);
     if (!input) {
@@ -295,14 +353,14 @@ const handleRuntimeMessage = async (
       return { error: "invalid lock request" };
     }
     session.lock();
-    return statusResponse(wallet, session);
+    return statusResponse(wallet, session, preferencesStore);
   }
 
   if (messageType === "wallet.status") {
     if (!readTypeOnlyInput(message, "wallet.status")) {
       return { error: "invalid status request" };
     }
-    return statusResponse(wallet, session);
+    return statusResponse(wallet, session, preferencesStore);
   }
 
   if (messageType === "wallet.unlock") {
@@ -312,7 +370,7 @@ const handleRuntimeMessage = async (
     }
     await wallet.readVault(input.vaultPassphrase);
     session.unlock(input.vaultPassphrase);
-    return statusResponse(wallet, session);
+    return statusResponse(wallet, session, preferencesStore);
   }
 
   return { error: "unsupported message" };
@@ -334,10 +392,23 @@ export const createMessageHandler =
     extensionId: string,
     session: UnlockSession = createUnlockSession(),
     approvals: ApprovalQueue = createApprovalQueue(),
+    preferencesStore: WalletPreferencesStore = unavailablePreferencesStore,
+    runtimeRpc: RuntimeRpc = defaultRuntimeRpc,
+    activity: ActivityLog = memoryActivityLog(),
   ) =>
   async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
-      return await handleRuntimeMessage(wallet, extensionId, session, approvals, message, sender);
+      return await handleRuntimeMessage(
+        wallet,
+        extensionId,
+        session,
+        approvals,
+        preferencesStore,
+        runtimeRpc,
+        activity,
+        message,
+        sender,
+      );
     } catch (error) {
       return runtimeErrorResponse(error, isExtensionPageSender(sender, extensionId));
     }
@@ -351,13 +422,22 @@ export const handleMessage = createMessageHandler(
     async createAccount() {
       throw new Error("wallet unavailable");
     },
+    async ensureNetworkAccount() {
+      throw new Error("wallet unavailable");
+    },
     async getGrantedAccounts() {
+      throw new Error("wallet unavailable");
+    },
+    async generateMnemonic() {
       throw new Error("wallet unavailable");
     },
     async grantOrigin() {
       throw new Error("wallet unavailable");
     },
     async readVault() {
+      throw new Error("wallet unavailable");
+    },
+    async setActiveAccount() {
       throw new Error("wallet unavailable");
     },
     async signHash() {

@@ -3,8 +3,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../src/background/messages";
+import { unavailablePreferencesStore } from "../src/background/runtime-state";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
+import { defaultWalletPreferences } from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
 import type { WalletStatus } from "../src/wallet/vault-service";
 
@@ -38,8 +40,14 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
   async createAccount() {
     return statusAccount;
   },
+  async ensureNetworkAccount() {
+    return statusAccount;
+  },
   async getGrantedAccounts() {
     return [];
+  },
+  async generateMnemonic() {
+    return "habit hope tip crystal because grunt nation idea electric witness alert like";
   },
   async grantOrigin() {
     return [statusAccount];
@@ -55,6 +63,9 @@ const createStatusWallet = (statusAccount: AccountRef = account) => ({
       schemaVersion: 1 as const,
       signingKeys: [{ accountId: statusAccount.id, privateKey: "0x123456" }],
     };
+  },
+  async setActiveAccount() {
+    return statusAccount;
   },
   async signHash() {
     return {
@@ -74,12 +85,12 @@ describe("background status messages", () => {
 
     await expect(handler({ type: "wallet.status" }, sender)).resolves.toMatchObject({
       accountCount: 1,
-      network: "Starknet Sepolia",
+      network: "Starknet Mainnet",
       ready: true,
     });
   });
 
-  test("returns the active account network after unlock", async () => {
+  test("returns the selected network after unlock", async () => {
     const mainnetAccount: AccountRef = {
       ...account,
       id: `SN_MAIN:${account.address}`,
@@ -91,12 +102,32 @@ describe("background status messages", () => {
       createStatusWallet(mainnetAccount),
       "extension-id",
       session,
+      undefined,
+      {
+        ...unavailablePreferencesStore,
+        async read() {
+          return { ...defaultWalletPreferences(), activeNetworkId: "SN_MAIN" };
+        },
+        async saveAddress() {
+          throw new Error("unused");
+        },
+        async setActiveNetwork() {
+          throw new Error("unused");
+        },
+        async setRpcOverride() {
+          throw new Error("unused");
+        },
+        async upsertToken() {
+          throw new Error("unused");
+        },
+      },
     );
 
     await expect(handler({ type: "wallet.status" }, sender)).resolves.toMatchObject({
       activeAccountId: mainnetAccount.id,
       locked: false,
       network: "Starknet Mainnet",
+      networkId: "SN_MAIN",
     });
   });
 });

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Starknet browser extension wallet shell.",
   "action": {
-    "default_popup": "popup.html"
+    "default_title": "Open MC Wallet"
   },
   "background": {
     "service_worker": "background/index.js",
@@ -20,8 +20,15 @@
       "run_at": "document_start"
     }
   ],
-  "permissions": ["storage"],
-  "host_permissions": [],
+  "permissions": ["sidePanel", "storage"],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "host_permissions": [
+    "https://api.cartridge.gg/*",
+    "http://127.0.0.1:5050/*",
+    "http://localhost:5050/*"
+  ],
   "web_accessible_resources": [
     {
       "resources": ["provider/inpage.js"],

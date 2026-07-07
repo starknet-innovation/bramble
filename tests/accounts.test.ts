@@ -12,15 +12,15 @@ describe("deriveAccountRef", () => {
     const account = await deriveAccountRef(fakeKms(), { mnemonic });
 
     expect(account).toEqual({
-      address: "0xabcabcdef",
-      classHash: "0xabcdef",
+      address: "0xabc111111",
+      classHash: "0x111111",
       derivation: {
         accountIndex: 0,
         addressIndex: 0,
         kind: "starknet-bip44",
       },
-      id: "SN_SEPOLIA:0xabcabcdef",
-      networkId: "SN_SEPOLIA",
+      id: "SN_MAIN:0xabc111111",
+      networkId: "SN_MAIN",
       publicKeyX: "0xabc",
       publicKeyY: "0xdef",
     });
@@ -83,7 +83,7 @@ describe("deriveAccountRef", () => {
         {
           ...fakeKms(),
           async getAccountClassHashes() {
-            return JSON.stringify({ oz: { "3.0.0": { SN_SEPOLIA: "not-hex" } } });
+            return JSON.stringify({ oz: { "3.0.0": { SN_MAIN: "not-hex" } } });
           },
         },
         { mnemonic },
@@ -94,7 +94,7 @@ describe("deriveAccountRef", () => {
         {
           ...fakeKms(),
           async getAccountClassHashes() {
-            return JSON.stringify({ oz: { "3.0.0": { SN_SEPOLIA: "0x0" } } });
+            return JSON.stringify({ oz: { "3.0.0": { SN_MAIN: "0x0" } } });
           },
         },
         { mnemonic },
@@ -103,8 +103,8 @@ describe("deriveAccountRef", () => {
   });
 
   test("rejects inherited Krusty class hash fields", async () => {
-    const previousDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, "SN_SEPOLIA");
-    Object.defineProperty(Object.prototype, "SN_SEPOLIA", {
+    const previousDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, "SN_MAIN");
+    Object.defineProperty(Object.prototype, "SN_MAIN", {
       configurable: true,
       enumerable: true,
       value: "0xabcdef",
@@ -121,12 +121,12 @@ describe("deriveAccountRef", () => {
           },
           { mnemonic },
         ),
-      ).rejects.toThrow("Krusty KMS class hashes are missing SN_SEPOLIA");
+      ).rejects.toThrow("Krusty KMS class hashes are missing SN_MAIN");
     } finally {
       if (previousDescriptor) {
-        Object.defineProperty(Object.prototype, "SN_SEPOLIA", previousDescriptor);
+        Object.defineProperty(Object.prototype, "SN_MAIN", previousDescriptor);
       } else {
-        Reflect.deleteProperty(Object.prototype, "SN_SEPOLIA");
+        Reflect.deleteProperty(Object.prototype, "SN_MAIN");
       }
     }
   });
