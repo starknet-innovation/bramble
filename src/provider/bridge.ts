@@ -4,24 +4,25 @@
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
-import { type AccountRef, isAccountRef } from "../storage/vault-schema";
+import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
+import { isAccountRef } from "../storage/vault-schema";
 import { type ProviderWatchAsset, readProviderWatchAsset } from "./watch-asset-params";
 
-/**
- * Marker for page-to-content wallet provider requests.
+// Page-facing account view: only the (already public) address and network id;
+// BIP-44 derivation indices, class hash, and public keys are withheld.
+type PublicAccount = { readonly address: string; readonly networkId: StarknetNetworkId };
+
+/** Marker for page-to-content wallet provider requests.
  */
 export const CONTENT_TARGET = "mc-wallet:content";
-/**
- * Marker for content-to-page wallet provider responses.
+/** Marker for content-to-page wallet provider responses.
  */
 export const PAGE_TARGET = "mc-wallet:page";
-/**
- * Maximum unresolved in-page provider requests kept in memory.
+/** Maximum unresolved in-page provider requests kept in memory.
  */
 export const MAX_PENDING_PROVIDER_REQUESTS = 100;
 
-/**
- * Provider methods exposed to dapp pages.
+/** Provider methods exposed to dapp pages.
  */
 export type ProviderMethod =
   | "mc_accounts"
@@ -52,7 +53,7 @@ export type ProviderRequest = {
 };
 
 type ProviderAccountsResult = {
-  readonly accounts: readonly AccountRef[];
+  readonly accounts: readonly PublicAccount[];
   readonly ok: true;
 };
 
@@ -292,37 +293,46 @@ export const readProviderRequest = (value: unknown): ProviderRequest | null => {
   };
 };
 
-const sanitizeAccountRef = (account: AccountRef): AccountRef => ({
+const toPublicAccount = (account: PublicAccount): PublicAccount => ({
   address: account.address,
-  classHash: account.classHash,
-  derivation: {
-    accountIndex: account.derivation.accountIndex,
-    addressIndex: account.derivation.addressIndex,
-    kind: account.derivation.kind,
-  },
-  id: account.id,
   networkId: account.networkId,
-  publicKeyX: account.publicKeyX,
-  publicKeyY: account.publicKeyY,
 });
-
-const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
-
-const providerAccountsResult = (result: unknown): ProviderAccountsResult | null => {
+const isPublicAccount = (value: unknown): value is PublicAccount =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["address", "networkId"]) &&
+  typeof value.address === "string" &&
+  value.address.length > 0 &&
+  isStarknetNetworkId(value.networkId);
+// Validates an `{ accounts, ok: true }` envelope of `isMember` members unique
+// under `keyOf`, returning the narrowed list or null.
+const parseAccountsResult = <T>(
+  result: unknown,
+  isMember: (value: unknown) => value is T,
+  keyOf: (value: T) => string,
+): readonly T[] | null => {
   if (
     !isRecord(result) ||
     !isJson(result) ||
     !hasOnlyKnownKeys(result, ["accounts", "ok"]) ||
     result.ok !== true ||
     !Array.isArray(result.accounts) ||
-    !result.accounts.every(isAccountRef) ||
-    !hasUniqueStrings(result.accounts.map((account) => account.id))
+    !result.accounts.every(isMember)
   ) {
     return null;
   }
+  const accounts = result.accounts;
+  return new Set(accounts.map(keyOf)).size === accounts.length ? accounts : null;
+};
 
-  return { accounts: result.accounts.map(sanitizeAccountRef), ok: true };
+// Page-facing account list carried over the bridge; rejects any record still
+// holding derivation indices or public keys.
+const providerAccountsResult = (result: unknown): ProviderAccountsResult | null => {
+  const accounts = parseAccountsResult(
+    result,
+    isPublicAccount,
+    (account) => `${account.networkId}:${account.address}`,
+  );
+  return accounts ? { accounts: accounts.map(toPublicAccount), ok: true } : null;
 };
 
 const providerStringArrayResult = (result: unknown): readonly string[] | null =>
@@ -452,14 +462,16 @@ export const toProviderPayload = (
   ) {
     return { result: { transaction_hash: result.transactionHash } };
   }
-  const accounts = providerAccountsResult(result);
+  // Validate the full list here (trusted context), then reduce to the page view
+  // so dapps never receive derivation indices, class hashes, or public keys.
+  const accounts = parseAccountsResult(result, isAccountRef, (account) => account.id);
   if (!accounts) {
     return { error: "invalid provider response" };
   }
   if (method === "wallet_requestAccounts") {
-    return { result: accounts.accounts.map((account) => account.address) };
+    return { result: accounts.map((account) => account.address) };
   }
-  return { result: accounts };
+  return { result: { accounts: accounts.map(toPublicAccount), ok: true } };
 };
 
 /**
