@@ -64,6 +64,9 @@ const walletStub = {
     }
     return vault;
   },
+  async revokeOrigin() {
+    return [];
+  },
   async setActiveAccount() {
     return account;
   },
@@ -178,6 +181,81 @@ const MESSAGES: readonly {
     },
     sender: extensionSender,
   },
+  { message: { networkId: "SN_MAIN", type: "wallet.addAccount" }, sender: extensionSender },
+  {
+    message: { accountId: account.id, origin: "https://dapp.example", type: "wallet.grantOrigin" },
+    sender: extensionSender,
+  },
+  {
+    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.approveOrigin" },
+    sender: extensionSender,
+  },
+  {
+    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.denyOrigin" },
+    sender: extensionSender,
+  },
+  {
+    message: { origin: "https://dapp.example", type: "wallet.revokeOrigin" },
+    sender: extensionSender,
+  },
+  { message: { type: "wallet.connectedSites" }, sender: extensionSender },
+  {
+    message: { origin: "https://dapp.example", type: "wallet.getPermissions" },
+    sender: contentSender,
+  },
+  {
+    message: {
+      accountId: account.id,
+      amount: "1.0",
+      recipient: account.address,
+      tokenId: "SN_MAIN:ETH:0x1",
+      type: "wallet.reviewTransfer",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      contractAddress: account.classHash,
+      recipient: account.address,
+      tokenId: "1",
+      type: "wallet.transferNft",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      allowanceId: "SN_MAIN:0x1:0x2",
+      type: "wallet.revokeAllowance",
+    },
+    sender: extensionSender,
+  },
+  { message: { type: "wallet.allowances" }, sender: extensionSender },
+  { message: { type: "wallet.activity" }, sender: extensionSender },
+  {
+    message: {
+      options: { address: account.classHash, decimals: 18, symbol: "TKN" },
+      origin: "https://dapp.example",
+      type: "wallet.watchAsset",
+    },
+    sender: contentSender,
+  },
+  { message: { address: account.classHash, type: "wallet.addToken" }, sender: extensionSender },
+  { message: { type: "wallet.detectTokens" }, sender: extensionSender },
+  { message: { type: "wallet.prices" }, sender: extensionSender },
+  { message: { address: account.classHash, type: "wallet.tokenChart" }, sender: extensionSender },
+  {
+    message: { accountId: account.id, label: "Main", type: "wallet.setAccountLabel" },
+    sender: extensionSender,
+  },
+  { message: { displayCurrency: "usd", type: "wallet.setDisplay" }, sender: extensionSender },
+  {
+    message: {
+      origin: "https://dapp.example",
+      typedData: { domain: {}, message: {}, primaryType: "X", types: {} },
+      type: "wallet.signTypedData",
+    },
+    sender: contentSender,
+  },
   { message: { type: "wallet.lock" }, sender: extensionSender },
   { message: { type: "wallet.status" }, sender: contentSender },
   {
@@ -189,6 +267,7 @@ const MESSAGES: readonly {
 describe("key boundary", () => {
   test("no handled message response ever carries key material", async () => {
     const session = createUnlockSession();
+    session.unlock(SECRET_PASSPHRASE);
     const handler = createMessageHandler(
       walletStub,
       "extension-id",
