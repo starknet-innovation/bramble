@@ -37,7 +37,6 @@ import {
   dockScreen,
   isWalletView,
   networkOptions,
-  networkPill,
   noAccountEmpty,
   WALLET_VIEWS,
   type WalletView,
@@ -57,19 +56,17 @@ const walletHeader = (
   preferences: WalletPreferences | null,
 ): string => {
   const label = account ? preferences?.accountLabels?.[account.id] : undefined;
-  const title = account ? (label ?? accountLabel(account.address)) : "MC Wallet";
+  const name = account ? (label ?? accountLabel(account.address)) : "MC Wallet";
   return `
   <header class="wallet-header">
-    <div class="brand">
-      <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
-      <div class="brand-copy">
-        <h1>${escapeHtml(title)}</h1>
-      </div>
+    <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
+    <div class="account-id">
+      <strong>${escapeHtml(name)}</strong>
+      <span class="account-sep">|</span>
+      <span class="dot"></span>
+      <span class="account-net">${escapeHtml(status.network)}</span>
     </div>
-    <div class="header-actions">
-      ${networkPill(status)}
-      <button id="lock-button" class="icon-button" type="button" aria-label="Lock wallet" title="Lock wallet">${icon("lock")}</button>
-    </div>
+    <button id="lock-button" class="icon-button" type="button" aria-label="Lock wallet" title="Lock wallet">${icon("lock")}</button>
   </header>`;
 };
 
@@ -142,7 +139,7 @@ const balanceRow = (
       <span class="token-mark">${escapeHtml(token.symbol.slice(0, 3))}</span>
       <div class="token-copy">
         <strong>${escapeHtml(token.symbol)}</strong>
-        <p>${escapeHtml(compactAmount(token.formatted))} ${escapeHtml(token.symbol)}</p>
+        <p>${escapeHtml(compactAmount(token.formatted))}</p>
       </div>
       <div class="token-side">
         <span class="token-amount">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>

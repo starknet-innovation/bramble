@@ -54,7 +54,7 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
     color: var(--mc-text);
   }
   button.icon-button {
-    background: var(--mc-elevated);
+    background: transparent;
     color: var(--mc-text);
   }
   button.secondary:not(:disabled):hover, button.icon-button:not(:disabled):hover {
@@ -71,7 +71,7 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
   button.danger { background: var(--mc-elevated); color: var(--mc-danger); }
   button.danger:not(:disabled):hover { background: var(--mc-danger-soft); }
   button.danger:not(:disabled):active { background: var(--mc-danger-soft); }
-  button.icon-button { flex: none; height: ${CONTROL.hit}; padding: 0; width: ${CONTROL.hit}; }
+  button.icon-button { flex: none; height: ${CONTROL.hit}; min-height: 0; padding: 0; width: ${CONTROL.hit}; }
   button.small { font-size: ${TYPE.label.size}; min-height: ${CONTROL.hitSmall}; padding: 0 ${SPACE.md}; }
   button:disabled, input:disabled, select:disabled, textarea:disabled {
     cursor: not-allowed;

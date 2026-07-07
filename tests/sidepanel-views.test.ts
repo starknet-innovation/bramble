@@ -282,7 +282,7 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="refresh-button"');
     expect(html).toContain("ETH");
     // The token amount sits under the symbol; the fiat value fills the right side.
-    expect(html).toContain(">1 ETH</p>");
+    expect(html).toContain(">1</p>");
     expect(html).toContain('class="token-amount"');
   });
 });

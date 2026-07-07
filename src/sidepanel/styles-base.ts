@@ -57,13 +57,13 @@ export const BASE_STYLES = `
   .screen { align-content: start; display: grid; flex: 1; gap: ${SPACE.lg}; }
 
   /* Layout primitives */
-  .row, .wallet-header, .address-line, .context-line, .callout, .token-row {
+  .row, .address-line, .context-line, .callout, .token-row {
     align-items: center;
     display: flex;
     gap: ${SPACE.sm};
     min-width: 0;
   }
-  .row, .wallet-header, .address-line { justify-content: space-between; }
+  .row, .address-line { justify-content: space-between; }
   .stack { display: grid; gap: ${SPACE.sm}; }
   .stack-tight { display: grid; gap: 3px; min-width: 0; }
   .button-row {
@@ -87,9 +87,14 @@ export const BASE_STYLES = `
     text-transform: uppercase;
   }
 
-  /* Header */
-  .wallet-header { padding: 2px 0 ${SPACE.xs}; }
-  .brand { align-items: center; display: flex; gap: 10px; min-width: 0; }
+  /* Header: avatar, centered identity (name | network), lock */
+  .wallet-header {
+    align-items: center;
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: 38px 1fr 40px;
+    padding: 2px 0 ${SPACE.xs};
+  }
   .brand-mark {
     align-items: center;
     background: var(--mc-accent);
@@ -101,11 +106,25 @@ export const BASE_STYLES = `
     justify-content: center;
     width: 38px;
   }
-  .brand-copy { display: grid; gap: 0; min-width: 0; }
-  .brand-copy h1 { font-size: ${TYPE.body.size}; font-weight: 700; letter-spacing: -0.01em; }
-  .brand-context {
+  .account-id {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    min-width: 0;
+  }
+  .account-id strong {
+    color: var(--mc-text);
+    font-size: ${TYPE.body.size};
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  .account-sep { color: var(--mc-muted); flex: none; }
+  .account-net {
     color: var(--mc-muted);
-    font-size: ${TYPE.caption.size};
+    font-size: ${TYPE.body.size};
     overflow: hidden;
     text-overflow: ellipsis;
     text-wrap: nowrap;
@@ -122,6 +141,7 @@ export const BASE_STYLES = `
     text-align: center;
   }
   .hero-total {
+    color: var(--mc-text);
     font-size: ${TYPE.amount.size};
     font-weight: 800;
     letter-spacing: -0.03em;
@@ -236,9 +256,7 @@ export const BASE_STYLES = `
   .flow-title p {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
+    overflow-wrap: anywhere;
   }
 
   /* Flat list rows: one solid fill, no border, separated by space */

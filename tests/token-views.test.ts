@@ -87,7 +87,7 @@ describe("token views", () => {
     const html = dashboard("home", status, [], preferences, { balances }, null, [], [], prices);
 
     expect(html).toContain('class="hero-total">$2,000.00</p>');
-    expect(html).toContain(">1 ETH</p>");
+    expect(html).toContain(">1</p>");
     expect(html).not.toContain("Fake USD");
     expect(html).toContain("1 hidden");
     expect(html).toContain('data-view="tokens"');
