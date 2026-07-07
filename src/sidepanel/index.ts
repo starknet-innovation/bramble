@@ -15,6 +15,7 @@ import { defaultSkin } from "../ui/default-skin";
 import { applySkin } from "../ui/skin";
 import { buttonBusy, errorMessage, focusMemo, restoreFocus, scopedStatus, showToast } from "./dom";
 import { locked, onboarding } from "./gate-views";
+import { bindConnectedSites } from "./origins-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { bindAccountLabel, bindAppearance, bindBackup, bindContacts } from "./settings-ui";
 import { SIDEPANEL_STYLES } from "./styles";
@@ -391,6 +392,10 @@ const render = async (status: WalletStatus): Promise<void> => {
     activeView === "activity" && status.hasVault && !status.locked
       ? await wallet.loadActivity().catch(() => [])
       : [];
+  const connectedSites =
+    activeView === "connected-sites" && status.hasVault && !status.locked
+      ? await wallet.connectedSites().catch(() => [])
+      : [];
   const scene = !status.hasVault
     ? "onboarding"
     : status.locked
@@ -403,7 +408,16 @@ const render = async (status: WalletStatus): Promise<void> => {
       ? onboarding(status)
       : status.locked
         ? locked(status)
-        : dashboard(activeView, status, pending, preferences, balances, deployment, transactions),
+        : dashboard(
+            activeView,
+            status,
+            pending,
+            preferences,
+            balances,
+            deployment,
+            transactions,
+            connectedSites,
+          ),
     animate,
   );
   bindNavigation();
@@ -429,6 +443,7 @@ const render = async (status: WalletStatus): Promise<void> => {
   bindContacts(settingsDeps);
   bindAddressBook();
   bindApprovals();
+  bindConnectedSites({ app, render, wallet });
 };
 
 let refreshQueued = false;

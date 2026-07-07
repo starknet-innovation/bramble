@@ -447,9 +447,9 @@ describe("createMessageHandler", () => {
     await expect(
       failingHandler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
     ).resolves.toEqual({ error: "grant failed" });
-    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toEqual({
+    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toMatchObject({
       ok: true,
-      pending: [pending],
+      pending: [{ id: pending.id, origin: pending.origin }],
     });
     await expect(
       handler({ id: pending.id, type: "wallet.approveOrigin" }, sender),

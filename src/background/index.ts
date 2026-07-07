@@ -3,9 +3,10 @@
  */
 import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 import { createKrustyKms } from "../crypto/krusty";
-import { createActivityLog } from "../storage/activity-store";
+import { createActivityLog, systemClock } from "../storage/activity-store";
 import { createBrowserLocalStore, createBrowserSessionStore } from "../storage/browser-storage";
 import { createEncryptedStore } from "../storage/encrypted-store";
+import { createOriginHistoryStore } from "../storage/origin-history";
 import { createPreferencesStore } from "../storage/preferences-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { createApprovalQueue } from "./approvals";
@@ -95,6 +96,13 @@ const activityLog = (() => {
     return undefined;
   }
 })();
+const originHistory = (() => {
+  try {
+    return createOriginHistoryStore({ now: systemClock, store: createBrowserLocalStore() });
+  } catch {
+    return undefined;
+  }
+})();
 const handleMessage = createMessageHandler(
   {
     async createAccount(input) {
@@ -138,6 +146,13 @@ const handleMessage = createMessageHandler(
         throw new Error("wallet unavailable");
       }
       return service.readVault(vaultPassphrase);
+    },
+    async revokeOrigin(input) {
+      const service = await wallet;
+      if (!service) {
+        throw new Error("wallet unavailable");
+      }
+      return service.revokeOrigin(input);
     },
     async setActiveAccount(input) {
       const service = await wallet;
@@ -237,6 +252,7 @@ const handleMessage = createMessageHandler(
   },
   defaultRuntimeRpc,
   activityLog,
+  originHistory,
 );
 
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {

@@ -60,6 +60,30 @@ scripts forward `accountsChanged`/`networkChanged` to connected pages through th
 provider's `on`/`off` subscription API — after re-querying which addresses each origin may see,
 so events never leak wallet state to unconnected sites.
 
+## Connected Sites & Site Reputation
+
+The wallet tracks which dapp origins hold account grants and surfaces phishing
+and reputation signals before a connection is approved:
+
+- Connected-sites manager: Settings → Connected sites lists every origin with a
+  persisted grant and how many accounts it can see. Revoking an origin removes
+  its grants from the encrypted vault and broadcasts `accountsChanged` so the
+  revoked page immediately sees an empty account list.
+- Phishing blocklist: `src/security/blocklist.ts` vendors a starter blocklist of
+  known-bad domains. `wallet.requestAccounts` from a blocklisted origin is
+  refused with `origin blocked`. This starter list is intentionally small and
+  explicit; replace or extend `BLOCKED_DOMAINS` with a real threat feed for
+  production coverage.
+- Lookalike heuristics: punycode detection plus digit-substitution,
+  hyphen-insertion, edit-distance, and brand-substring checks against a
+  protected list (`starknet.io`, `argent.xyz`, `braavos.app`, `cartridge.gg`,
+  `ethereum.org`) raise warnings without blocking, so real sites are never
+  denied by heuristics alone.
+- Site reputation: the first time an origin requests accounts is persisted in
+  `src/storage/origin-history.ts` (key `mc-wallet:origin-history`) using an
+  injected clock. Approval cards show first-seen, prior-connection, risky-TLD,
+  and lookalike insights prominently before the user grants access.
+
 ## Krusty KMS
 
 Wallet checks and cryptography require vendored WASM from Krusty KMS.

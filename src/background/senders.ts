@@ -67,6 +67,7 @@ export const isTrustedSender = (sender: RuntimeSender | undefined, extensionId: 
 export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.activity" ||
   type === "wallet.approveOrigin" ||
+  type === "wallet.connectedSites" ||
   type === "wallet.createAccount" ||
   type === "wallet.denyOrigin" ||
   type === "wallet.deployAccount" ||
@@ -79,6 +80,7 @@ export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.pendingApprovals" ||
   type === "wallet.preferences" ||
   type === "wallet.removeAddress" ||
+  type === "wallet.revokeOrigin" ||
   type === "wallet.reviewTransfer" ||
   type === "wallet.saveAddress" ||
   type === "wallet.setAccountLabel" ||

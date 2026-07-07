@@ -65,11 +65,31 @@ export type GenerateMnemonicResponse = {
 };
 
 /**
- * Pending dapp approval item shown in the popup.
+ * Pending dapp approval item shown in the popup, carrying optional
+ * phishing / site-reputation insight strings and a hard-block flag.
  */
 export type PendingApproval = {
+  readonly blocked?: boolean;
   readonly id: string;
+  readonly insights?: readonly string[];
   readonly origin: string;
+};
+
+/**
+ * A site with an active connection grant plus the number of accounts it can
+ * see, shown in the connected-sites manager.
+ */
+export type ConnectedSite = {
+  readonly accountCount: number;
+  readonly origin: string;
+};
+
+/**
+ * Connected-sites response accepted from the background boundary.
+ */
+export type ConnectedSitesResponse = {
+  readonly ok: true;
+  readonly sites: readonly ConnectedSite[];
 };
 
 /**
@@ -134,11 +154,26 @@ export type DeploymentStatusResponse = {
  */
 export type ApprovalDecisionResponse = AccountsResponse | PendingApprovalsResponse;
 
+const isInsightText = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= 200;
+
 const isPendingApproval = (value: unknown): value is PendingApproval =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["id", "origin"]) &&
+  hasOnlyKnownKeys(value, ["blocked", "id", "insights", "origin"]) &&
   typeof value.id === "string" &&
   isUuid(value.id) &&
+  typeof value.origin === "string" &&
+  isWalletOrigin(value.origin) &&
+  (value.blocked === undefined || typeof value.blocked === "boolean") &&
+  (value.insights === undefined ||
+    (Array.isArray(value.insights) && value.insights.every(isInsightText)));
+
+const isConnectedSite = (value: unknown): value is ConnectedSite =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountCount", "origin"]) &&
+  typeof value.accountCount === "number" &&
+  Number.isSafeInteger(value.accountCount) &&
+  value.accountCount >= 0 &&
   typeof value.origin === "string" &&
   isWalletOrigin(value.origin);
 
@@ -272,6 +307,18 @@ export const isPendingApprovalsResponse = (value: unknown): value is PendingAppr
   value.pending.every(isPendingApproval) &&
   hasUniqueStrings(value.pending.map((approval) => approval.id)) &&
   hasUniqueStrings(value.pending.map((approval) => approval.origin));
+
+/**
+ * Checks connected-sites responses before rendering the permissions manager.
+ */
+export const isConnectedSitesResponse = (value: unknown): value is ConnectedSitesResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["ok", "sites"]) &&
+  value.ok === true &&
+  Array.isArray(value.sites) &&
+  value.sites.every(isConnectedSite) &&
+  hasUniqueStrings(value.sites.map((site) => site.origin));
 
 /**
  * Checks plain preferences responses before rendering.

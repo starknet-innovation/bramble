@@ -2,10 +2,13 @@
  * Typed extension message handling for the background service worker.
  */
 
+import { isBlockedOrigin } from "../security/blocklist";
 import { DEFAULT_NETWORK, networkIdForChainId, STARKNET_NETWORKS } from "../starknet/networks";
 import { typedDataHash } from "../starknet/typed-data";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
+import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-history";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { enrichApprovals } from "./approval-insights";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import {
   readAddInvokeTransactionInput,
@@ -22,6 +25,7 @@ import {
   readTypeOnlyInput,
   readUnlockInput,
 } from "./message-inputs";
+import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
 import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
 import {
@@ -76,6 +80,7 @@ const handleRuntimeMessage = async (
   preferencesStore: WalletPreferencesStore,
   runtimeRpc: RuntimeRpc,
   activity: ActivityLog,
+  originHistory: OriginHistoryStore,
   message: unknown,
   sender?: RuntimeSender,
 ): Promise<RuntimeResponse> => {
@@ -104,6 +109,11 @@ const handleRuntimeMessage = async (
   const preferenceResponse = await handlePreferenceOps(preferencesStore, messageType, message);
   if (preferenceResponse) {
     return preferenceResponse;
+  }
+
+  const originResponse = await handleOriginOps({ session, wallet }, messageType, message);
+  if (originResponse) {
+    return originResponse;
   }
 
   if (messageType === "wallet.createAccount") {
@@ -295,7 +305,7 @@ const handleRuntimeMessage = async (
     if (!readTypeOnlyInput(message, "wallet.pendingApprovals")) {
       return { error: "invalid pending approvals request" };
     }
-    return { ok: true, pending: approvals.list() };
+    return { ok: true, pending: await enrichApprovals(approvals.list(), originHistory) };
   }
 
   if (messageType === "wallet.requestAccounts") {
@@ -306,6 +316,10 @@ const handleRuntimeMessage = async (
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
     }
+    if (isBlockedOrigin(input.origin)) {
+      return { error: "origin blocked" };
+    }
+    await originHistory.record(input.origin);
     const passphrase = session.getPassphrase();
     if (passphrase) {
       const accounts = await wallet.getGrantedAccounts(input.origin, passphrase);
@@ -395,6 +409,7 @@ export const createMessageHandler =
     preferencesStore: WalletPreferencesStore = unavailablePreferencesStore,
     runtimeRpc: RuntimeRpc = defaultRuntimeRpc,
     activity: ActivityLog = memoryActivityLog(),
+    originHistory: OriginHistoryStore = memoryOriginHistory(),
   ) =>
   async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
@@ -406,6 +421,7 @@ export const createMessageHandler =
         preferencesStore,
         runtimeRpc,
         activity,
+        originHistory,
         message,
         sender,
       );

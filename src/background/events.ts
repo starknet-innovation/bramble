@@ -47,6 +47,9 @@ export const walletEventBroadcasts = (
   if (message.type === "wallet.denyOrigin") {
     return [approvalsChanged];
   }
+  if (message.type === "wallet.revokeOrigin") {
+    return [accountsChanged];
+  }
   if (message.type === "wallet.requestAccounts") {
     return response.ok === false && isRecord(response.pending) ? [approvalsChanged] : [];
   }

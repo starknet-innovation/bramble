@@ -9,9 +9,11 @@ import type { ActivityEntry } from "../storage/activity-store";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef, Vault } from "../storage/vault-schema";
 import type {
+  ConnectedSite,
   CreateVaultAccountInput,
   EnsureNetworkAccountInput,
   OriginGrantInput,
+  RevokeOriginInput,
   SetActiveAccountInput,
   SignHashInput,
   WalletStatus as VaultStatus,
@@ -74,6 +76,14 @@ export type SignHashResponse = {
 export type PendingApprovalResponse = {
   readonly ok: true;
   readonly pending: readonly PendingApproval[];
+};
+
+/**
+ * Connected-sites response listing origin grants and their account counts.
+ */
+export type ConnectedSitesResponse = {
+  readonly ok: true;
+  readonly sites: readonly ConnectedSite[];
 };
 
 /**
@@ -158,6 +168,7 @@ export type RuntimeResponse =
   | ActivityResponse
   | BalancesResponse
   | ChainIdResponse
+  | ConnectedSitesResponse
   | CreateAccountResponse
   | DeploymentStatusResponse
   | TransferReviewResponse
@@ -183,6 +194,11 @@ export type WalletStatusReader = {
   ) => Promise<readonly AccountRef[]>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /**
+   * Removes an origin's grants. Optional on this narrow dispatch type so
+   * partial test stubs stay valid; the wired vault service always provides it.
+   */
+  readonly revokeOrigin?: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
   readonly status: () => Promise<VaultStatus>;

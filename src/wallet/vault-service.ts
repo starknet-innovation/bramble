@@ -62,6 +62,32 @@ export type OriginGrantInput = {
 };
 
 /**
+ * Origin revocation input for the connected-sites permissions manager.
+ */
+export type RevokeOriginInput = {
+  readonly origin: string;
+  readonly vaultPassphrase: string;
+};
+
+/**
+ * A site with a persisted origin grant plus how many accounts it can see.
+ */
+export type ConnectedSite = {
+  readonly accountCount: number;
+  readonly origin: string;
+};
+
+/**
+ * Derives the connected-sites list (origin plus granted account count) from a
+ * decrypted vault, ordered by origin for stable rendering. Pure helper reused
+ * by the connected-sites reader and by revocation responses.
+ */
+export const connectedSitesFromVault = (vault: Vault): readonly ConnectedSite[] =>
+  vault.originGrants
+    .map((grant) => ({ accountCount: grant.accountIds.length, origin: grant.origin }))
+    .sort((left, right) => left.origin.localeCompare(right.origin));
+
+/**
  * Active account selection input.
  */
 export type SetActiveAccountInput = {
@@ -90,6 +116,7 @@ export type WalletVaultService = {
     vaultPassphrase: string,
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
   readonly status: () => Promise<WalletStatus>;
@@ -270,6 +297,18 @@ export const createWalletVaultService = ({
       return grant.accountIds.map((accountId) => findAccount(vault, accountId));
     },
     readVault,
+    async revokeOrigin(input) {
+      if (!isWalletOrigin(input.origin)) {
+        throw new WalletError("Invalid origin");
+      }
+
+      const vault = await readVault(input.vaultPassphrase);
+      const originGrants = vault.originGrants.filter((grant) => grant.origin !== input.origin);
+      if (originGrants.length !== vault.originGrants.length) {
+        await writeVault(encryptedStore, { ...vault, originGrants }, input.vaultPassphrase);
+      }
+      return connectedSitesFromVault({ ...vault, originGrants });
+    },
     async setActiveAccount(input) {
       const vault = await readVault(input.vaultPassphrase);
       const account = findAccount(vault, input.accountId);

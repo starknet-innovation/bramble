@@ -21,6 +21,7 @@ export const WALLET_VIEWS = [
   "account",
   "address-book",
   "backup",
+  "connected-sites",
 ] as const;
 
 /**

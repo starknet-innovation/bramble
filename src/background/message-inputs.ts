@@ -142,6 +142,22 @@ export const readGrantOriginInput = (message: unknown): OriginGrantInput | null 
 };
 
 /**
+ * Parses connected-site revocation messages and normalizes the origin.
+ */
+export const readRevokeOriginInput = (message: unknown): { readonly origin: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["origin", "type"]) ||
+    message.type !== "wallet.revokeOrigin"
+  ) {
+    return null;
+  }
+
+  const origin = normalizeWalletOrigin(message.origin);
+  return origin ? { origin } : null;
+};
+
+/**
  * Parses account-read messages and optional extension-page passphrases.
  */
 export const readGetGrantedAccountsInput = (

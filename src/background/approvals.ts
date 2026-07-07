@@ -11,10 +11,14 @@ import { isWalletOrigin } from "../shared/origin";
 export const MAX_PENDING_APPROVALS = 50;
 
 /**
- * Pending dapp connection approval.
+ * Pending dapp connection approval. `blocked` and `insights` are attached by
+ * the reputation layer when the queue is listed to the UI; the queue itself
+ * only ever sets `id` and `origin`.
  */
 export type PendingApproval = {
+  readonly blocked?: boolean;
   readonly id: string;
+  readonly insights?: readonly string[];
   readonly origin: string;
 };
 
