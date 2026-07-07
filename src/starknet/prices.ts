@@ -250,17 +250,35 @@ export const createPriceService = ({
       if (!platform || wanted.length === 0 || (fresh && covered)) {
         return { currency, prices: sliceCurrency(cache.prices, addresses, currency) };
       }
-      try {
-        const url = `${COINGECKO_BASE}/simple/token_price/${platform}?contract_addresses=${encodeURIComponent(wanted.join(","))}&vs_currencies=usd,eur,gbp`;
-        const fetched = parsePriceBody(await readJsonRecord(http, url));
-        const merged = { ...cache.prices, ...fetched };
-        await store
-          .set(PRICES_STORE_KEY, { checked: wanted, fetchedAt: now(), prices: merged })
-          .catch(() => undefined);
-        return { currency, prices: sliceCurrency(merged, addresses, currency) };
-      } catch {
+      // CoinGecko's free simple/token_price endpoint now accepts only one
+      // contract address per request, so query each address on its own request
+      // in parallel. An address is only marked "covered" when its request
+      // actually responded (HTTP ok) — a network failure stays uncovered so it
+      // retries rather than caching a false miss.
+      const outcomes = await Promise.all(
+        wanted.map((address) =>
+          readJsonRecord(
+            http,
+            `${COINGECKO_BASE}/simple/token_price/${platform}?contract_addresses=${encodeURIComponent(address)}&vs_currencies=usd,eur,gbp`,
+          )
+            .then((body) => ({ address, ok: true, prices: parsePriceBody(body) }) as const)
+            .catch(() => ({ address, ok: false }) as const),
+        ),
+      );
+      const answered = outcomes.filter((outcome) => outcome.ok);
+      if (answered.length === 0) {
         return { currency, prices: sliceCurrency(cache.prices, addresses, currency) };
       }
+      const fetched = Object.assign(
+        {},
+        ...answered.map((outcome) => (outcome.ok ? outcome.prices : {})),
+      ) as Record<string, PriceEntry>;
+      const merged = { ...cache.prices, ...fetched };
+      const checked = [...new Set([...(cache.checked ?? []), ...answered.map((o) => o.address)])];
+      await store
+        .set(PRICES_STORE_KEY, { checked, fetchedAt: now(), prices: merged })
+        .catch(() => undefined);
+      return { currency, prices: sliceCurrency(merged, addresses, currency) };
     },
     async getTokenChart({ address, currency, networkId }) {
       const platform = PLATFORM_FOR_NETWORK[networkId];

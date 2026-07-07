@@ -55,8 +55,9 @@ describe("createPriceService.getPrices unpriced coverage", () => {
       currency: "usd",
       networkId: "SN_MAIN",
     });
-    // The absent price for UNPRICED must count as covered until the TTL lapses.
-    expect(calls).toHaveLength(1);
+    // Two per-address requests on the first fetch; the absent price for
+    // UNPRICED counts as covered so the second call refetches nothing.
+    expect(calls).toHaveLength(2);
   });
 
   test("refetches once the TTL lapses even for an unpriced token", async () => {
