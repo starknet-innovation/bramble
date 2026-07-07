@@ -88,6 +88,12 @@ export const handleChainOps = async (
     }
     const passphrase = session.getPassphrase();
     const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
+    // Only an origin that already holds a connection grant may steer the
+    // wallet's active network. A locked wallet or an unconnected (or blocked)
+    // site must not silently switch the chain for every other dapp.
+    if (granted.length === 0) {
+      return { error: "origin not connected" };
+    }
     const account = await switchActiveNetwork(wallet, session, preferencesStore, networkId);
     if (
       passphrase &&

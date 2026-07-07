@@ -23,16 +23,27 @@ export type WatchAssetToken = {
 };
 
 /**
+ * One decoded risk flag surfaced on an invoke approval card.
+ */
+export type ApprovalRiskFlag = {
+  readonly code: string;
+  readonly message: string;
+};
+
+/**
  * Pending dapp approval item shown in the popup. `kind` defaults to a
- * connection prompt when absent; watch-asset prompts also carry `token`;
- * `blocked`/`insights` carry phishing and site-reputation signals.
+ * connection prompt when absent; watch-asset prompts also carry `token`; invoke
+ * prompts carry decoded call `summaries` and risk `flags`; `blocked`/`insights`
+ * carry phishing and site-reputation signals.
  */
 export type PendingApproval = {
   readonly blocked?: boolean;
+  readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
-  readonly kind?: "connect" | "watch-asset";
+  readonly kind?: "connect" | "invoke" | "watch-asset";
   readonly origin: string;
+  readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
 };
 
@@ -80,18 +91,46 @@ const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
 const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
 
+const isSummaryText = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= 300;
+
+const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["code", "message"]) &&
+  typeof value.code === "string" &&
+  /^[a-z][a-z-]{1,40}$/.test(value.code) &&
+  typeof value.message === "string" &&
+  value.message.length > 0 &&
+  value.message.length <= 300;
+
 const isPendingApproval = (value: unknown): value is PendingApproval => {
   if (
     !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["blocked", "id", "insights", "kind", "origin", "token"]) ||
+    !hasOnlyKnownKeys(value, [
+      "blocked",
+      "flags",
+      "id",
+      "insights",
+      "kind",
+      "origin",
+      "summaries",
+      "token",
+    ]) ||
     typeof value.id !== "string" ||
     !isUuid(value.id) ||
     typeof value.origin !== "string" ||
     !isWalletOrigin(value.origin) ||
-    (value.kind !== undefined && value.kind !== "connect" && value.kind !== "watch-asset") ||
+    (value.kind !== undefined &&
+      value.kind !== "connect" &&
+      value.kind !== "invoke" &&
+      value.kind !== "watch-asset") ||
     (value.blocked !== undefined && typeof value.blocked !== "boolean") ||
     (value.insights !== undefined &&
-      !(Array.isArray(value.insights) && value.insights.every(isInsightText)))
+      !(Array.isArray(value.insights) && value.insights.every(isInsightText))) ||
+    (value.summaries !== undefined &&
+      !(Array.isArray(value.summaries) && value.summaries.every(isSummaryText))) ||
+    (value.flags !== undefined &&
+      !(Array.isArray(value.flags) && value.flags.every(isApprovalRiskFlag)))
   ) {
     return false;
   }
@@ -120,7 +159,9 @@ export const isPendingApprovalsResponse = (value: unknown): value is PendingAppr
   hasUniqueStrings(value.pending.map((approval) => approval.id)) &&
   hasUniqueStrings(
     value.pending
-      .filter((approval) => approval.kind !== "watch-asset")
+      // Only connection prompts dedupe per origin; watch-asset and invoke
+      // prompts legitimately queue multiple entries for the same site.
+      .filter((approval) => approval.kind === undefined || approval.kind === "connect")
       .map((approval) => approval.origin),
   );
 

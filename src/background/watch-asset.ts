@@ -27,10 +27,29 @@ export type WatchAssetMetadata = {
 
 const isTokenSymbol = (value: string): boolean => /^[A-Z0-9]{2,12}$/.test(value);
 
-const isTokenName = (value: string): boolean => value.length > 0 && value.length <= 64;
+// Restrict token names to printable ASCII (excluding angle-bracket markup) so a
+// dapp cannot smuggle control characters, RTL overrides, or non-ASCII homoglyphs
+// into a name the wallet later renders next to a balance. Note: the preferences
+// token store (src/storage/preferences-store.ts, not owned here) keeps a looser
+// length-only check; this boundary rejects hostile names before they reach it.
+const isTokenName = (value: string): boolean =>
+  value.length > 0 && value.length <= 64 && /^[\x20-\x7E]+$/.test(value) && !/[<>]/.test(value);
 
 const isTokenDecimals = (value: number): boolean =>
   Number.isSafeInteger(value) && value >= 0 && value <= 36;
+
+/**
+ * Canonicalizes a token contract address to lowercase, zero-padded 0x hex so
+ * case- and padding-variant spellings of the same address compare equal for
+ * validation and dedup. Returns null when the address is not a field element.
+ */
+export const canonicalTokenAddress = (address: string): string | null => {
+  const lower = address.trim().toLowerCase();
+  if (!isNonZeroStarkFieldElement(lower)) {
+    return null;
+  }
+  return `0x${BigInt(lower).toString(16).padStart(64, "0")}`;
+};
 
 /**
  * Builds a validated watch-asset token from on-chain metadata and dapp options,
@@ -41,7 +60,8 @@ export const watchAssetToken = (
   metadata: WatchAssetMetadata | null,
   networkId: StarknetNetworkId,
 ): WatchAssetToken | null => {
-  if (!isNonZeroStarkFieldElement(request.address)) {
+  const address = canonicalTokenAddress(request.address);
+  if (address === null) {
     return null;
   }
   const rawSymbol = metadata?.symbol ?? request.symbol;
@@ -54,5 +74,5 @@ export const watchAssetToken = (
   if (!isTokenSymbol(symbol) || !isTokenName(name) || !isTokenDecimals(decimals)) {
     return null;
   }
-  return { address: request.address, decimals, name, networkId, symbol };
+  return { address, decimals, name, networkId, symbol };
 };

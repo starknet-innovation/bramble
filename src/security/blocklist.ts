@@ -109,7 +109,11 @@ export type OriginInsight = {
 
 const hostnameOf = (origin: string): string | null => {
   try {
-    return new URL(origin).hostname.toLowerCase();
+    const host = new URL(origin).hostname.toLowerCase();
+    // Strip a single trailing dot so a fully-qualified form ("example.com.")
+    // matches the same registrable domain as "example.com" and cannot slip
+    // past the exact blocklist. Mirrors host handling in shared/origin.ts.
+    return host.endsWith(".") ? host.slice(0, -1) : host;
   } catch {
     return null;
   }

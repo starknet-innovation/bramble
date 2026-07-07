@@ -119,8 +119,10 @@ const makeHarness = () => {
   return { allowanceStore, handler, invokeCalls };
 };
 
-const submitApprove = (handler: ReturnType<typeof makeHarness>["handler"]) =>
-  handler(
+// A dapp invoke is now queued as an approval; approving it runs the held calls
+// through the wallet, which is where allowances get recorded.
+const submitApprove = async (handler: ReturnType<typeof makeHarness>["handler"]) => {
+  const queued = await handler(
     {
       calls: [{ calldata: ["0x5", "1000", "0"], contractAddress: TOKEN, entrypoint: "approve" }],
       origin: "https://dapp.example",
@@ -128,6 +130,9 @@ const submitApprove = (handler: ReturnType<typeof makeHarness>["handler"]) =>
     },
     contentSender,
   );
+  const id = (queued as { pending?: { id?: string } }).pending?.id ?? "";
+  return handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+};
 
 describe("allowance manager messages", () => {
   test("records approvals submitted through the dapp invoke path", async () => {

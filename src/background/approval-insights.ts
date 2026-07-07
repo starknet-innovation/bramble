@@ -11,6 +11,11 @@ import type { PendingApproval } from "./approvals";
 /**
  * Attaches `blocked` and `insights` to each pending approval. Pending approvals
  * are never for already-connected origins, so `connected` is always false here.
+ *
+ * First-seen history is read *before* being recorded, so the very first time an
+ * origin surfaces a prompt it is correctly reported as never-before-seen; the
+ * record then persists it so later prompts reflect the real history. This keeps
+ * the "first time seen" reputation branch reachable instead of dead.
  */
 export const enrichApprovals = async (
   approvals: readonly PendingApproval[],
@@ -24,6 +29,7 @@ export const enrichApprovals = async (
         firstSeenAt,
         now: history.now(),
       });
+      await history.record(approval.origin);
       return {
         ...approval,
         blocked: insight.blocked,

@@ -201,6 +201,8 @@ describe("origin reputation on account requests", () => {
     ).pending;
     expect(pending[0]?.origin).toBe("https://cleandapp.example");
     expect(pending[0]?.blocked).toBe(false);
-    expect(pending[0]?.insights?.some((insight) => insight.includes("first seen"))).toBe(true);
+    // The origin is recorded only by the enricher, so the very first listing of
+    // a brand-new site correctly reports it as never-before-seen.
+    expect(pending[0]?.insights?.some((insight) => insight.includes("First time"))).toBe(true);
   });
 });

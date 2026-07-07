@@ -266,16 +266,25 @@ describe("background network messages", () => {
         contentSender,
       ),
     ).resolves.toEqual({ chainId: "0x534e5f4d41494e", ok: true });
+    // A connected dapp invoke is queued as an approval, not auto-submitted.
+    const invokeResponse = await handler(
+      {
+        calls: [{ calldata: ["0x1"], contractAddress: "0x123", entrypoint: "transfer" }],
+        origin: "https://example.com",
+        type: "wallet.addInvokeTransaction",
+      },
+      contentSender,
+    );
+    expect(invokeResponse).toMatchObject({
+      ok: false,
+      pending: { kind: "invoke", origin: "https://example.com" },
+    });
+    expect(invoked).toHaveLength(0);
+
+    const invokeId = (invokeResponse as { pending: { id: string } }).pending.id;
     await expect(
-      handler(
-        {
-          calls: [{ calldata: ["0x1"], contractAddress: "0x123", entrypoint: "transfer" }],
-          origin: "https://example.com",
-          type: "wallet.addInvokeTransaction",
-        },
-        contentSender,
-      ),
-    ).resolves.toEqual({ ok: true, transactionHash: "0x123" });
+      handler({ id: invokeId, type: "wallet.approveOrigin" }, sender),
+    ).resolves.toMatchObject({ ok: true, pending: [] });
 
     expect(invoked[0]).toMatchObject({
       account: mainnetAccount,

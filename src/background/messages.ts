@@ -3,20 +3,19 @@
  */
 
 import { isBlockedOrigin } from "../security/blocklist";
-import { DEFAULT_NETWORK, STARKNET_NETWORKS } from "../starknet/networks";
+import { DEFAULT_NETWORK } from "../starknet/networks";
 import { type PriceService, unavailablePriceService } from "../starknet/prices";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
 import { type AllowanceStore, memoryAllowanceStore } from "../storage/allowance-store";
 import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-history";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { activeAccountSecrets } from "../wallet/vault-service";
-import { handleAllowanceOps, recordApproveAllowances } from "./allowance-ops";
+import { handleAllowanceOps } from "./allowance-ops";
 import { enrichApprovals } from "./approval-insights";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import { handleChainOps } from "./chain-ops";
 import {
   readAddAccountInput,
-  readAddInvokeTransactionInput,
   readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
@@ -32,14 +31,9 @@ import {
 import { handleNftOps } from "./nft-ops";
 import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
-import { handleProviderOps } from "./provider-ops";
+import { executeInvokeApproval, handleProviderOps } from "./provider-ops";
 import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
-import {
-  networkRpcUrls,
-  statusResponse,
-  switchActiveNetwork,
-  unavailablePreferencesStore,
-} from "./runtime-state";
+import { statusResponse, switchActiveNetwork, unavailablePreferencesStore } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import {
   isClaimedSenderOrigin,
@@ -200,6 +194,21 @@ const handleRuntimeMessage = async (
       approvals.approve(input.id);
       return { ok: true, pending: approvals.list() };
     }
+    if (approval.kind === "invoke") {
+      const payload = approvals.payload(input.id);
+      if (!payload) {
+        return { error: "approval not found" };
+      }
+      const result = await executeInvokeApproval(
+        { activity, allowanceStore, preferencesStore, runtimeRpc, session, wallet },
+        { origin: approval.origin, payload },
+      );
+      if ("error" in result) {
+        return result;
+      }
+      approvals.approve(input.id);
+      return { ok: true, pending: approvals.list() };
+    }
     const passphrase = session.getPassphrase();
     if (!passphrase) {
       return { error: "wallet locked" };
@@ -242,42 +251,6 @@ const handleRuntimeMessage = async (
     return { mnemonic, ok: true, privateKey };
   }
 
-  if (messageType === "wallet.addInvokeTransaction") {
-    const input = readAddInvokeTransactionInput(message);
-    const passphrase = session.getPassphrase();
-    if (!input) {
-      return { error: "invalid invoke request" };
-    }
-    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
-      return { error: "sender origin mismatch" };
-    }
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    const preferences = await preferencesStore.read();
-    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-    const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-    if (!account) {
-      return { error: "origin not connected" };
-    }
-    const result = await runtimeRpc.submitInvokeTransaction({
-      account,
-      calls: input.calls,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-      signHash: (messageHash) =>
-        wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase: passphrase }),
-    });
-    await activity.record({
-      accountId: account.id,
-      hash: result.transactionHash,
-      kind: "invoke",
-      networkId: account.networkId,
-      summary: `${input.origin} submitted ${input.calls.length} call${input.calls.length === 1 ? "" : "s"}`,
-    });
-    await recordApproveAllowances(allowanceStore, input.calls, account);
-    return { ok: true, transactionHash: result.transactionHash };
-  }
-
   if (messageType === "wallet.grantOrigin") {
     const input = readGrantOriginInput(message);
     if (!input) {
@@ -296,6 +269,10 @@ const handleRuntimeMessage = async (
     }
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
+    }
+    // A blocklisted origin must see no accounts even if it holds an old grant.
+    if (isBlockedOrigin(input.origin)) {
+      return { accounts: [], ok: true };
     }
     const vaultPassphrase = input.vaultPassphrase ?? session.getPassphrase();
     if (!vaultPassphrase) {
@@ -325,11 +302,14 @@ const handleRuntimeMessage = async (
     if (isBlockedOrigin(input.origin)) {
       return { error: "origin blocked" };
     }
-    await originHistory.record(input.origin);
     const passphrase = session.getPassphrase();
     if (passphrase) {
       const accounts = await wallet.getGrantedAccounts(input.origin, passphrase);
       if (accounts.length > 0) {
+        // Record the origin only once it is actually connecting; deferring the
+        // first-seen write to the enricher keeps the "first time seen" insight
+        // live for the pending approval a brand-new site produces.
+        await originHistory.record(input.origin);
         return { accounts, ok: true };
       }
     }
