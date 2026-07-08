@@ -110,13 +110,28 @@ const bindTabs = (deps: HomeUiDeps): void => {
   }
   const indicator = tabsRoot.querySelector<HTMLElement>(".tab-indicator");
 
-  const moveIndicator = (): void => {
+  const moveIndicator = (animate: boolean): void => {
     const active = tabsRoot.querySelector<HTMLElement>('.home-tab[aria-selected="true"]');
     if (!active || !indicator) {
       return;
     }
-    indicator.style.width = `${Math.max(active.offsetWidth - INDICATOR_INSET * 2, 12)}px`;
-    indicator.style.transform = `translateX(${active.offsetLeft + INDICATOR_INSET}px)`;
+    const width = `${Math.max(active.offsetWidth - INDICATOR_INSET * 2, 12)}px`;
+    const offset = `translateX(${active.offsetLeft + INDICATOR_INSET}px)`;
+    if (animate) {
+      indicator.style.width = width;
+      indicator.style.transform = offset;
+      return;
+    }
+    // On a data re-render the indicator element is fresh at its resting spot, so
+    // snap it into place with the transition suppressed — streaming balance and
+    // price updates must never make the underline glide. Restore the transition
+    // next frame so an explicit tab change still slides.
+    indicator.style.transition = "none";
+    indicator.style.width = width;
+    indicator.style.transform = offset;
+    requestAnimationFrame(() => {
+      indicator.style.transition = "";
+    });
   };
 
   const applyTab = (tab: HomeTab, animate: boolean): void => {
@@ -138,7 +153,7 @@ const bindTabs = (deps: HomeUiDeps): void => {
       }
       target.hidden = !on;
     });
-    moveIndicator();
+    moveIndicator(animate);
   };
 
   // Restore the remembered tab before first paint; the indicator is measured
