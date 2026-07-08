@@ -101,6 +101,9 @@ const makeHandler = (unlocked: boolean) => {
       deployCalls.push(input);
       return { transactionHash: "0x7abc" };
     },
+    async submitDeclareTransaction() {
+      return { classHash: "0x1", transactionHash: "0x1" };
+    },
     async submitErc20Transfer() {
       throw new Error("unused");
     },

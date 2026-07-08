@@ -10,6 +10,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
+import { type CustomNetwork, isCustomNetwork, normalizeChainId } from "./custom-network";
 import type { KeyValueStore } from "./kv";
 import { isWatchedNft, type WatchedNft, withNftId } from "./nft";
 import { assertStoreAccess, type StoreActor } from "./permissioned-store";
@@ -70,6 +71,7 @@ export type WalletPreferences = {
   readonly accountLabels?: AccountLabels;
   readonly activeNetworkId: StarknetNetworkId;
   readonly addressBook: readonly AddressBookEntry[];
+  readonly customNetworks?: readonly CustomNetwork[];
   readonly displayCurrency?: DisplayCurrency;
   readonly hiddenTokens?: readonly string[];
   readonly nfts?: readonly WatchedNft[];
@@ -83,6 +85,7 @@ export type WalletPreferences = {
  * Plain preferences store methods exposed to the background worker.
  */
 export type WalletPreferencesStore = {
+  readonly addCustomNetwork: (network: CustomNetwork) => Promise<WalletPreferences>;
   readonly addNft: (nft: Omit<WatchedNft, "id">) => Promise<WalletPreferences>;
   readonly importPreferences: (candidate: unknown) => Promise<WalletPreferences>;
   readonly read: () => Promise<WalletPreferences>;
@@ -221,6 +224,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
     "accountLabels",
     "activeNetworkId",
     "addressBook",
+    "customNetworks",
     "displayCurrency",
     "hiddenTokens",
     "nfts",
@@ -229,6 +233,12 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
     "theme",
     "tokens",
   ]) &&
+  (value.customNetworks === undefined ||
+    (Array.isArray(value.customNetworks) &&
+      value.customNetworks.every(isCustomNetwork) &&
+      hasUniqueStrings(
+        value.customNetworks.map((network) => normalizeChainId(network.chainId)),
+      ))) &&
   (value.accountLabels === undefined || isAccountLabels(value.accountLabels)) &&
   (value.displayCurrency === undefined || isDisplayCurrency(value.displayCurrency)) &&
   (value.hiddenTokens === undefined || isHiddenTokens(value.hiddenTokens)) &&
@@ -254,6 +264,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   accountLabels: {},
   activeNetworkId: DEFAULT_NETWORK.id,
   addressBook: [],
+  customNetworks: [],
   displayCurrency: "usd",
   hiddenTokens: [],
   nfts: [],
@@ -294,6 +305,19 @@ export const createPreferencesStore = ({
   };
 
   return {
+    async addCustomNetwork(network) {
+      if (!isCustomNetwork(network)) {
+        throw new WalletError("Invalid custom network");
+      }
+      const preferences = await read();
+      const key = normalizeChainId(network.chainId);
+      const existing = (preferences.customNetworks ?? []).filter(
+        (stored) => normalizeChainId(stored.chainId) !== key,
+      );
+      const next = { ...preferences, customNetworks: [...existing, network] };
+      await writePreferences(store, next);
+      return next;
+    },
     async addNft(nft) {
       const nextNft = withNftId(nft);
       if (!isWatchedNft(nextNft)) {

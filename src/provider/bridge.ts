@@ -5,13 +5,16 @@ import { unknownError, type WalletRpcError } from "../background/wallet-rpc-erro
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
+import { type ProviderChain, readProviderChain } from "./add-chain-params";
 import {
   type ProviderAccountsResult,
+  type ProviderDeclareResult,
   type ProviderDeploymentData,
   type ProviderInvokeCall,
   type ProviderInvokeResult,
   type ProviderPayload,
   providerAccountsResult,
+  providerDeclareResult,
   providerDeploymentResult,
   providerInvokeCalls,
   providerInvokeResult,
@@ -21,6 +24,7 @@ import {
   readTypedDataParam,
   toProviderPayload as toProviderPayloadResult,
 } from "./bridge-results";
+import { type ProviderDeclare, readProviderDeclare } from "./declare-params";
 import { type ProviderWatchAsset, readProviderWatchAsset } from "./watch-asset-params";
 
 /** Marker for page-to-content wallet provider requests.
@@ -43,8 +47,10 @@ export const toProviderPayload = toProviderPayloadResult;
 export type ProviderMethod =
   | "mc_accounts"
   | "mc_requestAccounts"
+  | "wallet_addDeclareTransaction"
   | "wallet_addInvokeTransaction"
   | "wallet_deploymentData"
+  | "wallet_addStarknetChain"
   | "wallet_getPermissions"
   | "wallet_requestAccounts"
   | "wallet_requestChainId"
@@ -87,6 +93,7 @@ export type ProviderResponse =
       readonly result:
         | ProviderAccountsResult
         | ProviderDeploymentData
+        | ProviderDeclareResult
         | ProviderInvokeResult
         | readonly string[]
         | boolean
@@ -129,6 +136,16 @@ export type PageMessageSource = Pick<MessageEvent<unknown>, "origin" | "source">
  * Background runtime messages exposed through the dapp provider bridge.
  */
 export type RuntimeMessage =
+  | {
+      readonly chain: ProviderChain;
+      readonly origin: string;
+      readonly type: "wallet.addStarknetChain";
+    }
+  | {
+      readonly declare: ProviderDeclare;
+      readonly origin: string;
+      readonly type: "wallet.addDeclareTransaction";
+    }
   | {
       readonly calls: readonly ProviderInvokeCall[];
       readonly origin: string;
@@ -193,8 +210,10 @@ export const isTrustedPageMessage = (
 const isProviderMethod = (value: unknown): value is ProviderMethod =>
   value === "mc_accounts" ||
   value === "mc_requestAccounts" ||
+  value === "wallet_addDeclareTransaction" ||
   value === "wallet_addInvokeTransaction" ||
   value === "wallet_deploymentData" ||
+  value === "wallet_addStarknetChain" ||
   value === "wallet_getPermissions" ||
   value === "wallet_requestAccounts" ||
   value === "wallet_requestChainId" ||
@@ -208,7 +227,9 @@ const readProviderParams = (method: ProviderMethod, params: unknown): Json | nul
   if (params === undefined) {
     return undefined;
   }
-  return (method === "wallet_addInvokeTransaction" ||
+  return (method === "wallet_addDeclareTransaction" ||
+    method === "wallet_addInvokeTransaction" ||
+    method === "wallet_addStarknetChain" ||
     method === "wallet_deploymentData" ||
     method === "wallet_signTypedData" ||
     method === "wallet_supportedSpecs" ||
@@ -311,6 +332,7 @@ export const readProviderResponse = (value: unknown): ProviderResponse | null =>
       providerAccountsResult(value.result) ??
       providerDeploymentResult(value.result) ??
       providerInvokeResult(value.result) ??
+      providerDeclareResult(value.result) ??
       providerStringArrayResult(value.result) ??
       (typeof value.result === "boolean" ? value.result : null) ??
       (typeof value.result === "string" && value.result.length > 0 ? value.result : null);
@@ -347,6 +369,14 @@ export const toRuntimeMessage = (
   if (request.method === "wallet_addInvokeTransaction") {
     const calls = providerInvokeCalls(request.params);
     return calls ? { calls, origin, type: "wallet.addInvokeTransaction" } : null;
+  }
+  if (request.method === "wallet_addStarknetChain") {
+    const chain = readProviderChain(request.params);
+    return chain ? { chain, origin, type: "wallet.addStarknetChain" } : null;
+  }
+  if (request.method === "wallet_addDeclareTransaction") {
+    const declare = readProviderDeclare(request.params);
+    return declare ? { declare, origin, type: "wallet.addDeclareTransaction" } : null;
   }
   if (request.method === "wallet_requestChainId") {
     return { origin, type: "wallet.getChainId" };
@@ -394,6 +424,7 @@ export const providerResponse = (
     providerAccountsResult(payload.result) ??
     providerDeploymentResult(payload.result) ??
     providerInvokeResult(payload.result) ??
+    providerDeclareResult(payload.result) ??
     providerStringArrayResult(payload.result) ??
     (typeof payload.result === "boolean" ? payload.result : null) ??
     (typeof payload.result === "string" && payload.result.length > 0 ? payload.result : null);

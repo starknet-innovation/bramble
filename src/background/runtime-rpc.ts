@@ -4,6 +4,7 @@
  */
 import {
   type BalanceInput,
+  type DeclareInput,
   type DeployAccountInput,
   type DeploymentStatusInput,
   estimateInvokeFee,
@@ -15,6 +16,7 @@ import {
   type InvokeInput,
   type NftOwnerInput,
   submitAccountDeployment,
+  submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
   type TokenMetadataInput,
@@ -39,6 +41,9 @@ export type RuntimeRpc = {
   readonly submitAccountDeployment: (
     input: DeployAccountInput,
   ) => ReturnType<typeof submitAccountDeployment>;
+  readonly submitDeclareTransaction: (
+    input: DeclareInput,
+  ) => ReturnType<typeof submitDeclareTransaction>;
   readonly submitErc20Transfer: (input: TransferInput) => ReturnType<typeof submitErc20Transfer>;
   readonly submitInvokeTransaction: (
     input: InvokeInput,
@@ -56,6 +61,7 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   getTokenMetadata,
   getTransactionStatuses,
   submitAccountDeployment,
+  submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
 };

@@ -142,6 +142,25 @@ export type WatchAssetResponse = {
 };
 
 /**
+ * Add-custom-chain outcome returned through the dapp provider bridge, both for
+ * the already-listed fast path and after a user approves adding the chain.
+ */
+export type AddChainResponse = {
+  readonly added: true;
+  readonly ok: true;
+};
+
+/**
+ * Declare submission outcome returned through the dapp provider bridge, carrying
+ * the node's transaction and class hashes for padding into the dapp result.
+ */
+export type DeclareResponse = {
+  readonly classHash: string;
+  readonly ok: true;
+  readonly transactionHash: string;
+};
+
+/**
  * Auto-detected token suggestions with balances returned to extension pages.
  */
 export type DetectTokensResponse = {
@@ -253,8 +272,10 @@ export type RequestAccountsResponse =
 export type RuntimeResponse =
   | AccountsResponse
   | ActivityResponse
+  | AddChainResponse
   | AllowancesResponse
   | BalancesResponse
+  | DeclareResponse
   | ChainIdResponse
   | ConnectedSitesResponse
   | CreateAccountResponse

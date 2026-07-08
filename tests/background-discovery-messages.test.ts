@@ -113,6 +113,9 @@ const makeHandler = (options: {
     async submitInvokeTransaction() {
       throw new Error("unused");
     },
+    async submitDeclareTransaction() {
+      return { classHash: "0x1", transactionHash: "0x1" };
+    },
   });
   return { handler, statusCalls };
 };

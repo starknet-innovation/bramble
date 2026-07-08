@@ -120,6 +120,9 @@ const makeHandler = (
       async getTransactionStatuses() {
         return {};
       },
+      async submitDeclareTransaction() {
+        return { classHash: "0x1", transactionHash: "0x1" };
+      },
       async submitAccountDeployment() {
         return { transactionHash: "0x7de" };
       },

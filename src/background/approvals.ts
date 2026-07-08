@@ -2,6 +2,8 @@
  * Background-only dapp approval queue. Requests are intentionally not persisted.
  */
 import type { Call } from "starknet";
+import type { ProviderChain } from "../provider/add-chain-params";
+import type { ProviderDeclare } from "../provider/declare-params";
 import { WalletError } from "../shared/errors";
 import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
@@ -17,7 +19,9 @@ export const MAX_PENDING_APPROVALS = 50;
  * a per-transaction invoke prompt that must be signed off before it executes.
  */
 export type ApprovalKind =
+  | "add-chain"
   | "connect"
+  | "declare"
   | "invoke"
   | "sign-typed-data"
   | "switch-chain"
@@ -68,7 +72,9 @@ export type PendingApproval = {
  */
 export type ApprovalPayload = {
   readonly calls?: readonly Call[];
+  readonly chain?: ProviderChain;
   readonly chainId?: string;
+  readonly declare?: ProviderDeclare;
   readonly networkId?: StarknetNetworkId;
   readonly typedData?: unknown;
 };
@@ -85,6 +91,16 @@ export type ApprovalQueue = {
   readonly list: () => readonly PendingApproval[];
   readonly payload: (id: string) => ApprovalPayload | null;
   readonly request: (origin: string) => PendingApproval;
+  readonly requestAddChain: (input: {
+    readonly chain: ProviderChain;
+    readonly origin: string;
+    readonly summaries: readonly string[];
+  }) => PendingApproval;
+  readonly requestDeclare: (input: {
+    readonly declare: ProviderDeclare;
+    readonly origin: string;
+    readonly summaries: readonly string[];
+  }) => PendingApproval;
   readonly requestInvoke: (input: {
     readonly calls: readonly Call[];
     readonly flags: readonly ApprovalRiskFlag[];
@@ -174,6 +190,12 @@ export const createApprovalQueue = (): ApprovalQueue => {
       if (approval.chainId !== undefined && approval.networkId !== undefined) {
         return { chainId: approval.chainId, networkId: approval.networkId };
       }
+      if (approval.chain !== undefined) {
+        return { chain: approval.chain };
+      }
+      if (approval.declare !== undefined) {
+        return { declare: approval.declare };
+      }
       if (approval.calls === undefined) {
         return null;
       }
@@ -191,6 +213,41 @@ export const createApprovalQueue = (): ApprovalQueue => {
         return approvalSnapshot(existing);
       }
       return enqueue({ id: crypto.randomUUID(), kind: "connect", origin });
+    },
+    requestAddChain({ chain, origin, summaries }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+
+      const existing = [...pending.values()].find(
+        (approval) =>
+          approval.kind === "add-chain" &&
+          approval.origin === origin &&
+          approval.chain?.chainId === chain.chainId,
+      );
+      if (existing) {
+        return approvalSnapshot(existing);
+      }
+      return enqueue({
+        chain,
+        id: crypto.randomUUID(),
+        kind: "add-chain",
+        origin,
+        summaries: [...summaries],
+      });
+    },
+    requestDeclare({ declare, origin, summaries }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+
+      return enqueue({
+        declare,
+        id: crypto.randomUUID(),
+        kind: "declare",
+        origin,
+        summaries: [...summaries],
+      });
     },
     requestInvoke({ calls, flags, origin, summaries }) {
       if (!isWalletOrigin(origin)) {

@@ -10,12 +10,14 @@ import { type AllowanceStore, memoryAllowanceStore } from "../storage/allowance-
 import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-history";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { activeAccountSecrets } from "../wallet/vault-service";
+import { handleAddChainOps } from "./add-chain-ops";
 import { handleAllowanceOps } from "./allowance-ops";
 import { handleApprovalDecision } from "./approval-decisions";
 import { enrichApprovals } from "./approval-insights";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import { handleChainOps } from "./chain-ops";
+import { handleDeclareOps } from "./declare-ops";
 import { handleDiscoveryOps } from "./discovery-ops";
 import {
   readAddAccountInput,
@@ -148,6 +150,26 @@ const handleRuntimeMessage = async (
   );
   if (discoveryResponse) {
     return discoveryResponse;
+  }
+
+  const addChainResponse = await handleAddChainOps(
+    { approvals, extensionId, preferencesStore, waiters },
+    messageType,
+    message,
+    sender,
+  );
+  if (addChainResponse) {
+    return addChainResponse;
+  }
+
+  const declareResponse = await handleDeclareOps(
+    { approvals, extensionId, preferencesStore, session, waiters, wallet },
+    messageType,
+    message,
+    sender,
+  );
+  if (declareResponse) {
+    return declareResponse;
   }
 
   const originResponse = await handleOriginOps({ session, wallet }, messageType, message);

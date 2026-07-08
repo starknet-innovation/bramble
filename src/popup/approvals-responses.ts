@@ -41,7 +41,14 @@ export type PendingApproval = {
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
-  readonly kind?: "connect" | "invoke" | "sign-typed-data" | "switch-chain" | "watch-asset";
+  readonly kind?:
+    | "add-chain"
+    | "connect"
+    | "declare"
+    | "invoke"
+    | "sign-typed-data"
+    | "switch-chain"
+    | "watch-asset";
   readonly origin: string;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
@@ -124,7 +131,9 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     !isWalletOrigin(value.origin) ||
     (value.typedData !== undefined && !isJson(value.typedData)) ||
     (value.kind !== undefined &&
+      value.kind !== "add-chain" &&
       value.kind !== "connect" &&
+      value.kind !== "declare" &&
       value.kind !== "invoke" &&
       value.kind !== "sign-typed-data" &&
       value.kind !== "switch-chain" &&
