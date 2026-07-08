@@ -4,8 +4,20 @@
  */
 import type { TokenBalance } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { tokenLogo } from "../starknet/token-logos";
 import type { DisplayCurrency } from "../storage/preferences-store";
 import { formatFiat, tokenFiatValue } from "./fiat";
+
+/**
+ * Renders a token's bundled logo when one is known, else a letter badge from
+ * the symbol. Decorative — the symbol is shown alongside it.
+ */
+export const tokenGlyph = (address: string, symbol: string): string => {
+  const logo = tokenLogo(address);
+  return logo
+    ? `<img class="token-logo" src="${logo}" alt="" width="40" height="40" />`
+    : `<span class="token-mark">${escapeHtml(symbol.slice(0, 3))}</span>`;
+};
 
 const groupThousands = (whole: string): string => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -44,7 +56,7 @@ export const balanceRow = (
   const fiat = tokenFiatValue(token.formatted, price);
   return `<li class="token-row">
     <button class="token-open" type="button" data-token-detail="${escapeHtml(token.id)}">
-      <span class="token-mark">${escapeHtml(token.symbol.slice(0, 3))}</span>
+      ${tokenGlyph(token.address, token.symbol)}
       <div class="token-copy">
         <strong>${escapeHtml(token.symbol)}</strong>
         <p>${escapeHtml(compactAmount(token.formatted))}</p>

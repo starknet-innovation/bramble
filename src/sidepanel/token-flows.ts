@@ -12,6 +12,7 @@ import { formatFiat, tokenFiatValue } from "./fiat";
 import { icon } from "./icons";
 import { copyButton, flowHeader, flowScreen } from "./parts";
 import { sparklinePath, sparklineTrend } from "./sparkline";
+import { tokenGlyph } from "./token-row";
 
 /**
  * Currency used by the token screens when preferences carry none.
@@ -27,9 +28,6 @@ export const isHiddenFromHome = (
   preferences: WalletPreferences | null,
 ): boolean => (preferences?.hiddenTokens ?? []).includes(token.id) || isLikelySpam(token);
 
-const tokenMark = (symbol: string): string =>
-  `<span class="token-mark">${escapeHtml(symbol.slice(0, 3))}</span>`;
-
 const trackedRow = (
   token: TokenConfig,
   balance: TokenBalance | undefined,
@@ -43,7 +41,7 @@ const trackedRow = (
     ? '<span class="token-flag">Likely spam</span>'
     : `<button class="secondary small" type="button" data-token-toggle="${escapeHtml(token.id)}" data-token-hidden="${isHidden ? "true" : "false"}">${isHidden ? "Show" : "Hide"}</button>`;
   return `<li class="token-row${isHidden ? " token-hidden" : ""}">
-    ${tokenMark(token.symbol)}
+    ${tokenGlyph(token.address, token.symbol)}
     <div class="token-copy">
       <strong>${escapeHtml(token.symbol)}</strong>
       <p>${escapeHtml(token.name)}</p>

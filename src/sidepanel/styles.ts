@@ -201,6 +201,13 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
     letter-spacing: 0.02em;
     width: 40px;
   }
+  .token-logo {
+    border-radius: ${RADIUS.full};
+    flex: none;
+    height: 40px;
+    object-fit: cover;
+    width: 40px;
+  }
   .token-copy { display: grid; flex: 1; gap: 2px; min-width: 0; }
   .token-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; }
   .token-copy p {
