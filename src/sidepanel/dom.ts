@@ -24,13 +24,17 @@ export const buttonBusy = (button: HTMLButtonElement | null | undefined, busy: b
 };
 
 /**
- * Writes a message to the nearest section status line.
+ * Writes a message to the nearest section status line. Returns whether a
+ * status line existed, so callers can fall back to a toast when the control
+ * lives outside any announced section.
  */
-export const scopedStatus = (element: Element, message: string): void => {
+export const scopedStatus = (element: Element, message: string): boolean => {
   const target = element.closest(".section")?.querySelector<HTMLElement>('[role="status"]');
   if (target) {
     target.textContent = message;
+    return true;
   }
+  return false;
 };
 
 type ToastTone = "error" | "success";

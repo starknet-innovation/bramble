@@ -93,7 +93,9 @@ const bindCopy = (): void => {
       buttonBusy(button, true);
       void navigator.clipboard.writeText(value).then(
         () => {
-          scopedStatus(button, "Copied");
+          if (!scopedStatus(button, "Copied")) {
+            showToast("Copied", "success");
+          }
           buttonBusy(button, false);
           confirmCopyGlyph(button);
         },

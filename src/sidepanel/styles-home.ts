@@ -40,6 +40,7 @@ export const HOME_STYLES = `
       visibility 0s linear ${MOTION.drawerMs}ms;
     visibility: hidden;
     width: min(300px, 88%);
+    will-change: transform;
   }
   .drawer-root[data-open="true"] .account-drawer {
     transform: translateX(0);
