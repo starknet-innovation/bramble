@@ -33,6 +33,7 @@ const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/conten
 const SECRET_MATERIAL_FILES = new Set([
   "src/background/approval-decisions.ts",
   "src/background/chain-ops.ts",
+  "src/background/discovery-ops.ts",
   "src/background/signature-waiters.ts",
   "src/background/index.ts",
   "src/background/message-inputs.ts",

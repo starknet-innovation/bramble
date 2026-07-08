@@ -214,6 +214,30 @@ export type DeploymentStatusResponse = {
 };
 
 /**
+ * Supported spec or wallet-API version list returned through the dapp provider
+ * bridge for the discovery methods.
+ */
+export type SupportedVersionsResponse = {
+  readonly ok: true;
+  readonly versions: readonly string[];
+};
+
+/**
+ * Counterfactual ACCOUNT_DEPLOYMENT_DATA returned through the dapp provider
+ * bridge; the bridge left-pads the felts before the dapp sees them.
+ */
+export type DeploymentDataResponse = {
+  readonly deployment: {
+    readonly address: string;
+    readonly calldata: readonly string[];
+    readonly classHash: string;
+    readonly salt: string;
+    readonly version: 0 | 1;
+  };
+  readonly ok: true;
+};
+
+/**
  * Dapp account-request response, either granted or queued for approval.
  */
 export type RequestAccountsResponse =
@@ -234,8 +258,10 @@ export type RuntimeResponse =
   | ChainIdResponse
   | ConnectedSitesResponse
   | CreateAccountResponse
+  | DeploymentDataResponse
   | DeploymentStatusResponse
   | DetectTokensResponse
+  | SupportedVersionsResponse
   | TransferReviewResponse
   | GenerateMnemonicResponse
   | PendingApprovalResponse

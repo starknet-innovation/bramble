@@ -88,6 +88,16 @@ describe("provider bridge", () => {
       params: invokeParams,
     });
     expect(readProviderRequestArguments({ debug: true, method: "mc_accounts" })).toBeNull();
+    // Discovery methods reach request() with an optional api_version param.
+    expect(readProviderRequestArguments({ method: "wallet_supportedSpecs" })).toEqual({
+      method: "wallet_supportedSpecs",
+    });
+    expect(
+      readProviderRequestArguments({
+        method: "wallet_deploymentData",
+        params: { api_version: "0.7.2" },
+      }),
+    ).toEqual({ method: "wallet_deploymentData", params: { api_version: "0.7.2" } });
   });
 
   test("reads well-formed provider requests", () => {

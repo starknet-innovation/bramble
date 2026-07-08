@@ -16,6 +16,7 @@ import { enrichApprovals } from "./approval-insights";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import { handleChainOps } from "./chain-ops";
+import { handleDiscoveryOps } from "./discovery-ops";
 import {
   readAddAccountInput,
   readCreateAccountInput,
@@ -137,6 +138,16 @@ const handleRuntimeMessage = async (
   );
   if (providerOpsResponse) {
     return providerOpsResponse;
+  }
+
+  const discoveryResponse = await handleDiscoveryOps(
+    { extensionId, preferencesStore, runtimeRpc, session, wallet },
+    messageType,
+    message,
+    sender,
+  );
+  if (discoveryResponse) {
+    return discoveryResponse;
   }
 
   const originResponse = await handleOriginOps({ session, wallet }, messageType, message);

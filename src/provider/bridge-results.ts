@@ -43,6 +43,24 @@ export type ProviderInvokeResult = {
 };
 
 /**
+ * Spec ACCOUNT_DEPLOYMENT_DATA carried to the page for wallet_deploymentData.
+ * Felts are PADDED_FELT so a dapp can rely on a fixed width.
+ */
+export type ProviderDeploymentData = {
+  readonly address: string;
+  readonly calldata: readonly string[];
+  readonly class_hash: string;
+  readonly salt: string;
+  readonly sigdata?: readonly string[];
+  readonly version: 0 | 1;
+};
+
+/**
+ * API_VERSION pattern accepted from dapps (`major.minor` with optional patch).
+ */
+export const API_VERSION_PATTERN = /^[0-9]+\.[0-9]+(\.[0-9]+)?$/;
+
+/**
  * The payload passed between the content bridge and the page response builder:
  * a spec error object or an unvalidated success value.
  */
@@ -55,10 +73,13 @@ export type ProviderResultMethod =
   | "mc_accounts"
   | "mc_requestAccounts"
   | "wallet_addInvokeTransaction"
+  | "wallet_deploymentData"
   | "wallet_getPermissions"
   | "wallet_requestAccounts"
   | "wallet_requestChainId"
   | "wallet_signTypedData"
+  | "wallet_supportedSpecs"
+  | "wallet_supportedWalletApi"
   | "wallet_switchStarknetChain"
   | "wallet_watchAsset";
 
@@ -156,6 +177,66 @@ export const providerInvokeResult = (result: unknown): ProviderInvokeResult | nu
   /^0x0[0-8][0-9a-f]{62}$/.test(result.transaction_hash)
     ? { transaction_hash: result.transaction_hash }
     : null;
+
+const isPaddedFelt = (value: unknown): value is string =>
+  typeof value === "string" && /^0x0[0-8][0-9a-f]{62}$/.test(value);
+
+/**
+ * Narrows an unknown value to a spec ACCOUNT_DEPLOYMENT_DATA whose address and
+ * felts are all PADDED_FELT and whose version is 0 or 1.
+ */
+export const providerDeploymentResult = (result: unknown): ProviderDeploymentData | null => {
+  if (
+    !isRecord(result) ||
+    !isJson(result) ||
+    !hasOnlyKnownKeys(result, [
+      "address",
+      "calldata",
+      "class_hash",
+      "salt",
+      "sigdata",
+      "version",
+    ]) ||
+    !isPaddedFelt(result.address) ||
+    !isPaddedFelt(result.class_hash) ||
+    !isPaddedFelt(result.salt) ||
+    (result.version !== 0 && result.version !== 1) ||
+    !Array.isArray(result.calldata) ||
+    !result.calldata.every(isPaddedFelt) ||
+    (result.sigdata !== undefined &&
+      !(Array.isArray(result.sigdata) && result.sigdata.every(isPaddedFelt)))
+  ) {
+    return null;
+  }
+  return {
+    address: result.address,
+    calldata: [...result.calldata],
+    class_hash: result.class_hash,
+    salt: result.salt,
+    ...(result.sigdata === undefined ? {} : { sigdata: [...result.sigdata] }),
+    version: result.version,
+  };
+};
+
+/**
+ * Reads an optional `{ api_version }` discovery param, returning the version
+ * string when present and valid, `undefined` when absent, or `null` when the
+ * param is malformed so the caller can reject it as INVALID_REQUEST_PAYLOAD.
+ */
+export const readApiVersionParam = (params: Json | undefined): string | null | undefined => {
+  if (params === undefined) {
+    return undefined;
+  }
+  if (!isRecord(params) || !hasOnlyKnownKeys(params, ["api_version"])) {
+    return null;
+  }
+  if (params.api_version === undefined) {
+    return undefined;
+  }
+  return typeof params.api_version === "string" && API_VERSION_PATTERN.test(params.api_version)
+    ? params.api_version
+    : null;
+};
 
 /**
  * Narrows an unknown value to a non-empty array of non-empty felt strings.
@@ -260,6 +341,45 @@ export const readTypedDataParam = (params: Json | undefined): Json | null => {
   return params;
 };
 
+// Pads a list of felts to PADDED_FELT, returning null if any entry will not pad.
+const padFeltList = (values: readonly unknown[]): string[] | null => {
+  const padded = values.map((value) => (typeof value === "string" ? padFelt(value) : null));
+  return padded.every((value): value is string => value !== null) ? padded : null;
+};
+
+// Shapes a background deployment result into the spec ACCOUNT_DEPLOYMENT_DATA
+// wire object, left-padding every felt. A felt the wallet produced that will
+// not pad is an internal failure and maps to UNKNOWN_ERROR.
+const deploymentPayload = (result: unknown): ProviderPayload => {
+  const deployment = isRecord(result) && result.ok === true ? result.deployment : null;
+  if (
+    !isRecord(deployment) ||
+    typeof deployment.address !== "string" ||
+    typeof deployment.classHash !== "string" ||
+    typeof deployment.salt !== "string" ||
+    !Array.isArray(deployment.calldata) ||
+    (deployment.version !== 0 && deployment.version !== 1)
+  ) {
+    return { error: unknownError() };
+  }
+  const address = padFelt(deployment.address);
+  const classHash = padFelt(deployment.classHash);
+  const salt = padFelt(deployment.salt);
+  const calldata = padFeltList(deployment.calldata);
+  if (address === null || classHash === null || salt === null || calldata === null) {
+    return { error: unknownError() };
+  }
+  return {
+    result: {
+      address,
+      calldata,
+      class_hash: classHash,
+      salt,
+      version: deployment.version,
+    },
+  };
+};
+
 /**
  * Converts background runtime results into provider success or rejection
  * payloads, mapping every failure to a spec `{ code, message, data? }` object.
@@ -278,6 +398,14 @@ export const toProviderPayload = (
     const permissions =
       isRecord(result) && result.ok === true ? providerStringArrayResult(result.permissions) : null;
     return permissions ? { result: permissions } : { error: unknownError() };
+  }
+  if (method === "wallet_supportedSpecs" || method === "wallet_supportedWalletApi") {
+    const versions =
+      isRecord(result) && result.ok === true ? providerStringArrayResult(result.versions) : null;
+    return versions ? { result: versions } : { error: unknownError() };
+  }
+  if (method === "wallet_deploymentData") {
+    return deploymentPayload(result);
   }
   if (method === "wallet_watchAsset") {
     return isRecord(result) && result.ok === true && result.watched === true
