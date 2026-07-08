@@ -31,6 +31,7 @@ const ENCRYPTED_STORE_WIRING_FILES = new Set([
 const RANDOM_UUID_FILES = new Set(["src/background/approvals.ts", "src/provider/inpage.ts"]);
 const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/content/index.ts"]);
 const SECRET_MATERIAL_FILES = new Set([
+  "src/background/approval-decisions.ts",
   "src/background/chain-ops.ts",
   "src/background/signature-waiters.ts",
   "src/background/index.ts",

@@ -13,6 +13,7 @@ import type {
   SignHashInput,
   WalletStatus,
 } from "../src/wallet/vault-service";
+import { flushHeld, latestApprovalId } from "./support/held";
 
 const account: AccountRef = {
   address: "0xabcabcdef",
@@ -171,12 +172,16 @@ describe("createMessageHandler", () => {
   test("allows content senders to use the provider account request path", async () => {
     const handler = createMessageHandler(createWallet(), "extension-id", createUnlockSession());
 
-    await expect(
-      handler({ origin: "https://example.com", type: "wallet.requestAccounts" }, contentSender),
-    ).resolves.toMatchObject({
-      ok: false,
-      pending: { origin: "https://example.com" },
-    });
+    // A locked wallet cannot read grants, so the request holds behind a queued
+    // connection approval rather than resolving immediately.
+    const held = handler(
+      { origin: "https://example.com", type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    await flushHeld();
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    await expect(held).resolves.toEqual({ error: "connection rejected" });
   });
 
   test("rejects content senders claiming a different origin", async () => {
@@ -415,15 +420,17 @@ describe("createMessageHandler", () => {
   test("creates pending approvals for ungranted dapp account requests", async () => {
     const handler = createMessageHandler(createWallet(), "extension-id", createUnlockSession());
 
-    const response = await handler(
+    const held = handler(
       { origin: "https://example.com", type: "wallet.requestAccounts" },
-      sender,
+      contentSender,
     );
-
-    expect(response).toMatchObject({
-      ok: false,
-      pending: { origin: "https://example.com" },
+    await flushHeld();
+    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toMatchObject({
+      pending: [{ origin: "https://example.com" }],
     });
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    await expect(held).resolves.toEqual({ error: "connection rejected" });
   });
 
   test("approves pending dapp account requests after unlock", async () => {

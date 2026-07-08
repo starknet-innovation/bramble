@@ -16,7 +16,12 @@ export const MAX_PENDING_APPROVALS = 50;
  * Approval kinds distinguishing a connection prompt, a watch-asset prompt, and
  * a per-transaction invoke prompt that must be signed off before it executes.
  */
-export type ApprovalKind = "connect" | "invoke" | "sign-typed-data" | "watch-asset";
+export type ApprovalKind =
+  | "connect"
+  | "invoke"
+  | "sign-typed-data"
+  | "switch-chain"
+  | "watch-asset";
 
 /**
  * ERC20 token metadata carried by a watch-asset approval, in the shape the
@@ -53,14 +58,18 @@ export type PendingApproval = {
   readonly origin: string;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
+  readonly typedData?: unknown;
 };
 
 /**
- * Execution payload held privately for an invoke approval. The raw calls never
- * cross to the UI snapshot; the background reads them at approve time to submit.
+ * Execution payload held privately until approve time. Invoke calls and the
+ * switch-chain target never need to cross to the UI in raw form; typed data is
+ * mirrored into the snapshot so the sign card can decode and display it.
  */
 export type ApprovalPayload = {
   readonly calls?: readonly Call[];
+  readonly chainId?: string;
+  readonly networkId?: StarknetNetworkId;
   readonly typedData?: unknown;
 };
 
@@ -87,6 +96,12 @@ export type ApprovalQueue = {
     readonly summary: string;
     readonly typedData: unknown;
   }) => PendingApproval;
+  readonly requestSwitchChain: (input: {
+    readonly chainId: string;
+    readonly networkId: StarknetNetworkId;
+    readonly origin: string;
+    readonly summary: string;
+  }) => PendingApproval;
   readonly requestWatchAsset: (input: {
     readonly origin: string;
     readonly token: WatchAssetToken;
@@ -103,6 +118,7 @@ const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
   ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
+  ...(approval.typedData === undefined ? {} : { typedData: approval.typedData }),
 });
 
 /**
@@ -155,6 +171,9 @@ export const createApprovalQueue = (): ApprovalQueue => {
       if (approval.typedData !== undefined) {
         return { typedData: approval.typedData };
       }
+      if (approval.chainId !== undefined && approval.networkId !== undefined) {
+        return { chainId: approval.chainId, networkId: approval.networkId };
+      }
       if (approval.calls === undefined) {
         return null;
       }
@@ -198,6 +217,29 @@ export const createApprovalQueue = (): ApprovalQueue => {
         origin,
         summaries: [summary],
         typedData,
+      });
+    },
+    requestSwitchChain({ chainId, networkId, origin, summary }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+
+      const existing = [...pending.values()].find(
+        (approval) =>
+          approval.kind === "switch-chain" &&
+          approval.origin === origin &&
+          approval.chainId === chainId,
+      );
+      if (existing) {
+        return approvalSnapshot(existing);
+      }
+      return enqueue({
+        chainId,
+        id: crypto.randomUUID(),
+        kind: "switch-chain",
+        networkId,
+        origin,
+        summaries: [summary],
       });
     },
     requestWatchAsset({ origin, token }) {

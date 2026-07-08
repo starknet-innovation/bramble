@@ -264,6 +264,11 @@ const MESSAGES: readonly {
   },
 ];
 
+const flush = (): Promise<void> =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
 describe("key boundary", () => {
   test("no handled message response ever carries key material", async () => {
     const session = createUnlockSession();
@@ -277,8 +282,32 @@ describe("key boundary", () => {
       runtimeRpcStub,
     );
 
+    // State-changing dapp methods (invoke, switchChain, signTypedData) hold their
+    // response until approved. Fire the request, approve any approval it queues,
+    // then scan the settled response — the held result must also carry no secret.
+    const settle = async (
+      message: Record<string, unknown>,
+      sender: RuntimeSender,
+    ): Promise<unknown> => {
+      const held = handler(message, sender);
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await flush();
+        const listed = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
+          readonly pending?: readonly { readonly id: string }[];
+        };
+        const pending = listed.pending ?? [];
+        if (pending.length === 0) {
+          break;
+        }
+        for (const approval of pending) {
+          await handler({ id: approval.id, type: "wallet.approveOrigin" }, extensionSender);
+        }
+      }
+      return held;
+    };
+
     for (const { message, sender } of MESSAGES) {
-      const response = await handler(message, sender);
+      const response = await settle(message, sender);
       const serialized = JSON.stringify(response);
       const sanctionedReveal =
         message.type === "wallet.generateMnemonic" || message.type === "wallet.revealSecrets";

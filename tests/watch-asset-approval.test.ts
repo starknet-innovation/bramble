@@ -13,6 +13,7 @@ import { createUnlockSession } from "../src/background/session";
 import { createMemoryStore } from "../src/storage/kv";
 import { createPreferencesStore } from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
+import { flushHeld, latestApprovalId } from "./support/held";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const DAI = "0x03e85bfbb8e2a42b7bead9e88e9a1b19dbccf661471061807292120462396ec9";
@@ -126,59 +127,63 @@ const usdcMetadata: RuntimeRpc["getTokenMetadata"] = async (input) => {
     : { decimals: 6, name: "USD Coin", symbol: "USDC" };
 };
 
-const pendingId = async (handler: ReturnType<typeof makeHandler>["handler"]): Promise<string> => {
-  const response = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-  const pending = (response as { pending: readonly { id: string }[] }).pending;
-  const id = pending.at(-1)?.id;
-  if (!id) {
-    throw new Error("no pending approval");
-  }
-  return id;
-};
+const pendingId = (handler: ReturnType<typeof makeHandler>["handler"]): Promise<string> =>
+  latestApprovalId(handler, extensionSender);
 
 describe("watch-asset approval lifecycle", () => {
   test("queues a watch-asset prompt with on-chain metadata", async () => {
     metadataCalls.length = 0;
     const { handler } = makeHandler(usdcMetadata);
 
-    const response = await handler(
+    // The request holds until a decision, so fire it without awaiting and read
+    // the queued approval, then settle it so nothing is left pending.
+    const held = handler(
       { asset: { address: USDC }, origin, type: "wallet.watchAsset" },
       contentSender,
     );
+    await flushHeld();
+    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
 
-    expect(response).toMatchObject({
-      ok: false,
-      pending: {
-        kind: "watch-asset",
-        origin,
-        token: {
-          address: USDC,
-          decimals: 6,
-          name: "USD Coin",
-          networkId: "SN_MAIN",
-          symbol: "USDC",
-        },
+    expect((listed as { pending: readonly unknown[] }).pending.at(-1)).toMatchObject({
+      kind: "watch-asset",
+      origin,
+      token: {
+        address: USDC,
+        decimals: 6,
+        name: "USD Coin",
+        networkId: "SN_MAIN",
+        symbol: "USDC",
       },
     });
     expect(metadataCalls).toHaveLength(1);
     expect(metadataCalls[0]?.address).toBe(USDC);
     expect(metadataCalls[0]?.rpcUrls.length).toBeGreaterThan(0);
+
+    const id = await pendingId(handler);
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ ok: true, watched: true });
   });
 
   test("approving tracks the token and later requests resolve true", async () => {
     const { handler, preferencesStore } = makeHandler(usdcMetadata);
 
-    await handler({ asset: { address: USDC }, origin, type: "wallet.watchAsset" }, contentSender);
+    const held = handler(
+      { asset: { address: USDC }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
     const id = await pendingId(handler);
 
     await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
       ok: true,
       pending: [],
     });
+    await expect(held).resolves.toEqual({ ok: true, watched: true });
     const preferences = await preferencesStore.read();
     expect(
       preferences.tokens.some((token) => token.address === USDC && token.symbol === "USDC"),
     ).toBe(true);
+    // The token is already tracked, so a repeat request resolves immediately.
     await expect(
       handler({ asset: { address: USDC }, origin, type: "wallet.watchAsset" }, contentSender),
     ).resolves.toEqual({ ok: true, watched: true });
@@ -187,32 +192,50 @@ describe("watch-asset approval lifecycle", () => {
   test("denying leaves the token untracked", async () => {
     const { handler, preferencesStore } = makeHandler(usdcMetadata);
 
-    await handler({ asset: { address: DAI }, origin, type: "wallet.watchAsset" }, contentSender);
+    const held = handler(
+      { asset: { address: DAI }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
     const id = await pendingId(handler);
 
     await expect(handler({ id, type: "wallet.denyOrigin" }, extensionSender)).resolves.toEqual({
       ok: true,
       pending: [],
     });
+    await expect(held).resolves.toEqual({ error: "request rejected" });
     const preferences = await preferencesStore.read();
     expect(preferences.tokens.some((token) => token.address === DAI)).toBe(false);
-    await expect(
-      handler({ asset: { address: DAI }, origin, type: "wallet.watchAsset" }, contentSender),
-    ).resolves.toMatchObject({ ok: false, pending: { kind: "watch-asset" } });
+    // A denied token is not tracked, so a repeat request queues a fresh prompt.
+    const held2 = handler(
+      { asset: { address: DAI }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
+    const requeued = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
+    expect((requeued as { pending: readonly unknown[] }).pending.at(-1)).toMatchObject({
+      kind: "watch-asset",
+    });
+    const id2 = await pendingId(handler);
+    await handler({ id: id2, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(held2).resolves.toEqual({ error: "request rejected" });
   });
 
   test("falls back to dapp options when on-chain metadata is unavailable", async () => {
     const { handler } = makeHandler(throwingRpc().getTokenMetadata);
 
-    await expect(
-      handler(
-        { asset: { address: DAI, decimals: 18, symbol: "DAI" }, origin, type: "wallet.watchAsset" },
-        contentSender,
-      ),
-    ).resolves.toMatchObject({
-      ok: false,
-      pending: { token: { address: DAI, decimals: 18, name: "DAI", symbol: "DAI" } },
+    const held = handler(
+      { asset: { address: DAI, decimals: 18, symbol: "DAI" }, origin, type: "wallet.watchAsset" },
+      contentSender,
+    );
+    await flushHeld();
+    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
+    expect((listed as { pending: readonly unknown[] }).pending.at(-1)).toMatchObject({
+      token: { address: DAI, decimals: 18, name: "DAI", symbol: "DAI" },
     });
+    const id = await pendingId(handler);
+    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "request rejected" });
   });
 
   test("rejects unusable metadata and origin mismatches", async () => {
@@ -229,15 +252,18 @@ describe("watch-asset approval lifecycle", () => {
     ).resolves.toEqual({ error: "sender origin mismatch" });
   });
 
-  test("broadcasts approvalsChanged only when a prompt is queued", () => {
-    expect(
-      walletEventBroadcasts(
-        { type: "wallet.watchAsset" },
-        { ok: false, pending: { id: "x", kind: "watch-asset", origin } },
-      ),
-    ).toEqual([{ event: "approvalsChanged", type: "wallet.event" }]);
+  test("does not broadcast from the watch-asset response itself", () => {
+    // A held watch-asset request signals the queue at enqueue time through the
+    // approval notifier; the request's own settled response broadcasts nothing.
     expect(
       walletEventBroadcasts({ type: "wallet.watchAsset" }, { ok: true, watched: true }),
     ).toEqual([]);
+    // Approving the queued prompt is what refreshes the approvals list.
+    expect(
+      walletEventBroadcasts({ type: "wallet.approveOrigin" }, { ok: true, pending: [] }),
+    ).toEqual([
+      { event: "accountsChanged", type: "wallet.event" },
+      { event: "approvalsChanged", type: "wallet.event" },
+    ]);
   });
 });

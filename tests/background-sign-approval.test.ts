@@ -134,7 +134,7 @@ describe("signTypedData approval gate", () => {
       pending: { id: string }[];
     };
     await handler({ id: pending.pending[0]?.id, type: "wallet.denyOrigin" }, page);
-    expect(await held).toEqual({ error: "signature request denied" });
+    expect(await held).toEqual({ error: "request rejected" });
   });
 
   test("an unconnected origin cannot queue a signature", async () => {

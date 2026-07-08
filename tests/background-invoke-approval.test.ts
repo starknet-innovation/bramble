@@ -14,6 +14,7 @@ import { createUnlockSession } from "../src/background/session";
 import type { InvokeInput } from "../src/starknet/rpc";
 import { memoryActivityLog } from "../src/storage/activity-store";
 import type { AccountRef } from "../src/storage/vault-schema";
+import { flushHeld, latestApprovalId } from "./support/held";
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -113,27 +114,41 @@ describe("per-transaction invoke approval (A-H1)", () => {
   test("queues a connected dapp invoke instead of submitting it", async () => {
     const { handler, invoked } = makeHarness();
 
-    const response = await handler(invokeMessage(), contentSender);
+    // The invoke holds until a decision; inspect the queued approval, then deny
+    // so the held request settles and nothing dangles.
+    const held = handler(invokeMessage(), contentSender);
+    await flushHeld();
+    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
 
-    expect(response).toMatchObject({ ok: false, pending: { kind: "invoke", origin } });
-    const pending = (response as { pending: { summaries?: readonly string[] } }).pending;
-    expect(pending.summaries?.length).toBe(1);
+    const pending = (
+      listed as {
+        pending: readonly { kind?: string; summaries?: readonly string[]; origin?: string }[];
+      }
+    ).pending.at(-1);
+    expect(pending).toMatchObject({ kind: "invoke", origin });
+    expect(pending?.summaries?.length).toBe(1);
     expect(invoked).toHaveLength(0);
+
+    const id = await latestApprovalId(handler, extensionSender);
+    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "request rejected" });
   });
 
   test("submits the held calls only after the user approves", async () => {
     const { activity, handler, invoked } = makeHarness();
 
-    const queued = await handler(invokeMessage(), contentSender);
-    const id = (queued as { pending: { id: string } }).pending.id;
+    const held = handler(invokeMessage(), contentSender);
+    await flushHeld();
 
     const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
     expect((listed as { pending: readonly { kind?: string }[] }).pending[0]?.kind).toBe("invoke");
 
+    const id = await latestApprovalId(handler, extensionSender);
     await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
       ok: true,
       pending: [],
     });
+    await expect(held).resolves.toEqual({ ok: true, transactionHash: "0x7cd" });
     expect(invoked).toHaveLength(1);
     expect(invoked[0]?.account).toEqual(account);
     const recorded = await activity.list();
@@ -143,13 +158,15 @@ describe("per-transaction invoke approval (A-H1)", () => {
   test("drops the held calls when the user denies", async () => {
     const { handler, invoked } = makeHarness();
 
-    const queued = await handler(invokeMessage(), contentSender);
-    const id = (queued as { pending: { id: string } }).pending.id;
+    const held = handler(invokeMessage(), contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
 
     await expect(handler({ id, type: "wallet.denyOrigin" }, extensionSender)).resolves.toEqual({
       ok: true,
       pending: [],
     });
+    await expect(held).resolves.toEqual({ error: "request rejected" });
     expect(invoked).toHaveLength(0);
   });
 

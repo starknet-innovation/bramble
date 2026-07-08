@@ -42,16 +42,17 @@ export const walletEventBroadcasts = (
     return withNetwork(account ? networkChangedForId(account.networkId) : null);
   }
   if (message.type === "wallet.approveOrigin") {
-    return [accountsChanged, approvalsChanged];
+    // A switch-chain approval carries the new chain id, so dapps also see the
+    // network change; other approvals just refresh accounts + the queue.
+    return typeof response.chainId === "string"
+      ? [accountsChanged, approvalsChanged, networkChanged(response.chainId)]
+      : [accountsChanged, approvalsChanged];
   }
   if (message.type === "wallet.denyOrigin") {
     return [approvalsChanged];
   }
   if (message.type === "wallet.revokeOrigin") {
     return [accountsChanged];
-  }
-  if (message.type === "wallet.requestAccounts" || message.type === "wallet.watchAsset") {
-    return response.ok === false && isRecord(response.pending) ? [approvalsChanged] : [];
   }
   if (message.type === "wallet.setActiveAccount") {
     return [accountsChanged];

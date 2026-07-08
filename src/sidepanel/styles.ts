@@ -15,6 +15,7 @@
  * scales, translates, or reflows on hover, press, or selection.
  */
 import { CONTROL, MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
+import { SIGN_REQUEST_STYLES } from "./sign-request";
 import { BASE_STYLES } from "./styles-base";
 
 /**
@@ -296,6 +297,7 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
     padding: ${SPACE.md};
   }
   .review-panel p { color: var(--mc-text); font-size: ${TYPE.label.size}; }
+${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--mc-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .tx-hint { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }

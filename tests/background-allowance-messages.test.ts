@@ -9,6 +9,7 @@ import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import { memoryAllowanceStore } from "../src/storage/allowance-store";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { flushHeld, latestApprovalId } from "./support/held";
 
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const account: AccountRef = {
@@ -119,10 +120,10 @@ const makeHarness = () => {
   return { allowanceStore, handler, invokeCalls };
 };
 
-// A dapp invoke is now queued as an approval; approving it runs the held calls
-// through the wallet, which is where allowances get recorded.
+// A dapp invoke is now held behind an approval; approving it runs the held
+// calls through the wallet, which is where allowances get recorded.
 const submitApprove = async (handler: ReturnType<typeof makeHarness>["handler"]) => {
-  const queued = await handler(
+  const held = handler(
     {
       calls: [{ calldata: ["0x5", "1000", "0"], contractAddress: TOKEN, entrypoint: "approve" }],
       origin: "https://dapp.example",
@@ -130,8 +131,10 @@ const submitApprove = async (handler: ReturnType<typeof makeHarness>["handler"])
     },
     contentSender,
   );
-  const id = (queued as { pending?: { id?: string } }).pending?.id ?? "";
-  return handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+  await flushHeld();
+  const id = await latestApprovalId(handler, extensionSender);
+  await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+  return held;
 };
 
 describe("allowance manager messages", () => {

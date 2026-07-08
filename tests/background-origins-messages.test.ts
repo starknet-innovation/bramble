@@ -13,6 +13,7 @@ import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import { memoryOriginHistory } from "../src/storage/origin-history";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { flushHeld } from "./support/held";
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -183,10 +184,13 @@ describe("origin reputation on account requests", () => {
     );
     const dappSender: RuntimeSender = { id: "extension-id", url: "https://cleandapp.example/" };
 
-    await handler(
+    // The ungranted request holds behind a queued connection approval, so fire
+    // it without awaiting and inspect the enriched pending list.
+    const held = handler(
       { origin: "https://cleandapp.example", type: "wallet.requestAccounts" },
       dappSender,
     );
+    await flushHeld();
     const response = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
 
     expect(response).toMatchObject({ ok: true });
@@ -194,6 +198,7 @@ describe("origin reputation on account requests", () => {
       response as {
         pending: readonly {
           blocked?: boolean;
+          id: string;
           insights?: readonly string[];
           origin: string;
         }[];
@@ -204,5 +209,9 @@ describe("origin reputation on account requests", () => {
     // The origin is recorded only by the enricher, so the very first listing of
     // a brand-new site correctly reports it as never-before-seen.
     expect(pending[0]?.insights?.some((insight) => insight.includes("First time"))).toBe(true);
+
+    // Settle the held request so nothing is left pending.
+    await handler({ id: pending[0]?.id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "connection rejected" });
   });
 });

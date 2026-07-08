@@ -11,6 +11,7 @@ import type { InvokeInput } from "../src/starknet/rpc";
 import { defaultWalletPreferences, type WalletPreferences } from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
 import type { EnsureNetworkAccountInput, WalletStatus } from "../src/wallet/vault-service";
+import { flushHeld, latestApprovalId } from "./support/held";
 
 const account: AccountRef = {
   address: "0xabcabcdef",
@@ -256,18 +257,25 @@ describe("background network messages", () => {
       },
     );
 
+    // Switching the chain is held behind an approval; approving performs the
+    // switch and returns the new chain id to the dapp.
+    const switchHeld = handler(
+      {
+        chainId: "0x534e5f4d41494e",
+        origin: "https://example.com",
+        type: "wallet.switchChain",
+      },
+      contentSender,
+    );
+    await flushHeld();
+    const switchId = await latestApprovalId(handler, sender);
     await expect(
-      handler(
-        {
-          chainId: "0x534e5f4d41494e",
-          origin: "https://example.com",
-          type: "wallet.switchChain",
-        },
-        contentSender,
-      ),
-    ).resolves.toEqual({ chainId: "0x534e5f4d41494e", ok: true });
+      handler({ id: switchId, type: "wallet.approveOrigin" }, sender),
+    ).resolves.toMatchObject({ chainId: "0x534e5f4d41494e", ok: true, pending: [] });
+    await expect(switchHeld).resolves.toEqual({ chainId: "0x534e5f4d41494e", ok: true });
+
     // A connected dapp invoke is queued as an approval, not auto-submitted.
-    const invokeResponse = await handler(
+    const invokeHeld = handler(
       {
         calls: [{ calldata: ["0x1"], contractAddress: "0x123", entrypoint: "transfer" }],
         origin: "https://example.com",
@@ -275,16 +283,19 @@ describe("background network messages", () => {
       },
       contentSender,
     );
-    expect(invokeResponse).toMatchObject({
-      ok: false,
-      pending: { kind: "invoke", origin: "https://example.com" },
+    await flushHeld();
+    const listed = await handler({ type: "wallet.pendingApprovals" }, sender);
+    expect((listed as { pending: readonly unknown[] }).pending.at(-1)).toMatchObject({
+      kind: "invoke",
+      origin: "https://example.com",
     });
     expect(invoked).toHaveLength(0);
 
-    const invokeId = (invokeResponse as { pending: { id: string } }).pending.id;
+    const invokeId = await latestApprovalId(handler, sender);
     await expect(
       handler({ id: invokeId, type: "wallet.approveOrigin" }, sender),
     ).resolves.toMatchObject({ ok: true, pending: [] });
+    await expect(invokeHeld).resolves.toMatchObject({ ok: true, transactionHash: "0x123" });
 
     expect(invoked[0]).toMatchObject({
       account: mainnetAccount,

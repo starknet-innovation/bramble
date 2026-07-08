@@ -3,7 +3,11 @@
  * background message handler: SNIP-12 signing, chain-id reads, and dapp chain
  * switches. Split from messages.ts to keep it within the size budget.
  */
-import { networkIdForChainId, STARKNET_NETWORKS } from "../starknet/networks";
+import {
+  networkIdForChainId,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+} from "../starknet/networks";
 import { typedDataHash } from "../starknet/typed-data";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { notifyApprovalsChanged } from "./approval-notifier";
@@ -155,27 +159,46 @@ export const handleChainOps = async (
     }
     const passphrase = session.getPassphrase();
     const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
-    // Only an origin that already holds a connection grant may steer the
-    // wallet's active network. A locked wallet or an unconnected (or blocked)
-    // site must not silently switch the chain for every other dapp.
+    // Only an origin that already holds a connection grant may ask to switch the
+    // network — and even then it may only ask: the switch never happens without
+    // an explicit user approval. A locked or unconnected site is refused.
     if (granted.length === 0) {
       return { error: "origin not connected" };
     }
-    const account = await switchActiveNetwork(wallet, session, preferencesStore, networkId);
-    if (
-      passphrase &&
-      account &&
-      granted.length > 0 &&
-      !granted.some((item) => item.id === account.id)
-    ) {
-      await wallet.grantOrigin({
-        accountId: account.id,
-        origin: input.origin,
-        vaultPassphrase: passphrase,
-      });
-    }
-    return { chainId: STARKNET_NETWORKS[networkId].chainId, ok: true };
+    const approval = approvals.requestSwitchChain({
+      chainId: STARKNET_NETWORKS[networkId].chainId,
+      networkId,
+      origin: input.origin,
+      summary: `Switch network to ${STARKNET_NETWORKS[networkId].name}`,
+    });
+    notifyApprovalsChanged();
+    return waiters.register(approval.id);
   }
 
   return null;
+};
+
+/**
+ * Applies a user-approved chain switch: sets the active network, keeps the
+ * origin's grant on the new network, and returns the new chain id for the dapp.
+ */
+export const executeSwitchChainApproval = async (
+  deps: Pick<ChainOpsDeps, "preferencesStore" | "session" | "wallet">,
+  input: { readonly networkId: StarknetNetworkId; readonly origin: string },
+): Promise<RuntimeResponse> => {
+  const { preferencesStore, session, wallet } = deps;
+  const passphrase = session.getPassphrase();
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const account = await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
+  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (account && !granted.some((item) => item.id === account.id)) {
+    await wallet.grantOrigin({
+      accountId: account.id,
+      origin: input.origin,
+      vaultPassphrase: passphrase,
+    });
+  }
+  return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
 };

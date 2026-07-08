@@ -8,11 +8,16 @@ import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import type { AccountRef } from "../src/storage/vault-schema";
+import { flushHeld, latestApprovalId } from "./support/held";
 
 const MAINNET_CHAIN_ID = "0x534e5f4d41494e";
 const origin = "https://dapp.example";
 const vaultPassphrase = "correct horse battery staple";
 const contentSender: RuntimeSender = { id: "extension-id", url: `${origin}/app` };
+const extensionSender: RuntimeSender = {
+  id: "extension-id",
+  url: "chrome-extension://extension-id/sidepanel.html",
+};
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -73,15 +78,22 @@ const walletStub = (connected: readonly AccountRef[]) => ({
 const switchMessage = { chainId: MAINNET_CHAIN_ID, origin, type: "wallet.switchChain" as const };
 
 describe("switchChain grant gate (A-M1)", () => {
-  test("lets a connected origin switch the active network", async () => {
+  test("lets a connected origin switch the active network after approval", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
     const handler = createMessageHandler(walletStub([account]), "extension-id", session);
 
-    await expect(handler(switchMessage, contentSender)).resolves.toEqual({
+    // The switch is held behind an explicit approval — it never changes the
+    // network just because a connected site asked.
+    const held = handler(switchMessage, contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
       chainId: MAINNET_CHAIN_ID,
       ok: true,
+      pending: [],
     });
+    await expect(held).resolves.toEqual({ chainId: MAINNET_CHAIN_ID, ok: true });
   });
 
   test("rejects a switch from an origin with no grant", async () => {

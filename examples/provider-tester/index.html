@@ -171,7 +171,7 @@
       <section class="scenario" data-step="2">
         <header><h2>2 · Connect</h2></header>
         <p class="why"><code>enable()</code> → <code>wallet_requestAccounts</code>. First time, the wallet queues a connection request.</p>
-        <p class="expect"><b>Expect:</b> the wallet shows a <b>Connection request</b> card. After you Approve, this returns your account address(es).</p>
+        <p class="expect"><b>Expect:</b> the call <b>holds</b> while the wallet shows a <b>Connection request</b> card; on Approve it resolves with your account address(es), on Deny it rejects. No retry needed.</p>
         <div class="controls"><button type="button" data-run="connect">Connect</button></div>
         <div class="result" id="r-connect"></div>
       </section>
@@ -205,10 +205,10 @@
 
       <section class="scenario" data-step="6">
         <header><h2>6 · Send transaction (invoke)</h2></header>
-        <p class="why"><code>wallet_addInvokeTransaction</code> with an ERC20 <code>transfer</code> call (self-transfer of 1 wei STRK by default).</p>
-        <p class="expect"><b>Expect:</b> the wallet shows a <b>Transaction request</b> card with the decoded call. The dapp call rejects with <code>approval pending</code> — approve in the wallet and the tx is submitted and appears in <b>Activity</b>. It must <b>never</b> auto-submit. (On-chain success needs a deployed, funded account.)</p>
+        <p class="why"><code>wallet_addInvokeTransaction</code> with an ERC20 <code>transfer</code> call (self-transfer of 1 FRI, STRK's smallest unit, by default).</p>
+        <p class="expect"><b>Expect:</b> the call <b>holds</b> while the wallet shows a <b>Transaction request</b> card with the decoded call. Approve → it resolves with <code>{ transaction_hash }</code> and the tx appears in <b>Activity</b>; Deny → it rejects. It must <b>never</b> auto-submit. (On-chain success needs a deployed, funded account.)</p>
         <div class="field"><label for="i-recipient">Recipient (defaults to your own address)</label><input id="i-recipient" placeholder="0x…" /></div>
-        <div class="field"><label for="i-amount">Amount (wei)</label><input id="i-amount" value="1" /></div>
+        <div class="field"><label for="i-amount">Amount (FRI)</label><input id="i-amount" value="1" /></div>
         <div class="controls"><button type="button" data-run="invoke">Send invoke</button></div>
         <div class="result" id="r-invoke"></div>
       </section>
@@ -216,7 +216,7 @@
       <section class="scenario" data-step="7">
         <header><h2>7 · Switch chain</h2></header>
         <p class="why"><code>wallet_switchStarknetChain</code> — only a connected origin may switch.</p>
-        <p class="expect"><b>Expect:</b> returns <code>true</code> and fires <code>networkChanged</code> (watch the log). An unconnected origin is refused. Devnet is a distinct chain id.</p>
+        <p class="expect"><b>Expect:</b> the call <b>holds</b> and the wallet shows a <b>Network switch request</b> — the network never changes without your approval. Approve → returns <code>true</code> and fires <code>networkChanged</code>; unconnected origins are refused.</p>
         <div class="controls">
           <button type="button" class="ghost" data-run="switch" data-chain="0x534e5f5345504f4c4941">Switch to Sepolia</button>
           <button type="button" class="ghost" data-run="switch" data-chain="0x534e5f4d41494e">Switch to Mainnet</button>
@@ -227,7 +227,7 @@
       <section class="scenario" data-step="8">
         <header><h2>8 · Watch asset</h2></header>
         <p class="why"><code>wallet_watchAsset</code> (ERC20). Adds a token to the wallet's tracked list.</p>
-        <p class="expect"><b>Expect:</b> the wallet shows an <b>Add token</b> card (with blocklist/reputation notes if any). Approve → returns <code>true</code> and the token appears under Tokens. Malformed names are rejected.</p>
+        <p class="expect"><b>Expect:</b> the call <b>holds</b> while the wallet shows an <b>Add token</b> card (with blocklist/reputation notes if any). Approve → returns <code>true</code> and the token appears under Tokens; malformed names are rejected.</p>
         <div class="field"><label for="i-token">Token address</label><input id="i-token" value="0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d" /></div>
         <div class="field"><label for="i-symbol">Symbol</label><input id="i-symbol" value="STRK" /></div>
         <div class="controls"><button type="button" data-run="watch">Watch asset</button></div>

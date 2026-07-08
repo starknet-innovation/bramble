@@ -12,6 +12,7 @@ import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { recordApproveAllowances } from "./allowance-ops";
+import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalPayload, ApprovalQueue } from "./approvals";
 import { readAddInvokeTransactionInput } from "./message-inputs";
 import { readGetPermissionsInput, readWatchAssetInput } from "./provider-inputs";
@@ -20,6 +21,7 @@ import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
+import type { SignatureWaiters } from "./signature-waiters";
 import { canonicalTokenAddress, watchAssetToken } from "./watch-asset";
 
 /**
@@ -32,6 +34,7 @@ export type ProviderOpsDeps = {
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
+  readonly waiters: SignatureWaiters;
 };
 
 /**
@@ -57,7 +60,7 @@ export const handleProviderOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const { approvals, extensionId, preferencesStore, runtimeRpc, session, wallet } = deps;
+  const { approvals, extensionId, preferencesStore, runtimeRpc, session, waiters, wallet } = deps;
 
   if (messageType === "wallet.getPermissions") {
     const input = readGetPermissionsInput(message);
@@ -106,7 +109,9 @@ export const handleProviderOps = async (
     if (!token) {
       return { error: "invalid watch asset metadata" };
     }
-    return { ok: false, pending: approvals.requestWatchAsset({ origin: input.origin, token }) };
+    const approval = approvals.requestWatchAsset({ origin: input.origin, token });
+    notifyApprovalsChanged();
+    return waiters.register(approval.id);
   }
 
   if (messageType === "wallet.addInvokeTransaction") {
@@ -135,15 +140,14 @@ export const handleProviderOps = async (
       addressBook: preferences.addressBook,
       tokens: preferences.tokens,
     });
-    return {
-      ok: false,
-      pending: approvals.requestInvoke({
-        calls: input.calls,
-        flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
-        origin: input.origin,
-        summaries: report.calls.map((call) => call.summary),
-      }),
-    };
+    const approval = approvals.requestInvoke({
+      calls: input.calls,
+      flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+      origin: input.origin,
+      summaries: report.calls.map((call) => call.summary),
+    });
+    notifyApprovalsChanged();
+    return waiters.register(approval.id);
   }
 
   return null;

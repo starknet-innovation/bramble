@@ -41,13 +41,10 @@ describe("walletEventBroadcasts", () => {
     );
   });
 
-  test("announces new pending approvals from dapp connection requests", () => {
-    expect(
-      walletEventBroadcasts(
-        { type: "wallet.requestAccounts" },
-        { ok: false, pending: { id: "1", origin: "https://dapp.example" } },
-      ),
-    ).toEqual([approvalsChanged]);
+  test("stays silent on a held connection request — the queue notifier signals it", () => {
+    // A held requestAccounts resolves to granted accounts only after approval;
+    // the approvals-changed signal is pushed at enqueue time by the notifier,
+    // and the connection itself is announced by the approveOrigin broadcast.
     expect(
       walletEventBroadcasts({ type: "wallet.requestAccounts" }, { accounts: [], ok: true }),
     ).toEqual([]);

@@ -4,7 +4,7 @@
  */
 
 import { isUuid } from "../shared/ids";
-import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
 
@@ -41,10 +41,11 @@ export type PendingApproval = {
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
-  readonly kind?: "connect" | "invoke" | "sign-typed-data" | "watch-asset";
+  readonly kind?: "connect" | "invoke" | "sign-typed-data" | "switch-chain" | "watch-asset";
   readonly origin: string;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
+  readonly typedData?: Json;
 };
 
 /**
@@ -115,15 +116,18 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "origin",
       "summaries",
       "token",
+      "typedData",
     ]) ||
     typeof value.id !== "string" ||
     !isUuid(value.id) ||
     typeof value.origin !== "string" ||
     !isWalletOrigin(value.origin) ||
+    (value.typedData !== undefined && !isJson(value.typedData)) ||
     (value.kind !== undefined &&
       value.kind !== "connect" &&
       value.kind !== "invoke" &&
       value.kind !== "sign-typed-data" &&
+      value.kind !== "switch-chain" &&
       value.kind !== "watch-asset") ||
     (value.blocked !== undefined && typeof value.blocked !== "boolean") ||
     (value.insights !== undefined &&

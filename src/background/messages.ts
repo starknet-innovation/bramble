@@ -11,12 +11,13 @@ import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { activeAccountSecrets } from "../wallet/vault-service";
 import { handleAllowanceOps } from "./allowance-ops";
+import { handleApprovalDecision } from "./approval-decisions";
 import { enrichApprovals } from "./approval-insights";
+import { notifyApprovalsChanged } from "./approval-notifier";
 import { type ApprovalQueue, createApprovalQueue } from "./approvals";
-import { executeSignApproval, handleChainOps } from "./chain-ops";
+import { handleChainOps } from "./chain-ops";
 import {
   readAddAccountInput,
-  readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
   readGrantOriginInput,
@@ -31,7 +32,7 @@ import {
 import { handleNftOps } from "./nft-ops";
 import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
-import { executeInvokeApproval, handleProviderOps } from "./provider-ops";
+import { handleProviderOps } from "./provider-ops";
 import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
 import { statusResponse, switchActiveNetwork, unavailablePreferencesStore } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
@@ -129,7 +130,7 @@ const handleRuntimeMessage = async (
   }
 
   const providerOpsResponse = await handleProviderOps(
-    { approvals, extensionId, preferencesStore, runtimeRpc, session, wallet },
+    { approvals, extensionId, preferencesStore, runtimeRpc, session, waiters, wallet },
     messageType,
     message,
     sender,
@@ -179,82 +180,13 @@ const handleRuntimeMessage = async (
     return { account, ok: true };
   }
 
-  if (messageType === "wallet.approveOrigin") {
-    const input = readApprovalIdInput(message);
-    if (!input) {
-      return { error: "invalid approval request" };
-    }
-    const approval = approvals.get(input.id);
-    if (!approval) {
-      return { error: "approval not found" };
-    }
-    if (approval.kind === "watch-asset") {
-      if (!approval.token) {
-        return { error: "approval not found" };
-      }
-      await preferencesStore.upsertToken(approval.token);
-      approvals.approve(input.id);
-      return { ok: true, pending: approvals.list() };
-    }
-    if (approval.kind === "invoke") {
-      const payload = approvals.payload(input.id);
-      if (!payload) {
-        return { error: "approval not found" };
-      }
-      const result = await executeInvokeApproval(
-        { activity, allowanceStore, preferencesStore, runtimeRpc, session, wallet },
-        { origin: approval.origin, payload },
-      );
-      if ("error" in result) {
-        return result;
-      }
-      approvals.approve(input.id);
-      return { ok: true, pending: approvals.list() };
-    }
-    if (approval.kind === "sign-typed-data") {
-      const payload = approvals.payload(input.id);
-      if (payload?.typedData === undefined) {
-        return { error: "approval not found" };
-      }
-      const result = await executeSignApproval(
-        { preferencesStore, session, wallet },
-        { origin: approval.origin, typedData: payload.typedData },
-      );
-      // Deliver the outcome back through the dapp's held request channel, then
-      // clear the approval regardless (the request is resolved either way).
-      waiters.settle(input.id, result);
-      approvals.approve(input.id);
-      if ("error" in result) {
-        return result;
-      }
-      return { ok: true, pending: approvals.list() };
-    }
-    const passphrase = session.getPassphrase();
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    const accounts = await wallet.grantOrigin({
-      origin: approval.origin,
-      vaultPassphrase: passphrase,
-    });
-    approvals.approve(input.id);
-    return {
-      accounts,
-      ok: true,
-    };
-  }
-
-  if (messageType === "wallet.denyOrigin") {
-    const input = readApprovalIdInput(message);
-    if (!input) {
-      return { error: "invalid approval request" };
-    }
-    const denied = approvals.get(input.id);
-    approvals.deny(input.id);
-    if (denied?.kind === "sign-typed-data") {
-      waiters.settle(input.id, { error: "signature request denied" });
-    }
-    return { ok: true, pending: approvals.list() };
+  const approvalDecision = await handleApprovalDecision(
+    { activity, allowanceStore, approvals, preferencesStore, runtimeRpc, session, waiters, wallet },
+    messageType,
+    message,
+  );
+  if (approvalDecision) {
+    return approvalDecision;
   }
 
   if (messageType === "wallet.generateMnemonic") {
@@ -337,7 +269,12 @@ const handleRuntimeMessage = async (
         return { accounts, ok: true };
       }
     }
-    return { ok: false, pending: approvals.request(input.origin) };
+    // Queue a connection approval and hold the response so the dapp's
+    // requestAccounts resolves with the granted addresses after the user
+    // approves — rather than rejecting and forcing a retry.
+    const approval = approvals.request(input.origin);
+    notifyApprovalsChanged();
+    return waiters.register(approval.id);
   }
 
   if (messageType === "wallet.setActiveAccount") {
