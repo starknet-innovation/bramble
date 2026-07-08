@@ -7,8 +7,12 @@ import type { WalletEventMessage } from "../provider/events";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
 import { createActivityLog, systemClock } from "../storage/activity-store";
 import { createAllowanceStore } from "../storage/allowance-store";
-import { createBrowserLocalStore, createBrowserSessionStore } from "../storage/browser-storage";
-import { createEncryptedStore } from "../storage/encrypted-store";
+import {
+  createBrowserLocalStore,
+  createBrowserSessionStore,
+  hardenSessionAccess,
+} from "../storage/browser-storage";
+import { createEncryptedStore, type EncryptedStore } from "../storage/encrypted-store";
 import { createOriginHistoryStore } from "../storage/origin-history";
 import { createPreferencesStore } from "../storage/preferences-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
@@ -80,16 +84,34 @@ const sessionStore: UnlockSessionStore | undefined = (() => {
     return undefined;
   }
 })();
-const session = createUnlockSession(undefined, undefined, sessionStore);
+// The vault store is created up front so the unlock session can drop its
+// cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
+// operations for the life of an unlock rather than re-derived every time.
+const vaultStore: EncryptedStore | null = (() => {
+  try {
+    return createEncryptedStore(createBrowserLocalStore(), VAULT_STORE_KEY);
+  } catch {
+    return null;
+  }
+})();
+const session = createUnlockSession(undefined, undefined, sessionStore, () =>
+  vaultStore?.clearKeys(),
+);
 const sessionReady = session.restore().catch(() => undefined);
-const wallet = Promise.resolve()
-  .then(() =>
-    createWalletVaultService({
-      encryptedStore: createEncryptedStore(createBrowserLocalStore(), VAULT_STORE_KEY),
-      kms: createKrustyKms(krustyModule),
-    }),
-  )
-  .catch(() => null);
+// Restrict the in-memory session area (which mirrors the unlock passphrase
+// across worker restarts) to trusted extension contexts, so content scripts
+// and web pages can never read it.
+void hardenSessionAccess().catch(() => undefined);
+const wallet = vaultStore
+  ? Promise.resolve()
+      .then(() =>
+        createWalletVaultService({
+          encryptedStore: vaultStore,
+          kms: createKrustyKms(krustyModule),
+        }),
+      )
+      .catch(() => null)
+  : Promise.resolve(null);
 const preferences = Promise.resolve()
   .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
   .catch(() => null);

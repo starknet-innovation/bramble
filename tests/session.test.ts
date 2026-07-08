@@ -99,6 +99,28 @@ describe("createUnlockSession", () => {
     expect(tooLate.getPassphrase()).toBeNull();
   });
 
+  test("clears derived key material on both lock and inactivity expiry", () => {
+    let now = 1_000;
+    let cleared = 0;
+    const session = createUnlockSession(
+      100,
+      () => now,
+      undefined,
+      () => {
+        cleared += 1;
+      },
+    );
+
+    session.unlock(PASSPHRASE);
+    session.lock();
+    expect(cleared).toBe(1);
+
+    session.unlock(PASSPHRASE);
+    now = 1_201;
+    expect(session.getPassphrase()).toBeNull();
+    expect(cleared).toBe(2);
+  });
+
   test("ignores malformed persisted sessions", async () => {
     const store = {
       async clear() {},

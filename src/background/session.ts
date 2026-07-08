@@ -62,6 +62,7 @@ export const createUnlockSession = (
   ttlMs = DEFAULT_TTL_MS,
   now = () => Date.now(),
   store?: UnlockSessionStore,
+  onClear?: () => void,
 ): UnlockSession => {
   if (!isValidTtl(ttlMs)) {
     throw new WalletError("Invalid unlock session ttl");
@@ -84,6 +85,9 @@ export const createUnlockSession = (
     passphrase = null;
     persistedAt = 0;
     void store?.clear().catch(() => undefined);
+    // Drop any derived-key cache (e.g. the vault AES key) so locking or expiry
+    // leaves no usable key material behind in worker memory.
+    onClear?.();
   };
 
   const getPassphrase = (): string | null => {

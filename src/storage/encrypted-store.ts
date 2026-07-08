@@ -91,7 +91,18 @@ const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   return copy.buffer;
 };
 
-const deriveKey = async (passphrase: string, salt: Uint8Array, iterations: number) => {
+/**
+ * Resolves a passphrase into an AES-GCM key for the given salt/iterations,
+ * mirroring the standalone {@link deriveKey}. A cached implementation can be
+ * injected so the expensive KDF runs once per unlock instead of per operation.
+ */
+export type KeyResolver = (
+  passphrase: string,
+  salt: Uint8Array,
+  iterations: number,
+) => Promise<CryptoKey>;
+
+const deriveKey: KeyResolver = async (passphrase, salt, iterations) => {
   invariant(isVaultPassphrase(passphrase), "Passphrase must be at least 12 characters");
 
   const baseKey = await crypto.subtle.importKey(
@@ -111,6 +122,13 @@ const deriveKey = async (passphrase: string, salt: Uint8Array, iterations: numbe
   );
 };
 
+// A non-secret fingerprint of the passphrase, used only to key the in-memory
+// derived-key cache so a wrong passphrase can never collide onto a cached key.
+const passphraseFingerprint = async (passphrase: string): Promise<string> => {
+  const digest = await crypto.subtle.digest("SHA-256", toArrayBuffer(encoder.encode(passphrase)));
+  return bytesToBase64(new Uint8Array(digest));
+};
+
 const encryptionParams = (iv: Uint8Array, scope: string): AesGcmParams => {
   invariant(scope.length > 0, "Encrypted store scope is required");
   return {
@@ -127,12 +145,13 @@ export const encryptJson = async (
   value: Json,
   passphrase: string,
   scope: string,
+  resolveKey: KeyResolver = deriveKey,
 ): Promise<EncryptedEnvelope> => {
   assertJsonValue(value);
 
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(passphrase, salt, KDF_ITERATIONS);
+  const key = await resolveKey(passphrase, salt, KDF_ITERATIONS);
   const plaintext = encoder.encode(JSON.stringify(value));
   const data = await crypto.subtle.encrypt(encryptionParams(iv, scope), key, plaintext);
 
@@ -155,12 +174,13 @@ export const decryptJson = async (
   envelope: EncryptedEnvelope,
   passphrase: string,
   scope: string,
+  resolveKey: KeyResolver = deriveKey,
 ): Promise<unknown> => {
   if (envelope.scope !== scope) {
     throw new WalletError("Invalid encrypted store envelope");
   }
 
-  const key = await deriveKey(passphrase, base64ToBytes(envelope.salt), envelope.iterations);
+  const key = await resolveKey(passphrase, base64ToBytes(envelope.salt), envelope.iterations);
   const plaintext = await crypto.subtle.decrypt(
     encryptionParams(base64ToBytes(envelope.iv), scope),
     key,
@@ -171,23 +191,53 @@ export const decryptJson = async (
 };
 
 /**
- * Passphrase-protected JSON store over a key-value backend.
+ * Passphrase-protected JSON store over a key-value backend. `clearKeys` drops
+ * the in-memory derived-key cache and must be called when the wallet locks.
  */
 export type EncryptedStore = {
+  readonly clearKeys: () => void;
   readonly exists: () => Promise<boolean>;
   readonly read: (passphrase: string) => Promise<unknown>;
   readonly remove: () => Promise<void>;
   readonly write: (value: Json, passphrase: string) => Promise<void>;
 };
 
+// Bounds the derived-key cache; salt changes each write, so a long-running
+// unlocked session with many writes must not accumulate keys without limit.
+const MAX_CACHED_KEYS = 8;
+
 /**
- * Creates an encrypted store for one key in the provided backend.
+ * Creates an encrypted store for one key in the provided backend. The store
+ * memoizes derived AES keys per (passphrase fingerprint, salt, iterations) so
+ * the PBKDF2 work runs once per unlock rather than on every read or signature;
+ * the keys are non-extractable and are dropped by `clearKeys` on lock.
  */
 export const createEncryptedStore = (store: KeyValueStore, key: string): EncryptedStore => {
   assertStorageKey(key);
   const scope = `mc-wallet:encrypted-store:${key}`;
+  const keyCache = new Map<string, CryptoKey>();
+
+  const resolveKey: KeyResolver = async (passphrase, salt, iterations) => {
+    const cacheId = `${await passphraseFingerprint(passphrase)}:${bytesToBase64(salt)}:${iterations}`;
+    const cached = keyCache.get(cacheId);
+    if (cached) {
+      return cached;
+    }
+    const derived = await deriveKey(passphrase, salt, iterations);
+    if (keyCache.size >= MAX_CACHED_KEYS) {
+      const oldest = keyCache.keys().next().value;
+      if (oldest !== undefined) {
+        keyCache.delete(oldest);
+      }
+    }
+    keyCache.set(cacheId, derived);
+    return derived;
+  };
 
   return {
+    clearKeys() {
+      keyCache.clear();
+    },
     async exists() {
       return (await store.get(key)) !== undefined;
     },
@@ -199,13 +249,13 @@ export const createEncryptedStore = (store: KeyValueStore, key: string): Encrypt
       if (!isEncryptedEnvelope(envelope)) {
         throw new WalletError("Invalid encrypted store envelope");
       }
-      return decryptJson(envelope as EncryptedEnvelope, passphrase, scope);
+      return decryptJson(envelope as EncryptedEnvelope, passphrase, scope, resolveKey);
     },
     async remove() {
       await store.remove(key);
     },
     async write(value, passphrase) {
-      await store.set(key, await encryptJson(value, passphrase, scope));
+      await store.set(key, await encryptJson(value, passphrase, scope, resolveKey));
     },
   };
 };

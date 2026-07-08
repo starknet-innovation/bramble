@@ -10,11 +10,17 @@ type StorageArea = {
   readonly set: (items: Record<string, Json>) => Promise<void>;
 };
 
+type SessionStorageArea = StorageArea & {
+  readonly setAccessLevel?: (options: {
+    readonly accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" | "TRUSTED_CONTEXTS";
+  }) => Promise<void>;
+};
+
 type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: {
     readonly storage?: {
       readonly local?: StorageArea;
-      readonly session?: StorageArea;
+      readonly session?: SessionStorageArea;
     };
   };
 };
@@ -61,4 +67,21 @@ export const createBrowserSessionStore = (): KeyValueStore => {
   }
 
   return createAreaStore(storage);
+};
+
+/**
+ * Restricts the in-memory session area to trusted extension contexts
+ * (background, popup, side panel) so untrusted content scripts and web pages
+ * can never read it. The unlock secret is mirrored there to survive
+ * service-worker restarts, so this access level is what keeps it off the page's
+ * reach — set explicitly rather than relying on the browser default. Resolves
+ * to whether the lockdown was applied.
+ */
+export const hardenSessionAccess = async (): Promise<boolean> => {
+  const storage = (globalThis as ExtensionGlobal).chrome?.storage?.session;
+  if (!storage?.setAccessLevel) {
+    return false;
+  }
+  await storage.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+  return true;
 };

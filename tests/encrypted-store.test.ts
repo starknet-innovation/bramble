@@ -74,6 +74,44 @@ describe("createEncryptedStore", () => {
     await expect(encrypted.read("wrong horse battery staple")).rejects.toThrow();
   });
 
+  test("derives the key once per unlock and re-derives after clearKeys", async () => {
+    const encrypted = createEncryptedStore(createMemoryStore(), vaultKey);
+    await encrypted.write({ schemaVersion: 1 }, "correct horse battery staple");
+    // Drop the key the write just cached so counting starts from a cold cache.
+    encrypted.clearKeys();
+
+    // Count the expensive PBKDF2 derivations across repeated reads.
+    const subtle = crypto.subtle as unknown as {
+      deriveKey: (...args: unknown[]) => Promise<CryptoKey>;
+    };
+    const original = subtle.deriveKey.bind(crypto.subtle);
+    let derivations = 0;
+    subtle.deriveKey = ((...args: unknown[]) => {
+      derivations += 1;
+      return original(...args);
+    }) as typeof subtle.deriveKey;
+
+    try {
+      await expect(encrypted.read("correct horse battery staple")).resolves.toEqual({
+        schemaVersion: 1,
+      });
+      await encrypted.read("correct horse battery staple");
+      await encrypted.read("correct horse battery staple");
+      expect(derivations).toBe(1);
+
+      // A wrong passphrase must not collide onto the cached key.
+      await expect(encrypted.read("wrong horse battery staple")).rejects.toThrow();
+      expect(derivations).toBe(2);
+
+      // Locking drops the cache, so the next read re-derives.
+      encrypted.clearKeys();
+      await encrypted.read("correct horse battery staple");
+      expect(derivations).toBe(3);
+    } finally {
+      subtle.deriveKey = original as typeof subtle.deriveKey;
+    }
+  });
+
   test("rejects malformed envelopes before decrypting", async () => {
     const store = createMemoryStore();
     const encrypted = createEncryptedStore(store, vaultKey);
