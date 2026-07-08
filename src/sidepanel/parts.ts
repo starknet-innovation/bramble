@@ -144,8 +144,10 @@ export const accountDisplayName = (
 ): string => preferences?.accountLabels?.[account.id] ?? friendlyAccountName(account.address);
 
 /**
- * Renders a deterministic identicon for an address: a symmetric 5x5 grid
- * derived from the address bits, drawn in the current skin color.
+ * Renders a deterministic gradient identicon for an address: a diagonal
+ * two-tone gradient with a soft accent orb, all hues derived from the address,
+ * filling its circular container. Distinct and recognizable per account without
+ * the sparse, glyph-like look of a pixel grid.
  */
 export const accountAvatar = (address: string): string => {
   let bits: bigint;
@@ -154,19 +156,26 @@ export const accountAvatar = (address: string): string => {
   } catch {
     bits = 0n;
   }
-  const cells: string[] = [];
-  for (let row = 0; row < 5; row += 1) {
-    for (let col = 0; col < 3; col += 1) {
-      const bit = (bits >> BigInt(row * 3 + col)) & 1n;
-      if (bit === 1n) {
-        cells.push(`<rect x="${col}" y="${row}" width="1" height="1" />`);
-        if (col < 2) {
-          cells.push(`<rect x="${4 - col}" y="${row}" width="1" height="1" />`);
-        }
-      }
-    }
-  }
-  return `<svg class="avatar" viewBox="-0.5 -0.5 6 6" aria-hidden="true" fill="currentColor">${cells.join("")}</svg>`;
+  const pick = (shift: number, mod: number): number =>
+    Number((bits >> BigInt(shift)) % BigInt(mod));
+  const h1 = pick(0, 360);
+  const h2 = (h1 + 55 + pick(11, 120)) % 360;
+  const h3 = (h1 + 190 + pick(23, 120)) % 360;
+  const orbX = 9 + pick(31, 22);
+  const orbY = 8 + pick(43, 18);
+  // A per-address gradient id; identical for repeats of the same account, so any
+  // duplicate reference resolves to the same definition.
+  const id = `av-${(bits % 2147483647n).toString(36)}`;
+  return `<svg class="avatar" viewBox="0 0 40 40" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
+    <defs>
+      <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="hsl(${h1} 74% 62%)" />
+        <stop offset="1" stop-color="hsl(${h2} 66% 44%)" />
+      </linearGradient>
+    </defs>
+    <rect width="40" height="40" fill="url(#${id})" />
+    <circle cx="${orbX}" cy="${orbY}" r="11" fill="hsl(${h3} 85% 66%)" opacity="0.55" />
+  </svg>`;
 };
 
 /**

@@ -104,6 +104,7 @@ export const BASE_STYLES = `
     flex: none;
     height: 38px;
     justify-content: center;
+    overflow: hidden;
     width: 38px;
   }
   .account-id {
@@ -279,8 +280,8 @@ export const BASE_STYLES = `
   button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
   .menu-icon, .menu-chevron { color: var(--mc-muted); display: inline-flex; flex: none; }
   .menu-icon .icon { height: 20px; width: 20px; }
-  .avatar { display: block; height: 20px; width: 20px; }
-  .brand-mark .avatar { color: var(--mc-accent-text); height: 20px; width: 20px; }
+  .avatar { display: block; height: 100%; width: 100%; }
+  .brand-mark .icon { height: 20px; width: 20px; }
   .option-avatar {
     align-items: center;
     background: var(--mc-accent);
@@ -290,6 +291,7 @@ export const BASE_STYLES = `
     flex: none;
     height: 36px;
     justify-content: center;
+    overflow: hidden;
     width: 36px;
   }
   input[type="file"] { padding: ${SPACE.sm} ${SPACE.md}; }
