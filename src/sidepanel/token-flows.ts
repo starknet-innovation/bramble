@@ -12,7 +12,7 @@ import { formatFiat, tokenFiatValue } from "./fiat";
 import { icon } from "./icons";
 import { copyButton, flowHeader, flowScreen } from "./parts";
 import { sparklinePath, sparklineTrend } from "./sparkline";
-import { tokenGlyph } from "./token-row";
+import { compactAmount, tokenGlyph } from "./token-row";
 
 /**
  * Currency used by the token screens when preferences carry none.
@@ -47,7 +47,7 @@ const trackedRow = (
       <p>${escapeHtml(token.name)}</p>
     </div>
     <div class="token-side">
-      ${balance ? `<span class="token-amount">${escapeHtml(balance.formatted)}</span>` : ""}
+      ${balance ? `<span class="token-amount">${escapeHtml(compactAmount(balance.formatted))}</span>` : ""}
       ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
     </div>
     ${toggle}

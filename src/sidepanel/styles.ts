@@ -182,8 +182,10 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
   .address-line code { flex: 1; }
   .token-list, .request-list, .address-book { display: grid; gap: 6px; }
   .token-row {
+    align-items: center;
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
+    display: flex;
     gap: ${SPACE.md};
     padding: ${SPACE.md};
   }

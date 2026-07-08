@@ -7,7 +7,7 @@ import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { SidepanelWallet } from "./runtime";
-import { tokenGlyph } from "./token-row";
+import { compactAmount, tokenGlyph } from "./token-row";
 
 /**
  * Dependencies the token bindings close over.
@@ -33,7 +33,7 @@ const suggestionsHtml = (suggestions: readonly TokenBalance[]): string =>
             ${tokenGlyph(token.address, token.symbol)}
             <div class="token-copy">
               <strong>${escapeHtml(token.symbol)}</strong>
-              <p>${escapeHtml(token.formatted)} ${escapeHtml(token.symbol)}</p>
+              <p>${escapeHtml(compactAmount(token.formatted))} ${escapeHtml(token.symbol)}</p>
             </div>
             <button class="secondary small" type="button" data-detect-add="${escapeHtml(token.address)}">Add</button>
           </li>`,
