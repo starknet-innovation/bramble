@@ -6,7 +6,6 @@
  */
 import {
   errorForMessage,
-  invalidRequestPayload,
   unknownError,
   type WalletRpcError,
 } from "../background/wallet-rpc-errors";
@@ -308,7 +307,9 @@ export const toProviderPayload = (
     typeof result.transactionHash === "string"
   ) {
     const padded = padFelt(result.transactionHash);
-    return padded ? { result: { transaction_hash: padded } } : { error: invalidRequestPayload() };
+    // A hash the wallet itself produced that will not pad is an internal
+    // failure, not a dapp payload problem, so it maps to UNKNOWN_ERROR.
+    return padded ? { result: { transaction_hash: padded } } : { error: unknownError() };
   }
   // Validate the full list here (trusted context), then reduce to the page view
   // so dapps never receive derivation indices, class hashes, or public keys.
