@@ -29,6 +29,7 @@ export type Strk20ProvingRequest = {
   readonly account: AccountRef;
   readonly actions: readonly Strk20Action[];
   readonly balances: readonly Strk20BalanceEntry[];
+  readonly proverUrl: string | null;
   readonly rpcUrls: readonly string[];
   readonly simulate: boolean;
 };

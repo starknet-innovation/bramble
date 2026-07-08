@@ -50,7 +50,12 @@ describe("strk20 service", () => {
   test("the unavailable default reports the account as not registered (118)", async () => {
     expect(
       await codeOf(() =>
-        readStrk20Balances(unavailableStrk20Service, { account, rpcUrls, tokens: [token] }),
+        readStrk20Balances(unavailableStrk20Service, {
+          account,
+          proverUrl: null,
+          rpcUrls,
+          tokens: [token],
+        }),
       ),
     ).toBe(118);
     expect(unavailableStrk20Service.proving).toBe(unconfiguredProvingBackend);
@@ -61,6 +66,7 @@ describe("strk20 service", () => {
       prepareStrk20CallAndProof(service({}), {
         account,
         actions: [{ action: "withdraw", amount: "10", token }],
+        proverUrl: null,
         rpcUrls,
         simulate: false,
       }),
@@ -79,6 +85,7 @@ describe("strk20 service", () => {
           {
             account,
             actions: [{ action: "deposit", amount: "1", token }],
+            proverUrl: null,
             rpcUrls,
             simulate: false,
           },
@@ -96,6 +103,7 @@ describe("strk20 service", () => {
           {
             account,
             actions: [{ action: "withdraw", amount: "1000", token }],
+            proverUrl: null,
             rpcUrls,
             simulate: false,
           },
@@ -110,6 +118,7 @@ describe("strk20 service", () => {
             { action: "deposit", amount: "5", token },
             { action: "withdraw", amount: "5", token },
           ],
+          proverUrl: null,
           rpcUrls,
           simulate: false,
         }),
@@ -123,6 +132,7 @@ describe("strk20 service", () => {
         prepareStrk20CallAndProof(service({ proving: unconfiguredProvingBackend }), {
           account,
           actions: [{ action: "invoke", call: callAndProof.call }],
+          proverUrl: null,
           rpcUrls,
           simulate: false,
         }),

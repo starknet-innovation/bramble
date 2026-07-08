@@ -77,6 +77,7 @@ export type WalletPreferences = {
   readonly nfts?: readonly WatchedNft[];
   readonly rpcOverrides?: RpcOverrides;
   readonly schemaVersion: 1;
+  readonly strk20ProverUrl?: string;
   readonly theme?: ThemeChoice;
   readonly tokens: readonly TokenConfig[];
 };
@@ -109,6 +110,7 @@ export type WalletPreferencesStore = {
     readonly networkId: StarknetNetworkId;
     readonly rpcUrl: string;
   }) => Promise<WalletPreferences>;
+  readonly setStrk20ProverUrl: (input: { readonly url: string }) => Promise<WalletPreferences>;
   readonly setTokenHidden: (input: {
     readonly hidden: boolean;
     readonly tokenId: string;
@@ -230,6 +232,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
     "nfts",
     "rpcOverrides",
     "schemaVersion",
+    "strk20ProverUrl",
     "theme",
     "tokens",
   ]) &&
@@ -244,6 +247,8 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
   (value.hiddenTokens === undefined || isHiddenTokens(value.hiddenTokens)) &&
   (value.theme === undefined || isThemeChoice(value.theme)) &&
   (value.rpcOverrides === undefined || isRpcOverrides(value.rpcOverrides)) &&
+  (value.strk20ProverUrl === undefined ||
+    (typeof value.strk20ProverUrl === "string" && isCustomRpcUrl(value.strk20ProverUrl))) &&
   (value.nfts === undefined ||
     (Array.isArray(value.nfts) &&
       value.nfts.every(isWatchedNft) &&
@@ -437,6 +442,21 @@ export const createPreferencesStore = ({
         overrides[networkId] = trimmed;
       }
       const next = { ...preferences, rpcOverrides: overrides };
+      await writePreferences(store, next);
+      return next;
+    },
+    async setStrk20ProverUrl({ url }) {
+      const trimmed = url.trim();
+      if (trimmed.length > 0 && !isCustomRpcUrl(trimmed)) {
+        throw new WalletError("Invalid prover endpoint");
+      }
+      const preferences = await read();
+      const next = { ...preferences };
+      if (trimmed.length === 0) {
+        delete (next as { strk20ProverUrl?: string }).strk20ProverUrl;
+      } else {
+        (next as { strk20ProverUrl?: string }).strk20ProverUrl = trimmed;
+      }
       await writePreferences(store, next);
       return next;
     },

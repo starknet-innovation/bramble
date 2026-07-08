@@ -32,10 +32,13 @@ export const STRK20_INSUFFICIENT_BALANCE = "insufficient private balance";
 export const STRK20_PRIVACY_LEAK = "strk20 privacy leak";
 
 /**
- * The account and RPC endpoints a STRK20 read targets.
+ * The account, RPC endpoints, and prover endpoint a STRK20 read targets. A null
+ * `proverUrl` means the user has not configured a prover, so the wallet treats
+ * the account as unavailable rather than talking to any endpoint.
  */
 export type Strk20AccountContext = {
   readonly account: AccountRef;
+  readonly proverUrl: string | null;
   readonly rpcUrls: readonly string[];
 };
 
@@ -135,7 +138,13 @@ export const readStrk20Balances = async (
   service: Strk20Service,
   input: Strk20BalancesInput,
 ): Promise<readonly Strk20BalanceEntry[]> => {
-  if (!(await service.registered({ account: input.account, rpcUrls: input.rpcUrls }))) {
+  if (
+    !(await service.registered({
+      account: input.account,
+      proverUrl: input.proverUrl,
+      rpcUrls: input.rpcUrls,
+    }))
+  ) {
     throw new WalletError(STRK20_NOT_REGISTERED);
   }
   return service.privateBalances(input);
@@ -153,11 +162,16 @@ export const prepareStrk20CallAndProof = async (
   input: {
     readonly account: AccountRef;
     readonly actions: readonly Strk20Action[];
+    readonly proverUrl: string | null;
     readonly rpcUrls: readonly string[];
     readonly simulate: boolean;
   },
 ): Promise<Strk20CallAndProof> => {
-  const context = { account: input.account, rpcUrls: input.rpcUrls };
+  const context = {
+    account: input.account,
+    proverUrl: input.proverUrl,
+    rpcUrls: input.rpcUrls,
+  };
   if (!(await service.registered(context))) {
     throw new WalletError(STRK20_NOT_REGISTERED);
   }
@@ -169,6 +183,7 @@ export const prepareStrk20CallAndProof = async (
     account: input.account,
     actions: input.actions,
     balances,
+    proverUrl: input.proverUrl,
     rpcUrls: input.rpcUrls,
     simulate: input.simulate,
   });

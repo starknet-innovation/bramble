@@ -105,6 +105,9 @@ const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | n
     ? (preferences.rpcOverrides?.[status.networkId] ?? "")
     : "";
 
+const strk20ProverUrlFor = (preferences: WalletPreferences | null): string =>
+  preferences?.strk20ProverUrl ?? "";
+
 /**
  * Network flow: switch the active network and set a custom RPC endpoint.
  */
@@ -140,6 +143,17 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
         </label>
         <button class="secondary" type="submit">${icon("check")}Save endpoint</button>
         <p id="rpc-result" role="status"></p>
+      </form>
+    </section>
+    <section class="section">
+      <h2>STRK20 prover</h2>
+      <form id="strk20-prover-form">
+        <label><span>Privacy prover endpoint</span>
+          <input class="mono" name="proverUrl" type="url" placeholder="https://…" value="${escapeHtml(strk20ProverUrlFor(preferences))}" autocomplete="off" spellcheck="false" />
+          <span class="hint">Where the wallet requests STRK20 proofs. Leave empty to keep privacy features off.</span>
+        </label>
+        <button class="secondary" type="submit">${icon("check")}Save prover</button>
+        <p id="strk20-prover-result" role="status"></p>
       </form>
     </section>`,
   );

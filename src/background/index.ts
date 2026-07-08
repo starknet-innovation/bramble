@@ -317,6 +317,13 @@ const handleMessage = createMessageHandler(
       }
       return store.setRpcOverride(input);
     },
+    async setStrk20ProverUrl(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setStrk20ProverUrl(input);
+    },
     async setTokenHidden(input) {
       const store = await preferences;
       if (!store) {

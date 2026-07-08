@@ -347,6 +347,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "rpc endpoint update failed");
     },
+    async setStrk20ProverUrl(url: string): Promise<void> {
+      const response = await sendMessage({ type: "wallet.setStrk20ProverUrl", url });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "prover endpoint update failed");
+    },
     async setActiveNetwork(networkId: string): Promise<WalletStatus> {
       const response = await sendMessage({ networkId, type: "wallet.setActiveNetwork" });
       if (isWalletStatus(response)) {

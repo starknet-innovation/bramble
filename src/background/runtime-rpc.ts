@@ -23,7 +23,8 @@ import {
   type TransactionStatusInput,
   type TransferInput,
 } from "../starknet/rpc";
-import { type Strk20Service, unavailableStrk20Service } from "../starknet/strk20/service";
+import { createHttpStrk20Service, type Strk20Http } from "../starknet/strk20/http-service";
+import type { Strk20Service } from "../starknet/strk20/service";
 
 /**
  * Injectable Starknet RPC operations used by the message handler.
@@ -57,6 +58,10 @@ export type RuntimeRpc = {
   readonly strk20?: Strk20Service;
 };
 
+// Real network transport for the STRK20 prover: a thin `fetch` wrapper matching
+// the {@link Strk20Http} shape the HTTP service expects.
+const strk20Http: Strk20Http = (url, init) => fetch(url, init);
+
 /**
  * Production RPC wiring used when no stub is injected.
  */
@@ -71,5 +76,5 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
-  strk20: unavailableStrk20Service,
+  strk20: createHttpStrk20Service(strk20Http),
 };

@@ -139,3 +139,20 @@ export const readSetRpcOverrideInput = (
     rpcUrl: message.rpcUrl,
   };
 };
+
+/**
+ * Parses STRK20 prover endpoint updates. An empty url clears the override.
+ */
+export const readSetStrk20ProverUrlInput = (message: unknown): { readonly url: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["type", "url"]) ||
+    message.type !== "wallet.setStrk20ProverUrl" ||
+    typeof message.url !== "string" ||
+    message.url.length > 2048
+  ) {
+    return null;
+  }
+
+  return { url: message.url };
+};

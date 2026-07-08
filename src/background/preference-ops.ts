@@ -11,6 +11,7 @@ import {
   readSetAccountLabelInput,
   readSetDisplayInput,
   readSetRpcOverrideInput,
+  readSetStrk20ProverUrlInput,
   readTypeOnlyInput,
 } from "./message-inputs";
 import { readRemoveNftInput, readSetNftSpamInput } from "./nft-inputs";
@@ -85,6 +86,14 @@ export const handlePreferenceOps = async (
       return { error: "invalid rpc override request" };
     }
     return { ok: true, preferences: await preferencesStore.setRpcOverride(input) };
+  }
+
+  if (messageType === "wallet.setStrk20ProverUrl") {
+    const input = readSetStrk20ProverUrlInput(message);
+    if (!input) {
+      return { error: "invalid prover endpoint request" };
+    }
+    return { ok: true, preferences: await preferencesStore.setStrk20ProverUrl(input) };
   }
 
   if (messageType === "wallet.importPreferences") {

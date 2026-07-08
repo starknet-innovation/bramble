@@ -275,6 +275,51 @@ describe("background strk20 messages", () => {
     });
   });
 
+  test("threads the configured prover url from preferences into the service", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const preferences = {
+      ...defaultWalletPreferences(),
+      activeNetworkId: "SN_SEPOLIA" as const,
+      strk20ProverUrl: "https://prover.example/strk20",
+    };
+    const seenProverUrls: (string | null)[] = [];
+    const strk20: Strk20Service = {
+      async privateBalances({ proverUrl, tokens }) {
+        seenProverUrls.push(proverUrl);
+        return tokens.map((entry) => ({ balance: "0x64", token: entry }));
+      },
+      proving: {
+        async prove() {
+          return callAndProof;
+        },
+      },
+      async registered({ proverUrl }) {
+        seenProverUrls.push(proverUrl);
+        return true;
+      },
+    };
+    const handler = createMessageHandler(
+      walletStub(),
+      "extension-id",
+      session,
+      undefined,
+      {
+        ...unavailablePreferencesStore,
+        async read() {
+          return preferences;
+        },
+      },
+      rpcStub(strk20, []),
+    );
+
+    await handler({ origin, tokens: [token], type: "wallet.strk20Balances" }, contentSender);
+    expect(seenProverUrls).toEqual([
+      "https://prover.example/strk20",
+      "https://prover.example/strk20",
+    ]);
+  });
+
   test("maps a denied invoke to USER_REFUSED_OP (113)", async () => {
     const invoked: InvokeInput[] = [];
     const handler = buildHandler({ invoked });

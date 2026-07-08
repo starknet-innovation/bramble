@@ -128,30 +128,49 @@ const bindDeploy = (): void => {
   });
 };
 
-const bindRpcOverride = (): void => {
-  const form = app?.querySelector<HTMLFormElement>("#rpc-form");
-  const result = app?.querySelector<HTMLElement>("#rpc-result");
+// Wires an endpoint-URL settings form (RPC override, STRK20 prover) to its save
+// handler, showing a saved/reset toast and re-rendering, or the failure message.
+// `noun` names the endpoint in every toast/status line.
+const bindEndpointForm = (
+  formId: string,
+  field: string,
+  noun: string,
+  submit: (value: string) => Promise<unknown>,
+): void => {
+  const form = app?.querySelector<HTMLFormElement>(formId);
+  const result = app?.querySelector<HTMLElement>(`${formId.replace("-form", "")}-result`);
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-
+  const fail = `${noun} update failed`;
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const rpcUrl = String(new FormData(form).get("rpcUrl") ?? "").trim();
+    const value = String(new FormData(form).get(field) ?? "").trim();
     buttonBusy(submitButton, true);
-    void wallet.setRpcOverride(lastNetworkId, rpcUrl).then(
+    void submit(value).then(
       async () => {
-        showToast(rpcUrl ? "RPC endpoint saved" : "RPC endpoint reset", "success");
+        showToast(`${noun} ${value ? "saved" : "reset"}`, "success");
         await render(await wallet.loadStatus());
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "RPC endpoint update failed"), "error");
+        const message = errorMessage(error, fail);
+        showToast(message, "error");
         if (result) {
-          result.textContent = errorMessage(error, "RPC endpoint update failed");
+          result.textContent = message;
         }
         buttonBusy(submitButton, false);
       },
     );
   });
 };
+
+const bindRpcOverride = (): void =>
+  bindEndpointForm("#rpc-form", "rpcUrl", "RPC endpoint", (rpcUrl) =>
+    wallet.setRpcOverride(lastNetworkId, rpcUrl),
+  );
+
+const bindStrk20Prover = (): void =>
+  bindEndpointForm("#strk20-prover-form", "proverUrl", "Prover endpoint", (proverUrl) =>
+    wallet.setStrk20ProverUrl(proverUrl),
+  );
 
 const bindPickers = (): void => {
   const result = app?.querySelector<HTMLElement>("#picker-result");
@@ -301,6 +320,7 @@ const bindAll = (): void => {
   bindDeploy();
   bindPickers();
   bindRpcOverride();
+  bindStrk20Prover();
   bindReveal({ app, wallet });
   bindActivity({ app, render, wallet });
   bindTransfer({ app, render, wallet });

@@ -464,4 +464,5 @@ export {
   readSetAccountLabelInput,
   readSetDisplayInput,
   readSetRpcOverrideInput,
+  readSetStrk20ProverUrlInput,
 } from "./preference-inputs";

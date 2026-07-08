@@ -83,6 +83,44 @@ describe("createPreferencesStore", () => {
     ).resolves.toMatchObject({ rpcOverrides: { SN_DEVNET: "http://127.0.0.1:5050/rpc" } });
   });
 
+  test("stores, prefers, and clears the STRK20 prover endpoint", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+
+    await preferences.setStrk20ProverUrl({ url: " https://prover.example/strk20 " });
+    await expect(preferences.read()).resolves.toMatchObject({
+      strk20ProverUrl: "https://prover.example/strk20",
+    });
+
+    await preferences.setStrk20ProverUrl({ url: "" });
+    const cleared = await preferences.read();
+    expect(cleared.strk20ProverUrl).toBeUndefined();
+  });
+
+  test("rejects an unsafe STRK20 prover endpoint", async () => {
+    const preferences = createPreferencesStore({ store: createMemoryStore() });
+
+    await expect(preferences.setStrk20ProverUrl({ url: "http://prover.example" })).rejects.toThrow(
+      "Invalid prover endpoint",
+    );
+    await expect(preferences.setStrk20ProverUrl({ url: "not a url" })).rejects.toThrow(
+      "Invalid prover endpoint",
+    );
+    await expect(
+      preferences.setStrk20ProverUrl({ url: "http://127.0.0.1:8080/strk20" }),
+    ).resolves.toMatchObject({ strk20ProverUrl: "http://127.0.0.1:8080/strk20" });
+  });
+
+  test("accepts preferences stored before the STRK20 prover existed", async () => {
+    const store = createMemoryStore();
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>).strk20ProverUrl;
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+
+    const preferences = await createPreferencesStore({ store }).read();
+    expect(preferences.strk20ProverUrl).toBeUndefined();
+  });
+
   test("accepts preferences stored before rpc overrides existed", async () => {
     const store = createMemoryStore();
     const legacy = { ...defaultWalletPreferences() };

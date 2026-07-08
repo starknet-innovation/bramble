@@ -63,6 +63,7 @@ export type Strk20ExecuteDeps = {
 type ResolvedAccount = {
   readonly account: AccountRef;
   readonly passphrase: string;
+  readonly proverUrl: string | null;
   readonly rpcUrls: readonly string[];
 };
 
@@ -93,6 +94,7 @@ const resolveAccount = async (
   return {
     account,
     passphrase,
+    proverUrl: preferences.strk20ProverUrl ?? null,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
   };
 };
@@ -188,6 +190,7 @@ export const handleStrk20Ops = async (
     try {
       const balances = await readStrk20Balances(strk20Service(deps.runtimeRpc), {
         account: resolved.account,
+        proverUrl: resolved.proverUrl,
         rpcUrls: resolved.rpcUrls,
         tokens: input.tokens,
       });
@@ -214,6 +217,7 @@ export const handleStrk20Ops = async (
       const callAndProof = await prepareStrk20CallAndProof(strk20Service(deps.runtimeRpc), {
         account: resolved.account,
         actions: input.actions,
+        proverUrl: resolved.proverUrl,
         rpcUrls: resolved.rpcUrls,
         simulate: input.simulate,
       });
@@ -266,6 +270,7 @@ export const executeStrk20InvokeApproval = async (
     const callAndProof = await prepareStrk20CallAndProof(strk20Service(deps.runtimeRpc), {
       account: resolved.account,
       actions: approval.actions,
+      proverUrl: resolved.proverUrl,
       rpcUrls: resolved.rpcUrls,
       simulate: false,
     });
