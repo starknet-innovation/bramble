@@ -43,6 +43,15 @@ export type ProviderInvokeResult = {
 };
 
 /**
+ * Spec declare result carried to the page (`{ transaction_hash, class_hash }`),
+ * both padded to their respective spec widths.
+ */
+export type ProviderDeclareResult = {
+  readonly class_hash: string;
+  readonly transaction_hash: string;
+};
+
+/**
  * The payload passed between the content bridge and the page response builder:
  * a spec error object or an unvalidated success value.
  */
@@ -54,7 +63,9 @@ export type ProviderPayload = { readonly error?: WalletRpcError; readonly result
 export type ProviderResultMethod =
   | "mc_accounts"
   | "mc_requestAccounts"
+  | "wallet_addDeclareTransaction"
   | "wallet_addInvokeTransaction"
+  | "wallet_addStarknetChain"
   | "wallet_getPermissions"
   | "wallet_requestAccounts"
   | "wallet_requestChainId"
@@ -155,6 +166,21 @@ export const providerInvokeResult = (result: unknown): ProviderInvokeResult | nu
   typeof result.transaction_hash === "string" &&
   /^0x0[0-8][0-9a-f]{62}$/.test(result.transaction_hash)
     ? { transaction_hash: result.transaction_hash }
+    : null;
+
+/**
+ * Narrows an unknown value to a spec declare result whose `transaction_hash` is
+ * a PADDED_TXN_HASH and `class_hash` a PADDED_FELT (`0x` + 64 hex).
+ */
+export const providerDeclareResult = (result: unknown): ProviderDeclareResult | null =>
+  isRecord(result) &&
+  isJson(result) &&
+  hasOnlyKnownKeys(result, ["class_hash", "transaction_hash"]) &&
+  typeof result.transaction_hash === "string" &&
+  /^0x0[0-8][0-9a-f]{62}$/.test(result.transaction_hash) &&
+  typeof result.class_hash === "string" &&
+  /^0x[0-9a-f]{64}$/.test(result.class_hash)
+    ? { class_hash: result.class_hash, transaction_hash: result.transaction_hash }
     : null;
 
 /**
@@ -310,6 +336,25 @@ export const toProviderPayload = (
     // A hash the wallet itself produced that will not pad is an internal
     // failure, not a dapp payload problem, so it maps to UNKNOWN_ERROR.
     return padded ? { result: { transaction_hash: padded } } : { error: unknownError() };
+  }
+  if (method === "wallet_addStarknetChain") {
+    return isRecord(result) && result.ok === true && result.added === true
+      ? { result: true }
+      : { error: unknownError() };
+  }
+  if (
+    method === "wallet_addDeclareTransaction" &&
+    isRecord(result) &&
+    typeof result.transactionHash === "string" &&
+    typeof result.classHash === "string"
+  ) {
+    const transactionHash = padFelt(result.transactionHash);
+    const classHash = padFelt(result.classHash);
+    // Hashes the wallet itself produced that will not pad are an internal
+    // failure, not a dapp payload problem, so they map to UNKNOWN_ERROR.
+    return transactionHash && classHash
+      ? { result: { class_hash: classHash, transaction_hash: transactionHash } }
+      : { error: unknownError() };
   }
   // Validate the full list here (trusted context), then reduce to the page view
   // so dapps never receive derivation indices, class hashes, or public keys.

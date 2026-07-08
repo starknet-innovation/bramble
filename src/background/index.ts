@@ -211,6 +211,13 @@ const handleMessage = createMessageHandler(
   session,
   approvals,
   {
+    async addCustomNetwork(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.addCustomNetwork(input);
+    },
     async addNft(input) {
       const store = await preferences;
       if (!store) {

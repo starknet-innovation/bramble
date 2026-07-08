@@ -8,8 +8,10 @@
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { executeAddChainApproval } from "./add-chain-ops";
 import type { ApprovalQueue } from "./approvals";
 import { executeSignApproval, executeSwitchChainApproval } from "./chain-ops";
+import { executeDeclareApproval } from "./declare-ops";
 import { readApprovalIdInput } from "./message-inputs";
 import { executeInvokeApproval } from "./provider-ops";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -110,6 +112,35 @@ export const handleApprovalDecision = async (
         return result;
       }
       return { chainId: payload.chainId, ok: true, pending: approvals.list() };
+    }
+    if (approval.kind === "add-chain") {
+      const payload = approvals.payload(input.id);
+      if (payload?.chain === undefined) {
+        return { error: "approval not found" };
+      }
+      const result = await executeAddChainApproval({ preferencesStore }, { chain: payload.chain });
+      waiters.settle(input.id, result);
+      approvals.approve(input.id);
+      if ("error" in result) {
+        return result;
+      }
+      return { ok: true, pending: approvals.list() };
+    }
+    if (approval.kind === "declare") {
+      const payload = approvals.payload(input.id);
+      if (payload?.declare === undefined) {
+        return { error: "approval not found" };
+      }
+      const result = await executeDeclareApproval(
+        { preferencesStore, runtimeRpc, session, wallet },
+        { declare: payload.declare, origin: approval.origin },
+      );
+      waiters.settle(input.id, result);
+      approvals.approve(input.id);
+      if ("error" in result) {
+        return result;
+      }
+      return { ok: true, pending: approvals.list() };
     }
     const passphrase = session.getPassphrase();
     if (!passphrase) {

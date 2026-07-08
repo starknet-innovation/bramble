@@ -88,6 +88,30 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
     ${decisionRow(approval, "Switch network", status.locked)}
   </li>`;
 
+const addChainCard = (approval: PendingApproval): string => `
+  <li class="request-card">
+    <div class="request-copy">
+      <p class="eyebrow">Add network request</p>
+      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      <p class="hint">This site is asking to add a custom Starknet network. Nothing is saved unless you approve.</p>
+      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+    </div>
+    ${reviewPanel(approval.insights ?? [])}
+    ${decisionRow(approval, "Add network", false)}
+  </li>`;
+
+const declareCard = (approval: PendingApproval, status: WalletStatus): string => `
+  <li class="request-card">
+    <div class="request-copy">
+      <p class="eyebrow">Declare contract request</p>
+      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review and declare this contract class." : "Approving signs and submits a declare transaction from your active account."}</p>
+      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+    </div>
+    ${reviewPanel(approval.insights ?? [])}
+    ${decisionRow(approval, "Declare", status.locked)}
+  </li>`;
+
 /**
  * Renders the correct approval card for a pending dapp request by kind.
  */
@@ -101,6 +125,10 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
       return signCard(approval, status);
     case "switch-chain":
       return switchCard(approval, status);
+    case "add-chain":
+      return addChainCard(approval);
+    case "declare":
+      return declareCard(approval, status);
     default:
       return connectCard(approval, status);
   }

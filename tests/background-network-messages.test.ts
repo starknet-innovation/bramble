@@ -244,6 +244,9 @@ describe("background network messages", () => {
         async getTokenMetadata() {
           return { decimals: 18, name: "Token", symbol: "TKN" };
         },
+        async submitDeclareTransaction() {
+          return { classHash: "0x1", transactionHash: "0x1" };
+        },
         async submitAccountDeployment() {
           throw new Error("unused");
         },

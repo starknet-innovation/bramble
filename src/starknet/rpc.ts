@@ -16,6 +16,14 @@ import {
 } from "./provider";
 
 /**
+ * Re-exported declare-transaction submission so callers keep one RPC import path.
+ */
+export {
+  type DeclareInput,
+  type DeclareSubmission,
+  submitDeclareTransaction,
+} from "./declare";
+/**
  * Re-exported counterfactual deployment operations.
  */
 export {
