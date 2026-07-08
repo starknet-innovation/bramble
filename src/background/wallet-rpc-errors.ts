@@ -94,6 +94,15 @@ export const errorForMessage = (message: string): WalletRpcError => {
   if (/deployment data/i.test(message)) {
     return deploymentDataNotAvailable();
   }
+  if (/not registered/i.test(message)) {
+    return notRegistered();
+  }
+  if (/insufficient private balance/i.test(message)) {
+    return insufficientPrivateBalance();
+  }
+  if (/privacy leak|would leak/i.test(message)) {
+    return privacyLeak();
+  }
   if (/^invalid\b|malformed|origin mismatch/i.test(message)) {
     return invalidRequestPayload();
   }

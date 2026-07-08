@@ -16,6 +16,7 @@ import type { RuntimeRpc } from "./runtime-rpc";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
+import { executeStrk20InvokeApproval } from "./strk20-ops";
 
 /**
  * Dependencies for resolving a queued approval into its settled result.
@@ -69,6 +70,22 @@ export const handleApprovalDecision = async (
       const result = await executeInvokeApproval(
         { activity, allowanceStore, preferencesStore, runtimeRpc, session, wallet },
         { origin: approval.origin, payload },
+      );
+      waiters.settle(input.id, result);
+      approvals.approve(input.id);
+      if ("error" in result) {
+        return result;
+      }
+      return { ok: true, pending: approvals.list() };
+    }
+    if (approval.kind === "strk20-invoke") {
+      const payload = approvals.payload(input.id);
+      if (!payload?.actions) {
+        return { error: "approval not found" };
+      }
+      const result = await executeStrk20InvokeApproval(
+        { activity, preferencesStore, runtimeRpc, session, wallet },
+        { actions: payload.actions, origin: approval.origin },
       );
       waiters.settle(input.id, result);
       approvals.approve(input.id);

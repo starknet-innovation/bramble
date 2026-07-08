@@ -4,6 +4,7 @@
 import type { StarkSignature } from "../crypto/krusty";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
+import type { Strk20BalanceEntry, Strk20CallAndProof } from "../starknet/strk20/schemas";
 import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { AllowanceRecord } from "../storage/allowance-store";
@@ -224,6 +225,22 @@ export type RequestAccountsResponse =
     };
 
 /**
+ * STRK20 private balances returned through the dapp provider bridge.
+ */
+export type Strk20BalancesResponse = {
+  readonly balances: readonly Strk20BalanceEntry[];
+  readonly ok: true;
+};
+
+/**
+ * STRK20 prepared call-and-proof returned through the dapp provider bridge.
+ */
+export type Strk20PrepareResponse = {
+  readonly callAndProof: Strk20CallAndProof;
+  readonly ok: true;
+};
+
+/**
  * Union of supported background message responses.
  */
 export type RuntimeResponse =
@@ -245,6 +262,8 @@ export type RuntimeResponse =
   | RequestAccountsResponse
   | RevealSecretsResponse
   | SignHashResponse
+  | Strk20BalancesResponse
+  | Strk20PrepareResponse
   | TokenChartResponse
   | TransferResponse
   | WalletStatus

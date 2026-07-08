@@ -45,6 +45,7 @@ import {
 } from "./senders";
 import { createUnlockSession, type UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
+import { handleStrk20Ops } from "./strk20-ops";
 import { handleTokenOps } from "./token-ops";
 import { handleWalletOps } from "./wallet-ops";
 
@@ -137,6 +138,16 @@ const handleRuntimeMessage = async (
   );
   if (providerOpsResponse) {
     return providerOpsResponse;
+  }
+
+  const strk20Response = await handleStrk20Ops(
+    { activity, approvals, extensionId, preferencesStore, runtimeRpc, session, waiters, wallet },
+    messageType,
+    message,
+    sender,
+  );
+  if (strk20Response) {
+    return strk20Response;
   }
 
   const originResponse = await handleOriginOps({ session, wallet }, messageType, message);
