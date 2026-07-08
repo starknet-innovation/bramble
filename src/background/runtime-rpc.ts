@@ -23,6 +23,7 @@ import {
   type TransactionStatusInput,
   type TransferInput,
 } from "../starknet/rpc";
+import { type Strk20Service, unavailableStrk20Service } from "../starknet/strk20/service";
 
 /**
  * Injectable Starknet RPC operations used by the message handler.
@@ -48,6 +49,12 @@ export type RuntimeRpc = {
   readonly submitInvokeTransaction: (
     input: InvokeInput,
   ) => ReturnType<typeof submitInvokeTransaction>;
+  /**
+   * STRK20 privacy service. Optional so existing RPC stubs stay valid; when
+   * absent the handler falls back to {@link unavailableStrk20Service}, which
+   * reports the account as not registered.
+   */
+  readonly strk20?: Strk20Service;
 };
 
 /**
@@ -64,4 +71,5 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
+  strk20: unavailableStrk20Service,
 };

@@ -47,6 +47,10 @@ export type PendingApproval = {
     | "declare"
     | "invoke"
     | "sign-typed-data"
+    | "connect"
+    | "invoke"
+    | "sign-typed-data"
+    | "strk20-invoke"
     | "switch-chain"
     | "watch-asset";
   readonly origin: string;
@@ -136,6 +140,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value.kind !== "declare" &&
       value.kind !== "invoke" &&
       value.kind !== "sign-typed-data" &&
+      value.kind !== "strk20-invoke" &&
       value.kind !== "switch-chain" &&
       value.kind !== "watch-asset") ||
     (value.blocked !== undefined && typeof value.blocked !== "boolean") ||

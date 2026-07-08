@@ -76,6 +76,18 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => `
     ${decisionRow(approval, "Sign", status.locked)}
   </li>`;
 
+const strk20Card = (approval: PendingApproval, status: WalletStatus): string => `
+  <li class="request-card">
+    <div class="request-copy">
+      <p class="eyebrow">Private transaction request</p>
+      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action. Approving builds the proof and submits it from your active account."}</p>
+      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+    </div>
+    ${reviewPanel(approval.insights ?? [])}
+    ${decisionRow(approval, "Approve", status.locked)}
+  </li>`;
+
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -123,6 +135,8 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
       return invokeCard(approval, status);
     case "sign-typed-data":
       return signCard(approval, status);
+    case "strk20-invoke":
+      return strk20Card(approval, status);
     case "switch-chain":
       return switchCard(approval, status);
     case "add-chain":

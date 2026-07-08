@@ -8,6 +8,7 @@ import { WalletError } from "../shared/errors";
 import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
 import type { StarknetNetworkId } from "../starknet/networks";
+import type { Strk20Action } from "../starknet/strk20/schemas";
 
 /**
  * Maximum queued dapp connection approvals kept in background memory.
@@ -24,6 +25,7 @@ export type ApprovalKind =
   | "declare"
   | "invoke"
   | "sign-typed-data"
+  | "strk20-invoke"
   | "switch-chain"
   | "watch-asset";
 
@@ -71,6 +73,7 @@ export type PendingApproval = {
  * mirrored into the snapshot so the sign card can decode and display it.
  */
 export type ApprovalPayload = {
+  readonly actions?: readonly Strk20Action[];
   readonly calls?: readonly Call[];
   readonly chain?: ProviderChain;
   readonly chainId?: string;
@@ -111,6 +114,11 @@ export type ApprovalQueue = {
     readonly origin: string;
     readonly summary: string;
     readonly typedData: unknown;
+  }) => PendingApproval;
+  readonly requestStrk20Invoke: (input: {
+    readonly actions: readonly Strk20Action[];
+    readonly origin: string;
+    readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestSwitchChain: (input: {
     readonly chainId: string;
@@ -196,6 +204,9 @@ export const createApprovalQueue = (): ApprovalQueue => {
       if (approval.declare !== undefined) {
         return { declare: approval.declare };
       }
+      if (approval.actions !== undefined) {
+        return { actions: approval.actions };
+      }
       if (approval.calls === undefined) {
         return null;
       }
@@ -274,6 +285,19 @@ export const createApprovalQueue = (): ApprovalQueue => {
         origin,
         summaries: [summary],
         typedData,
+      });
+    },
+    requestStrk20Invoke({ actions, origin, summaries }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+
+      return enqueue({
+        actions: actions.map((action) => ({ ...action })),
+        id: crypto.randomUUID(),
+        kind: "strk20-invoke",
+        origin,
+        summaries: [...summaries],
       });
     },
     requestSwitchChain({ chainId, networkId, origin, summary }) {

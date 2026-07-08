@@ -12,6 +12,7 @@ import {
 import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
 import { isAccountRef } from "../storage/vault-schema";
+import { providerStrk20Balances, providerStrk20CallAndProof } from "./strk20-bridge";
 
 /**
  * Page-facing account view: only the already-public address and network id.
@@ -91,6 +92,9 @@ export type ProviderResultMethod =
   | "wallet_signTypedData"
   | "wallet_supportedSpecs"
   | "wallet_supportedWalletApi"
+  | "wallet_strk20Balances"
+  | "wallet_strk20InvokeTransaction"
+  | "wallet_strk20PrepareInvoke"
   | "wallet_switchStarknetChain"
   | "wallet_watchAsset";
 
@@ -188,46 +192,6 @@ export const providerInvokeResult = (result: unknown): ProviderInvokeResult | nu
   /^0x0[0-8][0-9a-f]{62}$/.test(result.transaction_hash)
     ? { transaction_hash: result.transaction_hash }
     : null;
-
-const isPaddedFelt = (value: unknown): value is string =>
-  typeof value === "string" && /^0x0[0-8][0-9a-f]{62}$/.test(value);
-
-/**
- * Narrows an unknown value to a spec ACCOUNT_DEPLOYMENT_DATA whose address and
- * felts are all PADDED_FELT and whose version is 0 or 1.
- */
-export const providerDeploymentResult = (result: unknown): ProviderDeploymentData | null => {
-  if (
-    !isRecord(result) ||
-    !isJson(result) ||
-    !hasOnlyKnownKeys(result, [
-      "address",
-      "calldata",
-      "class_hash",
-      "salt",
-      "sigdata",
-      "version",
-    ]) ||
-    !isPaddedFelt(result.address) ||
-    !isPaddedFelt(result.class_hash) ||
-    !isPaddedFelt(result.salt) ||
-    (result.version !== 0 && result.version !== 1) ||
-    !Array.isArray(result.calldata) ||
-    !result.calldata.every(isPaddedFelt) ||
-    (result.sigdata !== undefined &&
-      !(Array.isArray(result.sigdata) && result.sigdata.every(isPaddedFelt)))
-  ) {
-    return null;
-  }
-  return {
-    address: result.address,
-    calldata: [...result.calldata],
-    class_hash: result.class_hash,
-    salt: result.salt,
-    ...(result.sigdata === undefined ? {} : { sigdata: [...result.sigdata] }),
-    version: result.version,
-  };
-};
 
 /**
  * Reads an optional `{ api_version }` discovery param, returning the version
@@ -448,6 +412,18 @@ export const toProviderPayload = (
       ? { result: [signature.r, signature.s] }
       : { error: unknownError() };
   }
+  if (method === "wallet_strk20Balances") {
+    const balances =
+      isRecord(result) && result.ok === true ? providerStrk20Balances(result.balances) : null;
+    return balances ? { result: balances } : { error: unknownError() };
+  }
+  if (method === "wallet_strk20PrepareInvoke") {
+    const callAndProof =
+      isRecord(result) && result.ok === true
+        ? providerStrk20CallAndProof(result.callAndProof)
+        : null;
+    return callAndProof ? { result: callAndProof } : { error: unknownError() };
+  }
   const chainId = providerChainIdResult(result);
   if (method === "wallet_switchStarknetChain" && chainId) {
     return { result: true };
@@ -456,7 +432,7 @@ export const toProviderPayload = (
     return { result: chainId.chainId };
   }
   if (
-    method === "wallet_addInvokeTransaction" &&
+    (method === "wallet_addInvokeTransaction" || method === "wallet_strk20InvokeTransaction") &&
     isRecord(result) &&
     typeof result.transactionHash === "string"
   ) {

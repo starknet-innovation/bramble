@@ -15,7 +15,6 @@ import {
   type ProviderPayload,
   providerAccountsResult,
   providerDeclareResult,
-  providerDeploymentResult,
   providerInvokeCalls,
   providerInvokeResult,
   providerStringArrayResult,
@@ -25,6 +24,17 @@ import {
   toProviderPayload as toProviderPayloadResult,
 } from "./bridge-results";
 import { type ProviderDeclare, readProviderDeclare } from "./declare-params";
+import { providerDeploymentResult } from "./deployment-bridge";
+import {
+  providerStrk20Balances,
+  providerStrk20CallAndProof,
+  readStrk20BalancesParams,
+  readStrk20InvokeParams,
+  readStrk20PrepareParams,
+  type Strk20Action,
+  type Strk20BalanceEntry,
+  type Strk20CallAndProof,
+} from "./strk20-bridge";
 import { type ProviderWatchAsset, readProviderWatchAsset } from "./watch-asset-params";
 
 /** Marker for page-to-content wallet provider requests.
@@ -57,6 +67,9 @@ export type ProviderMethod =
   | "wallet_signTypedData"
   | "wallet_supportedSpecs"
   | "wallet_supportedWalletApi"
+  | "wallet_strk20Balances"
+  | "wallet_strk20InvokeTransaction"
+  | "wallet_strk20PrepareInvoke"
   | "wallet_switchStarknetChain"
   | "wallet_watchAsset";
 
@@ -95,6 +108,8 @@ export type ProviderResponse =
         | ProviderDeploymentData
         | ProviderDeclareResult
         | ProviderInvokeResult
+        | Strk20CallAndProof
+        | readonly Strk20BalanceEntry[]
         | readonly string[]
         | boolean
         | string;
@@ -188,6 +203,22 @@ export type RuntimeMessage =
       readonly type: "wallet.signTypedData";
     }
   | {
+      readonly origin: string;
+      readonly tokens: readonly string[];
+      readonly type: "wallet.strk20Balances";
+    }
+  | {
+      readonly actions: readonly Strk20Action[];
+      readonly origin: string;
+      readonly simulate: boolean;
+      readonly type: "wallet.strk20PrepareInvoke";
+    }
+  | {
+      readonly actions: readonly Strk20Action[];
+      readonly origin: string;
+      readonly type: "wallet.strk20InvokeTransaction";
+    }
+  | {
       readonly chainId: string;
       readonly origin: string;
       readonly type: "wallet.switchChain";
@@ -220,6 +251,9 @@ const isProviderMethod = (value: unknown): value is ProviderMethod =>
   value === "wallet_signTypedData" ||
   value === "wallet_supportedSpecs" ||
   value === "wallet_supportedWalletApi" ||
+  value === "wallet_strk20Balances" ||
+  value === "wallet_strk20InvokeTransaction" ||
+  value === "wallet_strk20PrepareInvoke" ||
   value === "wallet_switchStarknetChain" ||
   value === "wallet_watchAsset";
 
@@ -234,6 +268,9 @@ const readProviderParams = (method: ProviderMethod, params: unknown): Json | nul
     method === "wallet_signTypedData" ||
     method === "wallet_supportedSpecs" ||
     method === "wallet_supportedWalletApi" ||
+    method === "wallet_strk20Balances" ||
+    method === "wallet_strk20InvokeTransaction" ||
+    method === "wallet_strk20PrepareInvoke" ||
     method === "wallet_switchStarknetChain" ||
     method === "wallet_watchAsset") &&
     isJson(params)
@@ -333,6 +370,8 @@ export const readProviderResponse = (value: unknown): ProviderResponse | null =>
       providerDeploymentResult(value.result) ??
       providerInvokeResult(value.result) ??
       providerDeclareResult(value.result) ??
+      providerStrk20CallAndProof(value.result) ??
+      providerStrk20Balances(value.result) ??
       providerStringArrayResult(value.result) ??
       (typeof value.result === "boolean" ? value.result : null) ??
       (typeof value.result === "string" && value.result.length > 0 ? value.result : null);
@@ -403,6 +442,25 @@ export const toRuntimeMessage = (
     const typedData = readTypedDataParam(request.params);
     return typedData === null ? null : { origin, typedData, type: "wallet.signTypedData" };
   }
+  if (request.method === "wallet_strk20Balances") {
+    const tokens = readStrk20BalancesParams(request.params);
+    return tokens ? { origin, tokens, type: "wallet.strk20Balances" } : null;
+  }
+  if (request.method === "wallet_strk20PrepareInvoke") {
+    const prepared = readStrk20PrepareParams(request.params);
+    return prepared
+      ? {
+          actions: prepared.actions,
+          origin,
+          simulate: prepared.simulate,
+          type: "wallet.strk20PrepareInvoke",
+        }
+      : null;
+  }
+  if (request.method === "wallet_strk20InvokeTransaction") {
+    const actions = readStrk20InvokeParams(request.params);
+    return actions ? { actions, origin, type: "wallet.strk20InvokeTransaction" } : null;
+  }
   if (request.method === "wallet_switchStarknetChain") {
     const chainId = providerSwitchChainId(request.params);
     return chainId ? { chainId, origin, type: "wallet.switchChain" } : null;
@@ -425,6 +483,8 @@ export const providerResponse = (
     providerDeploymentResult(payload.result) ??
     providerInvokeResult(payload.result) ??
     providerDeclareResult(payload.result) ??
+    providerStrk20CallAndProof(payload.result) ??
+    providerStrk20Balances(payload.result) ??
     providerStringArrayResult(payload.result) ??
     (typeof payload.result === "boolean" ? payload.result : null) ??
     (typeof payload.result === "string" && payload.result.length > 0 ? payload.result : null);
