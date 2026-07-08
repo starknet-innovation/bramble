@@ -9,6 +9,7 @@ import {
   isTrustedPageMessage,
   readProviderRequestArguments,
   readProviderResponse,
+  walletRpcException,
 } from "./bridge";
 import { createProviderEventHub, readProviderEvent } from "./events";
 
@@ -90,7 +91,7 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 
   pending.delete(response.id);
   if (response.error !== undefined) {
-    request.reject(new Error(response.error));
+    request.reject(walletRpcException(response.error));
     return;
   }
   request.resolve(response.result);

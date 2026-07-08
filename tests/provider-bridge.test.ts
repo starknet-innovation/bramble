@@ -3,6 +3,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  invalidRequestPayload,
+  unknownError,
+  userRefusedOp,
+} from "../src/background/wallet-rpc-errors";
+import {
   CONTENT_TARGET,
   canQueueProviderRequest,
   isTrustedPageMessage,
@@ -37,6 +42,8 @@ const publicAccountResult = { accounts: [publicAccount], ok: true as const };
 const invokeParams = {
   calls: [{ calldata: ["0x1"], contractAddress: "0x123", entrypoint: "transfer" }],
 };
+// A spec PADDED_TXN_HASH: 0x + 64 hex with the top nibble in 0-8.
+const paddedHash = `0x${"123".padStart(64, "0")}`;
 
 describe("provider bridge", () => {
   test("caps unresolved in-page provider requests", () => {
@@ -253,17 +260,17 @@ describe("provider bridge", () => {
     expect(
       providerResponse(
         { id: requestId, method: "mc_accounts" },
-        { error: "wallet locked", result: { ready: true } },
+        { error: userRefusedOp(), result: { ready: true } },
       ),
     ).toEqual({
-      error: "wallet locked",
+      error: userRefusedOp(),
       id: requestId,
       target: PAGE_TARGET,
     });
     expect(
       providerResponse({ id: requestId, method: "mc_accounts" }, { result: { ready: true } }),
     ).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
       id: requestId,
       target: PAGE_TARGET,
     });
@@ -300,20 +307,36 @@ describe("provider bridge", () => {
     expect(
       providerResponse(
         { id: requestId, method: "wallet_addInvokeTransaction" },
-        { result: { transaction_hash: "0x123" } },
+        { result: { transaction_hash: paddedHash } },
       ),
     ).toEqual({
       id: requestId,
-      result: { transaction_hash: "0x123" },
+      result: { transaction_hash: paddedHash },
       target: PAGE_TARGET,
     });
-    expect(providerResponse({ id: requestId, method: "mc_accounts" }, {})).toEqual({
-      error: "invalid provider response",
+    // A short (unpadded) transaction hash is rejected by the wire validator.
+    expect(
+      providerResponse(
+        { id: requestId, method: "wallet_addInvokeTransaction" },
+        { result: { transaction_hash: "0x123" } },
+      ),
+    ).toEqual({
+      error: unknownError(),
       id: requestId,
       target: PAGE_TARGET,
     });
-    expect(providerResponse({ id: requestId, method: "mc_accounts" }, { error: "" })).toEqual({
-      error: "invalid provider response",
+    expect(providerResponse({ id: requestId, method: "mc_accounts" }, {})).toEqual({
+      error: unknownError(),
+      id: requestId,
+      target: PAGE_TARGET,
+    });
+    expect(
+      providerResponse(
+        { id: requestId, method: "mc_accounts" },
+        { error: invalidRequestPayload() },
+      ),
+    ).toEqual({
+      error: invalidRequestPayload(),
       id: requestId,
       target: PAGE_TARGET,
     });
@@ -332,12 +355,16 @@ describe("provider bridge", () => {
       readProviderResponse({ id: requestId, result: accountResult, target: PAGE_TARGET }),
     ).toBeNull();
     expect(
-      readProviderResponse({ error: "wallet locked", id: requestId, target: PAGE_TARGET }),
+      readProviderResponse({ error: userRefusedOp(), id: requestId, target: PAGE_TARGET }),
     ).toEqual({
-      error: "wallet locked",
+      error: userRefusedOp(),
       id: requestId,
       target: PAGE_TARGET,
     });
+    // A raw string error is not a spec error object, so the response is rejected.
+    expect(
+      readProviderResponse({ error: "wallet locked", id: requestId, target: PAGE_TARGET }),
+    ).toBeNull();
     expect(
       readProviderResponse({ id: "not-a-uuid", result: true, target: PAGE_TARGET }),
     ).toBeNull();
@@ -360,7 +387,7 @@ describe("provider bridge", () => {
     ).toBeNull();
     expect(
       readProviderResponse({
-        error: "wallet locked",
+        error: userRefusedOp(),
         id: requestId,
         result: true,
         target: PAGE_TARGET,
@@ -369,7 +396,14 @@ describe("provider bridge", () => {
   });
 
   test("maps background errors to provider rejections", () => {
-    expect(toProviderPayload({ error: "wallet locked" })).toEqual({ error: "wallet locked" });
+    expect(toProviderPayload({ error: "request rejected" })).toEqual({ error: userRefusedOp() });
+    expect(toProviderPayload({ error: "wallet locked" })).toEqual({ error: unknownError() });
+    expect(toProviderPayload({ error: "invalid invoke request" })).toEqual({
+      error: invalidRequestPayload(),
+    });
+    expect(toProviderPayload({ error: "unsupported chain" })).toEqual({
+      error: { code: 117, message: "The chain id is not supported" },
+    });
     expect(toProviderPayload({ accounts: [], ok: true })).toEqual({
       result: { accounts: [], ok: true },
     });
@@ -382,10 +416,10 @@ describe("provider bridge", () => {
     expect(
       toProviderPayload({ ok: true, transactionHash: "0x123" }, "wallet_addInvokeTransaction"),
     ).toEqual({
-      result: { transaction_hash: "0x123" },
+      result: { transaction_hash: paddedHash },
     });
     expect(toProviderPayload({ ok: true, signature: { r: "0x1", s: "0x2" } })).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
     });
   });
 
@@ -396,18 +430,18 @@ describe("provider bridge", () => {
       result: publicAccountResult,
     });
     expect(toProviderPayload({ accounts: [account, account], ok: true })).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
     });
     expect(toProviderPayload({ accounts: sparseAccounts, ok: true })).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
     });
     expect(
       toProviderPayload({ accounts: [{ ...account, privateKey: "0x456" }], ok: true }),
     ).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
     });
     expect(toProviderPayload({ accounts: [account], ok: true, signature: "0x123" })).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
     });
   });
 
@@ -438,6 +472,6 @@ describe("provider bridge", () => {
         ok: false,
         pending: { id: "123e4567-e89b-42d3-a456-426614174000", origin: "https://a.test" },
       }),
-    ).toEqual({ error: "approval pending" });
+    ).toEqual({ error: unknownError() });
   });
 });

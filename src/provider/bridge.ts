@@ -1,16 +1,24 @@
 /**
  * Pure provider bridge rules shared by the injected page script and content script.
  */
+import { unknownError, type WalletRpcError } from "../background/wallet-rpc-errors";
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
-import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
-import { isAccountRef } from "../storage/vault-schema";
+import {
+  type ProviderAccountsResult,
+  type ProviderInvokeCall,
+  type ProviderInvokeResult,
+  type ProviderPayload,
+  providerAccountsResult,
+  providerInvokeCalls,
+  providerInvokeResult,
+  providerStringArrayResult,
+  providerSwitchChainId,
+  readTypedDataParam,
+  toProviderPayload as toProviderPayloadResult,
+} from "./bridge-results";
 import { type ProviderWatchAsset, readProviderWatchAsset } from "./watch-asset-params";
-
-// Page-facing account view: only the (already public) address and network id;
-// BIP-44 derivation indices, class hash, and public keys are withheld.
-type PublicAccount = { readonly address: string; readonly networkId: StarknetNetworkId };
 
 /** Marker for page-to-content wallet provider requests.
  */
@@ -21,6 +29,11 @@ export const PAGE_TARGET = "mc-wallet:page";
 /** Maximum unresolved in-page provider requests kept in memory.
  */
 export const MAX_PENDING_PROVIDER_REQUESTS = 100;
+
+/**
+ * Re-exported so the content script maps background results in one import.
+ */
+export const toProviderPayload = toProviderPayloadResult;
 
 /** Provider methods exposed to dapp pages.
  */
@@ -52,32 +65,12 @@ export type ProviderRequest = {
   readonly params?: Json;
 };
 
-type ProviderAccountsResult = {
-  readonly accounts: readonly PublicAccount[];
-  readonly ok: true;
-};
-
-type ProviderChainIdResult = {
-  readonly chainId: string;
-  readonly ok: true;
-};
-
-type ProviderInvokeResult = {
-  readonly transaction_hash: string;
-};
-
-type ProviderInvokeCall = {
-  readonly calldata: readonly string[];
-  readonly contractAddress: string;
-  readonly entrypoint: string;
-};
-
 /**
- * Page-targeted provider response shape.
+ * Page-targeted provider response shape. Rejections carry a spec error object.
  */
 export type ProviderResponse =
   | {
-      readonly error: string;
+      readonly error: WalletRpcError;
       readonly id: string;
       readonly result?: never;
       readonly target: typeof PAGE_TARGET;
@@ -93,6 +86,32 @@ export type ProviderResponse =
         | string;
       readonly target: typeof PAGE_TARGET;
     };
+
+/**
+ * Narrows an unknown value to a spec `{ code, message, data? }` error object.
+ */
+export const isWalletRpcError = (value: unknown): value is WalletRpcError =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["code", "data", "message"]) &&
+  typeof value.code === "number" &&
+  Number.isInteger(value.code) &&
+  typeof value.message === "string" &&
+  value.message.length > 0 &&
+  (value.data === undefined || typeof value.data === "string");
+
+/**
+ * Rebuilds a coded Error from a spec wallet error so a dapp can branch on
+ * `.code`/`.data`; passing the object to Error() would stringify it to
+ * "[object Object]" and drop the code.
+ */
+export const walletRpcException = (error: WalletRpcError): Error => {
+  const exception = new Error(error.message);
+  (exception as { code?: number }).code = error.code;
+  if (error.data !== undefined) {
+    (exception as { data?: string }).data = error.data;
+  }
+  return exception;
+};
 
 /**
  * Minimal message-event fields needed for page trust checks.
@@ -216,57 +235,6 @@ export const readProviderRequestArguments = (value: unknown): ProviderRequestArg
   return null;
 };
 
-const providerChainIdResult = (result: unknown): ProviderChainIdResult | null => {
-  if (
-    !isRecord(result) ||
-    !isJson(result) ||
-    !hasOnlyKnownKeys(result, ["chainId", "ok"]) ||
-    result.ok !== true ||
-    typeof result.chainId !== "string" ||
-    !/^0x[0-9a-f]+$/.test(result.chainId)
-  ) {
-    return null;
-  }
-
-  return {
-    chainId: result.chainId,
-    ok: true,
-  };
-};
-
-const providerInvokeResult = (result: unknown): ProviderInvokeResult | null =>
-  isRecord(result) &&
-  isJson(result) &&
-  hasOnlyKnownKeys(result, ["transaction_hash"]) &&
-  typeof result.transaction_hash === "string" &&
-  /^0x[0-9a-f]+$/.test(result.transaction_hash)
-    ? { transaction_hash: result.transaction_hash }
-    : null;
-
-const providerInvokeCalls = (params: Json | undefined): readonly ProviderInvokeCall[] | null => {
-  if (!isRecord(params) || !hasOnlyKnownKeys(params, ["calls"]) || !Array.isArray(params.calls)) {
-    return null;
-  }
-  const calls = params.calls.filter(
-    (call): call is ProviderInvokeCall =>
-      isRecord(call) &&
-      hasOnlyKnownKeys(call, ["calldata", "contractAddress", "entrypoint"]) &&
-      typeof call.contractAddress === "string" &&
-      typeof call.entrypoint === "string" &&
-      Array.isArray(call.calldata) &&
-      call.calldata.every((item) => typeof item === "string"),
-  );
-  return calls.length === params.calls.length && calls.length > 0 ? calls : null;
-};
-
-const providerSwitchChainId = (params: Json | undefined): string | null =>
-  isRecord(params) &&
-  hasOnlyKnownKeys(params, ["chainId"]) &&
-  typeof params.chainId === "string" &&
-  /^0x[0-9a-f]+$/.test(params.chainId)
-    ? params.chainId
-    : null;
-
 /**
  * Parses page provider messages without trusting arbitrary window traffic.
  */
@@ -293,55 +261,6 @@ export const readProviderRequest = (value: unknown): ProviderRequest | null => {
   };
 };
 
-const toPublicAccount = (account: PublicAccount): PublicAccount => ({
-  address: account.address,
-  networkId: account.networkId,
-});
-const isPublicAccount = (value: unknown): value is PublicAccount =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "networkId"]) &&
-  typeof value.address === "string" &&
-  value.address.length > 0 &&
-  isStarknetNetworkId(value.networkId);
-// Validates an `{ accounts, ok: true }` envelope of `isMember` members unique
-// under `keyOf`, returning the narrowed list or null.
-const parseAccountsResult = <T>(
-  result: unknown,
-  isMember: (value: unknown) => value is T,
-  keyOf: (value: T) => string,
-): readonly T[] | null => {
-  if (
-    !isRecord(result) ||
-    !isJson(result) ||
-    !hasOnlyKnownKeys(result, ["accounts", "ok"]) ||
-    result.ok !== true ||
-    !Array.isArray(result.accounts) ||
-    !result.accounts.every(isMember)
-  ) {
-    return null;
-  }
-  const accounts = result.accounts;
-  return new Set(accounts.map(keyOf)).size === accounts.length ? accounts : null;
-};
-
-// Page-facing account list carried over the bridge; rejects any record still
-// holding derivation indices or public keys.
-const providerAccountsResult = (result: unknown): ProviderAccountsResult | null => {
-  const accounts = parseAccountsResult(
-    result,
-    isPublicAccount,
-    (account) => `${account.networkId}:${account.address}`,
-  );
-  return accounts ? { accounts: accounts.map(toPublicAccount), ok: true } : null;
-};
-
-const providerStringArrayResult = (result: unknown): readonly string[] | null =>
-  Array.isArray(result) &&
-  isJson(result) &&
-  result.every((item) => typeof item === "string" && item.length > 0)
-    ? result
-    : null;
-
 /**
  * Parses content-script responses before resolving in-page provider requests.
  */
@@ -352,7 +271,7 @@ export const readProviderResponse = (value: unknown): ProviderResponse | null =>
     value.target !== PAGE_TARGET ||
     typeof value.id !== "string" ||
     !isUuid(value.id) ||
-    (value.error !== undefined && (typeof value.error !== "string" || value.error.length === 0)) ||
+    (value.error !== undefined && !isWalletRpcError(value.error)) ||
     (value.error !== undefined && Object.hasOwn(value, "result")) ||
     (value.error === undefined && !Object.hasOwn(value, "result"))
   ) {
@@ -404,9 +323,8 @@ export const toRuntimeMessage = (
     return { origin, type: "wallet.getChainId" };
   }
   if (request.method === "wallet_signTypedData") {
-    return request.params === undefined
-      ? null
-      : { origin, typedData: request.params, type: "wallet.signTypedData" };
+    const typedData = readTypedDataParam(request.params);
+    return typedData === null ? null : { origin, typedData, type: "wallet.signTypedData" };
   }
   if (request.method === "wallet_switchStarknetChain") {
     const chainId = providerSwitchChainId(request.params);
@@ -416,74 +334,14 @@ export const toRuntimeMessage = (
 };
 
 /**
- * Converts background runtime results into provider success or rejection payloads.
- */
-export const toProviderPayload = (
-  result: unknown,
-  method: ProviderMethod = "mc_accounts",
-): { readonly error?: string; readonly result?: unknown } => {
-  if (isRecord(result) && typeof result.error === "string") {
-    return { error: result.error };
-  }
-  if (isRecord(result) && result.ok === false && isRecord(result.pending)) {
-    return { error: "approval pending" };
-  }
-  if (method === "wallet_getPermissions") {
-    const permissions =
-      isRecord(result) && result.ok === true ? providerStringArrayResult(result.permissions) : null;
-    return permissions ? { result: permissions } : { error: "invalid provider response" };
-  }
-  if (method === "wallet_watchAsset") {
-    return isRecord(result) && result.ok === true && result.watched === true
-      ? { result: true }
-      : { error: "invalid provider response" };
-  }
-  if (method === "wallet_signTypedData") {
-    const signature = isRecord(result) && result.ok === true ? result.signature : null;
-    return isRecord(signature) &&
-      typeof signature.r === "string" &&
-      typeof signature.s === "string" &&
-      /^0x[0-9a-f]+$/.test(signature.r) &&
-      /^0x[0-9a-f]+$/.test(signature.s)
-      ? { result: [signature.r, signature.s] }
-      : { error: "invalid provider response" };
-  }
-  const chainId = providerChainIdResult(result);
-  if (method === "wallet_switchStarknetChain" && chainId) {
-    return { result: true };
-  }
-  if (chainId) {
-    return { result: chainId.chainId };
-  }
-  if (
-    method === "wallet_addInvokeTransaction" &&
-    isRecord(result) &&
-    typeof result.transactionHash === "string"
-  ) {
-    return { result: { transaction_hash: result.transactionHash } };
-  }
-  // Validate the full list here (trusted context), then reduce to the page view
-  // so dapps never receive derivation indices, class hashes, or public keys.
-  const accounts = parseAccountsResult(result, isAccountRef, (account) => account.id);
-  if (!accounts) {
-    return { error: "invalid provider response" };
-  }
-  if (method === "wallet_requestAccounts") {
-    return { result: accounts.map((account) => account.address) };
-  }
-  return { result: { accounts: accounts.map(toPublicAccount), ok: true } };
-};
-
-/**
  * Builds a page-targeted provider response for the in-page script.
  */
 export const providerResponse = (
   request: ProviderRequest,
-  payload: { readonly error?: string; readonly result?: unknown },
+  payload: ProviderPayload,
 ): ProviderResponse => {
   if (payload.error !== undefined) {
-    const error = payload.error.length === 0 ? "invalid provider response" : payload.error;
-    return { error, id: request.id, target: PAGE_TARGET };
+    return { error: payload.error, id: request.id, target: PAGE_TARGET };
   }
   const result =
     providerAccountsResult(payload.result) ??
@@ -491,8 +349,8 @@ export const providerResponse = (
     providerStringArrayResult(payload.result) ??
     (typeof payload.result === "boolean" ? payload.result : null) ??
     (typeof payload.result === "string" && payload.result.length > 0 ? payload.result : null);
-  if (!result) {
-    return { error: "invalid provider response", id: request.id, target: PAGE_TARGET };
+  if (result === null || result === undefined) {
+    return { error: unknownError(), id: request.id, target: PAGE_TARGET };
   }
 
   return { id: request.id, result, target: PAGE_TARGET };

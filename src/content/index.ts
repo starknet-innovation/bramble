@@ -1,6 +1,7 @@
 /**
  * Content-script bridge between untrusted pages and the extension background worker.
  */
+import { invalidRequestPayload, unknownError } from "../background/wallet-rpc-errors";
 import {
   isTrustedPageMessage,
   providerResponse,
@@ -60,13 +61,13 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 
   const runtimeMessage = toRuntimeMessage(request, window.location.origin);
   if (!runtimeMessage) {
-    postToPage({ error: "unsupported provider method" });
+    postToPage({ error: invalidRequestPayload() });
     return;
   }
 
   void runtime.sendMessage(runtimeMessage).then(
     (result) => postToPage(toProviderPayload(result, request.method)),
-    () => postToPage({ error: "provider request failed" }),
+    () => postToPage({ error: unknownError() }),
   );
 });
 

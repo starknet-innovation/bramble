@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { readGetPermissionsInput, readWatchAssetInput } from "../src/background/provider-inputs";
+import { invalidRequestPayload, unknownError } from "../src/background/wallet-rpc-errors";
 import { watchAssetToken } from "../src/background/watch-asset";
 import {
   CONTENT_TARGET,
@@ -60,11 +61,11 @@ describe("provider permission surface", () => {
     });
     expect(toProviderPayload({ error: "sender origin mismatch" }, "wallet_getPermissions")).toEqual(
       {
-        error: "sender origin mismatch",
+        error: invalidRequestPayload(),
       },
     );
     expect(toProviderPayload({ ok: true }, "wallet_getPermissions")).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
     });
   });
 
@@ -133,14 +134,14 @@ describe("provider watch-asset surface", () => {
         { ok: false, pending: { id: requestId, kind: "watch-asset", origin: "https://a.test" } },
         "wallet_watchAsset",
       ),
-    ).toEqual({ error: "approval pending" });
+    ).toEqual({ error: unknownError() });
     expect(
       toProviderPayload({ error: "invalid watch asset metadata" }, "wallet_watchAsset"),
     ).toEqual({
-      error: "invalid watch asset metadata",
+      error: invalidRequestPayload(),
     });
     expect(toProviderPayload({ ok: true }, "wallet_watchAsset")).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
     });
   });
 

@@ -45,6 +45,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/wallet-ops.ts",
   "src/crypto/krusty.ts",
   "src/popup/responses.ts",
+  "src/provider/bridge-results.ts",
   "src/provider/bridge.ts",
   "src/sidepanel/dom.ts",
   "src/sidepanel/gate-views.ts",

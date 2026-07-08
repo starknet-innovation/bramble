@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
+import { unknownError } from "../src/background/wallet-rpc-errors";
 import {
   readProviderRequestArguments,
   toProviderPayload,
@@ -89,7 +90,7 @@ describe("provider bridge typed data", () => {
       ),
     ).toEqual({ result: ["0x1a", "0x2b"] });
     expect(toProviderPayload({ ok: true, signature: {} }, "wallet_signTypedData")).toEqual({
-      error: "invalid provider response",
+      error: unknownError(),
     });
   });
 });
