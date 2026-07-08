@@ -7,14 +7,17 @@ import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import {
   type ProviderAccountsResult,
+  type ProviderDeploymentData,
   type ProviderInvokeCall,
   type ProviderInvokeResult,
   type ProviderPayload,
   providerAccountsResult,
+  providerDeploymentResult,
   providerInvokeCalls,
   providerInvokeResult,
   providerStringArrayResult,
   providerSwitchChainId,
+  readApiVersionParam,
   readTypedDataParam,
   toProviderPayload as toProviderPayloadResult,
 } from "./bridge-results";
@@ -41,10 +44,13 @@ export type ProviderMethod =
   | "mc_accounts"
   | "mc_requestAccounts"
   | "wallet_addInvokeTransaction"
+  | "wallet_deploymentData"
   | "wallet_getPermissions"
   | "wallet_requestAccounts"
   | "wallet_requestChainId"
   | "wallet_signTypedData"
+  | "wallet_supportedSpecs"
+  | "wallet_supportedWalletApi"
   | "wallet_switchStarknetChain"
   | "wallet_watchAsset";
 
@@ -80,6 +86,7 @@ export type ProviderResponse =
       readonly id: string;
       readonly result:
         | ProviderAccountsResult
+        | ProviderDeploymentData
         | ProviderInvokeResult
         | readonly string[]
         | boolean
@@ -128,8 +135,23 @@ export type RuntimeMessage =
       readonly type: "wallet.addInvokeTransaction";
     }
   | {
+      readonly apiVersion?: string;
+      readonly origin: string;
+      readonly type: "wallet.deploymentData";
+    }
+  | {
       readonly origin: string;
       readonly type: "wallet.getChainId";
+    }
+  | {
+      readonly apiVersion?: string;
+      readonly origin: string;
+      readonly type: "wallet.supportedSpecs";
+    }
+  | {
+      readonly apiVersion?: string;
+      readonly origin: string;
+      readonly type: "wallet.supportedWalletApi";
     }
   | {
       readonly origin: string;
@@ -172,10 +194,13 @@ const isProviderMethod = (value: unknown): value is ProviderMethod =>
   value === "mc_accounts" ||
   value === "mc_requestAccounts" ||
   value === "wallet_addInvokeTransaction" ||
+  value === "wallet_deploymentData" ||
   value === "wallet_getPermissions" ||
   value === "wallet_requestAccounts" ||
   value === "wallet_requestChainId" ||
   value === "wallet_signTypedData" ||
+  value === "wallet_supportedSpecs" ||
+  value === "wallet_supportedWalletApi" ||
   value === "wallet_switchStarknetChain" ||
   value === "wallet_watchAsset";
 
@@ -184,7 +209,10 @@ const readProviderParams = (method: ProviderMethod, params: unknown): Json | nul
     return undefined;
   }
   return (method === "wallet_addInvokeTransaction" ||
+    method === "wallet_deploymentData" ||
     method === "wallet_signTypedData" ||
+    method === "wallet_supportedSpecs" ||
+    method === "wallet_supportedWalletApi" ||
     method === "wallet_switchStarknetChain" ||
     method === "wallet_watchAsset") &&
     isJson(params)
@@ -281,6 +309,7 @@ export const readProviderResponse = (value: unknown): ProviderResponse | null =>
   if (value.error === undefined) {
     const result =
       providerAccountsResult(value.result) ??
+      providerDeploymentResult(value.result) ??
       providerInvokeResult(value.result) ??
       providerStringArrayResult(value.result) ??
       (typeof value.result === "boolean" ? value.result : null) ??
@@ -322,6 +351,24 @@ export const toRuntimeMessage = (
   if (request.method === "wallet_requestChainId") {
     return { origin, type: "wallet.getChainId" };
   }
+  if (request.method === "wallet_supportedSpecs") {
+    const apiVersion = readApiVersionParam(request.params);
+    return apiVersion === null
+      ? null
+      : { origin, type: "wallet.supportedSpecs", ...(apiVersion ? { apiVersion } : {}) };
+  }
+  if (request.method === "wallet_supportedWalletApi") {
+    const apiVersion = readApiVersionParam(request.params);
+    return apiVersion === null
+      ? null
+      : { origin, type: "wallet.supportedWalletApi", ...(apiVersion ? { apiVersion } : {}) };
+  }
+  if (request.method === "wallet_deploymentData") {
+    const apiVersion = readApiVersionParam(request.params);
+    return apiVersion === null
+      ? null
+      : { origin, type: "wallet.deploymentData", ...(apiVersion ? { apiVersion } : {}) };
+  }
   if (request.method === "wallet_signTypedData") {
     const typedData = readTypedDataParam(request.params);
     return typedData === null ? null : { origin, typedData, type: "wallet.signTypedData" };
@@ -345,6 +392,7 @@ export const providerResponse = (
   }
   const result =
     providerAccountsResult(payload.result) ??
+    providerDeploymentResult(payload.result) ??
     providerInvokeResult(payload.result) ??
     providerStringArrayResult(payload.result) ??
     (typeof payload.result === "boolean" ? payload.result : null) ??
