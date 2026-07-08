@@ -15,7 +15,11 @@ import { applySkin } from "../ui/skin";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { buttonBusy, errorMessage, focusMemo, restoreFocus, scopedStatus, showToast } from "./dom";
+import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
+import type { HomeTab } from "./home-tabs";
+import { bindHomeUi } from "./home-ui";
+import { icon } from "./icons";
 import { bindOnboarding } from "./onboarding-ui";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, emptyStatus, type RuntimeApi } from "./runtime";
@@ -43,6 +47,8 @@ let lastNetworkId = "SN_MAIN";
 let lastScene = "";
 let lastTheme = "";
 let selectedTokenId: string | null = null;
+let homeTab: HomeTab = "tokens";
+let drawerOpen = false;
 
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
@@ -56,6 +62,27 @@ const bindNavigation = (): void => {
   });
 };
 
+// Swaps the button's copy glyph for a check while the confirmation lands,
+// then restores it unless a re-render already replaced the control.
+const confirmCopyGlyph = (button: HTMLButtonElement): void => {
+  const glyph = button.querySelector("svg");
+  if (!glyph) {
+    return;
+  }
+  glyph.outerHTML = icon("check");
+  button.classList.add("copy-confirm");
+  setTimeout(() => {
+    if (!button.isConnected) {
+      return;
+    }
+    const check = button.querySelector("svg");
+    if (check) {
+      check.outerHTML = icon("copy");
+    }
+    button.classList.remove("copy-confirm");
+  }, 1400);
+};
+
 const bindCopy = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -67,8 +94,8 @@ const bindCopy = (): void => {
       void navigator.clipboard.writeText(value).then(
         () => {
           scopedStatus(button, "Copied");
-          showToast("Copied", "success");
           buttonBusy(button, false);
+          confirmCopyGlyph(button);
         },
         () => {
           scopedStatus(button, "Copy failed");
@@ -127,50 +154,6 @@ const bindDeploy = (): void => {
     );
   });
 };
-
-// Wires an endpoint-URL settings form (RPC override, STRK20 prover) to its save
-// handler, showing a saved/reset toast and re-rendering, or the failure message.
-// `noun` names the endpoint in every toast/status line.
-const bindEndpointForm = (
-  formId: string,
-  field: string,
-  noun: string,
-  submit: (value: string) => Promise<unknown>,
-): void => {
-  const form = app?.querySelector<HTMLFormElement>(formId);
-  const result = app?.querySelector<HTMLElement>(`${formId.replace("-form", "")}-result`);
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  const fail = `${noun} update failed`;
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const value = String(new FormData(form).get(field) ?? "").trim();
-    buttonBusy(submitButton, true);
-    void submit(value).then(
-      async () => {
-        showToast(`${noun} ${value ? "saved" : "reset"}`, "success");
-        await render(await wallet.loadStatus());
-      },
-      (error: unknown) => {
-        const message = errorMessage(error, fail);
-        showToast(message, "error");
-        if (result) {
-          result.textContent = message;
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
-  });
-};
-
-const bindRpcOverride = (): void =>
-  bindEndpointForm("#rpc-form", "rpcUrl", "RPC endpoint", (rpcUrl) =>
-    wallet.setRpcOverride(lastNetworkId, rpcUrl),
-  );
-
-const bindStrk20Prover = (): void =>
-  bindEndpointForm("#strk20-prover-form", "proverUrl", "Prover endpoint", (proverUrl) =>
-    wallet.setStrk20ProverUrl(proverUrl),
-  );
 
 const bindPickers = (): void => {
   const result = app?.querySelector<HTMLElement>("#picker-result");
@@ -319,8 +302,21 @@ const bindAll = (): void => {
   bindDashboard();
   bindDeploy();
   bindPickers();
-  bindRpcOverride();
-  bindStrk20Prover();
+  bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
+  bindHomeUi({
+    app,
+    drawerOpen: () => drawerOpen,
+    homeTab: () => homeTab,
+    networkId: () => lastNetworkId,
+    render,
+    setDrawerOpen: (open) => {
+      drawerOpen = open;
+    },
+    setHomeTab: (tab) => {
+      homeTab = tab;
+    },
+    wallet,
+  });
   bindReveal({ app, wallet });
   bindActivity({ app, render, wallet });
   bindTransfer({ app, render, wallet });
@@ -437,7 +433,7 @@ const render = async (status: WalletStatus): Promise<void> => {
       cache.deployment = value;
     });
   }
-  if (activeView === "activity") {
+  if (activeView === "activity" || activeView === "home") {
     fill(wallet.loadActivity(), (value) => {
       cache.transactions = value;
     });
@@ -467,8 +463,10 @@ const render = async (status: WalletStatus): Promise<void> => {
 };
 
 // Instant navigation: swap the visible screen from cache now, hydrate after.
+// Any navigation dismisses the account drawer so it never lingers over flows.
 const navigate = (view: WalletView): void => {
   activeView = view;
+  drawerOpen = false;
   paint();
   void wallet.loadStatus().then(render);
 };

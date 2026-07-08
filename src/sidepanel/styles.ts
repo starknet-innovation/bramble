@@ -3,20 +3,27 @@
  *
  * ANIMATION STORYBOARD
  *
- * Read top-to-bottom. Each value is ms after render.
+ * Read top-to-bottom. Each value is ms after render or interaction.
  *
- *   0ms   shell mounts; controls are laid out once and never move again
- *  90ms   hover and press feedback settles — color-only, zero translation
- * 200ms   a newly opened screen fades in and rises 4px into place
- * 220ms   toasts slide into the fixed stack above the shell
+ *   0ms   shell mounts; layout is stable from the first frame
+ *  90ms   hover and press feedback settles — background shifts plus a
+ *         restrained 2px lift or 0.96–1.0 press scale on tiles and rows
+ * 200ms   a newly opened screen fades in and rises 4px; the hero, action
+ *         tiles, and first six token rows follow in a 30–40ms stagger
+ * 220ms   the emerald tab indicator glides to the active tab while the
+ *         incoming panel cross-fades; toasts slide into the fixed stack
+ * 260ms   the account drawer slides in over a dimmed backdrop, its rows
+ *         cascading in behind it
  *
- * Press stability contract: interactive controls are borderless and change
- * only paint properties (background, text color) on hover and press. Nothing
- * scales, translates, or reflows on hover, press, or selection.
+ * Stability contract: interactive controls are borderless; transforms stay
+ * within a 2px lift or a 0.96 scale so nothing drifts under the pointer, and
+ * every animation and transition collapses under prefers-reduced-motion (see
+ * ./styles-home.ts, composed last so its media block wins).
  */
 import { CONTROL, MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
 import { SIGN_REQUEST_STYLES } from "./sign-request";
 import { BASE_STYLES } from "./styles-base";
+import { HOME_STYLES } from "./styles-home";
 
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
@@ -188,7 +195,12 @@ export const SIDEPANEL_STYLES = `${BASE_STYLES}  /* Buttons: pill CTAs and circu
     display: flex;
     gap: ${SPACE.md};
     padding: ${SPACE.md};
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
+  li.token-row:hover { background: var(--mc-hover); }
+  li.token-row:has(button.token-open:active) { background: var(--mc-soft-press); transform: scale(0.985); }
   .token-mark {
     align-items: center;
     background: var(--mc-accent-soft);
@@ -466,22 +478,4 @@ ${SIGN_REQUEST_STYLES}
   .toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   button.toast-copy { height: 30px; min-height: 30px; width: 30px; }
 
-  /* Motion: screens animate only when the scene changes, never on re-render */
-  .shell-animate .screen { animation: screen-enter ${MOTION.enterMs}ms ${MOTION.ease} both; }
-  @keyframes screen-enter {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes toast-enter {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: 2px solid var(--mc-accent);
-    outline-offset: 2px;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .shell-animate .screen, .toast { animation: none; }
-    button, input, select, textarea { transition: none; }
-  }
-`;
+${HOME_STYLES}`;

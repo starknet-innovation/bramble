@@ -1,11 +1,12 @@
 /**
  * Base layer of the side panel stylesheet: skin-derived custom properties,
- * reset, layout primitives, header, portfolio hero, quick actions, dock, flow
- * chrome, and list rows. Composed with the component layer in ./styles.ts.
+ * reset, layout primitives, the account-bar header, portfolio hero, action
+ * tiles, dock, flow chrome, and list rows. Composed with the component layer
+ * in ./styles.ts and the home/motion layer in ./styles-home.ts.
  *
- * Surface rules: solid fills only (no gradients); at most one border per
- * component; list rows are flat fills separated by space, never boxes nested
- * inside boxes.
+ * Surface rules: solid fills only (no gradients), structure carried by
+ * elevation instead of borders; list rows are flat fills separated by space,
+ * never boxes nested inside boxes.
  */
 import { CONTROL, FONT, MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
 
@@ -87,14 +88,30 @@ export const BASE_STYLES = `
     text-transform: uppercase;
   }
 
-  /* Header: avatar, centered identity (name | network), lock */
+  /* Header: avatar-led account trigger (opens the drawer), ghost actions */
   .wallet-header {
     align-items: center;
-    display: grid;
+    display: flex;
     gap: ${SPACE.sm};
-    grid-template-columns: 38px 1fr 40px;
+    justify-content: space-between;
     padding: 2px 0 ${SPACE.xs};
   }
+  button.account-trigger {
+    align-items: center;
+    background: transparent;
+    border-radius: ${RADIUS.full};
+    color: var(--mc-text);
+    display: flex;
+    flex: 0 1 auto;
+    gap: 10px;
+    justify-content: flex-start;
+    min-height: 0;
+    min-width: 0;
+    padding: 4px 12px 4px 4px;
+    text-align: left;
+  }
+  button.account-trigger:not(:disabled):hover { background: var(--mc-hover); }
+  button.account-trigger:not(:disabled):active { background: var(--mc-soft-press); }
   .brand-mark {
     align-items: center;
     background: var(--mc-accent);
@@ -102,19 +119,19 @@ export const BASE_STYLES = `
     color: var(--mc-accent-text);
     display: inline-flex;
     flex: none;
-    height: 38px;
+    height: 36px;
     justify-content: center;
     overflow: hidden;
-    width: 38px;
+    width: 36px;
   }
-  .account-id {
+  .account-meta { display: grid; gap: 1px; min-width: 0; }
+  .account-name {
     align-items: center;
     display: flex;
-    gap: 8px;
-    justify-content: center;
+    gap: 4px;
     min-width: 0;
   }
-  .account-id strong {
+  .account-name strong {
     color: var(--mc-text);
     font-size: ${TYPE.body.size};
     font-weight: 700;
@@ -122,23 +139,32 @@ export const BASE_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  .account-sep { color: var(--mc-muted); flex: none; }
-  .account-net {
+  .account-name .icon {
     color: var(--mc-muted);
-    font-size: ${TYPE.body.size};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
+    flex: none;
+    height: 12px;
+    transition: transform ${MOTION.tabMs}ms ${MOTION.ease};
+    width: 12px;
   }
-  .header-actions { align-items: center; display: flex; flex: none; gap: ${SPACE.sm}; }
+  .account-trigger[aria-expanded="true"] .account-name .icon { transform: rotate(180deg); }
+  .account-net {
+    align-items: center;
+    color: var(--mc-muted);
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: 6px;
+    min-width: 0;
+  }
+  .account-net .dot { height: 6px; width: 6px; }
+  .header-actions { align-items: center; display: flex; flex: none; gap: ${SPACE.xs}; }
 
-  /* Portfolio hero */
+  /* Portfolio hero: compact so the tile row and tabs stay above the fold */
   .hero {
     align-items: center;
     display: grid;
-    gap: ${SPACE.md};
+    gap: ${SPACE.sm};
     justify-items: center;
-    padding: ${SPACE.xl} ${SPACE.sm} ${SPACE.lg};
+    padding: ${SPACE.lg} ${SPACE.sm} ${SPACE.sm};
     text-align: center;
   }
   .hero-total {
@@ -165,43 +191,49 @@ export const BASE_STYLES = `
   button.hero-chip:not(:disabled):active { background: transparent; }
   .hero-chip .icon { color: var(--mc-muted); height: 14px; width: 14px; }
 
-  /* Quick actions: circular icon buttons with a short label */
-  .quick-actions {
+  /* Action tiles: rounded-square elevated surfaces, icon over label */
+  .action-row {
     display: grid;
-    gap: ${SPACE.sm};
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    justify-items: center;
-    padding: 0 ${SPACE.md};
+    gap: 10px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  button.quick-action {
-    background: transparent;
-    color: var(--mc-text);
-    display: grid;
-    gap: 8px;
-    justify-items: center;
-    min-height: 0;
-    padding: 0;
-  }
-  .quick-disc {
-    align-items: center;
+  button.action-tile {
+    align-content: center;
     background: var(--mc-elevated);
-    border-radius: ${RADIUS.full};
+    border-radius: ${RADIUS.lg};
     color: var(--mc-text);
-    display: inline-flex;
-    height: 56px;
-    justify-content: center;
-    transition: background 90ms ${MOTION.ease}, color 90ms ${MOTION.ease};
-    width: 56px;
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+    min-height: 72px;
+    padding: ${SPACE.md} ${SPACE.xs};
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      box-shadow ${MOTION.liftMs}ms ${MOTION.ease},
+      transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
-  button.quick-action:not(:disabled):hover, button.quick-action:not(:disabled):active { background: transparent; }
-  button.quick-action:not(:disabled):hover .quick-disc { background: var(--mc-hover); }
-  button.quick-action:not(:disabled):active .quick-disc { background: var(--mc-soft-press); }
-  button.quick-action.primary .quick-disc { background: var(--mc-accent); color: var(--mc-accent-text); }
-  button.quick-action.primary:not(:disabled):hover .quick-disc { background: var(--mc-accent-hover); }
-  button.quick-action:disabled { cursor: not-allowed; opacity: 0.4; }
-  .quick-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: 600; }
-  .quick-disc .icon { height: 22px; width: 22px; }
+  button.action-tile:not(:disabled):hover {
+    background: var(--mc-hover);
+    box-shadow: var(--mc-shadow-sm);
+    transform: translateY(-2px);
+  }
+  button.action-tile:not(:disabled):active {
+    background: var(--mc-soft-press);
+    box-shadow: none;
+    transform: translateY(0) scale(0.96);
+  }
+  button.action-tile:disabled { cursor: not-allowed; opacity: 0.4; }
+  button.action-tile.primary { background: var(--mc-accent-soft); }
+  button.action-tile.primary:not(:disabled):hover {
+    background: color-mix(in srgb, var(--mc-accent) 24%, var(--mc-panel));
+  }
+  button.action-tile.primary:not(:disabled):active {
+    background: color-mix(in srgb, var(--mc-accent) 30%, var(--mc-panel));
+  }
+  .tile-icon { color: var(--mc-text); display: inline-flex; }
+  button.action-tile.primary .tile-icon { color: var(--mc-accent); }
+  .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: 650; }
+  .tile-icon .icon { height: 20px; width: 20px; }
 
   /* Bottom dock */
   .wallet-dock {
@@ -230,18 +262,25 @@ export const BASE_STYLES = `
     justify-items: center;
     min-height: ${CONTROL.nav};
     padding: ${SPACE.xs} 2px;
+    transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
-  button.nav-item:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  button.nav-item:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+  button.nav-item:not(:disabled):hover .tab-icon { background: var(--mc-hover); }
+  button.nav-item:not(:disabled):active { background: transparent; transform: scale(0.92); }
   button.nav-item[aria-selected="true"] { color: var(--mc-accent); }
+  button.nav-item[aria-selected="true"] .tab-icon { background: var(--mc-accent-soft); }
   .tab-icon {
     align-items: center;
+    border-radius: ${RADIUS.full};
     display: inline-flex;
     justify-content: center;
     min-height: 22px;
+    padding: 6px 16px;
     position: relative;
+    transition: background ${MOTION.tabMs}ms ${MOTION.ease};
   }
   .tab-icon .icon { height: 22px; width: 22px; }
-  .tab-icon .badge { position: absolute; right: -12px; top: -4px; }
+  .tab-icon .badge { position: absolute; right: -4px; top: -2px; }
   .tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 
   /* Flow screens: back control + goal title */
@@ -271,11 +310,17 @@ export const BASE_STYLES = `
     padding: 0 ${SPACE.md};
     text-align: left;
     text-decoration: none;
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
   button.menu-row:not(:disabled):hover, button.option-row:not(:disabled):hover, a.menu-row:hover {
     background: var(--mc-hover);
   }
-  button.menu-row:not(:disabled):active, button.option-row:not(:disabled):active { background: var(--mc-soft-press); }
+  button.menu-row:not(:disabled):active, button.option-row:not(:disabled):active {
+    background: var(--mc-soft-press);
+    transform: scale(0.985);
+  }
   button.option-row[aria-pressed="true"] { background: var(--mc-accent-soft); }
   button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
   .menu-icon, .menu-chevron { color: var(--mc-muted); display: inline-flex; flex: none; }

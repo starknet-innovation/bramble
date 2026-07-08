@@ -54,13 +54,19 @@ export const TYPE = {
 } as const;
 
 /**
- * Motion durations in ms and the shared easing curve. Press feedback is
- * color-only by design: controls never translate or scale under the pointer.
+ * Motion durations in ms and the shared easing curves. `ease` settles
+ * decisively; `pop` carries a slight overshoot reserved for press-release and
+ * entrance moments. Feedback transforms stay within a 2px lift or a 0.96–1.0
+ * scale so controls feel alive without drifting under the pointer.
  */
 export const MOTION = {
+  drawerMs: 260,
   ease: "cubic-bezier(0.2, 0.7, 0.3, 1)",
   enterMs: 200,
+  liftMs: 160,
+  pop: "cubic-bezier(0.34, 1.3, 0.4, 1)",
   pressMs: 90,
+  tabMs: 220,
   toastMs: 220,
 } as const;
 

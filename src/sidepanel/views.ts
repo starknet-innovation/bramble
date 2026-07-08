@@ -1,21 +1,20 @@
 /**
  * Side panel screen composition. Dock screens (Home, Activity, Settings)
- * share the brand header and the bottom dock; every other view renders as a
- * dedicated flow screen from ./flows.ts with its own back navigation, so each
- * journey has a distinct place to complete its goal.
+ * share the account-bar header, the bottom dock, and the account drawer;
+ * every other view renders as a dedicated flow screen from ./flows.ts with
+ * its own back navigation, so each journey has a distinct place to complete
+ * its goal. Home follows a compact portfolio structure: hero balance, a row
+ * of action tiles, then the tabbed Tokens/Collectibles/Activity section from
+ * ./home-tabs.ts.
  */
 
-import type {
-  ConnectedSite,
-  PendingApproval,
-  TokenBalance,
-  WalletStatus,
-} from "../popup/responses";
+import type { ConnectedSite, PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { AllowanceRecord } from "../storage/allowance-store";
-import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
+import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { accountDrawer } from "./account-drawer";
 import { allowancesFlow } from "./allowance-views";
 import { approvalCard } from "./approval-cards";
 import { formatFiat, portfolioTotal } from "./fiat";
@@ -28,6 +27,7 @@ import {
   receiveFlow,
   sendFlow,
 } from "./flows";
+import { homeTabs, transactionRow, visibleHomeBalances } from "./home-tabs";
 import { type IconName, icon } from "./icons";
 import { nftDetailFlow, nftGalleryFlow } from "./nft-views";
 import {
@@ -35,7 +35,6 @@ import {
   accountDisplayName,
   accountLabel,
   activeAccount,
-  copyButton,
   dockScreen,
   isWalletView,
   networkOptions,
@@ -45,8 +44,7 @@ import {
 } from "./parts";
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
-import { DEFAULT_CURRENCY, isHiddenFromHome, tokenDetailFlow, tokensFlow } from "./token-flows";
-import { balanceRow } from "./token-row";
+import { DEFAULT_CURRENCY, tokenDetailFlow, tokensFlow } from "./token-flows";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
@@ -64,14 +62,17 @@ const walletHeader = (
     .replace(/^Starknet\s+/, "");
   return `
   <header class="wallet-header">
-    <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
-    <div class="account-id">
-      <strong>${escapeHtml(name)}</strong>
-      <span class="account-sep">|</span>
-      <span class="dot"></span>
-      <span class="account-net">${escapeHtml(network)}</span>
+    <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" title="Manage accounts">
+      <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
+      <span class="account-meta">
+        <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
+        <span class="account-net"><span class="dot"></span>${escapeHtml(network)}</span>
+      </span>
+    </button>
+    <div class="header-actions">
+      <button class="icon-button ghost" data-view="connected-sites" type="button" aria-label="Connected sites" title="Connected sites">${icon("link")}</button>
+      <button id="lock-button" class="icon-button ghost" type="button" aria-label="Lock wallet" title="Lock wallet">${icon("lock")}</button>
     </div>
-    <button id="lock-button" class="icon-button" type="button" aria-label="Lock wallet" title="Lock wallet">${icon("lock")}</button>
   </header>`;
 };
 
@@ -105,71 +106,17 @@ const pendingCallout = (pendingCount: number): string =>
         <button class="secondary small" data-view="activity" type="button">Review</button>
       </section>`;
 
-const visibleBalances = (
-  state: BalanceState,
-  preferences: WalletPreferences | null,
-): readonly TokenBalance[] => {
-  if ("error" in state) {
-    return [];
-  }
-  const trackedById = new Map<string, TokenConfig>(
-    (preferences?.tokens ?? []).map((token) => [token.id, token]),
-  );
-  return state.balances.filter((balance) => {
-    const token = trackedById.get(balance.id);
-    return !token || !isHiddenFromHome(token, preferences);
-  });
-};
-
-const quickAction = (
+const actionTile = (
   view: WalletView,
   label: string,
   name: IconName,
   primary: boolean,
   enabled: boolean,
 ): string =>
-  `<button class="quick-action${primary ? " primary" : ""}" data-view="${view}" type="button" ${enabled ? "" : "disabled"}>
-    <span class="quick-disc">${icon(name)}</span>
-    <span class="quick-label">${escapeHtml(label)}</span>
+  `<button class="action-tile${primary ? " primary" : ""}" data-view="${view}" type="button" ${enabled ? "" : "disabled"}>
+    <span class="tile-icon">${icon(name)}</span>
+    <span class="tile-label">${escapeHtml(label)}</span>
   </button>`;
-
-const balancePanel = (
-  state: BalanceState,
-  preferences: WalletPreferences | null,
-  prices: Readonly<Record<string, number>>,
-  changes: Readonly<Record<string, number>>,
-  currency: DisplayCurrency,
-): string => {
-  const visible = visibleBalances(state, preferences);
-  const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
-  return `
-  <section class="stack" aria-label="Balances">
-    <div class="section-head">
-      <h2>Tokens</h2>
-      <div class="header-actions">
-        <button class="icon-button" data-view="tokens" type="button" aria-label="Manage tokens" title="Manage tokens">${icon("plus")}</button>
-        <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh balances" title="Refresh balances">${icon("refresh")}</button>
-      </div>
-    </div>
-    ${
-      "error" in state
-        ? `<p class="empty">${escapeHtml(state.error)}</p>`
-        : visible.length === 0
-          ? '<p class="empty">No tracked balances yet. Add or detect tokens to see them here.</p>'
-          : `<ul class="token-list">${visible
-              .map((token) =>
-                balanceRow(token, prices[token.address], changes[token.address], currency),
-              )
-              .join("")}</ul>`
-    }
-    ${
-      hiddenCount > 0
-        ? `<button class="menu-row" data-view="tokens" type="button"><span class="menu-copy"><strong>Hidden tokens</strong></span><span class="menu-value">${hiddenCount} hidden</span><span class="menu-chevron">${icon("chevronRight")}</span></button>`
-        : ""
-    }
-    <p id="panel-result" role="status"></p>
-  </section>`;
-};
 
 const deployNotice = (account: AccountRef | null, deployment: boolean | null): string =>
   account === null || deployment !== false
@@ -191,9 +138,10 @@ const homeScreen = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
+  transactions: readonly ActivityEntry[],
 ): string => {
   const showTotal = account !== null && Object.keys(prices).length > 0;
-  const total = showTotal ? portfolioTotal(visibleBalances(balances, preferences), prices) : 0;
+  const total = showTotal ? portfolioTotal(visibleHomeBalances(balances, preferences), prices) : 0;
   return dockScreen(
     "home",
     `${pendingCallout(pendingCount)}
@@ -206,30 +154,14 @@ const homeScreen = (
       }
       ${deployNotice(account, deployment)}
     </section>
-    <div class="quick-actions">
-      ${quickAction("send", "Send", "send", true, account !== null)}
-      ${quickAction("receive", "Receive", "receive", false, account !== null)}
-      ${quickAction("nfts", "NFTs", "image", false, true)}
+    <div class="action-row">
+      ${actionTile("send", "Send", "send", true, account !== null)}
+      ${actionTile("receive", "Receive", "receive", false, account !== null)}
+      ${actionTile("nfts", "NFTs", "image", false, true)}
     </div>
-    ${balancePanel(balances, preferences, prices, changes, currency)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, transactions, status)}`,
   );
 };
-
-// Renders a note panel of user-facing warning lines (reputation insights and/or
-// decoded risk-flag messages). Empty input renders nothing.
-const PENDING_TX_HINT =
-  "Pending Starknet transactions cannot be sped up or cancelled and usually settle within a few minutes.";
-
-const transactionRow = (entry: ActivityEntry): string => `
-  <li class="tx-row">
-    <span class="tx-status ${entry.status}"${entry.status === "pending" ? ` title="${escapeHtml(PENDING_TX_HINT)}"` : ""}>${escapeHtml(entry.status)}</span>
-    <div class="tx-copy">
-      <strong>${escapeHtml(entry.summary)}</strong>
-      <code>${escapeHtml(`${entry.hash.slice(0, 10)}…${entry.hash.slice(-6)}`)}</code>
-      ${entry.status === "pending" ? `<span class="tx-hint">${escapeHtml(PENDING_TX_HINT)}</span>` : ""}
-    </div>
-    ${copyButton(entry.hash, "Copy transaction hash")}
-  </li>`;
 
 const activityScreen = (
   pending: readonly PendingApproval[],
@@ -407,9 +339,11 @@ export const dashboard = (
             prices,
             changes,
             currency,
+            transactions,
           );
   return `
     ${walletHeader(status, account, preferences)}
     ${screen}
-    ${walletDock(activeView, pending.length)}`;
+    ${walletDock(activeView, pending.length)}
+    ${accountDrawer(status, account, preferences)}`;
 };

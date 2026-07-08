@@ -8,6 +8,7 @@ const ICONS = {
     '<path d="M12 4 2.7 19.3a1 1 0 0 0 .9 1.7h16.8a1 1 0 0 0 .9-1.7z" /><path d="M12 10v4" /><path d="M12 17.5h.01" />',
   book: '<path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z" /><path d="M4 17a3 3 0 0 1 3-3h11" /><path d="M8 8h6" />',
   check: '<path d="m5 12 4 4L19 6" />',
+  chevronDown: '<path d="m6 10 6 6 6-6" />',
   chevronLeft: '<path d="m14 6-6 6 6 6" />',
   chevronRight: '<path d="m10 6 6 6-6 6" />',
   copy: '<path d="M8 8h10v10H8z" /><path d="M6 16H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />',
