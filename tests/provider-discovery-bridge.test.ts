@@ -4,7 +4,12 @@
  * and ACCOUNT_DEPLOYMENT_DATA is padded and survives the wire validators.
  */
 import { describe, expect, test } from "bun:test";
-import { unknownError } from "../src/background/wallet-rpc-errors";
+import {
+  accountAlreadyDeployed,
+  apiVersionNotSupported,
+  deploymentDataNotAvailable,
+  unknownError,
+} from "../src/background/wallet-rpc-errors";
 import {
   PAGE_TARGET,
   providerResponse,
@@ -95,5 +100,17 @@ describe("provider discovery bridge", () => {
         "wallet_deploymentData",
       ),
     ).toEqual({ error: unknownError() });
+  });
+
+  test("maps deployment-data and api-version errors to their spec codes", () => {
+    expect(
+      toProviderPayload({ error: "account already deployed" }, "wallet_deploymentData"),
+    ).toEqual({ error: accountAlreadyDeployed() });
+    expect(
+      toProviderPayload({ error: "deployment data not available" }, "wallet_deploymentData"),
+    ).toEqual({ error: deploymentDataNotAvailable() });
+    expect(
+      toProviderPayload({ error: "unsupported api version" }, "wallet_supportedWalletApi"),
+    ).toEqual({ error: apiVersionNotSupported() });
   });
 });
