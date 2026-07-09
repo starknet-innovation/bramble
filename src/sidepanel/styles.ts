@@ -24,6 +24,7 @@ import { CONTROL, MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
 import { SIGN_REQUEST_STYLES } from "./sign-request";
 import { BASE_STYLES } from "./styles-base";
 import { HOME_STYLES } from "./styles-home";
+import { TRADE_STYLES } from "./trade/styles";
 
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
@@ -479,4 +480,5 @@ ${SIGN_REQUEST_STYLES}
   .toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   button.toast-copy { height: 30px; min-height: 30px; width: 30px; }
 
+${TRADE_STYLES}
 ${HOME_STYLES}`;

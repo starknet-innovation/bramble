@@ -195,7 +195,7 @@ export const BASE_STYLES = `
   .action-row {
     display: grid;
     gap: 10px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   button.action-tile {
     align-content: center;

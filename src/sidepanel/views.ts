@@ -52,6 +52,8 @@ import {
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
 import { DEFAULT_CURRENCY, tokenDetailFlow, tokensFlow } from "./token-flows";
+import type { TradeTab } from "./trade/context";
+import { tradeTerminal } from "./trade/shell";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
@@ -164,6 +166,7 @@ const homeScreen = (
     <div class="action-row">
       ${actionTile("send", "Send", "send", true, account !== null)}
       ${actionTile("receive", "Receive", "receive", false, account !== null)}
+      ${actionTile("trade", "Trade", "swap", false, true)}
       ${actionTile("nfts", "NFTs", "image", false, true)}
     </div>
     ${homeTabs(balances, preferences, prices, changes, currency, transactions, status)}`,
@@ -279,6 +282,7 @@ export const dashboard = (
   multisigProposals: readonly MultisigProposalRecord[] = [],
   selectedMultisigId: string | null = null,
   multisigClassDeclared: boolean | "error" | null = null,
+  tradeTab: TradeTab = "discover",
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -349,6 +353,9 @@ export const dashboard = (
   }
   if (activeView === "reveal") {
     return revealFlow(status);
+  }
+  if (activeView === "trade") {
+    return tradeTerminal(tradeTab, { currency, preferences, status });
   }
   const screen =
     activeView === "activity"

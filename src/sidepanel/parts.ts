@@ -32,6 +32,7 @@ export const WALLET_VIEWS = [
   "nfts",
   "nft-detail",
   "reveal",
+  "trade",
 ] as const;
 
 /**

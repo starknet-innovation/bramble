@@ -14,13 +14,13 @@ import { defaultSkin } from "../ui/default-skin";
 import { applySkin } from "../ui/skin";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
+import { bindDeploy } from "./deploy-ui";
 import {
   bindCopyButtons,
   buttonBusy,
   errorMessage,
   focusMemo,
   restoreFocus,
-  scopedStatus,
   showToast,
 } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
@@ -40,6 +40,8 @@ import {
   bindContacts,
 } from "./settings-ui";
 import { SIDEPANEL_STYLES } from "./styles";
+import { bindTrade } from "./trade/bindings";
+import type { TradeTab } from "./trade/context";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
@@ -59,6 +61,7 @@ let lastScene = "";
 let lastTheme = "";
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
+let tradeTab: TradeTab = "discover";
 let drawerOpen = false;
 
 const bindNavigation = (): void => {
@@ -100,26 +103,6 @@ const bindDashboard = (): void => {
       buttonBusy(button, true);
       void wallet.loadStatus().then(render, () => buttonBusy(button, false));
     });
-  });
-};
-
-const bindDeploy = (): void => {
-  const button = app?.querySelector<HTMLButtonElement>("#deploy-button");
-  button?.addEventListener("click", () => {
-    buttonBusy(button, true);
-    scopedStatus(button, "Submitting deployment...");
-    void wallet.deployAccount().then(
-      (transactionHash) => {
-        showToast("Deployment submitted", "success");
-        scopedStatus(button, `Deployment submitted: ${transactionHash}`);
-        buttonBusy(button, false);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Deployment failed"), "error");
-        scopedStatus(button, errorMessage(error, "Deployment failed"));
-        buttonBusy(button, false);
-      },
-    );
   });
 };
 
@@ -272,7 +255,7 @@ const bindAll = (): void => {
   bindOnboarding({ app, render, wallet });
   bindUnlock();
   bindDashboard();
-  bindDeploy();
+  bindDeploy({ app, wallet });
   bindPickers();
   bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
   bindHomeUi({
@@ -290,6 +273,13 @@ const bindAll = (): void => {
     wallet,
   });
   bindReveal({ app, wallet });
+  bindTrade({
+    app,
+    setTradeTab: (tab) => {
+      tradeTab = tab;
+    },
+    tradeTab: () => tradeTab,
+  });
   bindActivity({ app, render, wallet });
   bindTransfer({ app, render, wallet });
   const settingsDeps = {
@@ -379,6 +369,7 @@ const paint = (): void => {
             cache.multisigs.proposals,
             selectedMultisigId,
             cache.multisigClassDeclared,
+            tradeTab,
           ),
     animate,
   );
