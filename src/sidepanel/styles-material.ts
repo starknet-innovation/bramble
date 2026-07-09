@@ -49,11 +49,26 @@ export const MATERIAL_STYLES = `
     --spring-snappy-ms: ${springSnappy.durationMs}ms;
     --spring-momentum: ${springMomentum.easing};
     --spring-momentum-ms: ${springMomentum.durationMs}ms;
-    /* Liquid Glass tint + light, adaptive through the skin panel token */
-    --mc-glass-bg: color-mix(in srgb, var(--mc-panel) 62%, transparent);
+    /* Liquid Glass tint + light, adaptive through the skin panel token. Blur and
+       saturation are strong so the aurora behind clearly refracts; the tint
+       opacity is tiered by surface size so big slabs stay airy while small rows
+       keep enough body for legible text. The specular highlight and edge are an
+       intentional physical light — a translucent rgba constant that does not
+       change with the palette, because light catching an edge is not a theme
+       colour — never a hex literal. */
+    --mc-glass-blur: 26px;
+    --mc-glass-blur-strong: 34px;
+    --mc-glass-sat: 180%;
+    --mc-glass-bg: color-mix(in srgb, var(--mc-panel) 58%, transparent);
+    --mc-glass-bg-row: color-mix(in srgb, var(--mc-panel) 70%, transparent);
+    --mc-glass-bg-hero: color-mix(in srgb, var(--mc-panel) 50%, transparent);
+    --mc-glass-hover: color-mix(in srgb, var(--mc-text) 9%, var(--mc-glass-bg-row));
+    --mc-glass-press: color-mix(in srgb, var(--mc-text) 15%, var(--mc-glass-bg-row));
     --mc-glass-tint: color-mix(in srgb, var(--mc-panel) 82%, transparent);
-    --mc-glass-highlight: rgba(255, 255, 255, 0.14);
-    --mc-glass-edge: rgba(255, 255, 255, 0.06);
+    --mc-glass-highlight: rgba(255, 255, 255, 0.2);
+    --mc-glass-highlight-strong: rgba(255, 255, 255, 0.34);
+    --mc-glass-sheen: rgba(255, 255, 255, 0.16);
+    --mc-glass-edge: rgba(255, 255, 255, 0.08);
     --mc-glass-shadow: var(--mc-elev-glass);
   }
 
@@ -62,8 +77,8 @@ export const MATERIAL_STYLES = `
      material edge; the depth shadow separates it from the page. */
   .glass {
     background: var(--mc-glass-bg);
-    -webkit-backdrop-filter: blur(22px) saturate(180%);
-    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--mc-glass-blur-strong)) saturate(var(--mc-glass-sat));
+    backdrop-filter: blur(var(--mc-glass-blur-strong)) saturate(var(--mc-glass-sat));
     box-shadow:
       inset 0 1px 0 var(--mc-glass-highlight),
       inset 0 0 0 1px var(--mc-glass-edge),

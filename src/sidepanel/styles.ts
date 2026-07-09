@@ -17,14 +17,17 @@
  *         cascading in behind it
  *
  * Layer order (composed below): base tokens/layout → Liquid Glass material →
- * component classes → view-transition choreography → home/motion. The home
- * layer is composed last so its prefers-reduced-motion block wins over every
- * earlier animation and transition.
+ * component classes → view-transition choreography → home/motion → ambient
+ * aurora + broad glass. The home layer's prefers-reduced-motion block precedes
+ * the aurora, which carries its own reduced-motion block for the drift; the
+ * aurora is composed last so its frosted surface material overrides the flat
+ * fills declared in the base and component layers.
  *
  * Stability contract: interactive controls are borderless; transforms stay
  * within a 2px lift or a 0.96 scale so nothing drifts under the pointer, and
  * every animation and transition collapses under prefers-reduced-motion.
  */
+import { AURORA_STYLES } from "./styles-aurora";
 import { BASE_STYLES } from "./styles-base";
 import { COMPONENT_STYLES } from "./styles-components";
 import { HOME_STYLES } from "./styles-home";
@@ -35,4 +38,4 @@ import { TRANSITION_STYLES } from "./styles-transitions";
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
 export const SIDEPANEL_STYLES = `${BASE_STYLES}${MATERIAL_STYLES}${COMPONENT_STYLES}${TRANSITION_STYLES}
-${HOME_STYLES}`;
+${HOME_STYLES}${AURORA_STYLES}`;

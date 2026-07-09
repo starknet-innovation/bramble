@@ -200,9 +200,14 @@ export const HOME_STYLES = `
   .shell-animate .token-list li:nth-child(4) { animation-delay: 130ms; }
   .shell-animate .token-list li:nth-child(5) { animation-delay: 160ms; }
   .shell-animate .token-list li:nth-child(6) { animation-delay: 190ms; }
+  /* screen-enter and panel-enter wrap the glass surfaces, so their end frame
+     omits the transform: with fill-mode both the container reverts to
+     transform:none once the entrance ends, leaving no backdrop-root that would
+     stop the glass inside from refracting the aurora (see ./styles-aurora.ts).
+     rise-in stays on leaf surfaces, where a settled transform is harmless. */
   @keyframes screen-enter {
     from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    to { opacity: 1; }
   }
   @keyframes rise-in {
     from { opacity: 0; transform: translateY(6px); }
@@ -210,7 +215,7 @@ export const HOME_STYLES = `
   }
   @keyframes panel-enter {
     from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+    to { opacity: 1; }
   }
   @keyframes drawer-item {
     from { opacity: 0; transform: translateX(-10px); }

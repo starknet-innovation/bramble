@@ -9,6 +9,9 @@ import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 export const SKIN_TOKENS = [
   "--mc-accent",
   "--mc-accent-text",
+  "--mc-aurora-1",
+  "--mc-aurora-2",
+  "--mc-aurora-3",
   "--mc-bg",
   "--mc-border",
   "--mc-danger",

@@ -31,9 +31,13 @@ describe("sidepanel styles", () => {
   });
 
   test("interactive controls are borderless — structure comes from elevation", () => {
+    // Structure still comes from elevation, not strokes: no solid borders and no
+    // non-zero border widths. Gradients are NO LONGER banned here — the redesign
+    // adds an aurora depth layer plus a hero specular sheen (both asserted, and
+    // kept token-driven, by the "aurora depth layer" tests below) — but the
+    // selected-tab indicator must still never carry a transform.
     expect(SIDEPANEL_STYLES).not.toMatch(/border:[^;]*solid/);
     expect(SIDEPANEL_STYLES).not.toMatch(/border:\s*\d*[1-9]/);
-    expect(SIDEPANEL_STYLES).not.toContain("linear-gradient(");
     expect(SIDEPANEL_STYLES).not.toMatch(/\[aria-selected="true"\][^}]*transform/s);
   });
 
@@ -45,9 +49,15 @@ describe("sidepanel styles", () => {
   });
 
   test("colors come only from skin tokens, never literals", () => {
+    // The stylesheet still ships zero colour hex literals: the aurora hues live
+    // in the skin token set (--mc-aurora-1..3, applied at runtime) and the
+    // stylesheet references them through var()/color-mix only. The specular
+    // light values are intentional physical-light rgba constants (see the glass
+    // material), not palette colours, and rgba()/data-URI grain carry no hex.
     expect(SIDEPANEL_STYLES).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(SIDEPANEL_STYLES).toContain("var(--mc-accent)");
     expect(SIDEPANEL_STYLES).toContain("var(--mc-bg)");
+    expect(SIDEPANEL_STYLES).toContain("var(--mc-aurora-1)");
   });
 
   test("motion uses shared tokens and respects reduced-motion", () => {
@@ -83,6 +93,47 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain("@supports not ((backdrop-filter");
     expect(SIDEPANEL_STYLES).toContain("@media (prefers-reduced-transparency: reduce)");
     expect(SIDEPANEL_STYLES).toContain("@media (prefers-contrast: more)");
+  });
+
+  test("aurora depth layer sits behind the glass and is built from skin tokens", () => {
+    // The ambient depth layer is what makes the glass read: without colour and
+    // light behind it, backdrop-filter has nothing to refract. It is painted on
+    // a fixed body pseudo-element behind all content (negative z-index), so it
+    // must exist and be built from the aurora skin tokens via color-mix — never
+    // from raw colour literals (the no-hex test above guards that globally).
+    expect(SIDEPANEL_STYLES).toMatch(/body::before \{[^}]*position: fixed/s);
+    expect(SIDEPANEL_STYLES).toMatch(/body::before \{[^}]*z-index: -2/s);
+    expect(SIDEPANEL_STYLES).toContain("radial-gradient(");
+    expect(SIDEPANEL_STYLES).toContain("color-mix(in srgb, var(--mc-aurora-1)");
+    expect(SIDEPANEL_STYLES).toContain("color-mix(in srgb, var(--mc-aurora-2)");
+    expect(SIDEPANEL_STYLES).toContain("color-mix(in srgb, var(--mc-aurora-3)");
+    // A faint grain overlay stops the wide gradients from banding.
+    expect(SIDEPANEL_STYLES).toMatch(/body::after \{[^}]*mix-blend-mode: overlay/s);
+  });
+
+  test("aurora drift is optional and stops under reduced motion", () => {
+    // The blobs drift slowly for life, but the motion is non-essential: under
+    // reduced motion the aurora holds still so the frost stays statically legible.
+    expect(SIDEPANEL_STYLES).toContain("@keyframes aurora-drift");
+    expect(SIDEPANEL_STYLES).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{\s*body::before \{ animation: none/s,
+    );
+  });
+
+  test("glass is applied broadly, not just to the dock and drawer", () => {
+    // The hero balance card and the primary surfaces opt into the frosted
+    // material so the whole panel reads as layered glass over the aurora. The
+    // hero uses the strong blur; each surface is a single translucent layer
+    // (rows are not nested in a blurred container) so blurs never stack.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.hero \{[^}]*backdrop-filter: blur\(var\(--mc-glass-blur-strong\)\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(/backdrop-filter: blur\(var\(--mc-glass-blur\)\)/);
+    // The hero's specular sheen is a token-driven translucent-light gradient.
+    expect(SIDEPANEL_STYLES).toMatch(/\.hero::before \{[^}]*var\(--mc-glass-sheen\)/s);
+    // The broad surfaces degrade with the same guards as the base material.
+    expect(SIDEPANEL_STYLES).toContain("li.token-row");
+    expect(SIDEPANEL_STYLES).toContain("button.action-tile");
   });
 
   test("view transitions are direction-aware and reduced-motion safe", () => {
