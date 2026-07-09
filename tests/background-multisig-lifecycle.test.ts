@@ -2,7 +2,7 @@
  * Multisig lifecycle regressions: the pending-deploy dedup guard actually
  * fires (it once matched an address suffix the recorded summary never
  * contained), and chain reads that cannot yet see a just-broadcast proposal
- * never downgrade the stored record into a dead-end not-found state.
+ * keep the stored record only while the submit transaction is still pending.
  */
 import { describe, expect, test } from "bun:test";
 import type { MultisigProposalStatus } from "../src/starknet/multisig";
@@ -11,6 +11,7 @@ import type { MultisigProposalRecord } from "../src/storage/multisig-store";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,
+  HARNESS_SUBMIT_HASH,
   HARNESS_TARGET,
   harnessAccount,
   harnessExtensionSender,
@@ -151,5 +152,30 @@ describe("unmined proposal protection", () => {
       harnessExtensionSender,
     );
     expect((await listedProposals(handler))[0]?.state).toBe("confirmed");
+  });
+
+  test("a rejected submit lets refresh mark the proposal not-found", async () => {
+    let submitStatus: "pending" | "rejected" = "pending";
+    const { handler } = makeMultisigHarness({
+      proposalStatus: () => notFound,
+      transactionStatuses: () => ({ [HARNESS_SUBMIT_HASH]: submitStatus }),
+    });
+    const watched = (await watch(handler)) as { multisig: { id: string } };
+    await propose(handler, watched.multisig.id);
+
+    await handler(
+      { id: watched.multisig.id, type: "wallet.refreshMultisig" },
+      harnessExtensionSender,
+    );
+    expect((await listedProposals(handler))[0]?.state).toBe("pending");
+
+    submitStatus = "rejected";
+    await handler({ type: "wallet.activity" }, harnessExtensionSender);
+    await handler(
+      { id: watched.multisig.id, type: "wallet.refreshMultisig" },
+      harnessExtensionSender,
+    );
+
+    expect((await listedProposals(handler))[0]?.state).toBe("not-found");
   });
 });

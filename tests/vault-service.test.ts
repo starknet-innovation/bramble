@@ -395,4 +395,65 @@ describe("createWalletVaultService", () => {
     expect(vault.accounts).toHaveLength(2);
     expect(vault.originGrants.map((grant) => grant.origin)).toEqual(["https://alpha.example"]);
   });
+
+  test("queues legacy KDF upgrades so passive reads cannot clobber mutations", async () => {
+    let stored: unknown;
+    let legacyEnvelope = false;
+    let releaseUpgrade: () => void = () => {};
+    let noteUpgradeStarted: () => void = () => {};
+    const upgradeStarted = new Promise<void>((resolve) => {
+      noteUpgradeStarted = resolve;
+    });
+    const upgradeMayFinish = new Promise<void>((resolve) => {
+      releaseUpgrade = resolve;
+    });
+    const clone = (value: unknown): unknown =>
+      value === undefined ? undefined : (JSON.parse(JSON.stringify(value)) as unknown);
+    const controlledStore = {
+      clearKeys() {},
+      async exists() {
+        return stored !== undefined;
+      },
+      async read(_passphrase: string) {
+        return clone(stored);
+      },
+      async remove() {
+        stored = undefined;
+      },
+      async upgradeLegacyEnvelope(_passphrase: string) {
+        if (!legacyEnvelope) {
+          return;
+        }
+        const snapshot = clone(stored);
+        legacyEnvelope = false;
+        noteUpgradeStarted();
+        await upgradeMayFinish;
+        stored = snapshot;
+      },
+      async write(value: unknown, _passphrase: string) {
+        stored = clone(value);
+      },
+    };
+    const service = createWalletVaultService({
+      encryptedStore: controlledStore as never,
+      kms: fakeKms(),
+    });
+
+    await service.createAccount({ mnemonic, vaultPassphrase });
+    legacyEnvelope = true;
+    const passiveRead = service.readVault(vaultPassphrase);
+    await upgradeStarted;
+    const grant = service.grantOrigin({
+      origin: "https://alpha.example",
+      vaultPassphrase,
+    });
+
+    releaseUpgrade();
+    await Promise.all([passiveRead, grant]);
+
+    const vault = await service.readVault(vaultPassphrase);
+    expect(vault.originGrants.map((originGrant) => originGrant.origin)).toEqual([
+      "https://alpha.example",
+    ]);
+  });
 });

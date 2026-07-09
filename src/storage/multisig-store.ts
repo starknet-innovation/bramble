@@ -55,6 +55,9 @@ export type MultisigProposalCall = {
 /**
  * One tracked proposal. `call` is null for proposals tracked from a pasted
  * transaction id. `state` and `confirmations` are last-known snapshots.
+ * `submitTransactionHash` is present for proposals submitted by this wallet and
+ * links the proposal to the activity row that proves the submit is still
+ * unmined.
  */
 export type MultisigProposalRecord = {
   readonly call: MultisigProposalCall | null;
@@ -62,6 +65,7 @@ export type MultisigProposalRecord = {
   readonly id: string;
   readonly multisigId: string;
   readonly state: "confirmed" | "executed" | "not-found" | "pending";
+  readonly submitTransactionHash?: string;
   readonly summary: string;
   readonly txId: string;
 };
@@ -148,6 +152,7 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
     "id",
     "multisigId",
     "state",
+    "submitTransactionHash",
     "summary",
     "txId",
   ]) &&
@@ -160,6 +165,9 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
     value.state === "executed" ||
     value.state === "not-found" ||
     value.state === "pending") &&
+  (value.submitTransactionHash === undefined ||
+    (typeof value.submitTransactionHash === "string" &&
+      isStarkFieldElement(value.submitTransactionHash))) &&
   isSummary(value.summary) &&
   typeof value.txId === "string" &&
   isStarkFieldElement(value.txId) &&

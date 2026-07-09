@@ -114,6 +114,24 @@ export const multisigRpc = (deps: MultisigOpsDeps) => {
   return rpc;
 };
 
+/**
+ * Checks whether this wallet's submit transaction for a proposal is still
+ * pending. While that activity row is pending, a not-found proposal status can
+ * simply mean the submit has not mined yet; after it is accepted/rejected, a
+ * not-found status is authoritative and should be persisted.
+ */
+export const isProposalSubmitPending = async (
+  deps: MultisigOpsDeps,
+  proposal: MultisigProposalRecord,
+): Promise<boolean> => {
+  const hash = proposal.submitTransactionHash;
+  if (!hash) {
+    return false;
+  }
+  const entries = await deps.activity.list().catch(() => []);
+  return entries.some((entry) => entry.hash === hash && entry.status === "pending");
+};
+
 const scopedList = async (
   store: MultisigStore,
   networkId: StarknetNetworkId,
@@ -131,10 +149,9 @@ const scopedList = async (
   return { multisigs, proposals };
 };
 
-// Re-reads one proposal's on-chain status and persists the fresh snapshot.
-// A known proposal reading as not-found means the chain has not seen its
-// submit transaction yet, so the stored snapshot is kept rather than
-// downgraded into a dead-end state with no actions.
+// Re-reads one proposal's on-chain status and persists the fresh snapshot. For
+// wallet-submitted proposals, a not-found status is suppressed only while the
+// submit transaction is still pending.
 const refreshProposal = async (
   deps: MultisigOpsDeps,
   record: MultisigRecord,
@@ -148,7 +165,7 @@ const refreshProposal = async (
     signer,
     txId: proposal.txId,
   });
-  if (status.state === "not-found") {
+  if (status.state === "not-found" && (await isProposalSubmitPending(deps, proposal))) {
     return proposal;
   }
   const next: MultisigProposalRecord = {
@@ -299,6 +316,9 @@ export const handleMultisigOps = async (
       id,
       multisigId: resolved.record.id,
       state: status.state,
+      ...(existing?.submitTransactionHash === undefined
+        ? {}
+        : { submitTransactionHash: existing.submitTransactionHash }),
       summary: input.summary ?? existing?.summary ?? "Shared proposal",
       txId: canonicalFelt(input.txId) ?? input.txId,
     };

@@ -209,6 +209,7 @@ export type EncryptedStore = {
   readonly exists: () => Promise<boolean>;
   readonly read: (passphrase: string) => Promise<unknown>;
   readonly remove: () => Promise<void>;
+  readonly upgradeLegacyEnvelope: (passphrase: string) => Promise<void>;
   readonly write: (value: Json, passphrase: string) => Promise<void>;
 };
 
@@ -226,6 +227,17 @@ export const createEncryptedStore = (store: KeyValueStore, key: string): Encrypt
   assertStorageKey(key);
   const scope = `mc-wallet:encrypted-store:${key}`;
   const keyCache = new Map<string, CryptoKey>();
+
+  const readEnvelope = async (): Promise<EncryptedEnvelope | undefined> => {
+    const envelope = await store.get(key);
+    if (envelope === undefined) {
+      return undefined;
+    }
+    if (!isEncryptedEnvelope(envelope)) {
+      throw new WalletError("Invalid encrypted store envelope");
+    }
+    return envelope as EncryptedEnvelope;
+  };
 
   const resolveKey: KeyResolver = async (passphrase, salt, iterations) => {
     const cacheId = `${await passphraseFingerprint(passphrase)}:${bytesToBase64(salt)}:${iterations}`;
@@ -252,32 +264,23 @@ export const createEncryptedStore = (store: KeyValueStore, key: string): Encrypt
       return (await store.get(key)) !== undefined;
     },
     async read(passphrase) {
-      const envelope = await store.get(key);
+      const envelope = await readEnvelope();
       if (envelope === undefined) {
         return undefined;
       }
-      if (!isEncryptedEnvelope(envelope)) {
-        throw new WalletError("Invalid encrypted store envelope");
-      }
-      const decrypted = await decryptJson(
-        envelope as EncryptedEnvelope,
-        passphrase,
-        scope,
-        resolveKey,
-      );
-      // Upgrade-on-read: a legacy-strength envelope is re-encrypted at the
-      // current KDF strength the first time it decrypts successfully, so
-      // raising KDF_ITERATIONS never bricks existing vaults. Best-effort — a
-      // failed upgrade write must not mask a successful unlock.
-      if ((envelope as EncryptedEnvelope).iterations !== KDF_ITERATIONS) {
-        await store
-          .set(key, await encryptJson(decrypted as Json, passphrase, scope, resolveKey))
-          .catch(() => undefined);
-      }
-      return decrypted;
+      return decryptJson(envelope, passphrase, scope, resolveKey);
     },
     async remove() {
       await store.remove(key);
+    },
+    async upgradeLegacyEnvelope(passphrase) {
+      const envelope = await readEnvelope();
+      if (envelope === undefined || envelope.iterations === KDF_ITERATIONS) {
+        return;
+      }
+      const decrypted = await decryptJson(envelope, passphrase, scope, resolveKey);
+      assertJsonValue(decrypted);
+      await store.set(key, await encryptJson(decrypted, passphrase, scope, resolveKey));
     },
     async write(value, passphrase) {
       await store.set(key, await encryptJson(value, passphrase, scope, resolveKey));
