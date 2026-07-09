@@ -38,6 +38,7 @@ export const onboarding = (status: WalletStatus): string => `
         <input name="vaultPassphrase" type="password" minlength="12" required autocomplete="new-password" placeholder="At least 12 characters" />
         <span class="hint">Unlocks the wallet on this device.</span>
       </label>
+      <p id="passphrase-result" role="status"></p>
       <div id="backup-verify" class="stack" hidden>
         <span class="hint">Confirm you saved the phrase by re-typing these words.</span>
         <div class="verify-grid">${backupVerifyInputs()}</div>

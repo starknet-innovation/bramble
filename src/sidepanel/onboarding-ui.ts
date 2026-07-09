@@ -3,10 +3,12 @@
  * phrase blurs the phrase behind an explicit reveal toggle and shows the
  * confirmation inputs, blocking wallet creation until the requested words are
  * re-typed correctly; pasting an existing phrase skips both the mask and
- * verification. On Mainnet the user must also accept the real-funds
- * acknowledgement before the wallet can be created.
+ * verification. Wallet creation also stays gated until the vault passphrase
+ * satisfies the encrypted-store length invariant and, on Mainnet, the user
+ * accepts the real-funds acknowledgement.
  */
 import type { WalletStatus } from "../popup/responses";
+import { isVaultPassphrase } from "../storage/encrypted-store";
 import { verifyBackupWords } from "./backup-verify";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied, requiresMainnetAck } from "./mainnet-ack";
@@ -32,6 +34,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const generateButton = app?.querySelector<HTMLButtonElement>("#generate-button");
   const result = app?.querySelector<HTMLElement>("#form-result");
   const mnemonicInput = form?.querySelector<HTMLTextAreaElement>('textarea[name="mnemonic"]');
+  const passphraseInput = form?.querySelector<HTMLInputElement>('input[name="vaultPassphrase"]');
+  const passphraseResult = form?.querySelector<HTMLElement>("#passphrase-result");
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const verifySection = form?.querySelector<HTMLElement>("#backup-verify");
   const verifyInputs = Array.from(
@@ -49,6 +53,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   const answers = (): readonly string[] => verifyInputs.map((input) => input.value);
 
+  const passphraseOk = (): boolean => isVaultPassphrase(passphraseInput?.value ?? "");
+
   const maskPhrase = (masked: boolean): void => {
     mnemonicInput?.classList.toggle("is-masked", masked);
     phraseToggle?.lastChild?.replaceWith(masked ? "Tap to show phrase" : "Tap to hide phrase");
@@ -62,9 +68,21 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const ackSatisfied = (): boolean =>
     mainnetAckSatisfied(selectedNetworkId(), ackCheckbox?.checked ?? false);
 
-  const refreshVerification = (): void => {
+  const refreshGate = (): void => {
     if (submitButton) {
-      submitButton.disabled = !(initiallyReady && verificationSatisfied() && ackSatisfied());
+      submitButton.disabled = !(
+        initiallyReady &&
+        passphraseOk() &&
+        verificationSatisfied() &&
+        ackSatisfied()
+      );
+    }
+    if (passphraseResult) {
+      const value = passphraseInput?.value ?? "";
+      passphraseResult.textContent =
+        value.length > 0 && !isVaultPassphrase(value)
+          ? "Passphrase must be at least 12 characters."
+          : "";
     }
     if (verifyResult && requiresVerification) {
       verifyResult.textContent = verificationSatisfied()
@@ -81,15 +99,16 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         ackContainer.setAttribute("hidden", "");
       }
     }
-    refreshVerification();
+    refreshGate();
   };
 
-  mnemonicInput?.addEventListener("input", refreshVerification);
+  mnemonicInput?.addEventListener("input", refreshGate);
+  passphraseInput?.addEventListener("input", refreshGate);
   for (const input of verifyInputs) {
-    input.addEventListener("input", refreshVerification);
+    input.addEventListener("input", refreshGate);
   }
   networkSelect?.addEventListener("change", syncNetworkGate);
-  ackCheckbox?.addEventListener("change", refreshVerification);
+  ackCheckbox?.addEventListener("change", refreshGate);
   syncNetworkGate();
 
   phraseToggle?.addEventListener("click", () => {
@@ -113,7 +132,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         if (submitButton) {
           submitButton.disabled = true;
         }
-        refreshVerification();
+        refreshGate();
         if (result) {
           result.textContent = "Recovery phrase generated. Confirm the words below.";
         }
@@ -132,6 +151,13 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (!passphraseOk()) {
+      if (passphraseResult) {
+        passphraseResult.textContent = "Passphrase must be at least 12 characters.";
+      }
+      showToast("Passphrase must be at least 12 characters", "error");
+      return;
+    }
     if (requiresVerification && !verifyBackupWords(mnemonicInput?.value ?? "", answers())) {
       if (verifyResult) {
         verifyResult.textContent = "Confirm the recovery words before creating the wallet.";
