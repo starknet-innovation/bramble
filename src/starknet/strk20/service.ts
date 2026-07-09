@@ -80,7 +80,7 @@ export const unavailableStrk20Service: Strk20Service = {
 const spentTokens = (actions: readonly Strk20Action[]): readonly string[] => {
   const seen = new Map<bigint, string>();
   for (const action of actions) {
-    if (action.action === "withdraw" || action.action === "transfer") {
+    if (action.type === "withdraw" || action.type === "transfer") {
       seen.set(BigInt(action.token), action.token);
     }
   }
@@ -93,7 +93,9 @@ const assertSufficientPrivateBalance = (
 ): void => {
   const required = new Map<bigint, bigint>();
   for (const action of actions) {
-    if (action.action === "withdraw" || action.action === "transfer") {
+    // An "OPEN" transfer creates an open note with no fixed amount, so it has no
+    // pre-checkable balance requirement; the prover enforces the real bound.
+    if ((action.type === "withdraw" || action.type === "transfer") && action.amount !== "OPEN") {
       const key = BigInt(action.token);
       required.set(key, (required.get(key) ?? 0n) + BigInt(action.amount));
     }
@@ -116,10 +118,10 @@ const assertNoPrivacyLeak = (actions: readonly Strk20Action[]): void => {
   const deposits = new Set<bigint>();
   const withdrawals = new Set<bigint>();
   for (const action of actions) {
-    if (action.action === "deposit") {
+    if (action.type === "deposit") {
       deposits.add(BigInt(action.token));
     }
-    if (action.action === "withdraw") {
+    if (action.type === "withdraw") {
       withdrawals.add(BigInt(action.token));
     }
   }
@@ -200,20 +202,21 @@ const shortAddress = (value: string): string =>
  * it holds no secret material and is never logged.
  */
 export const summarizeStrk20Action = (action: Strk20Action): string => {
-  if (action.action === "deposit") {
+  if (action.type === "deposit") {
     return `Deposit ${action.amount} to private balance (${shortAddress(action.token)})`;
   }
-  if (action.action === "withdraw") {
-    return `Withdraw ${action.amount} to public balance (${shortAddress(action.token)})`;
+  if (action.type === "withdraw") {
+    return `Withdraw ${action.amount} to ${shortAddress(action.recipient)} (${shortAddress(
+      action.token,
+    )})`;
   }
-  if (action.action === "transfer") {
-    return `Transfer ${action.amount} privately to ${shortAddress(
-      action.recipient,
-    )} (${shortAddress(action.token)})`;
+  if (action.type === "transfer") {
+    const what = action.amount === "OPEN" ? "an open note" : action.amount;
+    return `Transfer ${what} privately to ${shortAddress(action.recipient)} (${shortAddress(
+      action.token,
+    )})`;
   }
-  return `Private invoke ${action.call.entry_point} on ${shortAddress(
-    action.call.contract_address,
-  )}`;
+  return `Private invoke on ${shortAddress(action.contract)}`;
 };
 
 /**
