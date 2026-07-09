@@ -203,6 +203,7 @@ export type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
     readonly fee: FeeEstimate | null;
+    readonly feeEstimateFailed: boolean;
     readonly flags: readonly RiskFlag[];
     readonly requiresDeployment: boolean;
     readonly summaries: readonly string[];
