@@ -84,11 +84,11 @@ export const AURORA_STYLES = `
     z-index: -2;
     pointer-events: none;
     background:
-      radial-gradient(38% 34% at 16% 8%, color-mix(in srgb, var(--mc-aurora-1) 62%, transparent), transparent 72%),
-      radial-gradient(42% 38% at 88% 4%, color-mix(in srgb, var(--mc-aurora-2) 54%, transparent), transparent 70%),
-      radial-gradient(46% 42% at 82% 82%, color-mix(in srgb, var(--mc-aurora-3) 52%, transparent), transparent 72%),
-      radial-gradient(40% 40% at 8% 92%, color-mix(in srgb, var(--mc-aurora-1) 46%, transparent), transparent 72%),
-      radial-gradient(34% 30% at 50% 46%, color-mix(in srgb, var(--mc-accent) 30%, transparent), transparent 70%),
+      radial-gradient(40% 36% at 16% 8%, color-mix(in srgb, var(--mc-aurora-1) 70%, transparent), transparent 72%),
+      radial-gradient(44% 40% at 88% 4%, color-mix(in srgb, var(--mc-aurora-2) 62%, transparent), transparent 70%),
+      radial-gradient(48% 44% at 82% 82%, color-mix(in srgb, var(--mc-aurora-3) 60%, transparent), transparent 72%),
+      radial-gradient(42% 42% at 8% 92%, color-mix(in srgb, var(--mc-aurora-1) 52%, transparent), transparent 72%),
+      radial-gradient(36% 32% at 50% 46%, color-mix(in srgb, var(--mc-accent) 36%, transparent), transparent 70%),
       var(--mc-bg);
     background-repeat: no-repeat;
     animation: aurora-drift 26s var(--ease-in-out) infinite alternate;

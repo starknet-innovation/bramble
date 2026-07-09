@@ -254,7 +254,7 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
     padding: 3px 8px;
     text-transform: uppercase;
   }
-  .token-detail-price { font-size: ${TYPE.amount.size}; font-weight: 800; letter-spacing: -0.02em; }
+  .token-detail-price { color: var(--mc-text); font-size: ${TYPE.amount.size}; font-weight: 800; letter-spacing: -0.02em; }
   .sparkline { display: block; height: 48px; width: 100%; }
   .sparkline polyline {
     fill: none;

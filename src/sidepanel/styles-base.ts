@@ -56,6 +56,11 @@ export const BASE_STYLES = `
     padding: ${SPACE.md} ${SPACE.lg} ${SPACE.md};
   }
   .screen { align-content: start; display: grid; flex: 1; gap: ${SPACE.lg}; }
+  /* Dock screens scroll their content UNDER the floating glass dock. Reserve
+     clearance below the content equal to the dock footprint (nav height + its
+     padding + its bottom offset) plus a gap, so the last row never hides beneath
+     the sticky dock at any scroll position. Flow screens carry no dock. */
+  .screen:not(.flow) { padding-bottom: calc(${CONTROL.nav} + ${SPACE.xl} + ${SPACE.sm}); }
 
   /* Layout primitives */
   .row, .address-line, .context-line, .callout, .token-row {

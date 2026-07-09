@@ -58,17 +58,17 @@ export const MATERIAL_STYLES = `
        colour — never a hex literal. */
     --mc-glass-blur: 26px;
     --mc-glass-blur-strong: 34px;
-    --mc-glass-sat: 180%;
-    --mc-glass-bg: color-mix(in srgb, var(--mc-panel) 58%, transparent);
-    --mc-glass-bg-row: color-mix(in srgb, var(--mc-panel) 70%, transparent);
-    --mc-glass-bg-hero: color-mix(in srgb, var(--mc-panel) 50%, transparent);
+    --mc-glass-sat: 200%;
+    --mc-glass-bg: color-mix(in srgb, var(--mc-panel) 62%, transparent);
+    --mc-glass-bg-row: color-mix(in srgb, var(--mc-panel) 74%, transparent);
+    --mc-glass-bg-hero: color-mix(in srgb, var(--mc-panel) 54%, transparent);
     --mc-glass-hover: color-mix(in srgb, var(--mc-text) 9%, var(--mc-glass-bg-row));
     --mc-glass-press: color-mix(in srgb, var(--mc-text) 15%, var(--mc-glass-bg-row));
-    --mc-glass-tint: color-mix(in srgb, var(--mc-panel) 82%, transparent);
-    --mc-glass-highlight: rgba(255, 255, 255, 0.2);
-    --mc-glass-highlight-strong: rgba(255, 255, 255, 0.34);
-    --mc-glass-sheen: rgba(255, 255, 255, 0.16);
-    --mc-glass-edge: rgba(255, 255, 255, 0.08);
+    --mc-glass-tint: color-mix(in srgb, var(--mc-panel) 84%, transparent);
+    --mc-glass-highlight: rgba(255, 255, 255, 0.24);
+    --mc-glass-highlight-strong: rgba(255, 255, 255, 0.42);
+    --mc-glass-sheen: rgba(255, 255, 255, 0.2);
+    --mc-glass-edge: rgba(255, 255, 255, 0.11);
     --mc-glass-shadow: var(--mc-elev-glass);
   }
 
