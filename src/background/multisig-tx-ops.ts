@@ -22,7 +22,6 @@ import {
   requireMultisigContractClass,
 } from "../starknet/multisig-deploy";
 import { STARKNET_NETWORKS } from "../starknet/networks";
-import { verifyCalls } from "../starknet/verify";
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
@@ -42,19 +41,20 @@ import {
 } from "./multisig-ops";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
-import { signerForContext, verificationContext } from "./wallet-ops";
+import { signerForContext } from "./wallet-ops";
 
 const shortAddress = (address: string): string => `${address.slice(0, 8)}…${address.slice(-4)}`;
 
 // Submits one call through the shared invoke path and records activity.
+// The caller's descriptive summary is recorded verbatim: the generic call
+// decoder cannot describe multisig entrypoints, and the dedup guards below
+// match on these summaries, so they must stay deterministic and specific.
 const submitAndRecord = async (
   deps: MultisigOpsDeps,
   resolved: Exclude<Awaited<ReturnType<typeof multisigContext>>, { readonly error: string }>,
   call: ReturnType<typeof buildMultisigConfirmCall>,
   summary: string,
 ): Promise<string> => {
-  const preferences = await deps.preferencesStore.read();
-  const report = verifyCalls([call], verificationContext(resolved.account.account, preferences));
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: resolved.account.account,
     calls: [call],
@@ -66,7 +66,7 @@ const submitAndRecord = async (
     hash: result.transactionHash,
     kind: "invoke",
     networkId: resolved.account.networkId,
-    summary: report.calls[0]?.summary ?? summary,
+    summary,
   });
   return result.transactionHash;
 };
@@ -109,6 +109,24 @@ const requireUntrackedVerification = (
     ? "verify this proposal on a block explorer or with the proposer, then acknowledge before confirming"
     : null;
 
+// A known proposal reading as not-found means the chain has not seen it yet
+// (a just-broadcast submit) — never persist that over the stored snapshot, or
+// the record dead-ends with no actions and cannot even be re-tracked.
+const persistFreshStatus = async (
+  deps: MultisigOpsDeps,
+  proposal: MultisigProposalRecord,
+  status: MultisigProposalStatus,
+): Promise<void> => {
+  if (status.state === "not-found") {
+    return;
+  }
+  await deps.multisigStore.upsertProposal({
+    ...proposal,
+    confirmations: status.confirmations,
+    state: status.state,
+  });
+};
+
 const refreshAfterAction = async (
   deps: MultisigOpsDeps,
   record: MultisigRecord,
@@ -120,11 +138,7 @@ const refreshAfterAction = async (
     .getProposalStatus({ address: record.address, rpcUrls, signer, txId: proposal.txId })
     .catch(() => null);
   if (status) {
-    await deps.multisigStore.upsertProposal({
-      ...proposal,
-      confirmations: status.confirmations,
-      state: status.state,
-    });
+    await persistFreshStatus(deps, proposal, status);
   }
 };
 
@@ -151,11 +165,7 @@ const freshProposalStatus = async (
   } catch {
     return { error: "could not refresh proposal status — try again" };
   }
-  await deps.multisigStore.upsertProposal({
-    ...found.proposal,
-    confirmations: status.confirmations,
-    state: status.state,
-  });
+  await persistFreshStatus(deps, found.proposal, status);
   return status;
 };
 
@@ -222,13 +232,9 @@ export const handleMultisigTxOps = async (
     if (!stored) {
       return { error: "could not store proposal — the multisig may have been removed" };
     }
-    await refreshAfterAction(
-      deps,
-      refreshed.record,
-      proposal,
-      refreshed.account.account.address,
-      refreshed.rpcUrls,
-    );
+    // No post-broadcast status refresh here: the submit transaction cannot be
+    // mined yet, so the chain would answer not-found for a proposal that was
+    // just optimistically stored as pending.
     return { ok: true, proposal, transactionHash };
   }
 
@@ -449,13 +455,16 @@ export const handleMultisigTxOps = async (
     if (occupied) {
       return { error: "a multisig with these signers and salt already exists — watch it instead" };
     }
+    // The recorded summary embeds the full predicted address and this guard
+    // matches on the same marker — the two must stay in lockstep or the dedup
+    // silently dies (it once matched a suffix the summary never contained).
+    const deployMarker = ` at ${address}`;
     const activities = await deps.activity.list();
-    const addressSuffix = address.slice(-12);
     const hasPendingDeploy = activities.some(
       (entry) =>
         entry.accountId === context.account.id &&
         entry.networkId === context.networkId &&
-        entry.summary.includes(addressSuffix) &&
+        entry.summary.includes(deployMarker) &&
         entry.status === "pending",
     );
     if (hasPendingDeploy) {
@@ -465,7 +474,6 @@ export const handleMultisigTxOps = async (
       };
     }
     const call = buildMultisigDeployCall(config);
-    const report = verifyCalls([call], verificationContext(context.account, preferences));
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
       calls: [call],
@@ -477,9 +485,7 @@ export const handleMultisigTxOps = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.networkId,
-      summary:
-        report.calls[0]?.summary ??
-        `Deploy multisig (${input.quorum} of ${input.signers.length}) at ${shortAddress(address)}`,
+      summary: `Deploy multisig (${input.quorum} of ${input.signers.length})${deployMarker}`,
     });
     return { address, ok: true, transactionHash: result.transactionHash };
   }

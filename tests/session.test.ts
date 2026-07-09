@@ -51,6 +51,51 @@ describe("createUnlockSession", () => {
     expect(session.getPassphrase()).toBeNull();
   });
 
+  test("peeking never renews the expiry, so passive polling cannot hold the unlock", () => {
+    let now = 1_000;
+    const session = createUnlockSession(100, () => now);
+
+    session.unlock(PASSPHRASE);
+    // Poll right up to the edge of the window: peeks must not push it out.
+    now = 1_050;
+    expect(session.peekPassphrase()).toBe(PASSPHRASE);
+    now = 1_099;
+    expect(session.peekPassphrase()).toBe(PASSPHRASE);
+    expect(session.isUnlocked()).toBe(true);
+    now = 1_101;
+    expect(session.peekPassphrase()).toBeNull();
+    expect(session.getPassphrase()).toBeNull();
+  });
+
+  test("isUnlocked reports without renewing the expiry", () => {
+    let now = 1_000;
+    const session = createUnlockSession(100, () => now);
+
+    session.unlock(PASSPHRASE);
+    now = 1_099;
+    expect(session.isUnlocked()).toBe(true);
+    now = 1_101;
+    expect(session.isUnlocked()).toBe(false);
+  });
+
+  test("peeking an expired session clears derived key material", () => {
+    let now = 1_000;
+    let cleared = 0;
+    const session = createUnlockSession(
+      100,
+      () => now,
+      undefined,
+      () => {
+        cleared += 1;
+      },
+    );
+
+    session.unlock(PASSPHRASE);
+    now = 1_201;
+    expect(session.peekPassphrase()).toBeNull();
+    expect(cleared).toBe(1);
+  });
+
   test("rejects unsafe passphrases", () => {
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);

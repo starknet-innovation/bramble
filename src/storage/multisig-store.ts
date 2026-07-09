@@ -209,6 +209,41 @@ const upsertMultisigIn = (shape: StoredShape, record: MultisigRecord): StoredSha
   return { ...shape, multisigs: [...kept.slice(-(MAX_MULTISIGS - 1)), record] };
 };
 
+// Eviction priority at the proposal cap. Settled proposals go first, then
+// tracked-by-id ones (their state is recoverable by re-tracking), and only
+// as a last resort the oldest live proposal that carries a stored call —
+// that call is the only copy able to execute it, so it must never be the
+// silent first casualty.
+const evictionRank = (proposal: MultisigProposalRecord): number => {
+  if (proposal.state === "executed" || proposal.state === "not-found") {
+    return 0;
+  }
+  return proposal.call === null ? 1 : 2;
+};
+
+// Enforces MAX_PROPOSALS, dropping oldest-first within each eviction rank.
+const capProposals = (
+  proposals: readonly MultisigProposalRecord[],
+): readonly MultisigProposalRecord[] => {
+  let excess = proposals.length - MAX_PROPOSALS;
+  if (excess <= 0) {
+    return proposals;
+  }
+  const kept = [...proposals];
+  for (const rank of [0, 1, 2]) {
+    for (let index = 0; index < kept.length && excess > 0; ) {
+      const entry = kept[index];
+      if (entry && evictionRank(entry) === rank) {
+        kept.splice(index, 1);
+        excess -= 1;
+      } else {
+        index += 1;
+      }
+    }
+  }
+  return kept;
+};
+
 const upsertProposalIn = (
   shape: StoredShape,
   record: MultisigProposalRecord,
@@ -220,7 +255,7 @@ const upsertProposalIn = (
     return null;
   }
   const kept = shape.proposals.filter((stored) => stored.id !== record.id);
-  return { ...shape, proposals: [...kept.slice(-(MAX_PROPOSALS - 1)), record] };
+  return { ...shape, proposals: [...capProposals([...kept, record])] };
 };
 
 const removeMultisigIn = (shape: StoredShape, id: string): StoredShape => ({

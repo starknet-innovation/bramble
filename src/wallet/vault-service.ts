@@ -224,7 +224,19 @@ export const createWalletVaultService = ({
     return migrateVault(await encryptedStore.read(vaultPassphrase));
   };
 
-  return {
+  // Serializes vault mutations. Every mutation is a read-modify-write of the
+  // encrypted store and the background dispatches messages concurrently, so
+  // two interleaved mutations would silently lose one write (e.g. a grant
+  // racing an account derivation). Failures do not poison the queue. Reads
+  // stay unserialized — they cannot clobber state.
+  let mutationQueue: Promise<unknown> = Promise.resolve();
+  const serialized = <T>(run: () => Promise<T>): Promise<T> => {
+    const next = mutationQueue.then(run, run);
+    mutationQueue = next.catch(() => undefined);
+    return next;
+  };
+
+  const service: WalletVaultService = {
     async addDerivedAccount(input) {
       const vault = await readVault(input.vaultPassphrase);
       if (!vault.mnemonic) {
@@ -437,5 +449,15 @@ export const createWalletVaultService = ({
         ready: true,
       };
     },
+  };
+
+  return {
+    ...service,
+    addDerivedAccount: (input) => serialized(() => service.addDerivedAccount(input)),
+    createAccount: (input) => serialized(() => service.createAccount(input)),
+    ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
+    grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
+    revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
+    setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),
   };
 };

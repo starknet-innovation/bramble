@@ -138,6 +138,9 @@ const scopedList = async (
 };
 
 // Re-reads one proposal's on-chain status and persists the fresh snapshot.
+// A known proposal reading as not-found means the chain has not seen its
+// submit transaction yet, so the stored snapshot is kept rather than
+// downgraded into a dead-end state with no actions.
 const refreshProposal = async (
   deps: MultisigOpsDeps,
   record: MultisigRecord,
@@ -151,6 +154,9 @@ const refreshProposal = async (
     signer,
     txId: proposal.txId,
   });
+  if (status.state === "not-found") {
+    return proposal;
+  }
   const next: MultisigProposalRecord = {
     ...proposal,
     confirmations: status.confirmations,

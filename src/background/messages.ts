@@ -290,7 +290,10 @@ const handleRuntimeMessage = async (
     if (isBlockedOrigin(input.origin)) {
       return { accounts: [], ok: true };
     }
-    const vaultPassphrase = input.vaultPassphrase ?? session.getPassphrase();
+    // Peek, never renew: content scripts re-query grants automatically after
+    // every broadcast, and a page can invoke this at will — neither is user
+    // activity that should extend the unlock lifetime.
+    const vaultPassphrase = input.vaultPassphrase ?? session.peekPassphrase();
     if (!vaultPassphrase) {
       return { error: "wallet locked" };
     }

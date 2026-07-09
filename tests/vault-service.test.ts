@@ -354,4 +354,45 @@ describe("createWalletVaultService", () => {
       createWalletVaultService({ actor: "popup", encryptedStore, kms: fakeKms() }),
     ).toThrow("Storage access denied");
   });
+
+  test("serializes concurrent mutations so neither write is lost", async () => {
+    // An encrypted-store stand-in with real async latency: reads snapshot the
+    // stored value before yielding, so two unserialized read-modify-write
+    // mutations would base their writes on the same stale vault and the
+    // second write would silently erase the first.
+    const delay = () => new Promise((resolve) => setTimeout(resolve, 5));
+    let stored: unknown;
+    const slowStore = {
+      clearKeys() {},
+      async exists() {
+        return stored !== undefined;
+      },
+      async read(_passphrase: string) {
+        const snapshot = stored;
+        await delay();
+        return snapshot;
+      },
+      async remove() {
+        stored = undefined;
+      },
+      async write(value: unknown, _passphrase: string) {
+        await delay();
+        stored = JSON.parse(JSON.stringify(value));
+      },
+    };
+    const service = createWalletVaultService({
+      encryptedStore: slowStore as never,
+      kms: indexedKms(),
+    });
+
+    await service.createAccount({ mnemonic, vaultPassphrase });
+    await Promise.all([
+      service.grantOrigin({ origin: "https://alpha.example", vaultPassphrase }),
+      service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase }),
+    ]);
+
+    const vault = await service.readVault(vaultPassphrase);
+    expect(vault.accounts).toHaveLength(2);
+    expect(vault.originGrants.map((grant) => grant.origin)).toEqual(["https://alpha.example"]);
+  });
 });
