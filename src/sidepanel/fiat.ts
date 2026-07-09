@@ -126,38 +126,3 @@ export const portfolioDelta = (
     percent: Math.abs((absolute / previous) * 100),
   };
 };
-
-/**
- * Aggregates per-token price series into a single portfolio-value series by
- * summing, at each sample, every holding's amount times its price at that
- * sample. Series are aligned to the shortest available length (their most
- * recent samples), so a token with a shorter history never skews the shape.
- * Tokens without a series are ignored. Returns an empty array when no token has
- * at least two aligned samples.
- */
-export const portfolioSeries = (
-  balances: readonly FiatBalance[],
-  series: Readonly<Record<string, readonly number[]>>,
-): readonly number[] => {
-  const contributors = balances
-    .map((balance) => ({ amount: Number(balance.formatted), points: series[balance.address] }))
-    .filter(
-      (entry): entry is { amount: number; points: readonly number[] } =>
-        Number.isFinite(entry.amount) && entry.points !== undefined && entry.points.length >= 2,
-    );
-  if (contributors.length === 0) {
-    return [];
-  }
-  const length = Math.min(...contributors.map((entry) => entry.points.length));
-  const totals = new Array<number>(length).fill(0);
-  for (const { amount, points } of contributors) {
-    const offset = points.length - length;
-    for (let index = 0; index < length; index += 1) {
-      const price = points[offset + index];
-      if (price !== undefined && Number.isFinite(price)) {
-        totals[index] = (totals[index] ?? 0) + amount * price;
-      }
-    }
-  }
-  return totals;
-};

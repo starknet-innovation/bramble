@@ -228,7 +228,7 @@ describe("sidepanel views", () => {
     expect(html).not.toContain("<defs>");
   });
 
-  test("home hero carries the total-balance label, 24h delta, and portfolio sparkline", () => {
+  test("home hero carries the total-balance label and 24h delta, and no chart", () => {
     const tokenBalance: TokenBalance = {
       address: "0x00aa",
       balance: "10000000000000000000",
@@ -241,7 +241,9 @@ describe("sidepanel views", () => {
     };
     // positional args: …, balances(5), deployment(6), transactions(7),
     // connectedSites(8), prices(9), chart(10), selectedTokenId(11),
-    // allowances(12), selectedNftId(13), changes(14).
+    // allowances(12), selectedNftId(13), changes(14). The chart series (10) is
+    // still accepted for the token-detail flow but the home hero no longer
+    // renders a sparkline from it.
     const html = dashboard(
       "home",
       status,
@@ -266,11 +268,10 @@ describe("sidepanel views", () => {
     expect(hero).toContain('class="hero-change"');
     expect(hero).toContain('class="hero-change-amt"');
     expect(hero).toContain("· 24h");
-    // Portfolio sparkline (reusing the shared geometry) with 7d/Today labels.
-    expect(hero).toMatch(/class="hero-spark(?:| down)"/);
-    expect(hero).toContain('class="spark-line"');
-    expect(hero).toContain("7d ago");
-    expect(hero).toContain("Today");
+    // The portfolio area chart was removed — the hero has no sparkline markup.
+    expect(hero).not.toContain("hero-spark");
+    expect(hero).not.toContain("spark-line");
+    expect(hero).not.toContain("7d ago");
   });
 
   test("backup flow exports and restores non-secret data with back navigation", () => {

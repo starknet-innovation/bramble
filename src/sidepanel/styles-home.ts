@@ -195,14 +195,6 @@ export const HOME_STYLES = `
   .shell-animate .hero-eyebrow,
   .shell-animate .hero-total,
   .shell-animate .hero-change { animation: rise-in ${MOTION.enterMs}ms var(--ease-out) both; }
-  /* Sparkline draws itself in with a dash sweep on scene entry (the dash length
-     exceeds any plotted path, so the whole line reveals). Cut under reduced
-     motion below — the settled line simply appears. */
-  .shell-animate .hero-spark .spark-line {
-    animation: spark-draw 900ms var(--ease-out) 120ms forwards;
-    stroke-dasharray: 1000;
-    stroke-dashoffset: 1000;
-  }
   .shell-animate .action-tile { animation: rise-in 240ms var(--ease-out) both; }
   .shell-animate .action-tile:nth-child(2) { animation-delay: 40ms; }
   .shell-animate .action-tile:nth-child(3) { animation-delay: 80ms; }
@@ -238,7 +230,6 @@ export const HOME_STYLES = `
     to { opacity: 1; transform: scale(1); }
   }
   @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes spark-draw { to { stroke-dashoffset: 0; } }
 
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid var(--mc-accent);
@@ -254,12 +245,6 @@ export const HOME_STYLES = `
     .drawer-root[data-open="true"] .drawer-list li, .copy-confirm .icon,
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
     #detect-tokens[data-busy] .icon { animation: none; }
-    /* The sparkline appears fully drawn — no dash sweep. */
-    .shell-animate .hero-spark .spark-line {
-      animation: none;
-      stroke-dasharray: none;
-      stroke-dashoffset: 0;
-    }
     button, input, select, textarea, .tab-indicator, .tab-icon,
     .account-drawer, .drawer-backdrop, .account-name .icon { transition: none; }
     button.action-tile:not(:disabled):hover,

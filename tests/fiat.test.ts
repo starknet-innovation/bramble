@@ -6,7 +6,6 @@ import {
   CURRENCY_SYMBOLS,
   formatFiat,
   portfolioDelta,
-  portfolioSeries,
   portfolioTotal,
   tokenFiatValue,
 } from "../src/sidepanel/fiat";
@@ -83,36 +82,5 @@ describe("portfolioDelta", () => {
     const flat = portfolioDelta(balances, { "0xb": 3 }, {});
     expect(flat).toEqual({ absolute: 0, direction: "up", percent: 0 });
     expect(portfolioDelta(balances, {}, {})).toBeNull();
-  });
-});
-
-// The home hero's sparkline plots the series this aggregates.
-describe("portfolioSeries", () => {
-  test("sums each holding's amount times its price at every aligned sample", () => {
-    const balances = [
-      { address: "0xa", formatted: "2" },
-      { address: "0xb", formatted: "3" },
-    ];
-    const series = { "0xa": [1, 2, 3], "0xb": [10, 10, 20] };
-    // 2*[1,2,3] + 3*[10,10,20] = [32, 34, 66].
-    expect(portfolioSeries(balances, series)).toEqual([32, 34, 66]);
-  });
-
-  test("aligns shorter histories to their most recent samples", () => {
-    const balances = [
-      { address: "0xa", formatted: "1" },
-      { address: "0xb", formatted: "1" },
-    ];
-    // B has only two samples, so both series align to the last two of A.
-    expect(portfolioSeries(balances, { "0xa": [5, 6, 7], "0xb": [1, 2] })).toEqual([7, 9]);
-  });
-
-  test("ignores tokens without a drawable series and empties when none qualify", () => {
-    const balances = [
-      { address: "0xa", formatted: "2" },
-      { address: "0xb", formatted: "9" },
-    ];
-    expect(portfolioSeries(balances, { "0xa": [4, 5], "0xb": [7] })).toEqual([8, 10]);
-    expect(portfolioSeries(balances, {})).toEqual([]);
   });
 });

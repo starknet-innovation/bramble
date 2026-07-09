@@ -10,7 +10,7 @@
  * emerald accent is reserved for the primary CTA, active states, and positive
  * deltas — everything else stays in the near-mono neutral palette.
  */
-import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE } from "../ui/tokens";
+import { CONTROL, FONT, MOTION, RADIUS, SIZE, SPACE, TRACKING, TYPE } from "../ui/tokens";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -178,14 +178,19 @@ export const BASE_STYLES = `
   .account-net .dot { height: 6px; width: 6px; }
   .header-actions { align-items: center; display: flex; flex: none; gap: ${SPACE.xs}; }
 
-  /* Portfolio hero: left-aligned like the comp — eyebrow label, total, 24h
-     delta, a portfolio sparkline with 7d/Today end labels, then the address
-     chip. Compact so the tile row and tabs stay above the fold. */
+  /* Portfolio hero: the home screen's focal point. A quiet eyebrow label, the
+     total set as a large optically-sized figure, the 24h delta, then the
+     address chip. Left-aligned at a zero inset so the whole column shares one
+     disciplined left edge with the action tiles and token rows below (the old
+     2px inset left the balance ragged against those cards). Spacing sits on the
+     4/8px grid: the eyebrow, total, and delta read as one tight 4px cluster,
+     with the address chip set apart by a full 8px step so it groups as its own
+     element and the number is given room to breathe. */
   .hero {
     display: grid;
-    gap: 5px;
+    gap: ${SPACE.xs};
     justify-items: start;
-    padding: ${SPACE.md} 2px ${SPACE.sm};
+    padding: ${SPACE.sm} 0 0;
     text-align: left;
   }
   .hero-eyebrow {
@@ -195,12 +200,15 @@ export const BASE_STYLES = `
     letter-spacing: ${TRACKING.eyebrow};
     text-transform: uppercase;
   }
+  /* The total carries real presence: large, heavy, tightly tracked, optically
+     sized, and tabular so digits never jitter as prices stream. */
   .hero-total {
     color: var(--mc-text);
+    font-optical-sizing: auto;
     font-size: ${TYPE.amount.size};
     font-variant-numeric: tabular-nums;
     font-weight: 800;
-    letter-spacing: -0.03em;
+    letter-spacing: ${TRACKING.amount};
     line-height: ${TYPE.amount.line};
   }
   /* 24h delta: coloured magnitude (emerald up / red down) beside a muted
@@ -216,34 +224,6 @@ export const BASE_STYLES = `
   .hero-change .hero-change-amt { color: var(--mc-positive); }
   .hero-change.down .hero-change-amt { color: var(--mc-danger); }
   .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
-  /* Portfolio sparkline: reuses the shared sparkline geometry (see ./sparkline)
-     as an emerald line over a whisper-quiet area fill; red when the window is
-     down. Flat — no glass, one accent. */
-  .hero-spark {
-    display: block;
-    height: 56px;
-    margin: 10px 0 2px;
-    width: 100%;
-  }
-  .hero-spark .spark-fill { fill: var(--mc-accent); opacity: 0.1; }
-  .hero-spark.down .spark-fill { fill: var(--mc-danger); }
-  .hero-spark .spark-line {
-    fill: none;
-    stroke: var(--mc-accent);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 2;
-    vector-effect: non-scaling-stroke;
-  }
-  .hero-spark.down .spark-line { stroke: var(--mc-danger); }
-  .spark-axis {
-    color: var(--mc-faint);
-    display: flex;
-    font-size: 10.5px;
-    justify-content: space-between;
-    letter-spacing: 0.02em;
-    width: 100%;
-  }
   button.hero-chip {
     align-items: center;
     background: var(--mc-elevated);
@@ -254,19 +234,21 @@ export const BASE_STYLES = `
     display: inline-flex;
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.caption.size};
-    gap: 7px;
-    margin-top: 8px;
+    gap: 6px;
+    margin-top: ${SPACE.sm};
     min-height: 0;
-    padding: 6px 11px;
+    padding: 6px ${SPACE.md};
   }
   button.hero-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
   button.hero-chip:not(:disabled):active { background: var(--mc-soft-press); }
   .hero-chip .icon { color: var(--mc-muted); height: 14px; width: 14px; }
 
-  /* Action tiles: rounded-square elevated surfaces, icon over label */
+  /* Action tiles: rounded-square elevated surfaces, icon over label. Sit on
+     the 8px grid — an 8px gutter between the three tiles matches the gap
+     between the token rows below, so both card groups share one rhythm. */
   .action-row {
     display: grid;
-    gap: 10px;
+    gap: ${SPACE.sm};
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   button.action-tile {
@@ -276,9 +258,9 @@ export const BASE_STYLES = `
     box-shadow: var(--mc-edge);
     color: var(--mc-text);
     display: grid;
-    gap: 6px;
+    gap: ${SPACE.sm};
     justify-items: center;
-    min-height: 72px;
+    min-height: ${SIZE.tile};
     padding: ${SPACE.md} ${SPACE.xs};
     transition:
       background ${MOTION.pressMs}ms ${MOTION.ease},

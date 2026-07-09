@@ -188,7 +188,7 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
     padding: ${SPACE.sm} ${SPACE.sm} ${SPACE.sm} ${SPACE.md};
   }
   .address-line code { flex: 1; }
-  .token-list, .request-list, .address-book { display: grid; gap: 6px; }
+  .token-list, .request-list, .address-book { display: grid; gap: ${SPACE.sm}; }
   .token-row {
     align-items: center;
     background: var(--mc-elevated);
