@@ -3,10 +3,12 @@
  */
 import { unknownError, type WalletRpcError } from "../background/wallet-rpc-errors";
 import { isUuid } from "../shared/ids";
-import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
+import type { Json } from "../shared/json";
+import { hasOnlyKnownKeys, isJson, isRecord, normalizeFeltBigints } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import { type ProviderChain, readProviderChain } from "./add-chain-params";
 import {
+  isRequestAccountsParams,
   type ProviderAccountsResult,
   type ProviderDeclareResult,
   type ProviderDeploymentData,
@@ -261,21 +263,13 @@ const readProviderParams = (method: ProviderMethod, params: unknown): Json | nul
   if (params === undefined) {
     return undefined;
   }
-  return (method === "wallet_addDeclareTransaction" ||
-    method === "wallet_addInvokeTransaction" ||
-    method === "wallet_addStarknetChain" ||
-    method === "wallet_deploymentData" ||
-    method === "wallet_signTypedData" ||
-    method === "wallet_supportedSpecs" ||
-    method === "wallet_supportedWalletApi" ||
-    method === "wallet_strk20Balances" ||
-    method === "wallet_strk20InvokeTransaction" ||
-    method === "wallet_strk20PrepareInvoke" ||
-    method === "wallet_switchStarknetChain" ||
-    method === "wallet_watchAsset") &&
-    isJson(params)
-    ? params
-    : null;
+  // Every wallet_* method may carry params; the legacy mc_ aliases take none.
+  if (method === "mc_accounts" || method === "mc_requestAccounts") {
+    return null;
+  }
+  // Normalize felt bigints so a request carrying one survives the isJson gate.
+  const normalized = normalizeFeltBigints(params);
+  return isJson(normalized) ? normalized : null;
 };
 
 /**
@@ -399,7 +393,8 @@ export const toRuntimeMessage = (
     return { origin, type: "wallet.getGrantedAccounts" };
   }
   if (request.method === "wallet_getPermissions") {
-    return { origin, type: "wallet.getPermissions" };
+    const apiVersion = readApiVersionParam(request.params);
+    return apiVersion === null ? null : { origin, type: "wallet.getPermissions" };
   }
   if (request.method === "wallet_watchAsset") {
     const asset = readProviderWatchAsset(request.params);
@@ -418,7 +413,8 @@ export const toRuntimeMessage = (
     return declare ? { declare, origin, type: "wallet.addDeclareTransaction" } : null;
   }
   if (request.method === "wallet_requestChainId") {
-    return { origin, type: "wallet.getChainId" };
+    const apiVersion = readApiVersionParam(request.params);
+    return apiVersion === null ? null : { origin, type: "wallet.getChainId" };
   }
   if (request.method === "wallet_supportedSpecs") {
     const apiVersion = readApiVersionParam(request.params);
@@ -465,7 +461,10 @@ export const toRuntimeMessage = (
     const chainId = providerSwitchChainId(request.params);
     return chainId ? { chainId, origin, type: "wallet.switchChain" } : null;
   }
-  return { origin, type: "wallet.requestAccounts" };
+  // The tail also serves the legacy mc_requestAccounts alias (no params).
+  return isRequestAccountsParams(request.params)
+    ? { origin, type: "wallet.requestAccounts" }
+    : null;
 };
 
 /**

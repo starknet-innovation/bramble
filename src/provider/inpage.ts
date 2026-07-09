@@ -3,6 +3,7 @@
  * accountsChanged/networkChanged subscriptions and delegates to the content
  * bridge.
  */
+import { invalidRequestPayload } from "../background/wallet-rpc-errors";
 import {
   CONTENT_TARGET,
   canQueueProviderRequest,
@@ -100,10 +101,12 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 const request = (args: unknown): Promise<unknown> => {
   const input = readProviderRequestArguments(args);
   if (!input) {
-    return Promise.reject(new Error("invalid provider request"));
+    return Promise.reject(walletRpcException(invalidRequestPayload("invalid provider request")));
   }
   if (!canQueueProviderRequest(pending.size)) {
-    return Promise.reject(new Error("too many pending provider requests"));
+    return Promise.reject(
+      walletRpcException(invalidRequestPayload("too many pending provider requests")),
+    );
   }
 
   return new Promise((resolve, reject) => {
