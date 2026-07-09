@@ -75,7 +75,6 @@ const bindNavigation = (): void => {
 
 const bindDashboard = (): void => {
   const lockButton = app?.querySelector<HTMLButtonElement>("#lock-button");
-  const refreshButton = app?.querySelector<HTMLButtonElement>("#refresh-button");
   const result = app?.querySelector<HTMLElement>("#panel-result");
 
   lockButton?.addEventListener("click", () => {
@@ -95,9 +94,12 @@ const bindDashboard = (): void => {
     );
   });
 
-  refreshButton?.addEventListener("click", () => {
-    buttonBusy(refreshButton, true);
-    void wallet.loadStatus().then(render, () => buttonBusy(refreshButton, false));
+  // Both the tab-bar refresh control and the in-panel retry reload balances.
+  app?.querySelectorAll<HTMLButtonElement>("[data-reload-balances]").forEach((button) => {
+    button.addEventListener("click", () => {
+      buttonBusy(button, true);
+      void wallet.loadStatus().then(render, () => buttonBusy(button, false));
+    });
   });
 };
 
