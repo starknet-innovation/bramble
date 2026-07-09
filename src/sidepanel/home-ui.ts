@@ -96,7 +96,9 @@ const bindDrawerDrag = (root: HTMLElement, isOpen: () => boolean, close: () => v
   };
 
   drawer.addEventListener("pointerdown", (event: PointerEvent) => {
-    if (!isOpen() || event.button !== 0) {
+    // Ignore extra touch points once a gesture is in progress so a second
+    // finger cannot reset the origin and jump the sheet mid-drag.
+    if (!isOpen() || event.button !== 0 || armed) {
       return;
     }
     armed = true;

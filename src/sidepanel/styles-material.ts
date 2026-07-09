@@ -69,14 +69,6 @@ export const MATERIAL_STYLES = `
       inset 0 0 0 1px var(--mc-glass-edge),
       var(--mc-glass-shadow);
   }
-  /* "Materialize" on enter: blur + scale together, not a plain fade. */
-  .glass.glass-enter {
-    animation: mc-materialize var(--spring-drawer-ms) var(--spring-drawer) both;
-  }
-  @keyframes mc-materialize {
-    from { opacity: 0; transform: scale(0.96); }
-    to { opacity: 1; transform: scale(1); }
-  }
 
   /* Graceful fallback: no backdrop-filter support → solid tinted panel. */
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

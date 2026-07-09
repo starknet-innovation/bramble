@@ -93,7 +93,9 @@ const bindToastSwipe = (toast: HTMLElement): void => {
   let velocity = 0;
   let dragging = false;
   el.addEventListener("pointerdown", (event: PointerEvent) => {
-    if (event.button !== 0) {
+    // Ignore a second touch point once a swipe is underway — a new origin
+    // mid-drag would make the toast jump.
+    if (event.button !== 0 || dragging) {
       return;
     }
     for (const running of el.getAnimations()) {
