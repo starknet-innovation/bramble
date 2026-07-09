@@ -36,10 +36,12 @@ jobs:
             cargo-${{ runner.os }}-
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
+      - run: bun run test:e2e:install
       - run: bun run check:files
       - run: bun run vendor:krusty
       - run: bun run check
       - run: bun run build
+      - run: bun run test:e2e
       - run: bun run package:extension
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
