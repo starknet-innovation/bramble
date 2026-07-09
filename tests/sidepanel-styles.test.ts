@@ -121,14 +121,25 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
     );
+    // The active portfolio tab (Tokens/Collectibles/Activity) reads as selected
+    // via accent TEXT plus the underline indicator — a flat text tab, never a
+    // pill/box. So the active home-tab declares the accent colour and NO home-tab
+    // rule paints a background fill.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.home-tab\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
+    );
+    expect(SIDEPANEL_STYLES).not.toMatch(
+      /button\.home-tab\[aria-selected="true"\][^}]*background:(?! transparent)/,
+    );
     expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
     // The token glyph chip is neutral, not accent-filled.
     expect(SIDEPANEL_STYLES).toMatch(/\.token-mark \{[^}]*background: var\(--mc-sunken\)/s);
   });
 
   test("home action tiles are borderless icons, not boxes", () => {
-    // The client asked the Send/Receive/NFTs row to read as plain icons with
-    // labels beneath, so the tile box treatment is gone: the resting tile has a
+    // The client asked the Send/Receive row (formerly Send/Receive/NFTs, before
+    // the redundant NFTs tile was dropped) to read as plain icons with labels
+    // beneath, so the tile box treatment is gone: the resting tile has a
     // transparent fill and carries no hairline edge, no elevation shadow, and no
     // boxy fixed min-height. Primary (Send) stays distinguishable through an
     // accent-tinted ICON, never a filled accent box.

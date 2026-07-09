@@ -247,20 +247,25 @@ export const BASE_STYLES = `
   /* Action tiles: borderless icon buttons — a plain icon over its label, no
      box treatment (no fill, no hairline, no elevation, no boxy min-height), so
      the row reads as clean icons rather than cards and the homepage breathes.
-     The three sit centred on an evenly split 3-column grid. Send stays subtly
-     primary through the accent tint on its icon alone — never a filled box.
-     Feedback is a light press scale plus a hover icon-brighten; the accent
-     focus ring still frames the whole hit target. */
+     The two (Send / Receive) sit as a centred, equal-width pair beneath the
+     centred hero — a content-sized auto-column grid centred in the row rather
+     than stretched edge-to-edge, so removing the former third tile leaves the
+     pair balanced instead of drifting apart. Send stays subtly primary through
+     the accent tint on its icon alone — never a filled box. Feedback is a light
+     press scale plus a hover icon-brighten; the accent focus ring still frames
+     the whole hit target. */
   .action-row {
-    display: grid;
-    gap: ${SPACE.sm};
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    gap: ${SPACE.xl};
+    justify-content: center;
   }
   button.action-tile {
     align-content: start;
     background: transparent;
     border-radius: ${RADIUS.md};
     color: var(--mc-text);
+    flex: 0 0 auto;
+    min-width: 88px;
     display: grid;
     gap: ${SPACE.sm};
     justify-items: center;

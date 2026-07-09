@@ -74,15 +74,19 @@ describe("sidepanel home", () => {
   });
 
   test("quick actions render as borderless icon buttons with send carrying the accent", () => {
-    // The action row is Send / Receive / NFTs as plain borderless icon buttons
-    // (labels beneath, no box treatment). The markup keeps the `action-tile`
-    // hook and the `primary` modifier on Send — the box removal lives in the
-    // stylesheet — so Send stays distinguishable via its accent-tinted icon.
+    // The action row is now just Send / Receive as plain borderless icon buttons
+    // (labels beneath, no box treatment). The former third "NFTs" action tile was
+    // removed as redundant with the Collectibles home tab (which already reaches
+    // the NFT gallery + detail views), leaving a centred two-tile pair. The markup
+    // keeps the `action-tile` hook and the `primary` modifier on Send — the box
+    // removal lives in the stylesheet — so Send stays distinguishable via its
+    // accent-tinted icon.
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).toMatch(/class="action-tile primary" data-view="send"/);
     expect(html).toMatch(/class="action-tile" data-view="receive"/);
-    expect(html).toMatch(/class="action-tile" data-view="nfts"/);
+    // The NFTs action tile is gone; NFT access lives on the Collectibles tab.
+    expect(html).not.toMatch(/class="action-tile" data-view="nfts"/);
 
     const noAccounts = dashboard(
       "home",

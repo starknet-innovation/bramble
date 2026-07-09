@@ -187,7 +187,6 @@ const homeScreen = (
     <div class="action-row">
       ${actionTile("send", "Send", "send", true, account !== null)}
       ${actionTile("receive", "Receive", "receive", false, account !== null)}
-      ${actionTile("nfts", "NFTs", "image", false, true)}
     </div>
     ${homeTabs(balances, preferences, prices, changes, currency, transactions, status)}`,
   );

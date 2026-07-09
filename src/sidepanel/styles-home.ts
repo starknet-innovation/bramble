@@ -107,7 +107,11 @@ export const HOME_STYLES = `
   }
   button.home-tab:not(:disabled):hover { background: transparent; color: var(--mc-text); }
   button.home-tab:not(:disabled):active { background: transparent; transform: scale(0.95); }
-  button.home-tab[aria-selected="true"] { color: var(--mc-text); }
+  /* Active tab: no box/pill fill — a flat text tab that reads as selected via
+     the emerald accent (matching the sliding .tab-indicator underline and the
+     borderless dock highlight). Inactive tabs stay muted; alignment plus the
+     accent carry the state without any background. */
+  button.home-tab[aria-selected="true"] { color: var(--mc-accent); }
   .tab-indicator {
     background: var(--mc-accent);
     border-radius: ${RADIUS.full};
@@ -198,7 +202,6 @@ export const HOME_STYLES = `
   .shell-animate .hero-change { animation: rise-in ${MOTION.enterMs}ms var(--ease-out) both; }
   .shell-animate .action-tile { animation: rise-in 240ms var(--ease-out) both; }
   .shell-animate .action-tile:nth-child(2) { animation-delay: 40ms; }
-  .shell-animate .action-tile:nth-child(3) { animation-delay: 80ms; }
   .shell-animate .token-list li { animation: rise-in 260ms var(--ease-out) both; }
   .shell-animate .token-list li:nth-child(1) { animation-delay: 40ms; }
   .shell-animate .token-list li:nth-child(2) { animation-delay: 70ms; }
