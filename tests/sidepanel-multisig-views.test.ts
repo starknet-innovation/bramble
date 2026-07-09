@@ -100,17 +100,22 @@ describe("multisig views", () => {
     const html = render("multisig-detail", [multisig], [proposal]);
     expect(html).toContain("Pay vendor");
     expect(html).toContain("Ready to execute");
+    expect(html).toContain("On-chain effect when executed");
     expect(html).toContain(`data-ms-confirm="${proposal.id}"`);
     expect(html).toContain(`data-ms-execute="${proposal.id}"`);
+    expect(html).not.toContain("data-ms-requires-ack");
     expect(html).toContain('id="multisig-track-form"');
     expect(html).toContain('data-view="multisig-propose"');
-    expect(html).toContain('data-multisig-remove="' + multisig.id + '"');
+    expect(html).toContain(`data-multisig-remove="${multisig.id}"`);
   });
 
   test("detail hides execute for proposals tracked by id only", () => {
     const html = render("multisig-detail", [multisig], [{ ...proposal, call: null }]);
     expect(html).not.toContain("data-ms-execute");
     expect(html).toContain("Execute from the wallet that proposed it");
+    expect(html).toContain("data-ms-requires-ack");
+    expect(html).toContain("data-ms-ack");
+    expect(html).toContain("not verified on-chain");
   });
 
   test("executed proposals render without lifecycle actions", () => {

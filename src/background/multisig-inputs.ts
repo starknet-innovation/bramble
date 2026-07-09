@@ -108,6 +108,16 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
     : null;
 
 /**
+ * Parsed proposal action (`confirm`, `revoke`, `execute`). Confirm and revoke
+ * on proposals tracked by id only must carry `untrackedVerified: true` after
+ * the user acknowledges that off-chain summaries are not chain-verified.
+ */
+export type MultisigProposalActionInput = {
+  readonly proposalId: string;
+  readonly untrackedVerified?: boolean;
+};
+
+/**
  * Parses a proposal action request (`confirm`, `revoke`, `execute`).
  */
 export const readMultisigProposalActionInput = (
@@ -116,13 +126,29 @@ export const readMultisigProposalActionInput = (
     | "wallet.confirmMultisigProposal"
     | "wallet.executeMultisigProposal"
     | "wallet.revokeMultisigConfirmation",
-): { readonly proposalId: string } | null =>
-  isRecord(message) &&
-  hasOnlyKnownKeys(message, ["proposalId", "type"]) &&
-  message.type === type &&
-  isId(message.proposalId)
-    ? { proposalId: message.proposalId }
-    : null;
+): MultisigProposalActionInput | null => {
+  const keys =
+    type === "wallet.executeMultisigProposal"
+      ? (["proposalId", "type"] as const)
+      : (["proposalId", "type", "untrackedVerified"] as const);
+  if (
+    !(
+      isRecord(message) &&
+      hasOnlyKnownKeys(message, keys) &&
+      message.type === type &&
+      isId(message.proposalId)
+    )
+  ) {
+    return null;
+  }
+  if (message.untrackedVerified !== undefined && message.untrackedVerified !== true) {
+    return null;
+  }
+  return {
+    proposalId: message.proposalId,
+    ...(message.untrackedVerified === true ? { untrackedVerified: true } : {}),
+  };
+};
 
 /**
  * Parses a track request for a proposal id shared out-of-band.

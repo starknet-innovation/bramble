@@ -41,8 +41,12 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "add multisig failed");
       }
     },
-    async confirmProposal(proposalId: string): Promise<string> {
-      const response = await sendMessage({ proposalId, type: "wallet.confirmMultisigProposal" });
+    async confirmProposal(proposalId: string, untrackedVerified?: boolean): Promise<string> {
+      const response = await sendMessage({
+        proposalId,
+        type: "wallet.confirmMultisigProposal",
+        ...(untrackedVerified ? { untrackedVerified: true } : {}),
+      });
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
@@ -124,8 +128,12 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "remove failed");
       }
     },
-    async revokeConfirmation(proposalId: string): Promise<string> {
-      const response = await sendMessage({ proposalId, type: "wallet.revokeMultisigConfirmation" });
+    async revokeConfirmation(proposalId: string, untrackedVerified?: boolean): Promise<string> {
+      const response = await sendMessage({
+        proposalId,
+        type: "wallet.revokeMultisigConfirmation",
+        ...(untrackedVerified ? { untrackedVerified: true } : {}),
+      });
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }

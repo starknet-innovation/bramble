@@ -118,22 +118,39 @@ const bindListActions = (deps: MultisigUiDeps): void => {
 };
 
 const bindProposalActions = (deps: MultisigUiDeps): void => {
+  const syncAcknowledgment = (row: Element, checked: boolean): void => {
+    row.querySelectorAll<HTMLButtonElement>("[data-ms-requires-ack]").forEach((button) => {
+      const target = button;
+      target.disabled = !checked;
+    });
+  };
+
+  deps.app?.querySelectorAll<HTMLInputElement>("[data-ms-ack]").forEach((checkbox) => {
+    const row = checkbox.closest(".allowance-row");
+    if (!row) {
+      return;
+    }
+    checkbox.addEventListener("change", () => {
+      syncAcknowledgment(row, checkbox.checked);
+    });
+  });
+
   const actions: readonly {
     readonly attribute: string;
     readonly key: "msConfirm" | "msExecute" | "msRevoke";
-    readonly run: (proposalId: string) => Promise<string>;
+    readonly run: (proposalId: string, untrackedVerified?: boolean) => Promise<string>;
     readonly success: string;
   }[] = [
     {
       attribute: "[data-ms-confirm]",
       key: "msConfirm",
-      run: (id) => deps.multisig.confirmProposal(id),
+      run: (id, untrackedVerified) => deps.multisig.confirmProposal(id, untrackedVerified),
       success: "Confirmation submitted",
     },
     {
       attribute: "[data-ms-revoke]",
       key: "msRevoke",
-      run: (id) => deps.multisig.revokeConfirmation(id),
+      run: (id, untrackedVerified) => deps.multisig.revokeConfirmation(id, untrackedVerified),
       success: "Revocation submitted",
     },
     {
@@ -150,8 +167,17 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
         if (!proposalId) {
           return;
         }
+        const row = button.closest(".allowance-row");
+        const requiresAck = button.dataset.msRequiresAck === "true";
+        const ack = requiresAck
+          ? row?.querySelector<HTMLInputElement>("[data-ms-ack]")?.checked
+          : undefined;
+        if (requiresAck && !ack) {
+          showToast("Verify the proposal and check the acknowledgment first", "error");
+          return;
+        }
         runAction(deps, button, "multisig-proposal-result", "Submitting…", async () => {
-          await action.run(proposalId);
+          await action.run(proposalId, ack ? true : undefined);
           return action.success;
         });
       });
@@ -235,7 +261,7 @@ const bindDeployScreen = (deps: MultisigUiDeps): void => {
         String(data.get("name") ?? "").trim(),
       );
       deps.openList();
-      return `Deployment submitted at ${result.address}`;
+      return `Deployment submitted at ${result.address} — watch it once the transaction finalizes`;
     });
   });
 };

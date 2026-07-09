@@ -6,7 +6,11 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
-import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
+import type {
+  MultisigProposalCall,
+  MultisigProposalRecord,
+  MultisigRecord,
+} from "../storage/multisig-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { icon } from "./icons";
 import { accountLabel, copyButton, flowHeader, flowScreen, noAccountEmpty } from "./parts";
@@ -28,6 +32,27 @@ const stateLabel: Readonly<Record<MultisigProposalRecord["state"], string>> = {
   "not-found": "Not found",
   pending: "Collecting confirmations",
 };
+
+const formatCalldata = (calldata: readonly string[]): string =>
+  calldata.length === 0 ? "(empty)" : calldata.map((felt) => accountLabel(felt)).join(" ");
+
+const proposalCallDetails = (call: MultisigProposalCall): string => `
+  <div class="review-panel" role="note">
+    <p><strong>On-chain effect when executed</strong></p>
+    <p>Contract: <code>${escapeHtml(accountLabel(call.contractAddress))}</code></p>
+    <p>Entrypoint: <code>${escapeHtml(call.entrypoint)}</code></p>
+    <p>Calldata: <code>${escapeHtml(formatCalldata(call.calldata))}</code></p>
+    <p>Salt: <code>${escapeHtml(accountLabel(call.salt))}</code></p>
+  </div>`;
+
+const untrackedProposalWarning = (): string => `
+  <div class="review-panel" role="note">
+    <p class="review-flag">Notes and summaries are not verified on-chain. Confirm only after verifying this proposal id on a block explorer or with the proposer.</p>
+    <label class="hint">
+      <input type="checkbox" data-ms-ack />
+      I verified what this proposal does
+    </label>
+  </div>`;
 
 const multisigRow = (record: MultisigRecord, pendingCount: number): string => `
   <li class="allowance-row">
@@ -97,9 +122,14 @@ const proposalActions = (proposal: MultisigProposalRecord): string => {
         ? `<button class="secondary small" data-ms-execute="${escapeHtml(proposal.id)}" type="button">${icon("send")}Execute</button>`
         : '<span class="hint">Execute from the wallet that proposed it (call details are not shared with a pasted id).</span>'
       : "";
+  const confirmDisabled = proposal.call === null ? " disabled" : "";
+  const confirmAttr =
+    proposal.call === null ? ` data-ms-requires-ack="true"${confirmDisabled}` : "";
+  const revokeDisabled = proposal.call === null ? " disabled" : "";
+  const revokeAttr = proposal.call === null ? ` data-ms-requires-ack="true"${revokeDisabled}` : "";
   return `<div class="row">
-    <button class="secondary small" data-ms-confirm="${escapeHtml(proposal.id)}" type="button">${icon("check")}Confirm</button>
-    <button class="secondary small" data-ms-revoke="${escapeHtml(proposal.id)}" type="button">${icon("x")}Revoke</button>
+    <button class="secondary small" data-ms-confirm="${escapeHtml(proposal.id)}" type="button"${confirmAttr}>${icon("check")}Confirm</button>
+    <button class="secondary small" data-ms-revoke="${escapeHtml(proposal.id)}" type="button"${revokeAttr}>${icon("x")}Revoke</button>
     ${execute}
   </div>`;
 };
@@ -110,6 +140,7 @@ const proposalRow = (proposal: MultisigProposalRecord, quorum: number): string =
       <strong>${escapeHtml(proposal.summary)}</strong>
       <span class="hint">${escapeHtml(stateLabel[proposal.state])} · ${proposal.confirmations} of ${quorum} confirmations</span>
       <code>${escapeHtml(accountLabel(proposal.txId))}</code>
+      ${proposal.call ? proposalCallDetails(proposal.call) : untrackedProposalWarning()}
     </div>
     ${copyButton(proposal.txId, "Copy proposal id")}
     ${proposalActions(proposal)}
@@ -177,7 +208,7 @@ export const multisigDetailFlow = (
         <form id="multisig-track-form">
           <label><span>Proposal id</span><input class="mono" name="txId" placeholder="0x…" required autocomplete="off" spellcheck="false" /></label>
           <label><span>Note (optional)</span><input name="summary" maxlength="120" autocomplete="off" /></label>
-          <span class="hint">Tracked proposals can be confirmed and revoked; executing needs the original call from the proposer's wallet.</span>
+          <span class="hint">Notes are not verified on-chain. Tracked proposals can be confirmed and revoked after you verify the proposal id; executing needs the original call from the proposer's wallet.</span>
           <button class="secondary" type="submit">${icon("check")}Track proposal</button>
           <p id="multisig-track-result" role="status"></p>
         </form>

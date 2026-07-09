@@ -186,6 +186,13 @@ describe("multisig messages", () => {
       "wallet.deployMultisig",
       "wallet.proposeMultisigTx",
       "wallet.declareMultisigClass",
+      "wallet.confirmMultisigProposal",
+      "wallet.executeMultisigProposal",
+      "wallet.revokeMultisigConfirmation",
+      "wallet.trackMultisigProposal",
+      "wallet.removeMultisig",
+      "wallet.refreshMultisig",
+      "wallet.multisigClassStatus",
     ]) {
       await expect(handler({ type }, contentSender)).resolves.toEqual({
         error: "privileged sender required",
@@ -276,6 +283,25 @@ describe("multisig messages", () => {
     )) as { proposal: MultisigProposalRecord };
     expect(tracked.proposal).toMatchObject({ call: null, state: "pending", txId: "0xdef" });
 
+    await expect(
+      handler(
+        { proposalId: tracked.proposal.id, type: "wallet.confirmMultisigProposal" },
+        extensionSender,
+      ),
+    ).resolves.toMatchObject({
+      error: expect.stringContaining("verify this proposal"),
+    });
+
+    const confirm = await handler(
+      {
+        proposalId: tracked.proposal.id,
+        type: "wallet.confirmMultisigProposal",
+        untrackedVerified: true,
+      },
+      extensionSender,
+    );
+    expect(confirm).toEqual({ ok: true, transactionHash: "0x7cd" });
+
     const execute = await handler(
       { proposalId: tracked.proposal.id, type: "wallet.executeMultisigProposal" },
       extensionSender,
@@ -294,7 +320,7 @@ describe("multisig messages", () => {
     ).resolves.toEqual({ error: "no proposal with that id exists on this multisig" });
   });
 
-  test("deploys through the UDC and watches the predicted address", async () => {
+  test("deploys through the UDC without watching until finalized", async () => {
     const { handler, invokeCalls } = makeHarness();
     const response = (await handler(
       {
@@ -319,7 +345,7 @@ describe("multisig messages", () => {
     const listed = (await handler({ type: "wallet.multisigs" }, extensionSender)) as {
       multisigs: readonly { name?: string }[];
     };
-    expect(listed.multisigs[0]?.name).toBe("New treasury");
+    expect(listed.multisigs).toHaveLength(0);
   });
 
   test("fails deploys closed when the class is not declared", async () => {
@@ -346,11 +372,108 @@ describe("multisig messages", () => {
     });
   });
 
+  test("fails deploy closed when occupancy cannot be checked", async () => {
+    const session = createUnlockSession();
+    session.unlock("correct horse battery staple");
+    const handler = createMessageHandler(
+      walletStub,
+      "extension-id",
+      session,
+      undefined,
+      undefined,
+      {
+        async estimateInvokeFee() {
+          return { overallFee: "1", unit: "FRI" };
+        },
+        async getDeploymentStatus() {
+          throw new Error("rpc down");
+        },
+        async getNftOwner() {
+          return account.address;
+        },
+        async getTokenBalances() {
+          return [];
+        },
+        async getTokenMetadata() {
+          return { decimals: 18, name: "Ether", symbol: "ETH" };
+        },
+        async getTransactionStatuses() {
+          return {};
+        },
+        multisig: {
+          async computeTransactionId() {
+            return TX_ID;
+          },
+          async getConfig() {
+            return { quorum: 1, signers: [account.address] };
+          },
+          async getProposalStatus() {
+            return { confirmations: 0, confirmedBySigner: false, state: "pending" };
+          },
+          async isClassDeclared() {
+            return true;
+          },
+        },
+        async submitAccountDeployment() {
+          return { transactionHash: "0x7de" };
+        },
+        async submitDeclareTransaction() {
+          return { classHash: MULTISIG_CLASS_HASH, transactionHash: "0xdec" };
+        },
+        async submitErc20Transfer() {
+          return {
+            call: { calldata: [], contractAddress: TARGET, entrypoint: "transfer" },
+            transactionHash: "0x7ab",
+          };
+        },
+        async submitInvokeTransaction() {
+          return { calls: [], transactionHash: "0x7cd" };
+        },
+      },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      memoryMultisigStore(),
+    );
+    await expect(
+      handler(
+        { quorum: 1, signers: [account.address], type: "wallet.deployMultisig" },
+        extensionSender,
+      ),
+    ).resolves.toEqual({
+      error: "could not verify whether this multisig address is free — try again",
+    });
+  });
+
   test("declares only an artifact matching the pinned class hash", async () => {
-    const bad = makeHarness({ loadClass: async () => null });
+    const bad = makeHarness({ classDeclared: false, loadClass: async () => null });
     await expect(
       bad.handler({ type: "wallet.declareMultisigClass" }, extensionSender),
     ).resolves.toEqual({ error: "Bundled multisig class is malformed" });
     expect(bad.declared).toHaveLength(0);
+  });
+
+  test("refuses to declare when the class is already on-chain", async () => {
+    const { handler, declared } = makeHarness({
+      classDeclared: true,
+      loadClass: async () => ({ sierra_program: [] }),
+    });
+    await expect(
+      handler({ type: "wallet.declareMultisigClass" }, extensionSender),
+    ).resolves.toEqual({
+      error: "multisig class is already declared on this network",
+    });
+    expect(declared).toHaveLength(0);
+  });
+
+  test("refuses propose when the active account was removed as a signer", async () => {
+    const signers = [account.address, OTHER_SIGNER];
+    const { handler } = makeHarness({ signers });
+    const watched = (await watch(handler)) as { multisig: { id: string } };
+    signers.splice(0, signers.length, OTHER_SIGNER);
+    await expect(propose(handler, watched.multisig.id)).resolves.toEqual({
+      error: "the active account is not a signer of this multisig",
+    });
   });
 });

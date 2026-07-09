@@ -25,7 +25,6 @@ import { verifyCalls } from "../starknet/verify";
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
-  multisigId,
   multisigProposalId,
 } from "../storage/multisig-store";
 import { readTypeOnlyInput } from "./message-inputs";
@@ -34,7 +33,12 @@ import {
   readMultisigProposalActionInput,
   readProposeMultisigInput,
 } from "./multisig-inputs";
-import { type MultisigOpsDeps, multisigContext, multisigRpc, sameFelt } from "./multisig-ops";
+import {
+  type MultisigOpsDeps,
+  multisigContext,
+  multisigRpc,
+  refreshSignerMembership,
+} from "./multisig-ops";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import { signerForContext, verificationContext } from "./wallet-ops";
@@ -66,13 +70,6 @@ const submitAndRecord = async (
   return result.transactionHash;
 };
 
-const requireSigner = (
-  resolved: Exclude<Awaited<ReturnType<typeof multisigContext>>, { readonly error: string }>,
-): string | null =>
-  resolved.record.signers.some((signer) => sameFelt(signer, resolved.account.account.address))
-    ? null
-    : "the active account is not a signer of this multisig";
-
 const proposalById = async (
   deps: MultisigOpsDeps,
   proposalId: string,
@@ -96,12 +93,20 @@ const proposalById = async (
   if ("error" in resolved) {
     return { error: resolved.error };
   }
-  const notSigner = requireSigner(resolved);
-  if (notSigner) {
-    return { error: notSigner };
+  const refreshed = await refreshSignerMembership(deps, resolved);
+  if ("error" in refreshed) {
+    return { error: refreshed.error };
   }
-  return { proposal, resolved };
+  return { proposal, resolved: refreshed };
 };
+
+const requireUntrackedVerification = (
+  proposal: MultisigProposalRecord,
+  untrackedVerified: boolean | undefined,
+): string | null =>
+  proposal.call === null && untrackedVerified !== true
+    ? "verify this proposal on a block explorer or with the proposer, then acknowledge before confirming"
+    : null;
 
 const refreshAfterAction = async (
   deps: MultisigOpsDeps,
@@ -140,9 +145,9 @@ export const handleMultisigTxOps = async (
     if ("error" in resolved) {
       return { error: resolved.error };
     }
-    const notSigner = requireSigner(resolved);
-    if (notSigner) {
-      return { error: notSigner };
+    const refreshed = await refreshSignerMembership(deps, resolved);
+    if ("error" in refreshed) {
+      return { error: refreshed.error };
     }
     const call: MultisigCallInput = {
       calldata: input.calldata,
@@ -150,19 +155,19 @@ export const handleMultisigTxOps = async (
       entrypoint: input.entrypoint,
     };
     const txId = await multisigRpc(deps).computeTransactionId({
-      address: resolved.record.address,
+      address: refreshed.record.address,
       call,
-      rpcUrls: resolved.rpcUrls,
+      rpcUrls: refreshed.rpcUrls,
       salt: input.salt,
     });
     const summary = input.summary ?? `${input.entrypoint} on ${shortAddress(input.to)}`;
     const transactionHash = await submitAndRecord(
       deps,
-      resolved,
-      buildMultisigSubmitCall(resolved.record.address, call, input.salt),
+      refreshed,
+      buildMultisigSubmitCall(refreshed.record.address, call, input.salt),
       `Propose: ${summary}`,
     );
-    const id = multisigProposalId(resolved.record.id, txId);
+    const id = multisigProposalId(refreshed.record.id, txId);
     if (!id) {
       return { error: "invalid propose request" };
     }
@@ -175,7 +180,7 @@ export const handleMultisigTxOps = async (
       },
       confirmations: 0,
       id,
-      multisigId: resolved.record.id,
+      multisigId: refreshed.record.id,
       state: "pending",
       summary,
       txId,
@@ -192,6 +197,10 @@ export const handleMultisigTxOps = async (
     const found = await proposalById(deps, input.proposalId);
     if ("error" in found) {
       return { error: found.error };
+    }
+    const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
+    if (verifyError) {
+      return { error: verifyError };
     }
     const transactionHash = await submitAndRecord(
       deps,
@@ -217,6 +226,10 @@ export const handleMultisigTxOps = async (
     const found = await proposalById(deps, input.proposalId);
     if ("error" in found) {
       return { error: found.error };
+    }
+    const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
+    if (verifyError) {
+      return { error: verifyError };
     }
     const transactionHash = await submitAndRecord(
       deps,
@@ -299,14 +312,18 @@ export const handleMultisigTxOps = async (
     if (!deps.loadMultisigClass) {
       return { error: "multisig class artifact unavailable" };
     }
-    const contractClass = requireMultisigContractClass(await deps.loadMultisigClass());
     const preferences = await deps.preferencesStore.read();
+    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
+    if (await multisigRpc(deps).isClassDeclared({ rpcUrls })) {
+      return { error: "multisig class is already declared on this network" };
+    }
+    const contractClass = requireMultisigContractClass(await deps.loadMultisigClass());
     const result = await deps.runtimeRpc.submitDeclareTransaction({
       account: context.account,
       classHash: MULTISIG_CLASS_HASH,
       compiledClassHash: MULTISIG_COMPILED_CLASS_HASH,
       contractClass,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
+      rpcUrls,
       signHash: signerForContext(deps, context),
     });
     await deps.activity.record({
@@ -335,9 +352,14 @@ export const handleMultisigTxOps = async (
     }
     const config = { quorum: input.quorum, salt: input.salt, signers: input.signers };
     const address = predictMultisigAddress(config);
-    const occupied = await deps.runtimeRpc
-      .getDeploymentStatus({ accountAddress: address, rpcUrls })
-      .catch(() => false);
+    let occupied: boolean;
+    try {
+      occupied = await deps.runtimeRpc.getDeploymentStatus({ accountAddress: address, rpcUrls });
+    } catch {
+      return {
+        error: "could not verify whether this multisig address is free — try again",
+      };
+    }
     if (occupied) {
       return { error: "a multisig with these signers and salt already exists — watch it instead" };
     }
@@ -357,18 +379,6 @@ export const handleMultisigTxOps = async (
       summary:
         report.calls[0]?.summary ?? `Deploy multisig (${input.quorum} of ${input.signers.length})`,
     });
-    const id = multisigId(context.networkId, address);
-    if (id) {
-      const record: MultisigRecord = {
-        address: `0x${BigInt(address).toString(16)}`,
-        id,
-        ...(input.name === undefined ? {} : { name: input.name }),
-        networkId: context.networkId,
-        quorum: input.quorum,
-        signers: input.signers.map((signer) => `0x${BigInt(signer).toString(16)}`),
-      };
-      await deps.multisigStore.upsertMultisig(record);
-    }
     return { address, ok: true, transactionHash: result.transactionHash };
   }
 

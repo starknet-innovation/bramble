@@ -56,6 +56,33 @@ export type MultisigContext = {
 };
 
 /**
+ * Re-reads signer membership from chain, persists the fresh snapshot, and
+ * rejects when the active account is no longer a signer. Used immediately
+ * before any signer-gated submission so stale registry data cannot offer
+ * doomed transactions.
+ */
+export const refreshSignerMembership = async (
+  deps: MultisigOpsDeps,
+  resolved: MultisigContext,
+): Promise<{ readonly error: string } | MultisigContext> => {
+  const config = await multisigRpc(deps).getConfig({
+    address: resolved.record.address,
+    rpcUrls: resolved.rpcUrls,
+  });
+  const record: MultisigRecord = {
+    ...resolved.record,
+    quorum: config.quorum,
+    signers: config.signers,
+  };
+  await deps.multisigStore.upsertMultisig(record);
+  const next: MultisigContext = { ...resolved, record };
+  if (!record.signers.some((signer) => sameFelt(signer, next.account.account.address))) {
+    return { error: "the active account is not a signer of this multisig" };
+  }
+  return next;
+};
+
+/**
  * Resolves the active account and a watched multisig by id, enforcing that
  * both live on the active network. Returns an error response otherwise.
  */
