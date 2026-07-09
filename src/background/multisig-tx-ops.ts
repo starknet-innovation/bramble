@@ -12,6 +12,7 @@ import {
   buildMultisigRevokeCall,
   buildMultisigSubmitCall,
   type MultisigCallInput,
+  type MultisigProposalStatus,
 } from "../starknet/multisig";
 import {
   buildMultisigDeployCall,
@@ -209,15 +210,18 @@ export const handleMultisigTxOps = async (
     if (verifyError) {
       return { error: verifyError };
     }
-    const status = await multisigRpc(deps)
-      .getProposalStatus({
+    let status: MultisigProposalStatus;
+    try {
+      status = await multisigRpc(deps).getProposalStatus({
         address: found.resolved.record.address,
         rpcUrls: found.resolved.rpcUrls,
         signer: found.resolved.account.account.address,
         txId: found.proposal.txId,
-      })
-      .catch(() => null);
-    if (status && (status.state === "executed" || status.state === "not-found")) {
+      });
+    } catch {
+      return { error: "could not verify proposal state — try again" };
+    }
+    if (status.state === "executed" || status.state === "not-found") {
       return { error: `cannot confirm a proposal that is ${status.state}` };
     }
     const transactionHash = await submitAndRecord(
@@ -249,15 +253,18 @@ export const handleMultisigTxOps = async (
     if (verifyError) {
       return { error: verifyError };
     }
-    const status = await multisigRpc(deps)
-      .getProposalStatus({
+    let status: MultisigProposalStatus;
+    try {
+      status = await multisigRpc(deps).getProposalStatus({
         address: found.resolved.record.address,
         rpcUrls: found.resolved.rpcUrls,
         signer: found.resolved.account.account.address,
         txId: found.proposal.txId,
-      })
-      .catch(() => null);
-    if (status && (status.state === "executed" || status.state === "not-found")) {
+      });
+    } catch {
+      return { error: "could not verify proposal state — try again" };
+    }
+    if (status.state === "executed" || status.state === "not-found") {
       return { error: `cannot revoke a proposal that is ${status.state}` };
     }
     const transactionHash = await submitAndRecord(
@@ -291,15 +298,18 @@ export const handleMultisigTxOps = async (
           "this proposal was tracked by id only; executing needs the original call, so execute it from the wallet that proposed it",
       };
     }
-    const status = await multisigRpc(deps)
-      .getProposalStatus({
+    let status: MultisigProposalStatus;
+    try {
+      status = await multisigRpc(deps).getProposalStatus({
         address: found.resolved.record.address,
         rpcUrls: found.resolved.rpcUrls,
         signer: found.resolved.account.account.address,
         txId: found.proposal.txId,
-      })
-      .catch(() => null);
-    if (status && status.state !== "confirmed") {
+      });
+    } catch {
+      return { error: "could not verify proposal state — try again" };
+    }
+    if (status.state !== "confirmed") {
       return { error: `cannot execute a proposal that is ${status.state}` };
     }
     const transactionHash = await submitAndRecord(
