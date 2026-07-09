@@ -41,7 +41,7 @@ describe("createHttpStrk20Service", () => {
     await expect(
       service.proving.prove({
         account,
-        actions: [{ action: "invoke", call: callAndProof.call }],
+        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
         balances: [],
         proverUrl: null,
         rpcUrls,
@@ -66,7 +66,7 @@ describe("createHttpStrk20Service", () => {
     await expect(
       proving.proving.prove({
         account,
-        actions: [{ action: "invoke", call: callAndProof.call }],
+        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
         balances: [],
         proverUrl,
         rpcUrls,
@@ -89,7 +89,7 @@ describe("createHttpStrk20Service", () => {
     await expect(
       createHttpStrk20Service(httpReturning(callAndProof, false).http).proving.prove({
         account,
-        actions: [{ action: "invoke", call: callAndProof.call }],
+        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
         balances: [],
         proverUrl,
         rpcUrls,
@@ -114,7 +114,7 @@ describe("createHttpStrk20Service", () => {
     await expect(
       createHttpStrk20Service(httpReturning({ call: callAndProof.call }).http).proving.prove({
         account,
-        actions: [{ action: "invoke", call: callAndProof.call }],
+        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
         balances: [],
         proverUrl,
         rpcUrls,

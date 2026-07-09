@@ -9,8 +9,11 @@ Run this before opening a pull request:
 
 ```bash
 bun run vendor:krusty
+bun run vendor:multisig
 bun run check
+bun run test:e2e:install
 bun run build
+bun run test:e2e
 bun run package:extension
 ```
 

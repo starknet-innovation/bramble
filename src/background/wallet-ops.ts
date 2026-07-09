@@ -3,7 +3,7 @@
  * balances, deployment, transfer review and submission, and the activity feed.
  */
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks";
-import { buildErc20TransferCall, parseTokenAmount } from "../starknet/rpc";
+import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "../starknet/rpc";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
@@ -70,6 +70,22 @@ const transferContext = async (
 const signerFor =
   (deps: WalletOpsDeps, account: AccountRef, vaultPassphrase: string) => (messageHash: string) =>
     deps.wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase });
+
+/**
+ * Classifies a transfer review's fee outcome so callers can tell an intentional
+ * "no fee yet because the account still needs deployment" apart from a genuine
+ * estimate failure. For an undeployed account the fee is intentionally null and
+ * `feeEstimateFailed` stays false; for a deployed account that produced no
+ * estimate the failure flag is set so the UI can surface a retry instead of a
+ * dead "unavailable" string.
+ */
+export const resolveReviewFee = (input: {
+  readonly deployed: boolean;
+  readonly fee: FeeEstimate | null;
+}): { readonly fee: FeeEstimate | null; readonly feeEstimateFailed: boolean } =>
+  input.deployed
+    ? { fee: input.fee, feeEstimateFailed: input.fee === null }
+    : { fee: null, feeEstimateFailed: false };
 
 /**
  * Handles wallet operation messages; returns null for other message types.
@@ -158,7 +174,7 @@ export const handleWalletOps = async (
     const deployed = await runtimeRpc
       .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
       .catch(() => true);
-    const fee = deployed
+    const estimated = deployed
       ? await runtimeRpc
           .estimateInvokeFee({
             account,
@@ -168,10 +184,12 @@ export const handleWalletOps = async (
           })
           .catch(() => null)
       : null;
+    const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
     return {
       ok: true,
       review: {
         fee,
+        feeEstimateFailed,
         flags: report.flags,
         requiresDeployment: !deployed,
         summaries: report.calls.map((decoded) => decoded.summary),
@@ -201,10 +219,13 @@ export const handleWalletOps = async (
     const report = verifyCalls([result.call], verificationContext(account, preferences));
     await activity.record({
       accountId: account.id,
+      amount: input.amount,
+      counterparty: input.recipient,
       hash: result.transactionHash,
       kind: "transfer",
       networkId: account.networkId,
       summary: report.calls[0]?.summary ?? `Send ${token.symbol}`,
+      token: token.symbol,
     });
     return { ok: true, transactionHash: result.transactionHash };
   }

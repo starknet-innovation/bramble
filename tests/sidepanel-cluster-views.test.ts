@@ -82,13 +82,14 @@ describe("cluster views", () => {
     const html = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       pendingTx,
     ]);
-    expect(html).toContain("cannot be sped up or cancelled");
+    expect(html).toContain("sped up, replaced, or cancelled");
+    expect(html).toContain("protocol limitation");
     expect(html).toMatch(/tx-status pending"[^>]*title="/);
 
     const settled = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       { ...pendingTx, status: "accepted" as const },
     ]);
-    expect(settled).not.toContain("cannot be sped up or cancelled");
+    expect(settled).not.toContain("protocol limitation");
   });
 
   test("home links to the NFT gallery and settings links to allowances", () => {

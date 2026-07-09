@@ -1,6 +1,8 @@
 artifacts/
 dist/
 node_modules/
+playwright-report/
+test-results/
 vendor/krusty-kms/
 vendor/multisig/
 contracts/multisig/target/

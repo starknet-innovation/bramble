@@ -2,15 +2,20 @@
  * DOM utilities for the side panel: toasts, busy states, scoped status lines,
  * and focus preservation across full re-renders.
  */
+import { friendlyNetworkError } from "../shared/network-error";
+import { friendlyError } from "./friendly-error";
 import { icon } from "./icons";
 import { animate } from "./motion";
 import { isWalletView } from "./parts";
 
 /**
- * Formats an error for user-facing status lines.
+ * Formats an error for user-facing status lines, rewriting raw transport
+ * failures (e.g. "Failed to fetch") into a friendly, actionable line.
  */
-export const errorMessage = (error: unknown, fallback: string): string =>
-  error instanceof Error ? error.message : fallback;
+export const errorMessage = (error: unknown, fallback: string): string => {
+  const raw = error instanceof Error ? error.message : fallback;
+  return friendlyNetworkError(raw) ?? raw;
+};
 
 /**
  * Marks a button busy so repeated submits are impossible while work runs.
@@ -163,14 +168,15 @@ export const showToast = (message: string, tone: ToastTone): void => {
     document.body.append(stack);
   }
 
+  const friendly = tone === "error" ? friendlyError(message) : null;
   const toast = document.createElement("div");
   toast.className = `toast ${tone}`;
   const text = document.createElement("span");
   text.className = "toast-text";
-  text.textContent = message;
+  text.textContent = friendly ? friendly.message : message;
   toast.append(text);
-  if (tone === "error") {
-    toast.append(toastCopyButton(message));
+  if (friendly?.copyable) {
+    toast.append(toastCopyButton(friendly.message));
   }
   stack.append(toast);
   animate(

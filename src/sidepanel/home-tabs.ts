@@ -7,6 +7,7 @@
  */
 import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { friendlyNetworkError } from "../shared/network-error";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { WatchedNft } from "../storage/nft";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
@@ -62,7 +63,7 @@ export const visibleHomeBalances = (
  * screen.
  */
 export const PENDING_TX_HINT =
-  "Pending Starknet transactions cannot be sped up or cancelled and usually settle within a few minutes.";
+  "Starknet has no fee-bump or replace-by-fee: a pending transaction can't be sped up, replaced, or cancelled. This is a protocol limitation, not a wallet one, and it usually settles within a few minutes.";
 
 /**
  * Renders one recorded transaction row, shared by the home Activity tab and
@@ -79,6 +80,14 @@ export const transactionRow = (entry: ActivityEntry): string => `
     <button class="icon-button" data-copy="${escapeHtml(entry.hash)}" type="button" aria-label="Copy transaction hash" title="Copy transaction hash">${icon("copy")}</button>
   </li>`;
 
+// Renders the failed-load state with a friendly, actionable line and an
+// in-panel retry that re-runs the balance load (wired in ./index.ts).
+const tokensErrorPanel = (error: string): string => `
+  <div class="panel-error">
+    <p class="empty">${escapeHtml(friendlyNetworkError(error) ?? error)}</p>
+    <button class="ghost small" data-reload-balances type="button" aria-label="Retry loading balances">${icon("refresh")}Try again</button>
+  </div>`;
+
 const tokensPanel = (
   state: BalanceState,
   preferences: WalletPreferences | null,
@@ -90,7 +99,7 @@ const tokensPanel = (
   const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
   return `${
     "error" in state
-      ? `<p class="empty">${escapeHtml(state.error)}</p>`
+      ? tokensErrorPanel(state.error)
       : visible.length === 0
         ? '<p class="empty">No tracked balances yet. Add or detect tokens to see them here.</p>'
         : `<ul class="token-list">${visible
@@ -173,7 +182,7 @@ export const homeTabs = (
       </div>
       <div class="tab-actions" data-tab-actions="tokens">
         <button class="icon-button ghost" data-view="tokens" type="button" aria-label="Manage tokens" title="Manage tokens">${icon("plus")}</button>
-        <button id="refresh-button" class="icon-button ghost" type="button" aria-label="Refresh balances" title="Refresh balances">${icon("refresh")}</button>
+        <button id="refresh-button" class="icon-button ghost" data-reload-balances type="button" aria-label="Refresh balances" title="Refresh balances">${icon("refresh")}</button>
       </div>
       <div class="tab-actions" data-tab-actions="collectibles" hidden>
         <button class="icon-button ghost" data-view="nfts" type="button" aria-label="Manage collectibles" title="Manage collectibles">${icon("plus")}</button>

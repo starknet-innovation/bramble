@@ -70,7 +70,10 @@ const walletStub = {
   },
 };
 
-const makeHarness = (options?: { readonly deployed?: boolean }) => {
+const makeHarness = (options?: {
+  readonly deployed?: boolean;
+  readonly estimateFails?: boolean;
+}) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   let tick = 0;
@@ -90,6 +93,9 @@ const makeHarness = (options?: { readonly deployed?: boolean }) => {
     undefined,
     {
       async estimateInvokeFee() {
+        if (options?.estimateFails) {
+          throw new Error("rpc unavailable");
+        }
         return { overallFee: "2500000000000000", unit: "FRI" };
       },
       async getDeploymentStatus() {
@@ -151,6 +157,7 @@ describe("wallet operations", () => {
       ok: true,
       review: {
         fee: { overallFee: "2500000000000000", unit: "FRI" },
+        feeEstimateFailed: false,
         requiresDeployment: false,
       },
     });
@@ -174,7 +181,29 @@ describe("wallet operations", () => {
       extensionSender,
     );
 
-    expect(response).toMatchObject({ ok: true, review: { fee: null, requiresDeployment: true } });
+    expect(response).toMatchObject({
+      ok: true,
+      review: { fee: null, feeEstimateFailed: false, requiresDeployment: true },
+    });
+  });
+
+  test("review flags a genuine fee-estimate failure on a deployed account", async () => {
+    const { handler } = makeHarness({ deployed: true, estimateFails: true });
+    const response = await handler(
+      {
+        accountId: account.id,
+        amount: "1.5",
+        recipient: "0x777",
+        tokenId,
+        type: "wallet.reviewTransfer",
+      },
+      extensionSender,
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      review: { fee: null, feeEstimateFailed: true, requiresDeployment: false },
+    });
   });
 
   test("transfers are recorded and the activity feed refreshes their status", async () => {

@@ -17,7 +17,11 @@ import type { WalletStatus } from "../src/wallet/vault-service";
 import { flushHeld, latestApprovalId } from "./support/held";
 
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+const recipient = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const origin = "https://example.com";
+// The spec's literal `${openNoteIds[0]}` calldata placeholder, assembled by
+// interpolation so the source carries no bare "${" template token.
+const openNotePlaceholder = `${"$"}{openNoteIds[0]}`;
 const vaultPassphrase = "correct horse battery staple";
 const account: AccountRef = {
   address: "0xabcabcdef",
@@ -184,7 +188,7 @@ describe("background strk20 messages", () => {
     const handler = buildHandler({ invoked });
     const result = await handler(
       {
-        actions: [{ action: "withdraw", amount: "10", token }],
+        actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
         origin,
         simulate: false,
         type: "wallet.strk20PrepareInvoke",
@@ -202,7 +206,7 @@ describe("background strk20 messages", () => {
     const handler = buildHandler({ balance: "0x1" });
     const result = await handler(
       {
-        actions: [{ action: "withdraw", amount: "1000", token }],
+        actions: [{ amount: "0x3e8", recipient, token, type: "withdraw" }],
         origin,
         simulate: false,
         type: "wallet.strk20PrepareInvoke",
@@ -217,8 +221,8 @@ describe("background strk20 messages", () => {
     const result = await handler(
       {
         actions: [
-          { action: "deposit", amount: "5", token },
-          { action: "withdraw", amount: "5", token },
+          { amount: "0x05", token, type: "deposit" },
+          { amount: "0x05", recipient, token, type: "withdraw" },
         ],
         origin,
         simulate: false,
@@ -239,12 +243,61 @@ describe("background strk20 messages", () => {
     expect(toProviderPayload(result, "wallet_strk20PrepareInvoke").error?.code).toBe(114);
   });
 
+  test("prepares an OPEN transfer plus a placeholder-bearing invoke in simulate mode", async () => {
+    const handler = buildHandler();
+    const result = await handler(
+      {
+        actions: [
+          { amount: "OPEN", recipient, token, type: "transfer" },
+          { calldata: ["0x1", openNotePlaceholder], contract: token, type: "invoke" },
+        ],
+        origin,
+        simulate: true,
+        type: "wallet.strk20PrepareInvoke",
+      },
+      contentSender,
+    );
+    expect(result).toEqual({ callAndProof, ok: true });
+    expect(toProviderPayload(result, "wallet_strk20PrepareInvoke")).toEqual({
+      result: callAndProof,
+    });
+  });
+
+  test("prepares a numeric transfer within the private balance", async () => {
+    const handler = buildHandler();
+    const result = await handler(
+      {
+        actions: [{ amount: "0x0a", recipient, token, type: "transfer" }],
+        origin,
+        simulate: false,
+        type: "wallet.strk20PrepareInvoke",
+      },
+      contentSender,
+    );
+    expect(result).toEqual({ callAndProof, ok: true });
+  });
+
+  test("rejects the old `action`-discriminated shape at routing (114)", async () => {
+    const handler = buildHandler();
+    const result = await handler(
+      {
+        actions: [{ action: "withdraw", amount: "10", token }],
+        origin,
+        simulate: false,
+        type: "wallet.strk20PrepareInvoke",
+      },
+      contentSender,
+    );
+    expect(result).toEqual({ error: "invalid strk20 prepare request" });
+    expect(toProviderPayload(result, "wallet_strk20PrepareInvoke").error?.code).toBe(114);
+  });
+
   test("holds the invoke until approval, then submits a padded hash", async () => {
     const invoked: InvokeInput[] = [];
     const handler = buildHandler({ invoked });
     const held = handler(
       {
-        actions: [{ action: "withdraw", amount: "10", token }],
+        actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
         origin,
         type: "wallet.strk20InvokeTransaction",
       },
@@ -325,7 +378,7 @@ describe("background strk20 messages", () => {
     const handler = buildHandler({ invoked });
     const held = handler(
       {
-        actions: [{ action: "withdraw", amount: "10", token }],
+        actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
         origin,
         type: "wallet.strk20InvokeTransaction",
       },
