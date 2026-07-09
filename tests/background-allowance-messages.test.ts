@@ -12,6 +12,10 @@ import type { AccountRef, Vault } from "../src/storage/vault-schema";
 import { flushHeld, latestApprovalId } from "./support/held";
 
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+// Full-length felt so composed allowance ids exercise their real ~205-character
+// length; a short stub spender here once masked an id-length cap that rejected
+// revoking most genuine allowances.
+const SPENDER = `0x7${"5".repeat(62)}`;
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -128,7 +132,7 @@ const makeHarness = () => {
 const submitApprove = async (handler: ReturnType<typeof makeHarness>["handler"]) => {
   const held = handler(
     {
-      calls: [{ calldata: ["0x5", "1000", "0"], contractAddress: TOKEN, entrypoint: "approve" }],
+      calls: [{ calldata: [SPENDER, "1000", "0"], contractAddress: TOKEN, entrypoint: "approve" }],
       origin: "https://dapp.example",
       type: "wallet.addInvokeTransaction",
     },
@@ -150,7 +154,7 @@ describe("allowance manager messages", () => {
     const allowances = (response as { allowances: readonly { amount: string; spender: string }[] })
       .allowances;
     expect(allowances).toHaveLength(1);
-    expect(allowances[0]).toMatchObject({ amount: "1000", spender: "0x5" });
+    expect(allowances[0]).toMatchObject({ amount: "1000", spender: SPENDER });
   });
 
   test("requires an extension page to list allowances", async () => {
@@ -173,7 +177,7 @@ describe("allowance manager messages", () => {
 
     const revokeCall = invokeCalls.at(-1)?.[0] as { calldata: string[]; entrypoint: string };
     expect(revokeCall.entrypoint).toBe("approve");
-    expect(revokeCall.calldata).toEqual(["5", "0", "0"]);
+    expect(revokeCall.calldata).toEqual([BigInt(SPENDER).toString(), "0", "0"]);
 
     const after = (await handler({ type: "wallet.allowances" }, extensionSender)) as {
       allowances: readonly unknown[];
