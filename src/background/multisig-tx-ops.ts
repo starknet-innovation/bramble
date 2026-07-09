@@ -248,6 +248,11 @@ export const handleMultisigTxOps = async (
     if (status.state === "executed" || status.state === "not-found") {
       return { error: `cannot confirm a proposal that is ${status.state}` };
     }
+    if (status.state === "confirmed") {
+      return {
+        error: "proposal already has quorum — execute it instead of adding more confirmations",
+      };
+    }
     if (status.confirmedBySigner) {
       return { error: "this account has already confirmed this proposal" };
     }
@@ -441,11 +446,12 @@ export const handleMultisigTxOps = async (
       return { error: "a multisig with these signers and salt already exists — watch it instead" };
     }
     const activities = await deps.activity.list();
+    const addressSuffix = address.slice(-12);
     const hasPendingDeploy = activities.some(
       (entry) =>
         entry.accountId === context.account.id &&
         entry.networkId === context.networkId &&
-        entry.summary.startsWith(`Deploy multisig (${input.quorum} of ${input.signers.length})`) &&
+        entry.summary.includes(addressSuffix) &&
         entry.status === "pending",
     );
     if (hasPendingDeploy) {
@@ -455,7 +461,6 @@ export const handleMultisigTxOps = async (
       };
     }
     const call = buildMultisigDeployCall(config);
-    const report = verifyCalls([call], verificationContext(context.account, preferences));
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
       calls: [call],
@@ -467,8 +472,7 @@ export const handleMultisigTxOps = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.networkId,
-      summary:
-        report.calls[0]?.summary ?? `Deploy multisig (${input.quorum} of ${input.signers.length})`,
+      summary: `Deploy multisig (${input.quorum} of ${input.signers.length}) at ${shortAddress(address)}`,
     });
     return { address, ok: true, transactionHash: result.transactionHash };
   }

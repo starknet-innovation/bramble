@@ -218,4 +218,18 @@ describe("multisig action status gates", () => {
     ).resolves.toEqual({ error: "cannot execute a proposal that is pending" });
     expect(invokeCalls).toHaveLength(0);
   });
+
+  test("refuses to confirm when proposal already has quorum", async () => {
+    const { handler, invokeCalls, proposal } = await makeHarness({
+      confirmations: 2,
+      confirmedBySigner: false,
+      state: "confirmed",
+    });
+    await expect(
+      handler(actionMessage("wallet.confirmMultisigProposal", proposal.id), extensionSender),
+    ).resolves.toEqual({
+      error: "proposal already has quorum — execute it instead of adding more confirmations",
+    });
+    expect(invokeCalls).toHaveLength(0);
+  });
 });

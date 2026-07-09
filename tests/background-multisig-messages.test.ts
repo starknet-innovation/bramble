@@ -241,24 +241,30 @@ describe("multisig messages", () => {
     ]);
   });
 
-  test("confirms and executes a proposal submitted through this wallet", async () => {
-    const { handler, invokeCalls } = makeHarness({ state: "confirmed" });
+  test("confirms a pending proposal", async () => {
+    const { handler, invokeCalls } = makeHarness({ state: "pending" });
     const watched = (await watch(handler)) as { multisig: { id: string } };
-    const proposed = (await propose(handler, watched.multisig.id)) as {
+    const { proposal } = (await propose(handler, watched.multisig.id)) as {
       proposal: MultisigProposalRecord;
     };
-
     const confirm = await handler(
-      { proposalId: proposed.proposal.id, type: "wallet.confirmMultisigProposal" },
+      { proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
       extensionSender,
     );
     expect(confirm).toEqual({ ok: true, transactionHash: "0x7cd" });
     expect((invokeCalls.at(-1)?.[0] as { entrypoint: string }).entrypoint).toBe(
       "confirm_transaction",
     );
+  });
 
+  test("executes a proposal with quorum", async () => {
+    const { handler, invokeCalls } = makeHarness({ state: "confirmed" });
+    const watched = (await watch(handler)) as { multisig: { id: string } };
+    const { proposal } = (await propose(handler, watched.multisig.id)) as {
+      proposal: MultisigProposalRecord;
+    };
     const execute = await handler(
-      { proposalId: proposed.proposal.id, type: "wallet.executeMultisigProposal" },
+      { proposalId: proposal.id, type: "wallet.executeMultisigProposal" },
       extensionSender,
     );
     expect(execute).toEqual({ ok: true, transactionHash: "0x7cd" });
