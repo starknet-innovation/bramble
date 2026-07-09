@@ -73,6 +73,32 @@ Migrations must be deterministic. See README "Migration Workflow".
 - Commit style follows the existing history: imperative summary line, optional scope prefix like
   `ci:`, body explains the why.
 
+## Reuse before writing (anti-drift)
+
+This repo has been built by multiple agents in sequence, and every real consistency bug so far
+came from one agent re-deriving something another agent had already written. Before writing a
+helper, a constant, a validator, or a test stub, **grep for it first** — if something close
+exists, use or extend it in place rather than adding a sibling.
+
+- Felt helpers live in `src/starknet/networks.ts` (`sameFelt`, `canonicalFelt`,
+  `isStarkFieldElement`, …). Never re-implement numeric felt comparison or `0x` canonicalization
+  locally — three drifted copies of `sameFelt` once shipped.
+- Cross-layer limits are single-sourced (e.g. `MULTISIG_LIMITS` in `src/starknet/multisig.ts`,
+  consumed by inputs, storage, and deploy code). A limit that appears in two files as separate
+  literals will eventually desynchronize.
+- Background message tests use the shared harness factories in `tests/support/` (e.g.
+  `makeMultisigHarness`) instead of re-declaring wallet/RPC stubs per file, and
+  `createMessageHandler` takes named options — wire collaborators by key, never positionally.
+- Two lists are enforced-derived and will fail tests if you bypass them: the dapp-reachable
+  message allowlist (`DAPP_MESSAGES` in `src/background/senders.ts`, checked against the
+  provider-bridge sources) and the key-boundary scan catalog
+  (`tests/support/key-boundary-messages.ts`, checked against every handled `wallet.*` type). A
+  new message type must be added to the catalog (and to `DAPP_MESSAGES` only if deliberately
+  dapp-facing).
+- Activity summaries are load-bearing: dedup guards match on them (see
+  `src/background/multisig-tx-ops.ts`). Record deterministic, specific summaries, and never
+  change one without checking what greps for it.
+
 ## Cursor Cloud specific instructions
 
 The VM snapshot already has `bun`, `wasm-pack 0.13.1`, and a Rust toolchain on `PATH`, and the

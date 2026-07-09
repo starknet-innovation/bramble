@@ -6,6 +6,7 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { sameFelt } from "../starknet/networks";
 import type {
   MultisigProposalCall,
   MultisigProposalRecord,
@@ -14,14 +15,6 @@ import type {
 import type { AccountRef } from "../storage/vault-schema";
 import { icon } from "./icons";
 import { accountLabel, copyButton, flowHeader, flowScreen, noAccountEmpty } from "./parts";
-
-const sameFelt = (left: string, right: string): boolean => {
-  try {
-    return BigInt(left) === BigInt(right);
-  } catch {
-    return false;
-  }
-};
 
 const multisigDisplayName = (record: MultisigRecord): string =>
   record.name ?? accountLabel(record.address);

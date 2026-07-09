@@ -108,26 +108,27 @@ describe("background network messages", () => {
         },
       },
       "extension-id",
-      session,
-      undefined,
       {
-        ...unavailablePreferencesStore,
-        async read() {
-          return preferences;
+        preferencesStore: {
+          ...unavailablePreferencesStore,
+          async read() {
+            return preferences;
+          },
+          async saveAddress() {
+            throw new Error("unused");
+          },
+          async setActiveNetwork(networkId) {
+            preferences = { ...preferences, activeNetworkId: networkId };
+            return preferences;
+          },
+          async setRpcOverride() {
+            throw new Error("unused");
+          },
+          async upsertToken() {
+            throw new Error("unused");
+          },
         },
-        async saveAddress() {
-          throw new Error("unused");
-        },
-        async setActiveNetwork(networkId) {
-          preferences = { ...preferences, activeNetworkId: networkId };
-          return preferences;
-        },
-        async setRpcOverride() {
-          throw new Error("unused");
-        },
-        async upsertToken() {
-          throw new Error("unused");
-        },
+        session,
       },
     );
 
@@ -204,59 +205,60 @@ describe("background network messages", () => {
         },
       },
       "extension-id",
-      session,
-      undefined,
       {
-        ...unavailablePreferencesStore,
-        async read() {
-          return preferences;
+        preferencesStore: {
+          ...unavailablePreferencesStore,
+          async read() {
+            return preferences;
+          },
+          async saveAddress() {
+            throw new Error("unused");
+          },
+          async setActiveNetwork(networkId) {
+            preferences = { ...preferences, activeNetworkId: networkId };
+            return preferences;
+          },
+          async setRpcOverride() {
+            throw new Error("unused");
+          },
+          async upsertToken() {
+            throw new Error("unused");
+          },
         },
-        async saveAddress() {
-          throw new Error("unused");
+        runtimeRpc: {
+          async estimateInvokeFee() {
+            return { overallFee: "1", unit: "FRI" };
+          },
+          async getDeploymentStatus() {
+            return true;
+          },
+          async getNftOwner() {
+            return "0x0";
+          },
+          async getTransactionStatuses() {
+            return {};
+          },
+          async getTokenBalances() {
+            return [];
+          },
+          async getTokenMetadata() {
+            return { decimals: 18, name: "Token", symbol: "TKN" };
+          },
+          async submitDeclareTransaction() {
+            return { classHash: "0x1", transactionHash: "0x1" };
+          },
+          async submitAccountDeployment() {
+            throw new Error("unused");
+          },
+          async submitErc20Transfer() {
+            throw new Error("unused");
+          },
+          async submitInvokeTransaction(input) {
+            invoked.push(input);
+            return { calls: input.calls, transactionHash: "0x123" };
+          },
         },
-        async setActiveNetwork(networkId) {
-          preferences = { ...preferences, activeNetworkId: networkId };
-          return preferences;
-        },
-        async setRpcOverride() {
-          throw new Error("unused");
-        },
-        async upsertToken() {
-          throw new Error("unused");
-        },
-      },
-      {
-        async estimateInvokeFee() {
-          return { overallFee: "1", unit: "FRI" };
-        },
-        async getDeploymentStatus() {
-          return true;
-        },
-        async getNftOwner() {
-          return "0x0";
-        },
-        async getTransactionStatuses() {
-          return {};
-        },
-        async getTokenBalances() {
-          return [];
-        },
-        async getTokenMetadata() {
-          return { decimals: 18, name: "Token", symbol: "TKN" };
-        },
-        async submitDeclareTransaction() {
-          return { classHash: "0x1", transactionHash: "0x1" };
-        },
-        async submitAccountDeployment() {
-          throw new Error("unused");
-        },
-        async submitErc20Transfer() {
-          throw new Error("unused");
-        },
-        async submitInvokeTransaction(input) {
-          invoked.push(input);
-          return { calls: input.calls, transactionHash: "0x123" };
-        },
+        session,
       },
     );
 

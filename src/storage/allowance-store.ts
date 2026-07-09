@@ -8,6 +8,7 @@
 
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
@@ -48,14 +49,6 @@ export type AllowanceStore = {
   readonly list: () => Promise<readonly AllowanceRecord[]>;
   readonly record: (entry: AllowanceInput) => Promise<void>;
   readonly remove: (id: string) => Promise<void>;
-};
-
-const canonicalFelt = (value: string): string | null => {
-  try {
-    return `0x${BigInt(value).toString(16)}`;
-  } catch {
-    return null;
-  }
 };
 
 const isAmount = (value: unknown): value is string =>

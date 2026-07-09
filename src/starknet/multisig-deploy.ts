@@ -13,6 +13,7 @@ import type { Call, RpcProvider } from "starknet";
 import { CallData, constants, hash } from "starknet";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
+import { MULTISIG_LIMITS } from "./multisig";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
 import { withRpcFallback } from "./provider";
 
@@ -37,7 +38,7 @@ export const MULTISIG_COMPILED_CLASS_HASH =
  */
 export const MULTISIG_CLASS_ARTIFACT = "vendor/multisig/multisig.contract_class.json";
 
-const MAX_DEPLOY_SIGNERS = 32;
+const MAX_DEPLOY_SIGNERS = MULTISIG_LIMITS.signers;
 
 /**
  * Constructor configuration for a new multisig: initial signer set and

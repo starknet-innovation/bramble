@@ -199,14 +199,11 @@ export const buildHarness = (): Harness => {
   };
   const session = createUnlockSession();
   session.unlock(VAULT_PASSPHRASE);
-  const handler = createMessageHandler(
-    walletStub(bump),
-    EXTENSION_ID,
+  const handler = createMessageHandler(walletStub(bump), EXTENSION_ID, {
+    preferencesStore: preferencesStub(bump),
+    runtimeRpc: rpcStub(bump),
     session,
-    undefined,
-    preferencesStub(bump),
-    rpcStub(bump),
-  );
+  });
   return { handler, spy };
 };
 

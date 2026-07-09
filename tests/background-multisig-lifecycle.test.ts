@@ -9,6 +9,7 @@ import type { MultisigProposalStatus } from "../src/starknet/multisig";
 import { predictMultisigAddress } from "../src/starknet/multisig-deploy";
 import type { MultisigProposalRecord } from "../src/storage/multisig-store";
 import {
+  HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,
   HARNESS_TARGET,
   harnessAccount,
@@ -23,13 +24,7 @@ const deployRequest = {
 };
 
 const watch = (handler: ReturnType<typeof makeMultisigHarness>["handler"]) =>
-  handler(
-    {
-      address: "0x111111111111111111111111111111111111111111111111111111111111111",
-      type: "wallet.addMultisig",
-    },
-    harnessExtensionSender,
-  );
+  handler({ address: HARNESS_MULTISIG, type: "wallet.addMultisig" }, harnessExtensionSender);
 
 const propose = (handler: ReturnType<typeof makeMultisigHarness>["handler"], multisigId: string) =>
   handler(

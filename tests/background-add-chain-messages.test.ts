@@ -88,13 +88,11 @@ const makeHarness = () => {
   const session = createUnlockSession();
   const approvals = createApprovalQueue();
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(
-    walletStub(),
-    "extension-id",
-    session,
+  const handler = createMessageHandler(walletStub(), "extension-id", {
     approvals,
     preferencesStore,
-  );
+    session,
+  });
   return { handler, preferencesStore };
 };
 
