@@ -3,7 +3,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance } from "../src/popup/responses";
-import { balanceRow, compactAmount } from "../src/sidepanel/token-row";
+import { balanceRow, compactAmount, tokenGlyph } from "../src/sidepanel/token-row";
 
 const token: TokenBalance = {
   address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
@@ -32,6 +32,19 @@ describe("balanceRow", () => {
   test("omits the change badge when no change is known", () => {
     const html = balanceRow(token, 2000, undefined, "usd");
     expect(html).not.toContain("token-change");
+  });
+
+  // Logos moved from 128px raster <img> to inline vector <svg> so they stay
+  // crisp on high-DPI displays; unknown tokens still fall back to a letter badge.
+  test("renders a bundled token logo as an inline vector svg", () => {
+    const glyph = tokenGlyph(token.address, token.symbol);
+    expect(glyph).toContain('<svg class="token-logo"');
+    expect(glyph).not.toContain("<img");
+  });
+
+  test("falls back to a letter badge for an unknown token", () => {
+    const glyph = tokenGlyph("0x1234", "FOO");
+    expect(glyph).toBe('<span class="token-mark">FOO</span>');
   });
 
   test("compactAmount groups thousands and trims trailing zeros", () => {
