@@ -69,3 +69,21 @@ Migrations must be deterministic. See README "Migration Workflow".
   path that may expose secret material).
 - Commit style follows the existing history: imperative summary line, optional scope prefix like
   `ci:`, body explains the why.
+
+## Cursor Cloud specific instructions
+
+The VM snapshot already has `bun`, `wasm-pack 0.13.1`, and a Rust toolchain on `PATH`, and the
+Krusty KMS WASM package is already vendored — so `bun run check`, `bun run build`, and
+`bun run package:extension` run out of the box. The startup update script only runs
+`bun install --frozen-lockfile`; everything else below is background context, not steps to re-run.
+
+- Rust default toolchain must be **stable** (currently 1.96+); an `edition2024` transitive dep
+  fails to build under the older pinned 1.83 that some base images ship. If `bun run vendor:krusty`
+  ever fails with an `edition2024`/`feature not stabilized` error, run `rustup default stable`.
+- `vendor/krusty-kms/` persists in the snapshot (git-ignored). If it is missing (e.g. a clean
+  checkout), regenerate it with `bun run vendor:krusty` (needs network + `wasm-pack` + Rust). This
+  is the only build-like setup step and is intentionally kept out of the update script.
+- There is **no dev server / watch mode**: this is a Chrome MV3 extension. To run/verify it,
+  `bun run build` then load the `dist/` folder as an unpacked extension at `chrome://extensions`
+  (Developer mode on), and open the side panel from the toolbar action. Re-run `bun run build` and
+  reload the extension in Chrome to pick up source changes.
