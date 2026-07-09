@@ -308,6 +308,25 @@ describe("multisig messages", () => {
     );
     expect(confirm).toEqual({ ok: true, transactionHash: "0x7cd" });
 
+    await expect(
+      handler(
+        { proposalId: tracked.proposal.id, type: "wallet.revokeMultisigConfirmation" },
+        extensionSender,
+      ),
+    ).resolves.toMatchObject({
+      error: expect.stringContaining("verify this proposal"),
+    });
+
+    const revoke = await handler(
+      {
+        proposalId: tracked.proposal.id,
+        type: "wallet.revokeMultisigConfirmation",
+        untrackedVerified: true,
+      },
+      extensionSender,
+    );
+    expect(revoke).toEqual({ ok: true, transactionHash: "0x7cd" });
+
     const execute = await handler(
       { proposalId: tracked.proposal.id, type: "wallet.executeMultisigProposal" },
       extensionSender,
