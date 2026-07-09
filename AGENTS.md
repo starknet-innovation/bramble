@@ -11,7 +11,9 @@ bun install --frozen-lockfile
 bun run vendor:krusty        # required once before check/build (clones + wasm-pack builds Krusty KMS)
 bun run vendor:multisig      # required once before check/build (scarb-builds contracts/multisig)
 bun run check                # types + lint + file/config standards + manifest + krusty/multisig pins + tests
+bun run test:e2e:install     # Playwright Chromium + system deps (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
+bun run test:e2e             # Playwright extension E2E (requires dist/)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 ```
 
@@ -21,10 +23,11 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
   outputs, `check:krusty`/`check:multisig` and `build` fail — that is expected in offline
   sandboxes; run the rest of the gates and say so.
 - Narrower loops while iterating: `bun test tests/<name>.test.ts`, `bun run check:types`,
-  `bun run check:lint`. Always finish with the full `bun run check`.
+  `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the
+  full `bun run check`.
 - `bun run format` (Biome) fixes formatting/lint; Biome owns style, don't hand-format.
-- CI (`.github/workflows/ci.yml`) runs exactly the gates above plus `package:extension`. Do not
-  merge around a failing gate.
+- CI (`.github/workflows/ci.yml`) runs exactly the gates above plus `test:e2e` and
+  `package:extension`. Do not merge around a failing gate.
 
 ## Layout
 
