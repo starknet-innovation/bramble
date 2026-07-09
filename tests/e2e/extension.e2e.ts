@@ -7,8 +7,8 @@ import { expect, test } from "./fixtures";
 import { startTestDapp } from "./test-dapp-server";
 import {
   createWalletFromGeneratedPhrase,
-  importWalletFromPhrase,
   IMPORT_MNEMONIC,
+  importWalletFromPhrase,
   resolveConnectionApproval,
   unlockWallet,
 } from "./wallet-helpers";

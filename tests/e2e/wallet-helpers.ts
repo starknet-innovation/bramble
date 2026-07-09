@@ -19,13 +19,11 @@ const phraseWords = (phrase: string): readonly string[] =>
  */
 export const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> => {
   const words = phraseWords(phrase);
-  await Promise.all(
-    BACKUP_VERIFY_POSITIONS.map((position, index) =>
-      sidepanel
-        .locator(`input[name="verify-${index}"]`)
-        .fill(words[position - 1] ?? ""),
-    ),
-  );
+  await expect(sidepanel.locator("#backup-verify")).toBeVisible();
+  for (const [index, position] of BACKUP_VERIFY_POSITIONS.entries()) {
+    await sidepanel.locator(`input[name="verify-${index}"]`).fill(words[position - 1] ?? "");
+  }
+  await expect(sidepanel.locator("#verify-result")).toHaveText("Confirmed");
 };
 
 /**
@@ -40,7 +38,6 @@ export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<
   const phrase = await phraseInput.inputValue();
   await fillBackupVerify(sidepanel, phrase);
   await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
-  await expect(sidepanel.getByRole("button", { name: "Create wallet" })).toBeEnabled();
   await sidepanel.getByRole("button", { name: "Create wallet" }).click();
   await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
 };

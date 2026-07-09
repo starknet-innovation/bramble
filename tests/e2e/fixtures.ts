@@ -9,7 +9,7 @@ type WalletFixtures = {
 };
 
 export const test = base.extend<WalletFixtures>({
-  extension: async (_fixtures, use) => {
+  extension: async ({ browserName: _browserName }, use) => {
     const extension = await launchExtension();
     try {
       await use(extension);
