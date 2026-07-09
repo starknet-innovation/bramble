@@ -164,7 +164,7 @@ export const showToast = (message: string, tone: ToastTone): void => {
   }
 
   const toast = document.createElement("div");
-  toast.className = `toast glass ${tone}`;
+  toast.className = `toast ${tone}`;
   const text = document.createElement("span");
   text.className = "toast-text";
   text.textContent = message;

@@ -22,11 +22,13 @@ export const HOME_STYLES = `
     transition: opacity var(--spring-drawer-ms) var(--ease-drawer);
   }
   .drawer-root[data-open="true"] .drawer-backdrop { opacity: 1; }
-  /* Left sheet on the Liquid Glass material (background/blur/shadow from .glass),
+  /* Left sheet: a solid panel with a hairline edge and a soft depth shadow,
      settling with the iOS drawer spring. Enter and exit share one path. */
   .account-drawer {
+    background: var(--mc-panel);
     border-radius: 0 ${RADIUS.xl} ${RADIUS.xl} 0;
     bottom: 0;
+    box-shadow: var(--mc-edge), var(--mc-elev-lg);
     display: flex;
     flex-direction: column;
     gap: ${SPACE.md};
@@ -135,6 +137,7 @@ export const HOME_STYLES = `
   button.collectible-card {
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     color: var(--mc-text);
     display: grid;
     gap: ${SPACE.sm};
@@ -149,7 +152,7 @@ export const HOME_STYLES = `
     width: 100%;
   }
   button.collectible-card:not(:disabled):hover { background: var(--mc-hover); }
-  button.collectible-card:not(:disabled):active { background: var(--mc-soft-press); box-shadow: none; transform: scale(0.97); }
+  button.collectible-card:not(:disabled):active { background: var(--mc-soft-press); box-shadow: var(--mc-edge); transform: scale(0.97); }
 
   /* Hover lift is gated to fine pointers so a tap on touch never leaves an
      element floating (touch fires a phantom :hover). Pointer devices get the
@@ -157,7 +160,7 @@ export const HOME_STYLES = `
   @media (hover: hover) and (pointer: fine) {
     button.action-tile:not(:disabled):hover,
     button.collectible-card:not(:disabled):hover {
-      box-shadow: var(--mc-shadow-sm);
+      box-shadow: var(--mc-edge), var(--mc-shadow-sm);
       transform: translateY(-2px);
     }
   }
@@ -200,11 +203,10 @@ export const HOME_STYLES = `
   .shell-animate .token-list li:nth-child(4) { animation-delay: 130ms; }
   .shell-animate .token-list li:nth-child(5) { animation-delay: 160ms; }
   .shell-animate .token-list li:nth-child(6) { animation-delay: 190ms; }
-  /* screen-enter and panel-enter wrap the glass surfaces, so their end frame
-     omits the transform: with fill-mode both the container reverts to
-     transform:none once the entrance ends, leaving no backdrop-root that would
-     stop the glass inside from refracting the aurora (see ./styles-aurora.ts).
-     rise-in stays on leaf surfaces, where a settled transform is harmless. */
+  /* Entrances are small, GPU-only (opacity + a few px of translate) and settle
+     under 300ms. screen-enter and panel-enter drop their transform in the end
+     frame so containers leave nothing lingering; rise-in stays on leaf
+     surfaces, where a settled transform is harmless. */
   @keyframes screen-enter {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; }

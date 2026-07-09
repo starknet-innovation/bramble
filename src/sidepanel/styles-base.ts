@@ -4,9 +4,11 @@
  * tiles, dock, flow chrome, and list rows. Composed with the component layer
  * in ./styles.ts and the home/motion layer in ./styles-home.ts.
  *
- * Surface rules: solid fills only (no gradients), structure carried by
- * elevation instead of borders; list rows are flat fills separated by space,
- * never boxes nested inside boxes.
+ * Surface rules ("Clean Mono"): solid fills only (no gradients, no glass),
+ * structure carried by gentle low elevation and hairline edges; list rows are
+ * flat fills separated by space, never boxes nested inside boxes. The single
+ * emerald accent is reserved for the primary CTA, active states, and positive
+ * deltas — everything else stays in the near-mono neutral palette.
  */
 import { CONTROL, FONT, MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
 
@@ -19,17 +21,20 @@ export const BASE_STYLES = `
     color-scheme: dark;
     --mc-font-mono: ${FONT.mono};
     --mc-font-ui: ${FONT.ui};
-    --mc-soft: var(--mc-elevated);
-    --mc-hover: color-mix(in srgb, var(--mc-text) 7%, var(--mc-elevated));
-    --mc-soft-press: color-mix(in srgb, var(--mc-text) 12%, var(--mc-elevated));
-    --mc-accent-hover: color-mix(in srgb, var(--mc-text) 12%, var(--mc-accent));
-    --mc-accent-press: color-mix(in srgb, var(--mc-text) 22%, var(--mc-accent));
-    --mc-accent-soft: color-mix(in srgb, var(--mc-accent) 16%, var(--mc-panel));
-    --mc-positive-soft: color-mix(in srgb, var(--mc-positive) 15%, var(--mc-panel));
-    --mc-danger-soft: color-mix(in srgb, var(--mc-danger) 14%, var(--mc-panel));
-    --mc-hairline: color-mix(in srgb, var(--mc-text) 8%, transparent);
-    --mc-shadow: 0 20px 50px color-mix(in srgb, var(--mc-bg) 72%, transparent);
-    --mc-shadow-sm: 0 6px 18px color-mix(in srgb, var(--mc-bg) 55%, transparent);
+    /* Recessed group fill (tab tracks, permission/sign panels). */
+    --mc-soft: var(--mc-sunken);
+    --mc-hover: color-mix(in srgb, var(--mc-text) 6%, var(--mc-elevated));
+    --mc-soft-press: color-mix(in srgb, var(--mc-text) 11%, var(--mc-elevated));
+    --mc-accent-hover: color-mix(in srgb, var(--mc-text) 10%, var(--mc-accent));
+    --mc-accent-press: color-mix(in srgb, var(--mc-text) 18%, var(--mc-accent));
+    /* The accent tint stays whisper-quiet — enough to read as "active" without
+       becoming a second colour field. */
+    --mc-accent-soft: color-mix(in srgb, var(--mc-accent) 13%, var(--mc-panel));
+    --mc-positive-soft: color-mix(in srgb, var(--mc-positive) 13%, var(--mc-panel));
+    --mc-danger-soft: color-mix(in srgb, var(--mc-danger) 12%, var(--mc-panel));
+    --mc-faint: color-mix(in srgb, var(--mc-muted) 58%, var(--mc-bg));
+    --mc-shadow: var(--mc-elev-lg);
+    --mc-shadow-sm: var(--mc-elev-sm);
   }
   * { box-sizing: border-box; }
   html, body, #app { min-height: 100%; }
@@ -56,7 +61,7 @@ export const BASE_STYLES = `
     padding: ${SPACE.md} ${SPACE.lg} ${SPACE.md};
   }
   .screen { align-content: start; display: grid; flex: 1; gap: ${SPACE.lg}; }
-  /* Dock screens scroll their content UNDER the floating glass dock. Reserve
+  /* Dock screens scroll their content UNDER the floating dock. Reserve
      clearance below the content equal to the dock footprint (nav height + its
      padding + its bottom offset) plus a gap, so the last row never hides beneath
      the sticky dock at any scroll position. Flow screens carry no dock. */
@@ -206,6 +211,7 @@ export const BASE_STYLES = `
     align-content: center;
     background: var(--mc-elevated);
     border-radius: ${RADIUS.lg};
+    box-shadow: var(--mc-edge);
     color: var(--mc-text);
     display: grid;
     gap: 6px;
@@ -220,7 +226,7 @@ export const BASE_STYLES = `
   button.action-tile:not(:disabled):hover { background: var(--mc-hover); }
   button.action-tile:not(:disabled):active {
     background: var(--mc-soft-press);
-    box-shadow: none;
+    box-shadow: var(--mc-edge);
     transform: translateY(0) scale(0.96);
   }
   button.action-tile:disabled { cursor: not-allowed; opacity: 0.4; }
@@ -236,11 +242,14 @@ export const BASE_STYLES = `
   .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: 650; }
   .tile-icon .icon { height: 20px; width: 20px; }
 
-  /* Bottom dock: floating translucent nav on the shared Liquid Glass material
-     (see .glass in ./styles-material.ts) — content scrolls under it. */
+  /* Bottom dock: a floating solid nav card — hairline edge + a gentle low
+     shadow lift it a hair off the page while content scrolls under it. Flat,
+     no glass. */
   .wallet-dock {
+    background: var(--mc-panel);
     border-radius: ${RADIUS.lg};
     bottom: ${SPACE.sm};
+    box-shadow: var(--mc-edge), var(--mc-elev-md);
     display: grid;
     gap: 2px;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -302,6 +311,7 @@ export const BASE_STYLES = `
   button.menu-row, button.option-row, a.menu-row {
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     color: var(--mc-text);
     justify-content: flex-start;
     min-height: 58px;

@@ -1,14 +1,14 @@
 /**
- * Light wallet skin. The dark `midnight` skin is the default build; this is
- * the light alternate selected through the theme preference. Cool porcelain
- * surfaces with a deep emerald signal color and up/down semantics. Contrasts
- * meet WCAG AA on their ground.
+ * Light wallet skin — the "Clean Mono" daylight theme. The dark `midnight`
+ * skin is the default build; this is the light alternate selected through the
+ * theme preference. Cool porcelain surfaces on a soft neutral background with a
+ * single deep-emerald accent and dedicated up/down semantics for gains and
+ * losses. Quiet-luxury minimalism — flat and legible, not glass.
  *
- * The three `--mc-aurora-*` hues drive the ambient depth layer behind the
- * Liquid Glass panels (see ../sidepanel/styles-aurora.ts): a bright, airy
- * mint → periwinkle → aqua wash so the frosted surfaces read as sunlit glass.
- * They are background light, not foreground ink — never used for text — and the
- * aurora layer keeps them soft so text over the glass stays legible.
+ * Surfaces step in three quiet tiers: `--mc-sunken` for recessed group
+ * containers, `--mc-panel` (pure white) for cards, and `--mc-elevated` for
+ * controls and rows. Separation is carried by hairline edges and gentle low
+ * shadows. Contrasts meet WCAG AA on their ground.
  */
 import type { Skin } from "./skin";
 
@@ -20,16 +20,14 @@ export const defaultSkin: Skin = {
   tokens: {
     "--mc-accent": "#0a7a4d",
     "--mc-accent-text": "#ffffff",
-    "--mc-aurora-1": "#38d3a0",
-    "--mc-aurora-2": "#8aa6ff",
-    "--mc-aurora-3": "#53d8d1",
-    "--mc-bg": "#eef1f6",
+    "--mc-bg": "#f4f6f8",
     "--mc-border": "#e2e6ec",
     "--mc-danger": "#c23434",
-    "--mc-elevated": "#eceff3",
+    "--mc-elevated": "#eef1f4",
     "--mc-muted": "#5f6772",
     "--mc-panel": "#ffffff",
     "--mc-positive": "#0a7a4d",
+    "--mc-sunken": "#f0f2f5",
     "--mc-text": "#12141a",
   },
 };

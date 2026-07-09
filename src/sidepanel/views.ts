@@ -95,7 +95,7 @@ const dockItem = (
   </button>`;
 
 const walletDock = (activeView: WalletView, pendingCount: number): string => `
-  <nav class="wallet-dock glass" aria-label="Wallet screens" role="tablist">
+  <nav class="wallet-dock" aria-label="Wallet screens" role="tablist">
     ${dockItem(activeView, "home", "Home", "home")}
     ${dockItem(activeView, "activity", "Activity", "activity", pendingCount)}
     ${dockItem(activeView, "settings", "Settings", "settings")}

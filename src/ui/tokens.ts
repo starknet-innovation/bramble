@@ -127,16 +127,17 @@ export const SIZE = {
 } as const;
 
 /**
- * Elevation / shadow scale, tinted by the active skin background through
- * `color-mix` so shadows read correctly in both light and dark. `glass` is the
- * depth shadow paired with the Liquid Glass material. Bigger surfaces should
- * step up the scale (deeper blur + shadow) to read as thicker.
+ * Elevation / shadow scale for the "Clean Mono" look: gentle, low, near-diffuse
+ * shadows tinted by the active skin background through `color-mix` so they read
+ * correctly in both light and dark. Elevation is deliberately restrained —
+ * cards lift by a hair, floating chrome (dock, drawer) by a little more — so the
+ * interface stays flat and calm rather than glossy. Structure is carried mostly
+ * by hairline edges; these shadows only add the softest separation.
  */
 export const SHADOW = {
-  glass: "0 8px 30px color-mix(in srgb, var(--mc-bg) 65%, transparent)",
-  lg: "0 20px 50px color-mix(in srgb, var(--mc-bg) 72%, transparent)",
-  md: "0 12px 32px color-mix(in srgb, var(--mc-bg) 62%, transparent)",
-  sm: "0 6px 18px color-mix(in srgb, var(--mc-bg) 55%, transparent)",
+  lg: "0 24px 60px color-mix(in srgb, var(--mc-bg) 55%, transparent)",
+  md: "0 12px 30px color-mix(in srgb, var(--mc-bg) 45%, transparent)",
+  sm: "0 4px 14px color-mix(in srgb, var(--mc-bg) 34%, transparent)",
   xs: "0 1px 2px color-mix(in srgb, var(--mc-bg) 40%, transparent)",
 } as const;
 

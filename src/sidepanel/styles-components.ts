@@ -142,12 +142,25 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
      cards (callout, review panel, request/nft cards) carry their own single
      border below. */
   .section { display: grid; gap: ${SPACE.md}; }
+  /* Callout: a neutral panel card; the accent lives only in the leading icon
+     chip, so a waiting request draws the eye without turning the surface green. */
   .callout {
-    background: var(--mc-accent-soft);
+    background: var(--mc-panel);
     border-radius: ${RADIUS.lg};
+    box-shadow: var(--mc-edge);
     padding: ${SPACE.md} ${SPACE.lg};
   }
-  .callout-icon { color: var(--mc-accent); display: inline-flex; flex: none; }
+  .callout-icon {
+    align-items: center;
+    background: var(--mc-accent-soft);
+    border-radius: ${RADIUS.sm};
+    color: var(--mc-accent);
+    display: inline-flex;
+    flex: none;
+    height: 34px;
+    justify-content: center;
+    width: 34px;
+  }
   .deploy-notice { display: grid; gap: 2px; justify-items: start; }
   button.deploy-chip { color: var(--mc-danger); }
   button.deploy-chip:not(:disabled):hover, button.deploy-chip:not(:disabled):active {
@@ -171,6 +184,7 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
   .address-line {
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     padding: ${SPACE.sm} ${SPACE.sm} ${SPACE.sm} ${SPACE.md};
   }
   .address-line code { flex: 1; }
@@ -179,6 +193,7 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
     align-items: center;
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     display: flex;
     gap: ${SPACE.md};
     padding: ${SPACE.md};
@@ -188,11 +203,13 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
   }
   li.token-row:hover { background: var(--mc-hover); }
   li.token-row:has(button.token-open:active) { background: var(--mc-soft-press); transform: scale(0.985); }
+  /* Token glyph: a neutral chip — the accent is reserved for signal, not logos. */
   .token-mark {
     align-items: center;
-    background: var(--mc-accent-soft);
+    background: var(--mc-sunken);
     border-radius: ${RADIUS.full};
-    color: var(--mc-accent);
+    box-shadow: var(--mc-edge);
+    color: var(--mc-muted);
     display: inline-flex;
     flex: none;
     font-size: 11px;
@@ -272,6 +289,7 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
     align-items: center;
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     display: flex;
     gap: ${SPACE.sm};
     min-width: 0;
@@ -298,8 +316,9 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
   .tx-status.accepted { color: var(--mc-accent); }
   .tx-status.reverted, .tx-status.rejected { color: var(--mc-danger); }
   .review-panel {
-    background: var(--mc-accent-soft);
+    background: var(--mc-soft);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     display: grid;
     gap: ${SPACE.sm};
     padding: ${SPACE.md};
@@ -314,6 +333,7 @@ ${SIGN_REQUEST_STYLES}
     align-items: center;
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     display: flex;
     gap: ${SPACE.sm};
     padding: ${SPACE.sm} ${SPACE.md};
@@ -324,6 +344,7 @@ ${SIGN_REQUEST_STYLES}
   .nft-card {
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     display: grid;
     gap: ${SPACE.sm};
     min-width: 0;
@@ -332,6 +353,7 @@ ${SIGN_REQUEST_STYLES}
   button.nft-open {
     align-items: start;
     background: var(--mc-elevated);
+    box-shadow: var(--mc-edge);
     justify-content: flex-start;
     min-height: 0;
     padding: ${SPACE.sm};
@@ -344,11 +366,12 @@ ${SIGN_REQUEST_STYLES}
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .nft-actions { display: flex; gap: ${SPACE.sm}; }
   .nft-actions button { flex: 1; }
-  /* dApp approval/sign prompts float on the Liquid Glass material (background,
-     blur, and depth come from .glass in ./styles-material.ts) so a consequential
-     request reads as a distinct surface lifted above the request list. */
+  /* dApp approval/sign prompts are a solid panel card — a hairline edge plus a
+     gentle low shadow lift a consequential request above the request list. */
   .request-card {
+    background: var(--mc-panel);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge), var(--mc-elev-sm);
     display: grid;
     gap: ${SPACE.md};
     padding: ${SPACE.md};
@@ -359,6 +382,7 @@ ${SIGN_REQUEST_STYLES}
   .detail {
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     display: grid;
     gap: 2px;
     min-width: 0;
@@ -395,6 +419,7 @@ ${SIGN_REQUEST_STYLES}
   .empty {
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     font-size: ${TYPE.label.size};
     padding: ${SPACE.lg} ${SPACE.md};
@@ -409,6 +434,7 @@ ${SIGN_REQUEST_STYLES}
   .reveal-value {
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.mono.size};
     line-height: ${TYPE.mono.line};
@@ -428,10 +454,11 @@ ${SIGN_REQUEST_STYLES}
     width: ${CONTROL.icon};
   }
 
-  /* QR: fixed light card so codes scan identically in both themes */
+  /* QR: fixed light card so codes scan identically in both themes. */
   .qr-card {
     background: hsl(0 0% 100%);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge), var(--mc-elev-md);
     color: hsl(0 0% 8%);
     justify-self: center;
     padding: ${SPACE.sm};
@@ -450,12 +477,14 @@ ${SIGN_REQUEST_STYLES}
     right: ${SPACE.md};
     z-index: 10;
   }
-  /* Toasts float on the Liquid Glass material and are dragged/dismissed with an
-     interruptible WAAPI spring from ./dom.ts, so their entrance is not a CSS
-     keyframe (keyframes restart from zero and cannot be grabbed mid-flight). */
+  /* Toasts are a solid panel pill dragged/dismissed with an interruptible WAAPI
+     spring from ./dom.ts, so their entrance is not a CSS keyframe (keyframes
+     restart from zero and cannot be grabbed mid-flight). */
   .toast {
     align-items: center;
+    background: var(--mc-panel);
     border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge), var(--mc-elev-md);
     color: var(--mc-text);
     display: flex;
     font-size: ${TYPE.label.size};

@@ -1,10 +1,12 @@
 /**
- * Design-system stylesheet checks: press stability, token discipline, and
- * motion accessibility for the side panel UI.
+ * Design-system stylesheet checks for the "Clean Mono" direction: flat solid
+ * surfaces (no glass, no aurora, no gradients), press stability, colour-token
+ * discipline, hairline/low-elevation structure, and motion accessibility for
+ * the side panel UI.
  */
 import { describe, expect, test } from "bun:test";
 import { SIDEPANEL_STYLES } from "../src/sidepanel/styles";
-import { EASE, MOTION } from "../src/ui/tokens";
+import { EASE, MOTION, SHADOW } from "../src/ui/tokens";
 
 describe("sidepanel styles", () => {
   test("press and hover motion stays inside the lift/scale envelope", () => {
@@ -30,15 +32,44 @@ describe("sidepanel styles", () => {
     }
   });
 
-  test("interactive controls are borderless — structure comes from elevation", () => {
-    // Structure still comes from elevation, not strokes: no solid borders and no
-    // non-zero border widths. Gradients are NO LONGER banned here — the redesign
-    // adds an aurora depth layer plus a hero specular sheen (both asserted, and
-    // kept token-driven, by the "aurora depth layer" tests below) — but the
-    // selected-tab indicator must still never carry a transform.
+  test("interactive controls are borderless — structure comes from elevation and hairlines", () => {
+    // Structure comes from gentle elevation and 1px hairline edges (box-shadow
+    // insets), never from strokes: no `border:` shorthand and no non-zero full
+    // border widths. The selected-tab indicator must never carry a transform.
+    // Per-side dividers (border-top between rows) remain allowed.
     expect(SIDEPANEL_STYLES).not.toMatch(/border:[^;]*solid/);
     expect(SIDEPANEL_STYLES).not.toMatch(/border:\s*\d*[1-9]/);
     expect(SIDEPANEL_STYLES).not.toMatch(/\[aria-selected="true"\][^}]*transform/s);
+  });
+
+  test("the visual layer is flat — no gradients, no glass, no aurora residue", () => {
+    // Clean Mono is deliberately flat and legible. The redesign removed the
+    // Liquid Glass material and the ambient aurora depth layer entirely, so the
+    // stylesheet must carry NO gradients, NO backdrop-filter, NO `.glass`
+    // surfaces, and NO aurora tokens. Surfaces are solid fills only.
+    expect(SIDEPANEL_STYLES).not.toMatch(/gradient/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/backdrop-filter/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/-webkit-backdrop-filter/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.glass\b/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/--mc-glass/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/--mc-aurora/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/aurora-drift/);
+  });
+
+  test("surfaces are lifted by hairline edges plus a gentle low elevation scale", () => {
+    // The elevation scale reaches CSS as custom properties, and floating chrome
+    // (dock, drawer) plus cards (request card) use a hairline edge — a 1px inset
+    // ring — as their primary structure, with a soft shadow only for lift.
+    expect(SIDEPANEL_STYLES).toContain(`--mc-elev-sm: ${SHADOW.sm}`);
+    expect(SIDEPANEL_STYLES).toContain(`--mc-elev-md: ${SHADOW.md}`);
+    expect(SIDEPANEL_STYLES).toContain("--mc-edge: inset 0 0 0 1px var(--mc-hairline)");
+    // The dock and drawer are solid panels lifted by the edge + a low shadow.
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.wallet-dock \{[^}]*box-shadow: var\(--mc-edge\), var\(--mc-elev-md\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(/\.account-drawer \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.request-card \{[^}]*box-shadow: var\(--mc-edge\)/s);
   });
 
   test("reduced motion collapses every lift and press scale", () => {
@@ -49,15 +80,13 @@ describe("sidepanel styles", () => {
   });
 
   test("colors come only from skin tokens, never literals", () => {
-    // The stylesheet still ships zero colour hex literals: the aurora hues live
-    // in the skin token set (--mc-aurora-1..3, applied at runtime) and the
-    // stylesheet references them through var()/color-mix only. The specular
-    // light values are intentional physical-light rgba constants (see the glass
-    // material), not palette colours, and rgba()/data-URI grain carry no hex.
+    // The stylesheet ships zero colour hex literals: every colour is a skin
+    // token referenced through var()/color-mix. The near-mono palette adds a
+    // recessed --mc-sunken tier; the single emerald signal is --mc-accent.
     expect(SIDEPANEL_STYLES).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(SIDEPANEL_STYLES).toContain("var(--mc-accent)");
     expect(SIDEPANEL_STYLES).toContain("var(--mc-bg)");
-    expect(SIDEPANEL_STYLES).toContain("var(--mc-aurora-1)");
+    expect(SIDEPANEL_STYLES).toContain("var(--mc-sunken)");
   });
 
   test("motion uses shared tokens and respects reduced-motion", () => {
@@ -73,8 +102,9 @@ describe("sidepanel styles", () => {
   });
 
   test("strong easing and spring easings reach the stylesheet as tokens", () => {
-    // The redesign adds curves stronger than the legacy MOTION.ease/pop pair;
-    // they must be published as custom properties so screens share one source.
+    // Motion rides strong curves published as custom properties so screens share
+    // one source; the springs stay for the drawer/toast gestures. All motion is
+    // calm, small, fast (<300ms) — retuned for restraint, but still spring-true.
     expect(SIDEPANEL_STYLES).toContain(`--ease-out: ${EASE.out}`);
     expect(SIDEPANEL_STYLES).toContain(`--ease-drawer: ${EASE.drawer}`);
     expect(SIDEPANEL_STYLES).toContain("--spring-drawer: linear(");
@@ -83,57 +113,17 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/:\s*ease-in\b/);
   });
 
-  test("liquid glass is opt-in, token-driven, and degrades gracefully", () => {
-    // The material is a single class surfaces opt into — real translucency plus
-    // an inset specular highlight, not a border or gradient.
-    expect(SIDEPANEL_STYLES).toMatch(/\.glass \{[^}]*backdrop-filter: blur/s);
-    expect(SIDEPANEL_STYLES).toContain("inset 0 1px 0 var(--mc-glass-highlight)");
-    // Graceful fallbacks: solid where backdrop-filter is unsupported, frosted
-    // under reduced transparency, near-solid with an edge under more contrast.
-    expect(SIDEPANEL_STYLES).toContain("@supports not ((backdrop-filter");
-    expect(SIDEPANEL_STYLES).toContain("@media (prefers-reduced-transparency: reduce)");
-    expect(SIDEPANEL_STYLES).toContain("@media (prefers-contrast: more)");
-  });
-
-  test("aurora depth layer sits behind the glass and is built from skin tokens", () => {
-    // The ambient depth layer is what makes the glass read: without colour and
-    // light behind it, backdrop-filter has nothing to refract. It is painted on
-    // a fixed body pseudo-element behind all content (negative z-index), so it
-    // must exist and be built from the aurora skin tokens via color-mix — never
-    // from raw colour literals (the no-hex test above guards that globally).
-    expect(SIDEPANEL_STYLES).toMatch(/body::before \{[^}]*position: fixed/s);
-    expect(SIDEPANEL_STYLES).toMatch(/body::before \{[^}]*z-index: -2/s);
-    expect(SIDEPANEL_STYLES).toContain("radial-gradient(");
-    expect(SIDEPANEL_STYLES).toContain("color-mix(in srgb, var(--mc-aurora-1)");
-    expect(SIDEPANEL_STYLES).toContain("color-mix(in srgb, var(--mc-aurora-2)");
-    expect(SIDEPANEL_STYLES).toContain("color-mix(in srgb, var(--mc-aurora-3)");
-    // A faint grain overlay stops the wide gradients from banding.
-    expect(SIDEPANEL_STYLES).toMatch(/body::after \{[^}]*mix-blend-mode: overlay/s);
-  });
-
-  test("aurora drift is optional and stops under reduced motion", () => {
-    // The blobs drift slowly for life, but the motion is non-essential: under
-    // reduced motion the aurora holds still so the frost stays statically legible.
-    expect(SIDEPANEL_STYLES).toContain("@keyframes aurora-drift");
+  test("the single emerald accent is reserved for signal, not every surface", () => {
+    // Restraint check: the accent drives the active dock item, the portfolio tab
+    // indicator, and positive deltas — but resting neutral rows/tiles carry a
+    // neutral fill, so the accent stays a rare highlight.
+    expect(SIDEPANEL_STYLES).toMatch(/\.tab-indicator \{[^}]*background: var\(--mc-accent\)/s);
     expect(SIDEPANEL_STYLES).toMatch(
-      /@media \(prefers-reduced-motion: reduce\) \{\s*body::before \{ animation: none/s,
+      /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
     );
-  });
-
-  test("glass is applied broadly, not just to the dock and drawer", () => {
-    // The hero balance card and the primary surfaces opt into the frosted
-    // material so the whole panel reads as layered glass over the aurora. The
-    // hero uses the strong blur; each surface is a single translucent layer
-    // (rows are not nested in a blurred container) so blurs never stack.
-    expect(SIDEPANEL_STYLES).toMatch(
-      /\.hero \{[^}]*backdrop-filter: blur\(var\(--mc-glass-blur-strong\)\)/s,
-    );
-    expect(SIDEPANEL_STYLES).toMatch(/backdrop-filter: blur\(var\(--mc-glass-blur\)\)/);
-    // The hero's specular sheen is a token-driven translucent-light gradient.
-    expect(SIDEPANEL_STYLES).toMatch(/\.hero::before \{[^}]*var\(--mc-glass-sheen\)/s);
-    // The broad surfaces degrade with the same guards as the base material.
-    expect(SIDEPANEL_STYLES).toContain("li.token-row");
-    expect(SIDEPANEL_STYLES).toContain("button.action-tile");
+    expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
+    // The token glyph chip is neutral, not accent-filled.
+    expect(SIDEPANEL_STYLES).toMatch(/\.token-mark \{[^}]*background: var\(--mc-sunken\)/s);
   });
 
   test("view transitions are direction-aware and reduced-motion safe", () => {
