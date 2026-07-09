@@ -156,9 +156,10 @@ export const HOME_STYLES = `
 
   /* Hover lift is gated to fine pointers so a tap on touch never leaves an
      element floating (touch fires a phantom :hover). Pointer devices get the
-     2px rise + soft shadow; press feedback (scale) is universal. */
+     2px rise + soft shadow; press feedback (scale) is universal. The borderless
+     action-tile icons are excluded — they carry no box to lift, so hover only
+     brightens their label. */
   @media (hover: hover) and (pointer: fine) {
-    button.action-tile:not(:disabled):hover,
     button.collectible-card:not(:disabled):hover {
       box-shadow: var(--mc-edge), var(--mc-shadow-sm);
       transform: translateY(-2px);
@@ -247,7 +248,6 @@ export const HOME_STYLES = `
     #detect-tokens[data-busy] .icon { animation: none; }
     button, input, select, textarea, .tab-indicator, .tab-icon,
     .account-drawer, .drawer-backdrop, .account-name .icon { transition: none; }
-    button.action-tile:not(:disabled):hover,
     button.collectible-card:not(:disabled):hover,
     .account-trigger[aria-expanded="true"] .account-name .icon { transform: none; }
     button.action-tile:not(:disabled):active,

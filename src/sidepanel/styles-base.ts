@@ -10,7 +10,7 @@
  * emerald accent is reserved for the primary CTA, active states, and positive
  * deltas — everything else stays in the near-mono neutral palette.
  */
-import { CONTROL, FONT, MOTION, RADIUS, SIZE, SPACE, TRACKING, TYPE } from "../ui/tokens";
+import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE } from "../ui/tokens";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -180,18 +180,19 @@ export const BASE_STYLES = `
 
   /* Portfolio hero: the home screen's focal point. A quiet eyebrow label, the
      total set as a large optically-sized figure, the 24h delta, then the
-     address chip. Left-aligned at a zero inset so the whole column shares one
-     disciplined left edge with the action tiles and token rows below (the old
-     2px inset left the balance ragged against those cards). Spacing sits on the
+     address chip. Centre-aligned as a single block — the eyebrow, total, delta,
+     and address chip all share one horizontal centre line — so the balance
+     reads as a calm, symmetric focal point with breathing room on both sides
+     (the client asked to move off the hard left edge). Spacing sits on the
      4/8px grid: the eyebrow, total, and delta read as one tight 4px cluster,
      with the address chip set apart by a full 8px step so it groups as its own
      element and the number is given room to breathe. */
   .hero {
     display: grid;
     gap: ${SPACE.xs};
-    justify-items: start;
+    justify-items: center;
     padding: ${SPACE.sm} 0 0;
-    text-align: left;
+    text-align: center;
   }
   .hero-eyebrow {
     color: var(--mc-faint);
@@ -243,48 +244,43 @@ export const BASE_STYLES = `
   button.hero-chip:not(:disabled):active { background: var(--mc-soft-press); }
   .hero-chip .icon { color: var(--mc-muted); height: 14px; width: 14px; }
 
-  /* Action tiles: rounded-square elevated surfaces, icon over label. Sit on
-     the 8px grid — an 8px gutter between the three tiles matches the gap
-     between the token rows below, so both card groups share one rhythm. */
+  /* Action tiles: borderless icon buttons — a plain icon over its label, no
+     box treatment (no fill, no hairline, no elevation, no boxy min-height), so
+     the row reads as clean icons rather than cards and the homepage breathes.
+     The three sit centred on an evenly split 3-column grid. Send stays subtly
+     primary through the accent tint on its icon alone — never a filled box.
+     Feedback is a light press scale plus a hover icon-brighten; the accent
+     focus ring still frames the whole hit target. */
   .action-row {
     display: grid;
     gap: ${SPACE.sm};
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   button.action-tile {
-    align-content: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.lg};
-    box-shadow: var(--mc-edge);
+    align-content: start;
+    background: transparent;
+    border-radius: ${RADIUS.md};
     color: var(--mc-text);
     display: grid;
     gap: ${SPACE.sm};
     justify-items: center;
-    min-height: ${SIZE.tile};
-    padding: ${SPACE.md} ${SPACE.xs};
+    padding: ${SPACE.sm} ${SPACE.xs};
     transition:
-      background ${MOTION.pressMs}ms ${MOTION.ease},
-      box-shadow ${MOTION.liftMs}ms ${MOTION.ease},
+      color ${MOTION.pressMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
-  button.action-tile:not(:disabled):hover { background: var(--mc-hover); }
-  button.action-tile:not(:disabled):active {
-    background: var(--mc-soft-press);
-    box-shadow: var(--mc-edge);
-    transform: translateY(0) scale(0.96);
-  }
+  button.action-tile:not(:disabled):hover .tile-label { color: var(--mc-text); }
+  button.action-tile:not(:disabled):active { transform: scale(0.92); }
   button.action-tile:disabled { cursor: not-allowed; opacity: 0.4; }
-  button.action-tile.primary { background: var(--mc-accent-soft); }
-  button.action-tile.primary:not(:disabled):hover {
-    background: color-mix(in srgb, var(--mc-accent) 24%, var(--mc-panel));
+  .tile-icon {
+    align-items: center;
+    color: var(--mc-text);
+    display: inline-flex;
+    justify-content: center;
   }
-  button.action-tile.primary:not(:disabled):active {
-    background: color-mix(in srgb, var(--mc-accent) 30%, var(--mc-panel));
-  }
-  .tile-icon { color: var(--mc-text); display: inline-flex; }
   button.action-tile.primary .tile-icon { color: var(--mc-accent); }
   .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: 650; }
-  .tile-icon .icon { height: 20px; width: 20px; }
+  .tile-icon .icon { height: 24px; width: 24px; }
 
   /* Bottom dock: a floating solid nav card — hairline edge + a gentle low
      shadow lift it a hair off the page while content scrolls under it. Flat,
@@ -316,19 +312,19 @@ export const BASE_STYLES = `
     transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
   button.nav-item:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-  button.nav-item:not(:disabled):hover .tab-icon { background: var(--mc-hover); }
   button.nav-item:not(:disabled):active { background: transparent; transform: scale(0.92); }
+  /* Active/focus state is carried by the icon itself — an emerald accent tint,
+     with inactive items muted — never a filled background pill behind it. The
+     dock stays flat: no moving indicator, no accent-soft highlight field. */
   button.nav-item[aria-selected="true"] { color: var(--mc-accent); }
-  button.nav-item[aria-selected="true"] .tab-icon { background: var(--mc-accent-soft); }
   .tab-icon {
     align-items: center;
-    border-radius: ${RADIUS.full};
     display: inline-flex;
     justify-content: center;
     min-height: 22px;
     padding: 6px 16px;
     position: relative;
-    transition: background ${MOTION.tabMs}ms ${MOTION.ease};
+    transition: color ${MOTION.tabMs}ms ${MOTION.ease};
   }
   .tab-icon .icon { height: 22px; width: 22px; }
   .tab-icon .badge { position: absolute; right: -4px; top: -2px; }

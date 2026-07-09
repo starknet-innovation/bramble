@@ -126,6 +126,34 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(/\.token-mark \{[^}]*background: var\(--mc-sunken\)/s);
   });
 
+  test("home action tiles are borderless icons, not boxes", () => {
+    // The client asked the Send/Receive/NFTs row to read as plain icons with
+    // labels beneath, so the tile box treatment is gone: the resting tile has a
+    // transparent fill and carries no hairline edge, no elevation shadow, and no
+    // boxy fixed min-height. Primary (Send) stays distinguishable through an
+    // accent-tinted ICON, never a filled accent box.
+    expect(SIDEPANEL_STYLES).toMatch(/button\.action-tile \{[^}]*background: transparent/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile \{[^}]*box-shadow/s);
+    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile \{[^}]*min-height/s);
+    // No filled primary box — the accent lives on the icon only.
+    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile\.primary \{/);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.action-tile\.primary \.tile-icon \{ color: var\(--mc-accent\)/,
+    );
+  });
+
+  test("the active dock item is an accent icon, never a background pill", () => {
+    // The dock highlights the active/focused item by tinting the icon itself
+    // emerald (inactive stays muted) — there is NO filled background highlight
+    // behind it and NO moving indicator pill. So the active nav-item declares a
+    // colour but no background, and the icon holder never paints a fill.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
+    );
+    expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*background/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.tab-icon[^{}]*\{[^}]*background/s);
+  });
+
   test("view transitions are direction-aware and reduced-motion safe", () => {
     expect(SIDEPANEL_STYLES).toContain(
       'html[data-nav-direction="forward"]::view-transition-new(root)',

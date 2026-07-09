@@ -73,7 +73,11 @@ describe("sidepanel home", () => {
     expect(header).toContain('id="lock-button"');
   });
 
-  test("quick actions render as rounded tiles with send carrying the accent", () => {
+  test("quick actions render as borderless icon buttons with send carrying the accent", () => {
+    // The action row is Send / Receive / NFTs as plain borderless icon buttons
+    // (labels beneath, no box treatment). The markup keeps the `action-tile`
+    // hook and the `primary` modifier on Send — the box removal lives in the
+    // stylesheet — so Send stays distinguishable via its accent-tinted icon.
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).toMatch(/class="action-tile primary" data-view="send"/);
