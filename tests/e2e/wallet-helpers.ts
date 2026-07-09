@@ -14,6 +14,14 @@ export const IMPORT_MNEMONIC =
 const phraseWords = (phrase: string): readonly string[] =>
   phrase.trim().split(/\s+/).filter(Boolean);
 
+const acknowledgeMainnetIfPresent = async (sidepanel: Page): Promise<void> => {
+  const checkbox = sidepanel.locator('input[name="mainnetAck"]');
+  if ((await checkbox.count()) === 0 || !(await checkbox.isVisible())) {
+    return;
+  }
+  await checkbox.check();
+};
+
 /**
  * Fills backup-verification inputs using the same positions as onboarding UI.
  */
@@ -38,6 +46,7 @@ export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<
   const phrase = await phraseInput.inputValue();
   await fillBackupVerify(sidepanel, phrase);
   await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
+  await acknowledgeMainnetIfPresent(sidepanel);
   await sidepanel.getByRole("button", { name: "Create wallet" }).click();
   await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
 };
@@ -50,6 +59,7 @@ export const importWalletFromPhrase = async (sidepanel: Page, mnemonic: string):
   await sidepanel.locator('textarea[name="mnemonic"]').fill(mnemonic);
   await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
   await expect(sidepanel.locator("#backup-verify")).toBeHidden();
+  await acknowledgeMainnetIfPresent(sidepanel);
   await expect(sidepanel.getByRole("button", { name: "Create wallet" })).toBeEnabled();
   await sidepanel.getByRole("button", { name: "Create wallet" }).click();
   await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
