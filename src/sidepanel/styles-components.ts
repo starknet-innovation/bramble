@@ -443,7 +443,7 @@ ${SIGN_REQUEST_STYLES}
     padding: ${SPACE.sm} ${SPACE.md};
     word-break: break-all;
   }
-  .reveal-value.is-masked { filter: blur(7px); user-select: none; }
+  .reveal-value.is-masked, .gate-form textarea.is-masked { filter: blur(7px); user-select: none; }
   .verify-grid { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .icon {
     fill: none;

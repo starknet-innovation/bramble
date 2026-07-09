@@ -126,6 +126,9 @@ export const HOME_STYLES = `
   .tab-actions .icon-button { height: 32px; width: 32px; }
   .tab-panel { display: grid; gap: ${SPACE.sm}; }
   .tab-panel.is-entering { animation: panel-enter ${MOTION.enterMs}ms var(--ease-out) both; }
+  .panel-error { display: grid; gap: ${SPACE.sm}; justify-items: center; text-align: center; }
+  .panel-error .empty { margin: 0; }
+  .panel-error button { gap: 4px; }
   button.tab-more {
     color: var(--mc-muted);
     font-weight: 650;
