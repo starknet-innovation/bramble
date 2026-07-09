@@ -174,11 +174,42 @@ const CSV_HEADER =
 const csvField = (value: string): string =>
   /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 
+const pad = (value: number, width: number): string => value.toString().padStart(width, "0");
+
 /**
- * Formats an epoch-millisecond timestamp as a human-readable ISO-8601 string.
- * Deterministic given its input, so it stays clock-boundary safe.
+ * Formats an epoch-millisecond timestamp as a UTC ISO-8601 string
+ * (`YYYY-MM-DDTHH:mm:ss.sssZ`). Implemented as pure integer arithmetic rather
+ * than the `Date` constructor so it stays clock-boundary safe: the output
+ * depends only on the argument, never on ambient time or locale. The civil
+ * date is derived with Howard Hinnant's days-to-year/month/day algorithm.
  */
-const toIsoDate = (submittedAt: number): string => new Date(submittedAt).toISOString();
+const toIsoDate = (submittedAt: number): string => {
+  const millis = ((submittedAt % 1000) + 1000) % 1000;
+  const totalSeconds = Math.floor(submittedAt / 1000);
+  const secondOfDay = ((totalSeconds % 86400) + 86400) % 86400;
+  const seconds = secondOfDay % 60;
+  const minutes = Math.floor(secondOfDay / 60) % 60;
+  const hours = Math.floor(secondOfDay / 3600);
+
+  const z = Math.floor(totalSeconds / 86400) + 719468;
+  const era = Math.floor(z / 146097);
+  const dayOfEra = z - era * 146097;
+  const yearOfEra = Math.floor(
+    (dayOfEra -
+      Math.floor(dayOfEra / 1460) +
+      Math.floor(dayOfEra / 36524) -
+      Math.floor(dayOfEra / 146096)) /
+      365,
+  );
+  const dayOfYear =
+    dayOfEra - (365 * yearOfEra + Math.floor(yearOfEra / 4) - Math.floor(yearOfEra / 100));
+  const monthPart = Math.floor((5 * dayOfYear + 2) / 153);
+  const day = dayOfYear - Math.floor((153 * monthPart + 2) / 5) + 1;
+  const month = monthPart < 10 ? monthPart + 3 : monthPart - 9;
+  const year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0);
+
+  return `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}T${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)}.${pad(millis, 3)}Z`;
+};
 
 /**
  * Serializes activity entries as CSV for export. The timestamp is rendered as
