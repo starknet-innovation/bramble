@@ -53,6 +53,7 @@ import { createUnlockSession, type UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
 import { handleStrk20Ops } from "./strk20-ops";
 import { handleTokenOps } from "./token-ops";
+import { unlockFailureError } from "./unlock-errors";
 import { handleWalletOps } from "./wallet-ops";
 
 const unavailableVaultStatus = () => ({
@@ -389,7 +390,11 @@ const handleRuntimeMessage = async (
     if (!input) {
       return { error: "invalid unlock request" };
     }
-    await wallet.readVault(input.vaultPassphrase);
+    try {
+      await wallet.readVault(input.vaultPassphrase);
+    } catch (error) {
+      throw unlockFailureError(error);
+    }
     session.unlock(input.vaultPassphrase);
     return statusResponse(wallet, session, preferencesStore);
   }

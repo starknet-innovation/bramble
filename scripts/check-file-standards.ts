@@ -46,6 +46,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
   "src/background/session.ts",
+  "src/background/unlock-errors.ts",
   "src/background/wallet-ops.ts",
   "src/crypto/krusty.ts",
   "src/popup/responses.ts",
