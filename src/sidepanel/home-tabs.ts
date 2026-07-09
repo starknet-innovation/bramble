@@ -62,7 +62,7 @@ export const visibleHomeBalances = (
  * screen.
  */
 export const PENDING_TX_HINT =
-  "Pending Starknet transactions cannot be sped up or cancelled and usually settle within a few minutes.";
+  "Starknet has no fee-bump or replace-by-fee: a pending transaction can't be sped up, replaced, or cancelled. This is a protocol limitation, not a wallet one, and it usually settles within a few minutes.";
 
 /**
  * Renders one recorded transaction row, shared by the home Activity tab and
