@@ -137,7 +137,7 @@ describe("multisig views", () => {
     const ready = render("multisig-deploy", [], [], true);
     expect(ready).not.toContain('id="multisig-declare"');
     expect(ready).toContain('id="multisig-deploy-form"');
-    // Deploy stays disabled until the class is confirmed declared.
+    // Deploy is enabled once the class is confirmed declared.
     expect(ready).not.toContain("disabled");
   });
 
