@@ -28,6 +28,7 @@ const run = async (cmd: string[]): Promise<void> => {
 
 await run(["bun", "run", "check:extension"]);
 await run(["bun", "run", "check:krusty"]);
+await run(["bun", "run", "check:multisig"]);
 await rm(outdir, { force: true, recursive: true });
 await mkdir(outdir, { recursive: true });
 
@@ -82,4 +83,9 @@ await cp(
 await cp(
   "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm_bg.wasm",
   join(vendorOutdir, "krusty_kms_wasm_bg.wasm"),
+);
+await mkdir(join(outdir, "vendor/multisig"), { recursive: true });
+await cp(
+  "vendor/multisig/multisig.contract_class.json",
+  join(outdir, "vendor/multisig/multisig.contract_class.json"),
 );

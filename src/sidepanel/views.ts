@@ -12,6 +12,7 @@ import type { ConnectedSite, PendingApproval, WalletStatus } from "../popup/resp
 import { escapeHtml } from "../shared/html";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { AllowanceRecord } from "../storage/allowance-store";
+import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { accountDrawer } from "./account-drawer";
@@ -29,6 +30,12 @@ import {
 } from "./flows";
 import { homeTabs, transactionRow, visibleHomeBalances } from "./home-tabs";
 import { type IconName, icon } from "./icons";
+import {
+  multisigDeployFlow,
+  multisigDetailFlow,
+  multisigProposeFlow,
+  multisigsFlow,
+} from "./multisig-views";
 import { nftDetailFlow, nftGalleryFlow } from "./nft-views";
 import {
   accountAvatar,
@@ -213,6 +220,7 @@ const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | 
       ${menuRow("address-book", "Address book", "book")}
       ${menuRow("connected-sites", "Connected sites", "link")}
       ${menuRow("allowances", "Allowances", "lock")}
+      ${menuRow("multisigs", "Multisigs", "wallet")}
       ${menuRow("backup", "Backup & restore", "receive")}
       ${menuRow("reveal", "Reveal secrets", "lock")}
     </div>
@@ -267,6 +275,10 @@ export const dashboard = (
   allowances: readonly AllowanceRecord[] = [],
   selectedNftId: string | null = null,
   changes: Readonly<Record<string, number>> = {},
+  multisigs: readonly MultisigRecord[] = [],
+  multisigProposals: readonly MultisigProposalRecord[] = [],
+  selectedMultisigId: string | null = null,
+  multisigClassDeclared: boolean | "error" | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -291,6 +303,20 @@ export const dashboard = (
   }
   if (activeView === "allowances") {
     return allowancesFlow(status, account, allowances);
+  }
+  if (activeView === "multisigs") {
+    return multisigsFlow(status, account, multisigs, multisigProposals);
+  }
+  if (activeView === "multisig-detail" || activeView === "multisig-propose") {
+    const selected = multisigs.find(
+      (record) => record.id === selectedMultisigId && record.networkId === status.networkId,
+    );
+    return activeView === "multisig-detail"
+      ? multisigDetailFlow(status, account, selected ?? null, multisigProposals)
+      : multisigProposeFlow(status, selected ?? null);
+  }
+  if (activeView === "multisig-deploy") {
+    return multisigDeployFlow(status, account, multisigClassDeclared);
   }
   if (activeView === "nfts") {
     return nftGalleryFlow(status, account, preferences);

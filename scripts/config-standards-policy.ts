@@ -30,6 +30,7 @@ export const PINNED_RUNTIME_FILES = [
   "sidepanel/index.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
+  "vendor/multisig/multisig.contract_class.json",
 ] as const;
 
 export const EXPECTED_GITIGNORE_ENTRIES = [
@@ -38,6 +39,7 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "dist/",
   "node_modules/",
   "vendor/krusty-kms/",
+  "vendor/multisig/",
 ] as const;
 
 export const EXPECTED_README_SECTIONS = [
@@ -69,17 +71,19 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run scripts/build-extension.ts",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun test",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
   "check:lint": "biome check .",
+  "check:multisig": "bun run scripts/check-multisig-class.ts",
   "check:types": "tsc --noEmit",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
   test: "bun test",
   "vendor:krusty": "bun run scripts/vendor-krusty.ts",
+  "vendor:multisig": "bun run scripts/vendor-multisig.ts",
 };
 
 export const REQUIRED_COMPILER_OPTIONS: Readonly<Record<string, boolean>> = {

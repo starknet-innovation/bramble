@@ -34,10 +34,14 @@ jobs:
           key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
           restore-keys: |
             cargo-${{ runner.os }}-
+      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          scarb-version: 2.18.0
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
       - run: bun run check:files
       - run: bun run vendor:krusty
+      - run: bun run vendor:multisig
       - run: bun run check
       - run: bun run build
       - run: bun run package:extension

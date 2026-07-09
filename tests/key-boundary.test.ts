@@ -84,6 +84,8 @@ const walletStub = {
   },
 };
 
+const MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
+
 const runtimeRpcStub = {
   async estimateInvokeFee() {
     return { overallFee: "1", unit: "FRI" };
@@ -117,6 +119,20 @@ const runtimeRpcStub = {
   },
   async submitInvokeTransaction() {
     return { calls: [], transactionHash: "0x7abc" };
+  },
+  multisig: {
+    async computeTransactionId() {
+      return "0xabc";
+    },
+    async getConfig() {
+      return { quorum: 1, signers: [account.address] };
+    },
+    async getProposalStatus() {
+      return { confirmations: 0, confirmedBySigner: false, state: "pending" as const };
+    },
+    async isClassDeclared() {
+      return true;
+    },
   },
 };
 
@@ -263,6 +279,49 @@ const MESSAGES: readonly {
   { message: { type: "wallet.status" }, sender: contentSender },
   {
     message: { vaultPassphrase: "wrong passphrase!!", type: "wallet.unlock" },
+    sender: extensionSender,
+  },
+  { message: { type: "wallet.multisigs" }, sender: extensionSender },
+  {
+    message: { address: MULTISIG, name: "Treasury", type: "wallet.addMultisig" },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      calldata: ["0x1"],
+      entrypoint: "transfer",
+      multisigId: `SN_MAIN:${MULTISIG}`,
+      to: account.address,
+      type: "wallet.proposeMultisigTx",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
+      type: "wallet.confirmMultisigProposal",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      multisigId: `SN_MAIN:${MULTISIG}`,
+      txId: "0xdef",
+      type: "wallet.trackMultisigProposal",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: { id: `SN_MAIN:${MULTISIG}`, type: "wallet.refreshMultisig" },
+    sender: extensionSender,
+  },
+  { message: { type: "wallet.multisigClassStatus" }, sender: extensionSender },
+  {
+    message: {
+      quorum: 1,
+      signers: [account.address],
+      type: "wallet.deployMultisig",
+    },
     sender: extensionSender,
   },
 ];

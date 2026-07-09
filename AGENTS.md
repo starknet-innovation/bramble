@@ -9,14 +9,17 @@ rules and `README.md` the feature-level docs. Treat every change as security-sen
 ```bash
 bun install --frozen-lockfile
 bun run vendor:krusty        # required once before check/build (clones + wasm-pack builds Krusty KMS)
-bun run check                # types + lint + file/config standards + manifest + krusty adapter + tests
+bun run vendor:multisig      # required once before check/build (scarb-builds contracts/multisig)
+bun run check                # types + lint + file/config standards + manifest + krusty/multisig pins + tests
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
 bun run package:extension    # writes artifacts/*.zip + .sha256
 ```
 
-- `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain. Without the
-  vendored `vendor/krusty-kms/crates/wasm/pkg`, `check:krusty` and `build` fail — that is
-  expected in offline sandboxes; run the rest of the gates and say so.
+- `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
+  `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class hash pin in
+  `src/starknet/multisig-deploy.ts` is only reproducible on that version). Without the vendored
+  outputs, `check:krusty`/`check:multisig` and `build` fail — that is expected in offline
+  sandboxes; run the rest of the gates and say so.
 - Narrower loops while iterating: `bun test tests/<name>.test.ts`, `bun run check:types`,
   `bun run check:lint`. Always finish with the full `bun run check`.
 - `bun run format` (Biome) fixes formatting/lint; Biome owns style, don't hand-format.

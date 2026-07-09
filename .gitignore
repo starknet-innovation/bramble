@@ -2,6 +2,8 @@ artifacts/
 dist/
 node_modules/
 vendor/krusty-kms/
+vendor/multisig/
+contracts/multisig/target/
 *.log
 .DS_Store
 .claude/
