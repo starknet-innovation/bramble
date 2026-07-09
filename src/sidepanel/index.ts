@@ -20,16 +20,17 @@ import {
   errorMessage,
   focusMemo,
   restoreFocus,
-  scopedStatus,
   showToast,
 } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
+import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
 import { bindOnboarding } from "./onboarding-ui";
+import { DOCK_VIEWS } from "./parts";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, emptyStatus, type RuntimeApi } from "./runtime";
 import {
@@ -39,6 +40,7 @@ import {
   bindBackup,
   bindContacts,
 } from "./settings-ui";
+import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
@@ -57,9 +59,39 @@ let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
 let lastTheme = "";
+let lastActiveView: WalletView = "home";
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
+
+// Direction the shell is moving through the screen hierarchy, used to pick a
+// spatially consistent view transition (see ./styles-transitions.ts).
+type NavDirection = "forward" | "back" | "swap";
+
+const DETAIL_VIEWS: readonly WalletView[] = [
+  "token-detail",
+  "nft-detail",
+  "multisig-detail",
+  "multisig-propose",
+  "multisig-deploy",
+];
+
+// Dock screens sit at the root (0); flows push one level deeper (1); detail
+// screens deeper still (2). Direction follows the change in depth.
+const viewDepth = (view: WalletView): number =>
+  DOCK_VIEWS.includes(view) ? 0 : DETAIL_VIEWS.includes(view) ? 2 : 1;
+
+const navDirection = (from: WalletView, to: WalletView): NavDirection => {
+  const delta = viewDepth(to) - viewDepth(from);
+  return delta > 0 ? "forward" : delta < 0 ? "back" : "swap";
+};
+
+// The View Transitions API is progressively enhanced: typed locally so the
+// build does not depend on the lib.dom version shipping the declarations.
+type ViewTransition = { readonly finished: Promise<void> };
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => ViewTransition;
+};
 
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
@@ -69,112 +101,6 @@ const bindNavigation = (): void => {
         return;
       }
       navigate(view);
-    });
-  });
-};
-
-const bindDashboard = (): void => {
-  const lockButton = app?.querySelector<HTMLButtonElement>("#lock-button");
-  const refreshButton = app?.querySelector<HTMLButtonElement>("#refresh-button");
-  const result = app?.querySelector<HTMLElement>("#panel-result");
-
-  lockButton?.addEventListener("click", () => {
-    buttonBusy(lockButton, true);
-    void wallet.lockVault().then(
-      (status) => {
-        showToast("Vault locked", "success");
-        void render(status);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Lock failed"), "error");
-        if (result) {
-          result.textContent = errorMessage(error, "Lock failed");
-        }
-        buttonBusy(lockButton, false);
-      },
-    );
-  });
-
-  refreshButton?.addEventListener("click", () => {
-    buttonBusy(refreshButton, true);
-    void wallet.loadStatus().then(render, () => buttonBusy(refreshButton, false));
-  });
-};
-
-const bindDeploy = (): void => {
-  const button = app?.querySelector<HTMLButtonElement>("#deploy-button");
-  button?.addEventListener("click", () => {
-    buttonBusy(button, true);
-    scopedStatus(button, "Submitting deployment...");
-    void wallet.deployAccount().then(
-      (transactionHash) => {
-        showToast("Deployment submitted", "success");
-        scopedStatus(button, `Deployment submitted: ${transactionHash}`);
-        buttonBusy(button, false);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Deployment failed"), "error");
-        scopedStatus(button, errorMessage(error, "Deployment failed"));
-        buttonBusy(button, false);
-      },
-    );
-  });
-};
-
-const bindPickers = (): void => {
-  const result = app?.querySelector<HTMLElement>("#picker-result");
-
-  app?.querySelectorAll<HTMLButtonElement>("[data-network-id]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const networkId = button.dataset.networkId;
-      if (!networkId || button.getAttribute("aria-pressed") === "true") {
-        return;
-      }
-      buttonBusy(button, true);
-      if (result) {
-        result.textContent = "Switching network...";
-      }
-      void wallet.setActiveNetwork(networkId).then(
-        async (status) => {
-          activeView = "settings";
-          showToast("Network switched", "success");
-          await render(status);
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Network switch failed"), "error");
-          if (result) {
-            result.textContent = errorMessage(error, "Network switch failed");
-          }
-          buttonBusy(button, false);
-        },
-      );
-    });
-  });
-
-  app?.querySelectorAll<HTMLButtonElement>("[data-account-id]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const accountId = button.dataset.accountId;
-      if (!accountId || button.getAttribute("aria-pressed") === "true") {
-        return;
-      }
-      buttonBusy(button, true);
-      if (result) {
-        result.textContent = "Switching account...";
-      }
-      void wallet.setActiveAccount(accountId).then(
-        async () => {
-          activeView = "settings";
-          showToast("Account switched", "success");
-          await render(await wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Account switch failed"), "error");
-          if (result) {
-            result.textContent = errorMessage(error, "Account switch failed");
-          }
-          buttonBusy(button, false);
-        },
-      );
     });
   });
 };
@@ -212,6 +138,28 @@ const renderShell = (content: string, animate: boolean): void => {
   const focused = focusMemo();
   app.innerHTML = `<style>${SIDEPANEL_STYLES}</style><section class="shell${animate ? " shell-animate" : ""}">${content}</section>`;
   restoreFocus(app, focused);
+};
+
+// Swaps the shell markup and re-binds listeners. When the scene changed and the
+// View Transitions API is available (and motion is allowed), the swap runs
+// inside a direction-aware transition; otherwise it falls back to the instant
+// swap with the CSS scene-enter class. Overlapping navigations let the browser
+// skip the in-flight transition, keeping it interruptible.
+const renderScene = (content: string, animate: boolean, direction: NavDirection): void => {
+  const doc = document as ViewTransitionDocument;
+  if (!animate || prefersReducedMotion() || typeof doc.startViewTransition !== "function") {
+    renderShell(content, animate);
+    bindAll();
+    return;
+  }
+  document.documentElement.dataset.navDirection = direction;
+  const transition = doc.startViewTransition(() => {
+    renderShell(content, false);
+    bindAll();
+  });
+  void transition.finished.finally(() => {
+    delete document.documentElement.dataset.navDirection;
+  });
 };
 
 const deployedAccounts = new Set<string>();
@@ -269,9 +217,17 @@ const bindAll = (): void => {
   bindCopyButtons(app);
   bindOnboarding({ app, render, wallet });
   bindUnlock();
-  bindDashboard();
-  bindDeploy();
-  bindPickers();
+  const shellDeps = {
+    app,
+    render,
+    setActiveView: (view: WalletView) => {
+      activeView = view;
+    },
+    wallet,
+  };
+  bindDashboard(shellDeps);
+  bindDeploy(shellDeps);
+  bindPickers(shellDeps);
   bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
   bindHomeUi({
     app,
@@ -353,7 +309,9 @@ const paint = (): void => {
       : `dashboard:${activeView}`;
   const animate = scene !== lastScene;
   lastScene = scene;
-  renderShell(
+  const direction = navDirection(lastActiveView, activeView);
+  lastActiveView = activeView;
+  renderScene(
     !status.hasVault
       ? onboarding(status)
       : status.locked
@@ -379,8 +337,8 @@ const paint = (): void => {
             cache.multisigClassDeclared,
           ),
     animate,
+    direction,
   );
-  bindAll();
 };
 
 // Refreshes cache from the background, painting once from fast local data and

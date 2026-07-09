@@ -79,3 +79,102 @@ export const CONTROL = {
   icon: "18px",
   nav: "52px",
 } as const;
+
+/**
+ * Font-weight scale. Hierarchy is built from weight together with size and
+ * leading (per Apple type guidance), not size alone: `heavy` for the portfolio
+ * total, `bold` for headings, `semibold` for values, `medium` for labels.
+ */
+export const WEIGHT = {
+  bold: 700,
+  heavy: 800,
+  medium: 600,
+  regular: 400,
+  semibold: 650,
+} as const;
+
+/**
+ * Size-specific letter-spacing. Tracking is never one value for all sizes:
+ * large display text tightens (letters read too far apart as they grow) while
+ * small and uppercase text opens up slightly for legibility.
+ */
+export const TRACKING = {
+  amount: "-0.03em",
+  body: "0",
+  caption: "0.01em",
+  display: "-0.02em",
+  eyebrow: "0.08em",
+  label: "-0.01em",
+  title: "-0.01em",
+} as const;
+
+/**
+ * Element/height sub-scale absorbing the ad-hoc control, avatar, row, and tile
+ * pixel values that were previously sprinkled through the stylesheet, so every
+ * fixed dimension traces back to one place.
+ */
+export const SIZE = {
+  art: "56px",
+  avatar: "36px",
+  brand: "64px",
+  control: "46px",
+  mark: "40px",
+  pill: "28px",
+  row: "58px",
+  rowCompact: "56px",
+  sparkline: "48px",
+  tile: "72px",
+} as const;
+
+/**
+ * Elevation / shadow scale, tinted by the active skin background through
+ * `color-mix` so shadows read correctly in both light and dark. `glass` is the
+ * depth shadow paired with the Liquid Glass material. Bigger surfaces should
+ * step up the scale (deeper blur + shadow) to read as thicker.
+ */
+export const SHADOW = {
+  glass: "0 8px 30px color-mix(in srgb, var(--mc-bg) 65%, transparent)",
+  lg: "0 20px 50px color-mix(in srgb, var(--mc-bg) 72%, transparent)",
+  md: "0 12px 32px color-mix(in srgb, var(--mc-bg) 62%, transparent)",
+  sm: "0 6px 18px color-mix(in srgb, var(--mc-bg) 55%, transparent)",
+  xs: "0 1px 2px color-mix(in srgb, var(--mc-bg) 40%, transparent)",
+} as const;
+
+/**
+ * Strong easing curves for UI motion. The built-in CSS keywords are too weak;
+ * these carry the intentional punch the design bar demands. `out` for
+ * enter/exit (instant, responsive), `inOut` for on-screen moves, `drawer` for
+ * sheets. Never use `ease-in` on UI — it delays the frame the user watches
+ * most. `standard`/`pop` mirror the legacy `MOTION` curves for continuity.
+ */
+export const EASE = {
+  drawer: "cubic-bezier(0.32, 0.72, 0, 1)",
+  inOut: "cubic-bezier(0.77, 0, 0.175, 1)",
+  out: "cubic-bezier(0.23, 1, 0.32, 1)",
+  pop: "cubic-bezier(0.34, 1.3, 0.4, 1)",
+  standard: "cubic-bezier(0.2, 0.7, 0.3, 1)",
+} as const;
+
+/**
+ * Named spring presets in Apple's designer-friendly parameters: `response`
+ * (seconds-to-target, not a fixed duration) and `damping` (damping ratio —
+ * 1.0 = critically damped, no overshoot; <1.0 bounces). Reserve bounce
+ * (`drawer`/`momentum`) for motion that carried momentum. Convert to a WAAPI
+ * `linear()` easing + duration via ../ui/spring.ts.
+ */
+export const SPRING = {
+  default: { damping: 1, response: 0.4 },
+  drawer: { damping: 0.8, response: 0.3 },
+  momentum: { damping: 0.8, response: 0.4 },
+  snappy: { damping: 1, response: 0.3 },
+} as const;
+
+/**
+ * Name of a named spring preset.
+ */
+export type SpringName = keyof typeof SPRING;
+
+/**
+ * Spring parameters in Apple's response/damping form.
+ */
+export type SpringSpec = (typeof SPRING)[SpringName];
