@@ -136,50 +136,56 @@ export const HOME_STYLES = `
   }
   button.tab-more .icon { height: 14px; width: 14px; }
 
-  /* Collectible cards: elevated art placeholder over name and token id */
-  .collectible-grid { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Collectible tiles: a minimally framed art square over a tight name/token-id
+     caption. The box chrome (elevated fill + edge wrapping the whole card) is
+     gone — the art tile carries the only hairline framing, and the grid rhythm
+     aligns the tiles. Tapping a tile opens its detail; hover tints the name and
+     lifts the art with a soft shadow (no box behind the caption). */
+  .collectible-grid { display: grid; gap: ${SPACE.md}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   button.collectible-card {
-    background: var(--mc-elevated);
+    align-content: start;
+    background: transparent;
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     color: var(--mc-text);
     display: grid;
     gap: ${SPACE.sm};
-    justify-items: start;
+    /* Definite single 1fr column so the art's width:100% resolves to the full
+       card width (not the caption's content width, which base button's
+       justify-content:center would otherwise collapse it to). */
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: stretch;
     min-height: 0;
-    padding: ${SPACE.sm};
+    padding: 0;
     text-align: left;
-    transition:
-      background ${MOTION.pressMs}ms ${MOTION.ease},
-      box-shadow ${MOTION.liftMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms ${MOTION.pop};
+    transition: transform ${MOTION.liftMs}ms ${MOTION.pop};
     width: 100%;
   }
-  button.collectible-card:not(:disabled):hover { background: var(--mc-hover); }
-  button.collectible-card:not(:disabled):active { background: var(--mc-soft-press); box-shadow: var(--mc-edge); transform: scale(0.97); }
+  button.collectible-card:not(:disabled):hover { background: transparent; }
+  button.collectible-card:not(:disabled):hover strong { color: var(--mc-accent); }
+  button.collectible-card:not(:disabled):active { background: transparent; transform: scale(0.97); }
 
   /* Hover lift is gated to fine pointers so a tap on touch never leaves an
-     element floating (touch fires a phantom :hover). Pointer devices get the
-     2px rise + soft shadow; press feedback (scale) is universal. The borderless
-     action-tile icons are excluded — they carry no box to lift, so hover only
-     brightens their label. */
+     element floating (touch fires a phantom :hover). Pointer devices raise the
+     art tile with a soft shadow; the press scale is universal. */
   @media (hover: hover) and (pointer: fine) {
-    button.collectible-card:not(:disabled):hover {
+    button.collectible-card:not(:disabled):hover .collectible-art {
       box-shadow: var(--mc-edge), var(--mc-shadow-sm);
-      transform: translateY(-2px);
     }
   }
   .collectible-art {
     align-items: center;
+    aspect-ratio: 1 / 1;
     background: var(--mc-soft);
-    border-radius: ${RADIUS.sm};
+    border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     display: inline-flex;
-    height: 56px;
     justify-content: center;
+    transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease};
     width: 100%;
   }
-  .collectible-copy { display: grid; gap: 2px; min-width: 0; width: 100%; }
+  .collectible-art .icon { height: 28px; width: 28px; }
+  .collectible-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; width: 100%; }
   .collectible-copy strong { font-size: ${TYPE.label.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .collectible-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
 

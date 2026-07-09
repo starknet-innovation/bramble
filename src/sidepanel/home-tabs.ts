@@ -70,12 +70,12 @@ export const PENDING_TX_HINT =
  */
 export const transactionRow = (entry: ActivityEntry): string => `
   <li class="tx-row">
-    <span class="tx-status ${entry.status}"${entry.status === "pending" ? ` title="${escapeHtml(PENDING_TX_HINT)}"` : ""}>${escapeHtml(entry.status)}</span>
     <div class="tx-copy">
       <strong>${escapeHtml(entry.summary)}</strong>
       <code>${escapeHtml(`${entry.hash.slice(0, 10)}…${entry.hash.slice(-6)}`)}</code>
       ${entry.status === "pending" ? `<span class="tx-hint">${escapeHtml(PENDING_TX_HINT)}</span>` : ""}
     </div>
+    <span class="tx-status ${entry.status}"${entry.status === "pending" ? ` title="${escapeHtml(PENDING_TX_HINT)}"` : ""}>${escapeHtml(entry.status)}</span>
     <button class="icon-button" data-copy="${escapeHtml(entry.hash)}" type="button" aria-label="Copy transaction hash" title="Copy transaction hash">${icon("copy")}</button>
   </li>`;
 

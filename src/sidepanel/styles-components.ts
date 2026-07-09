@@ -188,19 +188,20 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
     padding: ${SPACE.sm} ${SPACE.sm} ${SPACE.sm} ${SPACE.md};
   }
   .address-line code { flex: 1; }
-  .token-list, .request-list, .address-book { display: grid; gap: ${SPACE.sm}; }
+  .request-list, .address-book { display: grid; gap: ${SPACE.sm}; }
+  /* Token list: de-boxed, flush rows carried by alignment and a single hairline
+     divider — no per-row fill/edge/radius box. The right-hand fiat/change column
+     is right-aligned with tabular figures; a hover fill still highlights a row. */
+  .token-list { display: grid; }
   .token-row {
     align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
+    border-radius: ${RADIUS.sm};
     display: flex;
     gap: ${SPACE.md};
-    padding: ${SPACE.md};
-    transition:
-      background ${MOTION.pressMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms ${MOTION.pop};
+    padding: ${SPACE.md} ${SPACE.sm};
+    transition: background ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
+  .token-list > .token-row + .token-row { border-top: 1px solid var(--mc-hairline); }
   li.token-row:hover { background: var(--mc-hover); }
   li.token-row:has(button.token-open:active) { background: var(--mc-soft-press); transform: scale(0.985); }
   /* Token glyph: a neutral chip — the accent is reserved for signal, not logos. */
@@ -284,17 +285,15 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
   .sparkline-up polyline { stroke: var(--mc-accent); }
   .sparkline-down polyline { stroke: var(--mc-danger); }
   .request-list { gap: ${SPACE.md}; }
-  .tx-list { display: grid; gap: ${SPACE.sm}; }
+  /* Activity list: same de-boxed treatment as the token list — flush rows split
+     by a single hairline divider, description left, semantic status + copy right. */
+  .tx-list { display: grid; }
   .tx-row {
-    align-items: center;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
-    display: flex;
-    gap: ${SPACE.sm};
-    min-width: 0;
-    padding: ${SPACE.sm} ${SPACE.md};
+    align-items: center; border-radius: ${RADIUS.sm}; display: flex; gap: ${SPACE.sm};
+    min-width: 0; padding: ${SPACE.md} ${SPACE.sm}; transition: background ${MOTION.pressMs}ms ${MOTION.ease};
   }
+  .tx-list > .tx-row + .tx-row { border-top: 1px solid var(--mc-hairline); }
+  li.tx-row:hover { background: var(--mc-hover); }
   .tx-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .tx-copy strong {
     font-size: ${TYPE.label.size};
@@ -302,15 +301,15 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
+  /* Status reads as a plain semantic micro-label, not a boxed pill: pending
+     stays muted, accepted goes emerald, reverted/rejected go danger. */
   .tx-status {
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.full};
     color: var(--mc-muted);
     flex: none;
     font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.03em;
-    padding: 3px 8px;
+    text-align: right;
     text-transform: uppercase;
   }
   .tx-status.accepted { color: var(--mc-accent); }
@@ -328,7 +327,7 @@ ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--mc-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .tx-hint { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
-  .allowance-list, .nft-grid { display: grid; gap: ${SPACE.sm}; }
+  .allowance-list { display: grid; gap: ${SPACE.sm}; }
   .allowance-row {
     align-items: center;
     background: var(--mc-soft);
@@ -340,32 +339,33 @@ ${SIGN_REQUEST_STYLES}
   }
   .allowance-copy { display: grid; flex: 1; gap: 2px; min-width: 0; }
   .allowance-copy code { overflow-wrap: anywhere; }
-  .nft-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .nft-card {
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
-    display: grid;
-    gap: ${SPACE.sm};
-    min-width: 0;
-    padding: ${SPACE.sm};
-  }
+  /* Collectibles gallery: clean image tiles, not boxed cards. Each item is a
+     minimally framed art square (a hairline on the art tile only) over a tight
+     caption, with compact ghost actions — no fill/edge box wraps the whole item. */
+  .nft-grid { display: grid; gap: ${SPACE.md}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nft-card { display: grid; gap: ${SPACE.sm}; min-width: 0; }
   button.nft-open {
-    align-items: start;
-    background: var(--mc-elevated);
-    box-shadow: var(--mc-edge);
-    justify-content: flex-start;
-    min-height: 0;
-    padding: ${SPACE.sm};
-    text-align: left;
+    align-content: start; background: transparent; color: var(--mc-text); display: grid; gap: ${SPACE.sm};
+    grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0; text-align: left;
   }
-  button.nft-open:not(:disabled):hover { background: var(--mc-hover); }
-  button.nft-open:not(:disabled):active { background: var(--mc-soft-press); }
-  .nft-mark { align-items: center; color: var(--mc-muted); display: inline-flex; flex: none; }
-  .nft-copy { display: grid; gap: 2px; min-width: 0; }
+  button.nft-open:not(:disabled):hover, button.nft-open:not(:disabled):active { background: transparent; }
+  button.nft-open:not(:disabled):hover strong { color: var(--mc-accent); }
+  .nft-art {
+    align-items: center; aspect-ratio: 1 / 1; background: var(--mc-soft); border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge); color: var(--mc-muted); display: inline-flex; justify-content: center;
+    transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease}; width: 100%;
+  }
+  .nft-art .icon { height: 28px; width: 28px; }
+  button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--mc-edge), var(--mc-shadow-sm); }
+  .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  .nft-actions { display: flex; gap: ${SPACE.sm}; }
-  .nft-actions button { flex: 1; }
+  .nft-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  /* Compact two-up ghost actions; the danger Remove stays borderless like Hide
+     (red ink carries the signal, not a box), with danger-soft hover feedback. */
+  .nft-actions { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; }
+  .nft-actions button { min-width: 0; padding: 0 ${SPACE.sm}; }
+  .nft-actions button.danger { background: transparent; }
+  .nft-actions button.danger:not(:disabled):hover { background: var(--mc-danger-soft); }
   /* dApp approval/sign prompts are a solid panel card — a hairline edge plus a
      gentle low shadow lift a consequential request above the request list. */
   .request-card {
