@@ -344,8 +344,10 @@ ${SIGN_REQUEST_STYLES}
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .nft-actions { display: flex; gap: ${SPACE.sm}; }
   .nft-actions button { flex: 1; }
+  /* dApp approval/sign prompts float on the Liquid Glass material (background,
+     blur, and depth come from .glass in ./styles-material.ts) so a consequential
+     request reads as a distinct surface lifted above the request list. */
   .request-card {
-    background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
     display: grid;
     gap: ${SPACE.md};
@@ -448,20 +450,20 @@ ${SIGN_REQUEST_STYLES}
     right: ${SPACE.md};
     z-index: 10;
   }
+  /* Toasts float on the Liquid Glass material and are dragged/dismissed with an
+     interruptible WAAPI spring from ./dom.ts, so their entrance is not a CSS
+     keyframe (keyframes restart from zero and cannot be grabbed mid-flight). */
   .toast {
     align-items: center;
-    animation: toast-enter ${MOTION.toastMs}ms ${MOTION.ease} both;
-    background: var(--mc-panel);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-shadow);
     color: var(--mc-text);
     display: flex;
     font-size: ${TYPE.label.size};
     gap: ${SPACE.sm};
     padding: ${SPACE.sm} ${SPACE.md};
     pointer-events: auto;
+    touch-action: pan-y;
   }
-  .toast.error { box-shadow: var(--mc-shadow); }
   .toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   button.toast-copy { height: 30px; min-height: 30px; width: 30px; }
 `;

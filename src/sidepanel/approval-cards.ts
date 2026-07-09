@@ -22,7 +22,7 @@ const decisionRow = (approval: PendingApproval, label: string, locked: boolean):
   `<div class="button-row"><button data-approval-action="approve" data-approval-id="${escapeHtml(approval.id)}" type="button" ${locked || approval.blocked ? "disabled" : ""}>${icon("check")}${label}</button><button class="secondary danger" data-approval-action="deny" data-approval-id="${escapeHtml(approval.id)}" type="button">${icon("x")}Deny</button></div>`;
 
 const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
-  <li class="request-card">
+  <li class="request-card glass">
     <div class="request-copy">
       <p class="eyebrow">Connection request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
@@ -38,7 +38,7 @@ const watchAssetCard = (approval: PendingApproval): string => {
     return "";
   }
   return `
-  <li class="request-card">
+  <li class="request-card glass">
     <div class="request-copy">
       <p class="eyebrow">Add token request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
@@ -53,7 +53,7 @@ const watchAssetCard = (approval: PendingApproval): string => {
 // Everything is inlined into the template (template contents are not re-wrapped)
 // so the decoded calls and combined risk-flag/insight warnings stay compact.
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
-  <li class="request-card">
+  <li class="request-card glass">
     <div class="request-copy">
       <p class="eyebrow">Transaction request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
@@ -65,7 +65,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
   </li>`;
 
 const signCard = (approval: PendingApproval, status: WalletStatus): string => `
-  <li class="request-card">
+  <li class="request-card glass">
     <div class="request-copy">
       <p class="eyebrow">Sign request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
@@ -77,7 +77,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => `
   </li>`;
 
 const strk20Card = (approval: PendingApproval, status: WalletStatus): string => `
-  <li class="request-card">
+  <li class="request-card glass">
     <div class="request-copy">
       <p class="eyebrow">Private transaction request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
@@ -89,7 +89,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
   </li>`;
 
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `
-  <li class="request-card">
+  <li class="request-card glass">
     <div class="request-copy">
       <p class="eyebrow">Network switch request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
@@ -101,7 +101,7 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
   </li>`;
 
 const addChainCard = (approval: PendingApproval): string => `
-  <li class="request-card">
+  <li class="request-card glass">
     <div class="request-copy">
       <p class="eyebrow">Add network request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
@@ -113,7 +113,7 @@ const addChainCard = (approval: PendingApproval): string => `
   </li>`;
 
 const declareCard = (approval: PendingApproval, status: WalletStatus): string => `
-  <li class="request-card">
+  <li class="request-card glass">
     <div class="request-copy">
       <p class="eyebrow">Declare contract request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>

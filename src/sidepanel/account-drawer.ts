@@ -43,7 +43,7 @@ export const accountDrawer = (
   return `
   <div class="drawer-root" data-open="false">
     <div class="drawer-backdrop" data-drawer-close></div>
-    <aside class="account-drawer" role="dialog" aria-modal="true" aria-label="Accounts">
+    <aside class="account-drawer glass" role="dialog" aria-modal="true" aria-label="Accounts">
       <header class="drawer-head">
         <div class="drawer-title">
           <h2>Accounts</h2>

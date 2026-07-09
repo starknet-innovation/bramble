@@ -4,7 +4,7 @@
  * stagger correctly.
  */
 import { describe, expect, test } from "bun:test";
-import { prefersReducedMotion, stagger } from "../src/sidepanel/motion";
+import { prefersReducedMotion, projectMomentum, stagger } from "../src/sidepanel/motion";
 import { resolveSpring, solveSpring } from "../src/ui/spring";
 import { SPRING } from "../src/ui/tokens";
 
@@ -57,5 +57,16 @@ describe("motion helpers", () => {
     // The test environment has no DOM, so the guard should report no preference
     // rather than throwing on the missing global.
     expect(prefersReducedMotion()).toBe(false);
+  });
+
+  test("projectMomentum carries a flick forward in the velocity's direction", () => {
+    // Zero velocity lands where the finger left off; the projection grows with
+    // speed and mirrors sign, so a leftward flick projects a negative offset.
+    expect(projectMomentum(0)).toBe(0);
+    expect(projectMomentum(-800)).toBeLessThan(0);
+    expect(projectMomentum(800)).toBeGreaterThan(0);
+    expect(Math.abs(projectMomentum(1600))).toBeGreaterThan(Math.abs(projectMomentum(400)));
+    // A snappier deceleration rate travels less distance for the same velocity.
+    expect(projectMomentum(800, 0.99)).toBeLessThan(projectMomentum(800, 0.998));
   });
 });

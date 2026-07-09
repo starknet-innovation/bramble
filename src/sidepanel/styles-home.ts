@@ -19,14 +19,14 @@ export const HOME_STYLES = `
     inset: 0;
     opacity: 0;
     position: absolute;
-    transition: opacity ${MOTION.drawerMs}ms ${MOTION.ease};
+    transition: opacity var(--spring-drawer-ms) var(--ease-drawer);
   }
   .drawer-root[data-open="true"] .drawer-backdrop { opacity: 1; }
+  /* Left sheet on the Liquid Glass material (background/blur/shadow from .glass),
+     settling with the iOS drawer spring. Enter and exit share one path. */
   .account-drawer {
-    background: var(--mc-panel);
     border-radius: 0 ${RADIUS.xl} ${RADIUS.xl} 0;
     bottom: 0;
-    box-shadow: var(--mc-shadow);
     display: flex;
     flex-direction: column;
     gap: ${SPACE.md};
@@ -34,17 +34,18 @@ export const HOME_STYLES = `
     padding: ${SPACE.lg} ${SPACE.md} ${SPACE.md};
     position: absolute;
     top: 0;
+    touch-action: pan-y;
     transform: translateX(-104%);
     transition:
-      transform ${MOTION.drawerMs}ms ${MOTION.ease},
-      visibility 0s linear ${MOTION.drawerMs}ms;
+      transform var(--spring-drawer-ms) var(--spring-drawer),
+      visibility 0s linear var(--spring-drawer-ms);
     visibility: hidden;
     width: min(300px, 88%);
     will-change: transform;
   }
   .drawer-root[data-open="true"] .account-drawer {
     transform: translateX(0);
-    transition: transform ${MOTION.drawerMs}ms ${MOTION.ease};
+    transition: transform var(--spring-drawer-ms) var(--spring-drawer);
     visibility: visible;
   }
   .drawer-head { align-items: center; display: flex; gap: ${SPACE.sm}; justify-content: space-between; }
@@ -75,7 +76,7 @@ export const HOME_STYLES = `
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .drawer-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .drawer-foot { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.sm}; }
-  .drawer-root[data-open="true"] .drawer-list li { animation: drawer-item ${MOTION.tabMs}ms ${MOTION.ease} both; }
+  .drawer-root[data-open="true"] .drawer-list li { animation: drawer-item ${MOTION.tabMs}ms var(--ease-out) both; }
   .drawer-root[data-open="true"] .drawer-list li:nth-child(2) { animation-delay: 30ms; }
   .drawer-root[data-open="true"] .drawer-list li:nth-child(3) { animation-delay: 60ms; }
   .drawer-root[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
@@ -112,13 +113,13 @@ export const HOME_STYLES = `
     height: 3px;
     left: 0;
     position: absolute;
-    transition: transform ${MOTION.tabMs}ms ${MOTION.ease}, width ${MOTION.tabMs}ms ${MOTION.ease};
+    transition: transform ${MOTION.tabMs}ms var(--ease-in-out), width ${MOTION.tabMs}ms var(--ease-in-out);
     width: 24px;
   }
   .tab-actions { align-items: center; display: flex; flex: none; gap: 2px; margin-bottom: 6px; }
   .tab-actions .icon-button { height: 32px; width: 32px; }
   .tab-panel { display: grid; gap: ${SPACE.sm}; }
-  .tab-panel.is-entering { animation: panel-enter ${MOTION.enterMs}ms ${MOTION.ease} both; }
+  .tab-panel.is-entering { animation: panel-enter ${MOTION.enterMs}ms var(--ease-out) both; }
   button.tab-more {
     color: var(--mc-muted);
     font-weight: 650;
@@ -147,12 +148,19 @@ export const HOME_STYLES = `
       transform ${MOTION.liftMs}ms ${MOTION.pop};
     width: 100%;
   }
-  button.collectible-card:not(:disabled):hover {
-    background: var(--mc-hover);
-    box-shadow: var(--mc-shadow-sm);
-    transform: translateY(-2px);
-  }
+  button.collectible-card:not(:disabled):hover { background: var(--mc-hover); }
   button.collectible-card:not(:disabled):active { background: var(--mc-soft-press); box-shadow: none; transform: scale(0.97); }
+
+  /* Hover lift is gated to fine pointers so a tap on touch never leaves an
+     element floating (touch fires a phantom :hover). Pointer devices get the
+     2px rise + soft shadow; press feedback (scale) is universal. */
+  @media (hover: hover) and (pointer: fine) {
+    button.action-tile:not(:disabled):hover,
+    button.collectible-card:not(:disabled):hover {
+      box-shadow: var(--mc-shadow-sm);
+      transform: translateY(-2px);
+    }
+  }
   .collectible-art {
     align-items: center;
     background: var(--mc-soft);
@@ -177,13 +185,15 @@ export const HOME_STYLES = `
   #activity-refresh[data-busy] .icon,
   #detect-tokens[data-busy] .icon { animation: spin 800ms linear infinite; }
 
-  /* Motion: scene entrances stagger the hero, tiles, and first rows */
-  .shell-animate .screen { animation: screen-enter ${MOTION.enterMs}ms ${MOTION.ease} both; }
-  .shell-animate .hero-total { animation: rise-in ${MOTION.enterMs}ms ${MOTION.ease} both; }
-  .shell-animate .action-tile { animation: rise-in 240ms ${MOTION.ease} both; }
+  /* Motion: scene entrances stagger the hero, tiles, and first rows with the
+     strong ease-out curve; screens enter under the direction-aware view
+     transition, this cascade brings their content in behind it. */
+  .shell-animate .screen { animation: screen-enter ${MOTION.enterMs}ms var(--ease-out) both; }
+  .shell-animate .hero-total { animation: rise-in ${MOTION.enterMs}ms var(--ease-out) both; }
+  .shell-animate .action-tile { animation: rise-in 240ms var(--ease-out) both; }
   .shell-animate .action-tile:nth-child(2) { animation-delay: 40ms; }
   .shell-animate .action-tile:nth-child(3) { animation-delay: 80ms; }
-  .shell-animate .token-list li { animation: rise-in 260ms ${MOTION.ease} both; }
+  .shell-animate .token-list li { animation: rise-in 260ms var(--ease-out) both; }
   .shell-animate .token-list li:nth-child(1) { animation-delay: 40ms; }
   .shell-animate .token-list li:nth-child(2) { animation-delay: 70ms; }
   .shell-animate .token-list li:nth-child(3) { animation-delay: 100ms; }
@@ -206,10 +216,6 @@ export const HOME_STYLES = `
     from { opacity: 0; transform: translateX(-10px); }
     to { opacity: 1; transform: translateX(0); }
   }
-  @keyframes toast-enter {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
   @keyframes glyph-pop {
     from { opacity: 0; transform: scale(0.4); }
     to { opacity: 1; transform: scale(1); }
@@ -228,7 +234,7 @@ export const HOME_STYLES = `
     .shell-animate .token-list li, .tab-panel.is-entering,
     .drawer-root[data-open="true"] .drawer-list li, .copy-confirm .icon,
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
-    #detect-tokens[data-busy] .icon, .toast { animation: none; }
+    #detect-tokens[data-busy] .icon { animation: none; }
     button, input, select, textarea, .tab-indicator, .tab-icon,
     .account-drawer, .drawer-backdrop, .account-name .icon { transition: none; }
     button.action-tile:not(:disabled):hover,

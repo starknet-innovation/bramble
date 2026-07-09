@@ -92,3 +92,14 @@ export const spring = (
  */
 export const stagger = (count: number, step = 50, base = 0): number[] =>
   Array.from({ length: Math.max(0, count) }, (_, index) => base + index * step);
+
+/**
+ * Projects where a flick would come to rest, Apple's exponential-decay momentum
+ * model from *Designing Fluid Interfaces* (not the physics-textbook form). Given
+ * a release velocity in px/s it returns the extra displacement (px, sign follows
+ * the velocity) the gesture would carry, so a drag handler can pick its snap
+ * target from where the motion is *going* rather than where the finger left off.
+ * `decelerationRate` ≈ 0.998 gives a normal scroll feel; lower is snappier.
+ */
+export const projectMomentum = (velocity: number, decelerationRate = 0.998): number =>
+  ((velocity / 1000) * decelerationRate) / (1 - decelerationRate);

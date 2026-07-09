@@ -160,7 +160,13 @@ Material: opt a surface into Apple-style Liquid Glass by adding `class="glass"` 
 to materialize on entry). It provides `backdrop-filter` blur + saturate, a skin-driven tint, an
 inset specular edge highlight, and a depth shadow. Use it sparingly — one translucent layer at a
 time, never stacked. It degrades to a solid panel where `backdrop-filter` is unsupported and
-frosts to near-solid under `prefers-reduced-transparency` / `prefers-contrast`.
+frosts to near-solid under `prefers-reduced-transparency` / `prefers-contrast`. Applied to the
+floating chrome and consequential surfaces — the bottom dock, the account drawer, dApp
+approval/sign cards, and toasts — while content surfaces (rows, tiles, detail tiles) stay solid.
+
+Gestures: the account drawer and toasts are drag-dismissible with 1:1 pointer tracking and
+velocity-projected momentum (`projectMomentum` in `src/sidepanel/motion.ts`) deciding whether a
+release falls closed or springs back; both cut to their resting state under `prefers-reduced-motion`.
 
 Interaction contract: controls are borderless — structure comes from elevation and spacing — and
 feedback transforms stay inside a bounded envelope (press scale 0.92–1.0, hover/press lift ≤ 2px)

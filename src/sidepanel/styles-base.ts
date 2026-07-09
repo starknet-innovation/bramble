@@ -212,11 +212,7 @@ export const BASE_STYLES = `
       box-shadow ${MOTION.liftMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
-  button.action-tile:not(:disabled):hover {
-    background: var(--mc-hover);
-    box-shadow: var(--mc-shadow-sm);
-    transform: translateY(-2px);
-  }
+  button.action-tile:not(:disabled):hover { background: var(--mc-hover); }
   button.action-tile:not(:disabled):active {
     background: var(--mc-soft-press);
     box-shadow: none;
@@ -235,14 +231,11 @@ export const BASE_STYLES = `
   .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: 650; }
   .tile-icon .icon { height: 20px; width: 20px; }
 
-  /* Bottom dock */
+  /* Bottom dock: floating translucent nav on the shared Liquid Glass material
+     (see .glass in ./styles-material.ts) — content scrolls under it. */
   .wallet-dock {
-    background: color-mix(in srgb, var(--mc-panel) 86%, transparent);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
     border-radius: ${RADIUS.lg};
     bottom: ${SPACE.sm};
-    box-shadow: var(--mc-shadow);
     display: grid;
     gap: 2px;
     grid-template-columns: repeat(3, minmax(0, 1fr));

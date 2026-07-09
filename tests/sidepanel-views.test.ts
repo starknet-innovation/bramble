@@ -55,7 +55,8 @@ describe("sidepanel views", () => {
     const dock = dockSlice(html);
 
     expect(WALLET_VIEWS).toContain("receive");
-    expect(html).toContain('class="wallet-dock"');
+    // The dock opts into the Liquid Glass material (see styles-material.ts).
+    expect(html).toContain('class="wallet-dock glass"');
     expect(html).toContain('role="tablist"');
     expect(dock).toContain('data-view="home"');
     expect(dock).toContain('data-view="activity"');
@@ -102,7 +103,8 @@ describe("sidepanel views", () => {
     expect(html).not.toContain('id="active-account"');
     expect(html).toContain('data-theme-id="dark"');
     expect(html).toContain('id="currency-select"');
-    expect(html).toContain('class="wallet-dock"');
+    // The dock opts into the Liquid Glass material (see styles-material.ts).
+    expect(html).toContain('class="wallet-dock glass"');
   });
 
   test("network flow lists networks, marks the active one, and returns to settings", () => {
