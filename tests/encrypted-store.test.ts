@@ -243,7 +243,7 @@ describe("createEncryptedStore", () => {
     };
   };
 
-  test("reads legacy-strength envelopes and upgrades them in place", async () => {
+  test("reads legacy-strength envelopes and upgrades them explicitly", async () => {
     const store = createMemoryStore();
     const encrypted = createEncryptedStore(store, vaultKey);
     const legacy = await legacyEnvelope(
@@ -254,9 +254,14 @@ describe("createEncryptedStore", () => {
     expect(isEncryptedEnvelope(legacy)).toBe(true);
     await store.set(vaultKey, legacy as never);
 
-    // The legacy envelope decrypts, and the read transparently re-encrypts at
-    // the current KDF strength so raising iterations never bricks a vault.
+    // The legacy envelope decrypts, but read stays side-effect-free so passive
+    // callers cannot race a write with a stale upgrade.
     expect(await encrypted.read("correct horse battery staple")).toEqual({ schemaVersion: 1 });
+    expect((await store.get(vaultKey)) as unknown).toEqual(legacy);
+
+    // The explicit upgrade path re-encrypts at the current KDF strength after a
+    // successful decrypt; the vault service runs this through its write queue.
+    await encrypted.upgradeLegacyEnvelope("correct horse battery staple");
     const upgraded = await store.get(vaultKey);
     if (!isEncryptedEnvelope(upgraded)) {
       throw new Error("upgrade did not persist a valid envelope");
@@ -266,7 +271,7 @@ describe("createEncryptedStore", () => {
 
     // A wrong passphrase never triggers the upgrade path.
     await store.set(vaultKey, legacy as never);
-    await expect(encrypted.read("wrong horse battery staple")).rejects.toThrow();
+    await expect(encrypted.upgradeLegacyEnvelope("wrong horse battery staple")).rejects.toThrow();
     expect((await store.get(vaultKey)) as unknown).toEqual(legacy);
   });
 });

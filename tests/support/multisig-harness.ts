@@ -7,6 +7,7 @@ import { createMessageHandler } from "../../src/background/messages";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
 import type { MultisigProposalStatus } from "../../src/starknet/multisig";
+import type { ActivityStatus } from "../../src/storage/activity-store";
 import { memoryMultisigStore } from "../../src/storage/multisig-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
 
@@ -26,6 +27,11 @@ export const HARNESS_OTHER_SIGNER =
  * ~139-character length (a short stub once masked an id-length cap).
  */
 export const HARNESS_TX_ID = `0x7${"a".repeat(62)}`;
+
+/**
+ * Transaction hash returned by submitted invoke calls.
+ */
+export const HARNESS_SUBMIT_HASH = "0x7cd";
 
 /**
  * Active harness account.
@@ -101,6 +107,7 @@ export type MultisigHarnessOptions = {
   readonly contractAt?: boolean;
   readonly proposalStatus?: () => MultisigProposalStatus;
   readonly signers?: readonly string[];
+  readonly transactionStatuses?: () => Readonly<Record<string, ActivityStatus>>;
 };
 
 /**
@@ -135,7 +142,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
         return { decimals: 18, name: "Ether", symbol: "ETH" };
       },
       async getTransactionStatuses() {
-        return {};
+        return options.transactionStatuses?.() ?? {};
       },
       multisig: {
         async computeTransactionId() {
@@ -174,7 +181,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
       },
       async submitInvokeTransaction(input) {
         invokeCalls.push(input.calls);
-        return { calls: input.calls, transactionHash: "0x7cd" };
+        return { calls: input.calls, transactionHash: HARNESS_SUBMIT_HASH };
       },
     },
     undefined,

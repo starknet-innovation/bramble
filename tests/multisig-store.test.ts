@@ -66,6 +66,10 @@ describe("multisig store", () => {
     expect(isMultisigRecord({ ...record, quorum: 3 })).toBe(false);
     expect(isMultisigRecord({ ...record, extra: true })).toBe(false);
     expect(isMultisigProposalRecord(proposal)).toBe(true);
+    expect(isMultisigProposalRecord({ ...proposal, submitTransactionHash: "0x1234" })).toBe(true);
+    expect(isMultisigProposalRecord({ ...proposal, submitTransactionHash: "not-a-hash" })).toBe(
+      false,
+    );
     expect(isMultisigProposalRecord({ ...proposal, state: "unknown" })).toBe(false);
     expect(isMultisigProposalRecord({ ...proposal, id: "other" })).toBe(false);
   });

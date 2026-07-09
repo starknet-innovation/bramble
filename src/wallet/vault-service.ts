@@ -217,7 +217,7 @@ export const createWalletVaultService = ({
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
 
-  const readVault = async (vaultPassphrase: string): Promise<Vault> => {
+  const readVaultSnapshot = async (vaultPassphrase: string): Promise<Vault> => {
     if (!isVaultPassphrase(vaultPassphrase)) {
       throw new WalletError("Passphrase must be at least 12 characters");
     }
@@ -227,8 +227,9 @@ export const createWalletVaultService = ({
   // Serializes vault mutations. Every mutation is a read-modify-write of the
   // encrypted store and the background dispatches messages concurrently, so
   // two interleaved mutations would silently lose one write (e.g. a grant
-  // racing an account derivation). Failures do not poison the queue. Reads
-  // stay unserialized — they cannot clobber state.
+  // racing an account derivation). Legacy KDF upgrade writes also run here:
+  // passive reads may trigger them, but they must never clobber a queued
+  // mutation. Failures do not poison the queue.
   let mutationQueue: Promise<unknown> = Promise.resolve();
   const serialized = <T>(run: () => Promise<T>): Promise<T> => {
     const next = mutationQueue.then(run, run);
@@ -236,9 +237,17 @@ export const createWalletVaultService = ({
     return next;
   };
 
+  const readVault = async (vaultPassphrase: string): Promise<Vault> => {
+    const vault = await readVaultSnapshot(vaultPassphrase);
+    await serialized(() => encryptedStore.upgradeLegacyEnvelope(vaultPassphrase)).catch(
+      () => undefined,
+    );
+    return vault;
+  };
+
   const service: WalletVaultService = {
     async addDerivedAccount(input) {
-      const vault = await readVault(input.vaultPassphrase);
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
       if (!vault.mnemonic) {
         throw new WalletError("No recovery phrase stored for this wallet");
       }
@@ -266,7 +275,7 @@ export const createWalletVaultService = ({
       return account;
     },
     async createAccount(input) {
-      const vault = await readVault(input.vaultPassphrase);
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
       const { account, privateKey } = await deriveAccount(kms, input);
 
       if (vault.accounts.some((stored) => stored.id === account.id)) {
@@ -289,7 +298,7 @@ export const createWalletVaultService = ({
       return account;
     },
     async ensureNetworkAccount(input) {
-      const vault = await readVault(input.vaultPassphrase);
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
       const source =
         (vault.activeAccountId
           ? vault.accounts.find((stored) => stored.id === vault.activeAccountId)
@@ -356,7 +365,7 @@ export const createWalletVaultService = ({
         throw new WalletError("Invalid origin");
       }
 
-      const vault = await readVault(input.vaultPassphrase);
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
       const accountId = input.accountId ?? vault.activeAccountId;
       if (!accountId) {
         throw new WalletError("No account selected");
@@ -396,7 +405,7 @@ export const createWalletVaultService = ({
         throw new WalletError("Invalid origin");
       }
 
-      const vault = await readVault(input.vaultPassphrase);
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
       const originGrants = vault.originGrants.filter((grant) => grant.origin !== input.origin);
       if (originGrants.length !== vault.originGrants.length) {
         await writeVault(encryptedStore, { ...vault, originGrants }, input.vaultPassphrase);
@@ -404,7 +413,7 @@ export const createWalletVaultService = ({
       return connectedSitesFromVault({ ...vault, originGrants });
     },
     async setActiveAccount(input) {
-      const vault = await readVault(input.vaultPassphrase);
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
       const account = findAccount(vault, input.accountId);
 
       await writeVault(

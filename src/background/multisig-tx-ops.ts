@@ -34,6 +34,7 @@ import {
   readProposeMultisigInput,
 } from "./multisig-inputs";
 import {
+  isProposalSubmitPending,
   type MultisigOpsDeps,
   multisigContext,
   multisigRpc,
@@ -109,15 +110,15 @@ const requireUntrackedVerification = (
     ? "verify this proposal on a block explorer or with the proposer, then acknowledge before confirming"
     : null;
 
-// A known proposal reading as not-found means the chain has not seen it yet
-// (a just-broadcast submit) — never persist that over the stored snapshot, or
-// the record dead-ends with no actions and cannot even be re-tracked.
+// A wallet-submitted proposal reading as not-found is kept only while its submit
+// transaction is still pending. Once that submit is accepted/rejected, not-found
+// is the authoritative chain state and should be persisted.
 const persistFreshStatus = async (
   deps: MultisigOpsDeps,
   proposal: MultisigProposalRecord,
   status: MultisigProposalStatus,
 ): Promise<void> => {
-  if (status.state === "not-found") {
+  if (status.state === "not-found" && (await isProposalSubmitPending(deps, proposal))) {
     return;
   }
   await deps.multisigStore.upsertProposal({
@@ -224,6 +225,7 @@ export const handleMultisigTxOps = async (
       id,
       multisigId: refreshed.record.id,
       state: "pending",
+      submitTransactionHash: transactionHash,
       summary,
       txId,
     };
