@@ -25,6 +25,7 @@ import {
   ORIGIN,
   PADDED_FELT,
   PADDED_TXN_HASH,
+  RECIPIENT,
   REQUEST_ID,
   SEPOLIA_CHAIN_ID,
   SIGNATURE_FELT,
@@ -343,10 +344,12 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     request: {
       id: REQUEST_ID,
       method: "wallet_strk20InvokeTransaction",
-      params: { actions: [{ action: "withdraw", amount: "10", token: TOKEN }] },
+      params: {
+        actions: [{ amount: "0x0a", recipient: RECIPIENT, token: TOKEN, type: "withdraw" }],
+      },
     },
     expectedRuntime: {
-      actions: [{ action: "withdraw", amount: "10", token: TOKEN }],
+      actions: [{ amount: "0x0a", recipient: RECIPIENT, token: TOKEN, type: "withdraw" }],
       origin: ORIGIN,
       type: "wallet.strk20InvokeTransaction",
     },
@@ -375,12 +378,15 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     request: {
       id: REQUEST_ID,
       method: "wallet_strk20PrepareInvoke",
-      params: { actions: [{ action: "withdraw", amount: "10", token: TOKEN }], simulate: false },
+      params: {
+        actions: [{ amount: "0x0a", recipient: RECIPIENT, token: TOKEN, type: "withdraw" }],
+        simulate: true,
+      },
     },
     expectedRuntime: {
-      actions: [{ action: "withdraw", amount: "10", token: TOKEN }],
+      actions: [{ amount: "0x0a", recipient: RECIPIENT, token: TOKEN, type: "withdraw" }],
       origin: ORIGIN,
-      simulate: false,
+      simulate: true,
       type: "wallet.strk20PrepareInvoke",
     },
     backgroundResult: { callAndProof: CALL_AND_PROOF, ok: true },

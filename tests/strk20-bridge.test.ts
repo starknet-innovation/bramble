@@ -13,7 +13,12 @@ import {
 
 const origin = "https://example.com";
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+const recipient = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const uuid = "123e4567-e89b-42d3-a456-426614174000";
+
+// The spec's literal `${poolAddress}` calldata placeholder, assembled by
+// interpolation so the source carries no bare "${" template token.
+const poolAddressPlaceholder = `${"$"}{poolAddress}`;
 
 const request = (method: ProviderRequest["method"], params?: unknown): ProviderRequest =>
   ({ id: uuid, method, ...(params === undefined ? {} : { params }) }) as ProviderRequest;
@@ -39,12 +44,12 @@ describe("strk20 bridge params", () => {
     expect(
       toRuntimeMessage(
         request("wallet_strk20PrepareInvoke", {
-          actions: [{ action: "deposit", amount: "10", token }],
+          actions: [{ amount: "0x0a", token, type: "deposit" }],
         }),
         origin,
       ),
     ).toEqual({
-      actions: [{ action: "deposit", amount: "10", token }],
+      actions: [{ amount: "0x0a", token, type: "deposit" }],
       origin,
       simulate: false,
       type: "wallet.strk20PrepareInvoke",
@@ -54,7 +59,45 @@ describe("strk20 bridge params", () => {
     ).toBeNull();
   });
 
-  test("maps invoke params to a runtime message", () => {
+  test("maps prepare params carrying an explicit simulate flag", () => {
+    expect(
+      toRuntimeMessage(
+        request("wallet_strk20PrepareInvoke", {
+          actions: [{ amount: "OPEN", recipient, token, type: "transfer" }],
+          simulate: true,
+        }),
+        origin,
+      ),
+    ).toEqual({
+      actions: [{ amount: "OPEN", recipient, token, type: "transfer" }],
+      origin,
+      simulate: true,
+      type: "wallet.strk20PrepareInvoke",
+    });
+  });
+
+  test("maps invoke params with a flat, placeholder-bearing invoke action", () => {
+    expect(
+      toRuntimeMessage(
+        request("wallet_strk20InvokeTransaction", {
+          actions: [
+            { amount: "0x1", recipient, token, type: "withdraw" },
+            { calldata: ["0x1", poolAddressPlaceholder], contract: token, type: "invoke" },
+          ],
+        }),
+        origin,
+      ),
+    ).toEqual({
+      actions: [
+        { amount: "0x1", recipient, token, type: "withdraw" },
+        { calldata: ["0x1", poolAddressPlaceholder], contract: token, type: "invoke" },
+      ],
+      origin,
+      type: "wallet.strk20InvokeTransaction",
+    });
+  });
+
+  test("rejects an action using the old `action` discriminator", () => {
     expect(
       toRuntimeMessage(
         request("wallet_strk20InvokeTransaction", {
@@ -62,11 +105,7 @@ describe("strk20 bridge params", () => {
         }),
         origin,
       ),
-    ).toEqual({
-      actions: [{ action: "withdraw", amount: "1", token }],
-      origin,
-      type: "wallet.strk20InvokeTransaction",
-    });
+    ).toBeNull();
   });
 });
 

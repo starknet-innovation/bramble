@@ -47,6 +47,8 @@ export const SEPOLIA_CHAIN_ID = "0x534e5f5345504f4c4941";
 export const MAIN_CHAIN_ID = "0x534e5f4d41494e";
 /** A well-formed STRK20 token / ERC20 asset ADDRESS. */
 export const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+/** A well-formed STRK20 recipient ADDRESS (withdraw target / transfer payee). */
+export const RECIPIENT = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 /** A valid felt ADDRESS deliberately NOT in the wallet's default token list, so
  *  wallet_watchAsset must hold behind approval rather than dedup on a listed one. */
 export const WATCH_ASSET_TOKEN = "0x64656d6f746f6b656e";

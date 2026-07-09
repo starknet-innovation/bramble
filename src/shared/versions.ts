@@ -19,4 +19,4 @@ export const SUPPORTED_SPECS: readonly [string, ...string[]] = ["0.10.0"];
 /**
  * Wallet-API versions this wallet implements (API_VERSION values).
  */
-export const SUPPORTED_WALLET_API: readonly [string, ...string[]] = ["0.7.2"];
+export const SUPPORTED_WALLET_API: readonly [string, ...string[]] = ["0.10.3"];
