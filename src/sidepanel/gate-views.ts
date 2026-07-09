@@ -6,6 +6,7 @@
 import type { WalletStatus } from "../popup/responses";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 import { icon } from "./icons";
+import { requiresMainnetAck } from "./mainnet-ack";
 import { networkOptions } from "./parts";
 
 const backupVerifyInputs = (): string =>
@@ -32,6 +33,7 @@ export const onboarding = (status: WalletStatus): string => `
         <textarea name="mnemonic" required autocomplete="off" spellcheck="false" placeholder="12 or 24 words separated by spaces"></textarea>
         <span class="hint">Anyone with these words controls the wallet. Store them offline.</span>
       </label>
+      <button id="phrase-toggle" class="secondary small" type="button" hidden>${icon("book")}Tap to show phrase</button>
       <label><span>Vault passphrase</span>
         <input name="vaultPassphrase" type="password" minlength="12" required autocomplete="new-password" placeholder="At least 12 characters" />
         <span class="hint">Unlocks the wallet on this device.</span>
@@ -41,6 +43,10 @@ export const onboarding = (status: WalletStatus): string => `
         <div class="verify-grid">${backupVerifyInputs()}</div>
         <p id="verify-result" role="status"></p>
       </div>
+      <label id="mainnet-ack" class="hint"${requiresMainnetAck(status.networkId) ? "" : " hidden"}>
+        <input name="mainnetAck" type="checkbox" />
+        <span>You are creating a wallet on Starknet Mainnet with real funds.</span>
+      </label>
       <p id="form-result" role="status"></p>
       <div class="gate-cta">
         <button id="generate-button" class="secondary" type="button" ${status.ready ? "" : "disabled"}>${icon("refresh")}Generate phrase</button>

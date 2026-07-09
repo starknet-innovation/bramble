@@ -4,16 +4,27 @@
  * envelope, and STRK20_BALANCE_ENTRY. Every value crossing the dapp boundary is
  * validated here so a single source of truth backs both the provider bridge and
  * the background handler. These guards are pure and never touch secret material.
+ *
+ * The action shapes track the canonical Wallet-API 0.10.3 STRK20 definitions
+ * (starkware-libs/starknet-specs wallet-api/wallet_rpc.json): actions are
+ * discriminated by a `type` field; withdraw carries a required `recipient`;
+ * transfer accepts either a FELT amount or the literal string "OPEN" (an open
+ * note); invoke is the flat `{ type, contract, calldata }` shape (no
+ * entry_point) whose calldata items are FELTs or wallet-resolved placeholder
+ * strings. The INVOKE_CALL used by the STRK20_CALL_AND_PROOF result is a
+ * separate, prover-produced shape and keeps its `entry_point` field.
  */
 import { hasOnlyKnownKeys, isRecord } from "../../shared/json";
 import { STARK_FIELD_PRIME } from "../networks";
 
-// A felt fits in the Stark field. Amounts are STRK20 token quantities that may
-// legitimately reach u256, so they are bounded by 2^256 rather than the field.
-const U256_LIMIT = 1n << 256n;
 const HEX_FELT_PATTERN = /^0x[0-9a-fA-F]+$/;
-const INTEGER_PATTERN = /^(?:0x[0-9a-fA-F]+|0|[1-9][0-9]*)$/;
+// A calldata placeholder the wallet resolves during action assembly:
+// `${openNoteIds[N]}` (zero-based) or `${poolAddress}`.
+const CALLDATA_PLACEHOLDER_PATTERN = /^\$\{(?:openNoteIds\[[0-9]+\]|poolAddress)\}$/;
 const ENTRY_POINT_PATTERN = /^(?:0x[0-9a-fA-F]{1,64}|[A-Za-z_][A-Za-z0-9_]*)$/;
+// The literal transfer amount that requests a new open note instead of a fixed
+// transfer.
+const OPEN_AMOUNT = "OPEN";
 
 const withinField = (value: string): boolean => {
   try {
@@ -40,28 +51,29 @@ export const isStrk20Address = (value: unknown): value is string =>
   isStrk20Felt(value) && BigInt(value) > 0n;
 
 /**
- * Checks whether an untrusted value is a positive STRK20 amount (decimal or
- * hex integer string, bounded by u256).
+ * Checks whether an untrusted value is a spec STRK20 amount: a FELT quantity in
+ * the token's smallest unit. Deposit and withdraw amounts use this directly;
+ * transfer additionally accepts the literal "OPEN".
  */
-export const isStrk20Amount = (value: unknown): value is string => {
-  if (typeof value !== "string" || value.length > 80 || !INTEGER_PATTERN.test(value)) {
-    return false;
-  }
-  const amount = BigInt(value);
-  return amount > 0n && amount < U256_LIMIT;
-};
+export const isStrk20Amount = (value: unknown): value is string => isStrk20Felt(value);
 
-const isCalldataFelt = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= 80 &&
-  INTEGER_PATTERN.test(value) &&
-  withinField(value);
+// Checks whether an untrusted value is a transfer amount: a FELT or the literal
+// "OPEN" open-note request.
+const isStrk20TransferAmount = (value: unknown): value is string =>
+  value === OPEN_AMOUNT || isStrk20Felt(value);
+
+// Checks whether an untrusted value is a STRK20_CALLDATA_ITEM: a FELT or one of
+// the wallet-resolved placeholder strings.
+const isStrk20CalldataItem = (value: unknown): value is string =>
+  isStrk20Felt(value) || (typeof value === "string" && CALLDATA_PLACEHOLDER_PATTERN.test(value));
 
 const isEntryPoint = (value: unknown): value is string =>
   typeof value === "string" && ENTRY_POINT_PATTERN.test(value);
 
 /**
  * A spec INVOKE_CALL: a contract address, an entry point, and felt calldata.
+ * This is the prover-produced call carried inside a STRK20_CALL_AND_PROOF
+ * result, distinct from the flat STRK20_INVOKE_ACTION on the request side.
  */
 export type Strk20InvokeCall = {
   readonly calldata: readonly string[];
@@ -80,7 +92,7 @@ export const readStrk20InvokeCall = (value: unknown): Strk20InvokeCall | null =>
     !isStrk20Address(value.contract_address) ||
     !isEntryPoint(value.entry_point) ||
     !Array.isArray(value.calldata) ||
-    !value.calldata.every(isCalldataFelt)
+    !value.calldata.every(isStrk20Felt)
   ) {
     return null;
   }
@@ -93,45 +105,50 @@ export const readStrk20InvokeCall = (value: unknown): Strk20InvokeCall | null =>
 
 /**
  * STRK20_DEPOSIT_ACTION: move a token amount from the public to the private
- * balance.
+ * balance (always to self).
  */
 export type Strk20DepositAction = {
-  readonly action: "deposit";
   readonly amount: string;
   readonly token: string;
+  readonly type: "deposit";
 };
 
 /**
- * STRK20_WITHDRAW_ACTION: move a token amount from the private to the public
- * balance.
+ * STRK20_WITHDRAW_ACTION: move a token amount from the private balance to a
+ * public recipient address.
  */
 export type Strk20WithdrawAction = {
-  readonly action: "withdraw";
-  readonly amount: string;
-  readonly token: string;
-};
-
-/**
- * STRK20_TRANSFER_ACTION: move a token amount from the private balance to a
- * recipient.
- */
-export type Strk20TransferAction = {
-  readonly action: "transfer";
   readonly amount: string;
   readonly recipient: string;
   readonly token: string;
+  readonly type: "withdraw";
 };
 
 /**
- * STRK20_INVOKE_ACTION: wrap an INVOKE_CALL executed privately.
+ * STRK20_TRANSFER_ACTION: privately transfer a token amount to a registered
+ * recipient inside the pool. `amount` may be the literal "OPEN" to create an
+ * open note instead of transferring a fixed amount.
+ */
+export type Strk20TransferAction = {
+  readonly amount: string;
+  readonly recipient: string;
+  readonly token: string;
+  readonly type: "transfer";
+};
+
+/**
+ * STRK20_INVOKE_ACTION: invoke an arbitrary contract as part of the same STRK20
+ * transaction. Calldata items are FELTs or wallet-resolved placeholder strings.
  */
 export type Strk20InvokeAction = {
-  readonly action: "invoke";
-  readonly call: Strk20InvokeCall;
+  readonly calldata: readonly string[];
+  readonly contract: string;
+  readonly type: "invoke";
 };
 
 /**
- * STRK20_ACTION: the discriminated union of the four privacy actions.
+ * STRK20_ACTION: the discriminated union of the four privacy actions, keyed on
+ * the `type` field.
  */
 export type Strk20Action =
   | Strk20DepositAction
@@ -139,46 +156,56 @@ export type Strk20Action =
   | Strk20TransferAction
   | Strk20WithdrawAction;
 
-const readValueMoveAction = (
-  value: Record<string, unknown>,
-  action: "deposit" | "withdraw",
-): Strk20DepositAction | Strk20WithdrawAction | null =>
-  hasOnlyKnownKeys(value, ["action", "amount", "token"]) &&
+const readDepositAction = (value: Record<string, unknown>): Strk20DepositAction | null =>
+  hasOnlyKnownKeys(value, ["amount", "token", "type"]) &&
   isStrk20Address(value.token) &&
   isStrk20Amount(value.amount)
-    ? { action, amount: value.amount, token: value.token }
+    ? { amount: value.amount, token: value.token, type: "deposit" }
+    : null;
+
+const readWithdrawAction = (value: Record<string, unknown>): Strk20WithdrawAction | null =>
+  hasOnlyKnownKeys(value, ["amount", "recipient", "token", "type"]) &&
+  isStrk20Address(value.token) &&
+  isStrk20Address(value.recipient) &&
+  isStrk20Amount(value.amount)
+    ? { amount: value.amount, recipient: value.recipient, token: value.token, type: "withdraw" }
+    : null;
+
+const readTransferAction = (value: Record<string, unknown>): Strk20TransferAction | null =>
+  hasOnlyKnownKeys(value, ["amount", "recipient", "token", "type"]) &&
+  isStrk20Address(value.token) &&
+  isStrk20Address(value.recipient) &&
+  isStrk20TransferAmount(value.amount)
+    ? { amount: value.amount, recipient: value.recipient, token: value.token, type: "transfer" }
+    : null;
+
+const readInvokeAction = (value: Record<string, unknown>): Strk20InvokeAction | null =>
+  hasOnlyKnownKeys(value, ["calldata", "contract", "type"]) &&
+  isStrk20Address(value.contract) &&
+  Array.isArray(value.calldata) &&
+  value.calldata.every(isStrk20CalldataItem)
+    ? { calldata: [...value.calldata], contract: value.contract, type: "invoke" }
     : null;
 
 /**
- * Strictly parses one STRK20_ACTION by its `action` discriminant, rejecting any
+ * Strictly parses one STRK20_ACTION by its `type` discriminant, rejecting any
  * variant carrying unexpected keys or malformed fields.
  */
 export const readStrk20Action = (value: unknown): Strk20Action | null => {
-  if (!isRecord(value) || typeof value.action !== "string") {
+  if (!isRecord(value) || typeof value.type !== "string") {
     return null;
   }
-  if (value.action === "deposit" || value.action === "withdraw") {
-    return readValueMoveAction(value, value.action);
+  if (value.type === "deposit") {
+    return readDepositAction(value);
   }
-  if (value.action === "transfer") {
-    return hasOnlyKnownKeys(value, ["action", "amount", "recipient", "token"]) &&
-      isStrk20Address(value.token) &&
-      isStrk20Address(value.recipient) &&
-      isStrk20Amount(value.amount)
-      ? {
-          action: "transfer",
-          amount: value.amount,
-          recipient: value.recipient,
-          token: value.token,
-        }
-      : null;
+  if (value.type === "withdraw") {
+    return readWithdrawAction(value);
   }
-  if (value.action === "invoke") {
-    if (!hasOnlyKnownKeys(value, ["action", "call"])) {
-      return null;
-    }
-    const call = readStrk20InvokeCall(value.call);
-    return call ? { action: "invoke", call } : null;
+  if (value.type === "transfer") {
+    return readTransferAction(value);
+  }
+  if (value.type === "invoke") {
+    return readInvokeAction(value);
   }
   return null;
 };

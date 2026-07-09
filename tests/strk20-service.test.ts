@@ -15,6 +15,7 @@ import {
 import type { AccountRef } from "../src/storage/vault-schema";
 
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
+const recipient = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const account = { id: "SN_SEPOLIA:0x1", networkId: "SN_SEPOLIA" } as unknown as AccountRef;
 const rpcUrls = ["https://rpc.example"];
 const callAndProof: Strk20CallAndProof = {
@@ -65,7 +66,7 @@ describe("strk20 service", () => {
     await expect(
       prepareStrk20CallAndProof(service({}), {
         account,
-        actions: [{ action: "withdraw", amount: "10", token }],
+        actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
         proverUrl: null,
         rpcUrls,
         simulate: false,
@@ -84,7 +85,7 @@ describe("strk20 service", () => {
           }),
           {
             account,
-            actions: [{ action: "deposit", amount: "1", token }],
+            actions: [{ amount: "0x1", token, type: "deposit" }],
             proverUrl: null,
             rpcUrls,
             simulate: false,
@@ -102,7 +103,7 @@ describe("strk20 service", () => {
           }),
           {
             account,
-            actions: [{ action: "withdraw", amount: "1000", token }],
+            actions: [{ amount: "0x3e8", recipient, token, type: "withdraw" }],
             proverUrl: null,
             rpcUrls,
             simulate: false,
@@ -115,8 +116,8 @@ describe("strk20 service", () => {
         prepareStrk20CallAndProof(service({}), {
           account,
           actions: [
-            { action: "deposit", amount: "5", token },
-            { action: "withdraw", amount: "5", token },
+            { amount: "0x05", token, type: "deposit" },
+            { amount: "0x05", recipient, token, type: "withdraw" },
           ],
           proverUrl: null,
           rpcUrls,
@@ -131,7 +132,7 @@ describe("strk20 service", () => {
       await codeOf(() =>
         prepareStrk20CallAndProof(service({ proving: unconfiguredProvingBackend }), {
           account,
-          actions: [{ action: "invoke", call: callAndProof.call }],
+          actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
           proverUrl: null,
           rpcUrls,
           simulate: false,
