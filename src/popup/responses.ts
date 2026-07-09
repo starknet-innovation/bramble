@@ -401,6 +401,7 @@ export type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
     readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+    readonly feeEstimateFailed: boolean;
     readonly flags: readonly { readonly code: string; readonly message: string }[];
     readonly requiresDeployment: boolean;
     readonly summaries: readonly string[];
@@ -464,13 +465,20 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     !hasOnlyKnownKeys(value, ["ok", "review"]) ||
     value.ok !== true ||
     !isRecord(value.review) ||
-    !hasOnlyKnownKeys(value.review, ["fee", "flags", "requiresDeployment", "summaries"])
+    !hasOnlyKnownKeys(value.review, [
+      "fee",
+      "feeEstimateFailed",
+      "flags",
+      "requiresDeployment",
+      "summaries",
+    ])
   ) {
     return false;
   }
   const review = value.review;
   return (
     (review.fee === null || isFeeShape(review.fee)) &&
+    typeof review.feeEstimateFailed === "boolean" &&
     Array.isArray(review.flags) &&
     review.flags.every(isRiskFlagShape) &&
     typeof review.requiresDeployment === "boolean" &&
