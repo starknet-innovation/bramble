@@ -4,7 +4,7 @@
  * separated.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletStatus } from "../src/popup/responses";
+import type { TokenBalance, WalletStatus } from "../src/popup/responses";
 import { dashboard, WALLET_VIEWS } from "../src/sidepanel/views";
 import type { WalletPreferences } from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
@@ -215,6 +215,62 @@ describe("sidepanel views", () => {
     expect(accountFlowHtml).toContain('id="label-form"');
     expect(accountFlowHtml).toContain('value="Savings"');
     expect(accountFlowHtml).toContain('class="option-avatar"');
+  });
+
+  test("avatars are flat single-colour chips from the palette, never gradients", () => {
+    // Clean Mono avatars: one solid --mc-avatar-* fill per account with a glyph
+    // — no <linearGradient>, so the only non-mono field is the flat chip itself.
+    const html = dashboard("home", status, [], preferences, { balances: [] });
+    expect(html).toContain('class="avatar"');
+    expect(html).toMatch(/fill="var\(--mc-avatar-\d\)"/);
+    expect(html).toContain("var(--mc-avatar-ink)");
+    expect(html).not.toContain("linearGradient");
+    expect(html).not.toContain("<defs>");
+  });
+
+  test("home hero carries the total-balance label, 24h delta, and portfolio sparkline", () => {
+    const tokenBalance: TokenBalance = {
+      address: "0x00aa",
+      balance: "10000000000000000000",
+      decimals: 18,
+      formatted: "10",
+      id: "SN_MAIN:TKN:0x00aa",
+      name: "Token",
+      networkId: "SN_MAIN",
+      symbol: "TKN",
+    };
+    // positional args: …, balances(5), deployment(6), transactions(7),
+    // connectedSites(8), prices(9), chart(10), selectedTokenId(11),
+    // allowances(12), selectedNftId(13), changes(14).
+    const html = dashboard(
+      "home",
+      status,
+      [],
+      preferences,
+      { balances: [tokenBalance] },
+      null,
+      [],
+      [],
+      { "0x00aa": 5 },
+      [1, 2, 3, 4],
+      null,
+      [],
+      null,
+      { "0x00aa": 4 },
+    );
+    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
+    // Eyebrow label above the total.
+    expect(hero).toContain('class="hero-eyebrow"');
+    expect(hero).toContain("Total balance");
+    // 24h delta line: coloured magnitude + a muted "· 24h" window; +4% ⇒ up.
+    expect(hero).toContain('class="hero-change"');
+    expect(hero).toContain('class="hero-change-amt"');
+    expect(hero).toContain("· 24h");
+    // Portfolio sparkline (reusing the shared geometry) with 7d/Today labels.
+    expect(hero).toMatch(/class="hero-spark(?:| down)"/);
+    expect(hero).toContain('class="spark-line"');
+    expect(hero).toContain("7d ago");
+    expect(hero).toContain("Today");
   });
 
   test("backup flow exports and restores non-secret data with back navigation", () => {

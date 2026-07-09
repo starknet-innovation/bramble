@@ -5,6 +5,8 @@ import { describe, expect, test } from "bun:test";
 import {
   CURRENCY_SYMBOLS,
   formatFiat,
+  portfolioDelta,
+  portfolioSeries,
   portfolioTotal,
   tokenFiatValue,
 } from "../src/sidepanel/fiat";
@@ -45,5 +47,72 @@ describe("portfolioTotal", () => {
     ];
     expect(portfolioTotal(balances, { "0xa": 5, "0xb": 10 })).toBe(40);
     expect(portfolioTotal(balances, {})).toBe(0);
+  });
+});
+
+// The home hero's 24h delta line reads its magnitude/direction from here.
+describe("portfolioDelta", () => {
+  test("reconstructs prior value from each token's 24h change and nets them", () => {
+    // A holds 100 @ $2 (+25% ⇒ prior $160); B holds 10 @ $1 (-20% ⇒ prior $12.5).
+    // current 200 + 10 = 210, prior 160 + 12.5 = 172.5 ⇒ +37.5 (+21.74%).
+    const balances = [
+      { address: "0xa", formatted: "100" },
+      { address: "0xb", formatted: "10" },
+    ];
+    const delta = portfolioDelta(balances, { "0xa": 2, "0xb": 1 }, { "0xa": 25, "0xb": -20 });
+    expect(delta?.direction).toBe("up");
+    expect(delta?.absolute).toBeCloseTo(37.5, 5);
+    expect(delta?.percent).toBeCloseTo(21.7391, 3);
+  });
+
+  test("flags a net loss as down with a positive magnitude", () => {
+    const balances = [{ address: "0xa", formatted: "10" }];
+    const delta = portfolioDelta(balances, { "0xa": 100 }, { "0xa": -20 });
+    // 10 @ $100 = 1000 now, prior 1000 / 0.8 = 1250 ⇒ -250 (-20%).
+    expect(delta?.direction).toBe("down");
+    expect(delta?.absolute).toBeCloseTo(250, 5);
+    expect(delta?.percent).toBeCloseTo(20, 5);
+  });
+
+  test("treats a missing change as flat and returns null with no baseline", () => {
+    // Only B is priced and it has no change ⇒ prior equals current ⇒ zero move.
+    const balances = [
+      { address: "0xa", formatted: "5" },
+      { address: "0xb", formatted: "4" },
+    ];
+    const flat = portfolioDelta(balances, { "0xb": 3 }, {});
+    expect(flat).toEqual({ absolute: 0, direction: "up", percent: 0 });
+    expect(portfolioDelta(balances, {}, {})).toBeNull();
+  });
+});
+
+// The home hero's sparkline plots the series this aggregates.
+describe("portfolioSeries", () => {
+  test("sums each holding's amount times its price at every aligned sample", () => {
+    const balances = [
+      { address: "0xa", formatted: "2" },
+      { address: "0xb", formatted: "3" },
+    ];
+    const series = { "0xa": [1, 2, 3], "0xb": [10, 10, 20] };
+    // 2*[1,2,3] + 3*[10,10,20] = [32, 34, 66].
+    expect(portfolioSeries(balances, series)).toEqual([32, 34, 66]);
+  });
+
+  test("aligns shorter histories to their most recent samples", () => {
+    const balances = [
+      { address: "0xa", formatted: "1" },
+      { address: "0xb", formatted: "1" },
+    ];
+    // B has only two samples, so both series align to the last two of A.
+    expect(portfolioSeries(balances, { "0xa": [5, 6, 7], "0xb": [1, 2] })).toEqual([7, 9]);
+  });
+
+  test("ignores tokens without a drawable series and empties when none qualify", () => {
+    const balances = [
+      { address: "0xa", formatted: "2" },
+      { address: "0xb", formatted: "9" },
+    ];
+    expect(portfolioSeries(balances, { "0xa": [4, 5], "0xb": [7] })).toEqual([8, 10]);
+    expect(portfolioSeries(balances, {})).toEqual([]);
   });
 });

@@ -23,6 +23,7 @@ import {
   showToast,
 } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
+import { portfolioSeries } from "./fiat";
 import { locked, onboarding } from "./gate-views";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
@@ -365,6 +366,10 @@ const render = async (status: WalletStatus): Promise<void> => {
   }
   paint();
   const jobs: Promise<unknown>[] = [];
+  // Per-token 7d price series gathered on home, aggregated into the portfolio
+  // sparkline series once every chart (and the balances that weight them) has
+  // resolved.
+  const homeSeries: Record<string, readonly number[]> = {};
   const fill = <T>(load: Promise<T>, assign: (value: T) => void): void => {
     jobs.push(load.then(assign).catch(() => undefined));
   };
@@ -381,6 +386,13 @@ const render = async (status: WalletStatus): Promise<void> => {
     fill(loadDeployment(status), (value) => {
       cache.deployment = value;
     });
+    for (const token of cache.preferences?.tokens ?? []) {
+      if (token.networkId === status.networkId) {
+        fill(wallet.loadTokenChart(token.address), (points) => {
+          homeSeries[token.address] = points;
+        });
+      }
+    }
   }
   if (activeView === "activity" || activeView === "home") {
     fill(wallet.loadActivity(), (value) => {
@@ -422,6 +434,12 @@ const render = async (status: WalletStatus): Promise<void> => {
   }
   if (jobs.length > 0) {
     await Promise.all(jobs);
+    if (activeView === "home") {
+      cache.chart = portfolioSeries(
+        "balances" in cache.balances ? cache.balances.balances : [],
+        homeSeries,
+      );
+    }
     paint();
   }
 };

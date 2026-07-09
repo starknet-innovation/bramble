@@ -18,7 +18,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { accountDrawer } from "./account-drawer";
 import { allowancesFlow } from "./allowance-views";
 import { approvalCard } from "./approval-cards";
-import { formatFiat, portfolioTotal } from "./fiat";
+import { formatFiat, portfolioDelta, portfolioTotal } from "./fiat";
 import {
   accountFlow,
   addressBookFlow,
@@ -51,6 +51,7 @@ import {
 } from "./parts";
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
+import { sparklinePoints, sparklineTrend } from "./sparkline";
 import { DEFAULT_CURRENCY, tokenDetailFlow, tokensFlow } from "./token-flows";
 
 /**
@@ -135,6 +136,45 @@ const deployNotice = (account: AccountRef | null, deployment: boolean | null): s
         <p id="deploy-result" role="status"></p>
       </div>`;
 
+// The portfolio 24h delta line under the balance: an emerald/red arrow and
+// magnitude beside a muted "percent · 24h" trailing label. Empty when nothing
+// is priced yet (no baseline), so it never renders a misleading zero-change.
+const heroDelta = (
+  balances: BalanceState,
+  preferences: WalletPreferences | null,
+  prices: Readonly<Record<string, number>>,
+  changes: Readonly<Record<string, number>>,
+  currency: DisplayCurrency,
+): string => {
+  const delta = portfolioDelta(visibleHomeBalances(balances, preferences), prices, changes);
+  if (delta === null) {
+    return "";
+  }
+  const arrow = delta.direction === "up" ? "↑" : "↓";
+  return `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
+      <span class="hero-change-amt">${arrow} ${escapeHtml(formatFiat(delta.absolute, currency))}</span>
+      <span class="hero-change-win">${delta.percent.toFixed(2)}% · 24h</span>
+    </p>`;
+};
+
+// The portfolio sparkline: reuses the shared sparkline geometry (the same
+// helpers the token-detail chart draws with) to plot the aggregate value series
+// as an emerald line over a faint area fill, with 7d/Today end labels like the
+// comp. Empty when the series has fewer than two drawable samples.
+const heroSparkline = (series: readonly number[]): string => {
+  const points = sparklinePoints(series, 320, 56);
+  if (points.length < 2) {
+    return "";
+  }
+  const line = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const trend = sparklineTrend(series);
+  return `<svg class="hero-spark${trend === "down" ? " down" : ""}" viewBox="0 0 320 56" preserveAspectRatio="none" aria-hidden="true">
+      <polygon class="spark-fill" points="${line} 320,56 0,56" />
+      <polyline class="spark-line" points="${line}" />
+    </svg>
+    <div class="spark-axis"><span>7d ago</span><span>Today</span></div>`;
+};
+
 const homeScreen = (
   status: WalletStatus,
   account: AccountRef | null,
@@ -146,6 +186,7 @@ const homeScreen = (
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
   transactions: readonly ActivityEntry[],
+  chart: readonly number[],
 ): string => {
   const showTotal = account !== null && Object.keys(prices).length > 0;
   const total = showTotal ? portfolioTotal(visibleHomeBalances(balances, preferences), prices) : 0;
@@ -153,7 +194,10 @@ const homeScreen = (
     "home",
     `${pendingCallout(pendingCount)}
     <section class="hero">
+      <p class="hero-eyebrow">Total balance</p>
       <p class="hero-total">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
+      ${showTotal ? heroDelta(balances, preferences, prices, changes, currency) : ""}
+      ${account ? heroSparkline(chart) : ""}
       ${
         account
           ? `<button class="hero-chip" data-copy="${escapeHtml(account.address)}" type="button" title="Copy address">${escapeHtml(accountLabel(account.address))}${icon("copy")}</button>`
@@ -372,6 +416,7 @@ export const dashboard = (
             changes,
             currency,
             transactions,
+            chart,
           );
   return `
     ${walletHeader(status, account, preferences)}

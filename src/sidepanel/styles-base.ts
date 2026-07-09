@@ -10,7 +10,7 @@
  * emerald accent is reserved for the primary CTA, active states, and positive
  * deltas — everything else stays in the near-mono neutral palette.
  */
-import { CONTROL, FONT, MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
+import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE } from "../ui/tokens";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -35,6 +35,15 @@ export const BASE_STYLES = `
     --mc-faint: color-mix(in srgb, var(--mc-muted) 58%, var(--mc-bg));
     --mc-shadow: var(--mc-elev-lg);
     --mc-shadow-sm: var(--mc-elev-sm);
+    /* Flat per-account avatar palette: four restrained mid-tone fills (the
+       first is the brand emerald) plus one dark ink for the glyph. Mid-tone by
+       design so the same fills and ink read on both skins; defined once here as
+       tokens so avatar chips carry no scattered colour literals. */
+    --mc-avatar-0: hsl(152 55% 45%);
+    --mc-avatar-1: hsl(222 62% 60%);
+    --mc-avatar-2: hsl(28 78% 55%);
+    --mc-avatar-3: hsl(265 52% 62%);
+    --mc-avatar-ink: hsl(206 34% 13%);
   }
   * { box-sizing: border-box; }
   html, body, #app { min-height: 100%; }
@@ -124,9 +133,10 @@ export const BASE_STYLES = `
   button.account-trigger:not(:disabled):active { background: var(--mc-soft-press); }
   .brand-mark {
     align-items: center;
-    background: var(--mc-accent);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-accent-text);
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
+    color: var(--mc-muted);
     display: inline-flex;
     flex: none;
     height: 36px;
@@ -168,37 +178,89 @@ export const BASE_STYLES = `
   .account-net .dot { height: 6px; width: 6px; }
   .header-actions { align-items: center; display: flex; flex: none; gap: ${SPACE.xs}; }
 
-  /* Portfolio hero: compact so the tile row and tabs stay above the fold */
+  /* Portfolio hero: left-aligned like the comp — eyebrow label, total, 24h
+     delta, a portfolio sparkline with 7d/Today end labels, then the address
+     chip. Compact so the tile row and tabs stay above the fold. */
   .hero {
-    align-items: center;
     display: grid;
-    gap: ${SPACE.sm};
-    justify-items: center;
-    padding: ${SPACE.lg} ${SPACE.sm} ${SPACE.sm};
-    text-align: center;
+    gap: 5px;
+    justify-items: start;
+    padding: ${SPACE.md} 2px ${SPACE.sm};
+    text-align: left;
+  }
+  .hero-eyebrow {
+    color: var(--mc-faint);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: ${TRACKING.eyebrow};
+    text-transform: uppercase;
   }
   .hero-total {
     color: var(--mc-text);
     font-size: ${TYPE.amount.size};
+    font-variant-numeric: tabular-nums;
     font-weight: 800;
     letter-spacing: -0.03em;
     line-height: ${TYPE.amount.line};
   }
+  /* 24h delta: coloured magnitude (emerald up / red down) beside a muted
+     "percent · 24h" window; tabular so digits never jitter as prices stream. */
+  .hero-change {
+    align-items: center;
+    display: inline-flex;
+    font-size: ${TYPE.label.size};
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    gap: 6px;
+  }
+  .hero-change .hero-change-amt { color: var(--mc-positive); }
+  .hero-change.down .hero-change-amt { color: var(--mc-danger); }
+  .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
+  /* Portfolio sparkline: reuses the shared sparkline geometry (see ./sparkline)
+     as an emerald line over a whisper-quiet area fill; red when the window is
+     down. Flat — no glass, one accent. */
+  .hero-spark {
+    display: block;
+    height: 56px;
+    margin: 10px 0 2px;
+    width: 100%;
+  }
+  .hero-spark .spark-fill { fill: var(--mc-accent); opacity: 0.1; }
+  .hero-spark.down .spark-fill { fill: var(--mc-danger); }
+  .hero-spark .spark-line {
+    fill: none;
+    stroke: var(--mc-accent);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+  .hero-spark.down .spark-line { stroke: var(--mc-danger); }
+  .spark-axis {
+    color: var(--mc-faint);
+    display: flex;
+    font-size: 10.5px;
+    justify-content: space-between;
+    letter-spacing: 0.02em;
+    width: 100%;
+  }
   button.hero-chip {
     align-items: center;
-    background: transparent;
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.full};
+    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     cursor: pointer;
     display: inline-flex;
     font-family: var(--mc-font-mono);
-    font-size: ${TYPE.body.size};
+    font-size: ${TYPE.caption.size};
     gap: 7px;
+    margin-top: 8px;
     min-height: 0;
-    padding: 4px 6px;
+    padding: 6px 11px;
   }
-  button.hero-chip:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-  button.hero-chip:not(:disabled):active { background: transparent; }
+  button.hero-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  button.hero-chip:not(:disabled):active { background: var(--mc-soft-press); }
   .hero-chip .icon { color: var(--mc-muted); height: 14px; width: 14px; }
 
   /* Action tiles: rounded-square elevated surfaces, icon over label */
@@ -337,9 +399,10 @@ export const BASE_STYLES = `
   .brand-mark .icon { height: 20px; width: 20px; }
   .option-avatar {
     align-items: center;
-    background: var(--mc-accent);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-accent-text);
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.md};
+    box-shadow: var(--mc-edge);
+    color: var(--mc-muted);
     display: inline-flex;
     flex: none;
     height: 36px;
