@@ -121,7 +121,7 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
   const syncAcknowledgment = (row: Element, checked: boolean): void => {
     row.querySelectorAll<HTMLButtonElement>("[data-ms-requires-ack]").forEach((button) => {
       const target = button;
-      target.disabled = !checked;
+      target.disabled = target.hasAttribute("data-busy") || !checked;
     });
   };
 

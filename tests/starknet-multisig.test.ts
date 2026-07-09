@@ -4,7 +4,7 @@
  * malformed inputs and artifacts.
  */
 import { describe, expect, test } from "bun:test";
-import { hash } from "starknet";
+import { hash, type RpcProvider } from "starknet";
 import {
   buildMultisigConfirmCall,
   buildMultisigExecuteCall,
@@ -15,6 +15,7 @@ import {
 } from "../src/starknet/multisig";
 import {
   buildMultisigDeployCall,
+  isMultisigClassDeclared,
   MULTISIG_CLASS_HASH,
   predictMultisigAddress,
   requireMultisigContractClass,
@@ -131,5 +132,25 @@ describe("multisig deployment", () => {
         sierra_program: ["0x1", "0x2", "0x3"],
       }),
     ).toThrow("does not match the pinned class hash");
+  });
+
+  test("requires an already declared class to match the pinned compiled hash", async () => {
+    const mismatchedCasm = {
+      bytecode: [],
+      entry_points_by_type: { CONSTRUCTOR: [], EXTERNAL: [], L1_HANDLER: [] },
+    };
+    const makeProvider = () =>
+      ({
+        async getClassByHash() {
+          return {};
+        },
+        async getCompiledCasm() {
+          return mismatchedCasm;
+        },
+      }) as unknown as RpcProvider;
+
+    await expect(
+      isMultisigClassDeclared({ makeProvider, rpcUrls: ["https://rpc.example"] }),
+    ).rejects.toThrow("pinned compiled class hash");
   });
 });

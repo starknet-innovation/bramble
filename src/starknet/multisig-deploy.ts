@@ -9,7 +9,7 @@
  * and the wallet offers an explicit user-paid declare of the bundled class.
  */
 
-import type { Call } from "starknet";
+import type { Call, RpcProvider } from "starknet";
 import { CallData, constants, hash } from "starknet";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
@@ -53,6 +53,7 @@ export type MultisigDeployConfig = {
  * Inputs for checking whether the pinned multisig class is declared.
  */
 export type MultisigClassStatusInput = {
+  readonly makeProvider?: ((nodeUrl: string) => RpcProvider) | undefined;
   readonly rpcUrls: readonly string[];
 };
 
@@ -122,25 +123,46 @@ const isClassNotFoundError = (error: unknown): boolean => {
   return isRecord(baseError) && baseError.code === 28;
 };
 
+const requirePinnedCompiledClass = (casm: unknown): void => {
+  let computed: string;
+  try {
+    computed = hash.computeCompiledClassHash(
+      casm as Parameters<typeof hash.computeCompiledClassHash>[0],
+    );
+  } catch {
+    throw new WalletError("Declared multisig class is malformed");
+  }
+  if (BigInt(computed) !== BigInt(MULTISIG_COMPILED_CLASS_HASH)) {
+    throw new WalletError("Declared multisig class does not match the pinned compiled class hash");
+  }
+};
+
 /**
  * Reads whether the pinned multisig class is declared on the network behind
- * the given endpoints. Transport failures propagate; only the node's
- * class-hash-not-found answer maps to `false`.
+ * the given endpoints. Both the Sierra and compiled class hashes must match
+ * the pins. Transport failures propagate; only the node's class-hash-not-found
+ * answer maps to `false`.
  */
 export const isMultisigClassDeclared = async ({
+  makeProvider,
   rpcUrls,
 }: MultisigClassStatusInput): Promise<boolean> =>
-  withRpcFallback(rpcUrls, async (provider) => {
-    try {
-      await provider.getClassByHash(MULTISIG_CLASS_HASH);
-      return true;
-    } catch (error) {
-      if (isClassNotFoundError(error)) {
-        return false;
+  withRpcFallback(
+    rpcUrls,
+    async (provider) => {
+      try {
+        await provider.getClassByHash(MULTISIG_CLASS_HASH);
+        requirePinnedCompiledClass(await provider.getCompiledCasm(MULTISIG_CLASS_HASH));
+        return true;
+      } catch (error) {
+        if (isClassNotFoundError(error)) {
+          return false;
+        }
+        throw error;
       }
-      throw error;
-    }
-  });
+    },
+    makeProvider,
+  );
 
 /**
  * Validates the bundled Sierra artifact before it is declared: it must be a
