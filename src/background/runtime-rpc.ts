@@ -2,6 +2,19 @@
  * Starknet RPC surface consumed by background message dispatch, injectable so
  * tests can stub network access.
  */
+
+import {
+  computeMultisigTransactionId,
+  getMultisigConfig,
+  getMultisigProposalStatus,
+  type MultisigConfigInput,
+  type MultisigProposalStatusInput,
+  type MultisigTransactionIdInput,
+} from "../starknet/multisig";
+import {
+  isMultisigClassDeclared,
+  type MultisigClassStatusInput,
+} from "../starknet/multisig-deploy";
 import {
   type BalanceInput,
   type DeclareInput,
@@ -25,6 +38,22 @@ import {
 } from "../starknet/rpc";
 import { createHttpStrk20Service, type Strk20Http } from "../starknet/strk20/http-service";
 import type { Strk20Service } from "../starknet/strk20/service";
+
+/**
+ * Injectable multisig read operations used by the multisig message handlers.
+ */
+export type MultisigRpc = {
+  readonly computeTransactionId: (
+    input: MultisigTransactionIdInput,
+  ) => ReturnType<typeof computeMultisigTransactionId>;
+  readonly getConfig: (input: MultisigConfigInput) => ReturnType<typeof getMultisigConfig>;
+  readonly getProposalStatus: (
+    input: MultisigProposalStatusInput,
+  ) => ReturnType<typeof getMultisigProposalStatus>;
+  readonly isClassDeclared: (
+    input: MultisigClassStatusInput,
+  ) => ReturnType<typeof isMultisigClassDeclared>;
+};
 
 /**
  * Injectable Starknet RPC operations used by the message handler.
@@ -51,6 +80,11 @@ export type RuntimeRpc = {
     input: InvokeInput,
   ) => ReturnType<typeof submitInvokeTransaction>;
   /**
+   * Multisig read surface. Optional so existing RPC stubs stay valid; when
+   * absent the multisig handlers report the feature as unavailable.
+   */
+  readonly multisig?: MultisigRpc;
+  /**
    * STRK20 privacy service. Optional so existing RPC stubs stay valid; when
    * absent the handler falls back to {@link unavailableStrk20Service}, which
    * reports the account as not registered.
@@ -72,6 +106,12 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   getTokenBalances,
   getTokenMetadata,
   getTransactionStatuses,
+  multisig: {
+    computeTransactionId: computeMultisigTransactionId,
+    getConfig: getMultisigConfig,
+    getProposalStatus: getMultisigProposalStatus,
+    isClassDeclared: isMultisigClassDeclared,
+  },
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,

@@ -16,6 +16,7 @@ local signing fallback.
 ```bash
 bun install
 bun run vendor:krusty
+bun run vendor:multisig
 bun run check
 bun run build
 bun run package:extension
@@ -242,6 +243,49 @@ and a tooltip; they typically settle within a few minutes. If a transaction is
 dropped, the next transaction on that nonce proceeds normally. This is a protocol
 constraint, not a wallet limitation.
 
+## Multisig
+
+Settings → Multisigs manages shared accounts built on OpenZeppelin's audited
+`MultisigComponent` (Cairo v3.0.0, the version already pinned via Krusty). This
+is the governance-style model: each participant keeps their own single-key
+account, and submit/confirm/revoke/execute are ordinary invokes from that
+account through the existing verified send path — no new client-side
+cryptography, no off-chain signature aggregation, and nothing stored in the
+encrypted vault (multisig addresses, signers, and proposals are public
+on-chain data, kept in the plain `mc-wallet:multisigs` store).
+
+- Watch: adding a multisig by address reads `get_quorum`/`get_signers`
+  on-chain and requires the active account to be a signer. Signer sets and
+  quorums refresh from chain on the detail screen.
+- Propose: single-call proposals (contract, entrypoint, calldata felts, salt).
+  The transaction id comes from the contract's own `hash_transaction` view, so
+  the wallet never re-implements the Pedersen scheme. Submitting does not
+  confirm; the proposer confirms like any other signer.
+- Coordinate: proposal ids are copyable and a pasted id can be tracked and
+  confirmed from another signer's wallet. Executing needs the original call
+  and salt, so it runs from a wallet that has them (the proposer's, today).
+  Discovering proposals submitted outside this wallet requires an event
+  indexer and is a documented follow-up, like allowances.
+- Deploy: new multisigs deploy from the pinned `MultisigWallet` class
+  (`contracts/multisig`, a constructor-only shell around the OZ component)
+  through the public Universal Deployer Contract with `not_from_zero = 0`, so
+  the address depends only on class, signers, quorum, and salt. If the class
+  is not declared on the active network, the deploy screen offers a one-time
+  user-paid declare of the bundled Sierra artifact, whose class hash is
+  re-verified against the pin before signing.
+
+Pinned class (reproduce with scarb `2.18.0` via `bun run vendor:multisig`;
+verified by `bun run check:multisig`):
+
+- Class hash: `0xbb216b0643679b992e7953b6ea6f5057804237053e79fdd064cf2b5adea035`
+- Compiled class hash: `0x42d945a7f59ead19b20435fbea7d168449299b03d71f8da205517166a2c80c8`
+
+Known limitations (v1): proposals are single-call (`submit_transaction_batch`
+is not surfaced); signer/quorum changes go through the custom-call form as
+self-calls (`add_signers`, `remove_signers`, `change_quorum`) rather than a
+dedicated editor; each confirmation is a separate on-chain transaction with
+its own fee, and proposals are public once submitted.
+
 ## Allowance manager
 
 Settings → Allowances lists the ERC20 approvals granted through this wallet
@@ -268,8 +312,10 @@ is out of scope for v1 — and sends use snake_case `transfer_from` only
 ## Reproducible Builds
 
 Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen
-lockfile, `wasm-pack 0.13.1`, GitHub Actions by commit SHA, and the Krusty KMS
-source at the commit recorded in `scripts/vendor-krusty.ts`. To reproduce a
+lockfile, `wasm-pack 0.13.1`, scarb `2.18.0` (enforced by
+`scripts/vendor-multisig.ts`) with exact OpenZeppelin versions in
+`contracts/multisig/Scarb.toml`, GitHub Actions by commit SHA, and the Krusty
+KMS source at the commit recorded in `scripts/vendor-krusty.ts`. To reproduce a
 release, run the Commands section above on those versions and compare
 `artifacts/*.zip.sha256` against the CI artifact checksum:
 

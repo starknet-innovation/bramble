@@ -7,6 +7,7 @@ import { DEFAULT_NETWORK } from "../starknet/networks";
 import { type PriceService, unavailablePriceService } from "../starknet/prices";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
 import { type AllowanceStore, memoryAllowanceStore } from "../storage/allowance-store";
+import { type MultisigStore, memoryMultisigStore } from "../storage/multisig-store";
 import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-history";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { activeAccountSecrets } from "../wallet/vault-service";
@@ -32,6 +33,8 @@ import {
   readTypeOnlyInput,
   readUnlockInput,
 } from "./message-inputs";
+import { handleMultisigOps } from "./multisig-ops";
+import { handleMultisigTxOps } from "./multisig-tx-ops";
 import { handleNftOps } from "./nft-ops";
 import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
@@ -85,6 +88,8 @@ const handleRuntimeMessage = async (
   prices: PriceService,
   allowanceStore: AllowanceStore,
   waiters: SignatureWaiters,
+  multisigStore: MultisigStore,
+  loadMultisigClass: (() => Promise<unknown>) | undefined,
   message: unknown,
   sender?: RuntimeSender,
 ): Promise<RuntimeResponse> => {
@@ -116,6 +121,17 @@ const handleRuntimeMessage = async (
   const nftResponse = await handleNftOps(opsDeps, messageType, message);
   if (nftResponse) {
     return nftResponse;
+  }
+
+  const multisigDeps = { ...opsDeps, loadMultisigClass, multisigStore };
+  const multisigResponse = await handleMultisigOps(multisigDeps, messageType, message);
+  if (multisigResponse) {
+    return multisigResponse;
+  }
+
+  const multisigTxResponse = await handleMultisigTxOps(multisigDeps, messageType, message);
+  if (multisigTxResponse) {
+    return multisigTxResponse;
   }
 
   const preferenceResponse = await handlePreferenceOps(preferencesStore, messageType, message);
@@ -402,6 +418,8 @@ export const createMessageHandler = (
   originHistory: OriginHistoryStore = memoryOriginHistory(),
   prices: PriceService = unavailablePriceService,
   allowanceStore: AllowanceStore = memoryAllowanceStore(),
+  multisigStore: MultisigStore = memoryMultisigStore(),
+  loadMultisigClass?: () => Promise<unknown>,
 ) => {
   const waiters = createSignatureWaiters();
   return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
@@ -418,6 +436,8 @@ export const createMessageHandler = (
         prices,
         allowanceStore,
         waiters,
+        multisigStore,
+        loadMultisigClass,
         message,
         sender,
       );

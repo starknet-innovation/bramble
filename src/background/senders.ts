@@ -76,9 +76,21 @@ export const isClaimedSenderOrigin = (
  */
 export const isPrivilegedMessage = (type: unknown): boolean =>
   type === "wallet.activity" ||
+  type === "wallet.addMultisig" ||
   type === "wallet.addToken" ||
   type === "wallet.addNft" ||
   type === "wallet.allowances" ||
+  type === "wallet.confirmMultisigProposal" ||
+  type === "wallet.declareMultisigClass" ||
+  type === "wallet.deployMultisig" ||
+  type === "wallet.executeMultisigProposal" ||
+  type === "wallet.multisigClassStatus" ||
+  type === "wallet.multisigs" ||
+  type === "wallet.proposeMultisigTx" ||
+  type === "wallet.refreshMultisig" ||
+  type === "wallet.removeMultisig" ||
+  type === "wallet.revokeMultisigConfirmation" ||
+  type === "wallet.trackMultisigProposal" ||
   type === "wallet.addAccount" ||
   type === "wallet.approveOrigin" ||
   type === "wallet.connectedSites" ||

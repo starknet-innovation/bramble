@@ -87,6 +87,57 @@ export const showToast = (message: string, tone: ToastTone): void => {
   setTimeout(() => toast.remove(), tone === "error" ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
 };
 
+// Swaps the button's copy glyph for a check while the confirmation lands,
+// then restores it unless a re-render already replaced the control.
+const confirmCopyGlyph = (button: HTMLButtonElement): void => {
+  const glyph = button.querySelector("svg");
+  if (!glyph) {
+    return;
+  }
+  glyph.outerHTML = icon("check");
+  button.classList.add("copy-confirm");
+  setTimeout(() => {
+    if (!button.isConnected) {
+      return;
+    }
+    const check = button.querySelector("svg");
+    if (check) {
+      check.outerHTML = icon("copy");
+    }
+    button.classList.remove("copy-confirm");
+  }, 1400);
+};
+
+/**
+ * Binds every `[data-copy]` control under the app root to the clipboard with
+ * scoped-status or toast feedback and a transient check glyph.
+ */
+export const bindCopyButtons = (app: Element | null): void => {
+  app?.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const value = button.dataset.copy;
+      if (!value) {
+        return;
+      }
+      buttonBusy(button, true);
+      void navigator.clipboard.writeText(value).then(
+        () => {
+          if (!scopedStatus(button, "Copied")) {
+            showToast("Copied", "success");
+          }
+          buttonBusy(button, false);
+          confirmCopyGlyph(button);
+        },
+        () => {
+          scopedStatus(button, "Copy failed");
+          showToast("Copy failed", "error");
+          buttonBusy(button, false);
+        },
+      );
+    });
+  });
+};
+
 const FOCUS_NAMES = ["address", "amount", "label", "mnemonic", "recipient", "vaultPassphrase"];
 
 /**

@@ -8,6 +8,7 @@ import type { Strk20BalanceEntry, Strk20CallAndProof } from "../starknet/strk20/
 import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { AllowanceRecord } from "../storage/allowance-store";
+import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef, Vault } from "../storage/vault-schema";
 import type {
@@ -284,6 +285,59 @@ export type Strk20PrepareResponse = {
 };
 
 /**
+ * Watched multisigs and their tracked proposals for the active network.
+ */
+export type MultisigsResponse = {
+  readonly multisigs: readonly MultisigRecord[];
+  readonly ok: true;
+  readonly proposals: readonly MultisigProposalRecord[];
+};
+
+/**
+ * One watched multisig after an add or config refresh, with refreshed
+ * proposals when the refresh path produced them.
+ */
+export type MultisigResponse = {
+  readonly multisig: MultisigRecord;
+  readonly ok: true;
+  readonly proposals?: readonly MultisigProposalRecord[];
+};
+
+/**
+ * One tracked proposal after a submit or track-by-id, with the submission
+ * hash when a transaction was broadcast.
+ */
+export type MultisigProposalResponse = {
+  readonly ok: true;
+  readonly proposal: MultisigProposalRecord;
+  readonly transactionHash?: string;
+};
+
+/**
+ * Whether the pinned multisig class is declared on the active network.
+ */
+export type MultisigClassStatusResponse = {
+  readonly declared: boolean;
+  readonly ok: true;
+};
+
+/**
+ * Deploy-multisig submission outcome with the predicted contract address.
+ */
+export type MultisigDeployResponse = {
+  readonly address: string;
+  readonly ok: true;
+  readonly transactionHash: string;
+};
+
+/**
+ * Acknowledgement response for operations with no payload.
+ */
+export type OkResponse = {
+  readonly ok: true;
+};
+
+/**
  * Union of supported background message responses.
  */
 export type RuntimeResponse =
@@ -302,6 +356,12 @@ export type RuntimeResponse =
   | SupportedVersionsResponse
   | TransferReviewResponse
   | GenerateMnemonicResponse
+  | MultisigClassStatusResponse
+  | MultisigDeployResponse
+  | MultisigProposalResponse
+  | MultisigResponse
+  | MultisigsResponse
+  | OkResponse
   | PendingApprovalResponse
   | PermissionsResponse
   | PreferencesResponse

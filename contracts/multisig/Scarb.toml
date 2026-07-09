@@ -1,0 +1,17 @@
+[package]
+name = "mc_multisig"
+version = "0.1.0"
+edition = "2024_07"
+
+# Pinned exactly: the class hash pinned in src/starknet/multisig-class.ts is
+# reproducible only with these versions plus the scarb release recorded in
+# scripts/vendor-multisig.ts.
+[dependencies]
+starknet = "=2.18.0"
+openzeppelin_governance = "=3.0.0"
+
+[dev-dependencies]
+
+[[target.starknet-contract]]
+sierra = true
+casm = true

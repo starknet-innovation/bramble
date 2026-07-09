@@ -13,6 +13,7 @@ import {
   hardenSessionAccess,
 } from "../storage/browser-storage";
 import { createEncryptedStore, type EncryptedStore } from "../storage/encrypted-store";
+import { createMultisigStore } from "../storage/multisig-store";
 import { createOriginHistoryStore } from "../storage/origin-history";
 import { createPreferencesStore } from "../storage/preferences-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
@@ -25,6 +26,7 @@ import type { RuntimeSender } from "./senders";
 import { createUnlockSession, type UnlockSessionStore } from "./session";
 
 type RuntimeApi = {
+  readonly getURL?: (path: string) => string;
   readonly id: string;
   readonly onInstalled: {
     readonly addListener: (listener: () => void) => void;
@@ -143,6 +145,27 @@ const priceService = (() => {
     return unavailablePriceService;
   }
 })();
+const multisigLog = (() => {
+  try {
+    return createMultisigStore({ store: createBrowserLocalStore() });
+  } catch {
+    return undefined;
+  }
+})();
+// Loads the bundled multisig Sierra class for the explicit declare flow. The
+// artifact ships inside the extension package, so this fetch never leaves the
+// extension origin; the ops handler re-verifies its class hash before use.
+const loadMultisigClass = async (): Promise<unknown> => {
+  const url = runtime?.getURL?.("vendor/multisig/multisig.contract_class.json");
+  if (!url) {
+    throw new Error("multisig class artifact unavailable");
+  }
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("multisig class artifact unavailable");
+  }
+  return response.json();
+};
 const handleMessage = createMessageHandler(
   {
     async addDerivedAccount(input) {
@@ -344,6 +367,8 @@ const handleMessage = createMessageHandler(
   originHistory,
   priceService,
   allowanceLog,
+  multisigLog,
+  loadMultisigClass,
 );
 
 const broadcastEvent = (event: WalletEventMessage): void => {

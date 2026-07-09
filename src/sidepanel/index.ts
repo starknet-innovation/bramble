@@ -14,12 +14,21 @@ import { defaultSkin } from "../ui/default-skin";
 import { applySkin } from "../ui/skin";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
-import { buttonBusy, errorMessage, focusMemo, restoreFocus, scopedStatus, showToast } from "./dom";
+import {
+  bindCopyButtons,
+  buttonBusy,
+  errorMessage,
+  focusMemo,
+  restoreFocus,
+  scopedStatus,
+  showToast,
+} from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
-import { icon } from "./icons";
+import { createMultisigClient } from "./multisig-runtime";
+import { bindMultisigs } from "./multisig-ui";
 import { bindOnboarding } from "./onboarding-ui";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, emptyStatus, type RuntimeApi } from "./runtime";
@@ -40,8 +49,10 @@ type ExtensionGlobal = typeof globalThis & {
 const app = document.querySelector("#app");
 const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
 const wallet = createSidepanelRuntime(runtime);
+const multisig = createMultisigClient(runtime);
 let activeView: WalletView = "home";
 let selectedNftId: string | null = null;
+let selectedMultisigId: string | null = null;
 let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
@@ -58,53 +69,6 @@ const bindNavigation = (): void => {
         return;
       }
       navigate(view);
-    });
-  });
-};
-
-// Swaps the button's copy glyph for a check while the confirmation lands,
-// then restores it unless a re-render already replaced the control.
-const confirmCopyGlyph = (button: HTMLButtonElement): void => {
-  const glyph = button.querySelector("svg");
-  if (!glyph) {
-    return;
-  }
-  glyph.outerHTML = icon("check");
-  button.classList.add("copy-confirm");
-  setTimeout(() => {
-    if (!button.isConnected) {
-      return;
-    }
-    const check = button.querySelector("svg");
-    if (check) {
-      check.outerHTML = icon("copy");
-    }
-    button.classList.remove("copy-confirm");
-  }, 1400);
-};
-
-const bindCopy = (): void => {
-  app?.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const value = button.dataset.copy;
-      if (!value) {
-        return;
-      }
-      buttonBusy(button, true);
-      void navigator.clipboard.writeText(value).then(
-        () => {
-          if (!scopedStatus(button, "Copied")) {
-            showToast("Copied", "success");
-          }
-          buttonBusy(button, false);
-          confirmCopyGlyph(button);
-        },
-        () => {
-          scopedStatus(button, "Copy failed");
-          showToast("Copy failed", "error");
-          buttonBusy(button, false);
-        },
-      );
     });
   });
 };
@@ -270,6 +234,8 @@ const loadDeployment = async (status: WalletStatus): Promise<boolean | null> => 
 
 type RenderData = {
   allowances: Awaited<ReturnType<typeof wallet.loadAllowances>>;
+  multisigs: Awaited<ReturnType<typeof multisig.loadMultisigs>>;
+  multisigClassDeclared: boolean | null;
   balances: Awaited<ReturnType<typeof wallet.loadBalances>>;
   chart: readonly number[];
   connectedSites: Awaited<ReturnType<typeof wallet.connectedSites>>;
@@ -284,6 +250,8 @@ type RenderData = {
 
 const cache: RenderData = {
   allowances: [],
+  multisigs: { multisigs: [], proposals: [] },
+  multisigClassDeclared: null,
   balances: { error: "wallet locked" },
   chart: [],
   connectedSites: [],
@@ -298,7 +266,7 @@ const cache: RenderData = {
 
 const bindAll = (): void => {
   bindNavigation();
-  bindCopy();
+  bindCopyButtons(app);
   bindOnboarding({ app, render, wallet });
   bindUnlock();
   bindDashboard();
@@ -350,6 +318,21 @@ const bindAll = (): void => {
     render,
     wallet,
   });
+  bindMultisigs({
+    app,
+    multisig,
+    openDetail: (id) => {
+      selectedMultisigId = id;
+      navigate("multisig-detail");
+    },
+    openList: () => {
+      selectedMultisigId = null;
+      navigate("multisigs");
+    },
+    render,
+    selectedMultisigId: () => selectedMultisigId,
+    wallet,
+  });
 };
 
 // Synchronous paint from the current cache. Navigation calls this first so the
@@ -390,6 +373,10 @@ const paint = (): void => {
             cache.allowances,
             selectedNftId,
             cache.changes,
+            cache.multisigs.multisigs,
+            cache.multisigs.proposals,
+            selectedMultisigId,
+            cache.multisigClassDeclared,
           ),
     animate,
   );
@@ -448,6 +435,21 @@ const render = async (status: WalletStatus): Promise<void> => {
   if (activeView === "allowances") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;
+    });
+  }
+  if (
+    activeView === "multisigs" ||
+    activeView === "multisig-detail" ||
+    activeView === "multisig-propose" ||
+    activeView === "multisig-deploy"
+  ) {
+    fill(multisig.loadMultisigs(), (value) => {
+      cache.multisigs = value;
+    });
+  }
+  if (activeView === "multisig-deploy") {
+    fill(multisig.loadClassStatus(), (value) => {
+      cache.multisigClassDeclared = value;
     });
   }
   if (activeView === "token-detail") {
