@@ -17,6 +17,10 @@ import type { AccountRef, Vault } from "../src/storage/vault-schema";
 const MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
 const TARGET = "0x222222222222222222222222222222222222222222222222222222222222222";
 const OTHER_SIGNER = "0x444444444444444444444444444444444444444444444444444444444444444";
+// Full-length felt so composed proposal ids exercise their real ~139-character
+// length; a short stub id here once masked an id-length cap that rejected
+// every genuine confirm/revoke/execute request.
+const TX_ID = `0x7${"a".repeat(62)}`;
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -113,7 +117,7 @@ const makeHarness = (options: HarnessOptions = {}) => {
       },
       multisig: {
         async computeTransactionId() {
-          return "0xabc";
+          return TX_ID;
         },
         async getConfig() {
           return { quorum: 2, signers: options.signers ?? [account.address, OTHER_SIGNER] };
@@ -215,7 +219,7 @@ describe("multisig messages", () => {
     const response = await propose(handler, watched.multisig.id);
     expect(response).toMatchObject({
       ok: true,
-      proposal: { state: "pending", summary: "Pay vendor", txId: "0xabc" },
+      proposal: { state: "pending", summary: "Pay vendor", txId: TX_ID },
       transactionHash: "0x7cd",
     });
     const submit = invokeCalls.at(-1)?.[0] as { calldata: string[]; entrypoint: string };

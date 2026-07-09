@@ -8,7 +8,9 @@ import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { isMultisigEntrypoint } from "../starknet/multisig";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
 
-const MAX_ID_LENGTH = 120;
+// Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
+// proposal id runs to ~144 characters, so the cap must sit comfortably above.
+const MAX_ID_LENGTH = 200;
 const MAX_NAME_LENGTH = 48;
 const MAX_SUMMARY_LENGTH = 120;
 const MAX_CALLDATA_FELTS = 64;
