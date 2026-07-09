@@ -11,7 +11,7 @@ bun install --frozen-lockfile
 bun run vendor:krusty        # required once before check/build (clones + wasm-pack builds Krusty KMS)
 bun run vendor:multisig      # required once before check/build (scarb-builds contracts/multisig)
 bun run check                # types + lint + file/config standards + manifest + krusty/multisig pins + tests
-bun run test:e2e:install     # Playwright Chromium + system deps (once per machine/CI image)
+bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
 bun run test:e2e             # Playwright extension E2E (requires dist/)
 bun run package:extension    # writes artifacts/*.zip + .sha256
