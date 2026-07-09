@@ -1,9 +1,4 @@
-/**
- * Multisig message checks: watching requires on-chain signer membership,
- * proposals round-trip through submit/confirm/execute with exact component
- * calldata, pasted ids can be tracked but not executed, and deploys go
- * through the UDC only after the pinned class is declared.
- */
+/** Multisig message handler tests. */
 import { describe, expect, test } from "bun:test";
 import { hash } from "starknet";
 import { createMessageHandler } from "../src/background/messages";
@@ -17,9 +12,6 @@ import type { AccountRef, Vault } from "../src/storage/vault-schema";
 const MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
 const TARGET = "0x222222222222222222222222222222222222222222222222222222222222222";
 const OTHER_SIGNER = "0x444444444444444444444444444444444444444444444444444444444444444";
-// Full-length felt so composed proposal ids exercise their real ~139-character
-// length; a short stub id here once masked an id-length cap that rejected
-// every genuine confirm/revoke/execute request.
 const TX_ID = `0x7${"a".repeat(62)}`;
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -36,7 +28,6 @@ const extensionSender: RuntimeSender = {
   url: "chrome-extension://extension-id/sidepanel.html",
 };
 const contentSender: RuntimeSender = { id: "extension-id", url: "https://dapp.example/app" };
-
 const walletStub = {
   async addDerivedAccount() {
     return account;
@@ -75,7 +66,6 @@ const walletStub = {
     };
   },
 };
-
 type HarnessOptions = {
   readonly classDeclared?: boolean;
   readonly contractAt?: boolean;
@@ -83,7 +73,6 @@ type HarnessOptions = {
   readonly signers?: readonly string[];
   readonly state?: MultisigProposalState;
 };
-
 const makeHarness = (options: HarnessOptions = {}) => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
@@ -122,10 +111,14 @@ const makeHarness = (options: HarnessOptions = {}) => {
         async getConfig() {
           return { quorum: 2, signers: options.signers ?? [account.address, OTHER_SIGNER] };
         },
-        async getProposalStatus() {
+        async getProposalStatus(input: { txId: string }) {
+          const confirmed = invokeCalls.flat().some((c) => {
+            const call = c as { calldata?: string[]; entrypoint?: string };
+            return call.entrypoint === "confirm_transaction" && call.calldata?.[0] === input.txId;
+          });
           return {
             confirmations: 1,
-            confirmedBySigner: false,
+            confirmedBySigner: confirmed,
             state: options.state ?? "pending",
           };
         },
@@ -160,10 +153,8 @@ const makeHarness = (options: HarnessOptions = {}) => {
   );
   return { declared, handler, invokeCalls, multisigStore };
 };
-
 const watch = async (handler: ReturnType<typeof makeHarness>["handler"]) =>
   handler({ address: MULTISIG, name: "Treasury", type: "wallet.addMultisig" }, extensionSender);
-
 const propose = async (handler: ReturnType<typeof makeHarness>["handler"], multisigId: string) =>
   handler(
     {
@@ -176,7 +167,6 @@ const propose = async (handler: ReturnType<typeof makeHarness>["handler"], multi
     },
     extensionSender,
   );
-
 describe("multisig messages", () => {
   test("requires an extension page for every multisig message", async () => {
     const { handler } = makeHarness();
@@ -199,7 +189,6 @@ describe("multisig messages", () => {
       });
     }
   });
-
   test("watches a multisig after proving signer membership on-chain", async () => {
     const { handler } = makeHarness();
     const response = await watch(handler);
@@ -212,14 +201,12 @@ describe("multisig messages", () => {
     };
     expect(listed.multisigs).toHaveLength(1);
   });
-
   test("refuses to watch a multisig the active account cannot sign for", async () => {
     const { handler } = makeHarness({ signers: [OTHER_SIGNER] });
     await expect(watch(handler)).resolves.toEqual({
       error: "the active account is not a signer of this multisig",
     });
   });
-
   test("proposes with the component calldata layout and stores the call", async () => {
     const { handler, invokeCalls } = makeHarness();
     const watched = (await watch(handler)) as { multisig: { id: string } };
@@ -240,7 +227,6 @@ describe("multisig messages", () => {
       "0x0",
     ]);
   });
-
   test("confirms a pending proposal", async () => {
     const { handler, invokeCalls } = makeHarness({ state: "pending" });
     const watched = (await watch(handler)) as { multisig: { id: string } };
@@ -256,7 +242,6 @@ describe("multisig messages", () => {
       "confirm_transaction",
     );
   });
-
   test("executes a proposal with quorum", async () => {
     const { handler, invokeCalls } = makeHarness({ state: "confirmed" });
     const watched = (await watch(handler)) as { multisig: { id: string } };
@@ -308,13 +293,31 @@ describe("multisig messages", () => {
     );
     expect(confirm).toEqual({ ok: true, transactionHash: "0x7cd" });
 
+    await expect(
+      handler(
+        { proposalId: tracked.proposal.id, type: "wallet.revokeMultisigConfirmation" },
+        extensionSender,
+      ),
+    ).resolves.toMatchObject({
+      error: expect.stringContaining("verify this proposal"),
+    });
+
+    const revoke = await handler(
+      {
+        proposalId: tracked.proposal.id,
+        type: "wallet.revokeMultisigConfirmation",
+        untrackedVerified: true,
+      },
+      extensionSender,
+    );
+    expect(revoke).toEqual({ ok: true, transactionHash: "0x7cd" });
+
     const execute = await handler(
       { proposalId: tracked.proposal.id, type: "wallet.executeMultisigProposal" },
       extensionSender,
     );
     expect(execute).toMatchObject({ error: expect.stringContaining("tracked by id only") });
   });
-
   test("rejects tracking an id the contract does not know", async () => {
     const { handler } = makeHarness({ state: "not-found" });
     const watched = (await watch(handler)) as { multisig: { id: string } };
@@ -325,7 +328,6 @@ describe("multisig messages", () => {
       ),
     ).resolves.toEqual({ error: "no proposal with that id exists on this multisig" });
   });
-
   test("deploys through the UDC without watching until finalized", async () => {
     const { handler, invokeCalls } = makeHarness();
     const response = (await handler(
@@ -367,7 +369,6 @@ describe("multisig messages", () => {
       ),
     ).resolves.toEqual({ error: "invalid deploy multisig request" });
   });
-
   test("fails deploys closed when the class is not declared", async () => {
     const { handler } = makeHarness({ classDeclared: false });
     await expect(
@@ -379,7 +380,6 @@ describe("multisig messages", () => {
       error: "multisig class not declared on this network — declare it first",
     });
   });
-
   test("refuses to deploy over an existing contract", async () => {
     const { handler } = makeHarness({ contractAt: true });
     await expect(
