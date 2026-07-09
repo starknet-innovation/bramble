@@ -19,6 +19,11 @@ export {
   type WatchAssetToken,
 } from "./approvals-responses";
 
+/**
+ * Re-exported transfer-review validators for one import path.
+ */
+export { isTransferReviewResponse, type TransferReviewResponse } from "./responses-transfer";
+
 import { type AllowanceRecord, isAllowanceRecord } from "../storage/allowance-store";
 import { isWalletPreferences, type WalletPreferences } from "../storage/preferences-store";
 import { type AccountRef, isAccountId, isAccountRef } from "../storage/vault-schema";
@@ -395,37 +400,6 @@ export type ActivityResponse = {
 };
 
 /**
- * Pre-sign transfer review accepted from the background boundary.
- */
-export type TransferReviewResponse = {
-  readonly ok: true;
-  readonly review: {
-    readonly fee: { readonly overallFee: string; readonly unit: string } | null;
-    readonly feeEstimateFailed: boolean;
-    readonly flags: readonly { readonly code: string; readonly message: string }[];
-    readonly requiresDeployment: boolean;
-    readonly summaries: readonly string[];
-  };
-};
-
-const isRiskFlagShape = (value: unknown): value is { code: string; message: string } =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["code", "message"]) &&
-  typeof value.code === "string" &&
-  /^[a-z][a-z-]{1,40}$/.test(value.code) &&
-  typeof value.message === "string" &&
-  value.message.length > 0 &&
-  value.message.length <= 300;
-
-const isFeeShape = (value: unknown): value is { overallFee: string; unit: string } =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["overallFee", "unit"]) &&
-  typeof value.overallFee === "string" &&
-  /^(?:0|[1-9][0-9]*)$/.test(value.overallFee) &&
-  typeof value.unit === "string" &&
-  /^[A-Z]{2,10}$/.test(value.unit);
-
-/**
  * Checks activity feed responses before rendering.
  */
 export const isActivityResponse = (value: unknown): value is ActivityResponse =>
@@ -454,40 +428,6 @@ export const isAllowancesResponse = (value: unknown): value is AllowancesRespons
   value.ok === true &&
   Array.isArray(value.allowances) &&
   value.allowances.every(isAllowanceRecord);
-
-/**
- * Checks transfer review responses before rendering the review step.
- */
-export const isTransferReviewResponse = (value: unknown): value is TransferReviewResponse => {
-  if (
-    !isRecord(value) ||
-    !isJson(value) ||
-    !hasOnlyKnownKeys(value, ["ok", "review"]) ||
-    value.ok !== true ||
-    !isRecord(value.review) ||
-    !hasOnlyKnownKeys(value.review, [
-      "fee",
-      "feeEstimateFailed",
-      "flags",
-      "requiresDeployment",
-      "summaries",
-    ])
-  ) {
-    return false;
-  }
-  const review = value.review;
-  return (
-    (review.fee === null || isFeeShape(review.fee)) &&
-    typeof review.feeEstimateFailed === "boolean" &&
-    Array.isArray(review.flags) &&
-    review.flags.every(isRiskFlagShape) &&
-    typeof review.requiresDeployment === "boolean" &&
-    Array.isArray(review.summaries) &&
-    review.summaries.every(
-      (summary) => typeof summary === "string" && summary.length > 0 && summary.length <= 300,
-    )
-  );
-};
 
 /**
  * Checks account deployment status responses before rendering.
