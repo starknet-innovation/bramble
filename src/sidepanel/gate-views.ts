@@ -6,6 +6,7 @@
 import type { WalletStatus } from "../popup/responses";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 import { icon } from "./icons";
+import { requiresMainnetAck } from "./mainnet-ack";
 import { networkOptions } from "./parts";
 
 const backupVerifyInputs = (): string =>
@@ -41,6 +42,10 @@ export const onboarding = (status: WalletStatus): string => `
         <div class="verify-grid">${backupVerifyInputs()}</div>
         <p id="verify-result" role="status"></p>
       </div>
+      <label id="mainnet-ack" class="hint"${requiresMainnetAck(status.networkId) ? "" : " hidden"}>
+        <input name="mainnetAck" type="checkbox" />
+        <span>You are creating a wallet on Starknet Mainnet with real funds.</span>
+      </label>
       <p id="form-result" role="status"></p>
       <div class="gate-cta">
         <button id="generate-button" class="secondary" type="button" ${status.ready ? "" : "disabled"}>${icon("refresh")}Generate phrase</button>
