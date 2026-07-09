@@ -58,6 +58,7 @@ let selectedMultisigId: string | null = null;
 let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
+let lastContent = "";
 let lastTheme = "";
 let lastActiveView: WalletView = "home";
 let selectedTokenId: string | null = null;
@@ -310,35 +311,36 @@ const paint = (): void => {
   const animate = scene !== lastScene;
   lastScene = scene;
   const direction = navDirection(lastActiveView, activeView);
+  const content = !status.hasVault
+    ? onboarding(status)
+    : status.locked
+      ? locked(status)
+      : dashboard(
+          activeView,
+          status,
+          cache.pending,
+          cache.preferences,
+          cache.balances,
+          cache.deployment,
+          cache.transactions,
+          cache.connectedSites,
+          cache.prices,
+          cache.chart,
+          selectedTokenId,
+          cache.allowances,
+          selectedNftId,
+          cache.changes,
+          cache.multisigs.multisigs,
+          cache.multisigs.proposals,
+          selectedMultisigId,
+          cache.multisigClassDeclared,
+        );
   lastActiveView = activeView;
-  renderScene(
-    !status.hasVault
-      ? onboarding(status)
-      : status.locked
-        ? locked(status)
-        : dashboard(
-            activeView,
-            status,
-            cache.pending,
-            cache.preferences,
-            cache.balances,
-            cache.deployment,
-            cache.transactions,
-            cache.connectedSites,
-            cache.prices,
-            cache.chart,
-            selectedTokenId,
-            cache.allowances,
-            selectedNftId,
-            cache.changes,
-            cache.multisigs.multisigs,
-            cache.multisigs.proposals,
-            selectedMultisigId,
-            cache.multisigClassDeclared,
-          ),
-    animate,
-    direction,
-  );
+  if (!animate && content === lastContent) {
+    return;
+  }
+  lastContent = content;
+  renderScene(content, animate, direction);
 };
 
 // Refreshes cache from the background, painting once from fast local data and
