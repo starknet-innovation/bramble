@@ -142,19 +142,16 @@ const buildHandler = (options?: {
       return options?.registered ?? true;
     },
   };
-  return createMessageHandler(
-    walletStub(),
-    "extension-id",
-    session,
-    undefined,
-    {
+  return createMessageHandler(walletStub(), "extension-id", {
+    preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {
         return preferences;
       },
     },
-    rpcStub(strk20, options?.invoked ?? []),
-  );
+    runtimeRpc: rpcStub(strk20, options?.invoked ?? []),
+    session,
+  });
 };
 
 describe("background strk20 messages", () => {
@@ -299,19 +296,16 @@ describe("background strk20 messages", () => {
         return true;
       },
     };
-    const handler = createMessageHandler(
-      walletStub(),
-      "extension-id",
-      session,
-      undefined,
-      {
+    const handler = createMessageHandler(walletStub(), "extension-id", {
+      preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {
           return preferences;
         },
       },
-      rpcStub(strk20, []),
-    );
+      runtimeRpc: rpcStub(strk20, []),
+      session,
+    });
 
     await handler({ origin, tokens: [token], type: "wallet.strk20Balances" }, contentSender);
     expect(seenProverUrls).toEqual([

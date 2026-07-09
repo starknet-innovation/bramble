@@ -96,14 +96,12 @@ const makeHarness = (connected: readonly AccountRef[] = [account]) => {
       return { classHash: "0x7ce", transactionHash: "0x7cd" };
     },
   } as unknown as RuntimeRpc;
-  const handler = createMessageHandler(
-    walletStub(connected),
-    "extension-id",
-    session,
+  const handler = createMessageHandler(walletStub(connected), "extension-id", {
     approvals,
-    unavailablePreferencesStore,
-    rpc,
-  );
+    preferencesStore: unavailablePreferencesStore,
+    runtimeRpc: rpc,
+    session,
+  });
   return { declared, handler };
 };
 

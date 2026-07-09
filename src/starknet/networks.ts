@@ -147,6 +147,35 @@ export const isNonZeroStarkFieldElement = (value: string): boolean =>
   isStarkFieldElement(value) && BigInt(value) > 0n;
 
 /**
+ * Compares two candidate field elements by numeric value. Non-numeric inputs
+ * never compare equal. This is the one shared implementation — do not
+ * re-derive it locally (three copies once drifted across features).
+ */
+export const sameFelt = (left: unknown, right: unknown): boolean => {
+  if (typeof left !== "string" || typeof right !== "string" || !left || !right) {
+    return false;
+  }
+  try {
+    return BigInt(left) === BigInt(right);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Normalizes a numeric string into the canonical `0x`-hex felt form, or null
+ * when the value is not numeric. Callers needing throw-on-invalid semantics
+ * wrap this rather than re-deriving the conversion.
+ */
+export const canonicalFelt = (value: string): string | null => {
+  try {
+    return `0x${BigInt(value).toString(16)}`;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Default network for newly imported accounts.
  */
 export const DEFAULT_NETWORK = STARKNET_NETWORKS.SN_MAIN;

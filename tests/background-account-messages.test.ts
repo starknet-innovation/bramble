@@ -92,7 +92,7 @@ describe("account lifecycle messages", () => {
     const handler = createMessageHandler(
       createWallet((input) => captured.push(input)),
       "extension-id",
-      session,
+      { session },
     );
 
     await expect(
@@ -108,7 +108,7 @@ describe("account lifecycle messages", () => {
   test("rejects add-account from content senders and malformed networks", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(createWallet(), "extension-id", session);
+    const handler = createMessageHandler(createWallet(), "extension-id", { session });
 
     await expect(
       handler({ networkId: "SN_SEPOLIA", type: "wallet.addAccount" }, contentSender),

@@ -5,8 +5,8 @@
  * ones added later and never registered anywhere — is extension-page only.
  */
 import { describe, expect, test } from "bun:test";
-import { handleMessage } from "../src/background/messages";
 import { DAPP_MESSAGES, isPrivilegedMessage, type RuntimeSender } from "../src/background/senders";
+import { handleMessage } from "./support/unavailable-handler";
 
 const contentSender: RuntimeSender = { id: "mc-wallet-test", url: "https://dapp.example/app" };
 

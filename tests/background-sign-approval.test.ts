@@ -90,7 +90,7 @@ const makeHandler = () => {
   setApprovalNotifier(() => undefined);
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
-  return createMessageHandler(wallet, "ext", session);
+  return createMessageHandler(wallet, "ext", { session });
 };
 
 const signMessage = {
@@ -146,7 +146,7 @@ describe("signTypedData approval gate", () => {
     };
     const session = createUnlockSession();
     session.unlock(PASSPHRASE);
-    const handler = createMessageHandler(lonely, "ext", session);
+    const handler = createMessageHandler(lonely, "ext", { session });
     expect(await handler(signMessage, content)).toEqual({ error: "origin not connected" });
   });
 });

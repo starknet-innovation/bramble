@@ -91,13 +91,10 @@ const makeHandler = (
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
-  const handler = createMessageHandler(
-    walletStub,
-    "extension-id",
-    session,
-    undefined,
+  const handler = createMessageHandler(walletStub, "extension-id", {
     preferencesStore,
-    {
+    prices,
+    runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "0", unit: "FRI" };
       },
@@ -136,10 +133,8 @@ const makeHandler = (
         return { calls: [], transactionHash: "0x7cd" };
       },
     },
-    undefined,
-    undefined,
-    prices,
-  );
+    session,
+  });
   return { handler, preferencesStore };
 };
 

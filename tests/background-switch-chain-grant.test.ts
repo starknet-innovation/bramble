@@ -81,7 +81,7 @@ describe("switchChain grant gate (A-M1)", () => {
   test("lets a connected origin switch the active network after approval", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub([account]), "extension-id", session);
+    const handler = createMessageHandler(walletStub([account]), "extension-id", { session });
 
     // The switch is held behind an explicit approval — it never changes the
     // network just because a connected site asked.
@@ -99,7 +99,7 @@ describe("switchChain grant gate (A-M1)", () => {
   test("rejects a switch from an origin with no grant", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(walletStub([]), "extension-id", session);
+    const handler = createMessageHandler(walletStub([]), "extension-id", { session });
 
     await expect(handler(switchMessage, contentSender)).resolves.toEqual({
       error: "origin not connected",
@@ -107,11 +107,9 @@ describe("switchChain grant gate (A-M1)", () => {
   });
 
   test("rejects a switch while the wallet is locked", async () => {
-    const handler = createMessageHandler(
-      walletStub([account]),
-      "extension-id",
-      createUnlockSession(),
-    );
+    const handler = createMessageHandler(walletStub([account]), "extension-id", {
+      session: createUnlockSession(),
+    });
 
     await expect(handler(switchMessage, contentSender)).resolves.toEqual({
       error: "origin not connected",

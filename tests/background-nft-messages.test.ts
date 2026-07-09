@@ -70,13 +70,9 @@ const makeHarness = (options?: { readonly owner?: string }) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const invokeCalls: (readonly unknown[])[] = [];
-  const handler = createMessageHandler(
-    walletStub,
-    "extension-id",
-    session,
-    undefined,
-    createPreferencesStore({ store: createMemoryStore() }),
-    {
+  const handler = createMessageHandler(walletStub, "extension-id", {
+    preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+    runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "1", unit: "FRI" };
       },
@@ -112,7 +108,8 @@ const makeHarness = (options?: { readonly owner?: string }) => {
         return { calls: input.calls, transactionHash: "0x7cd" };
       },
     },
-  );
+    session,
+  });
   return { handler, invokeCalls };
 };
 

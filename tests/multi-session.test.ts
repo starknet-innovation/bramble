@@ -83,7 +83,7 @@ const wallet = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
-  return createMessageHandler(wallet, "extension-id", session);
+  return createMessageHandler(wallet, "extension-id", { session });
 };
 
 describe("multi-session grants", () => {

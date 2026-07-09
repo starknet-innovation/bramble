@@ -82,13 +82,9 @@ const makeHarness = (options?: { readonly deployed?: boolean }) => {
     store: createMemoryStore(),
   });
   const statusRequests: string[][] = [];
-  const handler = createMessageHandler(
-    walletStub,
-    "extension-id",
-    session,
-    undefined,
-    undefined,
-    {
+  const handler = createMessageHandler(walletStub, "extension-id", {
+    activity,
+    runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "2500000000000000", unit: "FRI" };
       },
@@ -128,8 +124,8 @@ const makeHarness = (options?: { readonly deployed?: boolean }) => {
         return { calls: [], transactionHash: "0x7cd" };
       },
     },
-    activity,
-  );
+    session,
+  });
   return { activity, handler, statusRequests };
 };
 

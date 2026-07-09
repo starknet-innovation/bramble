@@ -94,16 +94,11 @@ const extensionSender: RuntimeSender = {
 const unlockedHandler = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(
-    wallet,
-    "extension-id",
+  return createMessageHandler(wallet, "extension-id", {
+    approvals: createApprovalQueue(),
+    originHistory: memoryOriginHistory(),
     session,
-    createApprovalQueue(),
-    undefined,
-    undefined,
-    undefined,
-    memoryOriginHistory(),
-  );
+  });
 };
 
 describe("connected-sites messages", () => {
@@ -120,7 +115,9 @@ describe("connected-sites messages", () => {
   });
 
   test("refuses connected-sites while locked", async () => {
-    const handler = createMessageHandler(wallet, "extension-id", createUnlockSession());
+    const handler = createMessageHandler(wallet, "extension-id", {
+      session: createUnlockSession(),
+    });
     await expect(handler({ type: "wallet.connectedSites" }, extensionSender)).resolves.toEqual({
       error: "wallet locked",
     });
@@ -172,16 +169,11 @@ describe("origin reputation on account requests", () => {
   test("records first-seen and surfaces insights on pending approvals", async () => {
     const session = createUnlockSession();
     const approvals = createApprovalQueue();
-    const handler = createMessageHandler(
-      wallet,
-      "extension-id",
-      session,
+    const handler = createMessageHandler(wallet, "extension-id", {
       approvals,
-      undefined,
-      undefined,
-      undefined,
-      memoryOriginHistory(() => 1000),
-    );
+      originHistory: memoryOriginHistory(() => 1000),
+      session,
+    });
     const dappSender: RuntimeSender = { id: "extension-id", url: "https://cleandapp.example/" };
 
     // The ungranted request holds behind a queued connection approval, so fire

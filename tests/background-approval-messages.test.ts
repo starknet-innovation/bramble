@@ -71,7 +71,10 @@ describe("background approval messages", () => {
   test("denies pending dapp account requests", async () => {
     const approvals = createApprovalQueue();
     const pending = approvals.request("https://example.com");
-    const handler = createMessageHandler(wallet, "extension-id", createUnlockSession(), approvals);
+    const handler = createMessageHandler(wallet, "extension-id", {
+      approvals,
+      session: createUnlockSession(),
+    });
 
     await expect(handler({ id: pending.id, type: "wallet.denyOrigin" }, sender)).resolves.toEqual({
       ok: true,
