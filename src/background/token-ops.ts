@@ -7,6 +7,7 @@
 
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { PriceService } from "../starknet/prices";
+import { isTransportRpcError, type TokenMetadata } from "../starknet/rpc";
 import { isLikelySpam, knownTokensForNetwork } from "../starknet/token-registry";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { readTypeOnlyInput } from "./message-inputs";
@@ -52,10 +53,19 @@ export const handleTokenOps = async (
     }
     const preferences = await preferencesStore.read();
     const network = STARKNET_NETWORKS[preferences.activeNetworkId];
-    const metadata = await runtimeRpc
-      .getTokenMetadata({ address: input.address, rpcUrls: networkRpcUrls(network, preferences) })
-      .catch(() => null);
-    if (!metadata) {
+    let metadata: TokenMetadata;
+    try {
+      metadata = await runtimeRpc.getTokenMetadata({
+        address: input.address,
+        rpcUrls: networkRpcUrls(network, preferences),
+      });
+    } catch (error) {
+      // A transport-level failure (node unreachable) is not the same as the
+      // contract simply not exposing readable ERC20 metadata; surface it as a
+      // retryable network error instead of "not a token".
+      if (isTransportRpcError(error)) {
+        return { error: "Couldn't reach the network, try again" };
+      }
       return { error: "could not read token metadata" };
     }
     const symbol = metadata.symbol.trim().toUpperCase();
@@ -109,14 +119,23 @@ export const handleTokenOps = async (
     if (candidates.length === 0) {
       return { ok: true, suggestions: [] };
     }
-    const balances = await runtimeRpc
-      .getTokenBalances({
+    // A live scan needs a working RPC: never swallow a failure into an empty
+    // result, or "couldn't reach the network" becomes indistinguishable from a
+    // genuine "no tokens found". Report the failure so the UI can prompt a retry.
+    try {
+      const balances = await runtimeRpc.getTokenBalances({
         accountAddress: context.account.address,
         rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
         tokens: candidates,
-      })
-      .catch(() => []);
-    return { ok: true, suggestions: balances.filter((balance) => balance.balance !== "0") };
+      });
+      return { ok: true, suggestions: balances.filter((balance) => balance.balance !== "0") };
+    } catch (error) {
+      return {
+        error: isTransportRpcError(error)
+          ? "Couldn't reach the network, try again"
+          : "Token scan failed, try again",
+      };
+    }
   }
 
   if (messageType === "wallet.setTokenHidden") {
