@@ -292,13 +292,14 @@ export const handleMultisigOps = async (
     if (!id) {
       return { error: "invalid track proposal request" };
     }
+    const existing = (await deps.multisigStore.listProposals()).find((p) => p.id === id);
     const proposal: MultisigProposalRecord = {
-      call: null,
+      call: existing?.call ?? null,
       confirmations: status.confirmations,
       id,
       multisigId: resolved.record.id,
       state: status.state,
-      summary: input.summary ?? "Shared proposal",
+      summary: input.summary ?? existing?.summary ?? "Shared proposal",
       txId: `0x${BigInt(input.txId).toString(16)}`,
     };
     await deps.multisigStore.upsertProposal(proposal);

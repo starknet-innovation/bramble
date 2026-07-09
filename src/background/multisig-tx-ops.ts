@@ -192,6 +192,10 @@ export const handleMultisigTxOps = async (
       rpcUrls: refreshed.rpcUrls,
       salt: input.salt,
     });
+    const id = multisigProposalId(refreshed.record.id, txId);
+    if (!id) {
+      return { error: "invalid propose request" };
+    }
     const summary = input.summary ?? `${input.entrypoint} on ${shortAddress(input.to)}`;
     const transactionHash = await submitAndRecord(
       deps,
@@ -199,10 +203,6 @@ export const handleMultisigTxOps = async (
       buildMultisigSubmitCall(refreshed.record.address, call, input.salt),
       `Propose: ${summary}`,
     );
-    const id = multisigProposalId(refreshed.record.id, txId);
-    if (!id) {
-      return { error: "invalid propose request" };
-    }
     const proposal: MultisigProposalRecord = {
       call: {
         calldata: input.calldata,
@@ -218,6 +218,10 @@ export const handleMultisigTxOps = async (
       txId,
     };
     await deps.multisigStore.upsertProposal(proposal);
+    const stored = (await deps.multisigStore.listProposals()).find((p) => p.id === proposal.id);
+    if (!stored) {
+      return { error: "could not store proposal — the multisig may have been removed" };
+    }
     await refreshAfterAction(
       deps,
       refreshed.record,
@@ -461,6 +465,7 @@ export const handleMultisigTxOps = async (
       };
     }
     const call = buildMultisigDeployCall(config);
+    const report = verifyCalls([call], verificationContext(context.account, preferences));
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
       calls: [call],
@@ -472,7 +477,9 @@ export const handleMultisigTxOps = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.networkId,
-      summary: `Deploy multisig (${input.quorum} of ${input.signers.length}) at ${shortAddress(address)}`,
+      summary:
+        report.calls[0]?.summary ??
+        `Deploy multisig (${input.quorum} of ${input.signers.length}) at ${shortAddress(address)}`,
     });
     return { address, ok: true, transactionHash: result.transactionHash };
   }
