@@ -214,6 +214,19 @@ export const readApiVersionParam = (params: Json | undefined): string | null | u
 };
 
 /**
+ * Validates the optional wallet_requestAccounts params (`silent_mode`,
+ * `api_version`): true when absent or well-formed, false when an unexpected key
+ * or malformed value is present so junk is not routed to a connect.
+ */
+export const isRequestAccountsParams = (params: Json | undefined): boolean =>
+  params === undefined ||
+  (isRecord(params) &&
+    hasOnlyKnownKeys(params, ["api_version", "silent_mode"]) &&
+    (params.silent_mode === undefined || typeof params.silent_mode === "boolean") &&
+    (params.api_version === undefined ||
+      (typeof params.api_version === "string" && API_VERSION_PATTERN.test(params.api_version))));
+
+/**
  * Narrows an unknown value to a spec declare result whose `transaction_hash` is
  * a PADDED_TXN_HASH and `class_hash` a PADDED_FELT (`0x` + 64 hex).
  */
@@ -237,6 +250,16 @@ export const providerStringArrayResult = (result: unknown): readonly string[] | 
   result.every((item) => typeof item === "string" && item.length > 0)
     ? result
     : null;
+
+const toCalldataFelt = (value: unknown): string | null => {
+  if (typeof value === "bigint" && value >= 0n) {
+    return `0x${value.toString(16)}`;
+  }
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return `0x${BigInt(value).toString(16)}`;
+  }
+  return typeof value === "string" ? value : null;
+};
 
 const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
   if (
@@ -264,15 +287,14 @@ const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
         ? call.entrypoint
         : null;
   const calldata = call.calldata ?? [];
-  if (
-    contractAddress === null ||
-    entrypoint === null ||
-    !Array.isArray(calldata) ||
-    !calldata.every((item) => typeof item === "string")
-  ) {
+  if (contractAddress === null || entrypoint === null || !Array.isArray(calldata)) {
     return null;
   }
-  return { calldata: [...calldata], contractAddress, entrypoint };
+  const felts = calldata.map(toCalldataFelt);
+  if (!felts.every((item): item is string => item !== null)) {
+    return null;
+  }
+  return { calldata: felts, contractAddress, entrypoint };
 };
 
 /**
