@@ -186,6 +186,13 @@ export const handleMultisigTxOps = async (
       txId,
     };
     await deps.multisigStore.upsertProposal(proposal);
+    await refreshAfterAction(
+      deps,
+      refreshed.record,
+      proposal,
+      refreshed.account.account.address,
+      refreshed.rpcUrls,
+    );
     return { ok: true, proposal, transactionHash };
   }
 
@@ -201,6 +208,17 @@ export const handleMultisigTxOps = async (
     const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
     if (verifyError) {
       return { error: verifyError };
+    }
+    const status = await multisigRpc(deps)
+      .getProposalStatus({
+        address: found.resolved.record.address,
+        rpcUrls: found.resolved.rpcUrls,
+        signer: found.resolved.account.account.address,
+        txId: found.proposal.txId,
+      })
+      .catch(() => null);
+    if (status && (status.state === "executed" || status.state === "not-found")) {
+      return { error: `cannot confirm a proposal that is ${status.state}` };
     }
     const transactionHash = await submitAndRecord(
       deps,
@@ -230,6 +248,17 @@ export const handleMultisigTxOps = async (
     const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
     if (verifyError) {
       return { error: verifyError };
+    }
+    const status = await multisigRpc(deps)
+      .getProposalStatus({
+        address: found.resolved.record.address,
+        rpcUrls: found.resolved.rpcUrls,
+        signer: found.resolved.account.account.address,
+        txId: found.proposal.txId,
+      })
+      .catch(() => null);
+    if (status && (status.state === "executed" || status.state === "not-found")) {
+      return { error: `cannot revoke a proposal that is ${status.state}` };
     }
     const transactionHash = await submitAndRecord(
       deps,
@@ -261,6 +290,17 @@ export const handleMultisigTxOps = async (
         error:
           "this proposal was tracked by id only; executing needs the original call, so execute it from the wallet that proposed it",
       };
+    }
+    const status = await multisigRpc(deps)
+      .getProposalStatus({
+        address: found.resolved.record.address,
+        rpcUrls: found.resolved.rpcUrls,
+        signer: found.resolved.account.account.address,
+        txId: found.proposal.txId,
+      })
+      .catch(() => null);
+    if (status && status.state !== "confirmed") {
+      return { error: `cannot execute a proposal that is ${status.state}` };
     }
     const transactionHash = await submitAndRecord(
       deps,
@@ -317,6 +357,17 @@ export const handleMultisigTxOps = async (
     if (await multisigRpc(deps).isClassDeclared({ rpcUrls })) {
       return { error: "multisig class is already declared on this network" };
     }
+    const activities = await deps.activity.list();
+    const hasPendingDeclare = activities.some(
+      (entry) =>
+        entry.accountId === context.account.id &&
+        entry.networkId === context.networkId &&
+        entry.summary === "Declare multisig class" &&
+        entry.status === "pending",
+    );
+    if (hasPendingDeclare) {
+      return { error: "a declare transaction is already pending — wait for it to complete" };
+    }
     const contractClass = requireMultisigContractClass(await deps.loadMultisigClass());
     const result = await deps.runtimeRpc.submitDeclareTransaction({
       account: context.account,
@@ -362,6 +413,20 @@ export const handleMultisigTxOps = async (
     }
     if (occupied) {
       return { error: "a multisig with these signers and salt already exists — watch it instead" };
+    }
+    const activities = await deps.activity.list();
+    const hasPendingDeploy = activities.some(
+      (entry) =>
+        entry.accountId === context.account.id &&
+        entry.networkId === context.networkId &&
+        entry.summary.startsWith(`Deploy multisig (${input.quorum} of ${input.signers.length})`) &&
+        entry.status === "pending",
+    );
+    if (hasPendingDeploy) {
+      return {
+        error:
+          "a deploy transaction for this multisig configuration is already pending — wait for it to complete",
+      };
     }
     const call = buildMultisigDeployCall(config);
     const report = verifyCalls([call], verificationContext(context.account, preferences));
