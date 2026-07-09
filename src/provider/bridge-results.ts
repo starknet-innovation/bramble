@@ -282,14 +282,16 @@ const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
 /**
  * Parses invoke params, accepting the spec `{ invoke_transaction: [...] }` and
  * the legacy `{ calls: [...] }` shapes, and rejecting a request that carries
- * both. Returns the internal camelCase call list.
+ * both. The spec-defined optional `proof` key is accepted so a conforming
+ * invoke carrying it is not rejected; the proof itself is not acted on here.
+ * Returns the internal camelCase call list.
  */
 export const providerInvokeCalls = (
   params: Json | undefined,
 ): readonly ProviderInvokeCall[] | null => {
   if (
     !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["calls", "invoke_transaction"]) ||
+    !hasOnlyKnownKeys(params, ["calls", "invoke_transaction", "proof"]) ||
     (Object.hasOwn(params, "calls") && Object.hasOwn(params, "invoke_transaction"))
   ) {
     return null;
@@ -304,10 +306,13 @@ export const providerInvokeCalls = (
 
 /**
  * Reads a spec switch-chain param (`{ chainId }`) matching the CHAIN_ID pattern.
+ * The spec-defined optional `silent_mode` (boolean) is accepted so a conforming
+ * request carrying it is not rejected; the flag itself is not acted on here.
  */
 export const providerSwitchChainId = (params: Json | undefined): string | null =>
   isRecord(params) &&
-  hasOnlyKnownKeys(params, ["chainId"]) &&
+  hasOnlyKnownKeys(params, ["chainId", "silent_mode"]) &&
+  (params.silent_mode === undefined || typeof params.silent_mode === "boolean") &&
   typeof params.chainId === "string" &&
   /^0x[0-9a-f]+$/.test(params.chainId)
     ? params.chainId

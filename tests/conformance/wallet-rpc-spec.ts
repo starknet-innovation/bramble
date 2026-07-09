@@ -11,6 +11,7 @@
  * and the `SpecMethod` type live in spec-fixtures.ts.
  */
 import type { ProviderMethod } from "../../src/provider/bridge";
+import { SUPPORTED_SPECS } from "../../src/shared/versions";
 import {
   ACCOUNT,
   ADDRESS,
@@ -64,7 +65,7 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
       params: { api_version: API_VERSION },
     },
     expectedRuntime: { apiVersion: API_VERSION, origin: ORIGIN, type: "wallet.supportedSpecs" },
-    backgroundResult: { ok: true, versions: ["0.8.1"] },
+    backgroundResult: { ok: true, versions: [...SUPPORTED_SPECS] },
     validateResult: (r) => isArrayOf(r, isString),
   },
   {

@@ -7,6 +7,7 @@
 import type { ProviderMethod, ProviderRequest, RuntimeMessage } from "../../src/provider/bridge";
 import type { ProviderResultMethod } from "../../src/provider/bridge-results";
 import type { Json } from "../../src/shared/json";
+import { SUPPORTED_WALLET_API } from "../../src/shared/versions";
 import type { AccountRef } from "../../src/storage/vault-schema";
 
 /** Spec PADDED_TXN_HASH: `0x` + 64 hex with a top nibble in 0-8 (felt < 2^252). */
@@ -49,8 +50,9 @@ export const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f
 /** A valid felt ADDRESS deliberately NOT in the wallet's default token list, so
  *  wallet_watchAsset must hold behind approval rather than dedup on a listed one. */
 export const WATCH_ASSET_TOKEN = "0x64656d6f746f6b656e";
-/** A spec API_VERSION the discovery methods accept as an optional param. */
-export const API_VERSION = "0.7.2";
+/** A spec API_VERSION the discovery methods accept as an optional param.
+ *  Sourced from the single-source versions module so wire and tests can't drift. */
+export const API_VERSION = SUPPORTED_WALLET_API[0];
 
 /** The connected account the background resolves for gated methods. */
 export const ACCOUNT: AccountRef = {

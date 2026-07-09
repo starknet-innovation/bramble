@@ -10,6 +10,7 @@ import { API_VERSION_PATTERN } from "../provider/bridge-results";
 import { isBlockedOrigin } from "../security/blocklist";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
+import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "../shared/versions";
 import { ozAccountDeployment } from "../starknet/deployment";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
@@ -20,14 +21,10 @@ import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
 
 /**
- * Starknet JSON-RPC spec versions this wallet targets (SPEC_VERSION values).
+ * Re-exported from the single-source versions module so callers importing them
+ * from the discovery layer still resolve the one canonical definition.
  */
-export const SUPPORTED_SPECS: readonly string[] = ["0.8.1"];
-
-/**
- * Wallet-API versions this wallet implements (API_VERSION values).
- */
-export const SUPPORTED_WALLET_API: readonly string[] = ["0.7.2"];
+export { SUPPORTED_SPECS, SUPPORTED_WALLET_API };
 
 /**
  * Dependencies shared by the read-only discovery operation handlers.
