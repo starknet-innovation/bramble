@@ -87,6 +87,41 @@ describe("spec-exact dapp shapes", () => {
     expect(/^0x0[0-8][0-9a-f]{62}$/.test(hash)).toBe(true);
   });
 
+  test("accepts a spec-conforming invoke carrying the optional proof param", () => {
+    expect(
+      toRuntimeMessage(
+        {
+          id: requestId,
+          method: "wallet_addInvokeTransaction",
+          params: {
+            invoke_transaction: [
+              { calldata: ["0x1"], contract_address: "0x123", entry_point: "transfer" },
+            ],
+            proof: { data: "proof" },
+          },
+        },
+        "https://a.test",
+      ),
+    ).toEqual({ calls: [call], origin: "https://a.test", type: "wallet.addInvokeTransaction" });
+  });
+
+  test("accepts wallet_switchStarknetChain with the optional silent_mode param", () => {
+    expect(
+      toRuntimeMessage(
+        {
+          id: requestId,
+          method: "wallet_switchStarknetChain",
+          params: { chainId: "0x534e5f4d41494e", silent_mode: true },
+        },
+        "https://a.test",
+      ),
+    ).toEqual({
+      chainId: "0x534e5f4d41494e",
+      origin: "https://a.test",
+      type: "wallet.switchChain",
+    });
+  });
+
   test("accepts the spec typed_data wrapper and a bare typed-data object", () => {
     const typedData = { domain: {}, message: {}, primaryType: "Mail", types: {} };
     expect(

@@ -251,10 +251,6 @@ export const providerStringArrayResult = (result: unknown): readonly string[] | 
     ? result
     : null;
 
-// Coerces a calldata felt to its canonical `0x`-hex string, accepting the string
-// form dapps usually send plus the felt-shaped bigint/integer number get-starknet
-// forwards unserialized. A non-felt-shaped value returns null so malformed
-// calldata still fails validation.
 const toCalldataFelt = (value: unknown): string | null => {
   if (typeof value === "bigint" && value >= 0n) {
     return `0x${value.toString(16)}`;
@@ -265,10 +261,6 @@ const toCalldataFelt = (value: unknown): string | null => {
   return typeof value === "string" ? value : null;
 };
 
-// Reads one INVOKE_CALL, accepting the spec snake_case shape
-// `{ contract_address, entry_point, calldata? }` and the legacy camelCase
-// `{ contractAddress, entrypoint, calldata }`. Returns the internal camelCase
-// call, or null when a field is missing or an unexpected key is present.
 const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
   if (
     !isRecord(call) ||
@@ -308,14 +300,16 @@ const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
 /**
  * Parses invoke params, accepting the spec `{ invoke_transaction: [...] }` and
  * the legacy `{ calls: [...] }` shapes, and rejecting a request that carries
- * both. Returns the internal camelCase call list.
+ * both. The spec-defined optional `proof` key is accepted so a conforming
+ * invoke carrying it is not rejected; the proof itself is not acted on here.
+ * Returns the internal camelCase call list.
  */
 export const providerInvokeCalls = (
   params: Json | undefined,
 ): readonly ProviderInvokeCall[] | null => {
   if (
     !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["calls", "invoke_transaction"]) ||
+    !hasOnlyKnownKeys(params, ["calls", "invoke_transaction", "proof"]) ||
     (Object.hasOwn(params, "calls") && Object.hasOwn(params, "invoke_transaction"))
   ) {
     return null;
@@ -330,10 +324,13 @@ export const providerInvokeCalls = (
 
 /**
  * Reads a spec switch-chain param (`{ chainId }`) matching the CHAIN_ID pattern.
+ * The spec-defined optional `silent_mode` (boolean) is accepted so a conforming
+ * request carrying it is not rejected; the flag itself is not acted on here.
  */
 export const providerSwitchChainId = (params: Json | undefined): string | null =>
   isRecord(params) &&
-  hasOnlyKnownKeys(params, ["chainId"]) &&
+  hasOnlyKnownKeys(params, ["chainId", "silent_mode"]) &&
+  (params.silent_mode === undefined || typeof params.silent_mode === "boolean") &&
   typeof params.chainId === "string" &&
   /^0x[0-9a-f]+$/.test(params.chainId)
     ? params.chainId
@@ -363,9 +360,6 @@ const padFeltList = (values: readonly unknown[]): string[] | null => {
   return padded.every((value): value is string => value !== null) ? padded : null;
 };
 
-// Shapes a background deployment result into the spec ACCOUNT_DEPLOYMENT_DATA
-// wire object, left-padding every felt. A felt the wallet produced that will
-// not pad is an internal failure and maps to UNKNOWN_ERROR.
 const deploymentPayload = (result: unknown): ProviderPayload => {
   const deployment = isRecord(result) && result.ok === true ? result.deployment : null;
   if (
