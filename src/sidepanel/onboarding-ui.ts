@@ -1,9 +1,10 @@
 /**
  * Onboarding binder for the create-wallet form. Generating a fresh recovery
- * phrase reveals confirmation inputs and blocks wallet creation until the
- * requested words are re-typed correctly; pasting an existing phrase (no
- * generation) skips verification. Verification uses the pure predicate in
- * ./backup-verify.
+ * phrase blurs the phrase behind an explicit reveal toggle and shows the
+ * confirmation inputs, blocking wallet creation until the requested words are
+ * re-typed correctly; pasting an existing phrase (no generation) skips both the
+ * mask and verification. Verification uses the pure predicate in
+ * ./backup-verify. Masking mirrors the blurred-reveal pattern in ./reveal-ui.
  */
 import type { WalletStatus } from "../popup/responses";
 import { verifyBackupWords } from "./backup-verify";
@@ -20,8 +21,9 @@ export type OnboardingUiDeps = {
 };
 
 /**
- * Binds the create-wallet form: generate or paste a recovery phrase, verify
- * generated phrases through re-typed words, then create the wallet.
+ * Binds the create-wallet form: generate or paste a recovery phrase, keep a
+ * generated phrase blurred until the user taps to reveal it, verify generated
+ * phrases through re-typed words, then create the wallet.
  */
 export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const { app, wallet } = deps;
@@ -35,9 +37,15 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     form?.querySelectorAll<HTMLInputElement>('input[name^="verify-"]') ?? [],
   );
   const verifyResult = form?.querySelector<HTMLElement>("#verify-result");
+  const phraseToggle = form?.querySelector<HTMLButtonElement>("#phrase-toggle");
   let requiresVerification = false;
 
   const answers = (): readonly string[] => verifyInputs.map((input) => input.value);
+
+  const maskPhrase = (masked: boolean): void => {
+    mnemonicInput?.classList.toggle("is-masked", masked);
+    phraseToggle?.lastChild?.replaceWith(masked ? "Tap to show phrase" : "Tap to hide phrase");
+  };
 
   const refreshVerification = (): void => {
     if (!requiresVerification) {
@@ -59,6 +67,10 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     input.addEventListener("input", refreshVerification);
   }
 
+  phraseToggle?.addEventListener("click", () => {
+    maskPhrase(!(mnemonicInput?.classList.contains("is-masked") ?? false));
+  });
+
   generateButton?.addEventListener("click", () => {
     buttonBusy(generateButton, true);
     void wallet.generateMnemonic().then(
@@ -68,6 +80,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         }
         requiresVerification = true;
         verifySection?.removeAttribute("hidden");
+        phraseToggle?.removeAttribute("hidden");
+        maskPhrase(true);
         for (const input of verifyInputs) {
           input.value = "";
         }

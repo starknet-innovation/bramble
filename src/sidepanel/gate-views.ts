@@ -32,6 +32,7 @@ export const onboarding = (status: WalletStatus): string => `
         <textarea name="mnemonic" required autocomplete="off" spellcheck="false" placeholder="12 or 24 words separated by spaces"></textarea>
         <span class="hint">Anyone with these words controls the wallet. Store them offline.</span>
       </label>
+      <button id="phrase-toggle" class="secondary small" type="button" hidden>${icon("book")}Tap to show phrase</button>
       <label><span>Vault passphrase</span>
         <input name="vaultPassphrase" type="password" minlength="12" required autocomplete="new-password" placeholder="At least 12 characters" />
         <span class="hint">Unlocks the wallet on this device.</span>
