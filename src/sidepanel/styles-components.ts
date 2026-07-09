@@ -198,10 +198,11 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
     border-radius: ${RADIUS.sm};
     display: flex;
     gap: ${SPACE.md};
-    padding: ${SPACE.md} ${SPACE.sm};
+    padding: ${SPACE.md} ${SPACE.sm}; position: relative;
     transition: background ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms ${MOTION.pop};
   }
-  .token-list > .token-row + .token-row { border-top: 1px solid var(--mc-hairline); }
+  /* Divider is a flat pseudo-line, not a border-top: a border-top curls along the row's border-radius and reads as a raised "top shadow" lip. */
+  .token-list > .token-row + .token-row::before { background: var(--mc-hairline); content: ""; height: 1px; inset: 0 0 auto; position: absolute; }
   li.token-row:hover { background: var(--mc-hover); }
   li.token-row:has(button.token-open:active) { background: var(--mc-soft-press); transform: scale(0.985); }
   /* Token glyph: a neutral chip — the accent is reserved for signal, not logos. */
@@ -290,9 +291,9 @@ export const COMPONENT_STYLES = `  /* Buttons: pill CTAs and circular icon butto
   .tx-list { display: grid; }
   .tx-row {
     align-items: center; border-radius: ${RADIUS.sm}; display: flex; gap: ${SPACE.sm};
-    min-width: 0; padding: ${SPACE.md} ${SPACE.sm}; transition: background ${MOTION.pressMs}ms ${MOTION.ease};
+    min-width: 0; padding: ${SPACE.md} ${SPACE.sm}; position: relative; transition: background ${MOTION.pressMs}ms ${MOTION.ease};
   }
-  .tx-list > .tx-row + .tx-row { border-top: 1px solid var(--mc-hairline); }
+  .tx-list > .tx-row + .tx-row::before { background: var(--mc-hairline); content: ""; height: 1px; inset: 0 0 auto; position: absolute; } /* flat pseudo-line divider; see .token-row */
   li.tx-row:hover { background: var(--mc-hover); }
   .tx-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .tx-copy strong {
