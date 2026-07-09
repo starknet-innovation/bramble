@@ -238,10 +238,6 @@ export const providerStringArrayResult = (result: unknown): readonly string[] | 
     ? result
     : null;
 
-// Reads one INVOKE_CALL, accepting the spec snake_case shape
-// `{ contract_address, entry_point, calldata? }` and the legacy camelCase
-// `{ contractAddress, entrypoint, calldata }`. Returns the internal camelCase
-// call, or null when a field is missing or an unexpected key is present.
 const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
   if (
     !isRecord(call) ||
@@ -342,9 +338,6 @@ const padFeltList = (values: readonly unknown[]): string[] | null => {
   return padded.every((value): value is string => value !== null) ? padded : null;
 };
 
-// Shapes a background deployment result into the spec ACCOUNT_DEPLOYMENT_DATA
-// wire object, left-padding every felt. A felt the wallet produced that will
-// not pad is an internal failure and maps to UNKNOWN_ERROR.
 const deploymentPayload = (result: unknown): ProviderPayload => {
   const deployment = isRecord(result) && result.ok === true ? result.deployment : null;
   if (
