@@ -219,10 +219,13 @@ export const handleWalletOps = async (
     const report = verifyCalls([result.call], verificationContext(account, preferences));
     await activity.record({
       accountId: account.id,
+      amount: input.amount,
+      counterparty: input.recipient,
       hash: result.transactionHash,
       kind: "transfer",
       networkId: account.networkId,
       summary: report.calls[0]?.summary ?? `Send ${token.symbol}`,
+      token: token.symbol,
     });
     return { ok: true, transactionHash: result.transactionHash };
   }
