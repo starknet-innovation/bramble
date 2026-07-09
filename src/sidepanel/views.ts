@@ -213,17 +213,13 @@ const menuRow = (view: WalletView, label: string, name: IconName): string =>
 const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | null): string =>
   dockScreen(
     "settings",
+    // Preferences (theme + display currency) lead the screen, ahead of the tall
+    // navigation menu. Settings content overflows the panel, so the sticky dock
+    // pins over whatever sits at the viewport fold; keeping the compact inline
+    // controls up top means the Appearance Dark/Light toggle is fully visible on
+    // open instead of clipped under the dock, while the deeper flow links below
+    // simply scroll into view (matching the Activity screen's behaviour).
     `<h2>Settings</h2>
-    <div class="menu-list" role="group" aria-label="Wallet settings">
-      ${menuRow("network", "Network", "globe")}
-      ${menuRow("account", "Account", "wallet")}
-      ${menuRow("address-book", "Address book", "book")}
-      ${menuRow("connected-sites", "Connected sites", "link")}
-      ${menuRow("allowances", "Allowances", "lock")}
-      ${menuRow("multisigs", "Multisigs", "wallet")}
-      ${menuRow("backup", "Backup & restore", "receive")}
-      ${menuRow("reveal", "Reveal secrets", "lock")}
-    </div>
     <p class="eyebrow">Appearance</p>
     <div class="option-list" role="group" aria-label="Theme">
       ${(["dark", "light"] as const)
@@ -247,6 +243,16 @@ const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | 
           .join("")}
       </select>
     </label>
+    <div class="menu-list" role="group" aria-label="Wallet settings">
+      ${menuRow("network", "Network", "globe")}
+      ${menuRow("account", "Account", "wallet")}
+      ${menuRow("address-book", "Address book", "book")}
+      ${menuRow("connected-sites", "Connected sites", "link")}
+      ${menuRow("allowances", "Allowances", "lock")}
+      ${menuRow("multisigs", "Multisigs", "wallet")}
+      ${menuRow("backup", "Backup & restore", "receive")}
+      ${menuRow("reveal", "Reveal secrets", "lock")}
+    </div>
     <a class="menu-row" href="https://github.com/mc-wallet/mc-wallet#readme" target="_blank" rel="noreferrer">
       <span class="menu-icon">${icon("book")}</span>
       <span class="menu-copy"><strong>Help &amp; docs</strong></span>
