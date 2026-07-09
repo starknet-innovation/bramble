@@ -63,10 +63,8 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       signers: readonly string[],
       quorum: number,
       salt: string,
-      name: string,
     ): Promise<MultisigDeployResponse> {
       const response = await sendMessage({
-        ...(name ? { name } : {}),
         quorum,
         ...(salt ? { salt } : {}),
         signers,
@@ -84,9 +82,18 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "execute failed");
     },
-    async loadClassStatus(): Promise<boolean | null> {
-      const response = await sendMessage({ type: "wallet.multisigClassStatus" });
-      return isMultisigClassStatusResponse(response) ? response.declared : null;
+    // Resolves to the declared flag, or "error" when the status cannot be
+    // determined (RPC failure, unavailable surface, malformed reply). Never
+    // rejects, so the deploy screen can tell "still loading" (null in the
+    // cache) apart from "checked and failed" and offer a retry instead of
+    // hanging on the checking state.
+    async loadClassStatus(): Promise<boolean | "error"> {
+      try {
+        const response = await sendMessage({ type: "wallet.multisigClassStatus" });
+        return isMultisigClassStatusResponse(response) ? response.declared : "error";
+      } catch {
+        return "error";
+      }
     },
     async loadMultisigs(): Promise<Pick<MultisigsResponse, "multisigs" | "proposals">> {
       const response = await sendMessage({ type: "wallet.multisigs" });

@@ -171,10 +171,12 @@ export const readTrackMultisigProposalInput = (
     : null;
 
 /**
- * Parsed deploy request for a new multisig contract.
+ * Parsed deploy request for a new multisig contract. No name is carried: the
+ * deploy handler intentionally does not watch the contract until it is
+ * finalized on-chain, so a name is chosen when the deployed multisig is later
+ * added through `wallet.addMultisig`.
  */
 export type DeployMultisigInput = {
-  readonly name?: string;
   readonly quorum: number;
   readonly salt: string;
   readonly signers: readonly string[];
@@ -186,7 +188,7 @@ export type DeployMultisigInput = {
  */
 export const readDeployMultisigInput = (message: unknown): DeployMultisigInput | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["name", "quorum", "salt", "signers", "type"]) &&
+  hasOnlyKnownKeys(message, ["quorum", "salt", "signers", "type"]) &&
   message.type === "wallet.deployMultisig" &&
   Array.isArray(message.signers) &&
   message.signers.length >= 1 &&
@@ -198,10 +200,8 @@ export const readDeployMultisigInput = (message: unknown): DeployMultisigInput |
   Number.isSafeInteger(message.quorum) &&
   message.quorum >= 1 &&
   message.quorum <= message.signers.length &&
-  isOptionalSalt(message.salt) &&
-  isOptionalName(message.name)
+  isOptionalSalt(message.salt)
     ? {
-        ...(message.name === undefined ? {} : { name: message.name }),
         quorum: message.quorum,
         salt: message.salt ?? "0x0",
         signers: message.signers as readonly string[],

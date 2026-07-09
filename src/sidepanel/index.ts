@@ -235,7 +235,7 @@ const loadDeployment = async (status: WalletStatus): Promise<boolean | null> => 
 type RenderData = {
   allowances: Awaited<ReturnType<typeof wallet.loadAllowances>>;
   multisigs: Awaited<ReturnType<typeof multisig.loadMultisigs>>;
-  multisigClassDeclared: boolean | null;
+  multisigClassDeclared: boolean | "error" | null;
   balances: Awaited<ReturnType<typeof wallet.loadBalances>>;
   chart: readonly number[];
   connectedSites: Awaited<ReturnType<typeof wallet.connectedSites>>;

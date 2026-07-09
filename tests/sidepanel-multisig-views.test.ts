@@ -58,7 +58,7 @@ const render = (
   view: Parameters<typeof dashboard>[0],
   multisigs: readonly MultisigRecord[] = [multisig],
   proposals: readonly MultisigProposalRecord[] = [],
-  declared: boolean | null = null,
+  declared: boolean | "error" | null = null,
 ): string =>
   dashboard(
     view,
@@ -137,5 +137,27 @@ describe("multisig views", () => {
     const ready = render("multisig-deploy", [], [], true);
     expect(ready).not.toContain('id="multisig-declare"');
     expect(ready).toContain('id="multisig-deploy-form"');
+    // Deploy stays disabled until the class is confirmed declared.
+    expect(ready).not.toContain("disabled");
+  });
+
+  test("deploy screen offers a retry and stays disabled when status errors", () => {
+    const errored = render("multisig-deploy", [], [], "error");
+    expect(errored).toContain('id="multisig-class-retry"');
+    expect(errored).not.toContain("Checking whether");
+    expect(errored).not.toContain('id="multisig-declare"');
+    // The truthy "error" string must not slip past the enable check.
+    expect(errored).toContain("disabled");
+  });
+
+  test("deploy screen shows the loading state before the status resolves", () => {
+    const loading = render("multisig-deploy", [], [], null);
+    expect(loading).toContain("Checking whether");
+    expect(loading).toContain("disabled");
+    expect(loading).not.toContain('id="multisig-class-retry"');
+  });
+
+  test("deploy form no longer collects a name", () => {
+    expect(render("multisig-deploy", [], [], true)).not.toContain('name="name"');
   });
 });

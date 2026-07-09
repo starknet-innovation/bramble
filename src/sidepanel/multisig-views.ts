@@ -257,7 +257,7 @@ export const multisigProposeFlow = (
 export const multisigDeployFlow = (
   status: WalletStatus,
   account: AccountRef | null,
-  declared: boolean | null,
+  declared: boolean | "error" | null,
 ): string =>
   flowHeader("Deploy multisig", "multisigs", status) +
   flowScreen(
@@ -269,17 +269,20 @@ export const multisigDeployFlow = (
              <p class="hint">The multisig class is not declared on ${escapeHtml(status.network)} yet. Declaring is a one-time, fee-paying transaction from your account; afterwards anyone can deploy from the same class.</p>
              <button id="multisig-declare" class="secondary" type="button">${icon("send")}Declare multisig class</button>
              <p id="multisig-declare-result" role="status"></p>`
-          : declared === null
-            ? '<p class="hint">Checking whether the multisig class is declared on this network…</p>'
-            : ""
+          : declared === "error"
+            ? `<div class="row"><span class="pill">Status unavailable</span></div>
+               <p class="hint">Could not check whether the multisig class is declared on ${escapeHtml(status.network)} — the network may be unreachable.</p>
+               <button id="multisig-class-retry" class="secondary" type="button">${icon("refresh")}Retry</button>`
+            : declared === null
+              ? '<p class="hint">Checking whether the multisig class is declared on this network…</p>'
+              : ""
       }
       <form id="multisig-deploy-form">
         <label><span>Signer addresses (one per line)</span><textarea class="mono" name="signers" rows="4" required autocomplete="off" spellcheck="false">${account ? escapeHtml(account.address) : ""}</textarea></label>
         <label><span>Quorum (confirmations required)</span><input name="quorum" inputmode="numeric" value="1" required autocomplete="off" /></label>
         <label><span>Salt</span><input class="mono" name="salt" value="0x0" autocomplete="off" spellcheck="false" /></label>
-        <label><span>Name (optional)</span><input name="name" maxlength="48" autocomplete="off" /></label>
-        <span class="hint">The contract address is derived from the class, signers, quorum, and salt — the same inputs always produce the same address on every network.</span>
-        <button class="secondary" type="submit" ${account && declared ? "" : "disabled"}>${icon("send")}Deploy multisig</button>
+        <span class="hint">The contract address is derived from the class, signers, quorum, and salt — the same inputs always produce the same address on every network. Name it after it finalizes, when you add it to your watched multisigs.</span>
+        <button class="secondary" type="submit" ${account && declared === true ? "" : "disabled"}>${icon("send")}Deploy multisig</button>
         <p id="multisig-deploy-result" role="status"></p>
       </form>
     </section>`,

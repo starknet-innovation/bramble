@@ -324,7 +324,6 @@ describe("multisig messages", () => {
     const { handler, invokeCalls } = makeHarness();
     const response = (await handler(
       {
-        name: "New treasury",
         quorum: 2,
         signers: [account.address, OTHER_SIGNER],
         type: "wallet.deployMultisig",
@@ -346,6 +345,21 @@ describe("multisig messages", () => {
       multisigs: readonly { name?: string }[];
     };
     expect(listed.multisigs).toHaveLength(0);
+  });
+
+  test("rejects a deploy request carrying an unknown name field", async () => {
+    const { handler } = makeHarness();
+    await expect(
+      handler(
+        {
+          name: "New treasury",
+          quorum: 1,
+          signers: [account.address],
+          type: "wallet.deployMultisig",
+        },
+        extensionSender,
+      ),
+    ).resolves.toEqual({ error: "invalid deploy multisig request" });
   });
 
   test("fails deploys closed when the class is not declared", async () => {

@@ -247,6 +247,14 @@ const bindDeployScreen = (deps: MultisigUiDeps): void => {
     });
   });
 
+  // Re-render re-fetches the class status for the deploy view, so a retry after
+  // a failed status check simply repaints from a fresh read.
+  const retry = deps.app?.querySelector<HTMLButtonElement>("#multisig-class-retry");
+  retry?.addEventListener("click", () => {
+    buttonBusy(retry, true);
+    void rerender(deps).catch(() => buttonBusy(retry, false));
+  });
+
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-deploy-form");
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   form?.addEventListener("submit", (event) => {
@@ -258,7 +266,6 @@ const bindDeployScreen = (deps: MultisigUiDeps): void => {
         parseFelts(String(data.get("signers") ?? "")),
         quorum,
         String(data.get("salt") ?? "").trim(),
-        String(data.get("name") ?? "").trim(),
       );
       deps.openList();
       return `Deployment submitted at ${result.address} — watch it once the transaction finalizes`;
