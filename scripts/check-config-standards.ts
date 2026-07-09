@@ -117,6 +117,8 @@ if (
     "!bun.lock",
     "!dist",
     "!node_modules",
+    "!playwright-report",
+    "!test-results",
     "!vendor",
   ])
 ) {
@@ -312,10 +314,13 @@ if (EXPECTED_RUNTIME_FILES.join("\n") !== PINNED_RUNTIME_FILES.join("\n")) {
 const ciCommands = [
   "cargo install wasm-pack --locked --version 0.13.1",
   "bun install --frozen-lockfile",
+  "bun run test:e2e:install",
   "bun run check:files",
   "bun run vendor:krusty",
+  "bun run vendor:multisig",
   "bun run check",
   "bun run build",
+  "bun run test:e2e",
   "bun run package:extension",
 ];
 const ciLines = ciWorkflow.split("\n").map((line) => line.trim());

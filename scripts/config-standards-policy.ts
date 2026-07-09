@@ -13,6 +13,7 @@ export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@biomejs/biome": "2.5.2",
+  "@playwright/test": "1.61.1",
   "@types/bun": "1.3.14",
   typescript: "6.0.3",
 };
@@ -38,6 +39,8 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "artifacts/",
   "dist/",
   "node_modules/",
+  "playwright-report/",
+  "test-results/",
   "vendor/krusty-kms/",
   "vendor/multisig/",
 ] as const;
@@ -82,6 +85,9 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
   test: "bun test",
+  "test:e2e": "playwright test",
+  "test:e2e:build": "bun run build && bun run test:e2e",
+  "test:e2e:install": "playwright install chromium",
   "vendor:krusty": "bun run scripts/vendor-krusty.ts",
   "vendor:multisig": "bun run scripts/vendor-multisig.ts",
 };
