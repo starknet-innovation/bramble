@@ -112,14 +112,12 @@ const throwingRpc = (): RuntimeRpc => ({
 const makeHandler = (getTokenMetadata: RuntimeRpc["getTokenMetadata"]) => {
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
   const approvals = createApprovalQueue();
-  const handler = createMessageHandler(
-    walletStub,
-    "extension-id",
-    createUnlockSession(),
+  const handler = createMessageHandler(walletStub, "extension-id", {
     approvals,
     preferencesStore,
-    { ...throwingRpc(), getTokenMetadata },
-  );
+    runtimeRpc: { ...throwingRpc(), getTokenMetadata },
+    session: createUnlockSession(),
+  });
   return { handler, preferencesStore };
 };
 

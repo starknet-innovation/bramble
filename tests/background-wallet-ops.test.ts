@@ -85,13 +85,9 @@ const makeHarness = (options?: {
     store: createMemoryStore(),
   });
   const statusRequests: string[][] = [];
-  const handler = createMessageHandler(
-    walletStub,
-    "extension-id",
-    session,
-    undefined,
-    undefined,
-    {
+  const handler = createMessageHandler(walletStub, "extension-id", {
+    activity,
+    runtimeRpc: {
       async estimateInvokeFee() {
         if (options?.estimateFails) {
           throw new Error("rpc unavailable");
@@ -134,8 +130,8 @@ const makeHarness = (options?: {
         return { calls: [], transactionHash: "0x7cd" };
       },
     },
-    activity,
-  );
+    session,
+  });
   return { activity, handler, statusRequests };
 };
 

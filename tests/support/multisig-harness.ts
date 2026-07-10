@@ -7,9 +7,15 @@ import { createMessageHandler } from "../../src/background/messages";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
 import type { MultisigProposalStatus } from "../../src/starknet/multisig";
+import { MULTISIG_CLASS_HASH } from "../../src/starknet/multisig-deploy";
 import type { ActivityStatus } from "../../src/storage/activity-store";
 import { memoryMultisigStore } from "../../src/storage/multisig-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+
+/**
+ * Address of the multisig contract the harness watches.
+ */
+export const HARNESS_MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
 
 /**
  * Target contract used by harness proposals.
@@ -52,6 +58,14 @@ export const harnessAccount: AccountRef = {
 export const harnessExtensionSender: RuntimeSender = {
   id: "extension-id",
   url: "chrome-extension://extension-id/sidepanel.html",
+};
+
+/**
+ * Content-script sender that must be rejected for privileged messages.
+ */
+export const harnessContentSender: RuntimeSender = {
+  id: "extension-id",
+  url: "https://dapp.example/app",
 };
 
 const vault = {
@@ -99,12 +113,16 @@ const walletStub = {
 };
 
 /**
- * Harness knobs. `proposalStatus` is consulted on every chain read so tests
- * can change the reported state between calls.
+ * Harness knobs. `proposalStatus` and `deploymentStatus` are consulted on
+ * every chain read so tests can change the reported state (or start
+ * throwing) between calls; `loadClass` supplies the bundled Sierra artifact
+ * for the declare flow.
  */
 export type MultisigHarnessOptions = {
   readonly classDeclared?: boolean;
   readonly contractAt?: boolean;
+  readonly deploymentStatus?: () => boolean;
+  readonly loadClass?: () => Promise<unknown>;
   readonly proposalStatus?: () => MultisigProposalStatus;
   readonly signers?: readonly string[];
   readonly transactionStatuses?: () => Readonly<Record<string, ActivityStatus>>;
@@ -112,25 +130,23 @@ export type MultisigHarnessOptions = {
 
 /**
  * Builds a message handler with an unlocked session, an in-memory multisig
- * store, and capture arrays for submitted invokes.
+ * store, and capture arrays for submitted invokes and declares.
  */
 export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
   const multisigStore = memoryMultisigStore();
   const invokeCalls: (readonly unknown[])[] = [];
-  const handler = createMessageHandler(
-    walletStub,
-    "extension-id",
-    session,
-    undefined,
-    undefined,
-    {
+  const declared: unknown[] = [];
+  const handler = createMessageHandler(walletStub, "extension-id", {
+    ...(options.loadClass ? { loadMultisigClass: options.loadClass } : {}),
+    multisigStore,
+    runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "1", unit: "FRI" };
       },
       async getDeploymentStatus() {
-        return options.contractAt ?? false;
+        return options.deploymentStatus?.() ?? options.contractAt ?? false;
       },
       async getNftOwner() {
         return harnessAccount.address;
@@ -154,21 +170,27 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
             signers: options.signers ?? [harnessAccount.address, HARNESS_OTHER_SIGNER],
           };
         },
-        async getProposalStatus() {
-          return (
-            options.proposalStatus?.() ?? {
-              confirmations: 1,
-              confirmedBySigner: false,
-              state: "pending",
-            }
-          );
+        async getProposalStatus(input: { readonly txId: string }) {
+          if (options.proposalStatus) {
+            return options.proposalStatus();
+          }
+          // Default chain behavior: a signer counts as having confirmed once
+          // this harness recorded a confirm_transaction invoke for the id, so
+          // confirm-then-revoke sequences pass their status gates like the
+          // real component would report.
+          const confirmedBySigner = invokeCalls.flat().some((entry) => {
+            const call = entry as { calldata?: readonly string[]; entrypoint?: string };
+            return call.entrypoint === "confirm_transaction" && call.calldata?.[0] === input.txId;
+          });
+          return { confirmations: 1, confirmedBySigner, state: "pending" as const };
         },
         async isClassDeclared() {
           return options.classDeclared ?? true;
         },
       },
-      async submitDeclareTransaction() {
-        return { classHash: "0x1", transactionHash: "0xdec" };
+      async submitDeclareTransaction(input) {
+        declared.push(input);
+        return { classHash: MULTISIG_CLASS_HASH, transactionHash: "0xdec" };
       },
       async submitAccountDeployment() {
         return { transactionHash: "0x7de" };
@@ -184,11 +206,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
         return { calls: input.calls, transactionHash: HARNESS_SUBMIT_HASH };
       },
     },
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    multisigStore,
-  );
-  return { handler, invokeCalls, multisigStore };
+    session,
+  });
+  return { declared, handler, invokeCalls, multisigStore };
 };

@@ -1,28 +1,25 @@
 /**
  * Key-boundary regression: no runtime message response may ever carry key
  * material out of the background. The stub vault is salted with recognizable
- * secrets; every handled message's serialized response is scanned for them.
+ * secrets; every handled message's serialized response is scanned for them,
+ * and the scanned catalog is proven exhaustive against the message types the
+ * background sources actually handle.
  */
 import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
-import type { AccountRef, Vault } from "../src/storage/vault-schema";
-
-const SECRET_PRIVATE_KEY = "0x7e57ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8";
-const SECRET_PASSPHRASE = "correct horse battery staple";
-const SECRET_MNEMONIC =
-  "habit hope tip crystal because grunt nation idea electric witness alert like";
-
-const account: AccountRef = {
-  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  networkId: "SN_MAIN",
-  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-};
+import type { Vault } from "../src/storage/vault-schema";
+import {
+  account,
+  contentSender,
+  extensionSender,
+  handledWalletMessages,
+  KEY_BOUNDARY_MESSAGES,
+  SECRET_MNEMONIC,
+  SECRET_PASSPHRASE,
+  SECRET_PRIVATE_KEY,
+} from "./support/key-boundary-messages";
 
 const vault = {
   accounts: [account],
@@ -32,12 +29,6 @@ const vault = {
   schemaVersion: 2,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
-
-const extensionSender: RuntimeSender = {
-  id: "extension-id",
-  url: "chrome-extension://extension-id/sidepanel.html",
-};
-const contentSender: RuntimeSender = { id: "extension-id", url: "https://dapp.example/swap" };
 
 const walletStub = {
   async addDerivedAccount() {
@@ -83,8 +74,6 @@ const walletStub = {
     };
   },
 };
-
-const MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
 
 const runtimeRpcStub = {
   async estimateInvokeFee() {
@@ -136,213 +125,29 @@ const runtimeRpcStub = {
   },
 };
 
-const MESSAGES: readonly {
-  readonly message: Record<string, unknown>;
-  readonly sender: RuntimeSender;
-}[] = [
-  { message: { type: "wallet.status" }, sender: extensionSender },
-  {
-    message: { type: "wallet.unlock", vaultPassphrase: SECRET_PASSPHRASE },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.getBalances" }, sender: extensionSender },
-  { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
-  { message: { type: "wallet.deployAccount" }, sender: extensionSender },
-  { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
-  { message: { type: "wallet.preferences" }, sender: extensionSender },
-  {
-    message: { origin: "https://dapp.example", type: "wallet.requestAccounts" },
-    sender: contentSender,
-  },
-  {
-    message: { origin: "https://dapp.example", type: "wallet.getGrantedAccounts" },
-    sender: contentSender,
-  },
-  { message: { origin: "https://dapp.example", type: "wallet.getChainId" }, sender: contentSender },
-  {
-    message: {
-      calls: [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }],
-      origin: "https://dapp.example",
-      type: "wallet.addInvokeTransaction",
-    },
-    sender: contentSender,
-  },
-  {
-    message: {
-      chainId: "0x534e5f4d41494e",
-      origin: "https://dapp.example",
-      type: "wallet.switchChain",
-    },
-    sender: contentSender,
-  },
-  { message: { accountId: account.id, type: "wallet.setActiveAccount" }, sender: extensionSender },
-  { message: { networkId: "SN_MAIN", type: "wallet.setActiveNetwork" }, sender: extensionSender },
-  {
-    message: {
-      accountId: account.id,
-      messageHash: "0x1",
-      type: "wallet.signHash",
-      vaultPassphrase: SECRET_PASSPHRASE,
-    },
-    sender: extensionSender,
-  },
-  {
-    message: { type: "wallet.revealSecrets", vaultPassphrase: SECRET_PASSPHRASE },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      accountId: account.id,
-      amount: "1.0",
-      recipient: account.address,
-      tokenId: "SN_MAIN:ETH:0x1",
-      type: "wallet.transfer",
-    },
-    sender: extensionSender,
-  },
-  { message: { networkId: "SN_MAIN", type: "wallet.addAccount" }, sender: extensionSender },
-  {
-    message: { accountId: account.id, origin: "https://dapp.example", type: "wallet.grantOrigin" },
-    sender: extensionSender,
-  },
-  {
-    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.approveOrigin" },
-    sender: extensionSender,
-  },
-  {
-    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.denyOrigin" },
-    sender: extensionSender,
-  },
-  {
-    message: { origin: "https://dapp.example", type: "wallet.revokeOrigin" },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.connectedSites" }, sender: extensionSender },
-  {
-    message: { origin: "https://dapp.example", type: "wallet.getPermissions" },
-    sender: contentSender,
-  },
-  {
-    message: {
-      accountId: account.id,
-      amount: "1.0",
-      recipient: account.address,
-      tokenId: "SN_MAIN:ETH:0x1",
-      type: "wallet.reviewTransfer",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      contractAddress: account.classHash,
-      recipient: account.address,
-      tokenId: "1",
-      type: "wallet.transferNft",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      allowanceId: "SN_MAIN:0x1:0x2",
-      type: "wallet.revokeAllowance",
-    },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.allowances" }, sender: extensionSender },
-  { message: { type: "wallet.activity" }, sender: extensionSender },
-  {
-    message: {
-      options: { address: account.classHash, decimals: 18, symbol: "TKN" },
-      origin: "https://dapp.example",
-      type: "wallet.watchAsset",
-    },
-    sender: contentSender,
-  },
-  { message: { address: account.classHash, type: "wallet.addToken" }, sender: extensionSender },
-  { message: { type: "wallet.detectTokens" }, sender: extensionSender },
-  { message: { type: "wallet.prices" }, sender: extensionSender },
-  { message: { address: account.classHash, type: "wallet.tokenChart" }, sender: extensionSender },
-  {
-    message: { accountId: account.id, label: "Main", type: "wallet.setAccountLabel" },
-    sender: extensionSender,
-  },
-  { message: { displayCurrency: "usd", type: "wallet.setDisplay" }, sender: extensionSender },
-  {
-    message: {
-      origin: "https://dapp.example",
-      typedData: { domain: {}, message: {}, primaryType: "X", types: {} },
-      type: "wallet.signTypedData",
-    },
-    sender: contentSender,
-  },
-  { message: { type: "wallet.lock" }, sender: extensionSender },
-  { message: { type: "wallet.status" }, sender: contentSender },
-  {
-    message: { vaultPassphrase: "wrong passphrase!!", type: "wallet.unlock" },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.multisigs" }, sender: extensionSender },
-  {
-    message: { address: MULTISIG, name: "Treasury", type: "wallet.addMultisig" },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      calldata: ["0x1"],
-      entrypoint: "transfer",
-      multisigId: `SN_MAIN:${MULTISIG}`,
-      to: account.address,
-      type: "wallet.proposeMultisigTx",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
-      type: "wallet.confirmMultisigProposal",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      multisigId: `SN_MAIN:${MULTISIG}`,
-      txId: "0xdef",
-      type: "wallet.trackMultisigProposal",
-    },
-    sender: extensionSender,
-  },
-  {
-    message: { id: `SN_MAIN:${MULTISIG}`, type: "wallet.refreshMultisig" },
-    sender: extensionSender,
-  },
-  { message: { type: "wallet.multisigClassStatus" }, sender: extensionSender },
-  {
-    message: {
-      quorum: 1,
-      signers: [account.address],
-      type: "wallet.deployMultisig",
-    },
-    sender: extensionSender,
-  },
-];
-
 const flush = (): Promise<void> =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, 0);
   });
 
 describe("key boundary", () => {
+  test("the scan catalog covers every message type the background handles", async () => {
+    const handled = await handledWalletMessages();
+    const scanned = new Set(KEY_BOUNDARY_MESSAGES.map((entry) => String(entry.message.type ?? "")));
+    const missing = [...handled].filter((type) => !scanned.has(type)).sort();
+    // A non-empty list means a message type was added to the background
+    // without a key-boundary scan entry: add a payload for it to
+    // tests/support/key-boundary-messages.ts.
+    expect(missing).toEqual([]);
+  });
+
   test("no handled message response ever carries key material", async () => {
     const session = createUnlockSession();
     session.unlock(SECRET_PASSPHRASE);
-    const handler = createMessageHandler(
-      walletStub,
-      "extension-id",
+    const handler = createMessageHandler(walletStub, "extension-id", {
+      runtimeRpc: runtimeRpcStub,
       session,
-      undefined,
-      undefined,
-      runtimeRpcStub,
-    );
+    });
 
     // State-changing dapp methods (invoke, switchChain, signTypedData) hold their
     // response until approved. Fire the request, approve any approval it queues,
@@ -368,7 +173,7 @@ describe("key boundary", () => {
       return held;
     };
 
-    for (const { message, sender } of MESSAGES) {
+    for (const { message, sender } of KEY_BOUNDARY_MESSAGES) {
       const response = await settle(message, sender);
       const serialized = JSON.stringify(response);
       const sanctionedReveal =
@@ -386,14 +191,10 @@ describe("key boundary", () => {
 
   test("mnemonic generation reveals only to extension pages", async () => {
     const session = createUnlockSession();
-    const handler = createMessageHandler(
-      walletStub,
-      "extension-id",
+    const handler = createMessageHandler(walletStub, "extension-id", {
+      runtimeRpc: runtimeRpcStub,
       session,
-      undefined,
-      undefined,
-      runtimeRpcStub,
-    );
+    });
 
     expect(await handler({ type: "wallet.generateMnemonic" }, contentSender)).toEqual({
       error: "privileged sender required",
@@ -406,14 +207,10 @@ describe("key boundary", () => {
 
   test("reveal secrets require an extension page and the re-entered passphrase", async () => {
     const session = createUnlockSession();
-    const handler = createMessageHandler(
-      walletStub,
-      "extension-id",
+    const handler = createMessageHandler(walletStub, "extension-id", {
+      runtimeRpc: runtimeRpcStub,
       session,
-      undefined,
-      undefined,
-      runtimeRpcStub,
-    );
+    });
 
     expect(
       await handler(

@@ -77,39 +77,42 @@ const makeHandler = (unlocked: boolean) => {
   if (unlocked) {
     session.unlock(vaultPassphrase);
   }
-  const handler = createMessageHandler(walletStub, "extension-id", session, undefined, undefined, {
-    async estimateInvokeFee() {
-      return { overallFee: "1", unit: "FRI" };
+  const handler = createMessageHandler(walletStub, "extension-id", {
+    runtimeRpc: {
+      async estimateInvokeFee() {
+        return { overallFee: "1", unit: "FRI" };
+      },
+      async getDeploymentStatus(input) {
+        statusCalls.push(input);
+        return false;
+      },
+      async getNftOwner() {
+        return "0x0";
+      },
+      async getTokenBalances() {
+        return [];
+      },
+      async getTokenMetadata() {
+        return { decimals: 18, name: "Token", symbol: "TKN" };
+      },
+      async getTransactionStatuses() {
+        return {};
+      },
+      async submitAccountDeployment(input) {
+        deployCalls.push(input);
+        return { transactionHash: "0x7abc" };
+      },
+      async submitDeclareTransaction() {
+        return { classHash: "0x1", transactionHash: "0x1" };
+      },
+      async submitErc20Transfer() {
+        throw new Error("unused");
+      },
+      async submitInvokeTransaction() {
+        throw new Error("unused");
+      },
     },
-    async getDeploymentStatus(input) {
-      statusCalls.push(input);
-      return false;
-    },
-    async getNftOwner() {
-      return "0x0";
-    },
-    async getTokenBalances() {
-      return [];
-    },
-    async getTokenMetadata() {
-      return { decimals: 18, name: "Token", symbol: "TKN" };
-    },
-    async getTransactionStatuses() {
-      return {};
-    },
-    async submitAccountDeployment(input) {
-      deployCalls.push(input);
-      return { transactionHash: "0x7abc" };
-    },
-    async submitDeclareTransaction() {
-      return { classHash: "0x1", transactionHash: "0x1" };
-    },
-    async submitErc20Transfer() {
-      throw new Error("unused");
-    },
-    async submitInvokeTransaction() {
-      throw new Error("unused");
-    },
+    session,
   });
   return { deployCalls, handler, statusCalls };
 };

@@ -86,14 +86,11 @@ const rpc = {
 const makeHandler = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(
-    walletStub,
-    "extension-id",
+  return createMessageHandler(walletStub, "extension-id", {
+    preferencesStore: unavailablePreferencesStore,
+    runtimeRpc: rpc,
     session,
-    undefined,
-    unavailablePreferencesStore,
-    rpc,
-  );
+  });
 };
 
 describe("blocklist enforced beyond connect (A-M2)", () => {

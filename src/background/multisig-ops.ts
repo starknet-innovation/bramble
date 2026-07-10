@@ -6,7 +6,12 @@
  * id shared out-of-band. Transaction-submitting multisig operations live in
  * multisig-tx-ops.ts.
  */
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "../starknet/networks";
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
@@ -32,17 +37,6 @@ import type { WalletOpsDeps } from "./wallet-ops";
 export type MultisigOpsDeps = WalletOpsDeps & {
   readonly loadMultisigClass?: (() => Promise<unknown>) | undefined;
   readonly multisigStore: MultisigStore;
-};
-
-/**
- * Compares two field elements by numeric value.
- */
-export const sameFelt = (left: string, right: string): boolean => {
-  try {
-    return BigInt(left) === BigInt(right);
-  } catch {
-    return false;
-  }
 };
 
 /**
@@ -245,7 +239,7 @@ export const handleMultisigOps = async (
       return { error: "invalid add multisig request" };
     }
     const record: MultisigRecord = {
-      address: `0x${BigInt(input.address).toString(16)}`,
+      address: canonicalFelt(input.address) ?? input.address,
       id,
       ...(input.name === undefined ? {} : { name: input.name }),
       networkId: context.networkId,
@@ -326,7 +320,7 @@ export const handleMultisigOps = async (
         ? {}
         : { submitTransactionHash: existing.submitTransactionHash }),
       summary: input.summary ?? existing?.summary ?? "Shared proposal",
-      txId: `0x${BigInt(input.txId).toString(16)}`,
+      txId: canonicalFelt(input.txId) ?? input.txId,
     };
     await deps.multisigStore.upsertProposal(proposal);
     return { ok: true, proposal };

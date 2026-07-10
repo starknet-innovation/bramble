@@ -8,8 +8,9 @@
  * from a pasted id have no call and can only be confirmed or revoked.
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
-import { isMultisigCallInput, isMultisigEntrypoint } from "../starknet/multisig";
+import { isMultisigCallInput, isMultisigEntrypoint, MULTISIG_LIMITS } from "../starknet/multisig";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -24,8 +25,8 @@ export const MULTISIG_STORE_KEY = "mc-wallet:multisigs";
 
 const MAX_MULTISIGS = 20;
 const MAX_PROPOSALS = 100;
-const MAX_NAME_LENGTH = 48;
-const MAX_SUMMARY_LENGTH = 120;
+const MAX_NAME_LENGTH = MULTISIG_LIMITS.nameLength;
+const MAX_SUMMARY_LENGTH = MULTISIG_LIMITS.summaryLength;
 
 /**
  * One watched multisig contract. `quorum` and `signers` are the last
@@ -80,14 +81,6 @@ export type MultisigStore = {
   readonly upsertProposal: (record: MultisigProposalRecord) => Promise<void>;
 };
 
-const canonicalFelt = (value: string): string | null => {
-  try {
-    return `0x${BigInt(value).toString(16)}`;
-  } catch {
-    return null;
-  }
-};
-
 /**
  * Builds the deterministic id for a watched multisig from its network and
  * canonical address. Returns null when the address is not a felt.
@@ -126,7 +119,7 @@ export const isMultisigRecord = (value: unknown): value is MultisigRecord =>
   value.quorum >= 1 &&
   Array.isArray(value.signers) &&
   value.signers.length >= value.quorum &&
-  value.signers.length <= 32 &&
+  value.signers.length <= MULTISIG_LIMITS.signers &&
   value.signers.every(
     (signer) => typeof signer === "string" && isNonZeroStarkFieldElement(signer),
   ) &&
