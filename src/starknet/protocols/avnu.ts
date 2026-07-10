@@ -1,13 +1,33 @@
 /**
- * AVNU integration stub — DEX aggregator routing across many AMMs. Phase-2
- * fills these in: `quoteSwap` calls the AVNU quotes API (AVNU_API.base) for the
- * best multi-venue route, and `buildSwapCalls` assembles the approve ->
- * `multi_route_swap` multicall (spender = AVNU_ADDRESSES.exchange) for the
- * in-wallet invoke path. Do NOT import @avnu/avnu-sdk — build calldata directly
- * with the vendored starknet-js from the quote's documented shape.
+ * AVNU integration — DEX aggregator routing across many AMMs. `quoteSwap` asks the
+ * AVNU quotes API (AVNU_API.base) for the best multi-venue route, then the build
+ * API for that route's prebuilt `multi_route_swap` calldata; `buildSwapCalls`
+ * assembles the approve -> `multi_route_swap` multicall (spender =
+ * AVNU_ADDRESSES.exchange) for the in-wallet invoke path. No @avnu/avnu-sdk — the
+ * REST endpoints are called directly and the calls are assembled with the vendored
+ * starknet-js. Route shapes, the REST client, and the pure builders live in
+ * ./avnu-swap; this module is the thin public protocol surface.
+ *
+ * ⚠️ AVNU_ADDRESSES.exchange is unverified (SDK/docs, not a mainnet explorer) — it
+ * is both the approve spender and the swap target, so it MUST be re-confirmed
+ * before mainnet swaps. See ./avnu-swap for the full flag. These builders never
+ * broadcast; they only produce `Call`s for the approval/invoke path.
  */
 import type { Call } from "starknet";
 import { WalletError } from "../../shared/errors";
+import { isNonZeroStarkFieldElement } from "../networks";
+import {
+  type AvnuRoute,
+  applySlippageFloor,
+  buildApproveCall,
+  DEFAULT_SLIPPAGE_BPS,
+  fetchAvnuExchangeCall,
+  fetchAvnuQuote,
+  isAvnuRoute,
+  slippageToFraction,
+  toExchangeCall,
+} from "./avnu-swap";
+import { AVNU_API } from "./constants";
 import type { SwapParams, SwapQuote, SwapQuoteParams } from "./types";
 
 /**
@@ -16,21 +36,67 @@ import type { SwapParams, SwapQuote, SwapQuoteParams } from "./types";
 export const AVNU_PROTOCOL_ID = "avnu" as const;
 
 /**
- * Fetches the best aggregated swap route from the AVNU API. TODO(phase2).
+ * Fetches the best aggregated swap route from the AVNU API and its slippage-bounded
+ * `multi_route_swap` calldata, returning a SwapQuote whose opaque `route` carries
+ * everything the synchronous buildSwapCalls needs to reproduce the trade.
  */
-export const quoteSwap = (_params: SwapQuoteParams): Promise<SwapQuote> => {
-  // TODO(phase2): GET AVNU quotes { sellTokenAddress, buyTokenAddress,
-  // sellAmount, takerAddress, size: 1 }, take quotes[0].routes[0], and map into
-  // a SwapQuote carrying the exchange spender + route for buildSwapCalls.
-  throw new WalletError("avnu quoteSwap not implemented");
+export const quoteSwap = async (params: SwapQuoteParams): Promise<SwapQuote> => {
+  if (
+    !isNonZeroStarkFieldElement(params.sellToken) ||
+    !isNonZeroStarkFieldElement(params.buyToken)
+  ) {
+    throw new WalletError("Invalid AVNU swap token");
+  }
+  if (!isNonZeroStarkFieldElement(params.takerAddress)) {
+    throw new WalletError("Invalid AVNU taker address");
+  }
+  const slippageBps = params.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
+  const quote = await fetchAvnuQuote(AVNU_API.base, {
+    buyToken: params.buyToken,
+    sellAmount: params.sellAmount,
+    sellToken: params.sellToken,
+    takerAddress: params.takerAddress,
+  });
+  // The build API bakes `buy_token_min_amount` (the on-chain slippage floor) into
+  // the returned calldata, so slippage is bound here at quote time.
+  const exchangeCall = await fetchAvnuExchangeCall(AVNU_API.base, {
+    includeApprove: false,
+    quoteId: quote.quoteId,
+    slippage: slippageToFraction(slippageBps),
+    takerAddress: params.takerAddress,
+  });
+  const route: AvnuRoute = {
+    buyAmount: quote.buyAmount,
+    buyToken: params.buyToken,
+    exchangeCall,
+    protocol: "avnu",
+    quoteId: quote.quoteId,
+    sellAmount: quote.sellAmount,
+    sellToken: params.sellToken,
+  };
+  return {
+    buyAmount: quote.buyAmount,
+    buyToken: params.buyToken,
+    minBuyAmount: applySlippageFloor(BigInt(quote.buyAmount), slippageBps).toString(),
+    protocol: AVNU_PROTOCOL_ID,
+    route,
+    sellAmount: quote.sellAmount,
+    sellToken: params.sellToken,
+  };
 };
 
 /**
- * Builds the AVNU approve + multi_route_swap multicall. TODO(phase2).
+ * Builds the AVNU approve + `multi_route_swap` multicall from a quoted route. The
+ * `slippageBps` on `params` is ignored: slippage was already bound into the quoted
+ * calldata by quoteSwap. Because this is synchronous with no RPC access it cannot
+ * read the current allowance, so it always emits an approve for exactly the sell
+ * amount; the router pulls only what the swap spends, leaving no lingering
+ * allowance.
  */
-export const buildSwapCalls = (_params: SwapParams): readonly Call[] => {
-  // TODO(phase2): emit [erc20 approve(exchange, sellAmount) when allowance is
-  // short, then exchange.multi_route_swap(...)] from the quoted route with a
-  // 0.1% default slippage bound.
-  throw new WalletError("avnu buildSwapCalls not implemented");
+export const buildSwapCalls = (params: SwapParams): readonly Call[] => {
+  const { route } = params.quote;
+  if (!isAvnuRoute(route)) {
+    throw new WalletError("Invalid AVNU route");
+  }
+  return [buildApproveCall(route.sellToken, BigInt(route.sellAmount)), toExchangeCall(route)];
 };

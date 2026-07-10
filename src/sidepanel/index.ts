@@ -42,6 +42,8 @@ import {
 import { SIDEPANEL_STYLES } from "./styles";
 import { bindTrade } from "./trade/bindings";
 import type { TradeTab } from "./trade/context";
+import { bindPortfolio } from "./trade/portfolio-bindings";
+import { bindTokens } from "./trade/tokens-bindings";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
@@ -280,6 +282,8 @@ const bindAll = (): void => {
     },
     tradeTab: () => tradeTab,
   });
+  bindTokens({ app, status: cache.status });
+  bindPortfolio({ app });
   bindActivity({ app, render, wallet });
   bindTransfer({ app, render, wallet });
   const settingsDeps = {
