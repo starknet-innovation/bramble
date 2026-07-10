@@ -74,7 +74,7 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run scripts/build-extension.ts",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test ./tests",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
@@ -84,7 +84,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:types": "tsc --noEmit",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
-  test: "bun test",
+  test: "bun test ./tests",
   "test:e2e": "playwright test",
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
