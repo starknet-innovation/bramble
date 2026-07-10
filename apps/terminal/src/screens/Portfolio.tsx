@@ -8,6 +8,7 @@
  * rows.
  */
 import { useMemo, useState, type ReactNode } from "react";
+import { BarChart3, Coins, LineChart, Receipt, Wallet } from "lucide-react";
 import {
   Card,
   EmptyState,
@@ -82,7 +83,7 @@ export default function Portfolio(): ReactNode {
     if (!isConnected) {
       return (
         <EmptyState
-          icon="💼"
+          icon={<Wallet size={22} strokeWidth={1.75} />}
           title="Your portfolio is empty"
           subtitle="Connect your Starknet wallet to view your token holdings, perps positions, and activity."
           ctaLabel="Connect Wallet"
@@ -101,7 +102,7 @@ export default function Portfolio(): ReactNode {
       if (portfolio.holdings.length === 0) {
         return (
           <EmptyState
-            icon="🪙"
+            icon={<Coins size={22} strokeWidth={1.75} />}
             title="No token balances"
             subtitle="This wallet holds none of the tracked Starknet tokens."
             style={{ flex: 1 }}
@@ -135,7 +136,7 @@ export default function Portfolio(): ReactNode {
     if (bodyTab === "perps") {
       return (
         <EmptyState
-          icon="📈"
+          icon={<LineChart size={22} strokeWidth={1.75} />}
           title="Perps positions — coming soon"
           subtitle="Live perpetual positions aren't wired to a data source in this build yet. No positions are shown rather than placeholder data."
           style={{ flex: 1 }}
@@ -146,7 +147,7 @@ export default function Portfolio(): ReactNode {
     if (bodyTab === "tokenActivity" || bodyTab === "perpActivity") {
       return (
         <EmptyState
-          icon="🧾"
+          icon={<Receipt size={22} strokeWidth={1.75} />}
           title="Activity history — coming soon"
           subtitle="Transaction and trade history isn't wired to an indexer yet. This is an empty state, not sample activity."
           style={{ flex: 1 }}
@@ -159,7 +160,7 @@ export default function Portfolio(): ReactNode {
     if (movers.length === 0) {
       return (
         <EmptyState
-          icon="📊"
+          icon={<BarChart3 size={22} strokeWidth={1.75} />}
           title="No movers to show"
           subtitle="Hold a priced token to see your top gainer and loser."
           style={{ flex: 1 }}

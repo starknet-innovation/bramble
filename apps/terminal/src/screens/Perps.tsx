@@ -13,6 +13,17 @@
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  Banknote,
+  BarChart3,
+  BookOpen,
+  ChartCandlestick,
+  LineChart,
+  Plus,
+  Receipt,
+  Star,
+  TriangleAlert,
+} from "lucide-react";
+import {
   CandlestickChart,
   EmptyState,
   ErrorBanner,
@@ -93,7 +104,7 @@ const TradeTape = ({
   if (trades.length === 0) {
     return (
       <EmptyState
-        icon="🧾"
+        icon={<Receipt size={22} strokeWidth={1.75} />}
         title="No recent trades"
         subtitle="Live trades will appear here as they print."
         style={{ minHeight: 180 }}
@@ -217,7 +228,7 @@ export default function Perps(): ReactNode {
     if (marketTab === "follows") {
       return (
         <EmptyState
-          icon="☆"
+          icon={<Star size={22} strokeWidth={1.75} />}
           title="No followed markets"
           subtitle="Follow a market to pin it here."
           style={{ minHeight: 180 }}
@@ -231,7 +242,13 @@ export default function Perps(): ReactNode {
       return <SkeletonRows rows={8} />;
     }
     if (rows.length === 0) {
-      return <EmptyState icon="📊" title="No perp markets available" style={{ minHeight: 180 }} />;
+      return (
+        <EmptyState
+          icon={<ChartCandlestick size={22} strokeWidth={1.75} />}
+          title="No perp markets available"
+          style={{ minHeight: 180 }}
+        />
+      );
     }
     return rows.map((m) => (
       <div
@@ -265,7 +282,13 @@ export default function Perps(): ReactNode {
     if (candles.error !== null) {
       return <ErrorBanner message={`Couldn't load candles: ${candles.error}`} />;
     }
-    return <EmptyState icon="📈" title="No chart data" style={{ minHeight: 320 }} />;
+    return (
+      <EmptyState
+        icon={<LineChart size={22} strokeWidth={1.75} />}
+        title="No chart data"
+        style={{ minHeight: 320 }}
+      />
+    );
   };
 
   // ----- center trade tabs body -----
@@ -284,7 +307,11 @@ export default function Perps(): ReactNode {
       }
       if (fundingData.history.length === 0) {
         return (
-          <EmptyState icon="💸" title="No funding history" style={{ minHeight: 150 }} />
+          <EmptyState
+            icon={<Banknote size={22} strokeWidth={1.75} />}
+            title="No funding history"
+            style={{ minHeight: 150 }}
+          />
         );
       }
       const recent = [...fundingData.history].reverse().slice(0, 24);
@@ -307,7 +334,7 @@ export default function Perps(): ReactNode {
     // positions / orders are account-gated.
     return (
       <EmptyState
-        icon="📊"
+        icon={<BarChart3 size={22} strokeWidth={1.75} />}
         title={tradeTab === "positions" ? "No open positions" : "No order history"}
         subtitle="Connect your wallet to start trading perps."
         ctaLabel={isConnected ? undefined : "Connect Wallet"}
@@ -322,7 +349,7 @@ export default function Perps(): ReactNode {
     <div className="screen" id="perps">
       <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         <div className="regionbanner">
-          <span>&#9888;</span>
+          <TriangleAlert size={14} strokeWidth={2} style={{ flexShrink: 0 }} aria-hidden />
           <span>
             Market data is live. Order placement requires a signed session and isn&apos;t available
             in your region. <a href="#learn-more">Learn more.</a>
@@ -362,8 +389,12 @@ export default function Perps(): ReactNode {
                   </h2>
                   <div className="tiny">Perpetual · Extended</div>
                 </div>
-                <button type="button" className="followbtn" style={{ marginLeft: 12 }}>
-                  + Follow
+                <button
+                  type="button"
+                  className="followbtn"
+                  style={{ marginLeft: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <Plus size={14} strokeWidth={2} /> Follow
                 </button>
               </div>
               <div className="statgrid">
@@ -477,7 +508,11 @@ export default function Perps(): ReactNode {
               ) : orderBook.isLoading ? (
                 <SkeletonRows rows={10} />
               ) : (
-                <EmptyState icon="📖" title="No order book" style={{ minHeight: 180 }} />
+                <EmptyState
+                  icon={<BookOpen size={22} strokeWidth={1.75} />}
+                  title="No order book"
+                  style={{ minHeight: 180 }}
+                />
               )
             ) : (
               <TradeTape trades={tradesData} isLoading={trades.isLoading} error={trades.error} />

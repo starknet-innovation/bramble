@@ -5,7 +5,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
 export type EmptyStateProps = {
-  /** Emoji / glyph shown in the rounded icon tile. */
+  /** Icon (e.g. a lucide-react icon element) shown in the rounded icon tile. */
   readonly icon: ReactNode;
   readonly title: ReactNode;
   readonly subtitle?: ReactNode;

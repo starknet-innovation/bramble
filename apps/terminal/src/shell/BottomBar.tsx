@@ -2,6 +2,7 @@
  * Bottom status bar — balance readout and footer links. Ported from the
  * mockup's `.bottombar`.
  */
+import { Globe, Mail, MessageCircle } from "lucide-react";
 import type { ReactNode } from "react";
 
 /**
@@ -27,9 +28,9 @@ export const BottomBar = (): ReactNode => (
       <a href="#disclosures">Disclosures</a>
       <a href="#help">Help</a>
       <span className="icons">
-        <span>&#9855;</span>
-        <span>&#9993;</span>
-        <span>&#9673;</span>
+        <Globe size={14} strokeWidth={1.75} aria-label="Website" />
+        <Mail size={14} strokeWidth={1.75} aria-label="Contact" />
+        <MessageCircle size={14} strokeWidth={1.75} aria-label="Community" />
       </span>
     </div>
   </div>

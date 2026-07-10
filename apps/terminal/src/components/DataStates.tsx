@@ -5,6 +5,7 @@
  * loading/error affordances consistent across Discover / Tokens / Perps /
  * Portfolio.
  */
+import { TriangleAlert } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
 /** A list of shimmer rows approximating a token / market list while loading. */
@@ -36,7 +37,7 @@ export const SkeletonChart = ({ height = 320 }: { readonly height?: number }): R
 /** A dismissable-looking (non-blocking) error banner. */
 export const ErrorBanner = ({ message }: { readonly message: string }): ReactNode => (
   <div className="errbanner" role="alert">
-    <span>&#9888;</span>
+    <TriangleAlert size={14} strokeWidth={2} style={{ flexShrink: 0 }} aria-hidden />
     <span>{message}</span>
   </div>
 );

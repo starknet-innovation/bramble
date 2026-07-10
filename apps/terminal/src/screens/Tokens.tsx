@@ -11,6 +11,7 @@
  * confirm-in-wallet flow.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Check, Coins, LineChart, Plus, Receipt } from "lucide-react";
 import type { Call } from "starknet";
 import {
   CandlestickChart,
@@ -253,12 +254,20 @@ export default function Tokens(): ReactNode {
               {tokens.isLoading ? (
                 <SkeletonRows rows={10} />
               ) : (
-                <EmptyState icon="🪙" title="No tokens available" style={{ minHeight: 200 }} />
+                <EmptyState
+                  icon={<Coins size={22} strokeWidth={1.75} />}
+                  title="No tokens available"
+                  style={{ minHeight: 200 }}
+                />
               )}
             </div>
           </div>
           <div className="center">
-            <EmptyState icon="🪙" title="Select a token" style={{ flex: 1 }} />
+            <EmptyState
+              icon={<Coins size={22} strokeWidth={1.75} />}
+              title="Select a token"
+              style={{ flex: 1 }}
+            />
           </div>
           <div className="rightpanel" />
         </div>
@@ -335,10 +344,18 @@ export default function Tokens(): ReactNode {
               <button
                 type="button"
                 className="followbtn"
-                style={{ marginLeft: 12 }}
+                style={{ marginLeft: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
                 onClick={() => setFollowed((f) => !f)}
               >
-                {followed ? "✓ Following" : "+ Follow"}
+                {followed ? (
+                  <>
+                    <Check size={14} strokeWidth={2} /> Following
+                  </>
+                ) : (
+                  <>
+                    <Plus size={14} strokeWidth={2} /> Follow
+                  </>
+                )}
               </button>
               <div
                 className="miniStats"
@@ -395,7 +412,7 @@ export default function Tokens(): ReactNode {
               <CandlestickChart key={token.address + timeframe} data={candleData} />
             ) : (
               <EmptyState
-                icon="📉"
+                icon={<LineChart size={22} strokeWidth={1.75} />}
                 title="Chart data unavailable"
                 subtitle={
                   candles.error !== null
@@ -411,7 +428,7 @@ export default function Tokens(): ReactNode {
             <TabStrip items={TRADE_TABS} value={tradeTab} onChange={setTradeTab} />
             {tradeTab === "trades" ? (
               <EmptyState
-                icon="🧾"
+                icon={<Receipt size={22} strokeWidth={1.75} />}
                 title="Live trade tape — coming soon"
                 subtitle="A verified on-chain trade feed for this token isn't wired to a source yet. This is an empty state, not sample trades."
                 style={{ minHeight: 160 }}

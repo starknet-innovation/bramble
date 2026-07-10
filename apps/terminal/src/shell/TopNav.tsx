@@ -3,6 +3,7 @@
  * Connect Wallet button. Ported from the mockup's `.topnav`.
  */
 import type { ReactNode } from "react";
+import { Search, Settings } from "lucide-react";
 import { useWallet } from "../wallet/WalletProvider";
 import { type ScreenId, SCREEN_TABS, shortenAddress } from "./screens";
 
@@ -42,7 +43,7 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
         ))}
       </div>
       <div className="search">
-        <span className="mag">&#9906;</span>
+        <Search className="mag" size={14} strokeWidth={1.75} aria-hidden />
         <input type="text" placeholder="Search tokens, perps, wallets" />
         <span className="slash">/</span>
       </div>
@@ -67,7 +68,7 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
           {connectLabel}
         </button>
         <button type="button" className="iconbtn" aria-label="Settings">
-          &#9881;
+          <Settings size={16} strokeWidth={1.75} />
         </button>
       </div>
     </div>

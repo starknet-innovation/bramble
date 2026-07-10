@@ -10,6 +10,7 @@
  */
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
+import { ChartCandlestick, ChevronDown, Coins, Rocket, Wallet } from "lucide-react";
 import {
   Card,
   EmptyState,
@@ -50,7 +51,7 @@ const LEFT_TABS: readonly { value: LeftTab; label: string }[] = [
 function DropButton({ label }: { readonly label: string }): ReactNode {
   return (
     <div className="dropbtn">
-      {label} <span className="cx">&#9662;</span>
+      {label} <ChevronDown className="cx" size={12} strokeWidth={2} aria-hidden />
     </div>
   );
 }
@@ -91,7 +92,7 @@ export default function Discover(): ReactNode {
     if (!isConnected) {
       return (
         <EmptyState
-          icon={"\u{1F4B3}"}
+          icon={<Wallet size={22} strokeWidth={1.75} />}
           title="Connect your wallet"
           subtitle="Connect your wallet to see your positions and activity."
           ctaLabel="Connect Wallet"
@@ -154,7 +155,7 @@ export default function Discover(): ReactNode {
         headerRight={<DropButton label="Trending" />}
       >
         <EmptyState
-          icon="🚀"
+          icon={<Rocket size={22} strokeWidth={1.75} />}
           title="Launches — coming soon"
           subtitle="A verified meme-token launch feed isn't wired to a data source yet. No launches are shown rather than placeholder tokens."
           style={{ flex: 1 }}
@@ -174,7 +175,11 @@ export default function Discover(): ReactNode {
             ) : tokens.isLoading && rankedTokens.length === 0 ? (
               <SkeletonRows rows={6} />
             ) : rankedTokens.length === 0 ? (
-              <EmptyState icon="🪙" title="No tokens available" style={{ minHeight: 160 }} />
+              <EmptyState
+                icon={<Coins size={22} strokeWidth={1.75} />}
+                title="No tokens available"
+                style={{ minHeight: 160 }}
+              />
             ) : (
               <table className="ranktable">
                 <thead>
@@ -222,7 +227,11 @@ export default function Discover(): ReactNode {
             ) : perps.isLoading && rankedPerps.length === 0 ? (
               <SkeletonRows rows={6} />
             ) : rankedPerps.length === 0 ? (
-              <EmptyState icon="📊" title="No perp markets available" style={{ minHeight: 160 }} />
+              <EmptyState
+                icon={<ChartCandlestick size={22} strokeWidth={1.75} />}
+                title="No perp markets available"
+                style={{ minHeight: 160 }}
+              />
             ) : (
               <table className="ranktable">
                 <thead>
