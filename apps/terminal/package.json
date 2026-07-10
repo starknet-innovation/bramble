@@ -1,0 +1,27 @@
+{
+  "name": "@mc-wallet/terminal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MC Wallet Trade Terminal — a standalone Starknet trade terminal that connects to the MC Wallet browser extension as a dApp.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "get-starknet-core": "^3.3.5",
+    "lightweight-charts": "^5.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "starknet": "10.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "~5.6.3",
+    "vite": "^5.4.11"
+  }
+}
