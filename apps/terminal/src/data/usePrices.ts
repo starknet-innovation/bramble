@@ -12,22 +12,30 @@
  * fabricated.
  */
 import { useCallback, useMemo } from "react";
-import { fetchJson } from "./client";
-import { COINGECKO_BASE } from "./endpoints";
+import { getJson } from "./cache";
+import { coingeckoHeaders, COINGECKO_BASE } from "./endpoints";
 import { KNOWN_TOKENS, KNOWN_TOKENS_BY_ADDRESS, SYMBOL_BY_COINGECKO_ID } from "./knownTokens";
 import type { PriceEntry, PricesData, Resource } from "./types";
 import { useAsyncResource } from "./useAsyncResource";
 
-const POLL_MS = 30_000;
+// Prices move slowly enough that a 60s poll is plenty; a shorter interval only
+// burns through CoinGecko's harsh free-tier rate limit (the source of the 429s).
+const POLL_MS = 60_000;
+// Serve a cached price to any concurrent consumer for just under the poll window
+// so Portfolio + Tokens + Discover coalesce into one request per cycle.
+const CACHE_MS = 55_000;
 
 /** The per-entry shape CoinGecko returns for both price endpoints. */
-type CoinGeckoPrice = {
+export type CoinGeckoPrice = {
   readonly usd?: number;
   readonly usd_24h_change?: number;
 };
-type CoinGeckoResponse = Readonly<Record<string, CoinGeckoPrice>>;
+export type CoinGeckoResponse = Readonly<Record<string, CoinGeckoPrice>>;
 
-const toEntry = (raw: CoinGeckoPrice | undefined): PriceEntry => ({
+/** Normalizes one CoinGecko price row into the app's `PriceEntry`. Exported so
+ * the offline `check:api` script validates the real response with this exact
+ * parser. */
+export const toEntry = (raw: CoinGeckoPrice | undefined): PriceEntry => ({
   usd: typeof raw?.usd === "number" && Number.isFinite(raw.usd) ? raw.usd : null,
   change24h:
     typeof raw?.usd_24h_change === "number" && Number.isFinite(raw.usd_24h_change)
@@ -48,10 +56,24 @@ const fetchPrices = async (
     `${COINGECKO_BASE}/api/v3/simple/price` +
     `?ids=${ids}&vs_currencies=usd&include_24hr_change=true`;
 
-  const [tokenPrices, majorPrices] = await Promise.all([
-    fetchJson<CoinGeckoResponse>(tokenUrl, { signal }),
-    fetchJson<CoinGeckoResponse>(majorsUrl, { signal }),
+  const headers = coingeckoHeaders();
+  // Fetch both feeds independently: the two calls have different failure modes
+  // (notably, without a CoinGecko API key `token_price` is capped to a single
+  // contract address and 400s for the whole tracked set), so one failing feed
+  // must not blank the other. The majors `/simple/price` call still resolves the
+  // tracked tokens by symbol, and vice-versa. Only if BOTH fail do we surface an
+  // error (useAsyncResource then keeps the last-good prices).
+  const [tokenSettled, majorSettled] = await Promise.allSettled([
+    getJson<CoinGeckoResponse>(tokenUrl, { signal, headers, cacheMs: CACHE_MS }),
+    getJson<CoinGeckoResponse>(majorsUrl, { signal, headers, cacheMs: CACHE_MS }),
   ]);
+  if (tokenSettled.status === "rejected" && majorSettled.status === "rejected") {
+    throw majorSettled.reason;
+  }
+  const tokenPrices: CoinGeckoResponse =
+    tokenSettled.status === "fulfilled" ? tokenSettled.value : {};
+  const majorPrices: CoinGeckoResponse =
+    majorSettled.status === "fulfilled" ? majorSettled.value : {};
 
   const byAddress: Record<string, PriceEntry> = {};
   const bySymbol: Record<string, PriceEntry> = {};

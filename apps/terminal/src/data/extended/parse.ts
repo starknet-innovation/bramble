@@ -263,9 +263,10 @@ const parseLevels = (raw: unknown): ExtendedOrderBookLevel[] => {
 };
 
 /**
- * Decodes an OrderbookUpdateModel (`{m,b,a}`) — the REST snapshot payload and the
- * WS SNAPSHOT/DELTA payload share this shape. `seq`/`ts` are threaded in from the
- * stream envelope when the caller has them.
+ * Decodes an OrderbookUpdateModel — `seq`/`ts` are threaded in from the stream
+ * envelope when the caller has them. Accepts every side-key spelling seen in the
+ * wild: the short WS aliases (`b`/`a`), the long WS aliases (`bids`/`asks`), and
+ * the live REST snapshot's singular `bid`/`ask` keys (`{price,qty}` levels).
  */
 export const parseOrderBook = (
   raw: unknown,
@@ -274,8 +275,8 @@ export const parseOrderBook = (
   const record = isRecord(raw) ? raw : {};
   return {
     market: typeof record.m === "string" ? record.m : typeof record.market === "string" ? record.market : "",
-    bids: parseLevels(record.b ?? record.bids),
-    asks: parseLevels(record.a ?? record.asks),
+    bids: parseLevels(record.b ?? record.bids ?? record.bid),
+    asks: parseLevels(record.a ?? record.asks ?? record.ask),
     seq: meta?.seq ?? null,
     ts: meta?.ts ?? null,
   };

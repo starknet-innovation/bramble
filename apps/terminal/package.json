@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:api": "bun run scripts/check-api.ts"
   },
   "dependencies": {
     "get-starknet-core": "^3.3.5",

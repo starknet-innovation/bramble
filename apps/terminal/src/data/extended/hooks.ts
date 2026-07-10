@@ -32,7 +32,10 @@ import type {
 import { connectStream, createOrderBookAggregator } from "./ws";
 
 const MARKETS_POLL_MS = 30_000;
-const STATS_POLL_MS = 5_000;
+// Stats are also pushed live over the market-stats surface; a 20s REST poll is a
+// calm fallback that stays comfortably within Extended's public rate limits
+// (the old 5s poll was needlessly aggressive).
+const STATS_POLL_MS = 20_000;
 const ORDERBOOK_POLL_MS = 8_000;
 const FUNDING_POLL_MS = 60_000;
 const CANDLES_POLL_MS = 30_000;

@@ -20,15 +20,42 @@ export class HttpError extends Error {
   readonly status: number;
   readonly url: string;
   readonly body: string;
+  /**
+   * Parsed `Retry-After` value in milliseconds when the server sent one (429/503
+   * responses often do). Null when absent/unparseable. The cache layer honors
+   * this before falling back to exponential backoff.
+   */
+  readonly retryAfterMs: number | null;
 
-  constructor(status: number, url: string, body: string) {
+  constructor(status: number, url: string, body: string, retryAfterMs: number | null = null) {
     super(`Request to ${url} failed with ${status}: ${body.slice(0, 300)}`);
     this.name = "HttpError";
     this.status = status;
     this.url = url;
     this.body = body;
+    this.retryAfterMs = retryAfterMs;
   }
 }
+
+/**
+ * Parses an HTTP `Retry-After` header (either delta-seconds or an HTTP date)
+ * into milliseconds from now. Returns null when the header is missing or cannot
+ * be interpreted.
+ */
+const parseRetryAfter = (value: string | null): number | null => {
+  if (value === null || value.trim().length === 0) {
+    return null;
+  }
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, seconds * 1000);
+  }
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) {
+    return Math.max(0, dateMs - Date.now());
+  }
+  return null;
+};
 
 /**
  * Fetches `url` and parses the JSON body, throwing `HttpError` on a non-2xx
@@ -48,7 +75,8 @@ export const fetchJson = async <T>(url: string, opts?: RequestInit): Promise<T> 
     } catch {
       // Ignore body read failures — the status alone is enough to classify.
     }
-    throw new HttpError(response.status, url, body);
+    const retryAfterMs = parseRetryAfter(response.headers?.get?.("retry-after") ?? null);
+    throw new HttpError(response.status, url, body, retryAfterMs);
   }
   return (await response.json()) as T;
 };

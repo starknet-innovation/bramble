@@ -8,12 +8,10 @@
  */
 import { useCallback } from "react";
 import type { Candle } from "../components/CandlestickChart";
-import { fetchJson } from "./client";
-import { COINGECKO_BASE } from "./endpoints";
+import { getJson } from "./cache";
+import { coingeckoHeaders, COINGECKO_BASE } from "./endpoints";
 import type { Resource } from "./types";
 import { useAsyncResource } from "./useAsyncResource";
-
-const POLL_MS = 60_000;
 
 // Timeframe label -> lookback days requested from CoinGecko.
 const DAYS_BY_TIMEFRAME: Readonly<Record<string, number>> = {
@@ -25,6 +23,22 @@ const DAYS_BY_TIMEFRAME: Readonly<Record<string, number>> = {
   "1y": 365,
   "5y": 1825,
 };
+
+// Per-timeframe poll interval: intraday charts refresh often, longer histories
+// barely move so they poll slowly (and stay well under CoinGecko's rate limit).
+const POLL_MS_BY_TIMEFRAME: Readonly<Record<string, number>> = {
+  "1d": 60_000,
+  "5d": 120_000,
+  "1m": 300_000,
+  "3m": 600_000,
+  "6m": 900_000,
+  "1y": 1_800_000,
+  "5y": 3_600_000,
+};
+const DEFAULT_POLL_MS = 120_000;
+
+const pollForTimeframe = (timeframe: string): number =>
+  POLL_MS_BY_TIMEFRAME[timeframe] ?? DEFAULT_POLL_MS;
 
 type MarketChartResponse = {
   readonly prices?: readonly (readonly [number, number])[];
@@ -73,7 +87,11 @@ const fetchCandles = async (
     ? `/api/v3/coins/starknet/contract/${tokenAddressOrId}/market_chart`
     : `/api/v3/coins/${tokenAddressOrId}/market_chart`;
   const url = `${COINGECKO_BASE}${path}?vs_currency=usd&days=${days}`;
-  const payload = await fetchJson<MarketChartResponse>(url, { signal });
+  const payload = await getJson<MarketChartResponse>(url, {
+    signal,
+    headers: coingeckoHeaders(),
+    cacheMs: Math.max(0, pollForTimeframe(timeframe) - 5_000),
+  });
   return bucketCandles(payload.prices ?? [], days);
 };
 
@@ -94,5 +112,5 @@ export const useCandles = (
     },
     [tokenAddressOrId, timeframe],
   );
-  return useAsyncResource(fetcher, [tokenAddressOrId ?? "", timeframe], POLL_MS);
+  return useAsyncResource(fetcher, [tokenAddressOrId ?? "", timeframe], pollForTimeframe(timeframe));
 };

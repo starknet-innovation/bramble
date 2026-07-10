@@ -7,12 +7,15 @@
  * `TokenRow`; fields a source does not provide are `null`, never invented.
  */
 import { useCallback } from "react";
-import { fetchJson } from "./client";
+import { getJson } from "./cache";
 import { AVNU_BASE, EKUBO_BASE } from "./endpoints";
 import type { Resource, TokenRow } from "./types";
 import { useAsyncResource } from "./useAsyncResource";
 
-const POLL_MS = 60_000;
+// The token universe (market caps / volumes) drifts slowly; a 2-minute poll is
+// ample and keeps the app well under the upstream rate limits.
+const POLL_MS = 120_000;
+const CACHE_MS = 115_000;
 
 const num = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -43,7 +46,10 @@ type AvnuToken = {
 
 type AvnuTokensResponse = readonly AvnuToken[] | { readonly content?: readonly AvnuToken[] };
 
-const toAvnuRows = (payload: AvnuTokensResponse): readonly TokenRow[] => {
+/** Normalizes the Avnu `/swap/v2/tokens` payload into `TokenRow[]`. Exported so
+ * the offline `check:api` script validates the real response with this exact
+ * normalizer. */
+export const toAvnuRows = (payload: AvnuTokensResponse): readonly TokenRow[] => {
   const list: readonly AvnuToken[] = Array.isArray(payload)
     ? payload
     : ((payload as { readonly content?: readonly AvnuToken[] }).content ?? []);
@@ -105,11 +111,13 @@ const toNumberLoose = (value: unknown): number =>
       ? Number(value)
       : 0;
 
-const fetchEkuboRows = async (signal: AbortSignal): Promise<readonly TokenRow[]> => {
-  const [tokensPayload, pairsPayload] = await Promise.all([
-    fetchJson<EkuboTokensResponse>(`${EKUBO_BASE}/tokens`, { signal }),
-    fetchJson<EkuboPairsResponse>(`${EKUBO_BASE}/pairs`, { signal }).catch(() => [] as EkuboPair[]),
-  ]);
+/** Normalizes the Ekubo `/tokens` (+ `/pairs` volume) payloads into `TokenRow[]`.
+ * Pure and exported so the offline `check:api` script validates the real
+ * responses with this exact normalizer. */
+export const toEkuboRows = (
+  tokensPayload: EkuboTokensResponse,
+  pairsPayload: EkuboPairsResponse,
+): readonly TokenRow[] => {
   const tokens: readonly EkuboToken[] = Array.isArray(tokensPayload)
     ? tokensPayload
     : ((tokensPayload as { readonly tokens?: readonly EkuboToken[] }).tokens ?? []);
@@ -166,9 +174,24 @@ const fetchEkuboRows = async (signal: AbortSignal): Promise<readonly TokenRow[]>
   return rows;
 };
 
+const fetchEkuboRows = async (signal: AbortSignal): Promise<readonly TokenRow[]> => {
+  const [tokensPayload, pairsPayload] = await Promise.all([
+    getJson<EkuboTokensResponse>(`${EKUBO_BASE}/tokens`, { signal, cacheMs: CACHE_MS }),
+    getJson<EkuboPairsResponse>(`${EKUBO_BASE}/pairs`, { signal, cacheMs: CACHE_MS }).catch(
+      () => [] as EkuboPair[],
+    ),
+  ]);
+  return toEkuboRows(tokensPayload, pairsPayload);
+};
+
 const fetchTokens = async (signal: AbortSignal): Promise<readonly TokenRow[]> => {
   try {
-    const payload = await fetchJson<AvnuTokensResponse>(`${AVNU_BASE}/swap/v2/tokens`, { signal });
+    // Fail fast (no retry) so a bad Avnu response falls back to Ekubo quickly.
+    const payload = await getJson<AvnuTokensResponse>(`${AVNU_BASE}/swap/v2/tokens`, {
+      signal,
+      cacheMs: CACHE_MS,
+      retries: 0,
+    });
     const rows = toAvnuRows(payload);
     if (rows.length > 0) {
       return rows;
@@ -183,7 +206,7 @@ const fetchTokens = async (signal: AbortSignal): Promise<readonly TokenRow[]> =>
 };
 
 /**
- * The normalized token universe, refreshed every 60s.
+ * The normalized token universe, refreshed on the `POLL_MS` cadence.
  */
 export const useTokens = (): Resource<readonly TokenRow[]> => {
   const fetcher = useCallback((signal: AbortSignal) => fetchTokens(signal), []);

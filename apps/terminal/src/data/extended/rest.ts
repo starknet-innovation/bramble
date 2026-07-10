@@ -1,9 +1,10 @@
 /**
  * Typed REST client for Extended's public market-data surface — one function per
- * public endpoint in the catalog, built on the shared `fetchJson` (HttpError +
- * AbortSignal). Every function threads the caller's `AbortSignal` so the polling
- * hooks cancel in-flight requests, and returns the decoded models from `parse.ts`
- * (never the raw envelope or short keys).
+ * public endpoint in the catalog, built on the shared `getJson` (HttpError +
+ * AbortSignal + in-flight de-dup, TTL cache, and 429/5xx backoff). Every function
+ * threads the caller's `AbortSignal` so the polling hooks cancel in-flight
+ * requests, and returns the decoded models from `parse.ts` (never the raw
+ * envelope or short keys).
  *
  * Covered endpoints:
  *   1. GET /info/markets                         -> fetchMarkets
@@ -16,7 +17,7 @@
  * `/info/markets/{market}/trades` as UNCONFIRMED); public trades are sourced from
  * the WS `publicTrades` stream instead — see `ws.ts` / `usePerpsTrades`.
  */
-import { fetchJson } from "../client";
+import { getJson } from "../cache";
 import type { CandleInterval, CandleType } from "./config";
 import { restUrls } from "./config";
 import {
@@ -39,7 +40,7 @@ export const fetchMarkets = async (
   opts?: { readonly markets?: readonly string[]; readonly signal?: AbortSignal },
 ): Promise<readonly ExtendedMarket[]> => {
   const url = restUrls.markets(opts?.markets);
-  const payload = await fetchJson<unknown>(url, { signal: opts?.signal });
+  const payload = await getJson<unknown>(url, { signal: opts?.signal, cacheMs: 25_000 });
   return parseMarkets(payload);
 };
 
@@ -52,7 +53,7 @@ export const fetchMarketStats = async (
   market: string,
   signal?: AbortSignal,
 ): Promise<ExtendedMarketStats | null> => {
-  const payload = await fetchJson<unknown>(restUrls.marketStats(market), { signal });
+  const payload = await getJson<unknown>(restUrls.marketStats(market), { signal, cacheMs: 12_000 });
   return parseMarketStatsResponse(payload);
 };
 
@@ -70,7 +71,7 @@ export const fetchCandles = async (
     limit: opts?.limit,
     endTime: opts?.endTime,
   });
-  const payload = await fetchJson<unknown>(url, { signal: opts?.signal });
+  const payload = await getJson<unknown>(url, { signal: opts?.signal, cacheMs: 20_000 });
   return parseCandles(payload);
 };
 
@@ -85,7 +86,7 @@ export const fetchFundingHistory = async (
   signal?: AbortSignal,
 ): Promise<readonly ExtendedFundingRate[]> => {
   const url = restUrls.funding(market, startTime, endTime);
-  const payload = await fetchJson<unknown>(url, { signal });
+  const payload = await getJson<unknown>(url, { signal, cacheMs: 55_000 });
   return parseFundingHistory(payload);
 };
 
@@ -94,6 +95,6 @@ export const fetchOrderBook = async (
   market: string,
   signal?: AbortSignal,
 ): Promise<ExtendedOrderBook> => {
-  const payload = await fetchJson<unknown>(restUrls.orderbook(market), { signal });
+  const payload = await getJson<unknown>(restUrls.orderbook(market), { signal, cacheMs: 5_000 });
   return parseOrderBookResponse(payload);
 };
