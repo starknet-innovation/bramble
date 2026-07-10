@@ -18,7 +18,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { accountDrawer } from "./account-drawer";
 import { allowancesFlow } from "./allowance-views";
 import { approvalCard } from "./approval-cards";
-import { formatFiat, portfolioTotal } from "./fiat";
+import { formatFiat, portfolioDelta, portfolioTotal } from "./fiat";
 import {
   accountFlow,
   addressBookFlow,
@@ -135,6 +135,27 @@ const deployNotice = (account: AccountRef | null, deployment: boolean | null): s
         <p id="deploy-result" role="status"></p>
       </div>`;
 
+// The portfolio 24h delta line under the balance: an emerald/red arrow and
+// magnitude beside a muted "percent · 24h" trailing label. Empty when nothing
+// is priced yet (no baseline), so it never renders a misleading zero-change.
+const heroDelta = (
+  balances: BalanceState,
+  preferences: WalletPreferences | null,
+  prices: Readonly<Record<string, number>>,
+  changes: Readonly<Record<string, number>>,
+  currency: DisplayCurrency,
+): string => {
+  const delta = portfolioDelta(visibleHomeBalances(balances, preferences), prices, changes);
+  if (delta === null) {
+    return "";
+  }
+  const arrow = delta.direction === "up" ? "↑" : "↓";
+  return `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
+      <span class="hero-change-amt">${arrow} ${escapeHtml(formatFiat(delta.absolute, currency))}</span>
+      <span class="hero-change-win">${delta.percent.toFixed(2)}% · 24h</span>
+    </p>`;
+};
+
 const homeScreen = (
   status: WalletStatus,
   account: AccountRef | null,
@@ -153,7 +174,9 @@ const homeScreen = (
     "home",
     `${pendingCallout(pendingCount)}
     <section class="hero">
+      <p class="hero-eyebrow">Total balance</p>
       <p class="hero-total">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
+      ${showTotal ? heroDelta(balances, preferences, prices, changes, currency) : ""}
       ${
         account
           ? `<button class="hero-chip" data-copy="${escapeHtml(account.address)}" type="button" title="Copy address">${escapeHtml(accountLabel(account.address))}${icon("copy")}</button>`
@@ -164,7 +187,6 @@ const homeScreen = (
     <div class="action-row">
       ${actionTile("send", "Send", "send", true, account !== null)}
       ${actionTile("receive", "Receive", "receive", false, account !== null)}
-      ${actionTile("nfts", "NFTs", "image", false, true)}
     </div>
     ${homeTabs(balances, preferences, prices, changes, currency, transactions, status)}`,
   );
@@ -213,17 +235,13 @@ const menuRow = (view: WalletView, label: string, name: IconName): string =>
 const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | null): string =>
   dockScreen(
     "settings",
+    // Preferences (theme + display currency) lead the screen, ahead of the tall
+    // navigation menu. Settings content overflows the panel, so the sticky dock
+    // pins over whatever sits at the viewport fold; keeping the compact inline
+    // controls up top means the Appearance Dark/Light toggle is fully visible on
+    // open instead of clipped under the dock, while the deeper flow links below
+    // simply scroll into view (matching the Activity screen's behaviour).
     `<h2>Settings</h2>
-    <div class="menu-list" role="group" aria-label="Wallet settings">
-      ${menuRow("network", "Network", "globe")}
-      ${menuRow("account", "Account", "wallet")}
-      ${menuRow("address-book", "Address book", "book")}
-      ${menuRow("connected-sites", "Connected sites", "link")}
-      ${menuRow("allowances", "Allowances", "lock")}
-      ${menuRow("multisigs", "Multisigs", "wallet")}
-      ${menuRow("backup", "Backup & restore", "receive")}
-      ${menuRow("reveal", "Reveal secrets", "lock")}
-    </div>
     <p class="eyebrow">Appearance</p>
     <div class="option-list" role="group" aria-label="Theme">
       ${(["dark", "light"] as const)
@@ -247,6 +265,16 @@ const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | 
           .join("")}
       </select>
     </label>
+    <div class="menu-list" role="group" aria-label="Wallet settings">
+      ${menuRow("network", "Network", "globe")}
+      ${menuRow("account", "Account", "wallet")}
+      ${menuRow("address-book", "Address book", "book")}
+      ${menuRow("connected-sites", "Connected sites", "link")}
+      ${menuRow("allowances", "Allowances", "lock")}
+      ${menuRow("multisigs", "Multisigs", "wallet")}
+      ${menuRow("backup", "Backup & restore", "receive")}
+      ${menuRow("reveal", "Reveal secrets", "lock")}
+    </div>
     <a class="menu-row" href="https://github.com/mc-wallet/mc-wallet#readme" target="_blank" rel="noreferrer">
       <span class="menu-icon">${icon("book")}</span>
       <span class="menu-copy"><strong>Help &amp; docs</strong></span>

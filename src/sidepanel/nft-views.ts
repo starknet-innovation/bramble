@@ -15,19 +15,21 @@ import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "./parts";
 
 const nftTitle = (nft: WatchedNft): string => nft.label ?? `NFT #${nft.tokenId}`;
 
+// A collectible tile: a minimally framed art square over a tight name +
+// contract/token-id caption, with compact ghost Hide/Remove actions. The box
+// chrome (filled/edged card) is gone — the art tile carries the only framing.
 const nftCard = (nft: WatchedNft): string => `
   <li class="nft-card">
-    <button class="secondary nft-open" data-nft-open="${escapeHtml(nft.id)}" type="button">
-      <span class="nft-mark">${icon("wallet")}</span>
+    <button class="nft-open" data-nft-open="${escapeHtml(nft.id)}" type="button">
+      <span class="nft-art">${icon("image")}</span>
       <span class="nft-copy">
         <strong>${escapeHtml(nftTitle(nft))}</strong>
-        <code>${escapeHtml(accountLabel(nft.contract))}</code>
-        <span class="hint">#${escapeHtml(nft.tokenId)}</span>
+        <code>${escapeHtml(accountLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>
       </span>
     </button>
     <div class="nft-actions">
-      <button class="secondary small" data-nft-spam="${escapeHtml(nft.id)}" data-nft-spam-value="true" type="button">${icon("x")}Hide</button>
-      <button class="secondary small danger" data-remove-nft="${escapeHtml(nft.id)}" type="button">${icon("x")}Remove</button>
+      <button class="ghost small" data-nft-spam="${escapeHtml(nft.id)}" data-nft-spam-value="true" type="button">Hide</button>
+      <button class="ghost small danger" data-remove-nft="${escapeHtml(nft.id)}" type="button">Remove</button>
     </div>
   </li>`;
 

@@ -146,15 +146,36 @@ Side panel styling is layered so each axis can be updated in one place:
 
 - Colors: `Skin` tokens in `src/ui/skin.ts`. Replace `defaultSkin` in `src/sidepanel/index.ts`
   to swap the palette; `applySkin` rejects missing, extra, hidden, or accessor tokens.
-- Scales: spacing, radius, type, motion, and control metrics live in `src/ui/tokens.ts` and are
-  interpolated into the stylesheet.
-- Components: `src/sidepanel/styles.ts` composes tokens into component classes used by the pure
-  templates in `src/sidepanel/views.ts`.
+- Scales: spacing, radius, type, control metrics, plus `WEIGHT`, `TRACKING` (size-specific
+  letter-spacing), a `SIZE` height scale, an elevation `SHADOW` scale, strong `EASE` curves, and
+  named `SPRING` presets (Apple's response/damping form) all live in `src/ui/tokens.ts`.
+- Motion primitives: `src/ui/spring.ts` turns a spring preset into a native CSS/WAAPI `linear()`
+  easing + settle duration (no dependency, CSP-safe). `src/sidepanel/motion.ts` exposes
+  `prefersReducedMotion()`, an interruptible WAAPI `animate()`/`spring()` wrapper (cancels
+  in-flight animations, cuts to the final state under reduced motion), and a `stagger()` helper.
+- Stylesheet layers: `src/sidepanel/styles.ts` composes the base layer (`styles-base.ts`), the
+  Liquid Glass material and token emission (`styles-material.ts`), component classes
+  (`styles-components.ts`), view-transition choreography (`styles-transitions.ts`), and the
+  home/motion layer (`styles-home.ts`, composed last so its reduced-motion block wins).
 
-Interaction contract: controls keep a constant 1px border and transition only paint properties,
-so nothing moves on hover or press; screens animate only when the visible scene changes, and
-`prefers-reduced-motion` disables motion entirely. `tests/sidepanel-styles.test.ts` enforces
-these rules.
+Material: opt a surface into Apple-style Liquid Glass by adding `class="glass"` (add `glass-enter`
+to materialize on entry). It provides `backdrop-filter` blur + saturate, a skin-driven tint, an
+inset specular edge highlight, and a depth shadow. Use it sparingly — one translucent layer at a
+time, never stacked. It degrades to a solid panel where `backdrop-filter` is unsupported and
+frosts to near-solid under `prefers-reduced-transparency` / `prefers-contrast`. Applied to the
+floating chrome and consequential surfaces — the bottom dock, the account drawer, dApp
+approval/sign cards, and toasts — while content surfaces (rows, tiles, detail tiles) stay solid.
+
+Gestures: the account drawer and toasts are drag-dismissible with 1:1 pointer tracking and
+velocity-projected momentum (`projectMomentum` in `src/sidepanel/motion.ts`) deciding whether a
+release falls closed or springs back; both cut to their resting state under `prefers-reduced-motion`.
+
+Interaction contract: controls are borderless — structure comes from elevation and spacing — and
+feedback transforms stay inside a bounded envelope (press scale 0.92–1.0, hover/press lift ≤ 2px)
+so nothing drifts under the pointer. Screen changes run through the View Transitions API, sliding
+forward/back by navigation depth (cross-fade for same-depth swaps) with an instant-swap fallback;
+`prefers-reduced-motion` collapses all motion to a cut on both the CSS and JS sides.
+`tests/sidepanel-styles.test.ts` and `tests/motion.test.ts` enforce these rules.
 
 The background broadcasts `wallet.event` messages (`accountsChanged`, `networkChanged`,
 `approvalsChanged`) after mutations. The side panel refreshes live from those events, and content

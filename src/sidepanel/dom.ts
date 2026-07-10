@@ -5,6 +5,7 @@
 import { friendlyNetworkError } from "../shared/network-error";
 import { friendlyError } from "./friendly-error";
 import { icon } from "./icons";
+import { animate } from "./motion";
 import { isWalletView } from "./parts";
 
 /**
@@ -65,11 +66,97 @@ const toastCopyButton = (message: string): HTMLButtonElement => {
   return copy;
 };
 
+// Slides a toast out along `toX` px (0 = straight fade) and removes it once the
+// motion lands. Reduced motion cuts to removal immediately.
+const dismissToast = (toast: HTMLElement, toX: number): void => {
+  const anim = animate(
+    toast,
+    [
+      { opacity: 1, transform: toast.style.transform || "none" },
+      { opacity: 0, transform: `translateX(${toX}px)` },
+    ],
+    { duration: 200 },
+  );
+  if (anim) {
+    void anim.finished.then(
+      () => toast.remove(),
+      () => toast.remove(),
+    );
+    return;
+  }
+  toast.remove();
+};
+
+// Swipe-to-dismiss: the toast tracks the pointer horizontally and flies off when
+// released past a distance or with enough flick velocity (> ~0.11 px/ms), so a
+// dismissal a user initiated feels direct. A weak swipe springs back to rest.
+const bindToastSwipe = (toast: HTMLElement): void => {
+  const el = toast;
+  let startX = 0;
+  let lastX = 0;
+  let lastT = 0;
+  let velocity = 0;
+  let dragging = false;
+  el.addEventListener("pointerdown", (event: PointerEvent) => {
+    // Ignore a second touch point once a swipe is underway — a new origin
+    // mid-drag would make the toast jump.
+    if (event.button !== 0 || dragging) {
+      return;
+    }
+    for (const running of el.getAnimations()) {
+      running.cancel();
+    }
+    dragging = true;
+    startX = event.clientX;
+    lastX = event.clientX;
+    lastT = event.timeStamp;
+    velocity = 0;
+    el.setPointerCapture(event.pointerId);
+    el.style.transition = "none";
+  });
+  el.addEventListener("pointermove", (event: PointerEvent) => {
+    if (!dragging) {
+      return;
+    }
+    const dx = event.clientX - startX;
+    const dt = event.timeStamp - lastT;
+    if (dt > 0) {
+      velocity = Math.abs(event.clientX - lastX) / dt;
+    }
+    lastX = event.clientX;
+    lastT = event.timeStamp;
+    el.style.transform = `translateX(${dx}px)`;
+    el.style.opacity = String(Math.max(0, 1 - Math.abs(dx) / 220));
+  });
+  const release = (event: PointerEvent): void => {
+    if (!dragging) {
+      return;
+    }
+    dragging = false;
+    if (el.hasPointerCapture(event.pointerId)) {
+      el.releasePointerCapture(event.pointerId);
+    }
+    const dx = event.clientX - startX;
+    if (velocity > 0.11 || Math.abs(dx) > 80) {
+      dismissToast(el, dx >= 0 ? 340 : -340);
+      return;
+    }
+    el.style.opacity = "1";
+    const anim = animate(el, [{ transform: `translateX(${dx}px)` }, { transform: "none" }], {
+      duration: 200,
+    });
+    if (!anim) {
+      el.style.transform = "";
+    }
+  };
+  el.addEventListener("pointerup", release);
+  el.addEventListener("pointercancel", release);
+};
+
 /**
- * Shows a transient toast in the fixed stack at the bottom of the shell. Error
- * toasts stay longer and are rewritten to friendly, user-facing copy; a
- * copy-to-clipboard control is attached only for genuinely unexpected internal
- * errors, never for validation or other recoverable user-facing conditions.
+ * Shows a transient toast in the fixed stack at the bottom of the shell. It
+ * materializes with an interruptible WAAPI spring and can be swiped away; error
+ * toasts stay longer and carry a copy control for the message.
  */
 export const showToast = (message: string, tone: ToastTone): void => {
   const stackId = "toast-stack";
@@ -92,7 +179,16 @@ export const showToast = (message: string, tone: ToastTone): void => {
     toast.append(toastCopyButton(friendly.message));
   }
   stack.append(toast);
-  setTimeout(() => toast.remove(), tone === "error" ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
+  animate(
+    toast,
+    [
+      { opacity: 0, transform: "translateY(10px) scale(0.98)" },
+      { opacity: 1, transform: "none" },
+    ],
+    { duration: 240 },
+  );
+  bindToastSwipe(toast);
+  setTimeout(() => dismissToast(toast, 0), tone === "error" ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);
 };
 
 // Swaps the button's copy glyph for a check while the confirmation lands,

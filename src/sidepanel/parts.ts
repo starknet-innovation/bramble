@@ -148,10 +148,14 @@ export const accountDisplayName = (
 ): string => preferences?.accountLabels?.[account.id] ?? friendlyAccountName(account.address);
 
 /**
- * Renders a deterministic gradient identicon for an address: a diagonal
- * two-tone gradient with a soft accent orb, all hues derived from the address,
- * filling its circular container. Distinct and recognizable per account without
- * the sparse, glyph-like look of a pixel grid.
+ * Renders a flat, single-colour avatar chip for an address: one solid fill from
+ * a small per-account palette (emerald / blue / amber / violet) with a quiet
+ * person glyph, matching the Clean Mono comp. The tone is chosen
+ * deterministically from the address, so an account always keeps the same
+ * colour. Fill and glyph ink come from the `--mc-avatar-*` tokens (see
+ * ./styles-base) — no gradients, no raw colour literals — and the chip's
+ * rounded-square shape and hairline are carried by its container
+ * (`.brand-mark` / `.option-avatar`).
  */
 export const accountAvatar = (address: string): string => {
   let bits: bigint;
@@ -160,25 +164,11 @@ export const accountAvatar = (address: string): string => {
   } catch {
     bits = 0n;
   }
-  const pick = (shift: number, mod: number): number =>
-    Number((bits >> BigInt(shift)) % BigInt(mod));
-  const h1 = pick(0, 360);
-  const h2 = (h1 + 55 + pick(11, 120)) % 360;
-  const h3 = (h1 + 190 + pick(23, 120)) % 360;
-  const orbX = 9 + pick(31, 22);
-  const orbY = 8 + pick(43, 18);
-  // A per-address gradient id; identical for repeats of the same account, so any
-  // duplicate reference resolves to the same definition.
-  const id = `av-${(bits % 2147483647n).toString(36)}`;
+  const tone = Number(bits % 4n);
   return `<svg class="avatar" viewBox="0 0 40 40" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-    <defs>
-      <linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="hsl(${h1} 74% 62%)" />
-        <stop offset="1" stop-color="hsl(${h2} 66% 44%)" />
-      </linearGradient>
-    </defs>
-    <rect width="40" height="40" fill="url(#${id})" />
-    <circle cx="${orbX}" cy="${orbY}" r="11" fill="hsl(${h3} 85% 66%)" opacity="0.55" />
+    <rect width="40" height="40" fill="var(--mc-avatar-${tone})" />
+    <circle cx="20" cy="15.5" r="6" fill="var(--mc-avatar-ink)" opacity="0.9" />
+    <path d="M8 34c1.7-7 6.4-10.5 12-10.5S30.3 27 32 34" fill="var(--mc-avatar-ink)" opacity="0.9" />
   </svg>`;
 };
 

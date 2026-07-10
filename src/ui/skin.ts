@@ -16,6 +16,7 @@ export const SKIN_TOKENS = [
   "--mc-muted",
   "--mc-panel",
   "--mc-positive",
+  "--mc-sunken",
   "--mc-text",
 ] as const;
 

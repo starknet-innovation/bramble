@@ -73,3 +73,56 @@ export const portfolioTotal = (
     const value = tokenFiatValue(balance.formatted, prices[balance.address]);
     return value === null ? total : total + value;
   }, 0);
+
+/**
+ * A portfolio's 24h movement, split into an always-positive magnitude and its
+ * direction, so callers can colour the sign (emerald up / red down) without
+ * re-deriving it. `percent` is the magnitude of the percentage move.
+ */
+export type PortfolioDelta = {
+  readonly absolute: number;
+  readonly direction: "down" | "up";
+  readonly percent: number;
+};
+
+/**
+ * Computes the portfolio's 24h fiat and percentage change from current priced
+ * balances and each token's 24h percent change. The prior value of every
+ * holding is reconstructed from its change, summed, and compared to the current
+ * total. Returns null when nothing is priced (no baseline to compare against).
+ */
+export const portfolioDelta = (
+  balances: readonly FiatBalance[],
+  prices: Readonly<Record<string, number>>,
+  changes: Readonly<Record<string, number>>,
+): PortfolioDelta | null => {
+  let current = 0;
+  let previous = 0;
+  let priced = false;
+  for (const balance of balances) {
+    const value = tokenFiatValue(balance.formatted, prices[balance.address]);
+    if (value === null) {
+      continue;
+    }
+    priced = true;
+    const change = changes[balance.address];
+    // Reconstruct the holding's value 24h ago: value / (1 + change%). A missing
+    // or non-finite change leaves that holding flat (it contributes equally to
+    // both totals), so it never fabricates movement.
+    const prior =
+      change === undefined || !Number.isFinite(change) || 1 + change / 100 <= 0
+        ? value
+        : value / (1 + change / 100);
+    current += value;
+    previous += prior;
+  }
+  if (!priced || previous <= 0) {
+    return null;
+  }
+  const absolute = current - previous;
+  return {
+    absolute: Math.abs(absolute),
+    direction: absolute < 0 ? "down" : "up",
+    percent: Math.abs((absolute / previous) * 100),
+  };
+};

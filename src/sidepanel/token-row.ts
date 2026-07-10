@@ -4,19 +4,20 @@
  */
 import type { TokenBalance } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
-import { tokenLogo } from "../starknet/token-logos";
+import { tokenLogoSvg } from "../starknet/token-logos-svg";
 import type { DisplayCurrency } from "../storage/preferences-store";
 import { formatFiat, tokenFiatValue } from "./fiat";
 
 /**
  * Renders a token's bundled logo when one is known, else a letter badge from
- * the symbol. Decorative — the symbol is shown alongside it.
+ * the symbol. Decorative — the symbol is shown alongside it. Known logos are
+ * emitted as inline vector SVG (a trusted static constant from the logo map,
+ * never token-supplied data) so the marks stay crisp on high-DPI displays; the
+ * letter badge still HTML-escapes the untrusted symbol.
  */
 export const tokenGlyph = (address: string, symbol: string): string => {
-  const logo = tokenLogo(address);
-  return logo
-    ? `<img class="token-logo" src="${logo}" alt="" width="40" height="40" />`
-    : `<span class="token-mark">${escapeHtml(symbol.slice(0, 3))}</span>`;
+  const logo = tokenLogoSvg(address);
+  return logo ?? `<span class="token-mark">${escapeHtml(symbol.slice(0, 3))}</span>`;
 };
 
 const groupThousands = (whole: string): string => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
