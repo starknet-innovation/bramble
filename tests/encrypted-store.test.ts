@@ -203,5 +203,85 @@ describe("createEncryptedStore", () => {
     await expect(encrypted.read("correct horse battery staple")).rejects.toThrow(
       "Invalid encrypted store envelope",
     );
+
+    // Near-miss counts outside the accepted set fail closed too: only the
+    // exact current and legacy strengths are readable.
+    expect(isEncryptedEnvelope({ ...raw, iterations: 100_000 })).toBe(false);
+  });
+
+  // Builds an envelope at the pre-bump legacy strength with raw Web Crypto,
+  // independent of the store's own encryptJson, to prove compatibility with
+  // envelopes produced before the KDF iteration raise.
+  const legacyEnvelope = async (value: unknown, passphrase: string, scope: string) => {
+    const encoder = new TextEncoder();
+    const iterations = 310_000;
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const baseKey = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(passphrase),
+      "PBKDF2",
+      false,
+      ["deriveKey"],
+    );
+    const key = await crypto.subtle.deriveKey(
+      { hash: "SHA-256", iterations, name: "PBKDF2", salt: salt.slice().buffer },
+      baseKey,
+      { length: 256, name: "AES-GCM" },
+      false,
+      ["encrypt"],
+    );
+    const data = await crypto.subtle.encrypt(
+      {
+        additionalData: encoder.encode(scope).slice().buffer,
+        iv: iv.slice().buffer,
+        name: "AES-GCM",
+      },
+      key,
+      encoder.encode(JSON.stringify(value)),
+    );
+    const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+    return {
+      cipher: "AES-256-GCM",
+      data: toBase64(new Uint8Array(data)),
+      iterations,
+      iv: toBase64(iv),
+      kdf: "PBKDF2-SHA-256",
+      salt: toBase64(salt),
+      scope,
+      version: 2,
+    };
+  };
+
+  test("reads legacy-strength envelopes and upgrades them explicitly", async () => {
+    const store = createMemoryStore();
+    const encrypted = createEncryptedStore(store, vaultKey);
+    const legacy = await legacyEnvelope(
+      { schemaVersion: 1 },
+      "correct horse battery staple",
+      `mc-wallet:encrypted-store:${vaultKey}`,
+    );
+    expect(isEncryptedEnvelope(legacy)).toBe(true);
+    await store.set(vaultKey, legacy as never);
+
+    // The legacy envelope decrypts, but read stays side-effect-free so passive
+    // callers cannot race a write with a stale upgrade.
+    expect(await encrypted.read("correct horse battery staple")).toEqual({ schemaVersion: 1 });
+    expect((await store.get(vaultKey)) as unknown).toEqual(legacy);
+
+    // The explicit upgrade path re-encrypts at the current KDF strength after a
+    // successful decrypt; the vault service runs this through its write queue.
+    await encrypted.upgradeLegacyEnvelope("correct horse battery staple");
+    const upgraded = await store.get(vaultKey);
+    if (!isEncryptedEnvelope(upgraded)) {
+      throw new Error("upgrade did not persist a valid envelope");
+    }
+    expect(upgraded.iterations).toBeGreaterThan(legacy.iterations);
+    expect(await encrypted.read("correct horse battery staple")).toEqual({ schemaVersion: 1 });
+
+    // A wrong passphrase never triggers the upgrade path.
+    await store.set(vaultKey, legacy as never);
+    await expect(encrypted.upgradeLegacyEnvelope("wrong horse battery staple")).rejects.toThrow();
+    expect((await store.get(vaultKey)) as unknown).toEqual(legacy);
   });
 });

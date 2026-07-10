@@ -6,6 +6,7 @@
 import type { Call } from "starknet";
 import type { AddressBookEntry, TokenConfig } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { canonicalFelt, sameFelt } from "./networks";
 import { formatTokenAmount } from "./rpc";
 
 const UINT_128_SHIFT = 128n;
@@ -66,18 +67,11 @@ const asFelt = (value: unknown): bigint | null => {
   }
 };
 
-const sameFelt = (a: unknown, b: unknown): boolean => {
-  const left = asFelt(a);
-  const right = asFelt(b);
-  return left !== null && right !== null && left === right;
-};
-
 const shortAddress = (address: string): string => `${address.slice(0, 6)}…${address.slice(-4)}`;
 
-const canonical = (value: string): string => {
-  const felt = asFelt(value);
-  return felt === null ? value : `0x${felt.toString(16)}`;
-};
+// Display-oriented canonicalization: unparseable values pass through so the
+// summary still shows what the call carried.
+const canonical = (value: string): string => canonicalFelt(value) ?? value;
 
 /**
  * Detects address poisoning: a candidate that visually mimics a trusted

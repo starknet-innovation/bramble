@@ -36,11 +36,16 @@ export type UnlockSessionStore = {
 
 /**
  * Unlock session interface for background-only passphrase access.
+ * `getPassphrase` renews the inactivity window and is for user-initiated
+ * operations; `peekPassphrase` reads without renewing and is for passive
+ * paths (status polling, event re-queries) so they can never hold the
+ * wallet unlocked forever.
  */
 export type UnlockSession = {
   readonly getPassphrase: () => string | null;
   readonly isUnlocked: () => boolean;
   readonly lock: () => void;
+  readonly peekPassphrase: () => string | null;
   readonly restore: () => Promise<void>;
   readonly unlock: (passphrase: string) => void;
 };
@@ -90,12 +95,10 @@ export const createUnlockSession = (
     onClear?.();
   };
 
-  const getPassphrase = (): string | null => {
+  // Reads the passphrase without renewing the inactivity window, clearing
+  // expired state on the way so peeks never resurrect a stale unlock.
+  const peekPassphrase = (): string | null => {
     if (passphrase && now() <= expiresAt) {
-      expiresAt = now() + ttlMs;
-      if (expiresAt - persistedAt >= PERSIST_SLACK_MS) {
-        persist();
-      }
       return passphrase;
     }
     if (passphrase !== null) {
@@ -104,11 +107,23 @@ export const createUnlockSession = (
     return null;
   };
 
+  const getPassphrase = (): string | null => {
+    const current = peekPassphrase();
+    if (current !== null) {
+      expiresAt = now() + ttlMs;
+      if (expiresAt - persistedAt >= PERSIST_SLACK_MS) {
+        persist();
+      }
+    }
+    return current;
+  };
+
   return {
     getPassphrase,
     isUnlocked() {
-      return getPassphrase() !== null;
+      return peekPassphrase() !== null;
     },
+    peekPassphrase,
     lock() {
       clear();
     },

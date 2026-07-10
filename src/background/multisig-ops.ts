@@ -6,7 +6,12 @@
  * id shared out-of-band. Transaction-submitting multisig operations live in
  * multisig-tx-ops.ts.
  */
-import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "../starknet/networks";
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
@@ -32,17 +37,6 @@ import type { WalletOpsDeps } from "./wallet-ops";
 export type MultisigOpsDeps = WalletOpsDeps & {
   readonly loadMultisigClass?: (() => Promise<unknown>) | undefined;
   readonly multisigStore: MultisigStore;
-};
-
-/**
- * Compares two field elements by numeric value.
- */
-export const sameFelt = (left: string, right: string): boolean => {
-  try {
-    return BigInt(left) === BigInt(right);
-  } catch {
-    return false;
-  }
 };
 
 /**
@@ -120,6 +114,24 @@ export const multisigRpc = (deps: MultisigOpsDeps) => {
   return rpc;
 };
 
+/**
+ * Checks whether this wallet's submit transaction for a proposal is still
+ * pending. While that activity row is pending, a not-found proposal status can
+ * simply mean the submit has not mined yet; after it is accepted/rejected, a
+ * not-found status is authoritative and should be persisted.
+ */
+export const isProposalSubmitPending = async (
+  deps: MultisigOpsDeps,
+  proposal: MultisigProposalRecord,
+): Promise<boolean> => {
+  const hash = proposal.submitTransactionHash;
+  if (!hash) {
+    return false;
+  }
+  const entries = await deps.activity.list().catch(() => []);
+  return entries.some((entry) => entry.hash === hash && entry.status === "pending");
+};
+
 const scopedList = async (
   store: MultisigStore,
   networkId: StarknetNetworkId,
@@ -137,7 +149,9 @@ const scopedList = async (
   return { multisigs, proposals };
 };
 
-// Re-reads one proposal's on-chain status and persists the fresh snapshot.
+// Re-reads one proposal's on-chain status and persists the fresh snapshot. For
+// wallet-submitted proposals, a not-found status is suppressed only while the
+// submit transaction is still pending.
 const refreshProposal = async (
   deps: MultisigOpsDeps,
   record: MultisigRecord,
@@ -151,6 +165,9 @@ const refreshProposal = async (
     signer,
     txId: proposal.txId,
   });
+  if (status.state === "not-found" && (await isProposalSubmitPending(deps, proposal))) {
+    return proposal;
+  }
   const next: MultisigProposalRecord = {
     ...proposal,
     confirmations: status.confirmations,
@@ -222,7 +239,7 @@ export const handleMultisigOps = async (
       return { error: "invalid add multisig request" };
     }
     const record: MultisigRecord = {
-      address: `0x${BigInt(input.address).toString(16)}`,
+      address: canonicalFelt(input.address) ?? input.address,
       id,
       ...(input.name === undefined ? {} : { name: input.name }),
       networkId: context.networkId,
@@ -299,8 +316,11 @@ export const handleMultisigOps = async (
       id,
       multisigId: resolved.record.id,
       state: status.state,
+      ...(existing?.submitTransactionHash === undefined
+        ? {}
+        : { submitTransactionHash: existing.submitTransactionHash }),
       summary: input.summary ?? existing?.summary ?? "Shared proposal",
-      txId: `0x${BigInt(input.txId).toString(16)}`,
+      txId: canonicalFelt(input.txId) ?? input.txId,
     };
     await deps.multisigStore.upsertProposal(proposal);
     return { ok: true, proposal };

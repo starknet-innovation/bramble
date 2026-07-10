@@ -144,7 +144,7 @@ describe("wallet.signTypedData handler", () => {
         },
       },
       "extension-id",
-      session,
+      { session },
     );
   })();
 

@@ -72,58 +72,36 @@ export const isClaimedSenderOrigin = (
 ): boolean => isExtensionPageSender(sender, extensionId) || isSenderOrigin(sender, origin);
 
 /**
+ * The only wallet messages a dapp page may reach through the content-script
+ * bridge (the provider mapping in src/provider/bridge.ts plus the content
+ * script's own grant re-query). tests/privileged-messages.test.ts derives
+ * this set from those sources, so adding a bridge mapping without updating
+ * this list — or vice versa — fails the suite.
+ */
+export const DAPP_MESSAGES: ReadonlySet<string> = new Set([
+  "wallet.addDeclareTransaction",
+  "wallet.addInvokeTransaction",
+  "wallet.addStarknetChain",
+  "wallet.deploymentData",
+  "wallet.getChainId",
+  "wallet.getGrantedAccounts",
+  "wallet.getPermissions",
+  "wallet.requestAccounts",
+  "wallet.signTypedData",
+  "wallet.strk20Balances",
+  "wallet.strk20InvokeTransaction",
+  "wallet.strk20PrepareInvoke",
+  "wallet.supportedSpecs",
+  "wallet.supportedWalletApi",
+  "wallet.switchChain",
+  "wallet.watchAsset",
+]);
+
+/**
  * Marks messages that must only come from extension-controlled pages.
+ * Deny-by-default: every wallet.* message is privileged unless it is one of
+ * the explicitly dapp-facing {@link DAPP_MESSAGES}, so a newly added message
+ * type can never be silently reachable from content scripts.
  */
 export const isPrivilegedMessage = (type: unknown): boolean =>
-  type === "wallet.activity" ||
-  type === "wallet.addMultisig" ||
-  type === "wallet.addToken" ||
-  type === "wallet.addNft" ||
-  type === "wallet.allowances" ||
-  type === "wallet.confirmMultisigProposal" ||
-  type === "wallet.declareMultisigClass" ||
-  type === "wallet.deployMultisig" ||
-  type === "wallet.executeMultisigProposal" ||
-  type === "wallet.multisigClassStatus" ||
-  type === "wallet.multisigs" ||
-  type === "wallet.proposeMultisigTx" ||
-  type === "wallet.refreshMultisig" ||
-  type === "wallet.removeMultisig" ||
-  type === "wallet.revokeMultisigConfirmation" ||
-  type === "wallet.trackMultisigProposal" ||
-  type === "wallet.addAccount" ||
-  type === "wallet.approveOrigin" ||
-  type === "wallet.connectedSites" ||
-  type === "wallet.createAccount" ||
-  type === "wallet.denyOrigin" ||
-  type === "wallet.deployAccount" ||
-  type === "wallet.deploymentStatus" ||
-  type === "wallet.detectTokens" ||
-  type === "wallet.generateMnemonic" ||
-  type === "wallet.grantOrigin" ||
-  type === "wallet.getBalances" ||
-  type === "wallet.importPreferences" ||
-  type === "wallet.lock" ||
-  type === "wallet.pendingApprovals" ||
-  type === "wallet.preferences" ||
-  type === "wallet.prices" ||
-  type === "wallet.removeAddress" ||
-  type === "wallet.revokeOrigin" ||
-  type === "wallet.removeNft" ||
-  type === "wallet.revealSecrets" ||
-  type === "wallet.reviewTransfer" ||
-  type === "wallet.revokeAllowance" ||
-  type === "wallet.saveAddress" ||
-  type === "wallet.setAccountLabel" ||
-  type === "wallet.setActiveAccount" ||
-  type === "wallet.setActiveNetwork" ||
-  type === "wallet.setDisplay" ||
-  type === "wallet.setNftSpam" ||
-  type === "wallet.setRpcOverride" ||
-  type === "wallet.setTokenHidden" ||
-  type === "wallet.signHash" ||
-  type === "wallet.status" ||
-  type === "wallet.tokenChart" ||
-  type === "wallet.transfer" ||
-  type === "wallet.transferNft" ||
-  type === "wallet.unlock";
+  typeof type === "string" && type.startsWith("wallet.") && !DAPP_MESSAGES.has(type);

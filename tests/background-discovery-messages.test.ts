@@ -84,38 +84,41 @@ const makeHandler = (options: {
       };
     },
   };
-  const handler = createMessageHandler(wallet, "extension-id", session, undefined, undefined, {
-    async estimateInvokeFee() {
-      return { overallFee: "1", unit: "FRI" };
+  const handler = createMessageHandler(wallet, "extension-id", {
+    runtimeRpc: {
+      async estimateInvokeFee() {
+        return { overallFee: "1", unit: "FRI" };
+      },
+      async getDeploymentStatus(input) {
+        statusCalls.push(input);
+        return options.deployed ?? false;
+      },
+      async getNftOwner() {
+        return "0x0";
+      },
+      async getTokenBalances() {
+        return [];
+      },
+      async getTokenMetadata() {
+        return { decimals: 18, name: "Token", symbol: "TKN" };
+      },
+      async getTransactionStatuses() {
+        return {};
+      },
+      async submitAccountDeployment() {
+        return { transactionHash: "0x7abc" };
+      },
+      async submitErc20Transfer() {
+        throw new Error("unused");
+      },
+      async submitInvokeTransaction() {
+        throw new Error("unused");
+      },
+      async submitDeclareTransaction() {
+        return { classHash: "0x1", transactionHash: "0x1" };
+      },
     },
-    async getDeploymentStatus(input) {
-      statusCalls.push(input);
-      return options.deployed ?? false;
-    },
-    async getNftOwner() {
-      return "0x0";
-    },
-    async getTokenBalances() {
-      return [];
-    },
-    async getTokenMetadata() {
-      return { decimals: 18, name: "Token", symbol: "TKN" };
-    },
-    async getTransactionStatuses() {
-      return {};
-    },
-    async submitAccountDeployment() {
-      return { transactionHash: "0x7abc" };
-    },
-    async submitErc20Transfer() {
-      throw new Error("unused");
-    },
-    async submitInvokeTransaction() {
-      throw new Error("unused");
-    },
-    async submitDeclareTransaction() {
-      return { classHash: "0x1", transactionHash: "0x1" };
-    },
+    session,
   });
   return { handler, statusCalls };
 };

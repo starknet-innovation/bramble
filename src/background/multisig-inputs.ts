@@ -5,16 +5,16 @@
  * and the multisig contract enforces them again at execution time.
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
-import { isMultisigEntrypoint } from "../starknet/multisig";
+import { isMultisigEntrypoint, MULTISIG_LIMITS } from "../starknet/multisig";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
 
 // Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
 // proposal id runs to ~144 characters, so the cap must sit comfortably above.
 const MAX_ID_LENGTH = 200;
-const MAX_NAME_LENGTH = 48;
-const MAX_SUMMARY_LENGTH = 120;
-const MAX_CALLDATA_FELTS = 64;
-const MAX_SIGNERS = 32;
+const MAX_NAME_LENGTH = MULTISIG_LIMITS.nameLength;
+const MAX_SUMMARY_LENGTH = MULTISIG_LIMITS.summaryLength;
+const MAX_CALLDATA_FELTS = MULTISIG_LIMITS.calldataFelts;
+const MAX_SIGNERS = MULTISIG_LIMITS.signers;
 
 const isId = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= MAX_ID_LENGTH;

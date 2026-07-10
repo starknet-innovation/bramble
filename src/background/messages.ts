@@ -56,14 +56,6 @@ import { handleTokenOps } from "./token-ops";
 import { unlockFailureError } from "./unlock-errors";
 import { handleWalletOps } from "./wallet-ops";
 
-const unavailableVaultStatus = () => ({
-  accountCount: 0,
-  activeAccountId: null,
-  hasVault: false,
-  locked: true,
-  ready: false,
-});
-
 const readMessageType = (message: unknown): string | null => {
   if (typeof message !== "object" || message === null) {
     return null;
@@ -291,7 +283,10 @@ const handleRuntimeMessage = async (
     if (isBlockedOrigin(input.origin)) {
       return { accounts: [], ok: true };
     }
-    const vaultPassphrase = input.vaultPassphrase ?? session.getPassphrase();
+    // Peek, never renew: content scripts re-query grants automatically after
+    // every broadcast, and a page can invoke this at will — neither is user
+    // activity that should extend the unlock lifetime.
+    const vaultPassphrase = input.vaultPassphrase ?? session.peekPassphrase();
     if (!vaultPassphrase) {
       return { error: "wallet locked" };
     }
@@ -410,22 +405,41 @@ const runtimeErrorResponse = (
 });
 
 /**
+ * Optional collaborators for {@link createMessageHandler}. Every field falls
+ * back to an in-memory or unavailable default, so tests wire only what they
+ * exercise — by name, never by position, so a transposed argument cannot
+ * silently rewire an unrelated dependency.
+ */
+export type MessageHandlerOptions = {
+  readonly activity?: ActivityLog;
+  readonly allowanceStore?: AllowanceStore;
+  readonly approvals?: ApprovalQueue;
+  readonly loadMultisigClass?: () => Promise<unknown>;
+  readonly multisigStore?: MultisigStore;
+  readonly originHistory?: OriginHistoryStore;
+  readonly preferencesStore?: WalletPreferencesStore;
+  readonly prices?: PriceService;
+  readonly runtimeRpc?: RuntimeRpc;
+  readonly session?: UnlockSession;
+};
+
+/**
  * Creates the trusted background runtime message dispatcher.
  */
 export const createMessageHandler = (
   wallet: WalletStatusReader,
   extensionId: string,
-  session: UnlockSession = createUnlockSession(),
-  approvals: ApprovalQueue = createApprovalQueue(),
-  preferencesStore: WalletPreferencesStore = unavailablePreferencesStore,
-  runtimeRpc: RuntimeRpc = defaultRuntimeRpc,
-  activity: ActivityLog = memoryActivityLog(),
-  originHistory: OriginHistoryStore = memoryOriginHistory(),
-  prices: PriceService = unavailablePriceService,
-  allowanceStore: AllowanceStore = memoryAllowanceStore(),
-  multisigStore: MultisigStore = memoryMultisigStore(),
-  loadMultisigClass?: () => Promise<unknown>,
+  options: MessageHandlerOptions = {},
 ) => {
+  const session = options.session ?? createUnlockSession();
+  const approvals = options.approvals ?? createApprovalQueue();
+  const preferencesStore = options.preferencesStore ?? unavailablePreferencesStore;
+  const runtimeRpc = options.runtimeRpc ?? defaultRuntimeRpc;
+  const activity = options.activity ?? memoryActivityLog();
+  const originHistory = options.originHistory ?? memoryOriginHistory();
+  const prices = options.prices ?? unavailablePriceService;
+  const allowanceStore = options.allowanceStore ?? memoryAllowanceStore();
+  const multisigStore = options.multisigStore ?? memoryMultisigStore();
   const waiters = createSignatureWaiters();
   return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
@@ -442,7 +456,7 @@ export const createMessageHandler = (
         allowanceStore,
         waiters,
         multisigStore,
-        loadMultisigClass,
+        options.loadMultisigClass,
         message,
         sender,
       );
@@ -451,42 +465,3 @@ export const createMessageHandler = (
     }
   };
 };
-
-/**
- * Test fallback handler used when no real background wallet service is wired.
- */
-export const handleMessage = createMessageHandler(
-  {
-    async addDerivedAccount() {
-      throw new Error("wallet unavailable");
-    },
-    async createAccount() {
-      throw new Error("wallet unavailable");
-    },
-    async ensureNetworkAccount() {
-      throw new Error("wallet unavailable");
-    },
-    async getGrantedAccounts() {
-      throw new Error("wallet unavailable");
-    },
-    async generateMnemonic() {
-      throw new Error("wallet unavailable");
-    },
-    async grantOrigin() {
-      throw new Error("wallet unavailable");
-    },
-    async readVault() {
-      throw new Error("wallet unavailable");
-    },
-    async setActiveAccount() {
-      throw new Error("wallet unavailable");
-    },
-    async signHash() {
-      throw new Error("wallet unavailable");
-    },
-    async status() {
-      return unavailableVaultStatus();
-    },
-  },
-  "mc-wallet-test",
-);

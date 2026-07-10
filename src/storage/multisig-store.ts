@@ -8,8 +8,9 @@
  * from a pasted id have no call and can only be confirmed or revoked.
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
-import { isMultisigCallInput, isMultisigEntrypoint } from "../starknet/multisig";
+import { isMultisigCallInput, isMultisigEntrypoint, MULTISIG_LIMITS } from "../starknet/multisig";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -24,8 +25,8 @@ export const MULTISIG_STORE_KEY = "mc-wallet:multisigs";
 
 const MAX_MULTISIGS = 20;
 const MAX_PROPOSALS = 100;
-const MAX_NAME_LENGTH = 48;
-const MAX_SUMMARY_LENGTH = 120;
+const MAX_NAME_LENGTH = MULTISIG_LIMITS.nameLength;
+const MAX_SUMMARY_LENGTH = MULTISIG_LIMITS.summaryLength;
 
 /**
  * One watched multisig contract. `quorum` and `signers` are the last
@@ -54,6 +55,9 @@ export type MultisigProposalCall = {
 /**
  * One tracked proposal. `call` is null for proposals tracked from a pasted
  * transaction id. `state` and `confirmations` are last-known snapshots.
+ * `submitTransactionHash` is present for proposals submitted by this wallet and
+ * links the proposal to the activity row that proves the submit is still
+ * unmined.
  */
 export type MultisigProposalRecord = {
   readonly call: MultisigProposalCall | null;
@@ -61,6 +65,7 @@ export type MultisigProposalRecord = {
   readonly id: string;
   readonly multisigId: string;
   readonly state: "confirmed" | "executed" | "not-found" | "pending";
+  readonly submitTransactionHash?: string;
   readonly summary: string;
   readonly txId: string;
 };
@@ -74,14 +79,6 @@ export type MultisigStore = {
   readonly removeMultisig: (id: string) => Promise<void>;
   readonly upsertMultisig: (record: MultisigRecord) => Promise<void>;
   readonly upsertProposal: (record: MultisigProposalRecord) => Promise<void>;
-};
-
-const canonicalFelt = (value: string): string | null => {
-  try {
-    return `0x${BigInt(value).toString(16)}`;
-  } catch {
-    return null;
-  }
 };
 
 /**
@@ -122,7 +119,7 @@ export const isMultisigRecord = (value: unknown): value is MultisigRecord =>
   value.quorum >= 1 &&
   Array.isArray(value.signers) &&
   value.signers.length >= value.quorum &&
-  value.signers.length <= 32 &&
+  value.signers.length <= MULTISIG_LIMITS.signers &&
   value.signers.every(
     (signer) => typeof signer === "string" && isNonZeroStarkFieldElement(signer),
   ) &&
@@ -155,6 +152,7 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
     "id",
     "multisigId",
     "state",
+    "submitTransactionHash",
     "summary",
     "txId",
   ]) &&
@@ -167,6 +165,9 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
     value.state === "executed" ||
     value.state === "not-found" ||
     value.state === "pending") &&
+  (value.submitTransactionHash === undefined ||
+    (typeof value.submitTransactionHash === "string" &&
+      isStarkFieldElement(value.submitTransactionHash))) &&
   isSummary(value.summary) &&
   typeof value.txId === "string" &&
   isStarkFieldElement(value.txId) &&
@@ -209,6 +210,41 @@ const upsertMultisigIn = (shape: StoredShape, record: MultisigRecord): StoredSha
   return { ...shape, multisigs: [...kept.slice(-(MAX_MULTISIGS - 1)), record] };
 };
 
+// Eviction priority at the proposal cap. Settled proposals go first, then
+// tracked-by-id ones (their state is recoverable by re-tracking), and only
+// as a last resort the oldest live proposal that carries a stored call —
+// that call is the only copy able to execute it, so it must never be the
+// silent first casualty.
+const evictionRank = (proposal: MultisigProposalRecord): number => {
+  if (proposal.state === "executed" || proposal.state === "not-found") {
+    return 0;
+  }
+  return proposal.call === null ? 1 : 2;
+};
+
+// Enforces MAX_PROPOSALS, dropping oldest-first within each eviction rank.
+const capProposals = (
+  proposals: readonly MultisigProposalRecord[],
+): readonly MultisigProposalRecord[] => {
+  let excess = proposals.length - MAX_PROPOSALS;
+  if (excess <= 0) {
+    return proposals;
+  }
+  const kept = [...proposals];
+  for (const rank of [0, 1, 2]) {
+    for (let index = 0; index < kept.length && excess > 0; ) {
+      const entry = kept[index];
+      if (entry && evictionRank(entry) === rank) {
+        kept.splice(index, 1);
+        excess -= 1;
+      } else {
+        index += 1;
+      }
+    }
+  }
+  return kept;
+};
+
 const upsertProposalIn = (
   shape: StoredShape,
   record: MultisigProposalRecord,
@@ -220,7 +256,7 @@ const upsertProposalIn = (
     return null;
   }
   const kept = shape.proposals.filter((stored) => stored.id !== record.id);
-  return { ...shape, proposals: [...kept.slice(-(MAX_PROPOSALS - 1)), record] };
+  return { ...shape, proposals: [...capProposals([...kept, record])] };
 };
 
 const removeMultisigIn = (shape: StoredShape, id: string): StoredShape => ({

@@ -102,12 +102,8 @@ describe("background status messages", () => {
     };
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const handler = createMessageHandler(
-      createStatusWallet(mainnetAccount),
-      "extension-id",
-      session,
-      undefined,
-      {
+    const handler = createMessageHandler(createStatusWallet(mainnetAccount), "extension-id", {
+      preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {
           return { ...defaultWalletPreferences(), activeNetworkId: "SN_MAIN" };
@@ -125,7 +121,8 @@ describe("background status messages", () => {
           throw new Error("unused");
         },
       },
-    );
+      session,
+    });
 
     await expect(handler({ type: "wallet.status" }, sender)).resolves.toMatchObject({
       activeAccountId: mainnetAccount.id,

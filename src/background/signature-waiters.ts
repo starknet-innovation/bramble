@@ -16,24 +16,29 @@ export type SignatureWaiters = {
 };
 
 /**
- * Creates a signature-waiter registry keyed by approval id.
+ * Creates a signature-waiter registry keyed by approval id. Deduped requests
+ * (e.g. two tabs of one origin connecting) register against the same approval
+ * id, so each id holds a list of resolvers and settling resolves them all —
+ * an unconditional overwrite here would orphan the earlier request forever.
  */
 export const createSignatureWaiters = (): SignatureWaiters => {
-  const waiters = new Map<string, (response: RuntimeResponse) => void>();
+  const waiters = new Map<string, ((response: RuntimeResponse) => void)[]>();
   return {
     pending() {
       return waiters.size;
     },
     register(id) {
       return new Promise<RuntimeResponse>((resolve) => {
-        waiters.set(id, resolve);
+        waiters.set(id, [...(waiters.get(id) ?? []), resolve]);
       });
     },
     settle(id, response) {
-      const resolve = waiters.get(id);
-      if (resolve) {
+      const resolvers = waiters.get(id);
+      if (resolvers) {
         waiters.delete(id);
-        resolve(response);
+        for (const resolve of resolvers) {
+          resolve(response);
+        }
       }
     },
   };

@@ -167,7 +167,9 @@ export const statusResponse = async (
   const status = await wallet.status();
   const preferences = await preferencesStore.read();
   const network = STARKNET_NETWORKS[preferences.activeNetworkId];
-  const passphrase = session.getPassphrase();
+  // Peek, never renew: the side panel polls status, and a passive poll must
+  // not hold the wallet unlocked past the inactivity limit.
+  const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return {
       ...status,

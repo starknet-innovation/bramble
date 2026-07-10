@@ -71,13 +71,9 @@ const makeHarness = () => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const allowanceStore = memoryAllowanceStore();
-  const handler = createMessageHandler(
-    walletStub,
-    "extension-id",
-    session,
-    undefined,
-    undefined,
-    {
+  const handler = createMessageHandler(walletStub, "extension-id", {
+    allowanceStore,
+    runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "1", unit: "FRI" };
       },
@@ -112,11 +108,8 @@ const makeHarness = () => {
         return { calls: input.calls, transactionHash: "0x7cd" };
       },
     },
-    undefined,
-    undefined,
-    undefined,
-    allowanceStore,
-  );
+    session,
+  });
   return { allowanceStore, handler };
 };
 

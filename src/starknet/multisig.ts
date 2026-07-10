@@ -11,11 +11,31 @@
 import type { Call } from "starknet";
 import { hash } from "starknet";
 import { WalletError } from "../shared/errors";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
+import {
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  canonicalFelt as sharedCanonicalFelt,
+} from "./networks";
 import { withRpcFallback } from "./provider";
 
-const MAX_CALLDATA_FELTS = 64;
-const MAX_SIGNERS = 32;
+/**
+ * Shared multisig limits. These are the single source of truth consumed by
+ * the input parsers, the storage validators, and the deploy builder — keep
+ * them here so the layers can never silently desynchronize.
+ */
+export const MULTISIG_LIMITS = {
+  /** Maximum felts in one proposal's inner calldata. */
+  calldataFelts: 64,
+  /** Maximum user-facing multisig name length. */
+  nameLength: 48,
+  /** Maximum signers accepted for watching or deploying a multisig. */
+  signers: 32,
+  /** Maximum user-facing proposal summary length. */
+  summaryLength: 120,
+} as const;
+
+const MAX_CALLDATA_FELTS = MULTISIG_LIMITS.calldataFelts;
+const MAX_SIGNERS = MULTISIG_LIMITS.signers;
 
 /**
  * One inner call a multisig proposal will execute, using the entrypoint name
@@ -99,7 +119,9 @@ export const isMultisigCallInput = (value: MultisigCallInput): boolean =>
   value.calldata.length <= MAX_CALLDATA_FELTS &&
   value.calldata.every((felt) => isStarkFieldElement(felt));
 
-const canonicalFelt = (value: string): string => `0x${BigInt(value).toString(16)}`;
+// Every call site validates the value as a field element first, so the shared
+// converter cannot return null here; the fallback only satisfies the types.
+const canonicalFelt = (value: string): string => sharedCanonicalFelt(value) ?? value;
 
 const requireCall = (call: MultisigCallInput): MultisigCallInput => {
   if (!isMultisigCallInput(call)) {
