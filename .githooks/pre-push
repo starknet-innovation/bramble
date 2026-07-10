@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Offline-fast pre-push hook for MC Wallet.
+#
+# Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Bypass a single push with:
+#   git push --no-verify
+#
+# This runs only the offline, fast subset of the gates: type check, lint,
+# file/config standards, extension manifest check, and unit tests. It does NOT
+# run the vendored krusty/multisig checks or the build/e2e suite (those need
+# network, wasm-pack, a Rust toolchain, and scarb). Run `bun run check` and
+# `bun run test:e2e` before merging to cover the full gate set.
+
+set -e
+
+if [ ! -x node_modules/.bin/biome ]; then
+  echo "pre-push: node_modules not found; run 'bun install' to enable local checks. Skipping."
+  exit 0
+fi
+
+echo "pre-push: check:types"
+bun run check:types
+
+echo "pre-push: check:lint"
+bun run check:lint
+
+echo "pre-push: check:files"
+bun run check:files
+
+echo "pre-push: check:extension"
+bun run check:extension
+
+echo "pre-push: unit tests"
+bun test tests
+
+echo "pre-push: offline checks passed"

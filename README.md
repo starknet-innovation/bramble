@@ -343,5 +343,5 @@ release, run the Commands section above on those versions and compare
 `artifacts/*.zip.sha256` against the CI artifact checksum:
 
 ```bash
-cd artifacts && shasum -a 256 -c mc-wallet-0.1.0.zip.sha256
+cd artifacts && shasum -a 256 -c mc-wallet-0.2.0.zip.sha256
 ```

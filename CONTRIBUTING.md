@@ -3,6 +3,35 @@
 This wallet handles private keys, encrypted state, and extension permissions. Treat every change as
 security-sensitive unless it is plainly documentation-only.
 
+## Prerequisites / Setup
+
+Install dependencies from the frozen lockfile first:
+
+```bash
+bun install --frozen-lockfile
+```
+
+Some gates need a toolchain beyond Bun and are expected to fail in offline
+sandboxes:
+
+- `bun run vendor:krusty` needs network access, `wasm-pack 0.13.1`, and a Rust
+  toolchain (build Krusty KMS).
+- `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class
+  hash pin is only reproducible on that version).
+
+Without the vendored outputs, `check:krusty`, `check:multisig`, and `build`
+fail; that is expected offline. Run the rest of the gates and say so.
+
+Contributors can enable the local pre-push hook to run the offline-fast checks
+(types, lint, file/config standards, extension manifest, unit tests) before
+every push:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Bypass a single push with `git push --no-verify`.
+
 ## Required Gates
 
 Run this before opening a pull request:
@@ -55,6 +84,16 @@ CI runs the same gates. Do not merge around them.
 - Runtime dependencies must stay pinned and explicit. Dev-tool dependencies must be pinned exactly.
 - Any dependency addition needs a reason in the pull request and must be used immediately.
 - Any change to key derivation, signing, encryption, storage schema, or permissions needs tests.
+
+## Commits & PRs
+
+- Commits must be GPG-signed.
+- Commit style follows the existing history: an imperative summary line, an
+  optional scope prefix like `ci:`, and a body that explains the why.
+- Pull requests are squash-merged, so keep the PR title and description in the
+  same commit style — that is what lands on `main`.
+- Any dependency addition needs a justification in the pull request, must be
+  pinned exactly, and must be used immediately. Prefer zero new dependencies.
 
 ## Code Style
 

@@ -8,4 +8,5 @@ vendor/multisig/
 contracts/multisig/target/
 *.log
 .DS_Store
-.claude/
+.claude/*
+!.claude/skills
