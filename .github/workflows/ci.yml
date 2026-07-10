@@ -39,6 +39,11 @@ jobs:
           scarb-version: 2.18.0
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
+      # apps/terminal is a standalone Vite+React app with its own package.json,
+      # lockfile, and tsconfig. It is intentionally excluded from the extension's
+      # root standards gates (biome, check:files, tsc), so validate it with its
+      # own typecheck + production build here.
+      - run: cd apps/terminal && bun install --frozen-lockfile && bun run build
       - run: bun run test:e2e:install
       - run: bun run check:files
       - run: bun run vendor:krusty

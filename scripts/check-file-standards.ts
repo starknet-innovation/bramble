@@ -8,6 +8,7 @@ const MAX_LINES = 500;
 const EXCLUDED = new Set([
   ".claude",
   ".git",
+  "apps",
   "artifacts",
   "bun.lock",
   "dist",
