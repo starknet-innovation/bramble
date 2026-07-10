@@ -3,7 +3,44 @@
  * from "../data". Every hook returns live API / on-chain data (no sample rows).
  */
 export { fetchJson, HttpError, withRpc } from "./client";
-export { AVNU_BASE, COINGECKO_BASE, EKUBO_BASE, RPC_URLS } from "./endpoints";
+export {
+  AVNU_BASE,
+  COINGECKO_BASE,
+  EKUBO_BASE,
+  EXTENDED_REST_BASE,
+  EXTENDED_WS_BASE,
+  RPC_URLS,
+} from "./endpoints";
+export {
+  CANDLE_INTERVALS,
+  CANDLE_TYPES,
+  TIMEFRAME_TO_INTERVAL,
+  connectStream,
+  createOrderBookAggregator,
+  fetchCandles,
+  fetchFundingHistory,
+  fetchMarketStats,
+  fetchMarkets,
+  fetchOrderBook,
+  useFunding,
+  useOrderBook,
+  usePerpsCandles,
+  usePerpsMarketStats,
+  usePerpsMarkets,
+  usePerpsTrades,
+} from "./extended";
+export type {
+  CandleInterval,
+  CandleType,
+  ExtendedCandle,
+  ExtendedFunding,
+  ExtendedFundingRate,
+  ExtendedMarket,
+  ExtendedMarketStats,
+  ExtendedOrderBook,
+  ExtendedOrderBookLevel,
+  ExtendedPublicTrade,
+} from "./extended";
 export {
   formatCompactUsd,
   formatPct,

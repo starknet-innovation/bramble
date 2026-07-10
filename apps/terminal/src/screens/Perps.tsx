@@ -1,30 +1,51 @@
 /**
- * Perps screen — Extended perpetuals. Region-gated: a yellow banner sits atop a
- * 4-column layout (markets list · chart + trade tabs · order book · order
- * ticket). Markets come from `extended.fetchMarkets()` but fall back to local
- * samples when the region-locked API throws. The order CTA is inert because
- * `extended.signOrder` rejects (phase-2 off-chain signing), so placing an order
- * surfaces a disabled "not available in your region" state and never throws.
+ * Perps screen — Extended (x10) perpetuals, wired end-to-end to LIVE public
+ * market data via the Extended REST + WS data layer:
+ *   - markets list + per-market stats  -> usePerpsMarkets / usePerpsMarketStats
+ *   - candlestick chart                -> usePerpsCandles (real o/h/l/c/T candles)
+ *   - order book (red asks/green bids) -> useOrderBook (REST snapshot + live WS)
+ *   - trade tape                       -> usePerpsTrades (WS publicTrades)
+ *   - funding history + mark/index/OI  -> useFunding / market stats
+ *
+ * The order-placement ticket stays intentionally gated: signing is stubbed and
+ * placement is region-locked, so the CTA is visible but disabled with a clear
+ * reason. ALL market data on the surface is live (no sample/mock rows remain).
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CandlestickChart,
   EmptyState,
+  ErrorBanner,
   PctChange,
   SegmentedTabs,
+  SkeletonChart,
+  SkeletonRows,
   StatPair,
   TabStrip,
   TokenIcon,
 } from "../components";
-import { extended } from "../protocols";
-import type { PerpOrderParams } from "../protocols";
+import {
+  TIMEFRAME_TO_INTERVAL,
+  useFunding,
+  useOrderBook,
+  usePerpsCandles,
+  usePerpsMarketStats,
+  usePerpsMarkets,
+  usePerpsTrades,
+  type ExtendedMarketStats,
+  type ExtendedPublicTrade,
+} from "../data";
 import { useWallet } from "../wallet/WalletProvider";
 import {
-  SAMPLE_MARKETS,
-  buildOrderBook,
-  toPerpMarket,
+  buildOrderBookView,
+  dailyChangePct,
+  fmtCompactUsd,
+  fmtPrice,
+  fmtSize,
+  fmtUsdPrice,
+  fundingPct,
+  toMarketRow,
   type OrderBookLevel,
-  type PerpMarket,
 } from "./perps-data";
 
 type Side = "long" | "short";
@@ -35,24 +56,12 @@ type BookTab = "book" | "trades";
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
 
+// Order placement is stubbed (no signer) and region-locked; surfaced verbatim.
+const ORDER_DISABLED_REASON =
+  "Order placement requires a signed session and isn't available in your region.";
+
 const usd = (value: number): string =>
   `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-// Order-book price/size formatting scales with the market's magnitude.
-const fmtPrice = (value: number): string => {
-  const digits = value >= 1000 ? 1 : value >= 1 ? 3 : 5;
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-};
-const fmtSize = (value: number): string => {
-  const digits = value >= 1000 ? 0 : value >= 1 ? 2 : 3;
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  });
-};
 
 const BookRow = ({ level, side }: { level: OrderBookLevel; side: Side }): ReactNode => (
   <div className={side === "long" ? "obrow bid" : "obrow ask"}>
@@ -63,120 +72,251 @@ const BookRow = ({ level, side }: { level: OrderBookLevel; side: Side }): ReactN
   </div>
 );
 
-export default function Perps(): ReactNode {
-  const { address, account, isConnected, isConnecting, connect } = useWallet();
+// The live public-trades tape, shared by the center "Trades" tab and the order
+// book's "Trades" toggle. Renders a clean empty state (never fabricated rows)
+// when the WS stream has not delivered any trades.
+const TradeTape = ({
+  trades,
+  isLoading,
+  error,
+}: {
+  trades: readonly ExtendedPublicTrade[];
+  isLoading: boolean;
+  error: string | null;
+}): ReactNode => {
+  if (error !== null && trades.length === 0) {
+    return <ErrorBanner message={`Couldn't load trades: ${error}`} />;
+  }
+  if (isLoading && trades.length === 0) {
+    return <SkeletonRows rows={8} />;
+  }
+  if (trades.length === 0) {
+    return (
+      <EmptyState
+        icon="🧾"
+        title="No recent trades"
+        subtitle="Live trades will appear here as they print."
+        style={{ minHeight: 180 }}
+      />
+    );
+  }
+  return (
+    <div className="obscroll">
+      <div className="obcols">
+        <span>Price</span>
+        <span>Size</span>
+        <span>Time</span>
+      </div>
+      {trades.map((trade) => (
+        <div
+          key={trade.id}
+          className={trade.side === "BUY" ? "obrow bid" : "obrow ask"}
+          style={{ zIndex: 1 }}
+        >
+          <span className="px mono">{fmtPrice(trade.price)}</span>
+          <span className="sz mono">{fmtSize(trade.qty)}</span>
+          <span className="tot mono">
+            {new Date(trade.timestamp).toLocaleTimeString("en-US", { hour12: false })}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
-  const [markets, setMarkets] = useState<readonly PerpMarket[]>(SAMPLE_MARKETS);
-  const [selected, setSelected] = useState<string>(SAMPLE_MARKETS[0]?.symbol ?? "");
+export default function Perps(): ReactNode {
+  const { isConnected, isConnecting, connect } = useWallet();
+
+  const markets = usePerpsMarkets();
+  const [selected, setSelected] = useState<string>("");
   const [marketTab, setMarketTab] = useState<"markets" | "follows">("markets");
   const [timeframe, setTimeframe] = useState<Timeframe>("15m");
-  const [tradeTab, setTradeTab] = useState<TradeTab>("positions");
+  const [tradeTab, setTradeTab] = useState<TradeTab>("trades");
   const [bookTab, setBookTab] = useState<BookTab>("book");
 
-  // Ticket state.
+  // Ticket state (visual only — placement is gated below).
   const [side, setSide] = useState<Side>("long");
   const [orderType, setOrderType] = useState<OrderType>("market");
   const [usdAmount, setUsdAmount] = useState<string>("");
   const [sizePct, setSizePct] = useState<number>(0);
   const [leverage, setLeverage] = useState<number>(2);
   const [autoClose, setAutoClose] = useState<boolean>(false);
-  const [placing, setPlacing] = useState<boolean>(false);
-  const [orderBlocked, setOrderBlocked] = useState<boolean>(false);
 
-  // Populate markets from the region-gated Extended API; keep samples on failure.
+  // Perpetual markets only (SPOT filtered when the API exposes `type`), sorted
+  // by 24h volume descending so the deepest markets lead the list.
+  const rows = useMemo(() => {
+    const source = markets.data ?? [];
+    return source
+      .filter((m) => m.type === null || m.type === "PERPETUAL")
+      .map((m, index) => toMarketRow(m, index))
+      .sort((a, b) => b.volume24hUsd - a.volume24hUsd);
+  }, [markets.data]);
+
+  // Keep the selection valid as markets load / change.
   useEffect(() => {
-    let live = true;
-    void (async () => {
-      try {
-        const fetched = await extended.fetchMarkets();
-        if (!live || fetched.length === 0) {
-          return;
-        }
-        setMarkets(fetched.map(toPerpMarket));
-        setSelected((prev) => (fetched.some((m) => m.name === prev) ? prev : fetched[0]!.name));
-      } catch {
-        // Region-locked / transport failure: retain the local sample markets.
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, []);
+    if (rows.length === 0) {
+      return;
+    }
+    setSelected((prev) => (rows.some((r) => r.symbol === prev) ? prev : rows[0]!.symbol));
+  }, [rows]);
 
-  const market = useMemo(
-    () => markets.find((m) => m.symbol === selected) ?? markets[0],
-    [markets, selected],
+  const selectedRow = useMemo(
+    () => rows.find((r) => r.symbol === selected) ?? rows[0],
+    [rows, selected],
   );
+  const activeSymbol = selectedRow?.symbol ?? null;
 
-  const book = useMemo(
-    () => (market === undefined ? undefined : buildOrderBook(market.symbol, market.markValue)),
-    [market],
-  );
+  // Live per-market data for the selected market.
+  const statsResource = usePerpsMarketStats(activeSymbol);
+  const orderBook = useOrderBook(activeSymbol);
+  const trades = usePerpsTrades(activeSymbol);
+  const funding = useFunding(activeSymbol);
+  const candles = usePerpsCandles(activeSymbol, "trades", TIMEFRAME_TO_INTERVAL[timeframe]!);
 
-  // Derived ticket figures.
+  // Resource<T> types `data` as `T | null`; these hooks always seed a non-null
+  // value, so coalesce once here for ergonomic use below.
+  const tradesData = trades.data ?? [];
+  const candlesData = candles.data ?? [];
+  const fundingData = funding.data ?? { latest: null, history: [] };
+
+  // Prefer the fresher standalone stats call; fall back to the nested stats the
+  // markets list already carries so the header is populated immediately.
+  const stats: ExtendedMarketStats | null = useMemo(() => {
+    if (statsResource.data !== null) {
+      return statsResource.data;
+    }
+    const market = (markets.data ?? []).find((m) => m.name === activeSymbol);
+    return market?.marketStats ?? null;
+  }, [statsResource.data, markets.data, activeSymbol]);
+
+  const book = useMemo(() => buildOrderBookView(orderBook.data), [orderBook.data]);
+
+  const markValue = stats !== null ? stats.markPrice || stats.lastPrice : (selectedRow?.markValue ?? 0);
+
+  // Derived ticket figures (display only).
+  const maxLev = Math.max(1, selectedRow?.maxLeverage ?? 1);
+  const boundedLev = Math.min(leverage, maxLev);
   const notional = useMemo(() => {
     const usdIn = Number.parseFloat(usdAmount);
-    return Number.isFinite(usdIn) ? usdIn * leverage : 0;
-  }, [usdAmount, leverage]);
+    return Number.isFinite(usdIn) ? usdIn * boundedLev : 0;
+  }, [usdAmount, boundedLev]);
   const fees = notional * 0.0005;
   const liqPrice = useMemo(() => {
-    if (market === undefined || notional <= 0 || leverage <= 0) {
+    if (markValue <= 0 || notional <= 0 || boundedLev <= 0) {
       return undefined;
     }
-    const factor = side === "long" ? 1 - 1 / leverage : 1 + 1 / leverage;
-    return market.markValue * factor;
-  }, [market, notional, leverage, side]);
+    const factor = side === "long" ? 1 - 1 / boundedLev : 1 + 1 / boundedLev;
+    return markValue * factor;
+  }, [markValue, notional, boundedLev, side]);
 
-  if (market === undefined) {
-    return (
-      <div className="screen" id="perps">
-        <EmptyState icon="📊" title="No perp markets available" />
+  const changePct = dailyChangePct(stats);
+  const fundingRate = fundingData.latest?.fundingRate ?? stats?.fundingRate ?? 0;
+
+  // ----- markets list body (skeleton / error / empty / rows) -----
+  const marketsBody = (): ReactNode => {
+    if (marketTab === "follows") {
+      return (
+        <EmptyState
+          icon="☆"
+          title="No followed markets"
+          subtitle="Follow a market to pin it here."
+          style={{ minHeight: 180 }}
+        />
+      );
+    }
+    if (markets.error !== null && rows.length === 0) {
+      return <ErrorBanner message={`Couldn't load markets: ${markets.error}`} />;
+    }
+    if (markets.isLoading && rows.length === 0) {
+      return <SkeletonRows rows={8} />;
+    }
+    if (rows.length === 0) {
+      return <EmptyState icon="📊" title="No perp markets available" style={{ minHeight: 180 }} />;
+    }
+    return rows.map((m) => (
+      <div
+        key={m.symbol}
+        className={m.symbol === selected ? "tokrow sel" : "tokrow"}
+        onClick={() => setSelected(m.symbol)}
+      >
+        <TokenIcon symbol={m.base} gradientIndex={m.gradientIndex} />
+        <div>
+          <div className="n1">{m.symbol}</div>
+          <div className="n2">
+            <span className="lev">{m.maxLeverage}x</span>
+          </div>
+        </div>
+        <div className="r">
+          <div className="pr mono">{m.priceLabel}</div>
+          <PctChange className="ch" value={m.change24h} />
+        </div>
       </div>
-    );
-  }
-
-  const maxLev = Math.max(1, market.maxLeverage);
-  const boundedLev = Math.min(leverage, maxLev);
-
-  const handlePlaceOrder = (): void => {
-    if (!isConnected) {
-      void connect();
-      return;
-    }
-    if (account === null || address === null) {
-      return;
-    }
-    // Extended settles off-chain and its signer is region-gated + phase-2 only,
-    // so this attempt always rejects. Guard it: never let the click throw, and
-    // fall into the disabled "not available in your region" state.
-    setPlacing(true);
-    const params: PerpOrderParams = {
-      market: market.symbol,
-      side: side === "long" ? "buy" : "sell",
-      size: usdAmount === "" ? "0" : usdAmount,
-      price: String(market.markValue),
-      leverage: boundedLev,
-      reduceOnly: false,
-    };
-    void extended
-      .signOrder(params)
-      .then(() => {
-        setPlacing(false);
-      })
-      .catch(() => {
-        setOrderBlocked(true);
-        setPlacing(false);
-      });
+    ));
   };
 
-  const ctaLabel = !isConnected
-    ? "Connect Wallet"
-    : orderBlocked
-      ? "Signing not available in your region"
-      : placing
-        ? "Signing…"
-        : `${side === "long" ? "Long" : "Short"} ${market.base}`;
-  const ctaDisabled = isConnected && (orderBlocked || placing);
+  // ----- chart body -----
+  const chartBody = (): ReactNode => {
+    if (candlesData.length > 0) {
+      return <CandlestickChart key={activeSymbol ?? "none"} data={candlesData} height={320} />;
+    }
+    if (candles.isLoading) {
+      return <SkeletonChart height={320} />;
+    }
+    if (candles.error !== null) {
+      return <ErrorBanner message={`Couldn't load candles: ${candles.error}`} />;
+    }
+    return <EmptyState icon="📈" title="No chart data" style={{ minHeight: 320 }} />;
+  };
+
+  // ----- center trade tabs body -----
+  const tradeTabBody = (): ReactNode => {
+    if (tradeTab === "trades") {
+      return (
+        <TradeTape trades={tradesData} isLoading={trades.isLoading} error={trades.error} />
+      );
+    }
+    if (tradeTab === "funding") {
+      if (funding.error !== null && fundingData.history.length === 0) {
+        return <ErrorBanner message={`Couldn't load funding: ${funding.error}`} />;
+      }
+      if (funding.isLoading && fundingData.history.length === 0) {
+        return <SkeletonRows rows={6} />;
+      }
+      if (fundingData.history.length === 0) {
+        return (
+          <EmptyState icon="💸" title="No funding history" style={{ minHeight: 150 }} />
+        );
+      }
+      const recent = [...fundingData.history].reverse().slice(0, 24);
+      return (
+        <div className="listscroll" style={{ padding: "6px 16px" }}>
+          {recent.map((entry) => (
+            <div
+              key={entry.timestamp}
+              style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}
+            >
+              <span className="mono" style={{ color: "var(--text-2)" }}>
+                {new Date(entry.timestamp).toLocaleString("en-US")}
+              </span>
+              <PctChange value={fundingPct(entry.fundingRate)} digits={4} />
+            </div>
+          ))}
+        </div>
+      );
+    }
+    // positions / orders are account-gated.
+    return (
+      <EmptyState
+        icon="📊"
+        title={tradeTab === "positions" ? "No open positions" : "No order history"}
+        subtitle="Connect your wallet to start trading perps."
+        ctaLabel={isConnected ? undefined : "Connect Wallet"}
+        onCta={isConnected ? undefined : () => void connect()}
+        ctaDisabled={isConnecting}
+        style={{ minHeight: 150 }}
+      />
+    );
+  };
 
   return (
     <div className="screen" id="perps">
@@ -184,8 +324,8 @@ export default function Perps(): ReactNode {
         <div className="regionbanner">
           <span>&#9888;</span>
           <span>
-            Access to this product isn't available in your region.{" "}
-            <a href="#learn-more">Learn more.</a>
+            Market data is live. Order placement requires a signed session and isn&apos;t available
+            in your region. <a href="#learn-more">Learn more.</a>
           </span>
         </div>
 
@@ -201,51 +341,23 @@ export default function Perps(): ReactNode {
               value={marketTab}
               onChange={setMarketTab}
             />
-            <div className="listscroll">
-              {marketTab === "follows" ? (
-                <EmptyState
-                  icon="☆"
-                  title="No followed markets"
-                  subtitle="Follow a market to pin it here."
-                  style={{ minHeight: 180 }}
-                />
-              ) : (
-                markets.map((m) => (
-                  <div
-                    key={m.symbol}
-                    className={m.symbol === selected ? "tokrow sel" : "tokrow"}
-                    onClick={() => {
-                      setSelected(m.symbol);
-                      setOrderBlocked(false);
-                    }}
-                  >
-                    <TokenIcon symbol={m.base} gradientIndex={m.gradientIndex} />
-                    <div>
-                      <div className="n1">{m.symbol}</div>
-                      <div className="n2">
-                        <span className="lev">{m.maxLeverage}x</span>
-                      </div>
-                    </div>
-                    <div className="r">
-                      <div className="pr mono">{m.price}</div>
-                      <PctChange className="ch" value={m.change24h} />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            <div className="listscroll">{marketsBody()}</div>
           </div>
 
           {/* CENTER — head + chart + trade tabs */}
           <div className="center">
             <div className="tokhead">
               <div className="top">
-                <TokenIcon symbol={market.base} size={40} gradientIndex={market.gradientIndex} />
+                <TokenIcon
+                  symbol={selectedRow?.base ?? "?"}
+                  size={40}
+                  gradientIndex={selectedRow?.gradientIndex ?? 0}
+                />
                 <div>
                   <h2>
-                    {market.symbol}{" "}
+                    {selectedRow?.symbol ?? "—"}{" "}
                     <span className="lev" style={{ fontSize: 11 }}>
-                      {market.maxLeverage}x
+                      {selectedRow?.maxLeverage ?? 1}x
                     </span>
                   </h2>
                   <div className="tiny">Perpetual · Extended</div>
@@ -255,20 +367,26 @@ export default function Perps(): ReactNode {
                 </button>
               </div>
               <div className="statgrid">
-                <StatPair label="Mark" value={market.mark} />
-                <StatPair label="Oracle" value={market.oracle} />
+                <StatPair label="Mark" value={fmtUsdPrice(stats?.markPrice ?? markValue)} />
+                <StatPair label="Index" value={fmtUsdPrice(stats?.indexPrice ?? markValue)} />
                 <StatPair
                   label="24h Change"
-                  value={<PctChange value={market.change24h} />}
-                  tone={market.change24h < 0 ? "neg" : "pos"}
+                  value={<PctChange value={changePct} />}
+                  tone={changePct < 0 ? "neg" : "pos"}
                 />
-                <StatPair label="24h Volume" value={market.volume24h} />
+                <StatPair
+                  label="24h Volume"
+                  value={stats !== null ? fmtCompactUsd(stats.dailyVolume) : "—"}
+                />
                 <StatPair
                   label="Funding"
-                  value={`${market.funding >= 0 ? "+" : ""}${market.funding.toFixed(4)}%`}
-                  tone={market.funding < 0 ? "neg" : "pos"}
+                  value={`${fundingRate >= 0 ? "+" : ""}${fundingPct(fundingRate).toFixed(4)}%`}
+                  tone={fundingRate < 0 ? "neg" : "pos"}
                 />
-                <StatPair label="Open Interest" value={market.openInterest} />
+                <StatPair
+                  label="Open Interest"
+                  value={stats !== null ? fmtCompactUsd(stats.openInterest) : "—"}
+                />
               </div>
             </div>
 
@@ -294,16 +412,7 @@ export default function Perps(): ReactNode {
                   </button>
                 </div>
               </div>
-              <CandlestickChart
-                key={market.symbol}
-                placeholder={{
-                  start: market.markValue,
-                  vol: market.markValue * 0.0035,
-                  up: market.change24h >= 0,
-                  format: (v) => `$${fmtPrice(v)}`,
-                }}
-                height={320}
-              />
+              {chartBody()}
             </div>
 
             <div className="tradetabs">
@@ -318,23 +427,7 @@ export default function Perps(): ReactNode {
                 value={tradeTab}
                 onChange={setTradeTab}
               />
-              <EmptyState
-                icon="📊"
-                title={
-                  tradeTab === "positions"
-                    ? "No open positions"
-                    : tradeTab === "trades"
-                      ? "No trades yet"
-                      : tradeTab === "funding"
-                        ? "No funding payments"
-                        : "No order history"
-                }
-                subtitle="Connect your wallet to start trading perps."
-                ctaLabel={isConnected ? undefined : "Connect Wallet"}
-                onCta={isConnected ? undefined : () => void connect()}
-                ctaDisabled={isConnecting}
-                style={{ minHeight: 150 }}
-              />
+              {tradeTabBody()}
             </div>
           </div>
 
@@ -356,34 +449,42 @@ export default function Perps(): ReactNode {
                 Trades
               </button>
             </div>
-            {bookTab === "book" && book !== undefined ? (
-              <>
-                <div className="obcols">
-                  <span>Price (USD)</span>
-                  <span>Size ({market.base})</span>
-                  <span>Total</span>
-                </div>
-                <div className="obscroll">
-                  {book.asks.map((level) => (
-                    <BookRow key={`ask-${level.price}`} level={level} side="short" />
-                  ))}
-                  <div className="obspread">
-                    <span>Spread</span>
-                    <span className="mono">
-                      {fmtPrice(book.spread)} ({book.spreadPct.toFixed(2)}%)
-                    </span>
+            {bookTab === "book" ? (
+              book !== null ? (
+                <>
+                  <div className="obcols">
+                    <span>Price (USD)</span>
+                    <span>Size ({selectedRow?.base ?? ""})</span>
+                    <span>Total</span>
                   </div>
-                  {book.bids.map((level) => (
-                    <BookRow key={`bid-${level.price}`} level={level} side="long" />
-                  ))}
-                </div>
-              </>
+                  <div className="obscroll">
+                    {book.asks.map((level) => (
+                      <BookRow key={`ask-${level.price}`} level={level} side="short" />
+                    ))}
+                    <div className="obspread">
+                      <span>Spread</span>
+                      <span className="mono">
+                        {fmtPrice(book.spread)} ({book.spreadPct.toFixed(2)}%)
+                      </span>
+                    </div>
+                    {book.bids.map((level) => (
+                      <BookRow key={`bid-${level.price}`} level={level} side="long" />
+                    ))}
+                  </div>
+                </>
+              ) : orderBook.error !== null ? (
+                <ErrorBanner message={`Couldn't load order book: ${orderBook.error}`} />
+              ) : orderBook.isLoading ? (
+                <SkeletonRows rows={10} />
+              ) : (
+                <EmptyState icon="📖" title="No order book" style={{ minHeight: 180 }} />
+              )
             ) : (
-              <EmptyState icon="🧾" title="No recent trades" style={{ minHeight: 180 }} />
+              <TradeTape trades={tradesData} isLoading={trades.isLoading} error={trades.error} />
             )}
           </div>
 
-          {/* ORDER TICKET */}
+          {/* ORDER TICKET — visible but gated (signing stubbed + region-locked). */}
           <div className="ticket">
             <div className="ti">
               <SegmentedTabs
@@ -393,10 +494,7 @@ export default function Perps(): ReactNode {
                   { value: "short", label: "Short", tone: "sell" },
                 ]}
                 value={side}
-                onChange={(v) => {
-                  setSide(v);
-                  setOrderBlocked(false);
-                }}
+                onChange={setSide}
               />
               <div className="otype">
                 {(["market", "limit", "stop"] as const).map((t) => (
@@ -420,10 +518,7 @@ export default function Perps(): ReactNode {
                   inputMode="decimal"
                   placeholder="0.00"
                   value={usdAmount}
-                  onChange={(e) => {
-                    setUsdAmount(e.target.value.replace(/[^0-9.]/g, ""));
-                    setOrderBlocked(false);
-                  }}
+                  onChange={(e) => setUsdAmount(e.target.value.replace(/[^0-9.]/g, ""))}
                 />
                 <span className="cur" style={{ fontWeight: 700, color: "var(--text-2)" }}>
                   USD
@@ -501,15 +596,37 @@ export default function Perps(): ReactNode {
                 />
               </div>
 
-              <button
-                type="button"
-                className="bigcta"
-                style={{ marginTop: 8, opacity: ctaDisabled ? 0.6 : 1 }}
-                disabled={ctaDisabled}
-                onClick={handlePlaceOrder}
-              >
-                {ctaLabel}
-              </button>
+              {isConnected ? (
+                <>
+                  <button
+                    type="button"
+                    className="bigcta"
+                    style={{ marginTop: 8, opacity: 0.6 }}
+                    disabled
+                    aria-disabled="true"
+                    title={ORDER_DISABLED_REASON}
+                  >
+                    Order Placement Unavailable
+                  </button>
+                  <div
+                    role="note"
+                    className="tiny"
+                    style={{ marginTop: 8, color: "var(--text-3)", lineHeight: 1.4 }}
+                  >
+                    {ORDER_DISABLED_REASON}
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="bigcta"
+                  style={{ marginTop: 8, opacity: isConnecting ? 0.6 : 1 }}
+                  disabled={isConnecting}
+                  onClick={() => void connect()}
+                >
+                  {isConnecting ? "Connecting…" : "Connect Wallet"}
+                </button>
+              )}
 
               <div className="balrow">
                 <span className="k">Total Balance</span>

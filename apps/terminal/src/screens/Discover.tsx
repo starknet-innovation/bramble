@@ -6,7 +6,7 @@
  *  - MID: the "Launches" feed — a meme-token launch feed with NO confirmed data
  *    source, so it renders an explicit "coming soon" empty state (not fake rows).
  *  - RIGHT: ranked "Tokens" (real, from `useTokens`, sorted by market cap) and
- *    "Perps" (real, from `usePerpsMarkets`; region-locked → region-locked state).
+ *    "Perps" (real, from `usePerpsMarkets`, sorted by 24h volume).
  */
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
@@ -20,9 +20,16 @@ import {
   SkeletonRows,
   TabStrip,
 } from "../components";
-import { formatCompactUsd, formatSignedUsd, formatUsd, usePortfolio, useTokens } from "../data";
+import {
+  formatCompactUsd,
+  formatSignedUsd,
+  formatUsd,
+  usePerpsMarkets,
+  usePortfolio,
+  useTokens,
+} from "../data";
 import { useWallet } from "../wallet/WalletProvider";
-import { RANKED_PERPS } from "./discoverData";
+import { dailyChangePct, fmtUsdPrice } from "./perps-data";
 
 type TotalView = "total" | "tokens" | "perps";
 type LeftTab = "positions" | "activities" | "follows";
@@ -55,6 +62,7 @@ export default function Discover(): ReactNode {
 
   const { data: portfolio } = usePortfolio(address);
   const tokens = useTokens();
+  const perps = usePerpsMarkets();
 
   const rankedTokens = useMemo(() => {
     const rows = [...(tokens.data ?? [])];
@@ -62,6 +70,14 @@ export default function Discover(): ReactNode {
       .sort((a, b) => (b.marketCapUsd ?? b.volume24hUsd ?? 0) - (a.marketCapUsd ?? a.volume24hUsd ?? 0))
       .slice(0, 20);
   }, [tokens.data]);
+
+  // Real Extended perpetual markets, sorted by 24h volume (deepest first).
+  const rankedPerps = useMemo(() => {
+    return [...(perps.data ?? [])]
+      .filter((m) => m.type === null || m.type === "PERPETUAL")
+      .sort((a, b) => (b.marketStats?.dailyVolume ?? 0) - (a.marketStats?.dailyVolume ?? 0))
+      .slice(0, 10);
+  }, [perps.data]);
 
   const onConnect = (): void => {
     void connect();
@@ -194,37 +210,53 @@ export default function Discover(): ReactNode {
           </div>
         </Card>
 
-        {/* Perps ranked column is owned by the dedicated Extended/Perps effort;
-            left as-is here to avoid conflicting with that work. */}
+        {/* Perps ranked column — real Extended markets, sorted by 24h volume. */}
         <Card
           title="Perps"
           headerRight={<DropButton label="Volume" />}
           style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
         >
           <div className="listscroll">
-            <table className="ranktable">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Symbol</th>
-                  <th>Price</th>
-                  <th>24h</th>
-                </tr>
-              </thead>
-              <tbody>
-                {RANKED_PERPS.map((perp, index) => (
-                  <RankRow
-                    key={perp.symbol}
-                    rank={index + 1}
-                    symbol={perp.symbol}
-                    name={`${perp.symbol}-USD`}
-                    subLabel={<span className="lev">{perp.leverage}</span>}
-                    gradientIndex={index + 2}
-                    cells={[perp.price, <PctChange key="ch" value={perp.change24h} digits={1} />]}
-                  />
-                ))}
-              </tbody>
-            </table>
+            {perps.error !== null && rankedPerps.length === 0 ? (
+              <ErrorBanner message={`Couldn't load perps: ${perps.error}`} />
+            ) : perps.isLoading && rankedPerps.length === 0 ? (
+              <SkeletonRows rows={6} />
+            ) : rankedPerps.length === 0 ? (
+              <EmptyState icon="📊" title="No perp markets available" style={{ minHeight: 160 }} />
+            ) : (
+              <table className="ranktable">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Symbol</th>
+                    <th>Price</th>
+                    <th>24h</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankedPerps.map((perp, index) => {
+                    const stats = perp.marketStats;
+                    const price = stats !== null ? stats.lastPrice || stats.markPrice : 0;
+                    return (
+                      <RankRow
+                        key={perp.name}
+                        rank={index + 1}
+                        symbol={perp.assetName}
+                        name={perp.name}
+                        subLabel={
+                          <span className="lev">{Math.max(1, Math.trunc(perp.maxLeverage))}x</span>
+                        }
+                        gradientIndex={index + 2}
+                        cells={[
+                          fmtUsdPrice(price),
+                          <PctChange key="ch" value={dailyChangePct(stats)} digits={1} />,
+                        ]}
+                      />
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </Card>
       </div>
