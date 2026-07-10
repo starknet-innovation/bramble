@@ -5,10 +5,34 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { isStarkFieldElement } from "../starknet/networks";
 import { activityToCsv } from "../storage/activity-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { formatFri } from "./parts";
 import type { SidepanelWallet } from "./runtime";
+
+const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
+
+/** Background error string returned when the recipient fails validation. */
+const INVALID_REVIEW_ERROR = "invalid transfer review request";
+
+/**
+ * Returns an inline error message when the recipient is not a well-formed
+ * Starknet address, or `null` when it is valid. Mirrors the background's
+ * `isStarkFieldElement` check so the send form rejects the same addresses the
+ * wallet would refuse, instead of surfacing a developer error string.
+ */
+export const recipientFieldError = (recipient: string): string | null =>
+  isStarkFieldElement(recipient) ? null : INVALID_RECIPIENT_MESSAGE;
+
+/**
+ * Maps the background's developer error string for a malformed recipient onto
+ * the same friendly, inline message; passes every other error through.
+ */
+export const friendlyReviewError = (error: unknown): string => {
+  const message = errorMessage(error, "Transfer review failed");
+  return message === INVALID_REVIEW_ERROR ? INVALID_RECIPIENT_MESSAGE : message;
+};
 
 /**
  * Dependencies the transfer and activity bindings close over.
@@ -30,9 +54,25 @@ const transferFields = (form: HTMLFormElement) => {
   };
 };
 
-const reviewPanelHtml = (
-  review: Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>,
-): string => `
+type Review = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
+
+// Renders the fee line: a numeric estimate when available, an informational
+// note when the account still needs deployment, or a friendly failure message
+// plus a retry control when a deployed account's estimate genuinely failed.
+const feeLineHtml = (review: Review): string => {
+  if (review.fee) {
+    return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFri(review.fee.overallFee))}</p>`;
+  }
+  if (review.requiresDeployment) {
+    return '<p class="review-fee">The network fee is estimated once this account is deployed.</p>';
+  }
+  if (review.feeEstimateFailed) {
+    return '<p class="review-flag" role="alert">Couldn\'t estimate the network fee right now. Check your connection and retry before sending.</p><button type="button" class="secondary" id="review-retry-fee">Retry fee estimate</button>';
+  }
+  return "";
+};
+
+const reviewPanelHtml = (review: Review): string => `
   <div class="review-panel" role="note">
     ${review.summaries.map((summary) => `<p>${escapeHtml(summary)}</p>`).join("")}
     ${review.flags.map((flag) => `<p class="review-flag">⚠ ${escapeHtml(flag.message)}</p>`).join("")}
@@ -41,7 +81,7 @@ const reviewPanelHtml = (
         ? '<p class="review-flag">⚠ This account is not deployed yet; the first send also submits its deployment.</p>'
         : ""
     }
-    <p class="review-fee">${review.fee ? `Estimated fee: ${escapeHtml(formatFri(review.fee.overallFee))}` : "Fee estimate unavailable."}</p>
+    ${feeLineHtml(review)}
   </div>`;
 
 /**
@@ -50,26 +90,45 @@ const reviewPanelHtml = (
  */
 export const bindTransfer = ({ app, wallet }: TransferUiDeps): void => {
   const form = app?.querySelector<HTMLFormElement>("#transfer-form");
+  if (!form) {
+    return;
+  }
   const result = app?.querySelector<HTMLElement>("#transfer-result");
   const reviewPanel = app?.querySelector<HTMLElement>("#review-panel");
+  const recipientInput = form?.querySelector<HTMLInputElement>('input[name="recipient"]');
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   let reviewedKey: string | null = null;
 
   const resetReview = (): void => {
     reviewedKey = null;
+    recipientInput?.setCustomValidity("");
     if (reviewPanel) {
       reviewPanel.innerHTML = "";
     }
     if (submitButton) {
       submitButton.lastChild?.replaceWith("Review send");
     }
+    // A failed estimate leaves the submit button disabled; editing any field
+    // clears the review, so re-enable it for the next review pass.
+    buttonBusy(submitButton, false);
   };
 
-  form?.addEventListener("input", resetReview);
+  form.addEventListener("input", resetReview);
 
-  form?.addEventListener("submit", (event) => {
+  form.addEventListener("submit", (event) => {
     event.preventDefault();
     const fields = transferFields(form);
+
+    const recipientError = recipientFieldError(fields.recipient);
+    if (recipientError) {
+      recipientInput?.setCustomValidity(recipientError);
+      recipientInput?.reportValidity();
+      if (result) {
+        result.textContent = recipientError;
+      }
+      return;
+    }
+
     const key = JSON.stringify(fields);
     buttonBusy(submitButton, true);
 
@@ -78,22 +137,31 @@ export const bindTransfer = ({ app, wallet }: TransferUiDeps): void => {
         .reviewTransfer(fields.accountId, fields.tokenId, fields.recipient, fields.amount)
         .then(
           (review) => {
-            reviewedKey = key;
+            const feeFailed = review.feeEstimateFailed;
+            reviewedKey = feeFailed ? null : key;
             if (reviewPanel) {
               reviewPanel.innerHTML = reviewPanelHtml(review);
             }
             if (submitButton) {
-              submitButton.lastChild?.replaceWith("Confirm send");
+              submitButton.lastChild?.replaceWith(feeFailed ? "Review send" : "Confirm send");
             }
             if (result) {
-              result.textContent = "Review the details above, then confirm.";
+              result.textContent = feeFailed
+                ? "Fee estimate failed. Retry the fee estimate before sending."
+                : "Review the details above, then confirm.";
             }
-            buttonBusy(submitButton, false);
+            reviewPanel
+              ?.querySelector<HTMLButtonElement>("#review-retry-fee")
+              ?.addEventListener("click", () => {
+                form.requestSubmit();
+              });
+            buttonBusy(submitButton, feeFailed);
           },
           (error: unknown) => {
-            showToast(errorMessage(error, "Transfer review failed"), "error");
+            const message = friendlyReviewError(error);
+            showToast(message, "error");
             if (result) {
-              result.textContent = errorMessage(error, "Transfer review failed");
+              result.textContent = message;
             }
             buttonBusy(submitButton, false);
           },

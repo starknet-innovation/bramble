@@ -2,14 +2,19 @@
  * DOM utilities for the side panel: toasts, busy states, scoped status lines,
  * and focus preservation across full re-renders.
  */
+import { friendlyNetworkError } from "../shared/network-error";
+import { friendlyError } from "./friendly-error";
 import { icon } from "./icons";
 import { isWalletView } from "./parts";
 
 /**
- * Formats an error for user-facing status lines.
+ * Formats an error for user-facing status lines, rewriting raw transport
+ * failures (e.g. "Failed to fetch") into a friendly, actionable line.
  */
-export const errorMessage = (error: unknown, fallback: string): string =>
-  error instanceof Error ? error.message : fallback;
+export const errorMessage = (error: unknown, fallback: string): string => {
+  const raw = error instanceof Error ? error.message : fallback;
+  return friendlyNetworkError(raw) ?? raw;
+};
 
 /**
  * Marks a button busy so repeated submits are impossible while work runs.
@@ -61,8 +66,10 @@ const toastCopyButton = (message: string): HTMLButtonElement => {
 };
 
 /**
- * Shows a transient toast in the fixed stack at the bottom of the shell.
- * Error toasts stay longer and carry a copy control for the message.
+ * Shows a transient toast in the fixed stack at the bottom of the shell. Error
+ * toasts stay longer and are rewritten to friendly, user-facing copy; a
+ * copy-to-clipboard control is attached only for genuinely unexpected internal
+ * errors, never for validation or other recoverable user-facing conditions.
  */
 export const showToast = (message: string, tone: ToastTone): void => {
   const stackId = "toast-stack";
@@ -74,14 +81,15 @@ export const showToast = (message: string, tone: ToastTone): void => {
     document.body.append(stack);
   }
 
+  const friendly = tone === "error" ? friendlyError(message) : null;
   const toast = document.createElement("div");
   toast.className = `toast ${tone}`;
   const text = document.createElement("span");
   text.className = "toast-text";
-  text.textContent = message;
+  text.textContent = friendly ? friendly.message : message;
   toast.append(text);
-  if (tone === "error") {
-    toast.append(toastCopyButton(message));
+  if (friendly?.copyable) {
+    toast.append(toastCopyButton(friendly.message));
   }
   stack.append(toast);
   setTimeout(() => toast.remove(), tone === "error" ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);

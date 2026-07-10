@@ -6,6 +6,7 @@
  */
 import type { ConnectedSite, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { knownAccountType } from "../starknet/account-types";
 import { isStarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
@@ -167,6 +168,7 @@ export const accountFlow = (
   preferences: WalletPreferences | null,
 ): string => {
   const networkAccounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
+  const accountType = account ? knownAccountType(account.classHash) : null;
   return (
     flowHeader("Account", "settings", status, `On ${status.network}`) +
     flowScreen(
@@ -219,6 +221,12 @@ export const accountFlow = (
               <div class="address-line"><code>${escapeHtml(account.address)}</code>${copyButton(account.address, "Copy address")}</div>
               <p class="eyebrow">Class hash</p>
               <div class="address-line"><code>${escapeHtml(account.classHash)}</code>${copyButton(account.classHash, "Copy class hash")}</div>
+              ${
+                accountType
+                  ? `<p class="eyebrow">Account type</p>
+              <div class="address-line"><code>${escapeHtml(accountType)}</code></div>`
+                  : ""
+              }
             </section>`
           : ""
       }`,

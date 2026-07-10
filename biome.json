@@ -1,7 +1,16 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.2/schema.json",
   "files": {
-    "includes": ["**", "!.claude", "!bun.lock", "!dist", "!node_modules", "!vendor"]
+    "includes": [
+      "**",
+      "!.claude",
+      "!bun.lock",
+      "!dist",
+      "!node_modules",
+      "!playwright-report",
+      "!test-results",
+      "!vendor"
+    ]
   },
   "formatter": {
     "enabled": true,

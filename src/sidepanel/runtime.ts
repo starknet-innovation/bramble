@@ -386,7 +386,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       if (isWalletStatus(response)) {
         return response;
       }
-      throw responseError(response, "wallet unavailable");
+      throw responseError(response, "Incorrect passphrase");
     },
   };
 };

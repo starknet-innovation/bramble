@@ -85,8 +85,21 @@ const prices: PriceService = {
   },
 };
 
+// A baseError with a numeric code marks a semantic RPC error; its absence marks
+// a transport-level failure (see isTransportRpcError). Mirror that shape so the
+// stubbed RPC can exercise both classifications.
+const transportError = (): Error => new Error("fetch failed");
+const semanticError = (): Error =>
+  Object.assign(new Error("Contract not found"), { baseError: { code: 20 } });
+
+type RpcOverrides = {
+  readonly getTokenBalances?: () => Promise<never>;
+  readonly getTokenMetadata?: () => Promise<never>;
+};
+
 const makeHandler = (
   metadata: TokenMetadata = { decimals: 6, name: "USD Coin", symbol: "usdc" },
+  overrides: RpcOverrides = {},
 ) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
@@ -107,16 +120,15 @@ const makeHandler = (
       async getNftOwner() {
         return "0x1";
       },
-      async getTokenBalances({ tokens }) {
-        return tokens.map((token, index) => ({
-          ...token,
-          balance: index === 0 ? "1000000" : "0",
-          formatted: index === 0 ? "1.0" : "0",
-        }));
-      },
-      async getTokenMetadata() {
-        return metadata;
-      },
+      getTokenBalances:
+        overrides.getTokenBalances ??
+        (async ({ tokens }) =>
+          tokens.map((token, index) => ({
+            ...token,
+            balance: index === 0 ? "1000000" : "0",
+            formatted: index === 0 ? "1.0" : "0",
+          }))),
+      getTokenMetadata: overrides.getTokenMetadata ?? (async () => metadata),
       async getTransactionStatuses() {
         return {};
       },
@@ -172,6 +184,52 @@ describe("background token messages", () => {
     const suggestions = (response as { suggestions: readonly { symbol: string }[] }).suggestions;
     expect(suggestions).toHaveLength(1);
     expect(suggestions[0]?.symbol).toBe("USDC");
+  });
+
+  test("reports a network failure instead of an empty scan result", async () => {
+    const { handler } = makeHandler(undefined, {
+      getTokenBalances: async () => {
+        throw transportError();
+      },
+    });
+
+    const response = await handler({ type: "wallet.detectTokens" }, sender);
+    // The failure must be distinguishable from a genuine empty ("no tokens
+    // found") success, which would be { ok: true, suggestions: [] }.
+    expect(response).toEqual({ error: "Couldn't reach the network, try again" });
+    expect(response).not.toMatchObject({ ok: true });
+  });
+
+  test("reports a non-transport scan failure without pretending it succeeded", async () => {
+    const { handler } = makeHandler(undefined, {
+      getTokenBalances: async () => {
+        throw semanticError();
+      },
+    });
+
+    await expect(handler({ type: "wallet.detectTokens" }, sender)).resolves.toEqual({
+      error: "Token scan failed, try again",
+    });
+  });
+
+  test("distinguishes an unreachable node from unreadable token metadata", async () => {
+    const networkDown = makeHandler(undefined, {
+      getTokenMetadata: async () => {
+        throw transportError();
+      },
+    });
+    await expect(
+      networkDown.handler({ address: USDC, type: "wallet.addToken" }, sender),
+    ).resolves.toEqual({ error: "Couldn't reach the network, try again" });
+
+    const notAToken = makeHandler(undefined, {
+      getTokenMetadata: async () => {
+        throw semanticError();
+      },
+    });
+    await expect(
+      notAToken.handler({ address: USDC, type: "wallet.addToken" }, sender),
+    ).resolves.toEqual({ error: "could not read token metadata" });
   });
 
   test("hides and reveals a tracked token", async () => {

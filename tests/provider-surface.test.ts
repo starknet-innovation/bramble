@@ -31,9 +31,13 @@ describe("provider permission surface", () => {
     expect(readProviderRequestArguments({ type: "wallet_getPermissions" })).toEqual({
       method: "wallet_getPermissions",
     });
+    // wallet_getPermissions accepts its spec-defined optional api_version param.
     expect(
-      readProviderRequestArguments({ method: "wallet_getPermissions", params: {} }),
-    ).toBeNull();
+      readProviderRequestArguments({
+        method: "wallet_getPermissions",
+        params: { api_version: "0.7.2" },
+      }),
+    ).toEqual({ method: "wallet_getPermissions", params: { api_version: "0.7.2" } });
     expect(
       readProviderRequest({
         id: requestId,

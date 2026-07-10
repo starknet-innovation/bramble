@@ -21,6 +21,16 @@ describe("createEncryptedStore", () => {
     expect(isVaultPassphrase("too short")).toBe(false);
   });
 
+  test("gates the onboarding submit at the 12-character boundary", () => {
+    // The create-wallet form gates on this predicate so the backend invariant
+    // never throws with an unsurfaced error; 11 chars is rejected, 12 accepted.
+    expect(isVaultPassphrase("a".repeat(11))).toBe(false);
+    expect(isVaultPassphrase("a".repeat(12))).toBe(true);
+    expect(isVaultPassphrase(`  ${"a".repeat(10)}  `)).toBe(false);
+    expect(isVaultPassphrase(42)).toBe(false);
+    expect(isVaultPassphrase(undefined)).toBe(false);
+  });
+
   test("requires explicit encryption scopes", async () => {
     await expect(encryptJson({ ok: true }, "correct horse battery staple", "")).rejects.toThrow(
       "Encrypted store scope is required",
