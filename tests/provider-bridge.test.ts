@@ -3,11 +3,6 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
-  invalidRequestPayload,
-  unknownError,
-  userRefusedOp,
-} from "../src/background/wallet-rpc-errors";
-import {
   CONTENT_TARGET,
   canQueueProviderRequest,
   isTrustedPageMessage,
@@ -20,6 +15,7 @@ import {
   toProviderPayload,
   toRuntimeMessage,
 } from "../src/provider/bridge";
+import { invalidRequestPayload, unknownError, userRefusedOp } from "../src/shared/rpc-errors";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 const account = {

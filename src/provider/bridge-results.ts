@@ -4,12 +4,9 @@
  * background results into spec-exact dapp shapes and maps failures to spec
  * `{ code, message, data? }` error objects.
  */
-import {
-  errorForMessage,
-  unknownError,
-  type WalletRpcError,
-} from "../background/wallet-rpc-errors";
+
 import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
+import { errorForMessage, unknownError, type WalletRpcError } from "../shared/rpc-errors";
 import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
 import { isAccountRef } from "../storage/vault-schema";
 import { providerStrk20Balances, providerStrk20CallAndProof } from "./strk20-bridge";

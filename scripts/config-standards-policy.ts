@@ -15,6 +15,8 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@biomejs/biome": "2.5.2",
   "@playwright/test": "1.61.1",
   "@types/bun": "1.3.14",
+  knip: "6.26.0",
+  madge: "8.0.0",
   typescript: "6.0.3",
 };
 
@@ -74,11 +76,14 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run scripts/build-extension.ts",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test",
   "check:audit": "bun audit --audit-level=high",
+  "check:cycles": "madge --circular --extensions ts src",
+  "check:deadcode": "knip --no-exit-code",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
+  "check:imports": "bun run scripts/check-import-layers.ts",
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
   "check:lint": "biome check .",
   "check:multisig": "bun run scripts/check-multisig-class.ts",

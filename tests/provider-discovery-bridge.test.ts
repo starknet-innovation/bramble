@@ -5,18 +5,18 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
-  accountAlreadyDeployed,
-  apiVersionNotSupported,
-  deploymentDataNotAvailable,
-  unknownError,
-} from "../src/background/wallet-rpc-errors";
-import {
   PAGE_TARGET,
   providerResponse,
   readProviderResponse,
   toProviderPayload,
   toRuntimeMessage,
 } from "../src/provider/bridge";
+import {
+  accountAlreadyDeployed,
+  apiVersionNotSupported,
+  deploymentDataNotAvailable,
+  unknownError,
+} from "../src/shared/rpc-errors";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 

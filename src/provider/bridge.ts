@@ -1,11 +1,12 @@
 /**
  * Pure provider bridge rules shared by the injected page script and content script.
  */
-import { unknownError, type WalletRpcError } from "../background/wallet-rpc-errors";
+
 import { isUuid } from "../shared/ids";
 import type { Json } from "../shared/json";
 import { hasOnlyKnownKeys, isJson, isRecord, normalizeFeltBigints } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
+import { unknownError, type WalletRpcError } from "../shared/rpc-errors";
 import { type ProviderChain, readProviderChain } from "./add-chain-params";
 import {
   isRequestAccountsParams,

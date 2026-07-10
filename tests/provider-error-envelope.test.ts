@@ -5,11 +5,6 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
-  invalidRequestPayload,
-  unknownError,
-  userRefusedOp,
-} from "../src/background/wallet-rpc-errors";
-import {
   PAGE_TARGET,
   type ProviderRequest,
   providerResponse,
@@ -17,6 +12,7 @@ import {
   toProviderPayload,
   walletRpcException,
 } from "../src/provider/bridge";
+import { invalidRequestPayload, unknownError, userRefusedOp } from "../src/shared/rpc-errors";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 const request: ProviderRequest = { id: requestId, method: "wallet_addInvokeTransaction" };

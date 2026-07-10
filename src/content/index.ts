@@ -1,7 +1,7 @@
 /**
  * Content-script bridge between untrusted pages and the extension background worker.
  */
-import { invalidRequestPayload, unknownError } from "../background/wallet-rpc-errors";
+
 import {
   isTrustedPageMessage,
   providerResponse,
@@ -10,6 +10,7 @@ import {
   toRuntimeMessage,
 } from "../provider/bridge";
 import { addressesFromPayload, isWalletEventMessage, pageEventsFor } from "../provider/events";
+import { invalidRequestPayload, unknownError } from "../shared/rpc-errors";
 
 type RuntimeApi = {
   readonly getURL: (path: string) => string;
