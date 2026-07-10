@@ -1,0 +1,30 @@
+/**
+ * Barrel for the terminal's real data layer. Screens import hooks + formatters
+ * from "../data". Every hook returns live API / on-chain data (no sample rows).
+ */
+export { fetchJson, HttpError, withRpc } from "./client";
+export { AVNU_BASE, COINGECKO_BASE, EKUBO_BASE, RPC_URLS } from "./endpoints";
+export {
+  formatCompactUsd,
+  formatPct,
+  formatPrice,
+  formatSignedUsd,
+  formatTokenAmount,
+  formatUsd,
+} from "./format";
+export { KNOWN_TOKENS, type KnownToken } from "./knownTokens";
+export { useAsyncResource } from "./useAsyncResource";
+export { useBalances } from "./useBalances";
+export { bucketCandles, useCandles } from "./useCandles";
+export { usePortfolio, type UsePortfolioResult } from "./usePortfolio";
+export { usePrices } from "./usePrices";
+export { useTokens } from "./useTokens";
+export type {
+  Holding,
+  PortfolioData,
+  PriceEntry,
+  PricesData,
+  Resource,
+  TokenBalance,
+  TokenRow,
+} from "./types";

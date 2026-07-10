@@ -1,32 +1,42 @@
 /**
- * Tokens screen — the three-pane token terminal. LEFT: a Tokens/Perps/Follows/
- * Track tab strip over a scrollable token list (click to select). CENTER: the
- * selected token's header (icon, name, follow, mini stats, stat grid), a
- * candlestick chart with a timeframe bar, and a trades tab strip with a sample
- * trade tape. RIGHT: a Buy/Sell trade panel that quotes a real Ekubo swap
- * (AVNU fallback) on amount change and, once connected, builds the swap calls
- * for a review + confirm-in-wallet flow. See the MANIFEST.
+ * Tokens screen — the three-pane token terminal. LEFT: a token list from the
+ * real token universe (`useTokens` — Avnu market list, Ekubo fallback), click to
+ * select. CENTER: the selected token's header + market stats (price / market cap
+ * / liquidity / 24h volume / 24h change, all real from the token API + live
+ * `usePrices`), a candlestick chart fed by real OHLC from `useCandles`
+ * (CoinGecko market chart, bucketed), and a trade tape that has NO confirmed
+ * source and therefore renders an explicit "coming soon" empty state (never
+ * fabricated trades). RIGHT: a Buy/Sell panel that quotes a real Ekubo swap
+ * (Avnu fallback) against the selected token and builds the swap calls for a
+ * confirm-in-wallet flow.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Call } from "starknet";
 import {
   CandlestickChart,
+  EmptyState,
+  ErrorBanner,
   PctChange,
   SegmentedTabs,
+  SkeletonChart,
+  SkeletonRows,
   StatPair,
   TabStrip,
   TokenIcon,
 } from "../components";
 import { avnu, ekubo, MAINNET_TOKEN_ADDRESSES, MAINNET_TOKEN_DECIMALS } from "../protocols";
 import type { SwapQuote } from "../protocols";
-import { useWallet } from "../wallet/WalletProvider";
 import {
-  buildSampleTrades,
-  QUICK_AMOUNTS,
-  SAMPLE_TOKENS,
-  TIMEFRAMES,
-  type SampleToken,
-} from "./tokensData";
+  formatCompactUsd,
+  formatPrice,
+  useCandles,
+  usePrices,
+  useTokens,
+  type TokenRow,
+} from "../data";
+import { shortenAddress } from "../shell/screens";
+import { useWallet } from "../wallet/WalletProvider";
+import { QUICK_AMOUNTS, TIMEFRAMES } from "./tokensData";
 
 type LeftTab = "tokens" | "perps" | "follows" | "track";
 type TradeTab = "trades" | "mine" | "positions" | "top" | "holders";
@@ -93,8 +103,15 @@ const SIDE_OPTIONS = [
   { value: "sell" as const, label: "Sell", tone: "sell" as const },
 ];
 
+const priceLabel = (value: number | null): string => (value === null ? "—" : formatPrice(value));
+const compactLabel = (value: number | null): string =>
+  value === null ? "—" : formatCompactUsd(value);
+
 export default function Tokens(): ReactNode {
   const { account, address, isConnected, isConnecting, connect } = useWallet();
+
+  const tokens = useTokens();
+  const list = useMemo<readonly TokenRow[]>(() => tokens.data ?? [], [tokens.data]);
 
   const [leftTab, setLeftTab] = useState<LeftTab>("tokens");
   const [tradeTab, setTradeTab] = useState<TradeTab>("trades");
@@ -108,18 +125,26 @@ export default function Tokens(): ReactNode {
   const [reviewCalls, setReviewCalls] = useState<readonly Call[] | null>(null);
   const [execMessage, setExecMessage] = useState<string | null>(null);
 
-  const token: SampleToken = SAMPLE_TOKENS[selected] ?? SAMPLE_TOKENS[0]!;
-  const trades = useMemo(() => buildSampleTrades(token.symbol, token.priceNum), [token]);
+  const token: TokenRow | undefined = list[selected] ?? list[0];
+
+  // Live price/change for the selected token, overriding the list snapshot.
+  const prices = usePrices(token !== undefined ? [token.address] : []);
+  const livePrice = token === undefined ? undefined : prices.data?.byAddress[token.address.toLowerCase()];
+  const priceUsd = livePrice?.usd ?? token?.priceUsd ?? null;
+  const change24h = livePrice?.change24h ?? token?.change24h ?? null;
+
+  // Real OHLC candles for the chart.
+  const candles = useCandles(token?.address ?? null, timeframe);
 
   // Buy = spend ETH to receive the selected token; Sell = spend the selected
   // token to receive ETH. Quoting needs both ERC20 addresses.
   const spend =
     side === "buy"
       ? { symbol: "ETH", address: ETH_ADDRESS, decimals: ETH_DECIMALS }
-      : { symbol: token.symbol, address: token.address, decimals: token.decimals };
+      : { symbol: token?.symbol ?? "", address: token?.address ?? "", decimals: token?.decimals ?? 18 };
   const receive =
     side === "buy"
-      ? { symbol: token.symbol, address: token.address, decimals: token.decimals }
+      ? { symbol: token?.symbol ?? "", address: token?.address ?? "", decimals: token?.decimals ?? 18 }
       : { symbol: "ETH", address: ETH_ADDRESS, decimals: ETH_DECIMALS };
 
   // Reset the review/exec flow whenever the trade inputs change.
@@ -132,11 +157,11 @@ export default function Tokens(): ReactNode {
   // known token addresses, and a positive amount; errors fall back to AVNU and
   // otherwise surface as a hint.
   useEffect(() => {
-    if (!isConnected || address === null) {
+    if (!isConnected || address === null || token === undefined) {
       setQuoteState({ status: "idle" });
       return;
     }
-    if (spend.address === undefined || receive.address === undefined) {
+    if (spend.address === "" || receive.address === "") {
       setQuoteState({ status: "error", message: "No route for this token yet." });
       return;
     }
@@ -144,14 +169,14 @@ export default function Tokens(): ReactNode {
       setQuoteState({ status: "error", message: "Pick a token other than ETH." });
       return;
     }
-    const sellAmount = toSmallestUnit(amount, spend.decimals!);
+    const sellAmount = toSmallestUnit(amount, spend.decimals);
     if (sellAmount === null) {
       setQuoteState({ status: "idle" });
       return;
     }
     const sellToken = spend.address;
     const buyToken = receive.address;
-    const receiveDecimals = receive.decimals!;
+    const receiveDecimals = receive.decimals;
     let cancelled = false;
     setQuoteState({ status: "loading" });
     const handle = window.setTimeout(() => {
@@ -181,7 +206,7 @@ export default function Tokens(): ReactNode {
       window.clearTimeout(handle);
     };
   }, [
-    isConnected, address, amount, side, selected,
+    isConnected, address, amount, side, selected, token,
     spend.address, spend.decimals, receive.address, receive.decimals,
   ]);
 
@@ -216,11 +241,32 @@ export default function Tokens(): ReactNode {
     })();
   }, [reviewCalls, account]);
 
-  const chartFormat = useCallback(
-    (v: number): string =>
-      `$${v.toLocaleString(undefined, { maximumFractionDigits: token.priceNum < 1 ? 4 : 2 })}`,
-    [token.priceNum],
-  );
+  // No token available yet: render the pane shell with loading/empty affordances.
+  if (token === undefined) {
+    return (
+      <div className="screen" id="tokens">
+        {tokens.error !== null && <ErrorBanner message={`Couldn't load tokens: ${tokens.error}`} />}
+        <div className="pane3">
+          <div className="leftlist">
+            <TabStrip items={LEFT_TABS} value={leftTab} onChange={setLeftTab} style={{ padding: "0 4px" }} />
+            <div className="listscroll">
+              {tokens.isLoading ? (
+                <SkeletonRows rows={10} />
+              ) : (
+                <EmptyState icon="🪙" title="No tokens available" style={{ minHeight: 200 }} />
+              )}
+            </div>
+          </div>
+          <div className="center">
+            <EmptyState icon="🪙" title="Select a token" style={{ flex: 1 }} />
+          </div>
+          <div className="rightpanel" />
+        </div>
+      </div>
+    );
+  }
+
+  const candleData = candles.data ?? [];
 
   const ctaLabel = !isConnected
     ? "Connect Wallet"
@@ -234,6 +280,7 @@ export default function Tokens(): ReactNode {
 
   return (
     <div className="screen" id="tokens">
+      {tokens.error !== null && <ErrorBanner message={`Couldn't load tokens: ${tokens.error}`} />}
       <div className="pane3">
         {/* LEFT: token list */}
         <div className="leftlist">
@@ -244,9 +291,9 @@ export default function Tokens(): ReactNode {
             style={{ padding: "0 4px" }}
           />
           <div className="listscroll">
-            {SAMPLE_TOKENS.map((t, i) => (
+            {list.map((t, i) => (
               <div
-                key={t.symbol}
+                key={t.address}
                 className={i === selected ? "tokrow sel" : "tokrow"}
                 onClick={() => setSelected(i)}
               >
@@ -256,8 +303,12 @@ export default function Tokens(): ReactNode {
                   <div className="n2">{t.symbol}</div>
                 </div>
                 <div className="r">
-                  <div className="pr mono">{t.price}</div>
-                  <PctChange value={t.change} digits={1} className="ch" />
+                  <div className="pr mono">{priceLabel(t.priceUsd)}</div>
+                  {t.change24h === null ? (
+                    <span className="ch tiny">—</span>
+                  ) : (
+                    <PctChange value={t.change24h} digits={1} className="ch" />
+                  )}
                 </div>
               </div>
             ))}
@@ -277,8 +328,8 @@ export default function Tokens(): ReactNode {
                   </span>
                 </h2>
                 <div className="tiny">
-                  Age {token.age} ·{" "}
-                  <span style={{ color: "var(--text-2)" }}>{token.contract}</span>
+                  Starknet ·{" "}
+                  <span style={{ color: "var(--text-2)" }}>{shortenAddress(token.address)}</span>
                 </div>
               </div>
               <button
@@ -293,26 +344,26 @@ export default function Tokens(): ReactNode {
                 className="miniStats"
                 style={{ marginLeft: "auto", border: "none", padding: 0, gap: 16 }}
               >
-                <StatPair variant="mini" label="5m Vol" value={token.vol5m} />
-                <StatPair variant="mini" label="Buys" value={token.buys} tone="pos" />
-                <StatPair variant="mini" label="Sells" value={token.sells} tone="neg" />
+                <StatPair variant="mini" label="24h Vol" value={compactLabel(token.volume24hUsd)} />
+                <StatPair variant="mini" label="Mkt Cap" value={compactLabel(token.marketCapUsd)} />
+                <StatPair
+                  variant="mini"
+                  label="24h"
+                  value={change24h === null ? "—" : <PctChange value={change24h} digits={2} />}
+                />
               </div>
             </div>
             <div className="statgrid">
-              <StatPair label="Price" value={token.price} />
-              <StatPair label="Market Cap" value={token.marketCap} />
+              <StatPair label="Price" value={priceLabel(priceUsd)} />
+              <StatPair label="Market Cap" value={compactLabel(token.marketCapUsd)} />
               <StatPair
                 label="24h Change"
-                value={<PctChange value={token.change} digits={2} />}
+                value={change24h === null ? "—" : <PctChange value={change24h} digits={2} />}
               />
-              <StatPair label="Liquidity" value={token.liquidity} />
-              <StatPair label="Supply" value={token.supply} />
-              <StatPair label="Top 10" value={token.top10} />
-              <StatPair
-                label="Audit"
-                value={token.audit}
-                tone={token.audit === "Passed" ? "pos" : undefined}
-              />
+              <StatPair label="Liquidity" value={compactLabel(token.liquidityUsd)} />
+              <StatPair label="24h Volume" value={compactLabel(token.volume24hUsd)} />
+              <StatPair label="Decimals" value={String(token.decimals)} />
+              <StatPair label="Contract" value={shortenAddress(token.address)} />
             </div>
           </div>
 
@@ -336,59 +387,35 @@ export default function Tokens(): ReactNode {
                 >
                   Candles
                 </button>
-                <button
-                  type="button"
-                  className="tf"
-                  style={{ background: "var(--surface-2)", color: "var(--text-2)" }}
-                >
-                  Indicators
-                </button>
               </div>
             </div>
-            <CandlestickChart
-              placeholder={{
-                start: token.priceNum,
-                vol: Math.max(token.priceNum * 0.015, 0.0001),
-                up: token.change >= 0,
-                format: chartFormat,
-              }}
-            />
+            {candles.isLoading && candleData.length === 0 ? (
+              <SkeletonChart height={320} />
+            ) : candleData.length > 0 ? (
+              <CandlestickChart key={token.address + timeframe} data={candleData} />
+            ) : (
+              <EmptyState
+                icon="📉"
+                title="Chart data unavailable"
+                subtitle={
+                  candles.error !== null
+                    ? "The price history source didn't return data for this token."
+                    : "No price history is available for this token yet."
+                }
+                style={{ minHeight: 320 }}
+              />
+            )}
           </div>
 
           <div className="tradetabs">
             <TabStrip items={TRADE_TABS} value={tradeTab} onChange={setTradeTab} />
             {tradeTab === "trades" ? (
-              <table className="tt-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Type</th>
-                    <th>Market Cap</th>
-                    <th>Amount</th>
-                    <th>Value</th>
-                    <th>Wallet</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trades.map((tr, i) => (
-                    <tr key={i}>
-                      <td>{tr.time}</td>
-                      <td
-                        className={tr.buy ? "pos" : "neg"}
-                        style={{ textAlign: "left", fontWeight: 700 }}
-                      >
-                        {tr.buy ? "Buy" : "Sell"}
-                      </td>
-                      <td className="mono">{tr.marketCap}</td>
-                      <td className="mono">{tr.amount}</td>
-                      <td className="mono">{tr.value}</td>
-                      <td className="mono" style={{ color: "var(--text-3)" }}>
-                        {tr.wallet}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <EmptyState
+                icon="🧾"
+                title="Live trade tape — coming soon"
+                subtitle="A verified on-chain trade feed for this token isn't wired to a source yet. This is an empty state, not sample trades."
+                style={{ minHeight: 160 }}
+              />
             ) : (
               <div className="tiny" style={{ padding: "20px 16px", textAlign: "center" }}>
                 {isConnected
@@ -503,36 +530,32 @@ export default function Tokens(): ReactNode {
             <div className="rp-title">Token Info</div>
             <div className="infoblock">
               <div className="ir">
-                <span className="k">Top 10 H</span>
-                <span className="v">{token.top10}</span>
+                <span className="k">Symbol</span>
+                <span className="v">{token.symbol}</span>
               </div>
               <div className="ir">
-                <span className="k">Dev H</span>
-                <span className="v">2.1%</span>
+                <span className="k">Price</span>
+                <span className="v">{priceLabel(priceUsd)}</span>
               </div>
               <div className="ir">
-                <span className="k">Snipers H</span>
-                <span className="v">0.8%</span>
+                <span className="k">Market Cap</span>
+                <span className="v">{compactLabel(token.marketCapUsd)}</span>
               </div>
               <div className="ir">
-                <span className="k">Bundler H</span>
-                <span className="v">1.4%</span>
+                <span className="k">24h Volume</span>
+                <span className="v">{compactLabel(token.volume24hUsd)}</span>
               </div>
               <div className="ir">
-                <span className="k">LP Burned</span>
-                <span className="v pos">100%</span>
+                <span className="k">Liquidity</span>
+                <span className="v">{compactLabel(token.liquidityUsd)}</span>
               </div>
               <div className="ir">
-                <span className="k">Mintable</span>
-                <span className="v pos">Disabled</span>
+                <span className="k">Decimals</span>
+                <span className="v">{token.decimals}</span>
               </div>
               <div className="ir">
-                <span className="k">Freezable</span>
-                <span className="v pos">Disabled</span>
-              </div>
-              <div className="ir">
-                <span className="k">Dev Wallet</span>
-                <span className="v">{token.contract}</span>
+                <span className="k">Contract</span>
+                <span className="v">{shortenAddress(token.address)}</span>
               </div>
             </div>
           </div>

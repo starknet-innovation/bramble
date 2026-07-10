@@ -1,27 +1,28 @@
 /**
  * Discover screen — the terminal landing view. Three columns:
- *  - LEFT: a Total balance/P&L panel + a Positions/Activities/Follows card whose
- *    body is a wallet-aware EmptyState.
- *  - MID: the "Launches" feed (scrollable meme-token launch rows).
- *  - RIGHT: ranked "Tokens" and "Perps" tables.
- *
- * All figures are screen-local hardcoded Starknet-flavored sample data (see
- * ./discoverData). No protocol calls are made here — Discover is a browse
- * surface; trading happens on the Tokens/Perps screens.
+ *  - LEFT: a Total balance/P&L panel (real, from `usePortfolio` once connected)
+ *    + a Positions/Activities/Follows card whose body is a wallet-aware
+ *    EmptyState.
+ *  - MID: the "Launches" feed — a meme-token launch feed with NO confirmed data
+ *    source, so it renders an explicit "coming soon" empty state (not fake rows).
+ *  - RIGHT: ranked "Tokens" (real, from `useTokens`, sorted by market cap) and
+ *    "Perps" (real, from `usePerpsMarkets`; region-locked → region-locked state).
  */
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Card,
   EmptyState,
+  ErrorBanner,
   PctChange,
   RankRow,
   SegmentedTabs,
+  SkeletonRows,
   TabStrip,
-  TokenIcon,
 } from "../components";
+import { formatCompactUsd, formatSignedUsd, formatUsd, usePortfolio, useTokens } from "../data";
 import { useWallet } from "../wallet/WalletProvider";
-import { LAUNCHES, RANKED_PERPS, RANKED_TOKENS } from "./discoverData";
+import { RANKED_PERPS } from "./discoverData";
 
 type TotalView = "total" | "tokens" | "perps";
 type LeftTab = "positions" | "activities" | "follows";
@@ -48,13 +49,27 @@ function DropButton({ label }: { readonly label: string }): ReactNode {
 }
 
 export default function Discover(): ReactNode {
-  const { isConnected, isConnecting, connect } = useWallet();
+  const { address, isConnected, isConnecting, connect } = useWallet();
   const [totalView, setTotalView] = useState<TotalView>("total");
   const [leftTab, setLeftTab] = useState<LeftTab>("positions");
+
+  const { data: portfolio } = usePortfolio(address);
+  const tokens = useTokens();
+
+  const rankedTokens = useMemo(() => {
+    const rows = [...(tokens.data ?? [])];
+    return rows
+      .sort((a, b) => (b.marketCapUsd ?? b.volume24hUsd ?? 0) - (a.marketCapUsd ?? a.volume24hUsd ?? 0))
+      .slice(0, 20);
+  }, [tokens.data]);
 
   const onConnect = (): void => {
     void connect();
   };
+
+  // Total-panel figures reflect the real portfolio; perps has no source (0).
+  const balance = !isConnected || totalView === "perps" ? 0 : portfolio.totalValueUsd;
+  const pnl = !isConnected || totalView === "perps" ? 0 : portfolio.pnl24hUsd;
 
   const emptyForTab = (): ReactNode => {
     if (!isConnected) {
@@ -94,11 +109,13 @@ export default function Discover(): ReactNode {
           <div className="totalrow">
             <div>
               <div className="lbl">Balance</div>
-              <div className="val mono">$0.00</div>
+              <div className="val mono">{formatUsd(balance)}</div>
             </div>
             <div>
               <div className="lbl">P&amp;L</div>
-              <div className="val small pos mono">+$0.00</div>
+              <div className={`val small mono ${pnl < 0 ? "neg" : "pos"}`}>
+                {formatSignedUsd(pnl)}
+              </div>
             </div>
           </div>
         </Card>
@@ -109,7 +126,7 @@ export default function Discover(): ReactNode {
         </Card>
       </div>
 
-      {/* ===== MID ===== */}
+      {/* ===== MID — Launches feed has no confirmed source: explicit empty state. ===== */}
       <Card
         className="dcol mid"
         title="Launches"
@@ -120,73 +137,65 @@ export default function Discover(): ReactNode {
         }
         headerRight={<DropButton label="Trending" />}
       >
-        <div className="listscroll">
-          {LAUNCHES.map((launch, index) => (
-            <div className="launchrow" key={launch.ticker}>
-              <TokenIcon symbol={launch.ticker} size={38} gradientIndex={index} />
-              <div className="mid2">
-                <div className="nm">
-                  {launch.name}{" "}
-                  <span className="muted" style={{ fontWeight: 600, fontSize: 11 }}>
-                    {launch.ticker}
-                  </span>
-                </div>
-                <div className="sub">
-                  <span>{launch.age}</span>
-                  <span>&middot;</span>
-                  <span>{launch.txCount} tx</span>
-                </div>
-                <div className="pillrow">
-                  {launch.pills.map((pill) => (
-                    <span className="pill" key={pill}>
-                      {pill}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div className="right2">
-                <div className="mc">MC {launch.marketCap}</div>
-                <div className="vol">VOL {launch.volume}</div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <EmptyState
+          icon="🚀"
+          title="Launches — coming soon"
+          subtitle="A verified meme-token launch feed isn't wired to a data source yet. No launches are shown rather than placeholder tokens."
+          style={{ flex: 1 }}
+        />
       </Card>
 
       {/* ===== RIGHT ===== */}
       <div className="dcol right">
         <Card
           title="Tokens"
-          headerRight={<DropButton label="24h" />}
+          headerRight={<DropButton label="Market Cap" />}
           style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
         >
           <div className="listscroll">
-            <table className="ranktable">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Token</th>
-                  <th>Market Cap</th>
-                  <th>24h</th>
-                </tr>
-              </thead>
-              <tbody>
-                {RANKED_TOKENS.map((token, index) => (
-                  <RankRow
-                    key={token.symbol}
-                    rank={index + 1}
-                    symbol={token.symbol}
-                    name={token.name}
-                    subLabel={token.symbol}
-                    gradientIndex={index}
-                    cells={[token.marketCap, <PctChange key="ch" value={token.change24h} digits={1} />]}
-                  />
-                ))}
-              </tbody>
-            </table>
+            {tokens.error !== null && rankedTokens.length === 0 ? (
+              <ErrorBanner message={`Couldn't load tokens: ${tokens.error}`} />
+            ) : tokens.isLoading && rankedTokens.length === 0 ? (
+              <SkeletonRows rows={6} />
+            ) : rankedTokens.length === 0 ? (
+              <EmptyState icon="🪙" title="No tokens available" style={{ minHeight: 160 }} />
+            ) : (
+              <table className="ranktable">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Token</th>
+                    <th>Market Cap</th>
+                    <th>24h</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankedTokens.map((token, index) => (
+                    <RankRow
+                      key={token.address}
+                      rank={index + 1}
+                      symbol={token.symbol}
+                      name={token.name}
+                      subLabel={token.symbol}
+                      gradientIndex={index}
+                      cells={[
+                        token.marketCapUsd === null ? "—" : formatCompactUsd(token.marketCapUsd),
+                        token.change24h === null ? (
+                          "—"
+                        ) : (
+                          <PctChange key="ch" value={token.change24h} digits={1} />
+                        ),
+                      ]}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </Card>
 
+        {/* Perps ranked column is owned by the dedicated Extended/Perps effort;
+            left as-is here to avoid conflicting with that work. */}
         <Card
           title="Perps"
           headerRight={<DropButton label="Volume" />}

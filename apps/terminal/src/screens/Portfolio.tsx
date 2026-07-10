@@ -1,26 +1,25 @@
 /**
- * Portfolio screen — a Total/Tokens/Perps hero (balance + P&L) over a tabbed
- * body (Tokens / Perps / Token Activity / Perps Activity / Top Gainer or Loser).
- * Disconnected, the body is a large centered "connect wallet" empty state,
- * matching the mockup's empty-first design. Once connected, the selected body
- * tab renders sample holdings / positions / activity. All figures are static
- * sample data (see portfolioData.ts) — no on-chain reads are wired here. See
- * the MANIFEST.
+ * Portfolio screen — a Total/Tokens/Perps hero (balance + 24h P&L) over a tabbed
+ * body. Holdings and totals are REAL: `usePortfolio` reads the connected
+ * address's on-chain ERC20 balances (RPC `balanceOf`) and prices them with live
+ * CoinGecko USD prices. Disconnected, the body is the "connect wallet" empty
+ * state. Perp positions and activity history have NO confirmed data source yet,
+ * so those tabs render an explicit "coming soon" empty state — never fabricated
+ * rows.
  */
 import { useMemo, useState, type ReactNode } from "react";
-import { Card, EmptyState, PctChange, RankRow, SegmentedTabs, TabStrip } from "../components";
-import { useWallet } from "../wallet/WalletProvider";
 import {
-  formatSignedUSD,
-  formatUSD,
-  HOLDINGS,
-  PERP_ACTIVITY,
-  PERP_POSITIONS,
-  PORTFOLIO_TOTALS,
-  TOKEN_ACTIVITY,
-  type Activity,
-  type Holding,
-} from "./portfolioData";
+  Card,
+  EmptyState,
+  ErrorBanner,
+  PctChange,
+  RankRow,
+  SegmentedTabs,
+  SkeletonRows,
+  TabStrip,
+} from "../components";
+import { formatSignedUsd, formatUsd, usePortfolio, type Holding } from "../data";
+import { useWallet } from "../wallet/WalletProvider";
 
 type HeroTab = "total" | "tokens" | "perps";
 type BodyTab = "tokens" | "perps" | "tokenActivity" | "perpActivity" | "topMovers";
@@ -51,41 +50,33 @@ const TableHead = ({ cols }: { readonly cols: readonly string[] }): ReactNode =>
   </thead>
 );
 
-const activityRow = (a: Activity, rank: number): ReactNode => {
-  const tone = a.kind === "Buy" || a.kind === "Open" ? "pos" : "neg";
-  return (
-    <RankRow
-      key={`${a.symbol}-${a.time}`}
-      rank={rank}
-      symbol={a.symbol}
-      name={a.symbol}
-      subLabel={a.time}
-      gradientIndex={a.gradientIndex}
-      cells={[
-        <span key="kind" className={tone} style={{ fontWeight: 700 }}>
-          {a.kind}
-        </span>,
-        a.amount,
-        formatUSD(a.value),
-      ]}
-    />
-  );
-};
-
 export default function Portfolio(): ReactNode {
-  const { isConnected, isConnecting, connect } = useWallet();
+  const { address, isConnected, isConnecting, connect } = useWallet();
+  const { data: portfolio, isLoading, error } = usePortfolio(address);
   const [heroTab, setHeroTab] = useState<HeroTab>("total");
   const [bodyTab, setBodyTab] = useState<BodyTab>("tokens");
 
-  const hero = PORTFOLIO_TOTALS[heroTab];
-  const balance = isConnected ? hero.balance : 0;
-  const pnl = isConnected ? hero.pnl : 0;
-  const pnlPct = isConnected ? hero.pnlPct : 0;
+  // Perps have no confirmed on-chain/API source in this build, so the perps
+  // hero slice is zero and the perps body tab is an explicit empty state.
+  const heroValues = useMemo(() => {
+    if (!isConnected) {
+      return { balance: 0, pnl: 0, pnlPct: 0 };
+    }
+    if (heroTab === "perps") {
+      return { balance: 0, pnl: 0, pnlPct: 0 };
+    }
+    return {
+      balance: portfolio.totalValueUsd,
+      pnl: portfolio.pnl24hUsd,
+      pnlPct: portfolio.pnl24hPct,
+    };
+  }, [isConnected, heroTab, portfolio]);
 
   const [topGainer, topLoser] = useMemo(() => {
-    const sorted = [...HOLDINGS].sort((a, b) => b.change - a.change);
+    const withChange = portfolio.holdings.filter((h) => h.change24h !== null);
+    const sorted = [...withChange].sort((a, b) => (b.change24h ?? 0) - (a.change24h ?? 0));
     return [sorted[0], sorted[sorted.length - 1]] as const;
-  }, []);
+  }, [portfolio.holdings]);
 
   const renderBody = (): ReactNode => {
     if (!isConnected) {
@@ -102,20 +93,38 @@ export default function Portfolio(): ReactNode {
       );
     }
 
+    if (isLoading && portfolio.holdings.length === 0) {
+      return <SkeletonRows rows={5} />;
+    }
+
     if (bodyTab === "tokens") {
+      if (portfolio.holdings.length === 0) {
+        return (
+          <EmptyState
+            icon="🪙"
+            title="No token balances"
+            subtitle="This wallet holds none of the tracked Starknet tokens."
+            style={{ flex: 1 }}
+          />
+        );
+      }
       return (
         <table className="ranktable">
           <TableHead cols={["Token", "Balance", "Value", "24h"]} />
           <tbody>
-            {HOLDINGS.map((h, i) => (
+            {portfolio.holdings.map((h, i) => (
               <RankRow
                 key={h.symbol}
                 rank={i + 1}
                 symbol={h.symbol}
                 name={h.symbol}
                 subLabel={h.name}
-                gradientIndex={h.gradientIndex}
-                cells={[h.balance, formatUSD(h.value), <PctChange key="chg" value={h.change} />]}
+                gradientIndex={i}
+                cells={[
+                  h.display,
+                  formatUsd(h.usdValue),
+                  h.change24h === null ? "—" : <PctChange key="chg" value={h.change24h} />,
+                ]}
               />
             ))}
           </tbody>
@@ -125,53 +134,38 @@ export default function Portfolio(): ReactNode {
 
     if (bodyTab === "perps") {
       return (
-        <table className="ranktable">
-          <TableHead cols={["Market", "Size", "Entry", "Mark", "PnL"]} />
-          <tbody>
-            {PERP_POSITIONS.map((p, i) => {
-              const pnlPctPos = (p.pnl / p.margin) * 100;
-              return (
-                <RankRow
-                  key={p.market}
-                  rank={i + 1}
-                  symbol={p.market}
-                  name={p.market}
-                  subLabel={
-                    <span>
-                      <span className={p.side === "Long" ? "pos" : "neg"}>{p.side}</span>{" "}
-                      <span className="lev">{p.leverage}x</span>
-                    </span>
-                  }
-                  gradientIndex={p.gradientIndex}
-                  cells={[
-                    formatUSD(p.size),
-                    p.entry.toLocaleString("en-US"),
-                    p.mark.toLocaleString("en-US"),
-                    <span key="pnl" className={p.pnl < 0 ? "neg" : "pos"}>
-                      {formatSignedUSD(p.pnl)}{" "}
-                      <PctChange value={pnlPctPos} />
-                    </span>,
-                  ]}
-                />
-              );
-            })}
-          </tbody>
-        </table>
+        <EmptyState
+          icon="📈"
+          title="Perps positions — coming soon"
+          subtitle="Live perpetual positions aren't wired to a data source in this build yet. No positions are shown rather than placeholder data."
+          style={{ flex: 1 }}
+        />
       );
     }
 
     if (bodyTab === "tokenActivity" || bodyTab === "perpActivity") {
-      const rows = bodyTab === "tokenActivity" ? TOKEN_ACTIVITY : PERP_ACTIVITY;
       return (
-        <table className="ranktable">
-          <TableHead cols={["Asset", "Type", "Amount", "Value"]} />
-          <tbody>{rows.map((a, i) => activityRow(a, i + 1))}</tbody>
-        </table>
+        <EmptyState
+          icon="🧾"
+          title="Activity history — coming soon"
+          subtitle="Transaction and trade history isn't wired to an indexer yet. This is an empty state, not sample activity."
+          style={{ flex: 1 }}
+        />
       );
     }
 
-    // topMovers
+    // topMovers — derived from the real holdings' 24h change.
     const movers = [topGainer, topLoser].filter((h): h is Holding => h !== undefined);
+    if (movers.length === 0) {
+      return (
+        <EmptyState
+          icon="📊"
+          title="No movers to show"
+          subtitle="Hold a priced token to see your top gainer and loser."
+          style={{ flex: 1 }}
+        />
+      );
+    }
     return (
       <table className="ranktable">
         <TableHead cols={["Token", "Value", "24h"]} />
@@ -183,8 +177,11 @@ export default function Portfolio(): ReactNode {
               symbol={h.symbol}
               name={h.symbol}
               subLabel={i === 0 ? "Top gainer" : "Top loser"}
-              gradientIndex={h.gradientIndex}
-              cells={[formatUSD(h.value), <PctChange key="chg" value={h.change} />]}
+              gradientIndex={i}
+              cells={[
+                formatUsd(h.usdValue),
+                h.change24h === null ? "—" : <PctChange key="chg" value={h.change24h} />,
+              ]}
             />
           ))}
         </tbody>
@@ -194,6 +191,9 @@ export default function Portfolio(): ReactNode {
 
   return (
     <div className="screen" id="portfolio">
+      {isConnected && error !== null && (
+        <ErrorBanner message={`Couldn't load portfolio: ${error}`} />
+      )}
       <Card className="pf-top">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontWeight: 700, fontSize: 15 }}>Portfolio</div>
@@ -207,16 +207,16 @@ export default function Portfolio(): ReactNode {
         <div className="pf-balrow">
           <div>
             <div className="lbl">Balance</div>
-            <div className="val">{formatUSD(balance)}</div>
+            <div className="val">{formatUsd(heroValues.balance)}</div>
           </div>
           <div>
-            <div className="lbl">P&amp;L</div>
+            <div className="lbl">P&amp;L (24h)</div>
             <div
-              className={`val ${pnl < 0 ? "neg" : "pos"}`}
+              className={`val ${heroValues.pnl < 0 ? "neg" : "pos"}`}
               style={{ fontSize: 20, display: "flex", alignItems: "baseline", gap: 8 }}
             >
-              <span className="mono">{formatSignedUSD(pnl)}</span>
-              <PctChange value={pnlPct} />
+              <span className="mono">{formatSignedUsd(heroValues.pnl)}</span>
+              <PctChange value={heroValues.pnlPct} />
             </div>
           </div>
         </div>
