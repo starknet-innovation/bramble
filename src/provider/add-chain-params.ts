@@ -67,23 +67,23 @@ export const readProviderChain = (params: Json | undefined): ProviderChain | nul
       "native_currency",
       "rpc_urls",
     ]) ||
-    !isNonEmptyString(params.id) ||
-    !isChainId(params.chain_id) ||
-    !isNonEmptyString(params.chain_name) ||
-    (params.native_currency !== undefined && !isRecord(params.native_currency))
+    !isNonEmptyString(params["id"]) ||
+    !isChainId(params["chain_id"]) ||
+    !isNonEmptyString(params["chain_name"]) ||
+    (params["native_currency"] !== undefined && !isRecord(params["native_currency"]))
   ) {
     return null;
   }
-  const rpcUrls = readUrlList(params.rpc_urls);
-  const blockExplorerUrls = readUrlList(params.block_explorer_url);
-  const iconUrls = readUrlList(params.icon_urls);
+  const rpcUrls = readUrlList(params["rpc_urls"]);
+  const blockExplorerUrls = readUrlList(params["block_explorer_url"]);
+  const iconUrls = readUrlList(params["icon_urls"]);
   if (rpcUrls === null || blockExplorerUrls === null || iconUrls === null) {
     return null;
   }
   return {
-    chainId: params.chain_id,
-    chainName: params.chain_name.trim(),
-    id: params.id.trim(),
+    chainId: params["chain_id"],
+    chainName: params["chain_name"].trim(),
+    id: params["id"].trim(),
     ...(rpcUrls === undefined ? {} : { rpcUrls }),
     ...(blockExplorerUrls === undefined ? {} : { blockExplorerUrls }),
     ...(iconUrls === undefined ? {} : { iconUrls }),
@@ -111,9 +111,9 @@ export const isProviderChain = (value: unknown): value is ProviderChain =>
     "id",
     "rpcUrls",
   ]) &&
-  isChainId(value.chainId) &&
-  isNonEmptyString(value.chainName) &&
-  isNonEmptyString(value.id) &&
-  isOptionalUrlArray(value.rpcUrls) &&
-  isOptionalUrlArray(value.blockExplorerUrls) &&
-  isOptionalUrlArray(value.iconUrls);
+  isChainId(value["chainId"]) &&
+  isNonEmptyString(value["chainName"]) &&
+  isNonEmptyString(value["id"]) &&
+  isOptionalUrlArray(value["rpcUrls"]) &&
+  isOptionalUrlArray(value["blockExplorerUrls"]) &&
+  isOptionalUrlArray(value["iconUrls"]);

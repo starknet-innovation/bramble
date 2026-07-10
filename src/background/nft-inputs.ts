@@ -21,11 +21,15 @@ export type NftTarget = {
 };
 
 const readNftTarget = (message: Record<string, unknown>): NftTarget | null =>
-  typeof message.contract === "string" &&
-  isNonZeroStarkFieldElement(message.contract) &&
-  isStarknetNetworkId(message.networkId) &&
-  isTokenId(message.tokenId)
-    ? { contract: message.contract, networkId: message.networkId, tokenId: message.tokenId }
+  typeof message["contract"] === "string" &&
+  isNonZeroStarkFieldElement(message["contract"]) &&
+  isStarknetNetworkId(message["networkId"]) &&
+  isTokenId(message["tokenId"])
+    ? {
+        contract: message["contract"],
+        networkId: message["networkId"],
+        tokenId: message["tokenId"],
+      }
     : null;
 
 /**
@@ -37,7 +41,7 @@ export const readAddNftInput = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["contract", "label", "networkId", "tokenId", "type"]) ||
-    message.type !== "wallet.addNft"
+    message["type"] !== "wallet.addNft"
   ) {
     return null;
   }
@@ -45,15 +49,15 @@ export const readAddNftInput = (
   if (!target) {
     return null;
   }
-  if (message.label !== undefined) {
+  if (message["label"] !== undefined) {
     if (
-      typeof message.label !== "string" ||
-      message.label.trim().length === 0 ||
-      message.label.trim().length > 64
+      typeof message["label"] !== "string" ||
+      message["label"].trim().length === 0 ||
+      message["label"].trim().length > 64
     ) {
       return null;
     }
-    return { ...target, label: message.label.trim() };
+    return { ...target, label: message["label"].trim() };
   }
   return target;
 };
@@ -67,14 +71,14 @@ export const readTransferNftInput = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["contract", "networkId", "recipient", "tokenId", "type"]) ||
-    message.type !== "wallet.transferNft" ||
-    typeof message.recipient !== "string" ||
-    !isNonZeroStarkFieldElement(message.recipient)
+    message["type"] !== "wallet.transferNft" ||
+    typeof message["recipient"] !== "string" ||
+    !isNonZeroStarkFieldElement(message["recipient"])
   ) {
     return null;
   }
   const target = readNftTarget(message);
-  return target ? { ...target, recipient: message.recipient } : null;
+  return target ? { ...target, recipient: message["recipient"] } : null;
 };
 
 /**
@@ -83,11 +87,11 @@ export const readTransferNftInput = (
 export const readRemoveNftInput = (message: unknown): { readonly id: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["id", "type"]) &&
-  message.type === "wallet.removeNft" &&
-  typeof message.id === "string" &&
-  message.id.length > 0 &&
-  message.id.length <= 200
-    ? { id: message.id }
+  message["type"] === "wallet.removeNft" &&
+  typeof message["id"] === "string" &&
+  message["id"].length > 0 &&
+  message["id"].length <= 200
+    ? { id: message["id"] }
     : null;
 
 /**
@@ -98,10 +102,10 @@ export const readSetNftSpamInput = (
 ): { readonly id: string; readonly spam: boolean } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["id", "spam", "type"]) &&
-  message.type === "wallet.setNftSpam" &&
-  typeof message.id === "string" &&
-  message.id.length > 0 &&
-  message.id.length <= 200 &&
-  typeof message.spam === "boolean"
-    ? { id: message.id, spam: message.spam }
+  message["type"] === "wallet.setNftSpam" &&
+  typeof message["id"] === "string" &&
+  message["id"].length > 0 &&
+  message["id"].length <= 200 &&
+  typeof message["spam"] === "boolean"
+    ? { id: message["id"], spam: message["spam"] }
     : null;

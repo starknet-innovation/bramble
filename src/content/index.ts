@@ -29,11 +29,11 @@ const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
 let lastAddresses: readonly string[] | null = null;
 
 const injectProvider = (): void => {
-  if (!runtime || document.documentElement.dataset.mcWalletInjected === "true") {
+  if (!runtime || document.documentElement.dataset["mcWalletInjected"] === "true") {
     return;
   }
 
-  document.documentElement.dataset.mcWalletInjected = "true";
+  document.documentElement.dataset["mcWalletInjected"] = "true";
   const script = document.createElement("script");
   script.src = runtime.getURL("provider/inpage.js");
   script.onload = () => script.remove();

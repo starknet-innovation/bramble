@@ -219,7 +219,7 @@ const confirmCopyGlyph = (button: HTMLButtonElement): void => {
 export const bindCopyButtons = (app: Element | null): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((button) => {
     button.addEventListener("click", () => {
-      const value = button.dataset.copy;
+      const value = button.dataset["copy"];
       if (!value) {
         return;
       }
@@ -255,8 +255,8 @@ export const focusMemo = (): string | null => {
   if (active.id) {
     return `#${active.id}`;
   }
-  if (isWalletView(active.dataset.view)) {
-    return `[data-view="${active.dataset.view}"]`;
+  if (isWalletView(active.dataset["view"])) {
+    return `[data-view="${active.dataset["view"]}"]`;
   }
   const name = active.getAttribute("name");
   if (name && FOCUS_NAMES.includes(name)) {

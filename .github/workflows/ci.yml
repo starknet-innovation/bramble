@@ -39,6 +39,11 @@ jobs:
           scarb-version: 2.18.0
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
+      # Fail the build on known high/critical advisories in the dependency tree.
+      # Requires network access to the advisory database; runs right after install
+      # so a vulnerable dependency blocks the rest of the pipeline. Severity gate
+      # (--audit-level=high) can be tuned in package.json's check:audit script.
+      - run: bun run check:audit
       - run: bun run test:e2e:install
       - run: bun run check:files
       - run: bun run vendor:krusty

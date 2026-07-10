@@ -110,36 +110,36 @@ const isSummary = (value: unknown): value is string =>
 export const isMultisigRecord = (value: unknown): value is MultisigRecord =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["address", "id", "name", "networkId", "quorum", "signers"]) &&
-  typeof value.address === "string" &&
-  isNonZeroStarkFieldElement(value.address) &&
-  (value.name === undefined || isName(value.name)) &&
-  isStarknetNetworkId(value.networkId) &&
-  typeof value.quorum === "number" &&
-  Number.isSafeInteger(value.quorum) &&
-  value.quorum >= 1 &&
-  Array.isArray(value.signers) &&
-  value.signers.length >= value.quorum &&
-  value.signers.length <= MULTISIG_LIMITS.signers &&
-  value.signers.every(
+  typeof value["address"] === "string" &&
+  isNonZeroStarkFieldElement(value["address"]) &&
+  (value["name"] === undefined || isName(value["name"])) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  typeof value["quorum"] === "number" &&
+  Number.isSafeInteger(value["quorum"]) &&
+  value["quorum"] >= 1 &&
+  Array.isArray(value["signers"]) &&
+  value["signers"].length >= value["quorum"] &&
+  value["signers"].length <= MULTISIG_LIMITS.signers &&
+  value["signers"].every(
     (signer) => typeof signer === "string" && isNonZeroStarkFieldElement(signer),
   ) &&
-  value.id === multisigId(value.networkId, value.address);
+  value["id"] === multisigId(value["networkId"], value["address"]);
 
 const isProposalCall = (value: unknown): value is MultisigProposalCall =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["calldata", "contractAddress", "entrypoint", "salt"]) &&
-  Array.isArray(value.calldata) &&
-  typeof value.contractAddress === "string" &&
-  typeof value.entrypoint === "string" &&
-  isMultisigEntrypoint(value.entrypoint) &&
-  typeof value.salt === "string" &&
-  isStarkFieldElement(value.salt) &&
+  Array.isArray(value["calldata"]) &&
+  typeof value["contractAddress"] === "string" &&
+  typeof value["entrypoint"] === "string" &&
+  isMultisigEntrypoint(value["entrypoint"]) &&
+  typeof value["salt"] === "string" &&
+  isStarkFieldElement(value["salt"]) &&
   isMultisigCallInput({
-    calldata: value.calldata.filter((felt): felt is string => typeof felt === "string"),
-    contractAddress: value.contractAddress,
-    entrypoint: value.entrypoint,
+    calldata: value["calldata"].filter((felt): felt is string => typeof felt === "string"),
+    contractAddress: value["contractAddress"],
+    entrypoint: value["entrypoint"],
   }) &&
-  value.calldata.every((felt) => typeof felt === "string");
+  value["calldata"].every((felt) => typeof felt === "string");
 
 /**
  * Checks a stored proposal record before trusting it.
@@ -156,22 +156,22 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
     "summary",
     "txId",
   ]) &&
-  (value.call === null || isProposalCall(value.call)) &&
-  typeof value.confirmations === "number" &&
-  Number.isSafeInteger(value.confirmations) &&
-  value.confirmations >= 0 &&
-  typeof value.multisigId === "string" &&
-  (value.state === "confirmed" ||
-    value.state === "executed" ||
-    value.state === "not-found" ||
-    value.state === "pending") &&
-  (value.submitTransactionHash === undefined ||
-    (typeof value.submitTransactionHash === "string" &&
-      isStarkFieldElement(value.submitTransactionHash))) &&
-  isSummary(value.summary) &&
-  typeof value.txId === "string" &&
-  isStarkFieldElement(value.txId) &&
-  value.id === multisigProposalId(value.multisigId, value.txId);
+  (value["call"] === null || isProposalCall(value["call"])) &&
+  typeof value["confirmations"] === "number" &&
+  Number.isSafeInteger(value["confirmations"]) &&
+  value["confirmations"] >= 0 &&
+  typeof value["multisigId"] === "string" &&
+  (value["state"] === "confirmed" ||
+    value["state"] === "executed" ||
+    value["state"] === "not-found" ||
+    value["state"] === "pending") &&
+  (value["submitTransactionHash"] === undefined ||
+    (typeof value["submitTransactionHash"] === "string" &&
+      isStarkFieldElement(value["submitTransactionHash"]))) &&
+  isSummary(value["summary"]) &&
+  typeof value["txId"] === "string" &&
+  isStarkFieldElement(value["txId"]) &&
+  value["id"] === multisigProposalId(value["multisigId"], value["txId"]);
 
 type StoredShape = {
   readonly multisigs: readonly MultisigRecord[];
@@ -183,12 +183,12 @@ const readShape = async (store: KeyValueStore): Promise<StoredShape> => {
   if (!isRecord(stored)) {
     return { multisigs: [], proposals: [] };
   }
-  const multisigs = Array.isArray(stored.multisigs)
-    ? stored.multisigs.filter(isMultisigRecord)
+  const multisigs = Array.isArray(stored["multisigs"])
+    ? stored["multisigs"].filter(isMultisigRecord)
     : [];
   const ids = new Set(multisigs.map((record) => record.id));
-  const proposals = Array.isArray(stored.proposals)
-    ? stored.proposals
+  const proposals = Array.isArray(stored["proposals"])
+    ? stored["proposals"]
         .filter(isMultisigProposalRecord)
         .filter((proposal) => ids.has(proposal.multisigId))
     : [];

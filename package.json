@@ -7,6 +7,7 @@
   "scripts": {
     "build": "bun run scripts/build-extension.ts",
     "check": "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test",
+    "check:audit": "bun audit --audit-level=high",
     "check:extension": "bun run scripts/check-extension-manifest.ts",
     "check:files": "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
     "check:krusty": "bun run scripts/check-krusty-adapter.ts",

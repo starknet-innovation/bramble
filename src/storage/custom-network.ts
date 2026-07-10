@@ -47,9 +47,9 @@ const isOptionalCustomUrlList = (value: unknown): value is readonly string[] | u
 export const isCustomNetwork = (value: unknown): value is CustomNetwork =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["blockExplorerUrls", "chainId", "iconUrls", "id", "name", "rpcUrls"]) &&
-  isChainIdHex(value.chainId) &&
-  isNetworkText(value.id, 256) &&
-  isNetworkText(value.name, 256) &&
-  isOptionalCustomUrlList(value.rpcUrls) &&
-  isOptionalCustomUrlList(value.blockExplorerUrls) &&
-  isOptionalCustomUrlList(value.iconUrls);
+  isChainIdHex(value["chainId"]) &&
+  isNetworkText(value["id"], 256) &&
+  isNetworkText(value["name"], 256) &&
+  isOptionalCustomUrlList(value["rpcUrls"]) &&
+  isOptionalCustomUrlList(value["blockExplorerUrls"]) &&
+  isOptionalCustomUrlList(value["iconUrls"]);

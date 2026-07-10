@@ -124,11 +124,11 @@ export type ProviderResponse =
 export const isWalletRpcError = (value: unknown): value is WalletRpcError =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["code", "data", "message"]) &&
-  typeof value.code === "number" &&
-  Number.isInteger(value.code) &&
-  typeof value.message === "string" &&
-  value.message.length > 0 &&
-  (value.data === undefined || typeof value.data === "string");
+  typeof value["code"] === "number" &&
+  Number.isInteger(value["code"]) &&
+  typeof value["message"] === "string" &&
+  value["message"].length > 0 &&
+  (value["data"] === undefined || typeof value["data"] === "string");
 
 /**
  * Rebuilds a coded Error from a spec wallet error so a dapp can branch on
@@ -287,28 +287,28 @@ export const readProviderRequestArguments = (value: unknown): ProviderRequestArg
   if (
     isRecord(value) &&
     hasOnlyKnownKeys(value, ["method", "params"]) &&
-    isProviderMethod(value.method)
+    isProviderMethod(value["method"])
   ) {
-    const params = readProviderParams(value.method, value.params);
+    const params = readProviderParams(value["method"], value["params"]);
     if (params === null) {
       return null;
     }
     return {
-      method: value.method,
+      method: value["method"],
       ...(params === undefined ? {} : { params }),
     };
   }
   if (
     isRecord(value) &&
     hasOnlyKnownKeys(value, ["params", "type"]) &&
-    isProviderMethod(value.type)
+    isProviderMethod(value["type"])
   ) {
-    const params = readProviderParams(value.type, value.params);
+    const params = readProviderParams(value["type"], value["params"]);
     if (params === null) {
       return null;
     }
     return {
-      method: value.type,
+      method: value["type"],
       ...(params === undefined ? {} : { params }),
     };
   }
@@ -322,21 +322,21 @@ export const readProviderRequest = (value: unknown): ProviderRequest | null => {
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, ["id", "method", "params", "target"]) ||
-    value.target !== CONTENT_TARGET ||
-    typeof value.id !== "string" ||
-    !isUuid(value.id) ||
-    !isProviderMethod(value.method)
+    value["target"] !== CONTENT_TARGET ||
+    typeof value["id"] !== "string" ||
+    !isUuid(value["id"]) ||
+    !isProviderMethod(value["method"])
   ) {
     return null;
   }
 
-  const params = readProviderParams(value.method, value.params);
+  const params = readProviderParams(value["method"], value["params"]);
   if (params === null) {
     return null;
   }
   return {
-    id: value.id,
-    method: value.method,
+    id: value["id"],
+    method: value["method"],
     ...(params === undefined ? {} : { params }),
   };
 };
@@ -348,33 +348,33 @@ export const readProviderResponse = (value: unknown): ProviderResponse | null =>
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, ["error", "id", "result", "target"]) ||
-    value.target !== PAGE_TARGET ||
-    typeof value.id !== "string" ||
-    !isUuid(value.id) ||
-    (value.error !== undefined && !isWalletRpcError(value.error)) ||
-    (value.error !== undefined && Object.hasOwn(value, "result")) ||
-    (value.error === undefined && !Object.hasOwn(value, "result"))
+    value["target"] !== PAGE_TARGET ||
+    typeof value["id"] !== "string" ||
+    !isUuid(value["id"]) ||
+    (value["error"] !== undefined && !isWalletRpcError(value["error"])) ||
+    (value["error"] !== undefined && Object.hasOwn(value, "result")) ||
+    (value["error"] === undefined && !Object.hasOwn(value, "result"))
   ) {
     return null;
   }
 
-  if (value.error === undefined) {
+  if (value["error"] === undefined) {
     const result =
-      providerAccountsResult(value.result) ??
-      providerDeploymentResult(value.result) ??
-      providerInvokeResult(value.result) ??
-      providerDeclareResult(value.result) ??
-      providerStrk20CallAndProof(value.result) ??
-      providerStrk20Balances(value.result) ??
-      providerStringArrayResult(value.result) ??
-      (typeof value.result === "boolean" ? value.result : null) ??
-      (typeof value.result === "string" && value.result.length > 0 ? value.result : null);
-    return result ? { id: value.id, result, target: PAGE_TARGET } : null;
+      providerAccountsResult(value["result"]) ??
+      providerDeploymentResult(value["result"]) ??
+      providerInvokeResult(value["result"]) ??
+      providerDeclareResult(value["result"]) ??
+      providerStrk20CallAndProof(value["result"]) ??
+      providerStrk20Balances(value["result"]) ??
+      providerStringArrayResult(value["result"]) ??
+      (typeof value["result"] === "boolean" ? value["result"] : null) ??
+      (typeof value["result"] === "string" && value["result"].length > 0 ? value["result"] : null);
+    return result ? { id: value["id"], result, target: PAGE_TARGET } : null;
   }
 
   return {
-    id: value.id,
-    error: value.error,
+    id: value["id"],
+    error: value["error"],
     target: PAGE_TARGET,
   };
 };

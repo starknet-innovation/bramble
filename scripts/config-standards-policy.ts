@@ -75,6 +75,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run scripts/build-extension.ts",
   check:
     "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test",
+  "check:audit": "bun audit --audit-level=high",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
@@ -92,6 +93,18 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "vendor:multisig": "bun run scripts/vendor-multisig.ts",
 };
 
+export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {
+  types: "recommended",
+};
+
+export const REQUIRED_BIOME_COMPLEXITY_RULES: Readonly<Record<string, string>> = {
+  useLiteralKeys: "off",
+};
+
+export const REQUIRED_BIOME_NURSERY_RULES: Readonly<Record<string, string>> = {
+  noFloatingPromises: "error",
+};
+
 export const REQUIRED_COMPILER_OPTIONS: Readonly<Record<string, boolean>> = {
   allowJs: false,
   exactOptionalPropertyTypes: true,
@@ -100,6 +113,8 @@ export const REQUIRED_COMPILER_OPTIONS: Readonly<Record<string, boolean>> = {
   noEmit: true,
   noFallthroughCasesInSwitch: true,
   noImplicitOverride: true,
+  noImplicitReturns: true,
+  noPropertyAccessFromIndexSignature: true,
   noUncheckedIndexedAccess: true,
   noUnusedLocals: true,
   noUnusedParameters: true,

@@ -105,12 +105,12 @@ const readBalancesMessage = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["origin", "tokens", "type"]) ||
-    message.type !== "wallet.strk20Balances"
+    message["type"] !== "wallet.strk20Balances"
   ) {
     return null;
   }
-  const origin = normalizeWalletOrigin(message.origin);
-  const tokens = readStrk20Tokens(message.tokens);
+  const origin = normalizeWalletOrigin(message["origin"]);
+  const tokens = readStrk20Tokens(message["tokens"]);
   return origin && tokens ? { origin, tokens } : null;
 };
 
@@ -124,14 +124,14 @@ const readPrepareMessage = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["actions", "origin", "simulate", "type"]) ||
-    message.type !== "wallet.strk20PrepareInvoke" ||
-    typeof message.simulate !== "boolean"
+    message["type"] !== "wallet.strk20PrepareInvoke" ||
+    typeof message["simulate"] !== "boolean"
   ) {
     return null;
   }
-  const origin = normalizeWalletOrigin(message.origin);
-  const actions = readStrk20Actions(message.actions);
-  return origin && actions ? { actions, origin, simulate: message.simulate } : null;
+  const origin = normalizeWalletOrigin(message["origin"]);
+  const actions = readStrk20Actions(message["actions"]);
+  return origin && actions ? { actions, origin, simulate: message["simulate"] } : null;
 };
 
 const readInvokeMessage = (
@@ -140,12 +140,12 @@ const readInvokeMessage = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["actions", "origin", "type"]) ||
-    message.type !== "wallet.strk20InvokeTransaction"
+    message["type"] !== "wallet.strk20InvokeTransaction"
   ) {
     return null;
   }
-  const origin = normalizeWalletOrigin(message.origin);
-  const actions = readStrk20Actions(message.actions);
+  const origin = normalizeWalletOrigin(message["origin"]);
+  const actions = readStrk20Actions(message["actions"]);
   return origin && actions ? { actions, origin } : null;
 };
 

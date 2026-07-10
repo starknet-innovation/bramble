@@ -89,10 +89,10 @@ export const signRequestDetails = (typedData: unknown): string => {
   if (!record) {
     return `<div class="sign-block">${rows([["data", typedData]])}</div>`;
   }
-  const domain = asRecord(record.domain);
-  const message = asRecord(record.message);
-  const types = asRecord(record.types);
-  const primaryType = typeof record.primaryType === "string" ? record.primaryType : "";
+  const domain = asRecord(record["domain"]);
+  const message = asRecord(record["message"]);
+  const types = asRecord(record["types"]);
+  const primaryType = typeof record["primaryType"] === "string" ? record["primaryType"] : "";
   const fieldList = types && isFieldList(types[primaryType]) ? types[primaryType] : null;
 
   const domainRows = domain ? rows(Object.entries(domain)) : "";

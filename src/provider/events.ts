@@ -72,31 +72,31 @@ export const readProviderEvent = (value: unknown): ProviderEvent | null => {
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, ["data", "event", "target"]) ||
-    value.target !== PAGE_TARGET ||
-    !isProviderEventName(value.event)
+    value["target"] !== PAGE_TARGET ||
+    !isProviderEventName(value["event"])
   ) {
     return null;
   }
-  if (value.event === "accountsChanged") {
-    return isAddressList(value.data) ? accountsChangedEvent(value.data) : null;
+  if (value["event"] === "accountsChanged") {
+    return isAddressList(value["data"]) ? accountsChangedEvent(value["data"]) : null;
   }
-  return isChainId(value.data) ? networkChangedEvent(value.data) : null;
+  return isChainId(value["data"]) ? networkChangedEvent(value["data"]) : null;
 };
 
 /**
  * Checks background wallet event broadcasts before reacting to them.
  */
 export const isWalletEventMessage = (value: unknown): value is WalletEventMessage => {
-  if (!isRecord(value) || value.type !== "wallet.event") {
+  if (!isRecord(value) || value["type"] !== "wallet.event") {
     return false;
   }
-  if (value.event === "accountsChanged" || value.event === "approvalsChanged") {
+  if (value["event"] === "accountsChanged" || value["event"] === "approvalsChanged") {
     return hasOnlyKnownKeys(value, ["event", "type"]);
   }
   return (
-    value.event === "networkChanged" &&
+    value["event"] === "networkChanged" &&
     hasOnlyKnownKeys(value, ["chainId", "event", "type"]) &&
-    isChainId(value.chainId)
+    isChainId(value["chainId"])
   );
 };
 
@@ -109,11 +109,11 @@ export const addressesFromPayload = (payload: {
   if (isAddressList(payload.result)) {
     return payload.result;
   }
-  if (isRecord(payload.result) && Array.isArray(payload.result.accounts)) {
-    const addresses = payload.result.accounts
-      .map((account) => (isRecord(account) ? account.address : null))
+  if (isRecord(payload.result) && Array.isArray(payload.result["accounts"])) {
+    const addresses = payload.result["accounts"]
+      .map((account) => (isRecord(account) ? account["address"] : null))
       .filter((address): address is string => typeof address === "string" && address.length > 0);
-    return addresses.length === payload.result.accounts.length ? addresses : null;
+    return addresses.length === payload.result["accounts"].length ? addresses : null;
   }
   return null;
 };

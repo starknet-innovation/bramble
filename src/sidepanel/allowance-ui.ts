@@ -22,7 +22,7 @@ export const bindAllowances = ({ app, render, wallet }: AllowanceUiDeps): void =
   const result = app?.querySelector<HTMLElement>("#allowance-result");
   app?.querySelectorAll<HTMLButtonElement>("[data-revoke-allowance]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset.revokeAllowance;
+      const id = button.dataset["revokeAllowance"];
       if (!id) {
         return;
       }

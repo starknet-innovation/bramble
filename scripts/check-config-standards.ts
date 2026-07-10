@@ -13,6 +13,9 @@ import {
   EXPECTED_PACKAGE_SCRIPTS,
   EXPECTED_README_SECTIONS,
   PINNED_RUNTIME_FILES,
+  REQUIRED_BIOME_COMPLEXITY_RULES,
+  REQUIRED_BIOME_LINTER_DOMAINS,
+  REQUIRED_BIOME_NURSERY_RULES,
   REQUIRED_COMPILER_OPTIONS,
   SEMVER,
 } from "./config-standards-policy";
@@ -70,48 +73,48 @@ if (!hasOnlyKeys(biomeJson, ["$schema", "files", "formatter", "javascript", "lin
 }
 
 if (
-  typeof packageJson.version !== "string" ||
-  typeof manifestJson.version !== "string" ||
-  packageJson.version !== manifestJson.version
+  typeof packageJson["version"] !== "string" ||
+  typeof manifestJson["version"] !== "string" ||
+  packageJson["version"] !== manifestJson["version"]
 ) {
   failures.push("package.json and public/manifest.json versions must match");
 }
 
 if (
-  typeof packageJson.version !== "string" ||
-  typeof manifestJson.version !== "string" ||
-  !SEMVER.test(packageJson.version) ||
-  !SEMVER.test(manifestJson.version)
+  typeof packageJson["version"] !== "string" ||
+  typeof manifestJson["version"] !== "string" ||
+  !SEMVER.test(packageJson["version"]) ||
+  !SEMVER.test(manifestJson["version"])
 ) {
   failures.push("package.json and public/manifest.json versions must use x.y.z");
 }
 
-if (packageJson.packageManager !== EXPECTED_PACKAGE_MANAGER) {
+if (packageJson["packageManager"] !== EXPECTED_PACKAGE_MANAGER) {
   failures.push(`package.json packageManager must stay ${EXPECTED_PACKAGE_MANAGER}`);
 }
 
 if (
-  packageJson.name !== "mc-wallet" ||
-  packageJson.private !== true ||
-  packageJson.type !== "module"
+  packageJson["name"] !== "mc-wallet" ||
+  packageJson["private"] !== true ||
+  packageJson["type"] !== "module"
 ) {
   failures.push("package.json must stay private ESM mc-wallet package metadata");
 }
 
-if (biomeJson.$schema !== "https://biomejs.dev/schemas/2.5.2/schema.json") {
+if (biomeJson["$schema"] !== "https://biomejs.dev/schemas/2.5.2/schema.json") {
   failures.push("biome.json schema must stay pinned to 2.5.2");
 }
 
-const biomeVcs = isRecord(biomeJson.vcs) ? biomeJson.vcs : null;
-if (!biomeVcs || !hasOnlyKeys(biomeVcs, ["enabled"]) || biomeVcs.enabled !== false) {
+const biomeVcs = isRecord(biomeJson["vcs"]) ? biomeJson["vcs"] : null;
+if (!biomeVcs || !hasOnlyKeys(biomeVcs, ["enabled"]) || biomeVcs["enabled"] !== false) {
   failures.push("biome.json VCS integration must stay disabled");
 }
 
-const biomeFiles = isRecord(biomeJson.files) ? biomeJson.files : null;
+const biomeFiles = isRecord(biomeJson["files"]) ? biomeJson["files"] : null;
 if (
   !biomeFiles ||
   !hasOnlyKeys(biomeFiles, ["includes"]) ||
-  !hasStringList(biomeFiles?.includes, [
+  !hasStringList(biomeFiles?.["includes"], [
     "**",
     "!.claude",
     "!bun.lock",
@@ -125,47 +128,58 @@ if (
   failures.push("biome.json must check the repository while excluding generated files");
 }
 
-const biomeFormatter = isRecord(biomeJson.formatter) ? biomeJson.formatter : null;
+const biomeFormatter = isRecord(biomeJson["formatter"]) ? biomeJson["formatter"] : null;
 if (
   !biomeFormatter ||
   !hasOnlyKeys(biomeFormatter, ["enabled", "indentStyle", "indentWidth", "lineWidth"]) ||
-  biomeFormatter?.enabled !== true ||
-  biomeFormatter.indentStyle !== "space" ||
-  biomeFormatter.indentWidth !== 2 ||
-  biomeFormatter.lineWidth !== 100
+  biomeFormatter?.["enabled"] !== true ||
+  biomeFormatter["indentStyle"] !== "space" ||
+  biomeFormatter["indentWidth"] !== 2 ||
+  biomeFormatter["lineWidth"] !== 100
 ) {
   failures.push("biome.json formatter settings must stay explicit");
 }
 
-const biomeJavascript = isRecord(biomeJson.javascript) ? biomeJson.javascript : null;
+const biomeJavascript = isRecord(biomeJson["javascript"]) ? biomeJson["javascript"] : null;
 const biomeJavascriptFormatter =
-  biomeJavascript && isRecord(biomeJavascript.formatter) ? biomeJavascript.formatter : null;
+  biomeJavascript && isRecord(biomeJavascript["formatter"]) ? biomeJavascript["formatter"] : null;
 if (
   !biomeJavascript ||
   !hasOnlyKeys(biomeJavascript, ["formatter"]) ||
   !biomeJavascriptFormatter ||
   !hasOnlyKeys(biomeJavascriptFormatter, ["quoteStyle", "semicolons", "trailingCommas"]) ||
-  biomeJavascriptFormatter?.quoteStyle !== "double" ||
-  biomeJavascriptFormatter.semicolons !== "always" ||
-  biomeJavascriptFormatter.trailingCommas !== "all"
+  biomeJavascriptFormatter?.["quoteStyle"] !== "double" ||
+  biomeJavascriptFormatter["semicolons"] !== "always" ||
+  biomeJavascriptFormatter["trailingCommas"] !== "all"
 ) {
   failures.push("biome.json JavaScript formatter settings must stay explicit");
 }
 
-const biomeLinter = isRecord(biomeJson.linter) ? biomeJson.linter : null;
-const biomeRules = biomeLinter && isRecord(biomeLinter.rules) ? biomeLinter.rules : null;
-const biomeStyle = biomeRules && isRecord(biomeRules.style) ? biomeRules.style : null;
+const biomeLinter = isRecord(biomeJson["linter"]) ? biomeJson["linter"] : null;
+const biomeDomains =
+  biomeLinter && isRecord(biomeLinter["domains"]) ? biomeLinter["domains"] : null;
+const biomeRules = biomeLinter && isRecord(biomeLinter["rules"]) ? biomeLinter["rules"] : null;
+const biomeComplexity =
+  biomeRules && isRecord(biomeRules["complexity"]) ? biomeRules["complexity"] : null;
+const biomeNursery = biomeRules && isRecord(biomeRules["nursery"]) ? biomeRules["nursery"] : null;
+const biomeStyle = biomeRules && isRecord(biomeRules["style"]) ? biomeRules["style"] : null;
 const biomeSuspicious =
-  biomeRules && isRecord(biomeRules.suspicious) ? biomeRules.suspicious : null;
+  biomeRules && isRecord(biomeRules["suspicious"]) ? biomeRules["suspicious"] : null;
 const noParameterAssign =
-  biomeStyle && isRecord(biomeStyle.noParameterAssign) ? biomeStyle.noParameterAssign : null;
+  biomeStyle && isRecord(biomeStyle["noParameterAssign"]) ? biomeStyle["noParameterAssign"] : null;
 const noParameterAssignOptions =
-  noParameterAssign && isRecord(noParameterAssign.options) ? noParameterAssign.options : null;
+  noParameterAssign && isRecord(noParameterAssign["options"]) ? noParameterAssign["options"] : null;
 if (
   !biomeLinter ||
-  !hasOnlyKeys(biomeLinter, ["enabled", "rules"]) ||
+  !hasOnlyKeys(biomeLinter, ["domains", "enabled", "rules"]) ||
+  !biomeDomains ||
+  !hasOnlyKeys(biomeDomains, Object.keys(REQUIRED_BIOME_LINTER_DOMAINS)) ||
   !biomeRules ||
-  !hasOnlyKeys(biomeRules, ["preset", "style", "suspicious"]) ||
+  !hasOnlyKeys(biomeRules, ["complexity", "nursery", "preset", "style", "suspicious"]) ||
+  !biomeComplexity ||
+  !hasOnlyKeys(biomeComplexity, Object.keys(REQUIRED_BIOME_COMPLEXITY_RULES)) ||
+  !biomeNursery ||
+  !hasOnlyKeys(biomeNursery, Object.keys(REQUIRED_BIOME_NURSERY_RULES)) ||
   !biomeStyle ||
   !hasOnlyKeys(biomeStyle, ["noNonNullAssertion", "noParameterAssign", "useImportType"]) ||
   !noParameterAssign ||
@@ -174,18 +188,36 @@ if (
   !hasOnlyKeys(noParameterAssignOptions, ["propertyAssignment"]) ||
   !biomeSuspicious ||
   !hasOnlyKeys(biomeSuspicious, ["noExplicitAny"]) ||
-  biomeLinter?.enabled !== true ||
-  biomeRules?.preset !== "recommended" ||
-  biomeStyle?.noNonNullAssertion !== "error" ||
-  biomeStyle.useImportType !== "error" ||
-  noParameterAssign?.level !== "error" ||
-  noParameterAssignOptions?.propertyAssignment !== "deny" ||
-  biomeSuspicious?.noExplicitAny !== "error"
+  biomeLinter?.["enabled"] !== true ||
+  biomeRules?.["preset"] !== "recommended" ||
+  biomeStyle?.["noNonNullAssertion"] !== "error" ||
+  biomeStyle["useImportType"] !== "error" ||
+  noParameterAssign?.["level"] !== "error" ||
+  noParameterAssignOptions?.["propertyAssignment"] !== "deny" ||
+  biomeSuspicious?.["noExplicitAny"] !== "error"
 ) {
   failures.push("biome.json linter rules must stay strict");
 }
 
-const packageScripts = isRecord(packageJson.scripts) ? packageJson.scripts : null;
+for (const [domain, expected] of Object.entries(REQUIRED_BIOME_LINTER_DOMAINS)) {
+  if (biomeDomains?.[domain] !== expected) {
+    failures.push(`biome.json linter domain ${domain} must stay ${expected}`);
+  }
+}
+
+for (const [rule, expected] of Object.entries(REQUIRED_BIOME_COMPLEXITY_RULES)) {
+  if (biomeComplexity?.[rule] !== expected) {
+    failures.push(`biome.json complexity rule ${rule} must stay ${expected}`);
+  }
+}
+
+for (const [rule, expected] of Object.entries(REQUIRED_BIOME_NURSERY_RULES)) {
+  if (biomeNursery?.[rule] !== expected) {
+    failures.push(`biome.json nursery rule ${rule} must stay ${expected}`);
+  }
+}
+
+const packageScripts = isRecord(packageJson["scripts"]) ? packageJson["scripts"] : null;
 if (
   !packageScripts ||
   Reflect.ownKeys(packageScripts).length !== Object.keys(EXPECTED_PACKAGE_SCRIPTS).length
@@ -199,8 +231,8 @@ if (
   }
 }
 
-const compilerOptions = isRecord(tsconfigJson.compilerOptions)
-  ? tsconfigJson.compilerOptions
+const compilerOptions = isRecord(tsconfigJson["compilerOptions"])
+  ? tsconfigJson["compilerOptions"]
   : null;
 if (!compilerOptions) {
   failures.push("tsconfig.json must declare strict compilerOptions");
@@ -223,20 +255,20 @@ if (!compilerOptions) {
     }
   }
   if (
-    compilerOptions.module !== "ESNext" ||
-    compilerOptions.moduleResolution !== "Bundler" ||
-    compilerOptions.target !== "ES2022"
+    compilerOptions["module"] !== "ESNext" ||
+    compilerOptions["moduleResolution"] !== "Bundler" ||
+    compilerOptions["target"] !== "ES2022"
   ) {
     failures.push("tsconfig.json compilerOptions module settings must stay browser-ready");
   }
-  if (!hasStringList(compilerOptions.lib, ["ES2022", "DOM", "DOM.Iterable"])) {
+  if (!hasStringList(compilerOptions["lib"], ["ES2022", "DOM", "DOM.Iterable"])) {
     failures.push("tsconfig.json compilerOptions.lib must stay browser-ready");
   }
-  if (!hasStringList(compilerOptions.types, ["bun-types"])) {
+  if (!hasStringList(compilerOptions["types"], ["bun-types"])) {
     failures.push("tsconfig.json compilerOptions.types must stay Bun-only");
   }
 }
-if (!hasStringList(tsconfigJson.include, ["scripts/**/*.ts", "src/**/*.ts", "tests/**/*.ts"])) {
+if (!hasStringList(tsconfigJson["include"], ["scripts/**/*.ts", "src/**/*.ts", "tests/**/*.ts"])) {
   failures.push("tsconfig.json include must cover scripts, src, and tests");
 }
 
@@ -271,8 +303,10 @@ for (const field of DEPENDENCY_FIELDS) {
   }
 }
 
-const devDependencies = isRecord(packageJson.devDependencies) ? packageJson.devDependencies : null;
-const dependencies = isRecord(packageJson.dependencies) ? packageJson.dependencies : null;
+const devDependencies = isRecord(packageJson["devDependencies"])
+  ? packageJson["devDependencies"]
+  : null;
+const dependencies = isRecord(packageJson["dependencies"]) ? packageJson["dependencies"] : null;
 if (
   !dependencies ||
   Reflect.ownKeys(dependencies).length !== Object.keys(EXPECTED_DEPENDENCIES).length
@@ -385,7 +419,7 @@ if (
 }
 
 const packageZipNamePrefix = packageScript.indexOf("const zipName = `mc-wallet-");
-const packageZipNameVersion = packageScript.indexOf("manifest.version", packageZipNamePrefix);
+const packageZipNameVersion = packageScript.indexOf('manifest["version"]', packageZipNamePrefix);
 const packageZipNameSuffix = packageScript.indexOf(".zip`;", packageZipNameVersion);
 const packageZipPath = packageScript.indexOf("const zipPath = resolve(artifactDir, zipName);");
 if (

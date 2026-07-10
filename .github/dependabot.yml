@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # Application dependencies (package.json + bun.lock).
+  # Dependabot's "npm" ecosystem understands the npm-compatible manifest/lockfile
+  # that Bun uses, covering both security and version updates.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      # Batch non-breaking bumps into a single PR to reduce review churn.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Keep the SHA-pinned GitHub Actions in .github/workflows up to date.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"

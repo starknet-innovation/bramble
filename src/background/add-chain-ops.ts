@@ -39,13 +39,13 @@ export const readAddStarknetChainInput = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["chain", "origin", "type"]) ||
-    message.type !== "wallet.addStarknetChain" ||
-    !isProviderChain(message.chain)
+    message["type"] !== "wallet.addStarknetChain" ||
+    !isProviderChain(message["chain"])
   ) {
     return null;
   }
-  const origin = normalizeWalletOrigin(message.origin);
-  return origin ? { chain: message.chain, origin } : null;
+  const origin = normalizeWalletOrigin(message["origin"]);
+  return origin ? { chain: message["chain"], origin } : null;
 };
 
 /**
