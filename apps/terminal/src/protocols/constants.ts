@@ -62,8 +62,8 @@ export const EKUBO_API_BASE = "https://prod-api.ekubo.org";
 
 /**
  * AVNU aggregator mainnet addresses and API bases. The exchange router is the
- * ERC20 `approve` spender for a `multi_route_swap`. VERIFY: sourced from the
- * AVNU SDK/docs, not the MCP repo — confirm before mainnet swaps.
+ * ERC20 `approve` spender for a `multi_route_swap`, verified against AVNU's
+ * published mainnet Contracts & Audits reference.
  */
 export const AVNU_ADDRESSES = {
   exchange: "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",

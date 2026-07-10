@@ -2,7 +2,7 @@
  * Portfolio screen — a Total/Tokens/Perps hero (balance + 24h P&L) over a tabbed
  * body. Holdings and totals are REAL: `usePortfolio` reads the connected
  * address's on-chain ERC20 balances (RPC `balanceOf`) and prices them with live
- * CoinGecko USD prices. Disconnected, the body is the "connect wallet" empty
+ * AVNU USD prices. Disconnected, the body is the "connect wallet" empty
  * state. Perp positions and activity history have NO confirmed data source yet,
  * so those tabs render an explicit "coming soon" empty state — never fabricated
  * rows.
@@ -21,6 +21,7 @@ import {
 } from "../components";
 import { formatSignedUsd, formatUsd, usePortfolio, type Holding } from "../data";
 import { useWallet } from "../wallet/WalletProvider";
+import type { ScreenId } from "../shell/screens";
 
 type HeroTab = "total" | "tokens" | "perps";
 type BodyTab = "tokens" | "perps" | "tokenActivity" | "perpActivity" | "topMovers";
@@ -51,7 +52,9 @@ const TableHead = ({ cols }: { readonly cols: readonly string[] }): ReactNode =>
   </thead>
 );
 
-export default function Portfolio(): ReactNode {
+type PortfolioProps = { readonly onNavigate: (screen: ScreenId) => void };
+
+export default function Portfolio({ onNavigate }: PortfolioProps): ReactNode {
   const { address, isConnected, isConnecting, connect } = useWallet();
   const { data: portfolio, isLoading, error } = usePortfolio(address);
   const [heroTab, setHeroTab] = useState<HeroTab>("total");
@@ -120,7 +123,7 @@ export default function Portfolio(): ReactNode {
                 symbol={h.symbol}
                 name={h.symbol}
                 subLabel={h.name}
-                gradientIndex={i}
+                colorIndex={i}
                 cells={[
                   h.display,
                   formatUsd(h.usdValue),
@@ -137,8 +140,10 @@ export default function Portfolio(): ReactNode {
       return (
         <EmptyState
           icon={<LineChart size={22} strokeWidth={1.75} />}
-          title="Perps positions — coming soon"
-          subtitle="Live perpetual positions aren't wired to a data source in this build yet. No positions are shown rather than placeholder data."
+          title="Open the Perps workspace"
+          subtitle="Market data and trading controls are available in the dedicated Perps view."
+          ctaLabel="Open Perps"
+          onCta={() => onNavigate("perps")}
           style={{ flex: 1 }}
         />
       );
@@ -178,7 +183,7 @@ export default function Portfolio(): ReactNode {
               symbol={h.symbol}
               name={h.symbol}
               subLabel={i === 0 ? "Top gainer" : "Top loser"}
-              gradientIndex={i}
+              colorIndex={i}
               cells={[
                 formatUsd(h.usdValue),
                 h.change24h === null ? "—" : <PctChange key="chg" value={h.change24h} />,
@@ -201,7 +206,13 @@ export default function Portfolio(): ReactNode {
           <SegmentedTabs<HeroTab>
             options={HERO_OPTIONS}
             value={heroTab}
-            onChange={setHeroTab}
+            onChange={(value) => {
+              if (value === "perps") {
+                onNavigate("perps");
+              } else {
+                setHeroTab(value);
+              }
+            }}
             variant="subtabs"
           />
         </div>

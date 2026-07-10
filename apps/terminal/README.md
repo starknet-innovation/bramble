@@ -19,61 +19,54 @@ bun run check:api  # LIVE API smoke test — run on your own machine (see below)
 
 The terminal reads from these hosts:
 
-| Purpose             | Host                                        | Dev proxy prefix       |
-| ------------------- | ------------------------------------------- | ---------------------- |
-| Token/majors prices | `https://api.coingecko.com`                 | `/proxy/coingecko`     |
-| Token universe      | `https://starknet.api.avnu.fi`              | `/proxy/avnu`          |
-| Token fallback      | `https://mainnet-api.ekubo.org`             | `/proxy/ekubo`         |
-| Perps (REST)        | `https://api.starknet.extended.exchange`    | `/proxy/extended`      |
-| Perps (WebSocket)   | `wss://api.starknet.extended.exchange`      | `/proxy/extended-ws`   |
-| Starknet RPC        | `https://api.cartridge.gg/x/starknet/mainnet` | `/proxy/rpc`         |
+| Purpose                    | Host                                           | Browser access             |
+| -------------------------- | ---------------------------------------------- | -------------------------- |
+| Token markets and candles  | `https://starknet.impulse.avnu.fi`             | `/proxy/avnu-markets` in dev |
+| Swap quotes/builds         | `https://starknet.api.avnu.fi`                 | Direct (CORS-enabled)      |
+| Token fallback             | `https://prod-api.ekubo.org`                   | Direct (CORS-enabled)      |
+| Perps (REST)               | `https://api.starknet.extended.exchange`       | `/proxy/extended` in dev   |
+| Perps (WebSocket)          | `wss://api.starknet.extended.exchange`         | `/proxy/extended-ws` in dev|
+| Starknet RPC               | `https://api.cartridge.gg/x/starknet/mainnet`  | Direct (CORS-enabled)      |
 
-These APIs do **not** send an `Access-Control-Allow-Origin` header, so a direct
-browser `fetch` from `http://localhost:5273` is blocked by CORS (and CoinGecko
-also rate-limits anonymous callers with `429`). To fix this in development,
-`vite.config.ts` defines a `server.proxy` that maps the `/proxy/<name>` prefixes
-above onto the real hosts (`changeOrigin: true`, prefix stripped via `rewrite`,
-plus `ws: true` for the WebSocket). The browser talks same-origin to Vite, which
-forwards the request server-side where there is no CORS.
+Ekubo and Cartridge allow browser origins. AVNU market data is still routed
+through Vite in development so its `404`/`5xx` response for an asset with no
+candle history becomes a clean empty series. Extended REST and WebSocket traffic
+are proxied because Extended rejects browser REST origins and WebSocket
+handshakes unless their headers are sanitized server-side. The development
+WebSocket bridge keeps its browser-facing sockets stable while it reconnects a
+reset upstream connection, so transient exchange disconnects do not create a
+browser error/reconnect loop.
 
 `src/data/endpoints.ts` is the single source of truth for every base and is
 **environment-aware**:
 
-- **Dev server** (`import.meta.env.DEV`, excluding vitest): uses the relative
-  `/proxy/...` paths → no CORS.
-- **Production build / tests**: uses the direct hosts, each overridable via
-  `import.meta.env.VITE_<NAME>_BASE` (`VITE_COINGECKO_BASE`, `VITE_AVNU_BASE`,
-  `VITE_EKUBO_BASE`, `VITE_EXTENDED_REST_BASE`, `VITE_EXTENDED_WS_BASE`).
+- **Dev server** (`import.meta.env.DEV`, excluding vitest): proxies Extended and
+  AVNU market data; quote/build, Ekubo, and RPC sources remain direct.
+- **Production build / tests**: uses direct hosts, overridable with
+  `VITE_AVNU_BASE`, `VITE_AVNU_MARKETS_BASE`, `VITE_EKUBO_BASE`,
+  `VITE_EXTENDED_REST_BASE`, and `VITE_EXTENDED_WS_BASE`.
 
 ### Production
 
-The Vite dev proxy only runs under `bun run dev`. A production deployment will
-hit the same CORS wall unless you either (a) front these APIs with a real
-reverse proxy (nginx, a CDN edge worker, etc.) that adds CORS headers, or (b)
-use CORS-enabled hosting — then set the `VITE_*_BASE` vars to point at it.
+The Vite dev proxy only runs under `bun run dev`. A production deployment must
+front Extended REST with a reverse proxy that adds CORS headers, then set
+`VITE_EXTENDED_REST_BASE` to it. To retain no-history candle normalization in a
+deployed build, expose AVNU market data through the same reverse proxy and set
+`VITE_AVNU_MARKETS_BASE` to it.
 
 ## Rate limits & resilience
 
-CoinGecko's free tier is the main source of `429`s. To stay under it the data
-layer:
+The data layer stays within public API limits by:
 
 - Coalesces concurrent requests for the same URL into one network call and
   serves a short-lived in-memory cache (`src/data/cache.ts`).
 - Polls at calm intervals — prices every 60s, token universe every 120s, candles
   per-timeframe (60s intraday → 1h for multi-year), perps stats every 20s.
-- Backs off exponentially on `429`/`5xx`, honoring a `Retry-After` header when
-  present, while keeping the last-good data on screen.
-
-### CoinGecko API key (optional)
-
-Set a [CoinGecko demo key](https://www.coingecko.com/en/api) to lift the harsh
-anonymous limit. Create `apps/terminal/.env.local`:
-
-```
-VITE_COINGECKO_API_KEY=CG-xxxxxxxxxxxx
-```
-
-It is sent as the `x-cg-demo-api-key` header (which rides through the dev proxy).
+- Backs off exponentially on `429`/`5xx`, honoring `Retry-After` while keeping
+  the last-good data on screen. Candle history does not retry because the AVNU
+  service uses `5xx` for some assets that simply have no series.
+- Letting each caller cancel its own wait without aborting the shared request
+  used by other tabs or React Strict Mode remounts.
 
 ## Live API check (`bun run check:api`)
 
@@ -84,18 +77,16 @@ shape/rate/host issues that unit tests (which mock `fetch`) cannot catch.
 ```bash
 cd apps/terminal
 bun run check:api
-# with a CoinGecko key:
-VITE_COINGECKO_API_KEY=CG-xxxx bun run check:api
 ```
 
 For each endpoint it hits the **direct** host (bypassing the dev proxy), prints a
 `PASS`/`FAIL`/`WARN` line with the HTTP status, latency, and a sample of the
 parsed result, and feeds the real response through the app's own
-parser/normalizer (`toEntry`, `toAvnuRows`, `toEkuboRows`, `bucketCandles`, and
+parser/normalizer (`toAvnuRows`, `toEkuboRows`, `toAvnuCandles`, and
 the `data/extended/parse.ts` functions). It covers:
 
-- CoinGecko `simple/token_price/starknet` and `simple/price`
-- Avnu `/swap/v2/tokens`, Ekubo `/tokens` (fallback, optional)
+- AVNU `/v3/tokens` and token OHLC, Ekubo `/tokens` (fallback, optional)
+- AVNU v3 swap quote/build and an Extended public WebSocket frame
 - Extended `/info/markets`, `/info/markets/{m}/stats`,
   `/info/candles/{m}/{type}`, `/info/{m}/funding`, `/info/markets/{m}/orderbook`
 - Starknet RPC `starknet_chainId` + a sample `balanceOf`

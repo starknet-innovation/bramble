@@ -3,20 +3,13 @@
  * data layer. This is the single source of truth for every host the `data/`
  * hooks reach; nothing under `data/` hardcodes a URL inline.
  *
- * ENVIRONMENT-AWARE BASES (CORS fix)
- * ----------------------------------
- * The browser cannot call these APIs directly — CoinGecko and Extended (and the
- * others) do not send an `Access-Control-Allow-Origin` header, so a direct
- * `fetch` from `http://localhost:5273` is blocked by CORS. To make local
- * development work, `vite.config.ts` defines a `server.proxy` that maps local
- * `/proxy/<name>` prefixes onto the real hosts (same-origin from the browser's
- * point of view, so no CORS, and CoinGecko's demo API key rides along).
+ * Extended REST is routed through Vite's development proxy for CORS. AVNU
+ * market data also uses a same-origin development route so missing candle
+ * history can be normalized without browser-level 404/500 noise.
  *
- * Accordingly each base below resolves at import time:
- *   - In the Vite dev server (`import.meta.env.DEV`, but NOT under vitest) it is
- *     the relative `/proxy/...` path so requests go same-origin through Vite.
- *   - Otherwise (production build, unit tests) it is the direct host, which can
- *     be overridden per-host via `import.meta.env.VITE_<NAME>_BASE`.
+ * Every host can be overridden with `VITE_<NAME>_BASE`. A production deployment
+ * must point `VITE_EXTENDED_REST_BASE` at its own CORS-enabled reverse proxy;
+ * the public Extended WebSocket can be used directly.
  *
  * PRODUCTION: the Vite dev proxy only exists while `bun run dev` is running. A
  * production deployment must front these APIs with a real reverse proxy (nginx,
@@ -24,13 +17,9 @@
  * vars at it — otherwise the same CORS errors return in prod. See
  * `apps/terminal/README.md`.
  *
- * The RPC endpoints and the Avnu base are NOT redefined here — they are read
- * from the shared constants (`STARKNET_NETWORKS.SN_MAIN.rpcUrls`, `AVNU_API`) so
- * the data layer uses the exact same audited hosts as the protocol quote reads.
- * Only the CoinGecko and public Ekubo data-API bases (which the protocol layer
- * does not already own) are declared here.
+ * Hosts are derived from the protocol/network constants rather than retyped.
  */
-import { AVNU_API, EXTENDED_API_BASE } from "../protocols/constants";
+import { AVNU_API, EKUBO_API_BASE, EXTENDED_API_BASE } from "../protocols/constants";
 import { STARKNET_NETWORKS } from "../protocols/support/networks";
 
 // -----------------------------------------------------------------------------
@@ -42,14 +31,14 @@ import { STARKNET_NETWORKS } from "../protocols/support/networks";
 /** Ordered mainnet RPC failover list, reused from the shared network constants. */
 export const RPC_DIRECT_URLS: readonly [string, ...string[]] = STARKNET_NETWORKS.SN_MAIN.rpcUrls;
 
-/** Avnu aggregator API base (`/swap/v2/tokens`). Reuses the protocol constant. */
+/** AVNU quote/build API base. */
 export const AVNU_DIRECT_BASE = AVNU_API.base;
 
-/** Ekubo public mainnet data API base (token-list fallback). */
-export const EKUBO_DIRECT_BASE = "https://mainnet-api.ekubo.org";
+/** AVNU's supported market-data API base. */
+export const AVNU_MARKETS_DIRECT_BASE = AVNU_API.impulse;
 
-/** CoinGecko API base — token prices, majors, and OHLC market charts. */
-export const COINGECKO_DIRECT_BASE = "https://api.coingecko.com";
+/** Ekubo public mainnet data API base (token-list fallback). */
+export const EKUBO_DIRECT_BASE = EKUBO_API_BASE;
 
 /**
  * Extended public perps-DEX REST base — the audited host (`EXTENDED_API_BASE`)
@@ -94,26 +83,20 @@ const currentWsOrigin = (): string => {
   return "ws://localhost:5273";
 };
 
-/** Same-origin HTTP origin for the current page, for the dev RPC proxy. */
-const currentHttpOrigin = (): string =>
-  typeof window !== "undefined" && window.location !== undefined
-    ? window.location.origin
-    : "http://localhost:5273";
-
 // -----------------------------------------------------------------------------
 // Resolved bases the data layer imports.
 // -----------------------------------------------------------------------------
 
-/** CoinGecko base: `/proxy/coingecko` in dev, direct host otherwise. */
-export const COINGECKO_BASE = USE_DEV_PROXY
-  ? "/proxy/coingecko"
-  : (override("COINGECKO") ?? COINGECKO_DIRECT_BASE);
+/** AVNU quote/build API. */
+export const AVNU_BASE = override("AVNU") ?? AVNU_DIRECT_BASE;
 
-/** Avnu base: `/proxy/avnu` in dev, direct host otherwise. */
-export const AVNU_BASE = USE_DEV_PROXY ? "/proxy/avnu" : (override("AVNU") ?? AVNU_DIRECT_BASE);
+/** AVNU market-data API used by token lists, prices, and charts. */
+export const AVNU_MARKETS_BASE = USE_DEV_PROXY
+  ? "/proxy/avnu-markets"
+  : (override("AVNU_MARKETS") ?? AVNU_MARKETS_DIRECT_BASE);
 
-/** Ekubo base: `/proxy/ekubo` in dev, direct host otherwise. */
-export const EKUBO_BASE = USE_DEV_PROXY ? "/proxy/ekubo" : (override("EKUBO") ?? EKUBO_DIRECT_BASE);
+/** Ekubo metadata API fallback. */
+export const EKUBO_BASE = override("EKUBO") ?? EKUBO_DIRECT_BASE;
 
 /**
  * Extended REST base: `/proxy/extended/api/v1` in dev (Vite strips `/proxy/extended`
@@ -124,38 +107,16 @@ export const EXTENDED_REST_BASE = USE_DEV_PROXY
   : (override("EXTENDED_REST") ?? EXTENDED_REST_DIRECT_BASE);
 
 /**
- * Extended WS base: a same-origin `/proxy/extended-ws/...` URL in dev (Vite
- * tunnels the socket to the real WS host), direct `wss://` host otherwise. The
- * path suffix after the origin is preserved from the direct base so the upstream
- * stream path is unchanged.
+ * Extended WS base: a same-origin `/proxy/extended-ws/...` URL in dev (the Vite
+ * bridge reconnects the upstream socket without dropping the browser socket),
+ * direct `wss://` host otherwise. The path suffix after the origin is preserved
+ * from the direct base so the upstream stream path is unchanged.
  */
 export const EXTENDED_WS_BASE = USE_DEV_PROXY
   ? `${currentWsOrigin()}/proxy/extended-ws${new URL(EXTENDED_WS_DIRECT_BASE).pathname}`
   : (override("EXTENDED_WS") ?? EXTENDED_WS_DIRECT_BASE);
 
 /**
- * RPC failover list. In dev the primary is proxied same-origin through Vite
- * (`/proxy/rpc<path>`, `<path>` preserved from the direct URL so the Cartridge
- * `/x/starknet/mainnet` route is intact); `starknet.js` needs an absolute URL,
- * so the current page origin is prepended. Otherwise the direct list is used.
+ * RPC failover list. Cartridge permits browser origins, so no proxy is needed.
  */
-export const RPC_URLS: readonly [string, ...string[]] = USE_DEV_PROXY
-  ? [`${currentHttpOrigin()}/proxy/rpc${new URL(RPC_DIRECT_URLS[0]).pathname}`]
-  : RPC_DIRECT_URLS;
-
-/**
- * Optional CoinGecko demo API key (`import.meta.env.VITE_COINGECKO_API_KEY`).
- * When set it lifts the harsh anonymous rate limit; sent as the demo-key header
- * (which rides through the dev proxy). See `usePrices` / `useCandles`.
- */
-export const COINGECKO_API_KEY: string | undefined =
-  typeof env.VITE_COINGECKO_API_KEY === "string" && env.VITE_COINGECKO_API_KEY.length > 0
-    ? env.VITE_COINGECKO_API_KEY
-    : undefined;
-
-/**
- * Extra headers for CoinGecko requests: the demo API-key header when a key is
- * configured, else empty. Works through the dev proxy and against the direct host.
- */
-export const coingeckoHeaders = (): Record<string, string> =>
-  COINGECKO_API_KEY !== undefined ? { "x-cg-demo-api-key": COINGECKO_API_KEY } : {};
+export const RPC_URLS: readonly [string, ...string[]] = RPC_DIRECT_URLS;

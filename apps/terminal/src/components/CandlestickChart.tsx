@@ -89,8 +89,8 @@ const MockChart = ({
   const y = (v: number): number => 18 + ((max - v) / (max - min)) * (chartH - 18);
   const maxVol = Math.max(...data.map((d) => d.vol));
   const last = data[n - 1]?.c ?? opts.start;
-  const green = "#2fcf8e";
-  const red = "#f0616d";
+  const green = "#48c78e";
+  const red = "#ed6a75";
   const accent = opts.up ? green : red;
 
   return (
@@ -105,8 +105,8 @@ const MockChart = ({
         const val = max - ((max - min) * k) / 4;
         return (
           <g key={`grid-${k}`}>
-            <line x1={0} y1={gy} x2={width - pad} y2={gy} stroke="#1a2029" strokeWidth={1} />
-            <text x={width - pad + 4} y={gy + 3} fill="#697280" fontSize={9} fontFamily="monospace">
+            <line x1={0} y1={gy} x2={width - pad} y2={gy} stroke="#202127" strokeWidth={1} />
+            <text x={width - pad + 4} y={gy + 3} fill="#71747d" fontSize={9} fontFamily="monospace">
               {opts.format(val)}
             </text>
           </g>
@@ -122,7 +122,7 @@ const MockChart = ({
             y={height - bh - 2}
             width={bw}
             height={bh}
-            fill={d.c >= d.o ? "rgba(47,207,142,.35)" : "rgba(240,97,109,.35)"}
+            fill={d.c >= d.o ? "rgba(72,199,142,.35)" : "rgba(237,106,117,.35)"}
           />
         );
       })}
@@ -158,7 +158,7 @@ const MockChart = ({
       <text
         x={width - pad + 4}
         y={y(last) + 3}
-        fill="#04140d"
+        fill="#090a0c"
         fontSize={9}
         fontFamily="monospace"
         fontWeight="bold"
@@ -189,22 +189,22 @@ const LiveChart = ({
       autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#697280",
+        textColor: "#71747d",
         attributionLogo: false,
       },
       grid: {
-        vertLines: { color: "#1a2029" },
-        horzLines: { color: "#1a2029" },
+        vertLines: { color: "#202127" },
+        horzLines: { color: "#202127" },
       },
-      rightPriceScale: { borderColor: "#20262f" },
-      timeScale: { borderColor: "#20262f" },
+      rightPriceScale: { borderColor: "#27292f" },
+      timeScale: { borderColor: "#27292f" },
     });
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: "#2fcf8e",
-      downColor: "#f0616d",
+      upColor: "#48c78e",
+      downColor: "#ed6a75",
       borderVisible: false,
-      wickUpColor: "#2fcf8e",
-      wickDownColor: "#f0616d",
+      wickUpColor: "#48c78e",
+      wickDownColor: "#ed6a75",
     });
     series.setData(
       data.map(

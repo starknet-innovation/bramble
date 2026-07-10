@@ -12,6 +12,7 @@
  * removed), and drops stale/duplicate deltas.
  */
 import { parseOrderBook, parseStreamMessage } from "./parse";
+import { isExtendedBridgeUrl, parseBridgeStatus } from "./bridge-protocol";
 import type { ExtendedOrderBook, StreamEnvelope } from "./types";
 
 /** Connection status surfaced to callers so hooks can drive a REST fallback. */
@@ -49,6 +50,7 @@ export const connectStream = (opts: ConnectStreamOptions): StreamHandle => {
   const Ctor = opts.WebSocketCtor ?? (globalThis as { WebSocket?: typeof WebSocket }).WebSocket;
   const baseBackoff = opts.baseBackoffMs ?? 500;
   const maxBackoff = opts.maxBackoffMs ?? 15_000;
+  const managedBridge = isExtendedBridgeUrl(opts.url);
 
   let socket: WebSocket | null = null;
   let closedByUser = false;
@@ -87,9 +89,14 @@ export const connectStream = (opts: ConnectStreamOptions): StreamHandle => {
 
     ws.onopen = (): void => {
       attempt = 0;
-      opts.onStatus?.("open");
+      opts.onStatus?.(managedBridge ? "connecting" : "open");
     };
     ws.onmessage = (event: MessageEvent): void => {
+      const bridgeStatus = parseBridgeStatus(event.data);
+      if (bridgeStatus !== null) {
+        opts.onStatus?.(bridgeStatus);
+        return;
+      }
       const envelope = parseStreamMessage(event.data);
       if (envelope === null) {
         return;
@@ -111,7 +118,10 @@ export const connectStream = (opts: ConnectStreamOptions): StreamHandle => {
     };
   }
 
-  open();
+  // React Strict Mode immediately cleans up its synthetic first mount. Deferring
+  // construction lets that cleanup cancel the timer instead of creating a real
+  // socket that Chrome reports as a failed connection when closed mid-handshake.
+  reconnectTimer = setTimeout(open, 0);
 
   return {
     close: (): void => {

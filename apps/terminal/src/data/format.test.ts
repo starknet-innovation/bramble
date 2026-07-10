@@ -1,10 +1,10 @@
 /**
- * Pure formatter + candle-bucketing tests — no network, no DOM. These pin the
+ * Pure formatter + candle-normalization tests — no network, no DOM. These pin the
  * numeric behavior the hooks and screens depend on.
  */
 import { describe, expect, it } from "vitest";
 import { formatCompactUsd, formatTokenAmount } from "./format";
-import { bucketCandles } from "./useCandles";
+import { toAvnuCandles } from "./useCandles";
 
 describe("formatTokenAmount", () => {
   it("formats a whole-ether u256 balance", () => {
@@ -33,25 +33,19 @@ describe("formatCompactUsd", () => {
   });
 });
 
-describe("bucketCandles", () => {
-  it("buckets a [ms, price] series into ascending OHLC candles", () => {
-    // Two points inside bucket 0 and one in a later bucket, over a 1-day window.
-    const bucketMs = Math.floor((1 * 86_400) / 90) * 1000; // matches hook math
-    const prices: [number, number][] = [
-      [0, 100],
-      [1000, 110],
-      [bucketMs + 1000, 120],
-    ];
-    const candles = bucketCandles(prices, 1);
+describe("toAvnuCandles", () => {
+  it("normalizes and sorts dated OHLC rows", () => {
+    const candles = toAvnuCandles([
+      { date: "2026-07-10T01:00:00Z", open: 105, high: 120, low: 104, close: 120 },
+      { date: "2026-07-10T00:00:00Z", open: 100, high: 110, low: 100, close: 110 },
+    ]);
     expect(candles.length).toBe(2);
-    // First bucket: open 100, high 110, low 100, close 110.
     expect(candles[0]).toMatchObject({ open: 100, high: 110, low: 100, close: 110 });
-    // Candles are ascending by time.
     expect(candles[0]!.time).toBeLessThan(candles[1]!.time);
-    expect(candles[1]).toMatchObject({ open: 120, close: 120 });
+    expect(candles[1]).toMatchObject({ open: 105, high: 120, low: 104, close: 120 });
   });
 
-  it("returns an empty array for an empty series", () => {
-    expect(bucketCandles([], 1)).toEqual([]);
+  it("drops malformed rows", () => {
+    expect(toAvnuCandles([{ date: "not-a-date", open: 1, high: 1, low: 1, close: 1 }])).toEqual([]);
   });
 });

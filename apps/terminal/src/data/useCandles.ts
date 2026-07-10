@@ -1,31 +1,25 @@
 /**
- * useCandles — OHLC candles for the detail chart, built from CoinGecko's
- * `market_chart` price series for a token contract. CoinGecko's free contract
- * endpoint returns `prices: [[ms, price], ...]` (not OHLC), so we bucket those
- * points into candles: for each fixed-width time bucket, open = first point,
- * close = last, high/low = extremes. The result feeds the existing
- * `CandlestickChart` `data` prop unchanged (unix-second `time`, o/h/l/c).
+ * Real OHLC candles from AVNU's supported market-data endpoint. Keeping token
+ * metadata, current prices, and history on one source avoids CoinGecko's
+ * anonymous rate limits and missing Starknet-contract coverage.
  */
 import { useCallback } from "react";
 import type { Candle } from "../components/CandlestickChart";
 import { getJson } from "./cache";
-import { coingeckoHeaders, COINGECKO_BASE } from "./endpoints";
+import { AVNU_MARKETS_BASE } from "./endpoints";
 import type { Resource } from "./types";
 import { useAsyncResource } from "./useAsyncResource";
 
-// Timeframe label -> lookback days requested from CoinGecko.
-const DAYS_BY_TIMEFRAME: Readonly<Record<string, number>> = {
-  "1d": 1,
-  "5d": 5,
-  "1m": 30,
-  "3m": 90,
-  "6m": 180,
-  "1y": 365,
-  "5y": 1825,
+const TIMEFRAMES: Readonly<Record<string, { readonly days: number; readonly resolution: string }>> = {
+  "1d": { days: 1, resolution: "15" },
+  "5d": { days: 5, resolution: "1H" },
+  "1m": { days: 30, resolution: "4H" },
+  "3m": { days: 90, resolution: "1D" },
+  "6m": { days: 180, resolution: "1D" },
+  "1y": { days: 365, resolution: "1W" },
+  "5y": { days: 1825, resolution: "1W" },
 };
 
-// Per-timeframe poll interval: intraday charts refresh often, longer histories
-// barely move so they poll slowly (and stay well under CoinGecko's rate limit).
 const POLL_MS_BY_TIMEFRAME: Readonly<Record<string, number>> = {
   "1d": 60_000,
   "5d": 120_000,
@@ -40,77 +34,70 @@ const DEFAULT_POLL_MS = 120_000;
 const pollForTimeframe = (timeframe: string): number =>
   POLL_MS_BY_TIMEFRAME[timeframe] ?? DEFAULT_POLL_MS;
 
-type MarketChartResponse = {
-  readonly prices?: readonly (readonly [number, number])[];
+type AvnuCandle = {
+  readonly date?: string;
+  readonly open?: number;
+  readonly high?: number;
+  readonly low?: number;
+  readonly close?: number;
 };
 
-/** Buckets a [ms, price] series into ~90 OHLC candles for the timeframe. */
-export const bucketCandles = (
-  prices: readonly (readonly [number, number])[],
-  days: number,
-): readonly Candle[] => {
-  if (prices.length === 0) {
-    return [];
-  }
-  const targetBuckets = 90;
-  const bucketSeconds = Math.max(60, Math.floor((days * 86_400) / targetBuckets));
-  const buckets = new Map<number, { open: number; high: number; low: number; close: number }>();
-  for (const point of prices) {
-    const seconds = Math.floor(point[0] / 1000);
-    const price = point[1];
-    if (!Number.isFinite(price)) {
-      continue;
-    }
-    const bucket = Math.floor(seconds / bucketSeconds) * bucketSeconds;
-    const existing = buckets.get(bucket);
-    if (existing === undefined) {
-      buckets.set(bucket, { open: price, high: price, low: price, close: price });
-    } else {
-      existing.high = Math.max(existing.high, price);
-      existing.low = Math.min(existing.low, price);
-      existing.close = price;
-    }
-  }
-  return Array.from(buckets.entries())
-    .sort((a, b) => a[0] - b[0])
-    .map(([time, ohlc]) => ({ time, ...ohlc }));
-};
+/** Normalizes AVNU's dated OHLC rows into ascending lightweight-charts candles. */
+export const toAvnuCandles = (payload: readonly AvnuCandle[]): readonly Candle[] =>
+  payload
+    .flatMap((row): readonly Candle[] => {
+      const time = row.date === undefined ? Number.NaN : Date.parse(row.date) / 1000;
+      const values = [row.open, row.high, row.low, row.close];
+      if (!Number.isFinite(time) || values.some((value) => !Number.isFinite(value))) {
+        return [];
+      }
+      return [
+        {
+          time: Math.floor(time),
+          open: row.open!,
+          high: row.high!,
+          low: row.low!,
+          close: row.close!,
+        },
+      ];
+    })
+    .sort((a, b) => a.time - b.time);
 
 const fetchCandles = async (
-  tokenAddressOrId: string,
+  tokenAddress: string,
   timeframe: string,
   signal: AbortSignal,
 ): Promise<readonly Candle[]> => {
-  const days = DAYS_BY_TIMEFRAME[timeframe] ?? 1;
-  const isContract = tokenAddressOrId.startsWith("0x");
-  const path = isContract
-    ? `/api/v3/coins/starknet/contract/${tokenAddressOrId}/market_chart`
-    : `/api/v3/coins/${tokenAddressOrId}/market_chart`;
-  const url = `${COINGECKO_BASE}${path}?vs_currency=usd&days=${days}`;
-  const payload = await getJson<MarketChartResponse>(url, {
-    signal,
-    headers: coingeckoHeaders(),
-    cacheMs: Math.max(0, pollForTimeframe(timeframe) - 5_000),
+  const config = TIMEFRAMES[timeframe] ?? TIMEFRAMES["1d"]!;
+  const end = new Date();
+  const start = new Date(end.getTime() - config.days * 86_400_000);
+  const params = new URLSearchParams({
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    resolution: config.resolution,
   });
-  return bucketCandles(payload.prices ?? [], days);
+  const url = `${AVNU_MARKETS_BASE}/v3/tokens/${encodeURIComponent(tokenAddress)}/prices/candle?${params}`;
+  const payload = await getJson<readonly AvnuCandle[]>(url, {
+    signal,
+    cacheMs: Math.max(0, pollForTimeframe(timeframe) - 5_000),
+    retries: 0,
+  });
+  return toAvnuCandles(payload);
 };
 
-/**
- * OHLC candles for `tokenAddressOrId` over `timeframe`. Returns `[]` (not an
- * error) when the source has no series for the token.
- */
+/** OHLC candles for a token contract. Returns `[]` when no series is available. */
 export const useCandles = (
-  tokenAddressOrId: string | null,
+  tokenAddress: string | null,
   timeframe: string,
 ): Resource<readonly Candle[]> => {
   const fetcher = useCallback(
     async (signal: AbortSignal): Promise<readonly Candle[]> => {
-      if (tokenAddressOrId === null || tokenAddressOrId.length === 0) {
+      if (tokenAddress === null || tokenAddress.length === 0) {
         return [];
       }
-      return fetchCandles(tokenAddressOrId, timeframe, signal);
+      return fetchCandles(tokenAddress, timeframe, signal);
     },
-    [tokenAddressOrId, timeframe],
+    [tokenAddress, timeframe],
   );
-  return useAsyncResource(fetcher, [tokenAddressOrId ?? "", timeframe], pollForTimeframe(timeframe));
+  return useAsyncResource(fetcher, [tokenAddress ?? "", timeframe], pollForTimeframe(timeframe));
 };

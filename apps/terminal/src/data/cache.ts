@@ -1,8 +1,7 @@
 /**
  * Shared read-through cache + in-flight de-duplication + retry/backoff for the
  * JSON GET endpoints the data layer polls. Its job is to stop the app from
- * hammering rate-limited public APIs (chiefly CoinGecko, which 429s aggressively
- * on the free tier):
+ * hammering rate-limited public APIs:
  *
  *  - De-duplication: concurrent callers requesting the same URL share ONE
  *    network request instead of each firing their own (e.g. Portfolio + Tokens
@@ -36,6 +35,26 @@ type CacheEntry = { readonly value: unknown; readonly expires: number };
 
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<unknown>>();
+
+const abortError = (): DOMException => new DOMException("Aborted", "AbortError");
+
+// A shared request must outlive any one React consumer. Strict Mode mounts,
+// aborts, then remounts effects; passing the first effect's signal to the shared
+// fetch poisoned the promise reused by the real mount. Each caller can still
+// stop waiting without cancelling the underlying request for every caller.
+const waitFor = <T>(promise: Promise<T>, signal?: AbortSignal | null): Promise<T> => {
+  if (signal === undefined || signal === null) {
+    return promise;
+  }
+  if (signal.aborted) {
+    return Promise.reject(signal.reason ?? abortError());
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => reject(signal.reason ?? abortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+    void promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+};
 
 /** Options for {@link getJson}: standard `RequestInit` plus resilience knobs. */
 export type GetJsonOptions = RequestInit & {
@@ -73,6 +92,7 @@ const sleep = (ms: number, signal?: AbortSignal | null): Promise<void> =>
  */
 export const getJson = async <T>(url: string, opts: GetJsonOptions = {}): Promise<T> => {
   const { cacheMs = 0, retries = 3, ...init } = opts;
+  const { signal, ...sharedInit } = init;
   const ttl = RESILIENCE_ENABLED ? cacheMs : 0;
   const maxRetries = RESILIENCE_ENABLED ? retries : 0;
   const key = `${init.method ?? "GET"} ${url}`;
@@ -86,26 +106,23 @@ export const getJson = async <T>(url: string, opts: GetJsonOptions = {}): Promis
 
   const existing = inFlight.get(key);
   if (existing !== undefined) {
-    return existing as Promise<T>;
+    return waitFor(existing as Promise<T>, signal);
   }
 
   const run = (async (): Promise<T> => {
     let attempt = 0;
     for (;;) {
       try {
-        const value = await fetchJson<T>(url, init);
+        const value = await fetchJson<T>(url, sharedInit);
         if (ttl > 0) {
           cache.set(key, { value, expires: Date.now() + ttl });
         }
         return value;
       } catch (cause) {
-        if (init.signal?.aborted === true) {
-          throw cause;
-        }
         if (cause instanceof HttpError && isRetryableStatus(cause.status) && attempt < maxRetries) {
           const backoff = cause.retryAfterMs ?? Math.min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * 2 ** attempt);
           attempt += 1;
-          await sleep(backoff, init.signal);
+          await sleep(backoff);
           continue;
         }
         throw cause;
@@ -114,11 +131,13 @@ export const getJson = async <T>(url: string, opts: GetJsonOptions = {}): Promis
   })();
 
   inFlight.set(key, run);
-  try {
-    return await run;
-  } finally {
-    inFlight.delete(key);
-  }
+  const remove = (): void => {
+    if (inFlight.get(key) === run) {
+      inFlight.delete(key);
+    }
+  };
+  void run.then(remove, remove);
+  return waitFor(run, signal);
 };
 
 /** Clears the TTL cache and any tracked in-flight promises (test helper). */

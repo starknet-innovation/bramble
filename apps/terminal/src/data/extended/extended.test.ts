@@ -7,6 +7,7 @@
  * stream-envelope parser and `connectStream` wiring via a fake WebSocket.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { encodeBridgeStatus } from "./bridge-protocol";
 import {
   fetchCandles,
   fetchFundingHistory,
@@ -296,6 +297,31 @@ describe("WS envelope + order-book aggregator (SNAPSHOT then DELTA)", () => {
 });
 
 describe("connectStream (fake WebSocket)", () => {
+  it("does not open a socket when closed during a Strict Mode mount cycle", async () => {
+    let constructed = 0;
+    class FakeWs {
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor() {
+        constructed += 1;
+      }
+      close(): void {
+        this.onclose?.();
+      }
+    }
+
+    const handle = connectStream({
+      url: "wss://example/orderbooks/BTC-USD",
+      WebSocketCtor: FakeWs as unknown as typeof WebSocket,
+      onMessage: () => undefined,
+    });
+    handle.close();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(constructed).toBe(0);
+  });
+
   it("delivers parsed envelopes and closes cleanly", async () => {
     const received: StreamEnvelope[] = [];
     let opened = false;
@@ -328,6 +354,42 @@ describe("connectStream (fake WebSocket)", () => {
     await vi.waitFor(() => expect(received.length).toBeGreaterThan(0));
     expect(opened).toBe(true);
     expect(received[0]).toMatchObject({ type: "TRADE", seq: 7 });
+    handle.close();
+  });
+
+  it("uses managed bridge frames as connection status, not market data", async () => {
+    const received: StreamEnvelope[] = [];
+    const statuses: string[] = [];
+
+    class FakeWs {
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onclose: (() => void) | null = null;
+      constructor() {
+        setTimeout(() => {
+          this.onopen?.();
+          this.onmessage?.({ data: encodeBridgeStatus("open") });
+          this.onmessage?.({
+            data: JSON.stringify({ type: "TRADE", data: [{ i: 1 }], seq: 1 }),
+          });
+        }, 0);
+      }
+      close(): void {
+        this.onclose?.();
+      }
+    }
+
+    const handle = connectStream({
+      url: "ws://localhost:5273/proxy/extended-ws/stream.extended.exchange/v1/publicTrades/BTC-USD",
+      WebSocketCtor: FakeWs as unknown as typeof WebSocket,
+      onMessage: (envelope) => received.push(envelope),
+      onStatus: (status) => statuses.push(status),
+    });
+
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(statuses.at(-1)).toBe("open");
+    expect(received[0]).toMatchObject({ type: "TRADE", seq: 1 });
     handle.close();
   });
 });

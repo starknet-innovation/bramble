@@ -3,8 +3,8 @@
  * fetcher, exposes `{ data, isLoading, error, refresh }`, cancels the in-flight
  * request (via AbortSignal) when dependencies change or the component unmounts,
  * and optionally re-runs on an interval. On a refresh/poll it keeps the last
- * good `data` so the UI shows stale-but-valid rows instead of flashing a
- * skeleton, and surfaces the new error alongside it.
+ * good `data`; when resource identity dependencies change it clears the prior
+ * result so one market/token is never rendered under another one's heading.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Resource } from "./types";
@@ -15,6 +15,9 @@ const toMessage = (error: unknown): string => {
   }
   return "Request failed";
 };
+
+const sameDependencies = (left: readonly unknown[], right: readonly unknown[]): boolean =>
+  left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
 
 /**
  * Drives an async fetcher with cancellation and optional polling.
@@ -34,6 +37,7 @@ export const useAsyncResource = <T>(
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const fetcherRef = useRef(fetcher);
+  const previousDepsRef = useRef<readonly unknown[] | null>(null);
   fetcherRef.current = fetcher;
 
   const refresh = useCallback(() => setTick((value) => value + 1), []);
@@ -41,6 +45,11 @@ export const useAsyncResource = <T>(
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
+    const previousDeps = previousDepsRef.current;
+    if (previousDeps !== null && !sameDependencies(previousDeps, deps)) {
+      setData(null);
+    }
+    previousDepsRef.current = [...deps];
     setIsLoading(true);
     void fetcherRef
       .current(controller.signal)

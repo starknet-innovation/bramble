@@ -1,23 +1,20 @@
 /**
- * Icon gradient palette, ported from the approved mockup. Token/perp icons are
- * gradient squares seeded by list index so a given symbol reads consistently.
+ * Muted solid asset colors. Token/perp icons are seeded by list index so a given
+ * symbol reads consistently without turning the interface into a color field.
  */
-export const ICON_GRADIENTS: readonly string[] = [
-  "#2fcf8e,#1a9c68",
-  "#4c8bf5,#2b5fb8",
-  "#e8b64b,#b8860f",
-  "#f0616d,#b8323d",
-  "#a06bf5,#6a3cc0",
-  "#f7931a,#b86a10",
-  "#3ec7d4,#1f8a94",
-  "#ec6ec4,#b03d8f",
+export const ICON_COLORS: readonly string[] = [
+  "#47505c",
+  "#5a4958",
+  "#555044",
+  "#4a5350",
+  "#514b5d",
+  "#5b4d47",
+  "#46545a",
+  "#554955",
 ];
 
 /**
- * Returns the `background` CSS value for the icon gradient at `index`
- * (wrapping), matching the mockup's `g(i)` helper.
+ * Returns the solid asset color at `index`, wrapping at the palette length.
  */
-export const iconGradient = (index: number): string => {
-  const stops = ICON_GRADIENTS[index % ICON_GRADIENTS.length] ?? ICON_GRADIENTS[0];
-  return `linear-gradient(135deg,${stops})`;
-};
+export const iconColor = (index: number): string =>
+  ICON_COLORS[index % ICON_COLORS.length] ?? ICON_COLORS[0]!;

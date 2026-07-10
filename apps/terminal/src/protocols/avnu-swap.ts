@@ -6,15 +6,10 @@
  * size budget. The only network access lives in the two `fetchAvnu*` functions;
  * everything else is pure parsing / calldata serialization.
  *
- * ⚠️ The AVNU exchange router address (AVNU_ADDRESSES.exchange) — the ERC20
- * `approve` spender AND the `multi_route_swap` target — is transcribed from the
- * AVNU SDK/docs, NOT verified on a mainnet explorer. It MUST be re-confirmed
- * against the deployed avnu-contracts-v2 exchange before any mainnet swap is
- * signed: approving the wrong spender risks funds. `parseBuildResponse` binds the
- * server-returned swap target to this constant so the approve and the invoke can
- * never diverge onto two different contracts. The swap calldata itself is fetched
- * from the AVNU build API rather than hand-encoded, so the fragile per-venue
- * `Route` serialization stays server-side (no @avnu/avnu-sdk import).
+ * The AVNU exchange router address is verified against AVNU's published mainnet
+ * Contracts & Audits reference. `parseBuildResponse` binds the server-returned
+ * target and entrypoint to that constant so the approve and invoke cannot diverge.
+ * The route calldata comes from the v3 build API rather than being hand-encoded.
  */
 import { type Call, CallData, cairo } from "starknet";
 import { WalletError } from "./support/errors";
@@ -43,12 +38,12 @@ export const AVNU_QUOTE_SIZE = 1;
 /**
  * AVNU quotes endpoint sub-path (best multi-venue route for a pair).
  */
-export const AVNU_QUOTES_PATH = "swap/v2/quotes";
+export const AVNU_QUOTES_PATH = "swap/v3/quotes";
 
 /**
  * AVNU build endpoint sub-path (prebuilt `multi_route_swap` calldata for a quote).
  */
-export const AVNU_BUILD_PATH = "swap/v2/build";
+export const AVNU_BUILD_PATH = "swap/v3/build";
 
 /**
  * A prebuilt on-chain call as returned by the AVNU build API: the exchange router
@@ -205,14 +200,18 @@ export const parseQuoteResponse = (payload: unknown): AvnuQuoteResult => {
  * invoke target can never diverge.
  */
 export const parseBuildResponse = (payload: unknown): AvnuExchangeCall => {
-  if (!isRecord(payload)) {
+  if (!isRecord(payload) || !Array.isArray(payload.calls) || payload.calls.length !== 1) {
     throw new WalletError("Invalid AVNU build response");
   }
-  const { calldata, contractAddress, entrypoint } = payload;
+  const call = payload.calls[0];
+  if (!isRecord(call)) {
+    throw new WalletError("Invalid AVNU build response");
+  }
+  const { calldata, contractAddress, entrypoint } = call;
   if (typeof contractAddress !== "string" || !isNonZeroStarkFieldElement(contractAddress)) {
     throw new WalletError("Invalid AVNU build response");
   }
-  if (typeof entrypoint !== "string" || entrypoint.length === 0) {
+  if (entrypoint !== "multi_route_swap") {
     throw new WalletError("Invalid AVNU build response");
   }
   if (!isStringArray(calldata)) {

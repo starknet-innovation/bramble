@@ -1,6 +1,6 @@
 /**
  * useTokens — the normalized token universe for the Tokens list and the Discover
- * rankings. Primary source is the Avnu market list (`GET /swap/v2/tokens`, which
+ * rankings. Primary source is the AVNU market list (`GET /v3/tokens`, which
  * carries price / market cap / volume / 24h change per token); if that response
  * shape is missing or empty it falls back to the Ekubo public API (`GET /tokens`
  * enriched with `GET /pairs` volume). Rows are normalized to the app's
@@ -8,7 +8,8 @@
  */
 import { useCallback } from "react";
 import { getJson } from "./cache";
-import { AVNU_BASE, EKUBO_BASE } from "./endpoints";
+import { AVNU_MARKETS_BASE, EKUBO_BASE } from "./endpoints";
+import { STARKNET_NETWORKS } from "../protocols/support/networks";
 import type { Resource, TokenRow } from "./types";
 import { useAsyncResource } from "./useAsyncResource";
 
@@ -35,18 +36,34 @@ type AvnuMarket = {
   readonly totalLiquidityInUsd?: number;
 };
 
+type AvnuStarknetMarket = {
+  readonly usd?: number;
+  readonly usdTvl?: number;
+  readonly usdVolume24h?: number;
+  readonly usdTradingVolume24h?: number;
+  readonly usdPriceChangePercentage24h?: number;
+};
+
+type AvnuGlobalMarket = {
+  readonly usd?: number;
+  readonly usdMarketCap?: number;
+};
+
 type AvnuToken = {
   readonly address?: string;
   readonly name?: string;
   readonly symbol?: string;
   readonly decimals?: number;
   readonly logoUri?: string;
+  readonly starknet?: AvnuStarknetMarket;
+  readonly global?: AvnuGlobalMarket | null;
+  /** Legacy market block accepted so cached/older mirrors fail soft. */
   readonly market?: AvnuMarket;
 };
 
 type AvnuTokensResponse = readonly AvnuToken[] | { readonly content?: readonly AvnuToken[] };
 
-/** Normalizes the Avnu `/swap/v2/tokens` payload into `TokenRow[]`. Exported so
+/** Normalizes the AVNU `/v3/tokens` payload into `TokenRow[]`. Exported so
  * the offline `check:api` script validates the real response with this exact
  * normalizer. */
 export const toAvnuRows = (payload: AvnuTokensResponse): readonly TokenRow[] => {
@@ -61,20 +78,25 @@ export const toAvnuRows = (payload: AvnuTokensResponse): readonly TokenRow[] => 
       continue;
     }
     const market = token.market ?? {};
+    const starknet = token.starknet ?? {};
+    const global = token.global ?? {};
     rows.push({
       address,
       name: str(token.name) ?? symbol,
       symbol,
       decimals: typeof token.decimals === "number" ? token.decimals : 18,
       logoUri: str(token.logoUri),
-      priceUsd: num(market.currentPrice),
-      marketCapUsd: num(market.marketCap),
+      priceUsd: num(starknet.usd) ?? num(global.usd) ?? num(market.currentPrice),
+      marketCapUsd: num(global.usdMarketCap) ?? num(market.marketCap),
       volume24hUsd:
+        num(starknet.usdVolume24h) ??
+        num(starknet.usdTradingVolume24h) ??
         num(market.starknetVolume24h) ??
         num(market.starknetTradingVolume24h) ??
         num(market.volume),
-      liquidityUsd: num(market.totalLiquidityInUsd),
-      change24h: num(market.priceChangePercentage24h),
+      liquidityUsd: num(starknet.usdTvl) ?? num(market.totalLiquidityInUsd),
+      change24h:
+        num(starknet.usdPriceChangePercentage24h) ?? num(market.priceChangePercentage24h),
     });
   }
   return rows;
@@ -87,86 +109,37 @@ type EkuboToken = {
   readonly symbol?: string;
   readonly decimals?: number;
   readonly l2_token_address?: string;
+  readonly address?: string;
   readonly logo_url?: string;
-};
-
-type EkuboPair = {
-  readonly token0?: string;
-  readonly token1?: string;
-  readonly volume0_24h?: string | number;
-  readonly volume1_24h?: string | number;
-  readonly tvl0_total?: string | number;
-  readonly tvl1_total?: string | number;
+  readonly usd_price?: number | null;
 };
 
 type EkuboTokensResponse = readonly EkuboToken[] | { readonly tokens?: readonly EkuboToken[] };
-type EkuboPairsResponse =
-  | readonly EkuboPair[]
-  | { readonly topPairs?: readonly EkuboPair[]; readonly pairs?: readonly EkuboPair[] };
 
-const toNumberLoose = (value: unknown): number =>
-  typeof value === "number"
-    ? value
-    : typeof value === "string" && value.length > 0
-      ? Number(value)
-      : 0;
-
-/** Normalizes the Ekubo `/tokens` (+ `/pairs` volume) payloads into `TokenRow[]`.
+/** Normalizes the Ekubo `/tokens` payload into `TokenRow[]`.
  * Pure and exported so the offline `check:api` script validates the real
  * responses with this exact normalizer. */
-export const toEkuboRows = (
-  tokensPayload: EkuboTokensResponse,
-  pairsPayload: EkuboPairsResponse,
-): readonly TokenRow[] => {
+export const toEkuboRows = (tokensPayload: EkuboTokensResponse): readonly TokenRow[] => {
   const tokens: readonly EkuboToken[] = Array.isArray(tokensPayload)
     ? tokensPayload
     : ((tokensPayload as { readonly tokens?: readonly EkuboToken[] }).tokens ?? []);
-  const pairs: readonly EkuboPair[] = Array.isArray(pairsPayload)
-    ? pairsPayload
-    : (() => {
-        const obj = pairsPayload as {
-          readonly topPairs?: readonly EkuboPair[];
-          readonly pairs?: readonly EkuboPair[];
-        };
-        return obj.topPairs ?? obj.pairs ?? [];
-      })();
-
-  // Aggregate 24h volume per token address from the pairs feed.
-  const volumeByAddress = new Map<string, number>();
-  for (const pair of pairs) {
-    const t0 = str(pair.token0);
-    const t1 = str(pair.token1);
-    if (t0 !== null) {
-      volumeByAddress.set(
-        t0.toLowerCase(),
-        (volumeByAddress.get(t0.toLowerCase()) ?? 0) + toNumberLoose(pair.volume0_24h),
-      );
-    }
-    if (t1 !== null) {
-      volumeByAddress.set(
-        t1.toLowerCase(),
-        (volumeByAddress.get(t1.toLowerCase()) ?? 0) + toNumberLoose(pair.volume1_24h),
-      );
-    }
-  }
 
   const rows: TokenRow[] = [];
   for (const token of tokens) {
-    const address = str(token.l2_token_address);
+    const address = str(token.address) ?? str(token.l2_token_address);
     const symbol = str(token.symbol);
     if (address === null || symbol === null) {
       continue;
     }
-    const volume = volumeByAddress.get(address.toLowerCase());
     rows.push({
       address,
       name: str(token.name) ?? symbol,
       symbol,
       decimals: typeof token.decimals === "number" ? token.decimals : 18,
       logoUri: str(token.logo_url),
-      priceUsd: null,
+      priceUsd: num(token.usd_price),
       marketCapUsd: null,
-      volume24hUsd: volume !== undefined && volume > 0 ? volume : null,
+      volume24hUsd: null,
       liquidityUsd: null,
       change24h: null,
     });
@@ -174,20 +147,21 @@ export const toEkuboRows = (
   return rows;
 };
 
+const EKUBO_MAINNET_CHAIN_ID = BigInt(STARKNET_NETWORKS.SN_MAIN.chainId).toString();
+
 const fetchEkuboRows = async (signal: AbortSignal): Promise<readonly TokenRow[]> => {
-  const [tokensPayload, pairsPayload] = await Promise.all([
-    getJson<EkuboTokensResponse>(`${EKUBO_BASE}/tokens`, { signal, cacheMs: CACHE_MS }),
-    getJson<EkuboPairsResponse>(`${EKUBO_BASE}/pairs`, { signal, cacheMs: CACHE_MS }).catch(
-      () => [] as EkuboPair[],
-    ),
-  ]);
-  return toEkuboRows(tokensPayload, pairsPayload);
+  const params = new URLSearchParams({ chainId: EKUBO_MAINNET_CHAIN_ID, pageSize: "1000" });
+  const tokensPayload = await getJson<EkuboTokensResponse>(`${EKUBO_BASE}/tokens?${params}`, {
+    signal,
+    cacheMs: CACHE_MS,
+  });
+  return toEkuboRows(tokensPayload);
 };
 
 const fetchTokens = async (signal: AbortSignal): Promise<readonly TokenRow[]> => {
   try {
     // Fail fast (no retry) so a bad Avnu response falls back to Ekubo quickly.
-    const payload = await getJson<AvnuTokensResponse>(`${AVNU_BASE}/swap/v2/tokens`, {
+    const payload = await getJson<AvnuTokensResponse>(`${AVNU_MARKETS_BASE}/v3/tokens`, {
       signal,
       cacheMs: CACHE_MS,
       retries: 0,

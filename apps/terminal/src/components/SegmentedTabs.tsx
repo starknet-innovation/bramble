@@ -42,6 +42,7 @@ export const SegmentedTabs = <T extends string>({
           key={option.value}
           className={classes === "" ? undefined : classes}
           onClick={() => onChange(option.value)}
+          aria-pressed={option.value === value}
         >
           {option.label}
         </button>

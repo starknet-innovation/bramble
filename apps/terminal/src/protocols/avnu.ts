@@ -8,10 +8,8 @@
  * starknet-js. Route shapes, the REST client, and the pure builders live in
  * ./avnu-swap; this module is the thin public protocol surface.
  *
- * ⚠️ AVNU_ADDRESSES.exchange is unverified (SDK/docs, not a mainnet explorer) — it
- * is both the approve spender and the swap target, so it MUST be re-confirmed
- * before mainnet swaps. See ./avnu-swap for the full flag. These builders never
- * broadcast; they only produce `Call`s for the approval/invoke path.
+ * The exchange address is pinned to AVNU's published mainnet contract reference.
+ * These builders never broadcast; they only produce `Call`s for wallet review.
  */
 import type { Call } from "starknet";
 import { WalletError } from "./support/errors";

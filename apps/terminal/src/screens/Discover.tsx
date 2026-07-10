@@ -10,7 +10,7 @@
  */
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { ChartCandlestick, ChevronDown, Coins, Rocket, Wallet } from "lucide-react";
+import { ChartCandlestick, Coins, Rocket, Wallet } from "lucide-react";
 import {
   Card,
   EmptyState,
@@ -34,6 +34,8 @@ import { dailyChangePct, fmtUsdPrice } from "./perps-data";
 
 type TotalView = "total" | "tokens" | "perps";
 type LeftTab = "positions" | "activities" | "follows";
+type TokenSort = "marketCap" | "volume" | "change";
+type PerpSort = "volume" | "change";
 
 const TOTAL_OPTIONS: readonly { value: TotalView; label: string }[] = [
   { value: "total", label: "Total" },
@@ -47,19 +49,12 @@ const LEFT_TABS: readonly { value: LeftTab; label: string }[] = [
   { value: "follows", label: "Follows" },
 ];
 
-/** A dropdown-looking (non-functional, mockup-faithful) filter control. */
-function DropButton({ label }: { readonly label: string }): ReactNode {
-  return (
-    <div className="dropbtn">
-      {label} <ChevronDown className="cx" size={12} strokeWidth={2} aria-hidden />
-    </div>
-  );
-}
-
 export default function Discover(): ReactNode {
   const { address, isConnected, isConnecting, connect } = useWallet();
   const [totalView, setTotalView] = useState<TotalView>("total");
   const [leftTab, setLeftTab] = useState<LeftTab>("positions");
+  const [tokenSort, setTokenSort] = useState<TokenSort>("marketCap");
+  const [perpSort, setPerpSort] = useState<PerpSort>("volume");
 
   const { data: portfolio } = usePortfolio(address);
   const tokens = useTokens();
@@ -67,18 +62,28 @@ export default function Discover(): ReactNode {
 
   const rankedTokens = useMemo(() => {
     const rows = [...(tokens.data ?? [])];
-    return rows
-      .sort((a, b) => (b.marketCapUsd ?? b.volume24hUsd ?? 0) - (a.marketCapUsd ?? a.volume24hUsd ?? 0))
-      .slice(0, 20);
-  }, [tokens.data]);
+    return rows.sort((a, b) => {
+      if (tokenSort === "volume") {
+        return (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0);
+      }
+      if (tokenSort === "change") {
+        return (b.change24h ?? Number.NEGATIVE_INFINITY) - (a.change24h ?? Number.NEGATIVE_INFINITY);
+      }
+      return (b.marketCapUsd ?? 0) - (a.marketCapUsd ?? 0);
+    }).slice(0, 20);
+  }, [tokenSort, tokens.data]);
 
   // Real Extended perpetual markets, sorted by 24h volume (deepest first).
   const rankedPerps = useMemo(() => {
     return [...(perps.data ?? [])]
       .filter((m) => m.type === null || m.type === "PERPETUAL")
-      .sort((a, b) => (b.marketStats?.dailyVolume ?? 0) - (a.marketStats?.dailyVolume ?? 0))
+      .sort((a, b) =>
+        perpSort === "change"
+          ? dailyChangePct(b.marketStats) - dailyChangePct(a.marketStats)
+          : (b.marketStats?.dailyVolume ?? 0) - (a.marketStats?.dailyVolume ?? 0),
+      )
       .slice(0, 10);
-  }, [perps.data]);
+  }, [perpSort, perps.data]);
 
   const onConnect = (): void => {
     void connect();
@@ -147,12 +152,6 @@ export default function Discover(): ReactNode {
       <Card
         className="dcol mid"
         title="Launches"
-        headerExtra={
-          <div style={{ marginLeft: 12 }}>
-            <DropButton label="Migrated" />
-          </div>
-        }
-        headerRight={<DropButton label="Trending" />}
       >
         <EmptyState
           icon={<Rocket size={22} strokeWidth={1.75} />}
@@ -166,7 +165,18 @@ export default function Discover(): ReactNode {
       <div className="dcol right">
         <Card
           title="Tokens"
-          headerRight={<DropButton label="Market Cap" />}
+          headerRight={
+            <select
+              className="compact-select"
+              aria-label="Sort tokens"
+              value={tokenSort}
+              onChange={(event) => setTokenSort(event.target.value as TokenSort)}
+            >
+              <option value="marketCap">Market Cap</option>
+              <option value="volume">Volume</option>
+              <option value="change">24h Change</option>
+            </select>
+          }
           style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
         >
           <div className="listscroll">
@@ -198,7 +208,7 @@ export default function Discover(): ReactNode {
                       symbol={token.symbol}
                       name={token.name}
                       subLabel={token.symbol}
-                      gradientIndex={index}
+                      colorIndex={index}
                       cells={[
                         token.marketCapUsd === null ? "—" : formatCompactUsd(token.marketCapUsd),
                         token.change24h === null ? (
@@ -218,7 +228,17 @@ export default function Discover(): ReactNode {
         {/* Perps ranked column — real Extended markets, sorted by 24h volume. */}
         <Card
           title="Perps"
-          headerRight={<DropButton label="Volume" />}
+          headerRight={
+            <select
+              className="compact-select"
+              aria-label="Sort perps"
+              value={perpSort}
+              onChange={(event) => setPerpSort(event.target.value as PerpSort)}
+            >
+              <option value="volume">Volume</option>
+              <option value="change">24h Change</option>
+            </select>
+          }
           style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}
         >
           <div className="listscroll">
@@ -255,7 +275,7 @@ export default function Discover(): ReactNode {
                         subLabel={
                           <span className="lev">{Math.max(1, Math.trunc(perp.maxLeverage))}x</span>
                         }
-                        gradientIndex={index + 2}
+                        colorIndex={index + 2}
                         cells={[
                           fmtUsdPrice(price),
                           <PctChange key="ch" value={dailyChangePct(stats)} digits={1} />,

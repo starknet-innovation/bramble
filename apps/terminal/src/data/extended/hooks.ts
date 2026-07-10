@@ -179,9 +179,10 @@ export const usePerpsTrades = (market: string | null): Resource<readonly Extende
     const handle = connectStream({
       url: wsUrls.publicTrades(market),
       onStatus: (status) => {
-        // No REST fallback route exists; once the socket closes with no data,
-        // stop the loading state so the empty state renders.
-        if (status === "closed") {
+        // No REST fallback route exists. Once the socket has connected (or
+        // closed), show an empty tape until the next live trade arrives rather
+        // than leaving the tab in an indefinite loading state.
+        if (active && (status === "open" || status === "closed")) {
           setIsLoading(false);
         }
       },

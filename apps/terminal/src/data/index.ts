@@ -5,7 +5,7 @@
 export { fetchJson, HttpError, withRpc } from "./client";
 export {
   AVNU_BASE,
-  COINGECKO_BASE,
+  AVNU_MARKETS_BASE,
   EKUBO_BASE,
   EXTENDED_REST_BASE,
   EXTENDED_WS_BASE,
@@ -52,7 +52,7 @@ export {
 export { KNOWN_TOKENS, type KnownToken } from "./knownTokens";
 export { useAsyncResource } from "./useAsyncResource";
 export { useBalances } from "./useBalances";
-export { bucketCandles, useCandles } from "./useCandles";
+export { toAvnuCandles, useCandles } from "./useCandles";
 export { usePortfolio, type UsePortfolioResult } from "./usePortfolio";
 export { usePrices } from "./usePrices";
 export { useTokens } from "./useTokens";

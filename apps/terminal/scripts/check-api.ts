@@ -12,8 +12,6 @@
  * USAGE:
  *   cd apps/terminal
  *   bun run check:api
- *   # optional: raise CoinGecko's rate limit with a demo key
- *   VITE_COINGECKO_API_KEY=CG-xxxx bun run check:api
  *
  * OUTPUT: one PASS/FAIL line per endpoint (HTTP status + latency + a sample of
  * the parsed result), then a summary table. Exit code is non-zero if any
@@ -24,25 +22,34 @@
 import { CallData, RpcProvider } from "starknet";
 import {
   AVNU_DIRECT_BASE,
-  COINGECKO_DIRECT_BASE,
-  coingeckoHeaders,
+  AVNU_MARKETS_DIRECT_BASE,
   EKUBO_DIRECT_BASE,
   EXTENDED_REST_DIRECT_BASE,
+  EXTENDED_WS_DIRECT_BASE,
   RPC_DIRECT_URLS,
 } from "../src/data/endpoints";
-import { toEntry } from "../src/data/usePrices";
 import { toAvnuRows, toEkuboRows } from "../src/data/useTokens";
+import { toAvnuCandles } from "../src/data/useCandles";
 import {
   parseCandles,
   parseFundingHistory,
   parseMarketStatsResponse,
   parseMarkets,
   parseOrderBookResponse,
+  parseStreamMessage,
 } from "../src/data/extended/parse";
+import {
+  AVNU_BUILD_PATH,
+  buildQuotesUrl,
+  parseBuildResponse,
+  parseQuoteResponse,
+} from "../src/protocols/avnu-swap";
 import { MAINNET_TOKEN_ADDRESSES } from "../src/protocols/constants";
+import { STARKNET_NETWORKS } from "../src/protocols/support/networks";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const SAMPLE_MARKET = "BTC-USD";
+const EXTENDED_USER_AGENT = "MC-Wallet-Terminal/0.1";
 
 type Outcome = {
   readonly name: string;
@@ -71,13 +78,18 @@ const keysOf = (value: unknown): string => {
 /** Fetches JSON with a hard timeout; returns status + parsed body (or throws). */
 const fetchJsonDirect = async (
   url: string,
-  headers: Record<string, string> = {},
+  init: RequestInit = {},
 ): Promise<{ status: number; body: unknown }> => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
+    const headers = new Headers(init.headers);
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/json");
+    }
     const res = await fetch(url, {
-      headers: { accept: "application/json", ...headers },
+      ...init,
+      headers,
       signal: controller.signal,
     });
     const text = await res.text();
@@ -130,70 +142,109 @@ const check = async (
   }
 };
 
+/** Opens one public stream and requires a valid Extended envelope. */
+const checkExtendedStream = (url: string): Promise<{ status: string; detail: string }> =>
+  new Promise((resolve, reject) => {
+    let settled = false;
+    const HeaderWebSocket = WebSocket as unknown as new (
+      socketUrl: string,
+      options: { readonly headers: Record<string, string> },
+    ) => WebSocket;
+    const socket = new HeaderWebSocket(url, {
+      headers: { "User-Agent": EXTENDED_USER_AGENT },
+    });
+    const finish = (result: { status: string; detail: string } | Error): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      socket.close();
+      if (result instanceof Error) {
+        reject(result);
+      } else {
+        resolve(result);
+      }
+    };
+    const timer = setTimeout(
+      () => finish(new Error(`WebSocket timed out after ${REQUEST_TIMEOUT_MS}ms`)),
+      REQUEST_TIMEOUT_MS,
+    );
+    socket.onmessage = (event) => {
+      const envelope = parseStreamMessage(event.data);
+      if (envelope !== null) {
+        finish({
+          status: "ws",
+          detail: `type=${envelope.type} seq=${envelope.seq ?? "n/a"}`,
+        });
+      }
+    };
+    socket.onerror = () => finish(new Error("WebSocket handshake failed"));
+    socket.onclose = () => finish(new Error("WebSocket closed before a valid frame"));
+  });
+
 const main = async (): Promise<void> => {
   // eslint-disable-next-line no-console
   console.log("Trade Terminal — live API check (direct hosts, no proxy)\n");
-  const cg = coingeckoHeaders();
-  if (Object.keys(cg).length > 0) {
-    // eslint-disable-next-line no-console
-    console.log("Using CoinGecko demo API key from VITE_COINGECKO_API_KEY.\n");
-  }
-
   const ETH = MAINNET_TOKEN_ADDRESSES.ETH;
-  const STRK = MAINNET_TOKEN_ADDRESSES.STRK;
-
-  // ---- CoinGecko ----------------------------------------------------------
-  // NOTE: without a CoinGecko API key the public `token_price` endpoint is capped
-  // to a SINGLE contract address (multiple 400 with error_code 10012). The app
-  // tolerates this (it falls back to `/simple/price` majors), so the required
-  // check uses one address; the multi-address behavior is only exercised (and
-  // only expected to pass) when VITE_COINGECKO_API_KEY is set.
-  await check("CoinGecko token_price/starknet", true, async () => {
-    const url =
-      `${COINGECKO_DIRECT_BASE}/api/v3/simple/token_price/starknet` +
-      `?contract_addresses=${ETH}&vs_currencies=usd&include_24hr_change=true`;
-    const { status, body } = await fetchJsonDirect(url, cg);
-    const first = Object.values(body as Record<string, unknown>)[0];
-    const entry = toEntry(first as { usd?: number } | undefined);
-    return { status, detail: `${keysOf(body)} -> parsed usd=${entry.usd}` };
-  });
-
-  if (Object.keys(cg).length > 0) {
-    await check("CoinGecko token_price (multi, keyed)", true, async () => {
-      const url =
-        `${COINGECKO_DIRECT_BASE}/api/v3/simple/token_price/starknet` +
-        `?contract_addresses=${ETH},${STRK}&vs_currencies=usd&include_24hr_change=true`;
-      const { status, body } = await fetchJsonDirect(url, cg);
-      return { status, detail: `${keysOf(body)}` };
-    });
-  }
-
-  await check("CoinGecko simple/price", true, async () => {
-    const url =
-      `${COINGECKO_DIRECT_BASE}/api/v3/simple/price` +
-      `?ids=starknet,ethereum,usd-coin&vs_currencies=usd&include_24hr_change=true`;
-    const { status, body } = await fetchJsonDirect(url, cg);
-    const strk = (body as Record<string, { usd?: number }>).starknet;
-    return { status, detail: `${keysOf(body)} -> STRK usd=${toEntry(strk).usd}` };
-  });
 
   // ---- Avnu (token universe, primary) ------------------------------------
-  await check("Avnu /swap/v2/tokens", true, async () => {
-    const { status, body } = await fetchJsonDirect(`${AVNU_DIRECT_BASE}/swap/v2/tokens`);
+  await check("AVNU market data", true, async () => {
+    const { status, body } = await fetchJsonDirect(`${AVNU_MARKETS_DIRECT_BASE}/v3/tokens`);
     const rows = toAvnuRows(body as never);
     return { status, detail: `${keysOf(body)} -> ${rows.length} TokenRows (first symbol=${rows[0]?.symbol ?? "n/a"})` };
   });
 
+  await check("AVNU token candles", true, async () => {
+    const end = new Date();
+    const start = new Date(end.getTime() - 86_400_000);
+    const params = new URLSearchParams({
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      resolution: "1H",
+    });
+    const { status, body } = await fetchJsonDirect(
+      `${AVNU_MARKETS_DIRECT_BASE}/v3/tokens/${ETH}/prices/candle?${params}`,
+    );
+    const rows = toAvnuCandles(body as never);
+    return { status, detail: `${rows.length} candles (last close=${rows.at(-1)?.close ?? "n/a"})` };
+  });
+
+  await check("AVNU v3 swap quote/build", true, async () => {
+    const takerAddress = "0x1";
+    const quoteResponse = await fetchJsonDirect(
+      buildQuotesUrl(AVNU_DIRECT_BASE, {
+        buyToken: MAINNET_TOKEN_ADDRESSES.STRK,
+        sellAmount: "1000000000000000",
+        sellToken: ETH,
+        takerAddress,
+      }),
+    );
+    const quote = parseQuoteResponse(quoteResponse.body);
+    const buildResponse = await fetchJsonDirect(`${AVNU_DIRECT_BASE}/${AVNU_BUILD_PATH}`, {
+      body: JSON.stringify({
+        includeApprove: false,
+        quoteId: quote.quoteId,
+        slippage: 0.005,
+        takerAddress,
+      }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    const call = parseBuildResponse(buildResponse.body);
+    return {
+      status: `${quoteResponse.status}/${buildResponse.status}`,
+      detail: `buy=${quote.buyAmount} entrypoint=${call.entrypoint}`,
+    };
+  });
+
   // ---- Ekubo (token universe, fallback) ----------------------------------
   await check("Ekubo /tokens", false, async () => {
-    const tokens = await fetchJsonDirect(`${EKUBO_DIRECT_BASE}/tokens`);
-    let pairs: unknown = [];
-    try {
-      pairs = (await fetchJsonDirect(`${EKUBO_DIRECT_BASE}/pairs`)).body;
-    } catch {
-      // pairs volume is optional enrichment
-    }
-    const rows = toEkuboRows(tokens.body as never, pairs as never);
+    const chainId = BigInt(STARKNET_NETWORKS.SN_MAIN.chainId).toString();
+    const tokens = await fetchJsonDirect(
+      `${EKUBO_DIRECT_BASE}/tokens?chainId=${chainId}&pageSize=1000`,
+    );
+    const rows = toEkuboRows(tokens.body as never);
     return { status: tokens.status, detail: `${keysOf(tokens.body)} -> ${rows.length} TokenRows` };
   });
 
@@ -237,6 +288,10 @@ const main = async (): Promise<void> => {
     const book = parseOrderBookResponse(body);
     return { status, detail: `${book.bids.length} bids / ${book.asks.length} asks` };
   });
+
+  await check(`Extended stream/${SAMPLE_MARKET}`, true, () =>
+    checkExtendedStream(`${EXTENDED_WS_DIRECT_BASE}/publicTrades/${SAMPLE_MARKET}`),
+  );
 
   // ---- Starknet RPC -------------------------------------------------------
   const rpcUrl = RPC_DIRECT_URLS[0];

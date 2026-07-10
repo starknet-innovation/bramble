@@ -18,6 +18,7 @@ import { createOriginHistoryStore } from "../storage/origin-history";
 import { createPreferencesStore } from "../storage/preferences-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { setApprovalNotifier } from "./approval-notifier";
+import { requestApprovalSurface } from "./approval-surface";
 import { createApprovalQueue } from "./approvals";
 import { walletEventBroadcasts } from "./events";
 import { createMessageHandler } from "./messages";
@@ -54,6 +55,7 @@ type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: {
     readonly runtime?: RuntimeApi;
     readonly sidePanel?: {
+      readonly open: (options: { readonly tabId: number }) => Promise<void>;
       readonly setPanelBehavior: (behavior: {
         readonly openPanelOnActionClick: boolean;
       }) => Promise<void>;
@@ -402,6 +404,7 @@ void extensionApi?.sidePanel
   ?.setPanelBehavior({ openPanelOnActionClick: true })
   .catch(() => undefined);
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
+  requestApprovalSurface(extensionApi?.sidePanel, runtime.id, message, sender);
   void sessionReady
     .then(() => handleMessage(message, sender))
     .then(

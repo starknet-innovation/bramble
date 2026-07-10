@@ -1,9 +1,7 @@
 /**
- * Top navigation bar — logo, screen tabs, search box, balance chip, and the
- * Connect Wallet button. Ported from the mockup's `.topnav`.
+ * Top navigation bar with real screen navigation and wallet connection state.
  */
 import type { ReactNode } from "react";
-import { Search, Settings } from "lucide-react";
 import { useWallet } from "../wallet/WalletProvider";
 import { type ScreenId, SCREEN_TABS, shortenAddress } from "./screens";
 
@@ -37,28 +35,13 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
             key={tab.id}
             className={tab.id === active ? "navtab active" : "navtab"}
             onClick={() => onNavigate(tab.id)}
+            aria-current={tab.id === active ? "page" : undefined}
           >
             {tab.label}
           </button>
         ))}
       </div>
-      <div className="search">
-        <Search className="mag" size={14} strokeWidth={1.75} aria-hidden />
-        <input type="text" placeholder="Search tokens, perps, wallets" />
-        <span className="slash">/</span>
-      </div>
       <div className="navright">
-        <div className="balchip">
-          <span className="dot" />
-          {isConnected ? shortenAddress(address ?? "") : "$0.00"}
-        </div>
-        <div className="numsel">
-          <button type="button" className="active">
-            1
-          </button>
-          <button type="button">2</button>
-          <button type="button">3</button>
-        </div>
         <button
           type="button"
           className="connect"
@@ -66,9 +49,6 @@ export const TopNav = ({ active, onNavigate }: TopNavProps): ReactNode => {
           onClick={() => (isConnected ? void disconnect() : void connect())}
         >
           {connectLabel}
-        </button>
-        <button type="button" className="iconbtn" aria-label="Settings">
-          <Settings size={16} strokeWidth={1.75} />
         </button>
       </div>
     </div>

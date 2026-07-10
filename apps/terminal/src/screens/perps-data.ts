@@ -53,15 +53,18 @@ export const fmtCompactUsd = (value: number): string => {
 };
 
 /**
- * Converts the API's `dailyPriceChange` into a whole-percent number.
- *
- * UNITS FLAG (verify live): the catalog types `dailyPriceChange` as a raw
- * Decimal without stating units. We interpret it as a fraction (0.0214 =>
- * +2.14%) and multiply by 100. If the live API already returns whole percent,
- * drop the `* 100` here.
+ * Converts Extended's absolute daily price delta into a percentage relative to
+ * the previous close. The live API returns values such as `1421` for a BTC move
+ * from roughly 62.8k to 64.2k; treating it as a fraction produced +142100%.
  */
-export const dailyChangePct = (stats: ExtendedMarketStats | null): number =>
-  stats === null ? 0 : stats.dailyPriceChange * 100;
+export const dailyChangePct = (stats: ExtendedMarketStats | null): number => {
+  if (stats === null) {
+    return 0;
+  }
+  const current = stats.lastPrice || stats.markPrice;
+  const previous = current - stats.dailyPriceChange;
+  return previous === 0 ? 0 : (stats.dailyPriceChange / previous) * 100;
+};
 
 /**
  * Converts a funding rate (per-interval fraction) into a whole-percent number for
@@ -74,7 +77,7 @@ export type PerpMarketRow = {
   readonly symbol: string;
   readonly base: string;
   readonly maxLeverage: number;
-  readonly gradientIndex: number;
+  readonly colorIndex: number;
   /** Numeric last/mark price used to seed chart magnitude + book formatting. */
   readonly markValue: number;
   readonly priceLabel: string;
@@ -96,7 +99,7 @@ export const toMarketRow = (market: ExtendedMarket, index: number): PerpMarketRo
     symbol: market.name,
     base: market.assetName,
     maxLeverage: Math.max(1, Math.trunc(market.maxLeverage)),
-    gradientIndex: index,
+    colorIndex: index,
     markValue: mark,
     priceLabel: fmtUsdPrice(mark),
     change24h: dailyChangePct(stats),

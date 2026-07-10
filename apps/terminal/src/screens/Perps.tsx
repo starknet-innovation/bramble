@@ -17,6 +17,7 @@ import {
   BarChart3,
   BookOpen,
   ChartCandlestick,
+  Check,
   LineChart,
   Plus,
   Receipt,
@@ -141,6 +142,7 @@ export default function Perps(): ReactNode {
   const markets = usePerpsMarkets();
   const [selected, setSelected] = useState<string>("");
   const [marketTab, setMarketTab] = useState<"markets" | "follows">("markets");
+  const [followed, setFollowed] = useState<ReadonlySet<string>>(() => new Set());
   const [timeframe, setTimeframe] = useState<Timeframe>("15m");
   const [tradeTab, setTradeTab] = useState<TradeTab>("trades");
   const [bookTab, setBookTab] = useState<BookTab>("book");
@@ -201,6 +203,22 @@ export default function Perps(): ReactNode {
   }, [statsResource.data, markets.data, activeSymbol]);
 
   const book = useMemo(() => buildOrderBookView(orderBook.data), [orderBook.data]);
+  const isFollowed = activeSymbol !== null && followed.has(activeSymbol);
+
+  const toggleFollow = (): void => {
+    if (activeSymbol === null) {
+      return;
+    }
+    setFollowed((current) => {
+      const next = new Set(current);
+      if (next.has(activeSymbol)) {
+        next.delete(activeSymbol);
+      } else {
+        next.add(activeSymbol);
+      }
+      return next;
+    });
+  };
 
   const markValue = stats !== null ? stats.markPrice || stats.lastPrice : (selectedRow?.markValue ?? 0);
 
@@ -225,7 +243,8 @@ export default function Perps(): ReactNode {
 
   // ----- markets list body (skeleton / error / empty / rows) -----
   const marketsBody = (): ReactNode => {
-    if (marketTab === "follows") {
+    const visibleRows = marketTab === "follows" ? rows.filter((row) => followed.has(row.symbol)) : rows;
+    if (marketTab === "follows" && visibleRows.length === 0) {
       return (
         <EmptyState
           icon={<Star size={22} strokeWidth={1.75} />}
@@ -250,13 +269,14 @@ export default function Perps(): ReactNode {
         />
       );
     }
-    return rows.map((m) => (
-      <div
+    return visibleRows.map((m) => (
+      <button
+        type="button"
         key={m.symbol}
         className={m.symbol === selected ? "tokrow sel" : "tokrow"}
         onClick={() => setSelected(m.symbol)}
       >
-        <TokenIcon symbol={m.base} gradientIndex={m.gradientIndex} />
+        <TokenIcon symbol={m.base} colorIndex={m.colorIndex} />
         <div>
           <div className="n1">{m.symbol}</div>
           <div className="n2">
@@ -267,7 +287,7 @@ export default function Perps(): ReactNode {
           <div className="pr mono">{m.priceLabel}</div>
           <PctChange className="ch" value={m.change24h} />
         </div>
-      </div>
+      </button>
     ));
   };
 
@@ -352,7 +372,7 @@ export default function Perps(): ReactNode {
           <TriangleAlert size={14} strokeWidth={2} style={{ flexShrink: 0 }} aria-hidden />
           <span>
             Market data is live. Order placement requires a signed session and isn&apos;t available
-            in your region. <a href="#learn-more">Learn more.</a>
+            in your region.
           </span>
         </div>
 
@@ -378,7 +398,7 @@ export default function Perps(): ReactNode {
                 <TokenIcon
                   symbol={selectedRow?.base ?? "?"}
                   size={40}
-                  gradientIndex={selectedRow?.gradientIndex ?? 0}
+                  colorIndex={selectedRow?.colorIndex ?? 0}
                 />
                 <div>
                   <h2>
@@ -393,8 +413,13 @@ export default function Perps(): ReactNode {
                   type="button"
                   className="followbtn"
                   style={{ marginLeft: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
+                  onClick={toggleFollow}
                 >
-                  <Plus size={14} strokeWidth={2} /> Follow
+                  {isFollowed ? (
+                    <><Check size={14} strokeWidth={2} /> Following</>
+                  ) : (
+                    <><Plus size={14} strokeWidth={2} /> Follow</>
+                  )}
                 </button>
               </div>
               <div className="statgrid">
@@ -433,15 +458,6 @@ export default function Perps(): ReactNode {
                     {tf}
                   </button>
                 ))}
-                <div className="right">
-                  <button
-                    type="button"
-                    className="tf"
-                    style={{ background: "var(--surface-2)", color: "var(--text-2)" }}
-                  >
-                    Indicators
-                  </button>
-                </div>
               </div>
               {chartBody()}
             </div>

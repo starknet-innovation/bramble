@@ -21,4 +21,4 @@ export {
 export { StatPair, type StatPairProps } from "./StatPair";
 export { TabStrip, type TabStripItem, type TabStripProps } from "./TabStrip";
 export { TokenIcon, type TokenIconProps } from "./TokenIcon";
-export { ICON_GRADIENTS, iconGradient } from "./palette";
+export { ICON_COLORS, iconColor } from "./palette";

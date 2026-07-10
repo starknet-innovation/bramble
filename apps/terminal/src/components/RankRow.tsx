@@ -15,7 +15,7 @@ export type RankRowProps = {
   readonly name: ReactNode;
   /** Secondary line under the name (n2), e.g. ticker or a leverage pill. */
   readonly subLabel?: ReactNode;
-  readonly gradientIndex?: number;
+  readonly colorIndex?: number;
   /** Trailing right-aligned cells (already formatted, e.g. price + PctChange). */
   readonly cells: readonly ReactNode[];
   readonly onClick?: () => void;
@@ -30,7 +30,7 @@ export const RankRow = ({
   symbol,
   name,
   subLabel,
-  gradientIndex = 0,
+  colorIndex = 0,
   cells,
   onClick,
 }: RankRowProps): ReactNode => (
@@ -38,7 +38,7 @@ export const RankRow = ({
     <td>{rank}</td>
     <td className="name">
       <div className="namecell">
-        <TokenIcon symbol={symbol} size={26} gradientIndex={gradientIndex} />
+        <TokenIcon symbol={symbol} size={26} colorIndex={colorIndex} />
         <div>
           <div className="n1">{name}</div>
           {subLabel !== undefined && <div className="n2">{subLabel}</div>}

@@ -18,7 +18,7 @@ export type TabStripProps<T extends string> = {
 };
 
 /**
- * Renders an underline tab strip. The active tab gets the emerald underline.
+ * Renders an underline tab strip. The active tab gets the high-contrast underline.
  */
 export const TabStrip = <T extends string>({
   items,
@@ -29,13 +29,15 @@ export const TabStrip = <T extends string>({
 }: TabStripProps<T>): ReactNode => (
   <div className={className === undefined ? "tabstrip" : `tabstrip ${className}`} style={style}>
     {items.map((item) => (
-      <div
+      <button
+        type="button"
         key={item.value}
         className={item.value === value ? "t active" : "t"}
         onClick={() => onChange(item.value)}
+        aria-pressed={item.value === value}
       >
         {item.label}
-      </div>
+      </button>
     ))}
   </div>
 );

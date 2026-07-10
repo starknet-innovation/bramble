@@ -1,37 +1,25 @@
 /**
- * Bottom status bar — balance readout and footer links. Ported from the
- * mockup's `.bottombar`.
+ * Bottom status bar with wallet, network, and live data-source state.
  */
-import { Globe, Mail, MessageCircle } from "lucide-react";
 import type { ReactNode } from "react";
+import { useWallet } from "../wallet/WalletProvider";
+import { shortenAddress } from "./screens";
 
 /**
  * The application chrome's bottom bar.
  */
-export const BottomBar = (): ReactNode => (
-  <div className="bottombar">
-    <span className="bal">
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: "50%",
-          background: "var(--accent)",
-          display: "inline-block",
-        }}
-      />
-      Balance $0.00
-    </span>
-    <div className="right">
-      <a href="#terms">Terms</a>
-      <a href="#privacy">Privacy</a>
-      <a href="#disclosures">Disclosures</a>
-      <a href="#help">Help</a>
-      <span className="icons">
-        <Globe size={14} strokeWidth={1.75} aria-label="Website" />
-        <Mail size={14} strokeWidth={1.75} aria-label="Contact" />
-        <MessageCircle size={14} strokeWidth={1.75} aria-label="Community" />
+export const BottomBar = (): ReactNode => {
+  const { address, chainId, isConnected } = useWallet();
+  return (
+    <div className="bottombar">
+      <span className="bal">
+        <span className="status-dot" />
+        {isConnected ? `Connected ${shortenAddress(address ?? "")}` : "Wallet disconnected"}
       </span>
+      <div className="right">
+        <span>{chainId ?? "Starknet"}</span>
+        <span>AVNU · Extended</span>
+      </div>
     </div>
-  </div>
-);
+  );
+};

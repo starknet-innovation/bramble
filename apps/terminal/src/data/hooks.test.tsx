@@ -1,5 +1,5 @@
 /**
- * Data-layer hook tests. The live hosts (Avnu / CoinGecko) and the Starknet RPC
+ * Data-layer hook tests. The live hosts (AVNU / Ekubo) and the Starknet RPC
  * are unreachable from the sandbox (403), so these mock `fetch` with realistic
  * sample payloads and stub the shared `withRpc` accessor with a fake provider,
  * then assert each hook parses the response into the app types. This is the
@@ -32,6 +32,7 @@ import { useCandles } from "./useCandles";
 import { usePortfolio } from "./usePortfolio";
 import { usePrices } from "./usePrices";
 import { useTokens } from "./useTokens";
+import { useAsyncResource } from "./useAsyncResource";
 
 const ETH = MAINNET_TOKEN_ADDRESSES.ETH;
 const USDC = MAINNET_TOKEN_ADDRESSES.USDC;
@@ -66,28 +67,44 @@ const AVNU_TOKENS = [
       totalLiquidityInUsd: 18_400_000,
     },
   },
+  {
+    address: ETH,
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18,
+    starknet: { usd: 3000, usdPriceChangePercentage24h: 2, usdTvl: 10_000_000 },
+    global: { usd: 3000, usdMarketCap: 300_000_000_000 },
+  },
+  {
+    address: USDC,
+    name: "USD Coin",
+    symbol: "USDC",
+    decimals: 6,
+    starknet: { usd: 1, usdPriceChangePercentage24h: 0, usdTvl: 5_000_000 },
+    global: { usd: 1, usdMarketCap: 50_000_000_000 },
+  },
+  {
+    address: STRK,
+    name: "Starknet Token",
+    symbol: "STRK",
+    decimals: 18,
+    starknet: { usd: 0.14, usdPriceChangePercentage24h: 6, usdTvl: 4_000_000 },
+    global: { usd: 0.14, usdMarketCap: 500_000_000 },
+  },
 ];
 
-const TOKEN_PRICES = {
-  [ETH.toLowerCase()]: { usd: 3000, usd_24h_change: 2 },
-  [USDC.toLowerCase()]: { usd: 1, usd_24h_change: 0 },
-};
-
-const MAJOR_PRICES = {
-  ethereum: { usd: 3000, usd_24h_change: 2 },
-  "usd-coin": { usd: 1, usd_24h_change: 0 },
-  starknet: { usd: 0.14, usd_24h_change: 6 },
-  tether: { usd: 1 },
-  dai: { usd: 1 },
-  "wrapped-bitcoin": { usd: 60_000 },
-};
-
-const MARKET_CHART = { prices: [[0, 100], [1000, 110], [10_000_000, 120]] };
+const AVNU_CANDLES = [
+  { date: "2026-07-09T00:00:00Z", open: 100, high: 112, low: 98, close: 110 },
+  { date: "2026-07-09T01:00:00Z", open: 110, high: 121, low: 109, close: 120 },
+];
 
 // Routes a fetch by URL substring to the matching sample payload.
 const routeFetch = (avnuStatus = 200): void => {
   globalThis.fetch = vi.fn(async (input: string | URL) => {
     const url = String(input);
+    if (url.includes("/prices/candle")) {
+      return respond(AVNU_CANDLES);
+    }
     if (url.includes("avnu.fi")) {
       return respond(avnuStatus === 200 ? AVNU_TOKENS : { error: "boom" }, avnuStatus);
     }
@@ -95,18 +112,6 @@ const routeFetch = (avnuStatus = 200): void => {
       return respond([
         { name: "Nostra", symbol: "NSTR", decimals: 18, l2_token_address: "0xdef", logo_url: "u" },
       ]);
-    }
-    if (url.includes("ekubo.org") && url.includes("/pairs")) {
-      return respond([{ token0: "0xdef", token1: "0x123", volume0_24h: "9600000" }]);
-    }
-    if (url.includes("simple/token_price")) {
-      return respond(TOKEN_PRICES);
-    }
-    if (url.includes("simple/price")) {
-      return respond(MAJOR_PRICES);
-    }
-    if (url.includes("market_chart")) {
-      return respond(MARKET_CHART);
     }
     throw new Error(`unexpected fetch: ${url}`);
   }) as unknown as typeof fetch;
@@ -126,8 +131,8 @@ describe("useTokens", () => {
     const { result } = renderHook(() => useTokens());
     await waitFor(() => expect(result.current.data).not.toBeNull());
     const rows = result.current.data ?? [];
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
+    expect(rows).toHaveLength(4);
+    expect(rows.find((row) => row.symbol === "EKUBO")).toMatchObject({
       address: "0xabc",
       symbol: "EKUBO",
       priceUsd: 2.18,
@@ -149,7 +154,7 @@ describe("useTokens", () => {
       symbol: "NSTR",
       address: "0xdef",
       priceUsd: null,
-      volume24hUsd: 9_600_000,
+      volume24hUsd: null,
     });
   });
 });
@@ -161,7 +166,6 @@ describe("usePrices", () => {
     const data = result.current.data;
     expect(data?.byAddress[ETH.toLowerCase()]).toEqual({ usd: 3000, change24h: 2 });
     expect(data?.bySymbol.ETH).toEqual({ usd: 3000, change24h: 2 });
-    // STRK is absent from the contract-price response but filled from majors.
     expect(data?.bySymbol.STRK?.usd).toBe(0.14);
   });
 });
@@ -199,7 +203,7 @@ describe("usePortfolio", () => {
 });
 
 describe("useCandles", () => {
-  it("buckets the CoinGecko price series into OHLC candles", async () => {
+  it("normalizes AVNU OHLC candles", async () => {
     const { result } = renderHook(() => useCandles(ETH, "1d"));
     await waitFor(() => expect(result.current.data).not.toBeNull());
     const candles = result.current.data ?? [];
@@ -208,5 +212,28 @@ describe("useCandles", () => {
     for (let i = 1; i < candles.length; i += 1) {
       expect(candles[i]!.time).toBeGreaterThan(candles[i - 1]!.time);
     }
+  });
+});
+
+describe("useAsyncResource", () => {
+  it("clears data immediately when the resource identity changes", async () => {
+    const { result, rerender } = renderHook(
+      ({ identity }: { readonly identity: string }) =>
+        useAsyncResource(
+          (signal) =>
+            identity === "first"
+              ? Promise.resolve("first-data")
+              : new Promise<string>((_resolve, reject) => {
+                  signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+                }),
+          [identity],
+        ),
+      { initialProps: { identity: "first" } },
+    );
+    await waitFor(() => expect(result.current.data).toBe("first-data"));
+
+    rerender({ identity: "second" });
+    await waitFor(() => expect(result.current.data).toBeNull());
+    expect(result.current.isLoading).toBe(true);
   });
 });

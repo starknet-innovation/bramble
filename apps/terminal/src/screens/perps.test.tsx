@@ -9,7 +9,7 @@
  *    asserted to be invoked, proving the live-data chart path — not the mock),
  *  - and the order ticket disabled with its region/signing reason.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const wallet = vi.hoisted(() => ({
@@ -68,7 +68,7 @@ const MARKET = {
   marketStats: {
     dailyVolume: "1280000000",
     dailyVolumeBase: "20000",
-    dailyPriceChange: "0.0214",
+    dailyPriceChange: "1342.5",
     dailyLow: "62000",
     dailyHigh: "64000",
     lastPrice: "63842.5",
@@ -181,6 +181,7 @@ describe("Perps screen (live-shaped mocked data)", () => {
 
     // Markets list + header from the mocked markets REST.
     expect(await screen.findAllByText("BTC-USD")).not.toHaveLength(0);
+    expect(await screen.findAllByText("+2.15%")).not.toHaveLength(0);
 
     // Order book populated (the Spread row only renders with a real book).
     expect(await screen.findByText("Spread")).toBeTruthy();
@@ -204,5 +205,15 @@ describe("Perps screen (live-shaped mocked data)", () => {
     expect(
       screen.getAllByText(/Order placement requires a signed session/).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("persists followed markets in the Follows tab", async () => {
+    render(<Perps />);
+    await screen.findAllByText("BTC-USD");
+
+    fireEvent.click(screen.getByRole("button", { name: "Follow" }));
+    expect(screen.getByRole("button", { name: "Following" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Follows" }));
+    expect(screen.getByRole("button", { name: /BTC-USD/ })).toBeTruthy();
   });
 });
