@@ -10,6 +10,7 @@ import {
   IMPORT_MNEMONIC,
   importWalletFromPhrase,
   resolveConnectionApproval,
+  resolvePendingApproval,
   unlockWallet,
 } from "./wallet-helpers";
 
@@ -69,6 +70,78 @@ test("denies a dapp connection request", async ({ extension }) => {
     await expect(dapp.getByTestId("connect-result")).toContainText('"status":"rejected"');
     await dapp.getByTestId("preauth").click();
     await expect(dapp.getByTestId("preauth-result")).toHaveText("false");
+  } finally {
+    await dappServer.close();
+  }
+});
+
+test("signs SNIP-12 typed data through the injected provider approval", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await createWalletFromGeneratedPhrase(sidepanel);
+
+  const dappServer = await startTestDapp();
+  try {
+    const dapp = await extension.context.newPage();
+    await dapp.goto(dappServer.url);
+    await dapp.getByTestId("connect").click();
+    await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
+    await expect(dapp.getByTestId("connect-result")).toContainText('"status":"resolved"');
+
+    await dapp.getByTestId("sign").click();
+    await expect(dapp.getByTestId("sign-result")).toHaveText("pending");
+    await resolvePendingApproval(sidepanel, "Sign request", dappServer.origin, "approve");
+
+    await expect(dapp.getByTestId("sign-result")).toContainText('"status":"resolved"');
+    // A SNIP-12 signature is returned to the dapp as an [r, s] felt array.
+    await expect(dapp.getByTestId("sign-result")).toContainText(
+      /"signature":\["0x[0-9a-f]+","0x[0-9a-f]+"\]/,
+    );
+  } finally {
+    await dappServer.close();
+  }
+});
+
+test("rejects a typed-data signature when the user denies", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await createWalletFromGeneratedPhrase(sidepanel);
+
+  const dappServer = await startTestDapp();
+  try {
+    const dapp = await extension.context.newPage();
+    await dapp.goto(dappServer.url);
+    await dapp.getByTestId("connect").click();
+    await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
+    await expect(dapp.getByTestId("connect-result")).toContainText('"status":"resolved"');
+
+    await dapp.getByTestId("sign").click();
+    await expect(dapp.getByTestId("sign-result")).toHaveText("pending");
+    await resolvePendingApproval(sidepanel, "Sign request", dappServer.origin, "deny");
+
+    await expect(dapp.getByTestId("sign-result")).toContainText('"status":"rejected"');
+  } finally {
+    await dappServer.close();
+  }
+});
+
+test("surfaces an invoke as a transaction approval and rejects on deny", async ({ extension }) => {
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  await createWalletFromGeneratedPhrase(sidepanel);
+
+  const dappServer = await startTestDapp();
+  try {
+    const dapp = await extension.context.newPage();
+    await dapp.goto(dappServer.url);
+    await dapp.getByTestId("connect").click();
+    await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
+    await expect(dapp.getByTestId("connect-result")).toContainText('"status":"resolved"');
+
+    await dapp.getByTestId("invoke").click();
+    await expect(dapp.getByTestId("invoke-result")).toHaveText("pending");
+    // The provider request surfaces as a transaction approval card in the side
+    // panel; denying it rejects the held provider promise.
+    await resolvePendingApproval(sidepanel, "Transaction request", dappServer.origin, "deny");
+
+    await expect(dapp.getByTestId("invoke-result")).toContainText('"status":"rejected"');
   } finally {
     await dappServer.close();
   }

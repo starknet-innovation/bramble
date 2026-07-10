@@ -10,7 +10,12 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
-import { type CustomNetwork, isCustomNetwork, normalizeChainId } from "./custom-network";
+import {
+  type CustomNetwork,
+  isCustomNetwork,
+  isCustomRpcUrl,
+  normalizeChainId,
+} from "./custom-network";
 import type { KeyValueStore } from "./kv";
 import { isWatchedNft, type WatchedNft, withNftId } from "./nft";
 import { assertStoreAccess, type StoreActor } from "./permissioned-store";
@@ -174,23 +179,6 @@ const isAddressBookEntry = (value: unknown): value is AddressBookEntry =>
 
 const hasUniqueStrings = (values: readonly string[]): boolean =>
   new Set(values).size === values.length;
-
-const isLoopbackHost = (host: string): boolean => host === "localhost" || host === "127.0.0.1";
-
-/**
- * Checks a user-provided RPC endpoint: https anywhere, http only on loopback.
- */
-export const isCustomRpcUrl = (value: unknown): value is string => {
-  if (typeof value !== "string" || value.length === 0 || value.length > 2048) {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHost(url.hostname));
-  } catch {
-    return false;
-  }
-};
 
 const isAccountLabels = (value: unknown): value is AccountLabels =>
   isRecord(value) &&

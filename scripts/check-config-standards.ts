@@ -353,6 +353,7 @@ const ciCommands = [
   "bun run vendor:krusty",
   "bun run vendor:multisig",
   "bun run check",
+  "bun run check:coverage",
   "bun run build",
   "bun run test:e2e",
   "bun run package:extension",

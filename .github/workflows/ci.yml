@@ -49,6 +49,10 @@ jobs:
       - run: bun run vendor:krusty
       - run: bun run vendor:multisig
       - run: bun run check
+      # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).
+      # Kept out of the aggregate `check` so the offline gate stays fast; a
+      # coverage regression below the floor fails the build here.
+      - run: bun run check:coverage
       - run: bun run build
       - run: bun run test:e2e
       - run: bun run package:extension
