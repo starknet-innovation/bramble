@@ -4,6 +4,7 @@
  * descriptor is rejected identically on both sides of the wire.
  */
 import { hasOnlyKnownKeys, isRecord, type Json } from "../shared/json";
+import { isCanonicalChainId } from "../starknet/networks";
 
 /**
  * A custom Starknet chain a dapp asks the wallet to add, after bridge
@@ -17,11 +18,6 @@ export type ProviderChain = {
   readonly id: string;
   readonly rpcUrls?: readonly string[];
 };
-
-const CHAIN_ID_PATTERN = /^0x[0-9a-fA-F]{1,64}$/;
-
-const isChainId = (value: unknown): value is string =>
-  typeof value === "string" && CHAIN_ID_PATTERN.test(value) && BigInt(value) > 0n;
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.length <= 256;
@@ -68,7 +64,7 @@ export const readProviderChain = (params: Json | undefined): ProviderChain | nul
       "rpc_urls",
     ]) ||
     !isNonEmptyString(params["id"]) ||
-    !isChainId(params["chain_id"]) ||
+    !isCanonicalChainId(params["chain_id"]) ||
     !isNonEmptyString(params["chain_name"]) ||
     (params["native_currency"] !== undefined && !isRecord(params["native_currency"]))
   ) {
@@ -111,7 +107,7 @@ export const isProviderChain = (value: unknown): value is ProviderChain =>
     "id",
     "rpcUrls",
   ]) &&
-  isChainId(value["chainId"]) &&
+  isCanonicalChainId(value["chainId"]) &&
   isNonEmptyString(value["chainName"]) &&
   isNonEmptyString(value["id"]) &&
   isOptionalUrlArray(value["rpcUrls"]) &&

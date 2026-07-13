@@ -192,6 +192,24 @@ export const canonicalFelt = (value: string): string | null => {
 };
 
 /**
+ * Checks whether a value is a chain id in lowercase `0x`-hex form. The loose
+ * form used when reading an already-canonical chain id off an internal message
+ * or a provider event: it accepts any length and `0x0`, matching how the
+ * extension emits chain ids. Do not re-derive this regex locally.
+ */
+export const isHexChainId = (value: unknown): value is string =>
+  typeof value === "string" && /^0x[0-9a-f]+$/.test(value);
+
+/**
+ * Checks whether a value is a canonical chain id: a positive `0x`-hex felt of
+ * 1..64 digits, accepting either case. The strict form used when accepting a
+ * chain id from a dapp (`wallet_addStarknetChain`) or persisting a custom
+ * network. Do not re-derive this locally.
+ */
+export const isCanonicalChainId = (value: unknown): value is string =>
+  typeof value === "string" && /^0x[0-9a-fA-F]{1,64}$/.test(value) && BigInt(value) > 0n;
+
+/**
  * Default network for newly imported accounts.
  */
 export const DEFAULT_NETWORK = STARKNET_NETWORKS.SN_MAIN;

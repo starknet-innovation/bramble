@@ -130,6 +130,14 @@ export const isStringArray = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && isJson(value) && value.every((item) => typeof item === "string");
 
 /**
+ * Checks a value is a token decimals count: a non-negative safe integer within
+ * the 0..36 range accepted at the watch-asset, preferences, and provider input
+ * boundaries. The one shared bound — do not re-derive the `36` literal locally.
+ */
+export const isSafeDecimals = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 36;
+
+/**
  * Checks that a list of strings has no duplicates. The one shared implementation
  * used by the storage and extension-message validators — do not re-derive it
  * locally (five copies once drifted across features).
