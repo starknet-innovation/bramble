@@ -5,7 +5,7 @@
  * `preferences-store.ts` so that file stays under the repository line cap; the
  * store re-exports the public types so existing import paths are unchanged.
  */
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "../shared/json";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
@@ -124,12 +124,6 @@ export const isAddressBookEntry = (value: unknown): value is AddressBookEntry =>
   isLabel(value["label"]) &&
   isStarknetNetworkId(value["networkId"]) &&
   value["id"] === `${value["networkId"]}:${value["address"]}`;
-
-/**
- * Checks that a list of strings has no duplicates.
- */
-export const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
 
 /**
  * Validates the account-labels map (account id keys, label values).

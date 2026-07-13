@@ -4,12 +4,9 @@
  */
 
 import { isUuid } from "../shared/ids";
-import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
-
-const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
 
 /**
  * ERC20 token metadata carried by a watch-asset approval.

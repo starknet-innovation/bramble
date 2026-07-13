@@ -3,7 +3,7 @@
  * kept out of preferences-store.ts so that file stays within the size budget.
  * Follows the built-in network model in starknet/networks.ts.
  */
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "../shared/json";
 
 const isLoopbackHost = (host: string): boolean => host === "localhost" || host === "127.0.0.1";
 
@@ -34,9 +34,6 @@ export type CustomNetwork = {
   readonly name: string;
   readonly rpcUrls?: readonly string[];
 };
-
-const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
 
 const isChainIdHex = (value: unknown): value is string =>
   typeof value === "string" && /^0x[0-9a-fA-F]{1,64}$/.test(value) && BigInt(value) > 0n;

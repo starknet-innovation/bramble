@@ -130,6 +130,14 @@ export const isStringArray = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && isJson(value) && value.every((item) => typeof item === "string");
 
 /**
+ * Checks that a list of strings has no duplicates. The one shared implementation
+ * used by the storage and extension-message validators — do not re-derive it
+ * locally (five copies once drifted across features).
+ */
+export const hasUniqueStrings = (values: readonly string[]): boolean =>
+  new Set(values).size === values.length;
+
+/**
  * Deep-coerces felt-shaped bigints to their canonical `0x`-hex string so a value
  * a dapp passes with bigint felts (get-starknet forwards `request` args
  * unserialized) survives the isJson gate instead of being dropped. A negative

@@ -163,6 +163,22 @@ export const sameFelt = (left: unknown, right: unknown): boolean => {
 };
 
 /**
+ * Parses a felt-shaped string into its bigint value, or null when the input is
+ * not a non-empty numeric string. The one shared felt parser — decode calldata
+ * felts through this rather than re-deriving the BigInt guard locally.
+ */
+export const asFelt = (value: unknown): bigint | null => {
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Normalizes a numeric string into the canonical `0x`-hex felt form, or null
  * when the value is not numeric. Callers needing throw-on-invalid semantics
  * wrap this rather than re-deriving the conversion.

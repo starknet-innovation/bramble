@@ -2,7 +2,7 @@
  * Plain wallet preferences kept outside the encrypted vault.
  */
 import { WalletError } from "../shared/errors";
-import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
 import {
   DEFAULT_NETWORK,
   DEFAULT_TOKENS,
@@ -32,7 +32,6 @@ import {
   type AccountLabels,
   type AddressBookEntry,
   type DisplayCurrency,
-  hasUniqueStrings,
   isAccountLabels,
   isAddressBookEntry,
   isDisplayCurrency,

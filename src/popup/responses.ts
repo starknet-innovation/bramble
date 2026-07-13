@@ -2,7 +2,7 @@
  * Pure popup response validators for background runtime data.
  */
 
-import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
 import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
 import { type ActivityEntry, isActivityEntry } from "../storage/activity-store";
 
@@ -145,9 +145,6 @@ export type DeploymentStatusResponse = {
  * Popup approval decision response accepted from the background boundary.
  */
 export type ApprovalDecisionResponse = AccountsResponse | PendingApprovalsResponse;
-
-const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
 
 const isNetworkOption = (value: unknown): value is NetworkOption =>
   isRecord(value) &&
