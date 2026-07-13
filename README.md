@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🔷 MC Wallet
+# MC Wallet
 
 ### A Starknet wallet that lives in your browser side panel.
 
@@ -18,26 +18,26 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 
 ---
 
-## ✨ Features
+## Features
 
-- 💸 **Accounts & transfers** — OpenZeppelin accounts, seed-phrase backup with on-screen verification, derive more accounts, reveal keys behind re-auth.
-- 🔌 **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
-- 🪙 **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
-- 🖼️ **NFT gallery** — watch collectibles with on-chain ownership proof before they're stored.
-- 🤝 **Multisig** — watch, propose, confirm, and execute on OpenZeppelin multisig accounts.
-- 🛡️ **Anti-phishing** — domain blocklist plus lookalike / punycode detection and per-origin connection history.
-- 🎛️ **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap.
-- 🎨 **Liquid Glass UI** — Apple-style glass surfaces, spring motion, and View Transitions, with full reduced-motion support.
+- **Accounts & transfers** — OpenZeppelin accounts, seed-phrase backup with on-screen verification, derive more accounts, reveal keys behind re-auth.
+- **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
+- **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
+- **NFT gallery** — watch collectibles with on-chain ownership proof before they're stored.
+- **Multisig** — watch, propose, confirm, and execute on OpenZeppelin multisig accounts.
+- **Anti-phishing** — domain blocklist plus lookalike / punycode detection and per-origin connection history.
+- **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap.
+- **Liquid Glass UI** — Apple-style glass surfaces, spring motion, and View Transitions, with full reduced-motion support.
 
 Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also available). Mainnet moves real funds. All cryptography runs through the vendored **Krusty KMS** WASM core, and there is no local signing fallback.
 
-## 🚀 Quick start
+## Quick start
 
 ```bash
 bun install
 bun run vendor:krusty     # Krusty KMS crypto core (WASM)
 bun run vendor:multisig   # pinned multisig contract artifacts
-bun run build             # → dist/
+bun run build             # -> dist/
 ```
 
 Open `chrome://extensions`, turn on Developer mode, hit **Load unpacked** and pick `dist/`, then click the toolbar icon to pop open the side panel.
@@ -45,20 +45,20 @@ Open `chrome://extensions`, turn on Developer mode, hit **Load unpacked** and pi
 Day to day:
 
 ```bash
-bun run check     # types · lint · standards · unit tests
+bun run check     # types, lint, standards, unit tests
 bun run format    # Biome autofix
 bun run test:e2e  # Playwright end-to-end (run test:e2e:install once first)
 ```
 
-## 🧱 Built with
+## Built with
 
 Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · Biome · Krusty KMS (WASM) · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
 
-## 🗺️ Layout
+## Layout
 
 ```
 src/background              privileged state, approvals, unlock sessions, vault service
-src/content + src/provider  page ⇄ background bridge (signing never exposed to pages)
+src/content + src/provider  page <-> background bridge (signing never exposed to pages)
 src/storage                encrypted persistence, permissions, schema migrations
 src/crypto                 Krusty KMS boundary
 src/starknet               RPC, networks, token registry, prices
@@ -66,11 +66,11 @@ src/sidepanel + src/ui      the side-panel app and its design system
 contracts/multisig         the pinned OpenZeppelin multisig shell (Cairo)
 ```
 
-## 📚 Docs
+## Docs
 
 - **[Architecture & internals](docs/ARCHITECTURE.md)** — the provider API, pinned class hashes, storage migrations, design system, and full tour.
 - **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**
 
-## 📄 License
+## License
 
 [MIT](LICENSE)
