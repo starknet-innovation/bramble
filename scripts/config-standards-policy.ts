@@ -17,7 +17,7 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@types/bun": "1.3.14",
   knip: "6.26.0",
   madge: "8.0.0",
-  typescript: "7.0.2",
+  typescript: "6.0.3",
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
