@@ -10,6 +10,7 @@
 import { WalletError } from "../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import type { IconName } from "../sidepanel/icons";
+import { hasUniqueStrings } from "./preferences-entries";
 import { isAccountId } from "./vault-schema";
 
 /**
@@ -72,9 +73,6 @@ const isGroupId = (value: unknown): value is string =>
   value.length > 0 &&
   value.length <= 80 &&
   /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
-
-const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
 
 /**
  * Checks a value is one of the allowed group icon names.

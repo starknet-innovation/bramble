@@ -331,6 +331,16 @@ const paint = (): void => {
   const animate = scene !== lastScene;
   lastScene = scene;
   const direction = navDirection(lastActiveView, activeView);
+  // Self-heal a stale drawer filter. Group ids are deterministic, so a filter
+  // still pointing at a deleted group would silently re-apply itself once a
+  // same-named group is recreated. Drop it whenever no current group matches,
+  // falling the drawer back to showing all accounts.
+  if (
+    drawerGroupFilter !== null &&
+    !(cache.preferences?.groups ?? []).some((group) => group.id === drawerGroupFilter)
+  ) {
+    drawerGroupFilter = null;
+  }
   const content = !status.hasVault
     ? onboarding(status)
     : status.locked

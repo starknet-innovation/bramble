@@ -295,7 +295,7 @@ export const HOME_STYLES = `
   button.group-toggle[aria-pressed="true"] { background: var(--mc-accent-soft); }
   .group-toggle-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
   .group-toggle-icon .icon { height: 16px; width: 16px; }
-  .group-toggle-name { flex: 1; font-size: ${TYPE.body.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .group-toggle-name { flex: 1; font-size: ${TYPE.body.size}; overflow: hidden; text-align: left; text-overflow: ellipsis; text-wrap: nowrap; }
   .group-toggle-mark .icon { height: 16px; width: 16px; }
   button.group-toggle[aria-pressed="true"] .group-toggle-mark .icon { color: var(--mc-accent); }
   .new-group-form, .edit-group-form { display: grid; gap: ${SPACE.sm}; }

@@ -82,7 +82,7 @@ export const groupAssignPanel = (account: AccountRef, groups: AccountGroups): st
   </div>`;
 
 const groupManagerRow = (group: AccountGroup): string => `
-  <li class="group-manage-row" data-group-row="${escapeHtml(group.id)}">
+  <li class="group-manage-row">
     <div class="group-manage-head">
       <span class="group-manage-icon">${icon(group.icon)}</span>
       <span class="group-manage-copy">
