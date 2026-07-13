@@ -79,6 +79,61 @@ describe("membership", () => {
   });
 });
 
+// Third account id used only by the bulk-membership suite (a distinct network
+// prefix, exercising cross-network bucketing into one group).
+const accountC = "SN_MAIN:0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+
+describe("bulk membership (group-centric editor)", () => {
+  test("buckets several accounts into one group in successive toggles", () => {
+    let groups = createGroup([], "Work", "briefcase");
+    const id = groups[0]?.id ?? "";
+    for (const account of [accountA, accountB, accountC]) {
+      groups = setAccountInGroup(groups, id, account, true);
+    }
+    expect(groups[0]?.accountIds).toEqual([accountA, accountB, accountC]);
+  });
+
+  test("removes several accounts, leaving the untouched ones", () => {
+    let groups = createGroup([], "Work", "briefcase");
+    const id = groups[0]?.id ?? "";
+    for (const account of [accountA, accountB, accountC]) {
+      groups = setAccountInGroup(groups, id, account, true);
+    }
+    groups = setAccountInGroup(groups, id, accountA, false);
+    groups = setAccountInGroup(groups, id, accountC, false);
+    expect(groups[0]?.accountIds).toEqual([accountB]);
+  });
+
+  test("re-toggling the same membership is idempotent", () => {
+    let groups = createGroup([], "Work", "briefcase");
+    const id = groups[0]?.id ?? "";
+    groups = setAccountInGroup(groups, id, accountA, true);
+    const afterAdd = groups;
+    // A no-op toggle preserves each group's identity (per-group referential
+    // stability), even though the containing array is a fresh map result.
+    groups = setAccountInGroup(groups, id, accountA, true);
+    expect(groups).toEqual(afterAdd);
+    expect(groups[0]).toBe(afterAdd[0]);
+    groups = setAccountInGroup(groups, id, accountB, false);
+    expect(groups).toEqual(afterAdd);
+    expect(groups[0]).toBe(afterAdd[0]);
+  });
+
+  test("membership is independent across groups", () => {
+    let groups = createGroup(createGroup([], "Work", "briefcase"), "Personal", "user");
+    const [work, personal] = [groups[0]?.id ?? "", groups[1]?.id ?? ""];
+    groups = setAccountInGroup(groups, work, accountA, true);
+    groups = setAccountInGroup(groups, work, accountB, true);
+    groups = setAccountInGroup(groups, personal, accountB, true);
+    expect(groups[0]?.accountIds).toEqual([accountA, accountB]);
+    expect(groups[1]?.accountIds).toEqual([accountB]);
+    // Removing an account from one group leaves its other memberships intact.
+    groups = setAccountInGroup(groups, work, accountB, false);
+    expect(groups[0]?.accountIds).toEqual([accountA]);
+    expect(groups[1]?.accountIds).toEqual([accountB]);
+  });
+});
+
 describe("renameGroup / setGroupIcon / removeGroup", () => {
   test("renames and re-icons only the matching group", () => {
     let groups = createGroup(createGroup([], "One", "folder"), "Two", "star");

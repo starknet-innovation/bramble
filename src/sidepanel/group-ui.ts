@@ -10,11 +10,15 @@ import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { SidepanelWallet } from "./runtime";
 
 /**
- * State the group controls close over: the wallet client plus a re-render
- * callback invoked after every successful mutation.
+ * State the group controls close over: the wallet client, a re-render callback
+ * invoked after every successful mutation, and the manage-accounts bulk editor's
+ * expanded-group accessor/mutator so a group's members editor can be opened
+ * (e.g. right after creating it) and stay open across re-renders.
  */
 export type GroupControlDeps = {
+  readonly expandedGroup: () => string | null;
   readonly rerender: () => Promise<void>;
+  readonly setExpandedGroup: (id: string | null) => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -54,8 +58,11 @@ const bindCreateForms = (root: Element, deps: GroupControlDeps): void => {
         return;
       }
       buttonBusy(button, true);
+      // The op returns the created group's deterministic id; open its bulk
+      // members editor so the user can immediately bucket accounts into it.
       void deps.wallet.createGroup(name, glyph).then(
-        async () => {
+        async (id) => {
+          deps.setExpandedGroup(id);
           showToast("Group created", "success");
           await deps.rerender();
         },
@@ -171,6 +178,23 @@ const bindAssignPanels = (root: Element): void => {
   });
 };
 
+// Expand/collapse a group's bulk members editor in the manage-accounts Groups
+// section. The open group is held in a module var (mirroring the drawer's group
+// filter) so it survives full re-renders; clicking the open group's header
+// collapses it. A re-render repaints the section with the right editor open.
+const bindGroupExpanders = (root: Element, deps: GroupControlDeps): void => {
+  root.querySelectorAll<HTMLButtonElement>("[data-group-expand]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["groupExpand"];
+      if (!id) {
+        return;
+      }
+      deps.setExpandedGroup(deps.expandedGroup() === id ? null : id);
+      void deps.rerender();
+    });
+  });
+};
+
 /**
  * Wires every account-groups control found under `root`. Safe to call on each
  * render; regions without group controls are simply skipped.
@@ -185,4 +209,5 @@ export const bindGroupControls = (root: Element | null, deps: GroupControlDeps):
   bindRemoveButtons(root, deps);
   bindAssignToggles(root, deps);
   bindAssignPanels(root);
+  bindGroupExpanders(root, deps);
 };

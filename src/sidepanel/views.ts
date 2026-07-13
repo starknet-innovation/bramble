@@ -310,6 +310,7 @@ export const dashboard = (
   selectedMultisigId: string | null = null,
   multisigClassDeclared: boolean | "error" | null = null,
   drawerGroupFilter: string | null = null,
+  expandedGroupId: string | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -324,7 +325,7 @@ export const dashboard = (
     return networkFlow(status, preferences);
   }
   if (activeView === "account") {
-    return accountFlow(status, account, preferences);
+    return accountFlow(status, account, preferences, expandedGroupId);
   }
   if (activeView === "address-book") {
     return addressBookFlow(status, preferences);

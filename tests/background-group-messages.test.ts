@@ -55,6 +55,66 @@ describe("account group messages", () => {
     expect(removed).toMatchObject({ ok: true, preferences: { groups: [] } });
   });
 
+  test("buckets several accounts into a group and keeps groups independent", async () => {
+    const handler = handlerWithGroups();
+    // Distinct, well-formed account ids spanning networks — the bulk editor
+    // lists every wallet account regardless of network.
+    const ids = ["SN_MAIN:0x1", "SN_MAIN:0x2", "SN_SEPOLIA:0x3"] as const;
+
+    await handler({ icon: "briefcase", name: "Work", type: "wallet.createGroup" }, extensionSender);
+    await handler({ icon: "user", name: "Personal", type: "wallet.createGroup" }, extensionSender);
+
+    let latest: unknown;
+    for (const accountId of ids) {
+      latest = await handler(
+        { accountId, groupId: "work", member: true, type: "wallet.setAccountInGroup" },
+        extensionSender,
+      );
+    }
+    expect(latest).toMatchObject({
+      ok: true,
+      preferences: { groups: [{ id: "work", accountIds: [...ids] }, { id: "personal" }] },
+    });
+
+    // A no-op re-toggle keeps membership stable (idempotent).
+    latest = await handler(
+      { accountId: ids[0], groupId: "work", member: true, type: "wallet.setAccountInGroup" },
+      extensionSender,
+    );
+    expect(latest).toMatchObject({
+      preferences: {
+        groups: [
+          { id: "work", accountIds: [...ids] },
+          { id: "personal", accountIds: [] },
+        ],
+      },
+    });
+
+    // The same account can also belong to a second group, independently.
+    await handler(
+      { accountId: ids[0], groupId: "personal", member: true, type: "wallet.setAccountInGroup" },
+      extensionSender,
+    );
+    // Removing several from "work" leaves the "personal" membership intact.
+    await handler(
+      { accountId: ids[1], groupId: "work", member: false, type: "wallet.setAccountInGroup" },
+      extensionSender,
+    );
+    const removed = await handler(
+      { accountId: ids[2], groupId: "work", member: false, type: "wallet.setAccountInGroup" },
+      extensionSender,
+    );
+    expect(removed).toMatchObject({
+      ok: true,
+      preferences: {
+        groups: [
+          { id: "work", accountIds: [ids[0]] },
+          { id: "personal", accountIds: [ids[0]] },
+        ],
+      },
+    });
+  });
+
   test("rejects malformed group requests", async () => {
     const handler = handlerWithGroups();
 

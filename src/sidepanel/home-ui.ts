@@ -22,6 +22,7 @@ export type HomeUiDeps = {
   readonly setDrawerOpen: (open: boolean) => void;
   readonly drawerGroupFilter: () => string | null;
   readonly setDrawerGroupFilter: (filter: string | null) => void;
+  readonly editGroup: (id: string) => void;
   readonly homeTab: () => HomeTab;
   readonly setHomeTab: (tab: HomeTab) => void;
   readonly networkId: () => string;
@@ -230,6 +231,18 @@ const bindDrawer = (deps: HomeUiDeps): void => {
       }
       deps.setDrawerGroupFilter(next);
       void deps.wallet.loadStatus().then(deps.render);
+    });
+  });
+
+  // The active-group chip's edit affordance jumps to the manage-accounts flow
+  // and opens that group's bulk members editor — bulk editing without the heavy
+  // editor crowding the drawer.
+  root.querySelectorAll<HTMLButtonElement>("[data-edit-group-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["editGroupView"];
+      if (id) {
+        deps.editGroup(id);
+      }
     });
   });
 

@@ -263,6 +263,12 @@ export const HOME_STYLES = `
   button.group-chip .icon { height: 14px; width: 14px; }
   button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
   button.group-chip[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  /* Active chip carries an inline edit affordance; the pair stays together when
+     the chip row wraps. */
+  .group-chip-active { align-items: center; display: inline-flex; gap: 2px; }
+  button.group-chip-edit { color: var(--mc-muted); height: 28px; width: 28px; }
+  button.group-chip-edit .icon { height: 15px; width: 15px; }
+  button.group-chip-edit:not(:disabled):hover { color: var(--mc-accent); }
   .drawer-account-item { display: grid; gap: 4px; }
   .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
   .drawer-account-row .drawer-account, .option-row-line .option-row { flex: 1; min-width: 0; }
@@ -326,13 +332,78 @@ export const HOME_STYLES = `
   button.group-icon-option .icon { height: 18px; width: 18px; }
   button.group-icon-option:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
   button.group-icon-option[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  .group-manage-list { display: grid; gap: ${SPACE.md}; }
+  .group-manage-list { display: grid; gap: ${SPACE.sm}; }
   .group-manage-row { display: grid; gap: ${SPACE.sm}; }
-  .group-manage-head { align-items: center; display: flex; gap: ${SPACE.sm}; }
   .group-manage-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
-  .group-manage-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .group-manage-copy strong { font-size: ${TYPE.body.size}; }
+  .group-manage-copy { display: grid; flex: 1; gap: 1px; min-width: 0; text-align: left; }
+  .group-manage-copy strong { font-size: ${TYPE.body.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   button[data-remove-group].is-confirming { color: var(--mc-danger); }
+
+  /* Group-centric bulk members editor: an expandable header per group, then a
+     roomy checklist of every wallet account. Hairline + skin-token only. */
+  button.group-expand {
+    align-items: center;
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.md};
+    color: var(--mc-text);
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: flex-start;
+    min-height: 48px;
+    padding: 0 ${SPACE.sm};
+    width: 100%;
+  }
+  button.group-expand:not(:disabled):hover { background: var(--mc-hover); }
+  button.group-expand[aria-expanded="true"] { background: var(--mc-accent-soft); }
+  button.group-expand[aria-expanded="true"] .group-manage-icon { color: var(--mc-accent); }
+  .group-expand-mark { align-items: center; color: var(--mc-muted); display: inline-flex; flex: none; }
+  .group-expand-mark .icon { height: 16px; width: 16px; }
+  .group-members {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.md};
+    display: grid;
+    gap: ${SPACE.sm};
+    padding: ${SPACE.sm};
+  }
+  .group-members-head { align-items: center; display: flex; gap: ${SPACE.sm}; }
+  .group-members-head .eyebrow { flex: 1; margin: 0; }
+  .account-check-list { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; }
+  button.account-check {
+    align-items: center;
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.sm};
+    box-shadow: var(--mc-edge);
+    color: var(--mc-text);
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: flex-start;
+    min-height: 48px;
+    padding: 0 ${SPACE.sm};
+    text-align: left;
+    width: 100%;
+  }
+  button.account-check:not(:disabled):hover { background: var(--mc-hover); }
+  button.account-check[aria-pressed="true"] { background: var(--mc-accent-soft); }
+  .account-check .option-avatar { flex: none; }
+  .account-check-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
+  .account-check-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .account-check-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .account-check-net {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-muted);
+    flex: none;
+    font-size: ${TYPE.caption.size};
+    font-weight: 650;
+    max-width: 92px;
+    overflow: hidden;
+    padding: 2px ${SPACE.sm};
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  .account-check-mark { flex: none; }
+  .account-check-mark .icon { color: var(--mc-muted); height: 18px; width: 18px; }
+  button.account-check[aria-pressed="true"] .account-check-mark .icon { color: var(--mc-accent); }
 
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid var(--mc-accent);

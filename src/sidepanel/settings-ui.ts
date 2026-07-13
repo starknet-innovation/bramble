@@ -13,9 +13,11 @@ import type { SidepanelWallet } from "./runtime";
 export type SettingsUiDeps = {
   readonly activeAccountId: () => string | null;
   readonly app: Element | null;
+  readonly expandedGroup: () => string | null;
   readonly networkId: () => string;
   readonly refresh: () => Promise<WalletStatus>;
   readonly render: (status: WalletStatus) => Promise<void>;
+  readonly setExpandedGroup: (id: string | null) => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -88,7 +90,9 @@ export const bindAddAccount = (deps: SettingsUiDeps): void => {
  */
 export const bindGroups = (deps: SettingsUiDeps): void => {
   bindGroupControls(deps.app, {
+    expandedGroup: deps.expandedGroup,
     rerender: () => rerender(deps),
+    setExpandedGroup: deps.setExpandedGroup,
     wallet: deps.wallet,
   });
 };

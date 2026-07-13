@@ -10,7 +10,8 @@ import { knownAccountType } from "../starknet/account-types";
 import { isStarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { groupAssignPanel, groupsSection } from "./group-controls";
+import { groupAssignPanel } from "./group-controls";
+import { groupsSection } from "./group-members";
 import { icon } from "./icons";
 import {
   accountAvatar,
@@ -162,11 +163,14 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
 
 /**
  * Account flow: switch the active account, name it, and inspect identifiers.
+ * `expandedGroupId` opens that group's bulk members editor in the Groups
+ * section (null = all collapsed).
  */
 export const accountFlow = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
+  expandedGroupId: string | null = null,
 ): string => {
   const networkAccounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
   const accountType = account ? knownAccountType(account.classHash) : null;
@@ -212,7 +216,7 @@ export const accountFlow = (
         <button id="new-account" class="secondary" type="button">${icon("wallet")}Add account</button>
         <p id="new-account-result" role="status"></p>
       </section>
-      ${groupsSection(groups)}
+      ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}
       ${
         account
           ? `<section class="section">

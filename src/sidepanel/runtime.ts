@@ -332,10 +332,17 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "label update failed");
     },
-    async createGroup(name: string, icon: AccountGroupIcon): Promise<void> {
+    async createGroup(name: string, icon: AccountGroupIcon): Promise<string> {
       const response = await sendMessage({ icon, name, type: "wallet.createGroup" });
       if (isPreferencesResponse(response)) {
-        return;
+        // The pure model appends the new group last with a deterministic id, so
+        // the final entry is the one just created — return its id so the caller
+        // can open its members editor.
+        const groups = response.preferences.groups ?? [];
+        const created = groups[groups.length - 1];
+        if (created) {
+          return created.id;
+        }
       }
       throw responseError(response, "group create failed");
     },

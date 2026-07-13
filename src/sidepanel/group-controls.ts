@@ -1,9 +1,11 @@
 /**
  * Pure templates for the account-groups ("folders") UI, shared by the left
  * account drawer and the manage-accounts flow so the two entry points render
- * the same controls: an icon picker, filter chips, a per-account assignment
- * panel, and the full groups-management section. Behaviour lives in
- * ./group-ui.ts; styles in ./styles-home.ts.
+ * the same controls: an icon picker, the shared "New group" form, filter chips
+ * (with an edit affordance on the active chip), and the per-account assignment
+ * panel. The group-centric bulk members editor and its "Groups" section wrapper
+ * live in ./group-members.ts, which reuses the picker and form templates here.
+ * Behaviour lives in ./group-ui.ts; styles in ./styles-home.ts.
  */
 import { escapeHtml } from "../shared/html";
 import {
@@ -42,7 +44,11 @@ export const newGroupForm = (): string => `
 
 /**
  * Renders the drawer's folder filter chips: an "All" chip plus one per group.
- * `activeFilter` is the selected group id, or null for "All".
+ * `activeFilter` is the selected group id, or null for "All". The chip matching
+ * the active filter grows an edit affordance (`data-edit-group-view`) that jumps
+ * to the manage-accounts flow and opens that group's bulk members editor — a
+ * fast path into bulk editing without duplicating the heavy editor in the
+ * cramped drawer.
  */
 export const groupFilterChips = (groups: AccountGroups, activeFilter: string | null): string => {
   if (groups.length === 0) {
@@ -50,9 +56,16 @@ export const groupFilterChips = (groups: AccountGroups, activeFilter: string | n
   }
   const chip = (id: string | null, label: string, glyph: string): string =>
     `<button class="group-chip" type="button" data-group-filter="${escapeHtml(id ?? "all")}" aria-pressed="${(id ?? null) === activeFilter}">${glyph}<span>${escapeHtml(label)}</span></button>`;
+  const groupChip = (group: AccountGroup): string => {
+    const base = chip(group.id, group.name, icon(group.icon));
+    if (group.id !== activeFilter) {
+      return base;
+    }
+    return `<span class="group-chip-active">${base}<button class="icon-button ghost group-chip-edit" type="button" data-edit-group-view="${escapeHtml(group.id)}" aria-label="Edit ${escapeHtml(group.name)} members" title="Edit members">${icon("settings")}</button></span>`;
+  };
   return `<div class="group-chips" role="group" aria-label="Filter by group">
     ${chip(null, "All", icon("wallet"))}
-    ${groups.map((group) => chip(group.id, group.name, icon(group.icon))).join("")}
+    ${groups.map(groupChip).join("")}
   </div>`;
 };
 
@@ -80,37 +93,3 @@ export const groupAssignPanel = (account: AccountRef, groups: AccountGroups): st
     }
     ${newGroupForm()}
   </div>`;
-
-const groupManagerRow = (group: AccountGroup): string => `
-  <li class="group-manage-row">
-    <div class="group-manage-head">
-      <span class="group-manage-icon">${icon(group.icon)}</span>
-      <span class="group-manage-copy">
-        <strong>${escapeHtml(group.name)}</strong>
-        <span class="hint">${group.accountIds.length} account${group.accountIds.length === 1 ? "" : "s"}</span>
-      </span>
-      <button class="icon-button danger" type="button" data-remove-group="${escapeHtml(group.id)}" aria-label="Delete ${escapeHtml(group.name)}" title="Delete ${escapeHtml(group.name)}">${icon("x")}</button>
-    </div>
-    <form class="edit-group-form" data-edit-group="${escapeHtml(group.id)}">
-      <input class="group-name-input" data-group-name maxlength="64" value="${escapeHtml(group.name)}" autocomplete="off" aria-label="Group name" />
-      ${groupIconPicker(group.icon)}
-      <button class="secondary small" type="submit" data-save-group="${escapeHtml(group.id)}">${icon("check")}Save changes</button>
-    </form>
-  </li>`;
-
-/**
- * Renders the manage-accounts "Groups" section: the list of existing groups
- * with inline rename, icon change, and delete controls, plus a new-group form.
- */
-export const groupsSection = (groups: AccountGroups): string => `
-  <section class="section">
-    <h2>Groups</h2>
-    <p class="hint">Organise accounts into named folders. An account can belong to several groups.</p>
-    ${
-      groups.length === 0
-        ? '<p class="empty">No groups yet. Create your first below.</p>'
-        : `<ul class="group-manage-list">${groups.map(groupManagerRow).join("")}</ul>`
-    }
-    ${newGroupForm()}
-    <p id="groups-result" role="status"></p>
-  </section>`;
