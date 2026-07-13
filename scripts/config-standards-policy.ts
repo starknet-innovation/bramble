@@ -15,8 +15,8 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@biomejs/biome": "2.5.3",
   "@playwright/test": "1.61.1",
   "@types/bun": "1.3.14",
+  dpdm: "4.2.0",
   knip: "6.26.0",
-  madge: "8.0.0",
   typescript: "7.0.2",
 };
 
@@ -81,7 +81,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
     "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test",
   "check:audit": "bun audit --audit-level=high",
   "check:coverage": "bun run scripts/check-coverage.ts",
-  "check:cycles": "madge --circular --extensions ts src",
+  "check:cycles": "dpdm --no-warning --no-tree --exit-code circular:1 'src/**/*.ts'",
   "check:deadcode": "knip --no-exit-code",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
