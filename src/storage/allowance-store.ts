@@ -72,15 +72,15 @@ export const allowanceId = (entry: AllowanceInput): string | null => {
 export const isAllowanceRecord = (value: unknown): value is AllowanceRecord =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountId", "amount", "id", "networkId", "spender", "token"]) &&
-  isAccountId(value.accountId) &&
-  isAmount(value.amount) &&
-  typeof value.id === "string" &&
-  isStarknetNetworkId(value.networkId) &&
-  typeof value.spender === "string" &&
-  isNonZeroStarkFieldElement(value.spender) &&
-  typeof value.token === "string" &&
-  isNonZeroStarkFieldElement(value.token) &&
-  value.id === `${value.accountId}:${value.token}:${value.spender}`;
+  isAccountId(value["accountId"]) &&
+  isAmount(value["amount"]) &&
+  typeof value["id"] === "string" &&
+  isStarknetNetworkId(value["networkId"]) &&
+  typeof value["spender"] === "string" &&
+  isNonZeroStarkFieldElement(value["spender"]) &&
+  typeof value["token"] === "string" &&
+  isNonZeroStarkFieldElement(value["token"]) &&
+  value["id"] === `${value["accountId"]}:${value["token"]}:${value["spender"]}`;
 
 const toRecord = (entry: AllowanceInput): AllowanceRecord | null => {
   const token = canonicalFelt(entry.token);

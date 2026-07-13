@@ -44,12 +44,12 @@ const describeTypedData = (typedData: unknown): string => {
     return "typed data";
   }
   const record = typedData as Record<string, unknown>;
-  const primaryType = typeof record.primaryType === "string" ? record.primaryType : "message";
+  const primaryType = typeof record["primaryType"] === "string" ? record["primaryType"] : "message";
   const domain =
-    typeof record.domain === "object" && record.domain !== null
-      ? (record.domain as Record<string, unknown>)
+    typeof record["domain"] === "object" && record["domain"] !== null
+      ? (record["domain"] as Record<string, unknown>)
       : {};
-  const name = typeof domain.name === "string" ? domain.name : "";
+  const name = typeof domain["name"] === "string" ? domain["name"] : "";
   return name ? `${primaryType} · ${name}` : primaryType;
 };
 

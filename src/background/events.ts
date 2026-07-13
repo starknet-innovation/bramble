@@ -30,42 +30,42 @@ export const walletEventBroadcasts = (
   message: unknown,
   response: unknown,
 ): readonly WalletEventMessage[] => {
-  if (!isRecord(message) || typeof message.type !== "string") {
+  if (!isRecord(message) || typeof message["type"] !== "string") {
     return [];
   }
-  if (!isRecord(response) || typeof response.error === "string") {
+  if (!isRecord(response) || typeof response["error"] === "string") {
     return [];
   }
 
-  if (message.type === "wallet.createAccount") {
-    const account = isRecord(response.account) ? response.account : null;
-    return withNetwork(account ? networkChangedForId(account.networkId) : null);
+  if (message["type"] === "wallet.createAccount") {
+    const account = isRecord(response["account"]) ? response["account"] : null;
+    return withNetwork(account ? networkChangedForId(account["networkId"]) : null);
   }
-  if (message.type === "wallet.approveOrigin") {
+  if (message["type"] === "wallet.approveOrigin") {
     // A switch-chain approval carries the new chain id, so dapps also see the
     // network change; other approvals just refresh accounts + the queue.
-    return typeof response.chainId === "string"
-      ? [accountsChanged, approvalsChanged, networkChanged(response.chainId)]
+    return typeof response["chainId"] === "string"
+      ? [accountsChanged, approvalsChanged, networkChanged(response["chainId"])]
       : [accountsChanged, approvalsChanged];
   }
-  if (message.type === "wallet.denyOrigin") {
+  if (message["type"] === "wallet.denyOrigin") {
     return [approvalsChanged];
   }
-  if (message.type === "wallet.revokeOrigin") {
+  if (message["type"] === "wallet.revokeOrigin") {
     return [accountsChanged];
   }
-  if (message.type === "wallet.setActiveAccount") {
+  if (message["type"] === "wallet.setActiveAccount") {
     return [accountsChanged];
   }
-  if (message.type === "wallet.setActiveNetwork") {
-    return withNetwork(networkChangedForId(response.networkId));
+  if (message["type"] === "wallet.setActiveNetwork") {
+    return withNetwork(networkChangedForId(response["networkId"]));
   }
-  if (message.type === "wallet.switchChain") {
+  if (message["type"] === "wallet.switchChain") {
     return withNetwork(
-      typeof response.chainId === "string" ? networkChanged(response.chainId) : null,
+      typeof response["chainId"] === "string" ? networkChanged(response["chainId"]) : null,
     );
   }
-  if (message.type === "wallet.lock" || message.type === "wallet.unlock") {
+  if (message["type"] === "wallet.lock" || message["type"] === "wallet.unlock") {
     return [accountsChanged];
   }
   return [];

@@ -46,11 +46,11 @@ const requireFile = async (path: string): Promise<void> => {
   }
 };
 
-if (manifest.manifest_version !== 3) {
+if (manifest["manifest_version"] !== 3) {
   failures.push("manifest must use MV3");
 }
 
-if (manifest.version !== packageJson.version) {
+if (manifest["version"] !== packageJson["version"]) {
   failures.push("manifest version must match package.json");
 }
 
@@ -73,41 +73,44 @@ if (
   failures.push("manifest top-level capabilities must stay explicit");
 }
 
-if (!hasOnly(manifest.permissions, ["sidePanel", "storage"])) {
+if (!hasOnly(manifest["permissions"], ["sidePanel", "storage"])) {
   failures.push("manifest permissions must stay sidePanel and storage only");
 }
 
-if (!hasOnly(manifest.host_permissions, expectedHostPermissions)) {
+if (!hasOnly(manifest["host_permissions"], expectedHostPermissions)) {
   failures.push("manifest host_permissions must stay pinned to Starknet RPC endpoints");
 }
 
-const contentSecurityPolicy = hasOnlyKeys(manifest.content_security_policy, ["extension_pages"])
-  ? manifest.content_security_policy
+const contentSecurityPolicy = hasOnlyKeys(manifest["content_security_policy"], ["extension_pages"])
+  ? manifest["content_security_policy"]
   : null;
-if (!contentSecurityPolicy || contentSecurityPolicy.extension_pages !== expectedExtensionCsp) {
+if (!contentSecurityPolicy || contentSecurityPolicy["extension_pages"] !== expectedExtensionCsp) {
   failures.push("manifest CSP must allow only packaged scripts and Krusty WASM");
 }
 
-const background = hasOnlyKeys(manifest.background, ["service_worker", "type"])
-  ? manifest.background
+const background = hasOnlyKeys(manifest["background"], ["service_worker", "type"])
+  ? manifest["background"]
   : null;
-if (background?.type !== "module") {
+if (background?.["type"] !== "module") {
   failures.push("manifest background worker must stay module-only");
 }
 const backgroundPath =
-  typeof background?.service_worker === "string" ? background.service_worker : "";
+  typeof background?.["service_worker"] === "string" ? background["service_worker"] : "";
 if (backgroundPath !== expectedBackgroundServiceWorker) {
   failures.push("manifest background worker path must stay pinned");
 }
 await requireFile(`src/${backgroundPath.replace(/\.js$/, ".ts")}`);
 
-const action = hasOnlyKeys(manifest.action, ["default_title"]) ? manifest.action : null;
-if (action?.default_title !== expectedActionTitle) {
+const action = hasOnlyKeys(manifest["action"], ["default_title"]) ? manifest["action"] : null;
+if (action?.["default_title"] !== expectedActionTitle) {
   failures.push("manifest action must open the wallet side panel");
 }
 
-const sidePanel = hasOnlyKeys(manifest.side_panel, ["default_path"]) ? manifest.side_panel : null;
-const sidePanelPath = typeof sidePanel?.default_path === "string" ? sidePanel.default_path : "";
+const sidePanel = hasOnlyKeys(manifest["side_panel"], ["default_path"])
+  ? manifest["side_panel"]
+  : null;
+const sidePanelPath =
+  typeof sidePanel?.["default_path"] === "string" ? sidePanel["default_path"] : "";
 if (sidePanelPath !== expectedSidePanel) {
   failures.push("manifest side panel path must stay pinned");
 }
@@ -124,7 +127,7 @@ if (sidePanelPath) {
   }
 }
 
-const contentScripts = manifest.content_scripts;
+const contentScripts = manifest["content_scripts"];
 if (!Array.isArray(contentScripts) || contentScripts.length !== 1) {
   failures.push("manifest must expose one content script");
 } else {
@@ -132,31 +135,33 @@ if (!Array.isArray(contentScripts) || contentScripts.length !== 1) {
   const contentScript = hasOnlyKeys(script, ["js", "matches", "run_at"]) ? script : null;
   if (
     !contentScript ||
-    !hasOnly(contentScript.matches, expectedMatches) ||
-    contentScript.run_at !== "document_start"
+    !hasOnly(contentScript["matches"], expectedMatches) ||
+    contentScript["run_at"] !== "document_start"
   ) {
     failures.push("content script matches or run_at changed");
   }
-  if (!hasOnly(contentScript?.js, [expectedContentScript])) {
+  if (!hasOnly(contentScript?.["js"], [expectedContentScript])) {
     failures.push("content script path must stay pinned");
   }
-  const [contentPath] = Array.isArray(contentScript?.js) ? contentScript.js : [];
+  const [contentPath] = Array.isArray(contentScript?.["js"]) ? contentScript["js"] : [];
   await requireFile(`src/${contentPath?.toString().replace(/\.js$/, ".ts")}`);
 }
 
-const resources = manifest.web_accessible_resources;
+const resources = manifest["web_accessible_resources"];
 if (!Array.isArray(resources) || resources.length !== 1) {
   failures.push("manifest must expose one web-accessible resource group");
 } else {
   const [resource] = resources;
   const resourceGroup = hasOnlyKeys(resource, ["matches", "resources"]) ? resource : null;
-  if (!resourceGroup || !hasOnly(resourceGroup.matches, expectedMatches)) {
+  if (!resourceGroup || !hasOnly(resourceGroup["matches"], expectedMatches)) {
     failures.push("web-accessible resource matches changed");
   }
-  if (!hasOnly(resourceGroup?.resources, [expectedProviderResource])) {
+  if (!hasOnly(resourceGroup?.["resources"], [expectedProviderResource])) {
     failures.push("web-accessible provider path must stay pinned");
   }
-  const [providerPath] = Array.isArray(resourceGroup?.resources) ? resourceGroup.resources : [];
+  const [providerPath] = Array.isArray(resourceGroup?.["resources"])
+    ? resourceGroup["resources"]
+    : [];
   await requireFile(`src/${providerPath?.toString().replace(/\.js$/, ".ts")}`);
 }
 

@@ -46,19 +46,20 @@ const readDiscoveryInput = (message: unknown, type: string): DiscoveryInput | nu
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["apiVersion", "origin", "type"]) ||
-    message.type !== type ||
-    (message.apiVersion !== undefined &&
-      (typeof message.apiVersion !== "string" || !API_VERSION_PATTERN.test(message.apiVersion)))
+    message["type"] !== type ||
+    (message["apiVersion"] !== undefined &&
+      (typeof message["apiVersion"] !== "string" ||
+        !API_VERSION_PATTERN.test(message["apiVersion"])))
   ) {
     return null;
   }
-  const origin = normalizeWalletOrigin(message.origin);
+  const origin = normalizeWalletOrigin(message["origin"]);
   if (!origin) {
     return null;
   }
   return {
     origin,
-    ...(message.apiVersion === undefined ? {} : { apiVersion: message.apiVersion as string }),
+    ...(message["apiVersion"] === undefined ? {} : { apiVersion: message["apiVersion"] as string }),
   };
 };
 

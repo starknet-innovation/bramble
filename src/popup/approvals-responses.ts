@@ -87,18 +87,18 @@ export type PendingApprovalsResponse = {
 const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["address", "decimals", "name", "networkId", "symbol"]) &&
-  typeof value.address === "string" &&
-  isStarkFieldElement(value.address) &&
-  typeof value.decimals === "number" &&
-  Number.isSafeInteger(value.decimals) &&
-  value.decimals >= 0 &&
-  value.decimals <= 36 &&
-  typeof value.name === "string" &&
-  value.name.length > 0 &&
-  value.name.length <= 64 &&
-  isStarknetNetworkId(value.networkId) &&
-  typeof value.symbol === "string" &&
-  /^[A-Z0-9]{2,12}$/.test(value.symbol);
+  typeof value["address"] === "string" &&
+  isStarkFieldElement(value["address"]) &&
+  typeof value["decimals"] === "number" &&
+  Number.isSafeInteger(value["decimals"]) &&
+  value["decimals"] >= 0 &&
+  value["decimals"] <= 36 &&
+  typeof value["name"] === "string" &&
+  value["name"].length > 0 &&
+  value["name"].length <= 64 &&
+  isStarknetNetworkId(value["networkId"]) &&
+  typeof value["symbol"] === "string" &&
+  /^[A-Z0-9]{2,12}$/.test(value["symbol"]);
 
 const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
@@ -109,11 +109,11 @@ const isSummaryText = (value: unknown): value is string =>
 const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["code", "message"]) &&
-  typeof value.code === "string" &&
-  /^[a-z][a-z-]{1,40}$/.test(value.code) &&
-  typeof value.message === "string" &&
-  value.message.length > 0 &&
-  value.message.length <= 300;
+  typeof value["code"] === "string" &&
+  /^[a-z][a-z-]{1,40}$/.test(value["code"]) &&
+  typeof value["message"] === "string" &&
+  value["message"].length > 0 &&
+  value["message"].length <= 300;
 
 const isPendingApproval = (value: unknown): value is PendingApproval => {
   if (
@@ -129,41 +129,43 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "token",
       "typedData",
     ]) ||
-    typeof value.id !== "string" ||
-    !isUuid(value.id) ||
-    typeof value.origin !== "string" ||
-    !isWalletOrigin(value.origin) ||
-    (value.typedData !== undefined && !isJson(value.typedData)) ||
-    (value.kind !== undefined &&
-      value.kind !== "add-chain" &&
-      value.kind !== "connect" &&
-      value.kind !== "declare" &&
-      value.kind !== "invoke" &&
-      value.kind !== "sign-typed-data" &&
-      value.kind !== "strk20-invoke" &&
-      value.kind !== "switch-chain" &&
-      value.kind !== "watch-asset") ||
-    (value.blocked !== undefined && typeof value.blocked !== "boolean") ||
-    (value.insights !== undefined &&
-      !(Array.isArray(value.insights) && value.insights.every(isInsightText))) ||
-    (value.summaries !== undefined &&
-      !(Array.isArray(value.summaries) && value.summaries.every(isSummaryText))) ||
-    (value.flags !== undefined &&
-      !(Array.isArray(value.flags) && value.flags.every(isApprovalRiskFlag)))
+    typeof value["id"] !== "string" ||
+    !isUuid(value["id"]) ||
+    typeof value["origin"] !== "string" ||
+    !isWalletOrigin(value["origin"]) ||
+    (value["typedData"] !== undefined && !isJson(value["typedData"])) ||
+    (value["kind"] !== undefined &&
+      value["kind"] !== "add-chain" &&
+      value["kind"] !== "connect" &&
+      value["kind"] !== "declare" &&
+      value["kind"] !== "invoke" &&
+      value["kind"] !== "sign-typed-data" &&
+      value["kind"] !== "strk20-invoke" &&
+      value["kind"] !== "switch-chain" &&
+      value["kind"] !== "watch-asset") ||
+    (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
+    (value["insights"] !== undefined &&
+      !(Array.isArray(value["insights"]) && value["insights"].every(isInsightText))) ||
+    (value["summaries"] !== undefined &&
+      !(Array.isArray(value["summaries"]) && value["summaries"].every(isSummaryText))) ||
+    (value["flags"] !== undefined &&
+      !(Array.isArray(value["flags"]) && value["flags"].every(isApprovalRiskFlag)))
   ) {
     return false;
   }
-  return value.kind === "watch-asset" ? isWatchAssetToken(value.token) : value.token === undefined;
+  return value["kind"] === "watch-asset"
+    ? isWatchAssetToken(value["token"])
+    : value["token"] === undefined;
 };
 
 const isConnectedSite = (value: unknown): value is ConnectedSite =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountCount", "origin"]) &&
-  typeof value.accountCount === "number" &&
-  Number.isSafeInteger(value.accountCount) &&
-  value.accountCount >= 0 &&
-  typeof value.origin === "string" &&
-  isWalletOrigin(value.origin);
+  typeof value["accountCount"] === "number" &&
+  Number.isSafeInteger(value["accountCount"]) &&
+  value["accountCount"] >= 0 &&
+  typeof value["origin"] === "string" &&
+  isWalletOrigin(value["origin"]);
 
 /**
  * Checks pending approval responses before rendering.
@@ -172,12 +174,12 @@ export const isPendingApprovalsResponse = (value: unknown): value is PendingAppr
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["ok", "pending"]) &&
-  value.ok === true &&
-  Array.isArray(value.pending) &&
-  value.pending.every(isPendingApproval) &&
-  hasUniqueStrings(value.pending.map((approval) => approval.id)) &&
+  value["ok"] === true &&
+  Array.isArray(value["pending"]) &&
+  value["pending"].every(isPendingApproval) &&
+  hasUniqueStrings(value["pending"].map((approval) => approval.id)) &&
   hasUniqueStrings(
-    value.pending
+    value["pending"]
       // Only connection prompts dedupe per origin; watch-asset and invoke
       // prompts legitimately queue multiple entries for the same site.
       .filter((approval) => approval.kind === undefined || approval.kind === "connect")
@@ -191,7 +193,7 @@ export const isConnectedSitesResponse = (value: unknown): value is ConnectedSite
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["ok", "sites"]) &&
-  value.ok === true &&
-  Array.isArray(value.sites) &&
-  value.sites.every(isConnectedSite) &&
-  hasUniqueStrings(value.sites.map((site) => site.origin));
+  value["ok"] === true &&
+  Array.isArray(value["sites"]) &&
+  value["sites"].every(isConnectedSite) &&
+  hasUniqueStrings(value["sites"].map((site) => site.origin));

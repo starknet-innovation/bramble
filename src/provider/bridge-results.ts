@@ -4,12 +4,9 @@
  * background results into spec-exact dapp shapes and maps failures to spec
  * `{ code, message, data? }` error objects.
  */
-import {
-  errorForMessage,
-  unknownError,
-  type WalletRpcError,
-} from "../background/wallet-rpc-errors";
+
 import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
+import { errorForMessage, unknownError, type WalletRpcError } from "../shared/rpc-errors";
 import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
 import { isAccountRef } from "../storage/vault-schema";
 import { providerStrk20Balances, providerStrk20CallAndProof } from "./strk20-bridge";
@@ -129,9 +126,9 @@ export const toPublicAccount = (account: PublicAccount): PublicAccount => ({
 export const isPublicAccount = (value: unknown): value is PublicAccount =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["address", "networkId"]) &&
-  typeof value.address === "string" &&
-  value.address.length > 0 &&
-  isStarknetNetworkId(value.networkId);
+  typeof value["address"] === "string" &&
+  value["address"].length > 0 &&
+  isStarknetNetworkId(value["networkId"]);
 
 // Validates an `{ accounts, ok: true }` envelope of `isMember` members unique
 // under `keyOf`, returning the narrowed list or null.
@@ -144,13 +141,13 @@ const parseAccountsResult = <T>(
     !isRecord(result) ||
     !isJson(result) ||
     !hasOnlyKnownKeys(result, ["accounts", "ok"]) ||
-    result.ok !== true ||
-    !Array.isArray(result.accounts) ||
-    !result.accounts.every(isMember)
+    result["ok"] !== true ||
+    !Array.isArray(result["accounts"]) ||
+    !result["accounts"].every(isMember)
   ) {
     return null;
   }
-  const accounts = result.accounts;
+  const accounts = result["accounts"];
   return new Set(accounts.map(keyOf)).size === accounts.length ? accounts : null;
 };
 
@@ -174,10 +171,10 @@ export const providerChainIdResult = (result: unknown): { chainId: string } | nu
   isRecord(result) &&
   isJson(result) &&
   hasOnlyKnownKeys(result, ["chainId", "ok"]) &&
-  result.ok === true &&
-  typeof result.chainId === "string" &&
-  /^0x[0-9a-f]+$/.test(result.chainId)
-    ? { chainId: result.chainId }
+  result["ok"] === true &&
+  typeof result["chainId"] === "string" &&
+  /^0x[0-9a-f]+$/.test(result["chainId"])
+    ? { chainId: result["chainId"] }
     : null;
 
 /**
@@ -188,9 +185,9 @@ export const providerInvokeResult = (result: unknown): ProviderInvokeResult | nu
   isRecord(result) &&
   isJson(result) &&
   hasOnlyKnownKeys(result, ["transaction_hash"]) &&
-  typeof result.transaction_hash === "string" &&
-  /^0x0[0-8][0-9a-f]{62}$/.test(result.transaction_hash)
-    ? { transaction_hash: result.transaction_hash }
+  typeof result["transaction_hash"] === "string" &&
+  /^0x0[0-8][0-9a-f]{62}$/.test(result["transaction_hash"])
+    ? { transaction_hash: result["transaction_hash"] }
     : null;
 
 /**
@@ -205,11 +202,12 @@ export const readApiVersionParam = (params: Json | undefined): string | null | u
   if (!isRecord(params) || !hasOnlyKnownKeys(params, ["api_version"])) {
     return null;
   }
-  if (params.api_version === undefined) {
+  if (params["api_version"] === undefined) {
     return undefined;
   }
-  return typeof params.api_version === "string" && API_VERSION_PATTERN.test(params.api_version)
-    ? params.api_version
+  return typeof params["api_version"] === "string" &&
+    API_VERSION_PATTERN.test(params["api_version"])
+    ? params["api_version"]
     : null;
 };
 
@@ -222,9 +220,10 @@ export const isRequestAccountsParams = (params: Json | undefined): boolean =>
   params === undefined ||
   (isRecord(params) &&
     hasOnlyKnownKeys(params, ["api_version", "silent_mode"]) &&
-    (params.silent_mode === undefined || typeof params.silent_mode === "boolean") &&
-    (params.api_version === undefined ||
-      (typeof params.api_version === "string" && API_VERSION_PATTERN.test(params.api_version))));
+    (params["silent_mode"] === undefined || typeof params["silent_mode"] === "boolean") &&
+    (params["api_version"] === undefined ||
+      (typeof params["api_version"] === "string" &&
+        API_VERSION_PATTERN.test(params["api_version"]))));
 
 /**
  * Narrows an unknown value to a spec declare result whose `transaction_hash` is
@@ -234,11 +233,11 @@ export const providerDeclareResult = (result: unknown): ProviderDeclareResult | 
   isRecord(result) &&
   isJson(result) &&
   hasOnlyKnownKeys(result, ["class_hash", "transaction_hash"]) &&
-  typeof result.transaction_hash === "string" &&
-  /^0x0[0-8][0-9a-f]{62}$/.test(result.transaction_hash) &&
-  typeof result.class_hash === "string" &&
-  /^0x[0-9a-f]{64}$/.test(result.class_hash)
-    ? { class_hash: result.class_hash, transaction_hash: result.transaction_hash }
+  typeof result["transaction_hash"] === "string" &&
+  /^0x0[0-8][0-9a-f]{62}$/.test(result["transaction_hash"]) &&
+  typeof result["class_hash"] === "string" &&
+  /^0x[0-9a-f]{64}$/.test(result["class_hash"])
+    ? { class_hash: result["class_hash"], transaction_hash: result["transaction_hash"] }
     : null;
 
 /**
@@ -275,18 +274,18 @@ const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
     return null;
   }
   const contractAddress =
-    typeof call.contract_address === "string"
-      ? call.contract_address
-      : typeof call.contractAddress === "string"
-        ? call.contractAddress
+    typeof call["contract_address"] === "string"
+      ? call["contract_address"]
+      : typeof call["contractAddress"] === "string"
+        ? call["contractAddress"]
         : null;
   const entrypoint =
-    typeof call.entry_point === "string"
-      ? call.entry_point
-      : typeof call.entrypoint === "string"
-        ? call.entrypoint
+    typeof call["entry_point"] === "string"
+      ? call["entry_point"]
+      : typeof call["entrypoint"] === "string"
+        ? call["entrypoint"]
         : null;
-  const calldata = call.calldata ?? [];
+  const calldata = call["calldata"] ?? [];
   if (contractAddress === null || entrypoint === null || !Array.isArray(calldata)) {
     return null;
   }
@@ -314,7 +313,7 @@ export const providerInvokeCalls = (
   ) {
     return null;
   }
-  const source = params.invoke_transaction ?? params.calls;
+  const source = params["invoke_transaction"] ?? params["calls"];
   if (!Array.isArray(source) || source.length === 0) {
     return null;
   }
@@ -330,10 +329,10 @@ export const providerInvokeCalls = (
 export const providerSwitchChainId = (params: Json | undefined): string | null =>
   isRecord(params) &&
   hasOnlyKnownKeys(params, ["chainId", "silent_mode"]) &&
-  (params.silent_mode === undefined || typeof params.silent_mode === "boolean") &&
-  typeof params.chainId === "string" &&
-  /^0x[0-9a-f]+$/.test(params.chainId)
-    ? params.chainId
+  (params["silent_mode"] === undefined || typeof params["silent_mode"] === "boolean") &&
+  typeof params["chainId"] === "string" &&
+  /^0x[0-9a-f]+$/.test(params["chainId"])
+    ? params["chainId"]
     : null;
 
 /**
@@ -345,11 +344,11 @@ export const readTypedDataParam = (params: Json | undefined): Json | null => {
   if (params === undefined) {
     return null;
   }
-  if (isRecord(params) && Object.hasOwn(params, "typed_data") && isJson(params.typed_data)) {
-    return params.typed_data;
+  if (isRecord(params) && Object.hasOwn(params, "typed_data") && isJson(params["typed_data"])) {
+    return params["typed_data"];
   }
-  if (isRecord(params) && Object.hasOwn(params, "typedData") && isJson(params.typedData)) {
-    return params.typedData;
+  if (isRecord(params) && Object.hasOwn(params, "typedData") && isJson(params["typedData"])) {
+    return params["typedData"];
   }
   return params;
 };
@@ -361,21 +360,21 @@ const padFeltList = (values: readonly unknown[]): string[] | null => {
 };
 
 const deploymentPayload = (result: unknown): ProviderPayload => {
-  const deployment = isRecord(result) && result.ok === true ? result.deployment : null;
+  const deployment = isRecord(result) && result["ok"] === true ? result["deployment"] : null;
   if (
     !isRecord(deployment) ||
-    typeof deployment.address !== "string" ||
-    typeof deployment.classHash !== "string" ||
-    typeof deployment.salt !== "string" ||
-    !Array.isArray(deployment.calldata) ||
-    (deployment.version !== 0 && deployment.version !== 1)
+    typeof deployment["address"] !== "string" ||
+    typeof deployment["classHash"] !== "string" ||
+    typeof deployment["salt"] !== "string" ||
+    !Array.isArray(deployment["calldata"]) ||
+    (deployment["version"] !== 0 && deployment["version"] !== 1)
   ) {
     return { error: unknownError() };
   }
-  const address = padFelt(deployment.address);
-  const classHash = padFelt(deployment.classHash);
-  const salt = padFelt(deployment.salt);
-  const calldata = padFeltList(deployment.calldata);
+  const address = padFelt(deployment["address"]);
+  const classHash = padFelt(deployment["classHash"]);
+  const salt = padFelt(deployment["salt"]);
+  const calldata = padFeltList(deployment["calldata"]);
   if (address === null || classHash === null || salt === null || calldata === null) {
     return { error: unknownError() };
   }
@@ -385,7 +384,7 @@ const deploymentPayload = (result: unknown): ProviderPayload => {
       calldata,
       class_hash: classHash,
       salt,
-      version: deployment.version,
+      version: deployment["version"],
     },
   };
 };
@@ -398,49 +397,53 @@ export const toProviderPayload = (
   result: unknown,
   method: ProviderResultMethod = "mc_accounts",
 ): ProviderPayload => {
-  if (isRecord(result) && typeof result.error === "string") {
-    return { error: errorForMessage(result.error) };
+  if (isRecord(result) && typeof result["error"] === "string") {
+    return { error: errorForMessage(result["error"]) };
   }
-  if (isRecord(result) && result.ok === false && isRecord(result.pending)) {
+  if (isRecord(result) && result["ok"] === false && isRecord(result["pending"])) {
     return { error: unknownError() };
   }
   if (method === "wallet_getPermissions") {
     const permissions =
-      isRecord(result) && result.ok === true ? providerStringArrayResult(result.permissions) : null;
+      isRecord(result) && result["ok"] === true
+        ? providerStringArrayResult(result["permissions"])
+        : null;
     return permissions ? { result: permissions } : { error: unknownError() };
   }
   if (method === "wallet_supportedSpecs" || method === "wallet_supportedWalletApi") {
     const versions =
-      isRecord(result) && result.ok === true ? providerStringArrayResult(result.versions) : null;
+      isRecord(result) && result["ok"] === true
+        ? providerStringArrayResult(result["versions"])
+        : null;
     return versions ? { result: versions } : { error: unknownError() };
   }
   if (method === "wallet_deploymentData") {
     return deploymentPayload(result);
   }
   if (method === "wallet_watchAsset") {
-    return isRecord(result) && result.ok === true && result.watched === true
+    return isRecord(result) && result["ok"] === true && result["watched"] === true
       ? { result: true }
       : { error: unknownError() };
   }
   if (method === "wallet_signTypedData") {
-    const signature = isRecord(result) && result.ok === true ? result.signature : null;
+    const signature = isRecord(result) && result["ok"] === true ? result["signature"] : null;
     return isRecord(signature) &&
-      typeof signature.r === "string" &&
-      typeof signature.s === "string" &&
-      /^0x[0-9a-f]+$/.test(signature.r) &&
-      /^0x[0-9a-f]+$/.test(signature.s)
-      ? { result: [signature.r, signature.s] }
+      typeof signature["r"] === "string" &&
+      typeof signature["s"] === "string" &&
+      /^0x[0-9a-f]+$/.test(signature["r"]) &&
+      /^0x[0-9a-f]+$/.test(signature["s"])
+      ? { result: [signature["r"], signature["s"]] }
       : { error: unknownError() };
   }
   if (method === "wallet_strk20Balances") {
     const balances =
-      isRecord(result) && result.ok === true ? providerStrk20Balances(result.balances) : null;
+      isRecord(result) && result["ok"] === true ? providerStrk20Balances(result["balances"]) : null;
     return balances ? { result: balances } : { error: unknownError() };
   }
   if (method === "wallet_strk20PrepareInvoke") {
     const callAndProof =
-      isRecord(result) && result.ok === true
-        ? providerStrk20CallAndProof(result.callAndProof)
+      isRecord(result) && result["ok"] === true
+        ? providerStrk20CallAndProof(result["callAndProof"])
         : null;
     return callAndProof ? { result: callAndProof } : { error: unknownError() };
   }
@@ -454,26 +457,26 @@ export const toProviderPayload = (
   if (
     (method === "wallet_addInvokeTransaction" || method === "wallet_strk20InvokeTransaction") &&
     isRecord(result) &&
-    typeof result.transactionHash === "string"
+    typeof result["transactionHash"] === "string"
   ) {
-    const padded = padFelt(result.transactionHash);
+    const padded = padFelt(result["transactionHash"]);
     // A hash the wallet itself produced that will not pad is an internal
     // failure, not a dapp payload problem, so it maps to UNKNOWN_ERROR.
     return padded ? { result: { transaction_hash: padded } } : { error: unknownError() };
   }
   if (method === "wallet_addStarknetChain") {
-    return isRecord(result) && result.ok === true && result.added === true
+    return isRecord(result) && result["ok"] === true && result["added"] === true
       ? { result: true }
       : { error: unknownError() };
   }
   if (
     method === "wallet_addDeclareTransaction" &&
     isRecord(result) &&
-    typeof result.transactionHash === "string" &&
-    typeof result.classHash === "string"
+    typeof result["transactionHash"] === "string" &&
+    typeof result["classHash"] === "string"
   ) {
-    const transactionHash = padFelt(result.transactionHash);
-    const classHash = padFelt(result.classHash);
+    const transactionHash = padFelt(result["transactionHash"]);
+    const classHash = padFelt(result["classHash"]);
     // Hashes the wallet itself produced that will not pad are an internal
     // failure, not a dapp payload problem, so they map to UNKNOWN_ERROR.
     return transactionHash && classHash

@@ -6,12 +6,12 @@ import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
-import { unknownError } from "../src/background/wallet-rpc-errors";
 import {
   readProviderRequestArguments,
   toProviderPayload,
   toRuntimeMessage,
 } from "../src/provider/bridge";
+import { unknownError } from "../src/shared/rpc-errors";
 import { isTypedDataShape, typedDataHash } from "../src/starknet/typed-data";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
 

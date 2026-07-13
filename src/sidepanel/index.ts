@@ -97,7 +97,7 @@ type ViewTransitionDocument = Document & {
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      const view = button.dataset.view;
+      const view = button.dataset["view"];
       if (!isWalletView(view)) {
         return;
       }
@@ -153,13 +153,13 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
     bindAll();
     return;
   }
-  document.documentElement.dataset.navDirection = direction;
+  document.documentElement.dataset["navDirection"] = direction;
   const transition = doc.startViewTransition(() => {
     renderShell(content, false);
     bindAll();
   });
   void transition.finished.finally(() => {
-    delete document.documentElement.dataset.navDirection;
+    delete document.documentElement.dataset["navDirection"];
   });
 };
 

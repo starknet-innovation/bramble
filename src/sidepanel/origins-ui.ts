@@ -24,7 +24,7 @@ export const bindConnectedSites = ({ app, render, wallet }: ConnectedSitesUiDeps
 
   app?.querySelectorAll<HTMLButtonElement>("[data-revoke-origin]").forEach((button) => {
     button.addEventListener("click", () => {
-      const origin = button.dataset.revokeOrigin;
+      const origin = button.dataset["revokeOrigin"];
       if (!origin) {
         return;
       }

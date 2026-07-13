@@ -27,8 +27,17 @@
   },
   "linter": {
     "enabled": true,
+    "domains": {
+      "types": "recommended"
+    },
     "rules": {
       "preset": "recommended",
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
+      "nursery": {
+        "noFloatingPromises": "error"
+      },
       "style": {
         "noNonNullAssertion": "error",
         "noParameterAssign": {

@@ -3,7 +3,7 @@
  * accountsChanged/networkChanged subscriptions and delegates to the content
  * bridge.
  */
-import { invalidRequestPayload } from "../background/wallet-rpc-errors";
+import { invalidRequestPayload } from "../shared/rpc-errors";
 import {
   CONTENT_TARGET,
   canQueueProviderRequest,

@@ -193,7 +193,7 @@ const bindDrawer = (deps: HomeUiDeps): void => {
 
   root.querySelectorAll<HTMLButtonElement>("[data-switch-account]").forEach((button) => {
     button.addEventListener("click", () => {
-      const accountId = button.dataset.switchAccount;
+      const accountId = button.dataset["switchAccount"];
       if (!accountId) {
         return;
       }
@@ -268,15 +268,15 @@ const bindTabs = (deps: HomeUiDeps): void => {
   const applyTab = (tab: HomeTab, animate: boolean): void => {
     tabsRoot.setAttribute("data-active-tab", tab);
     tabsRoot.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
-      button.setAttribute("aria-selected", String(button.dataset.homeTab === tab));
+      button.setAttribute("aria-selected", String(button.dataset["homeTab"] === tab));
     });
     tabsRoot.querySelectorAll<HTMLElement>("[data-tab-actions]").forEach((actions) => {
       const target = actions;
-      target.hidden = target.dataset.tabActions !== tab;
+      target.hidden = target.dataset["tabActions"] !== tab;
     });
     tabsRoot.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
       const target = panel;
-      const on = target.dataset.tabPanel === tab;
+      const on = target.dataset["tabPanel"] === tab;
       if (on && animate) {
         // Re-runs the enter animation: the panel was display:none, so the
         // animation restarts when it becomes visible again.
@@ -293,7 +293,7 @@ const bindTabs = (deps: HomeUiDeps): void => {
 
   tabsRoot.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
     button.addEventListener("click", () => {
-      const tab = button.dataset.homeTab;
+      const tab = button.dataset["homeTab"];
       if (!isHomeTab(tab) || tab === deps.homeTab()) {
         return;
       }

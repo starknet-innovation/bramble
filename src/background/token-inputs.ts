@@ -10,10 +10,10 @@ import { isNonZeroStarkFieldElement } from "../starknet/networks";
 export const readAddTokenInput = (message: unknown): { readonly address: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["address", "type"]) &&
-  message.type === "wallet.addToken" &&
-  typeof message.address === "string" &&
-  isNonZeroStarkFieldElement(message.address)
-    ? { address: message.address }
+  message["type"] === "wallet.addToken" &&
+  typeof message["address"] === "string" &&
+  isNonZeroStarkFieldElement(message["address"])
+    ? { address: message["address"] }
     : null;
 
 /**
@@ -22,10 +22,10 @@ export const readAddTokenInput = (message: unknown): { readonly address: string 
 export const readTokenChartInput = (message: unknown): { readonly address: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["address", "type"]) &&
-  message.type === "wallet.tokenChart" &&
-  typeof message.address === "string" &&
-  isNonZeroStarkFieldElement(message.address)
-    ? { address: message.address }
+  message["type"] === "wallet.tokenChart" &&
+  typeof message["address"] === "string" &&
+  isNonZeroStarkFieldElement(message["address"])
+    ? { address: message["address"] }
     : null;
 
 /**
@@ -36,10 +36,10 @@ export const readSetTokenHiddenInput = (
 ): { readonly hidden: boolean; readonly tokenId: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["hidden", "tokenId", "type"]) &&
-  message.type === "wallet.setTokenHidden" &&
-  typeof message.hidden === "boolean" &&
-  typeof message.tokenId === "string" &&
-  message.tokenId.length > 0 &&
-  message.tokenId.length <= 200
-    ? { hidden: message.hidden, tokenId: message.tokenId }
+  message["type"] === "wallet.setTokenHidden" &&
+  typeof message["hidden"] === "boolean" &&
+  typeof message["tokenId"] === "string" &&
+  message["tokenId"].length > 0 &&
+  message["tokenId"].length <= 200
+    ? { hidden: message["hidden"], tokenId: message["tokenId"] }
     : null;

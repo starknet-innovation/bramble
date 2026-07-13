@@ -39,14 +39,14 @@ const isNftLabel = (value: unknown): value is string =>
 export const isWatchedNft = (value: unknown): value is WatchedNft =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["contract", "id", "label", "networkId", "spam", "tokenId"]) &&
-  typeof value.contract === "string" &&
-  isNonZeroStarkFieldElement(value.contract) &&
-  typeof value.id === "string" &&
-  (value.label === undefined || isNftLabel(value.label)) &&
-  isStarknetNetworkId(value.networkId) &&
-  (value.spam === undefined || typeof value.spam === "boolean") &&
-  isTokenId(value.tokenId) &&
-  value.id === `${value.networkId}:${value.contract}:${value.tokenId}`;
+  typeof value["contract"] === "string" &&
+  isNonZeroStarkFieldElement(value["contract"]) &&
+  typeof value["id"] === "string" &&
+  (value["label"] === undefined || isNftLabel(value["label"])) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  (value["spam"] === undefined || typeof value["spam"] === "boolean") &&
+  isTokenId(value["tokenId"]) &&
+  value["id"] === `${value["networkId"]}:${value["contract"]}:${value["tokenId"]}`;
 
 /**
  * Normalizes a watched-NFT input into canonical hex/decimal form and attaches

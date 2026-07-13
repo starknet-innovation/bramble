@@ -10,7 +10,12 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
-import { type CustomNetwork, isCustomNetwork, normalizeChainId } from "./custom-network";
+import {
+  type CustomNetwork,
+  isCustomNetwork,
+  isCustomRpcUrl,
+  normalizeChainId,
+} from "./custom-network";
 import type { KeyValueStore } from "./kv";
 import { isWatchedNft, type WatchedNft, withNftId } from "./nft";
 import { assertStoreAccess, type StoreActor } from "./permissioned-store";
@@ -151,46 +156,29 @@ const withAddressBookId = (entry: Omit<AddressBookEntry, "id">): AddressBookEntr
 const isTokenConfig = (value: unknown): value is TokenConfig =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["address", "decimals", "id", "name", "networkId", "symbol"]) &&
-  typeof value.address === "string" &&
-  isNonZeroStarkFieldElement(value.address) &&
-  isSafeDecimals(value.decimals) &&
-  typeof value.id === "string" &&
-  typeof value.name === "string" &&
-  value.name.trim().length > 0 &&
-  value.name.trim().length <= 64 &&
-  isStarknetNetworkId(value.networkId) &&
-  isTokenSymbol(value.symbol) &&
-  value.id === `${value.networkId}:${value.symbol}:${value.address}`;
+  typeof value["address"] === "string" &&
+  isNonZeroStarkFieldElement(value["address"]) &&
+  isSafeDecimals(value["decimals"]) &&
+  typeof value["id"] === "string" &&
+  typeof value["name"] === "string" &&
+  value["name"].trim().length > 0 &&
+  value["name"].trim().length <= 64 &&
+  isStarknetNetworkId(value["networkId"]) &&
+  isTokenSymbol(value["symbol"]) &&
+  value["id"] === `${value["networkId"]}:${value["symbol"]}:${value["address"]}`;
 
 const isAddressBookEntry = (value: unknown): value is AddressBookEntry =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["address", "id", "label", "networkId"]) &&
-  typeof value.address === "string" &&
-  isNonZeroStarkFieldElement(value.address) &&
-  typeof value.id === "string" &&
-  isLabel(value.label) &&
-  isStarknetNetworkId(value.networkId) &&
-  value.id === `${value.networkId}:${value.address}`;
+  typeof value["address"] === "string" &&
+  isNonZeroStarkFieldElement(value["address"]) &&
+  typeof value["id"] === "string" &&
+  isLabel(value["label"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  value["id"] === `${value["networkId"]}:${value["address"]}`;
 
 const hasUniqueStrings = (values: readonly string[]): boolean =>
   new Set(values).size === values.length;
-
-const isLoopbackHost = (host: string): boolean => host === "localhost" || host === "127.0.0.1";
-
-/**
- * Checks a user-provided RPC endpoint: https anywhere, http only on loopback.
- */
-export const isCustomRpcUrl = (value: unknown): value is string => {
-  if (typeof value !== "string" || value.length === 0 || value.length > 2048) {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHost(url.hostname));
-  } catch {
-    return false;
-  }
-};
 
 const isAccountLabels = (value: unknown): value is AccountLabels =>
   isRecord(value) &&
@@ -236,31 +224,31 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
     "theme",
     "tokens",
   ]) &&
-  (value.customNetworks === undefined ||
-    (Array.isArray(value.customNetworks) &&
-      value.customNetworks.every(isCustomNetwork) &&
+  (value["customNetworks"] === undefined ||
+    (Array.isArray(value["customNetworks"]) &&
+      value["customNetworks"].every(isCustomNetwork) &&
       hasUniqueStrings(
-        value.customNetworks.map((network) => normalizeChainId(network.chainId)),
+        value["customNetworks"].map((network) => normalizeChainId(network.chainId)),
       ))) &&
-  (value.accountLabels === undefined || isAccountLabels(value.accountLabels)) &&
-  (value.displayCurrency === undefined || isDisplayCurrency(value.displayCurrency)) &&
-  (value.hiddenTokens === undefined || isHiddenTokens(value.hiddenTokens)) &&
-  (value.theme === undefined || isThemeChoice(value.theme)) &&
-  (value.rpcOverrides === undefined || isRpcOverrides(value.rpcOverrides)) &&
-  (value.strk20ProverUrl === undefined ||
-    (typeof value.strk20ProverUrl === "string" && isCustomRpcUrl(value.strk20ProverUrl))) &&
-  (value.nfts === undefined ||
-    (Array.isArray(value.nfts) &&
-      value.nfts.every(isWatchedNft) &&
-      hasUniqueStrings(value.nfts.map((nft) => nft.id)))) &&
-  value.schemaVersion === 1 &&
-  isStarknetNetworkId(value.activeNetworkId) &&
-  Array.isArray(value.addressBook) &&
-  value.addressBook.every(isAddressBookEntry) &&
-  hasUniqueStrings(value.addressBook.map((entry) => entry.id)) &&
-  Array.isArray(value.tokens) &&
-  value.tokens.every(isTokenConfig) &&
-  hasUniqueStrings(value.tokens.map((token) => token.id));
+  (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
+  (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
+  (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
+  (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
+  (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"])) &&
+  (value["strk20ProverUrl"] === undefined ||
+    (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&
+  (value["nfts"] === undefined ||
+    (Array.isArray(value["nfts"]) &&
+      value["nfts"].every(isWatchedNft) &&
+      hasUniqueStrings(value["nfts"].map((nft) => nft.id)))) &&
+  value["schemaVersion"] === 1 &&
+  isStarknetNetworkId(value["activeNetworkId"]) &&
+  Array.isArray(value["addressBook"]) &&
+  value["addressBook"].every(isAddressBookEntry) &&
+  hasUniqueStrings(value["addressBook"].map((entry) => entry.id)) &&
+  Array.isArray(value["tokens"]) &&
+  value["tokens"].every(isTokenConfig) &&
+  hasUniqueStrings(value["tokens"].map((token) => token.id));
 
 /**
  * Creates default non-secret wallet preferences.

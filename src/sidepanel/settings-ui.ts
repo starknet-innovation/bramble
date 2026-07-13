@@ -86,7 +86,7 @@ export const bindAddAccount = (deps: SettingsUiDeps): void => {
 export const bindContacts = (deps: SettingsUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-remove-address]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset.removeAddress;
+      const id = button.dataset["removeAddress"];
       if (!id) {
         return;
       }
@@ -113,7 +113,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
 
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-theme-id]").forEach((button) => {
     button.addEventListener("click", () => {
-      const theme = button.dataset.themeId;
+      const theme = button.dataset["themeId"];
       if (
         (theme !== "dark" && theme !== "light") ||
         button.getAttribute("aria-pressed") === "true"

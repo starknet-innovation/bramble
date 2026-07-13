@@ -27,7 +27,9 @@ export type {
  * validated token list, or null when malformed.
  */
 export const readStrk20BalancesParams = (params: Json | undefined): readonly string[] | null =>
-  isRecord(params) && hasOnlyKnownKeys(params, ["tokens"]) ? readStrk20Tokens(params.tokens) : null;
+  isRecord(params) && hasOnlyKnownKeys(params, ["tokens"])
+    ? readStrk20Tokens(params["tokens"])
+    : null;
 
 /**
  * Parses `wallet_strk20PrepareInvoke` params (`{ actions, simulate? }`) into the
@@ -40,12 +42,12 @@ export const readStrk20PrepareParams = (
   if (
     !isRecord(params) ||
     !hasOnlyKnownKeys(params, ["actions", "simulate"]) ||
-    (params.simulate !== undefined && typeof params.simulate !== "boolean")
+    (params["simulate"] !== undefined && typeof params["simulate"] !== "boolean")
   ) {
     return null;
   }
-  const actions = readStrk20Actions(params.actions);
-  return actions ? { actions, simulate: params.simulate === true } : null;
+  const actions = readStrk20Actions(params["actions"]);
+  return actions ? { actions, simulate: params["simulate"] === true } : null;
 };
 
 /**
@@ -54,7 +56,7 @@ export const readStrk20PrepareParams = (
  */
 export const readStrk20InvokeParams = (params: Json | undefined): readonly Strk20Action[] | null =>
   isRecord(params) && hasOnlyKnownKeys(params, ["actions"])
-    ? readStrk20Actions(params.actions)
+    ? readStrk20Actions(params["actions"])
     : null;
 
 /**

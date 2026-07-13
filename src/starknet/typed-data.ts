@@ -15,11 +15,11 @@ export const isTypedDataShape = (
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["domain", "message", "primaryType", "types"]) &&
-  isRecord(value.types) &&
-  typeof value.primaryType === "string" &&
-  value.primaryType.length > 0 &&
-  isRecord(value.domain) &&
-  isRecord(value.message);
+  isRecord(value["types"]) &&
+  typeof value["primaryType"] === "string" &&
+  value["primaryType"].length > 0 &&
+  isRecord(value["domain"]) &&
+  isRecord(value["message"]);
 
 /**
  * Computes the SNIP-12 message hash an account signs for typed data.

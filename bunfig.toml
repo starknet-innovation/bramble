@@ -1,0 +1,15 @@
+# Test runner configuration.
+#
+# Coverage is NOT enabled globally here: turning it on would slow every local
+# `bun test` and the offline gate. Coverage is computed only when tests run with
+# `--coverage` (the `check:coverage` script / the CI coverage step).
+#
+# The coverage FLOOR is enforced by scripts/check-coverage.ts, which checks the
+# aggregate ("All files") percentages. Bun's `coverageThreshold` is applied per
+# file in the pinned Bun release, so it cannot express a single repository-wide
+# floor (entrypoint and E2E-driven UI modules are intentionally not unit-covered
+# and would fail any positive per-file threshold); the script gate is used
+# instead. The reporter is pinned to text so the summary the gate parses is
+# always emitted.
+[test]
+coverageReporter = ["text"]

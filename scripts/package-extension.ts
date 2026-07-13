@@ -43,7 +43,7 @@ await rm(artifactDir, { force: true, recursive: true });
 await mkdir(artifactDir, { recursive: true });
 
 const manifest = await readJson(join(distDir, "manifest.json"));
-if (typeof manifest.version !== "string") {
+if (typeof manifest["version"] !== "string") {
   throw new Error("dist manifest version missing");
 }
 
@@ -51,7 +51,7 @@ const files = (await walk(distDir)).map((path) => relative(distDir, path));
 if (files.join("\n") !== EXPECTED_RUNTIME_FILES.join("\n")) {
   throw new Error(`unexpected packaged files:\n${files.join("\n")}`);
 }
-const zipName = `mc-wallet-${manifest.version}.zip`;
+const zipName = `mc-wallet-${manifest["version"]}.zip`;
 const zipPath = resolve(artifactDir, zipName);
 
 await run(["touch", "-t", reproducibleZipTime, ...files], distDir);

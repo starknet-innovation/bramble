@@ -96,7 +96,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
 const bindRowActions = (deps: NftUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-open]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset.nftOpen;
+      const id = button.dataset["nftOpen"];
       if (id) {
         deps.openDetail(id);
       }
@@ -105,12 +105,12 @@ const bindRowActions = (deps: NftUiDeps): void => {
 
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-spam]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset.nftSpam;
+      const id = button.dataset["nftSpam"];
       if (!id) {
         return;
       }
       buttonBusy(button, true);
-      void deps.wallet.setNftSpam(id, button.dataset.nftSpamValue === "true").then(
+      void deps.wallet.setNftSpam(id, button.dataset["nftSpamValue"] === "true").then(
         async () => {
           await rerender(deps);
         },
@@ -124,7 +124,7 @@ const bindRowActions = (deps: NftUiDeps): void => {
 
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-remove-nft]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset.removeNft;
+      const id = button.dataset["removeNft"];
       if (!id) {
         return;
       }

@@ -130,12 +130,12 @@ const isStringArray = (value: unknown): value is readonly string[] =>
 const isPriceCache = (value: unknown): value is PriceCache =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["changes", "checked", "fetchedAt", "prices"]) &&
-  isFiniteNumber(value.fetchedAt) &&
-  (value.checked === undefined || isStringArray(value.checked)) &&
-  (value.changes === undefined ||
-    (isRecord(value.changes) && Object.values(value.changes).every(isFiniteNumber))) &&
-  isRecord(value.prices) &&
-  Object.values(value.prices).every(isPriceEntry);
+  isFiniteNumber(value["fetchedAt"]) &&
+  (value["checked"] === undefined || isStringArray(value["checked"])) &&
+  (value["changes"] === undefined ||
+    (isRecord(value["changes"]) && Object.values(value["changes"]).every(isFiniteNumber))) &&
+  isRecord(value["prices"]) &&
+  Object.values(value["prices"]).every(isPriceEntry);
 
 const readJsonRecord = async (http: HttpFetch, url: string): Promise<Record<string, unknown>> => {
   const response = await http(url);
@@ -153,9 +153,9 @@ const parsePriceBody = (body: Record<string, unknown>): Record<string, PriceEntr
     if (!isRecord(value)) {
       continue;
     }
-    const usd = value.usd;
-    const eur = value.eur;
-    const gbp = value.gbp;
+    const usd = value["usd"];
+    const eur = value["eur"];
+    const gbp = value["gbp"];
     if (isFiniteNumber(usd) && isFiniteNumber(eur) && isFiniteNumber(gbp)) {
       parsed[normalizeAddress(key)] = { eur, gbp, usd };
     }
@@ -165,7 +165,7 @@ const parsePriceBody = (body: Record<string, unknown>): Record<string, PriceEntr
 
 // Extracts the price column from a CoinGecko market_chart response.
 const parseChartBody = (body: Record<string, unknown>): readonly number[] => {
-  const series = body.prices;
+  const series = body["prices"];
   if (!Array.isArray(series)) {
     return [];
   }
@@ -198,8 +198,8 @@ const sliceCurrency = (
 const parseChanges = (body: Record<string, unknown>): Record<string, number> => {
   const parsed: Record<string, number> = {};
   for (const [key, value] of Object.entries(body)) {
-    if (isRecord(value) && isFiniteNumber(value.usd_24h_change)) {
-      parsed[normalizeAddress(key)] = value.usd_24h_change;
+    if (isRecord(value) && isFiniteNumber(value["usd_24h_change"])) {
+      parsed[normalizeAddress(key)] = value["usd_24h_change"];
     }
   }
   return parsed;
@@ -246,8 +246,11 @@ export const createPriceService = ({
     }
     const entries: Record<string, ChartEntry> = {};
     for (const [key, value] of Object.entries(stored)) {
-      if (isRecord(value) && isFiniteNumber(value.fetchedAt) && Array.isArray(value.points)) {
-        entries[key] = { fetchedAt: value.fetchedAt, points: value.points.filter(isFiniteNumber) };
+      if (isRecord(value) && isFiniteNumber(value["fetchedAt"]) && Array.isArray(value["points"])) {
+        entries[key] = {
+          fetchedAt: value["fetchedAt"],
+          points: value["points"].filter(isFiniteNumber),
+        };
       }
     }
     return entries;

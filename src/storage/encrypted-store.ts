@@ -81,19 +81,19 @@ export type EncryptedEnvelope = {
 export const isEncryptedEnvelope = (value: unknown): value is EncryptedEnvelope =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ENVELOPE_KEYS) &&
-  value.cipher === "AES-256-GCM" &&
-  typeof value.data === "string" &&
-  typeof value.iterations === "number" &&
-  isAcceptedIterations(value.iterations) &&
-  typeof value.iv === "string" &&
-  hasBase64Bytes(value.iv, 12) &&
-  value.kdf === "PBKDF2-SHA-256" &&
-  typeof value.salt === "string" &&
-  hasBase64Bytes(value.salt, 16) &&
-  typeof value.scope === "string" &&
-  value.scope.length > 0 &&
-  hasBase64Bytes(value.data) &&
-  value.version === 2;
+  value["cipher"] === "AES-256-GCM" &&
+  typeof value["data"] === "string" &&
+  typeof value["iterations"] === "number" &&
+  isAcceptedIterations(value["iterations"]) &&
+  typeof value["iv"] === "string" &&
+  hasBase64Bytes(value["iv"], 12) &&
+  value["kdf"] === "PBKDF2-SHA-256" &&
+  typeof value["salt"] === "string" &&
+  hasBase64Bytes(value["salt"], 16) &&
+  typeof value["scope"] === "string" &&
+  value["scope"].length > 0 &&
+  hasBase64Bytes(value["data"]) &&
+  value["version"] === 2;
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const copy = new Uint8Array(bytes.byteLength);

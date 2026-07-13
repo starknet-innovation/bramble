@@ -42,11 +42,14 @@ export const readAddMultisigInput = (
 ): { readonly address: string; readonly name?: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["address", "name", "type"]) &&
-  message.type === "wallet.addMultisig" &&
-  typeof message.address === "string" &&
-  isNonZeroStarkFieldElement(message.address) &&
-  isOptionalName(message.name)
-    ? { address: message.address, ...(message.name === undefined ? {} : { name: message.name }) }
+  message["type"] === "wallet.addMultisig" &&
+  typeof message["address"] === "string" &&
+  isNonZeroStarkFieldElement(message["address"]) &&
+  isOptionalName(message["name"])
+    ? {
+        address: message["address"],
+        ...(message["name"] === undefined ? {} : { name: message["name"] }),
+      }
     : null;
 
 /**
@@ -58,9 +61,9 @@ export const readMultisigIdInput = (
 ): { readonly id: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["id", "type"]) &&
-  message.type === type &&
-  isId(message.id)
-    ? { id: message.id }
+  message["type"] === type &&
+  isId(message["id"])
+    ? { id: message["id"] }
     : null;
 
 /**
@@ -89,21 +92,21 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
     "to",
     "type",
   ]) &&
-  message.type === "wallet.proposeMultisigTx" &&
-  isId(message.multisigId) &&
-  typeof message.to === "string" &&
-  isNonZeroStarkFieldElement(message.to) &&
-  isMultisigEntrypoint(message.entrypoint) &&
-  isFeltList(message.calldata, MAX_CALLDATA_FELTS) &&
-  isOptionalSalt(message.salt) &&
-  isOptionalSummary(message.summary)
+  message["type"] === "wallet.proposeMultisigTx" &&
+  isId(message["multisigId"]) &&
+  typeof message["to"] === "string" &&
+  isNonZeroStarkFieldElement(message["to"]) &&
+  isMultisigEntrypoint(message["entrypoint"]) &&
+  isFeltList(message["calldata"], MAX_CALLDATA_FELTS) &&
+  isOptionalSalt(message["salt"]) &&
+  isOptionalSummary(message["summary"])
     ? {
-        calldata: message.calldata,
-        entrypoint: message.entrypoint as string,
-        multisigId: message.multisigId as string,
-        salt: message.salt ?? "0x0",
-        ...(message.summary === undefined ? {} : { summary: message.summary }),
-        to: message.to,
+        calldata: message["calldata"],
+        entrypoint: message["entrypoint"] as string,
+        multisigId: message["multisigId"] as string,
+        salt: message["salt"] ?? "0x0",
+        ...(message["summary"] === undefined ? {} : { summary: message["summary"] }),
+        to: message["to"],
       }
     : null;
 
@@ -135,18 +138,18 @@ export const readMultisigProposalActionInput = (
     !(
       isRecord(message) &&
       hasOnlyKnownKeys(message, keys) &&
-      message.type === type &&
-      isId(message.proposalId)
+      message["type"] === type &&
+      isId(message["proposalId"])
     )
   ) {
     return null;
   }
-  if (message.untrackedVerified !== undefined && message.untrackedVerified !== true) {
+  if (message["untrackedVerified"] !== undefined && message["untrackedVerified"] !== true) {
     return null;
   }
   return {
-    proposalId: message.proposalId,
-    ...(message.untrackedVerified === true ? { untrackedVerified: true } : {}),
+    proposalId: message["proposalId"],
+    ...(message["untrackedVerified"] === true ? { untrackedVerified: true } : {}),
   };
 };
 
@@ -158,15 +161,15 @@ export const readTrackMultisigProposalInput = (
 ): { readonly multisigId: string; readonly summary?: string; readonly txId: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["multisigId", "summary", "txId", "type"]) &&
-  message.type === "wallet.trackMultisigProposal" &&
-  isId(message.multisigId) &&
-  typeof message.txId === "string" &&
-  isStarkFieldElement(message.txId) &&
-  isOptionalSummary(message.summary)
+  message["type"] === "wallet.trackMultisigProposal" &&
+  isId(message["multisigId"]) &&
+  typeof message["txId"] === "string" &&
+  isStarkFieldElement(message["txId"]) &&
+  isOptionalSummary(message["summary"])
     ? {
-        multisigId: message.multisigId as string,
-        ...(message.summary === undefined ? {} : { summary: message.summary }),
-        txId: message.txId,
+        multisigId: message["multisigId"] as string,
+        ...(message["summary"] === undefined ? {} : { summary: message["summary"] }),
+        txId: message["txId"],
       }
     : null;
 
@@ -189,21 +192,21 @@ export type DeployMultisigInput = {
 export const readDeployMultisigInput = (message: unknown): DeployMultisigInput | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["quorum", "salt", "signers", "type"]) &&
-  message.type === "wallet.deployMultisig" &&
-  Array.isArray(message.signers) &&
-  message.signers.length >= 1 &&
-  message.signers.length <= MAX_SIGNERS &&
-  message.signers.every(
+  message["type"] === "wallet.deployMultisig" &&
+  Array.isArray(message["signers"]) &&
+  message["signers"].length >= 1 &&
+  message["signers"].length <= MAX_SIGNERS &&
+  message["signers"].every(
     (signer) => typeof signer === "string" && isNonZeroStarkFieldElement(signer),
   ) &&
-  typeof message.quorum === "number" &&
-  Number.isSafeInteger(message.quorum) &&
-  message.quorum >= 1 &&
-  message.quorum <= message.signers.length &&
-  isOptionalSalt(message.salt)
+  typeof message["quorum"] === "number" &&
+  Number.isSafeInteger(message["quorum"]) &&
+  message["quorum"] >= 1 &&
+  message["quorum"] <= message["signers"].length &&
+  isOptionalSalt(message["salt"])
     ? {
-        quorum: message.quorum,
-        salt: message.salt ?? "0x0",
-        signers: message.signers as readonly string[],
+        quorum: message["quorum"],
+        salt: message["salt"] ?? "0x0",
+        signers: message["signers"] as readonly string[],
       }
     : null;

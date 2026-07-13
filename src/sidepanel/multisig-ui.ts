@@ -76,7 +76,7 @@ const bindAddForm = (deps: MultisigUiDeps): void => {
 const bindListActions = (deps: MultisigUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-multisig-open]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset.multisigOpen;
+      const id = button.dataset["multisigOpen"];
       if (id) {
         deps.openDetail(id);
       }
@@ -85,7 +85,7 @@ const bindListActions = (deps: MultisigUiDeps): void => {
 
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-multisig-remove]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset.multisigRemove;
+      const id = button.dataset["multisigRemove"];
       if (!id) {
         return;
       }
@@ -106,7 +106,7 @@ const bindListActions = (deps: MultisigUiDeps): void => {
 
   const refresh = deps.app?.querySelector<HTMLButtonElement>("#multisig-refresh");
   refresh?.addEventListener("click", () => {
-    const id = refresh.dataset.multisigId;
+    const id = refresh.dataset["multisigId"];
     if (!id) {
       return;
     }
@@ -168,7 +168,7 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
           return;
         }
         const row = button.closest(".allowance-row");
-        const requiresAck = button.dataset.msRequiresAck === "true";
+        const requiresAck = button.dataset["msRequiresAck"] === "true";
         const ack = requiresAck
           ? row?.querySelector<HTMLInputElement>("[data-ms-ack]")?.checked
           : undefined;

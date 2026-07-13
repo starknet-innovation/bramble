@@ -62,8 +62,8 @@ export const bindApprovals = ({ app, render, wallet }: BindingContext): void => 
   const result = app?.querySelector<HTMLElement>("#approval-result");
   app?.querySelectorAll<HTMLButtonElement>("[data-approval-id]").forEach((button) => {
     button.addEventListener("click", () => {
-      const id = button.dataset.approvalId;
-      const action = readApprovalAction(button.dataset.approvalAction);
+      const id = button.dataset["approvalId"];
+      const action = readApprovalAction(button.dataset["approvalAction"]);
       if (!id || !action) {
         return;
       }

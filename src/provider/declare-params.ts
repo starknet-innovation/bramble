@@ -27,24 +27,24 @@ export const readProviderDeclare = (params: Json | undefined): ProviderDeclare |
   if (
     !isRecord(params) ||
     !hasOnlyKnownKeys(params, ["declare_transaction"]) ||
-    !isRecord(params.declare_transaction)
+    !isRecord(params["declare_transaction"])
   ) {
     return null;
   }
-  const declare = params.declare_transaction;
+  const declare = params["declare_transaction"];
   if (
     !hasOnlyKnownKeys(declare, ["class_hash", "compiled_class_hash", "contract_class"]) ||
-    !isFelt(declare.compiled_class_hash) ||
-    (declare.class_hash !== undefined && !isFelt(declare.class_hash)) ||
-    !isRecord(declare.contract_class) ||
-    Object.keys(declare.contract_class).length === 0
+    !isFelt(declare["compiled_class_hash"]) ||
+    (declare["class_hash"] !== undefined && !isFelt(declare["class_hash"])) ||
+    !isRecord(declare["contract_class"]) ||
+    Object.keys(declare["contract_class"]).length === 0
   ) {
     return null;
   }
   return {
-    compiledClassHash: declare.compiled_class_hash,
-    contractClass: declare.contract_class,
-    ...(declare.class_hash === undefined ? {} : { classHash: declare.class_hash }),
+    compiledClassHash: declare["compiled_class_hash"],
+    contractClass: declare["contract_class"],
+    ...(declare["class_hash"] === undefined ? {} : { classHash: declare["class_hash"] }),
   };
 };
 
@@ -56,7 +56,7 @@ export const readProviderDeclare = (params: Json | undefined): ProviderDeclare |
 export const isProviderDeclare = (value: unknown): value is ProviderDeclare =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["classHash", "compiledClassHash", "contractClass"]) &&
-  isFelt(value.compiledClassHash) &&
-  (value.classHash === undefined || isFelt(value.classHash)) &&
-  isRecord(value.contractClass) &&
-  Object.keys(value.contractClass).length > 0;
+  isFelt(value["compiledClassHash"]) &&
+  (value["classHash"] === undefined || isFelt(value["classHash"])) &&
+  isRecord(value["contractClass"]) &&
+  Object.keys(value["contractClass"]).length > 0;

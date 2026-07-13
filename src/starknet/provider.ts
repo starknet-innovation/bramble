@@ -64,7 +64,7 @@ export const isContractNotFoundError = (error: unknown): boolean => {
     return true;
   }
   const baseError = (error as { readonly baseError?: unknown }).baseError;
-  return isRecord(baseError) && baseError.code === 20;
+  return isRecord(baseError) && baseError["code"] === 20;
 };
 
 /**
@@ -76,7 +76,7 @@ export const isTransportRpcError = (error: unknown): boolean => {
     return false;
   }
   const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
-  return !(isRecord(baseError) && typeof baseError.code === "number");
+  return !(isRecord(baseError) && typeof baseError["code"] === "number");
 };
 
 /**

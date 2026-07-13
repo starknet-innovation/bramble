@@ -54,13 +54,13 @@ export const readAddDeclareTransactionInput = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["declare", "origin", "type"]) ||
-    message.type !== "wallet.addDeclareTransaction" ||
-    !isProviderDeclare(message.declare)
+    message["type"] !== "wallet.addDeclareTransaction" ||
+    !isProviderDeclare(message["declare"])
   ) {
     return null;
   }
-  const origin = normalizeWalletOrigin(message.origin);
-  return origin ? { declare: message.declare, origin } : null;
+  const origin = normalizeWalletOrigin(message["origin"]);
+  return origin ? { declare: message["declare"], origin } : null;
 };
 
 const declareSummaries = (declare: ProviderDeclare): readonly string[] => [

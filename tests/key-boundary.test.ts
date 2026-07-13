@@ -133,7 +133,9 @@ const flush = (): Promise<void> =>
 describe("key boundary", () => {
   test("the scan catalog covers every message type the background handles", async () => {
     const handled = await handledWalletMessages();
-    const scanned = new Set(KEY_BOUNDARY_MESSAGES.map((entry) => String(entry.message.type ?? "")));
+    const scanned = new Set(
+      KEY_BOUNDARY_MESSAGES.map((entry) => String(entry.message["type"] ?? "")),
+    );
     const missing = [...handled].filter((type) => !scanned.has(type)).sort();
     // A non-empty list means a message type was added to the background
     // without a key-boundary scan entry: add a payload for it to
@@ -177,10 +179,10 @@ describe("key boundary", () => {
       const response = await settle(message, sender);
       const serialized = JSON.stringify(response);
       const sanctionedReveal =
-        message.type === "wallet.generateMnemonic" || message.type === "wallet.revealSecrets";
+        message["type"] === "wallet.generateMnemonic" || message["type"] === "wallet.revealSecrets";
       expect(serialized).not.toContain(SECRET_PASSPHRASE);
       expect(serialized).not.toContain("signingKeys");
-      if (message.type !== "wallet.revealSecrets") {
+      if (message["type"] !== "wallet.revealSecrets") {
         expect(serialized).not.toContain(SECRET_PRIVATE_KEY);
       }
       if (!sanctionedReveal) {

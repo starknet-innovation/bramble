@@ -87,7 +87,7 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
 
   app?.querySelectorAll<HTMLButtonElement>("[data-network-id]").forEach((button) => {
     button.addEventListener("click", () => {
-      const networkId = button.dataset.networkId;
+      const networkId = button.dataset["networkId"];
       if (!networkId || button.getAttribute("aria-pressed") === "true") {
         return;
       }
@@ -114,7 +114,7 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
 
   app?.querySelectorAll<HTMLButtonElement>("[data-account-id]").forEach((button) => {
     button.addEventListener("click", () => {
-      const accountId = button.dataset.accountId;
+      const accountId = button.dataset["accountId"];
       if (!accountId || button.getAttribute("aria-pressed") === "true") {
         return;
       }

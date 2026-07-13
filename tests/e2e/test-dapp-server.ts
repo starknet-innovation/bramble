@@ -25,13 +25,36 @@ const dappHtml = `<!doctype html>
     <button data-testid="detect" type="button">Detect</button>
     <button data-testid="connect" type="button">Connect</button>
     <button data-testid="preauth" type="button">Preauthorized</button>
+    <button data-testid="sign" type="button">Sign typed data</button>
+    <button data-testid="invoke" type="button">Invoke</button>
     <output data-testid="connect-result"></output>
     <output data-testid="preauth-result"></output>
+    <output data-testid="sign-result"></output>
+    <output data-testid="invoke-result"></output>
     <script>
       const write = (testId, value) => {
         document.querySelector('[data-testid="' + testId + '"]').textContent = value;
       };
       const provider = () => window.starknet_mcWallet;
+      // A well-formed SNIP-12 (SN_MAIN) typed message that hashes cleanly.
+      const TYPED_DATA = {
+        domain: { chainId: "0x534e5f4d41494e", name: "Example", version: "1" },
+        message: { contents: "hello" },
+        primaryType: "Mail",
+        types: {
+          Mail: [{ name: "contents", type: "felt" }],
+          StarkNetDomain: [
+            { name: "name", type: "felt" },
+            { name: "version", type: "felt" },
+            { name: "chainId", type: "felt" },
+          ],
+        },
+      };
+      const INVOKE_CALL = {
+        calldata: ["0x5", "1000", "0"],
+        contractAddress: "0x123",
+        entrypoint: "transfer",
+      };
       const refreshProvider = () => {
         const wallet = provider();
         write(
@@ -53,6 +76,30 @@ const dappHtml = `<!doctype html>
       });
       document.querySelector('[data-testid="preauth"]').addEventListener("click", async () => {
         write("preauth-result", String(await provider().isPreauthorized()));
+      });
+      document.querySelector('[data-testid="sign"]').addEventListener("click", async () => {
+        write("sign-result", "pending");
+        try {
+          const signature = await provider().request({
+            params: { typed_data: TYPED_DATA },
+            type: "wallet_signTypedData",
+          });
+          write("sign-result", JSON.stringify({ signature, status: "resolved" }));
+        } catch (error) {
+          write("sign-result", JSON.stringify({ message: error.message, status: "rejected" }));
+        }
+      });
+      document.querySelector('[data-testid="invoke"]').addEventListener("click", async () => {
+        write("invoke-result", "pending");
+        try {
+          const result = await provider().request({
+            params: { calls: [INVOKE_CALL] },
+            type: "wallet_addInvokeTransaction",
+          });
+          write("invoke-result", JSON.stringify({ result, status: "resolved" }));
+        } catch (error) {
+          write("invoke-result", JSON.stringify({ message: error.message, status: "rejected" }));
+        }
       });
     </script>
   </body>

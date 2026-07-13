@@ -89,8 +89,22 @@ export const resolveConnectionApproval = async (
   origin: string,
   action: "approve" | "deny",
 ): Promise<void> => {
+  await resolvePendingApproval(sidepanel, "Connection request", origin, action);
+};
+
+/**
+ * Opens the activity view and resolves a pending approval identified by its
+ * card eyebrow (for example "Connection request", "Sign request", or
+ * "Transaction request"), then approves or denies it.
+ */
+export const resolvePendingApproval = async (
+  sidepanel: Page,
+  eyebrow: string,
+  origin: string,
+  action: "approve" | "deny",
+): Promise<void> => {
   await sidepanel.locator('button.nav-item[data-view="activity"]').click();
-  await expect(sidepanel.getByText("Connection request")).toBeVisible();
+  await expect(sidepanel.getByText(eyebrow)).toBeVisible();
   await expect(sidepanel.getByText(origin)).toBeVisible();
   await sidepanel.locator(`[data-approval-action="${action}"]`).click();
 };

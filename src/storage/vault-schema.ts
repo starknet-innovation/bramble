@@ -89,9 +89,9 @@ const isNonZeroFelt = (value: unknown): value is string =>
 const isDerivation = (value: unknown): value is AccountRef["derivation"] =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountIndex", "addressIndex", "kind"]) &&
-  value.kind === "starknet-bip44" &&
-  isSafeIndex(value.accountIndex) &&
-  isSafeIndex(value.addressIndex);
+  value["kind"] === "starknet-bip44" &&
+  isSafeIndex(value["accountIndex"]) &&
+  isSafeIndex(value["addressIndex"]);
 
 /**
  * Validates account ids used in public metadata and references.
@@ -121,30 +121,30 @@ export const isAccountRef = (value: unknown): value is AccountRef =>
     "publicKeyX",
     "publicKeyY",
   ]) &&
-  isNonZeroFelt(value.address) &&
-  isNonZeroFelt(value.classHash) &&
-  isDerivation(value.derivation) &&
-  isAccountId(value.id) &&
-  isStarknetNetworkId(value.networkId) &&
-  value.id === `${value.networkId}:${value.address}` &&
-  isNonZeroFelt(value.publicKeyX) &&
-  isNonZeroFelt(value.publicKeyY);
+  isNonZeroFelt(value["address"]) &&
+  isNonZeroFelt(value["classHash"]) &&
+  isDerivation(value["derivation"]) &&
+  isAccountId(value["id"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  value["id"] === `${value["networkId"]}:${value["address"]}` &&
+  isNonZeroFelt(value["publicKeyX"]) &&
+  isNonZeroFelt(value["publicKeyY"]);
 
 const isSigningKeyRef = (value: unknown): value is SigningKeyRef =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountId", "privateKey"]) &&
-  isAccountId(value.accountId) &&
-  typeof value.privateKey === "string" &&
-  isNonZeroStarkFieldElement(value.privateKey);
+  isAccountId(value["accountId"]) &&
+  typeof value["privateKey"] === "string" &&
+  isNonZeroStarkFieldElement(value["privateKey"]);
 
 const isOriginGrant = (value: unknown): value is OriginGrant =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountIds", "origin"]) &&
-  Array.isArray(value.accountIds) &&
-  value.accountIds.length > 0 &&
-  value.accountIds.every(isAccountId) &&
-  typeof value.origin === "string" &&
-  isWalletOrigin(value.origin);
+  Array.isArray(value["accountIds"]) &&
+  value["accountIds"].length > 0 &&
+  value["accountIds"].every(isAccountId) &&
+  typeof value["origin"] === "string" &&
+  isWalletOrigin(value["origin"]);
 
 const hasUniqueStrings = (values: readonly string[]): boolean =>
   new Set(values).size === values.length;
@@ -166,17 +166,17 @@ const isRetainedMnemonic = (value: unknown): value is string | null =>
 
 const hasValidVaultReferences = (value: Record<string, unknown>): boolean => {
   if (
-    (!isAccountId(value.activeAccountId) && value.activeAccountId !== null) ||
-    !Array.isArray(value.accounts) ||
-    !Array.isArray(value.originGrants) ||
-    !Array.isArray(value.signingKeys)
+    (!isAccountId(value["activeAccountId"]) && value["activeAccountId"] !== null) ||
+    !Array.isArray(value["accounts"]) ||
+    !Array.isArray(value["originGrants"]) ||
+    !Array.isArray(value["signingKeys"])
   ) {
     return false;
   }
 
-  const accounts = value.accounts;
-  const originGrants = value.originGrants;
-  const signingKeys = value.signingKeys;
+  const accounts = value["accounts"];
+  const originGrants = value["originGrants"];
+  const signingKeys = value["signingKeys"];
 
   return (
     accounts.every(isAccountRef) &&
@@ -192,9 +192,9 @@ const hasValidVaultReferences = (value: Record<string, unknown>): boolean => {
     signingKeys.every((key) => accounts.some((account) => account.id === key.accountId)) &&
     accounts.every((account) => signingKeys.some((key) => key.accountId === account.id)) &&
     (accounts.length === 0
-      ? value.activeAccountId === null
-      : value.activeAccountId !== null &&
-        accounts.some((account) => account.id === value.activeAccountId))
+      ? value["activeAccountId"] === null
+      : value["activeAccountId"] !== null &&
+        accounts.some((account) => account.id === value["activeAccountId"]))
   );
 };
 
@@ -211,7 +211,7 @@ export const isVaultV1 = (value: unknown): value is VaultV1 =>
     "schemaVersion",
     "signingKeys",
   ]) &&
-  value.schemaVersion === 1 &&
+  value["schemaVersion"] === 1 &&
   hasValidVaultReferences(value);
 
 /**
@@ -228,6 +228,6 @@ export const isVaultV2 = (value: unknown): value is VaultV2 =>
     "schemaVersion",
     "signingKeys",
   ]) &&
-  value.schemaVersion === CURRENT_SCHEMA_VERSION &&
-  isRetainedMnemonic(value.mnemonic) &&
+  value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
+  isRetainedMnemonic(value["mnemonic"]) &&
   hasValidVaultReferences(value);

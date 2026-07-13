@@ -14,9 +14,9 @@ const MAX_ID_LENGTH = 240;
 export const readRevokeAllowanceInput = (message: unknown): { readonly id: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["id", "type"]) &&
-  message.type === "wallet.revokeAllowance" &&
-  typeof message.id === "string" &&
-  message.id.length > 0 &&
-  message.id.length <= MAX_ID_LENGTH
-    ? { id: message.id }
+  message["type"] === "wallet.revokeAllowance" &&
+  typeof message["id"] === "string" &&
+  message["id"].length > 0 &&
+  message["id"].length <= MAX_ID_LENGTH
+    ? { id: message["id"] }
     : null;
