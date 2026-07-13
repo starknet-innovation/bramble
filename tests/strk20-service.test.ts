@@ -3,7 +3,7 @@
  * balances, and the leak guard, and never fabricates a proof.
  */
 import { describe, expect, test } from "bun:test";
-import { errorForMessage } from "../src/background/wallet-rpc-errors";
+import { errorForMessage } from "../src/shared/rpc-errors";
 import { unconfiguredProvingBackend } from "../src/starknet/strk20/proving-backend";
 import type { Strk20CallAndProof } from "../src/starknet/strk20/schemas";
 import {

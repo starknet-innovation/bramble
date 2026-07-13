@@ -53,11 +53,11 @@ export type UnlockSession = {
 const isSessionState = (value: unknown): value is UnlockSessionState =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["expiresAt", "passphrase"]) &&
-  typeof value.expiresAt === "number" &&
-  Number.isSafeInteger(value.expiresAt) &&
-  value.expiresAt > 0 &&
-  typeof value.passphrase === "string" &&
-  isVaultPassphrase(value.passphrase);
+  typeof value["expiresAt"] === "number" &&
+  Number.isSafeInteger(value["expiresAt"]) &&
+  value["expiresAt"] > 0 &&
+  typeof value["passphrase"] === "string" &&
+  isVaultPassphrase(value["passphrase"]);
 
 /**
  * Creates an expiring background passphrase session. Activity renews the

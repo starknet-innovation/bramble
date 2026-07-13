@@ -68,7 +68,7 @@ const bindAddToken = (deps: TokensUiDeps): void => {
 const bindDetectAdd = (deps: TokensUiDeps, container: Element | null | undefined): void => {
   container?.querySelectorAll<HTMLButtonElement>("[data-detect-add]").forEach((button) => {
     button.addEventListener("click", () => {
-      const address = button.dataset.detectAdd;
+      const address = button.dataset["detectAdd"];
       if (!address) {
         return;
       }
@@ -120,11 +120,11 @@ const bindDetect = (deps: TokensUiDeps): void => {
 const bindToggles = (deps: TokensUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-token-toggle]").forEach((button) => {
     button.addEventListener("click", () => {
-      const tokenId = button.dataset.tokenToggle;
+      const tokenId = button.dataset["tokenToggle"];
       if (!tokenId) {
         return;
       }
-      const hidden = button.dataset.tokenHidden === "true";
+      const hidden = button.dataset["tokenHidden"] === "true";
       buttonBusy(button, true);
       void deps.wallet.setTokenHidden(tokenId, !hidden).then(
         async () => {
@@ -143,7 +143,7 @@ const bindToggles = (deps: TokensUiDeps): void => {
 const bindOpenDetail = (deps: TokensUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-token-detail]").forEach((button) => {
     button.addEventListener("click", () => {
-      const tokenId = button.dataset.tokenDetail;
+      const tokenId = button.dataset["tokenDetail"];
       if (tokenId) {
         deps.openToken(tokenId);
       }

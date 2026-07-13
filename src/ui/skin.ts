@@ -40,14 +40,14 @@ const hasExactSkinTokens = (skin: unknown): skin is Skin => {
   if (
     !isRecord(skin) ||
     !hasOnlyKnownKeys(skin, ["name", "tokens"]) ||
-    typeof skin.name !== "string" ||
-    skin.name.trim().length === 0 ||
-    !isRecord(skin.tokens)
+    typeof skin["name"] !== "string" ||
+    skin["name"].trim().length === 0 ||
+    !isRecord(skin["tokens"])
   ) {
     return false;
   }
 
-  const skinTokens = skin.tokens;
+  const skinTokens = skin["tokens"];
   const tokens = Reflect.ownKeys(skinTokens);
   return (
     tokens.length === SKIN_TOKENS.length &&

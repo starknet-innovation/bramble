@@ -332,7 +332,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     async setDisplay(input: {
       readonly displayCurrency?: "eur" | "gbp" | "usd";
-      readonly theme?: "dark" | "light";
+      readonly theme?: "dark" | "light" | "system";
     }): Promise<void> {
       const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
       if (isPreferencesResponse(response)) {

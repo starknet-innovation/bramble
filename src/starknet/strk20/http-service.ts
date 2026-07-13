@@ -143,9 +143,9 @@ export const createHttpStrk20Service = (http: Strk20Http): Strk20Service => ({
       { address: input.account.address, rpcUrls: input.rpcUrls },
       STRK20_NOT_REGISTERED,
     );
-    if (!isRecord(payload) || typeof payload.registered !== "boolean") {
+    if (!isRecord(payload) || typeof payload["registered"] !== "boolean") {
       throw new WalletError(STRK20_NOT_REGISTERED);
     }
-    return payload.registered;
+    return payload["registered"];
   },
 });

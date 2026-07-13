@@ -89,17 +89,17 @@ export const readStrk20InvokeCall = (value: unknown): Strk20InvokeCall | null =>
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, ["calldata", "contract_address", "entry_point"]) ||
-    !isStrk20Address(value.contract_address) ||
-    !isEntryPoint(value.entry_point) ||
-    !Array.isArray(value.calldata) ||
-    !value.calldata.every(isStrk20Felt)
+    !isStrk20Address(value["contract_address"]) ||
+    !isEntryPoint(value["entry_point"]) ||
+    !Array.isArray(value["calldata"]) ||
+    !value["calldata"].every(isStrk20Felt)
   ) {
     return null;
   }
   return {
-    calldata: [...value.calldata],
-    contract_address: value.contract_address,
-    entry_point: value.entry_point,
+    calldata: [...value["calldata"]],
+    contract_address: value["contract_address"],
+    entry_point: value["entry_point"],
   };
 };
 
@@ -158,33 +158,43 @@ export type Strk20Action =
 
 const readDepositAction = (value: Record<string, unknown>): Strk20DepositAction | null =>
   hasOnlyKnownKeys(value, ["amount", "token", "type"]) &&
-  isStrk20Address(value.token) &&
-  isStrk20Amount(value.amount)
-    ? { amount: value.amount, token: value.token, type: "deposit" }
+  isStrk20Address(value["token"]) &&
+  isStrk20Amount(value["amount"])
+    ? { amount: value["amount"], token: value["token"], type: "deposit" }
     : null;
 
 const readWithdrawAction = (value: Record<string, unknown>): Strk20WithdrawAction | null =>
   hasOnlyKnownKeys(value, ["amount", "recipient", "token", "type"]) &&
-  isStrk20Address(value.token) &&
-  isStrk20Address(value.recipient) &&
-  isStrk20Amount(value.amount)
-    ? { amount: value.amount, recipient: value.recipient, token: value.token, type: "withdraw" }
+  isStrk20Address(value["token"]) &&
+  isStrk20Address(value["recipient"]) &&
+  isStrk20Amount(value["amount"])
+    ? {
+        amount: value["amount"],
+        recipient: value["recipient"],
+        token: value["token"],
+        type: "withdraw",
+      }
     : null;
 
 const readTransferAction = (value: Record<string, unknown>): Strk20TransferAction | null =>
   hasOnlyKnownKeys(value, ["amount", "recipient", "token", "type"]) &&
-  isStrk20Address(value.token) &&
-  isStrk20Address(value.recipient) &&
-  isStrk20TransferAmount(value.amount)
-    ? { amount: value.amount, recipient: value.recipient, token: value.token, type: "transfer" }
+  isStrk20Address(value["token"]) &&
+  isStrk20Address(value["recipient"]) &&
+  isStrk20TransferAmount(value["amount"])
+    ? {
+        amount: value["amount"],
+        recipient: value["recipient"],
+        token: value["token"],
+        type: "transfer",
+      }
     : null;
 
 const readInvokeAction = (value: Record<string, unknown>): Strk20InvokeAction | null =>
   hasOnlyKnownKeys(value, ["calldata", "contract", "type"]) &&
-  isStrk20Address(value.contract) &&
-  Array.isArray(value.calldata) &&
-  value.calldata.every(isStrk20CalldataItem)
-    ? { calldata: [...value.calldata], contract: value.contract, type: "invoke" }
+  isStrk20Address(value["contract"]) &&
+  Array.isArray(value["calldata"]) &&
+  value["calldata"].every(isStrk20CalldataItem)
+    ? { calldata: [...value["calldata"]], contract: value["contract"], type: "invoke" }
     : null;
 
 /**
@@ -192,19 +202,19 @@ const readInvokeAction = (value: Record<string, unknown>): Strk20InvokeAction | 
  * variant carrying unexpected keys or malformed fields.
  */
 export const readStrk20Action = (value: unknown): Strk20Action | null => {
-  if (!isRecord(value) || typeof value.type !== "string") {
+  if (!isRecord(value) || typeof value["type"] !== "string") {
     return null;
   }
-  if (value.type === "deposit") {
+  if (value["type"] === "deposit") {
     return readDepositAction(value);
   }
-  if (value.type === "withdraw") {
+  if (value["type"] === "withdraw") {
     return readWithdrawAction(value);
   }
-  if (value.type === "transfer") {
+  if (value["type"] === "transfer") {
     return readTransferAction(value);
   }
-  if (value.type === "invoke") {
+  if (value["type"] === "invoke") {
     return readInvokeAction(value);
   }
   return null;
@@ -247,12 +257,12 @@ export type Strk20Proof = {
 export const isStrk20Proof = (value: unknown): value is Strk20Proof =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["data", "output", "proof_facts"]) &&
-  typeof value.data === "string" &&
-  value.data.length > 0 &&
-  Array.isArray(value.output) &&
-  value.output.every(isStrk20Felt) &&
-  Array.isArray(value.proof_facts) &&
-  value.proof_facts.every(isStrk20Felt);
+  typeof value["data"] === "string" &&
+  value["data"].length > 0 &&
+  Array.isArray(value["output"]) &&
+  value["output"].every(isStrk20Felt) &&
+  Array.isArray(value["proof_facts"]) &&
+  value["proof_facts"].every(isStrk20Felt);
 
 /**
  * STRK20_CALL_AND_PROOF: the invoke call paired with its privacy proof.
@@ -268,8 +278,8 @@ export type Strk20CallAndProof = {
 export const isStrk20CallAndProof = (value: unknown): value is Strk20CallAndProof =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["call", "proof"]) &&
-  readStrk20InvokeCall(value.call) !== null &&
-  isStrk20Proof(value.proof);
+  readStrk20InvokeCall(value["call"]) !== null &&
+  isStrk20Proof(value["proof"]);
 
 /**
  * STRK20_BALANCE_ENTRY: a token and its private balance felt.
@@ -285,5 +295,5 @@ export type Strk20BalanceEntry = {
 export const isStrk20BalanceEntry = (value: unknown): value is Strk20BalanceEntry =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["balance", "token"]) &&
-  isStrk20Address(value.token) &&
-  isStrk20Felt(value.balance);
+  isStrk20Address(value["token"]) &&
+  isStrk20Felt(value["balance"]);

@@ -1,0 +1,163 @@
+name: Release
+
+# Tag-driven release pipeline (issue #58). Pushing a `vX.Y.Z` tag builds and
+# packages the extension exactly as CI does, publishes a GitHub Release with the
+# reproducible zip + SHA-256, and — only on an explicit manual dispatch with
+# publish=true — pushes that same zip to the Chrome Web Store. The store publish
+# is WIRED BUT DISABLED: it never runs on a tag push and skips cleanly until the
+# four CWS_* secrets exist in the `chrome-web-store` environment. The manual
+# runbook and prerequisites live in RELEASING.md (issue #61).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the built zip to the Chrome Web Store"
+        type: boolean
+        default: false
+      publish_target:
+        description: "Chrome Web Store audience"
+        type: choice
+        options:
+          - trustedTesters
+          - default
+        default: trustedTesters
+      deploy_percentage:
+        description: "Optional staged rollout percentage (0-100); blank = full rollout"
+        type: string
+        default: ""
+      dry_run:
+        description: "Validate the package and request plan without publishing"
+        type: boolean
+        default: false
+
+# Least privilege: only the Release job needs to write releases; the Chrome Web
+# Store job authenticates with its own CWS_* secrets, not the GitHub token.
+permissions:
+  contents: read
+
+jobs:
+  build-release:
+    permissions:
+      contents: write
+    runs-on:
+      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      # fetch-depth: 0 so `gh release create --generate-notes` can diff against
+      # the previous tag when no CHANGELOG.md exists yet (issue #60).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      # Same cargo/wasm-pack cache key as ci.yml so the release build reuses the
+      # exact toolchain the vendored krusty artifacts are built with.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          scarb-version: 2.18.0
+      - run: cargo install wasm-pack --locked --version 0.13.1
+      - run: bun install --frozen-lockfile
+      - run: bun run vendor:krusty
+      - run: bun run vendor:multisig
+      # Assert the version single-source invariant (package.json / manifest /
+      # built dist manifest) before publishing anything.
+      - run: bun test tests/conformance/version-single-source.test.ts
+      - run: bun run build
+      - run: bun run package:extension
+      # Confirm the released zip is byte-identical to what its checksum records
+      # (and therefore to the CI artifact at the same commit).
+      - name: Verify checksum
+        working-directory: artifacts
+        run: sha256sum -c ./*.zip.sha256
+      # Consumable by the Chrome Web Store job so store bytes == release bytes.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mc-wallet-release
+          path: |
+            artifacts/*.zip
+            artifacts/*.zip.sha256
+          if-no-files-found: error
+      # Create the GitHub Release only on tag pushes. Release notes come from the
+      # matching CHANGELOG.md section when it exists (issue #60); otherwise fall
+      # back to auto-generated notes. Uses the gh CLI (present on the runner,
+      # authenticated by GITHUB_TOKEN) so there is no third-party release action
+      # SHA to pin.
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes_args=(--generate-notes)
+          if [ -f CHANGELOG.md ]; then
+            version="${TAG#v}"
+            section="$(awk -v v="$version" '
+              $0 ~ "^## \\[?" v "\\]?" {capture=1; print; next}
+              capture && /^## / {exit}
+              capture {print}
+            ' CHANGELOG.md)"
+            if [ -n "$section" ]; then
+              printf "%s\n" "$section" > release-notes.md
+              notes_args=(--notes-file release-notes.md)
+            fi
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            "${notes_args[@]}" \
+            artifacts/*.zip artifacts/*.zip.sha256
+
+  # OPTIONAL / GATED. Never runs on a tag push. Only a manual dispatch with
+  # publish=true reaches this job, and even then the publish script skips
+  # cleanly if the CWS_* secrets are absent. The `chrome-web-store` environment
+  # scopes the secrets so PR/fork runs can never read them.
+  publish-chrome-web-store:
+    needs: build-release
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+    environment: chrome-web-store
+    permissions:
+      contents: read
+    runs-on:
+      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: mc-wallet-release
+          path: artifacts
+      - name: Resolve packaged zip path
+        id: zip
+        run: echo "path=$(ls artifacts/*.zip)" >> "$GITHUB_OUTPUT"
+      # The publish client fails closed on a real API rejection but skips
+      # cleanly (exit 0) when any CWS_* secret is missing, so this job is safe
+      # even before a Chrome Web Store account exists.
+      - name: Publish to Chrome Web Store
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CWS_ZIP_PATH: ${{ steps.zip.outputs.path }}
+          CWS_PUBLISH_TARGET: ${{ inputs.publish_target }}
+          CWS_DEPLOY_PERCENTAGE: ${{ inputs.deploy_percentage }}
+          CWS_DRY_RUN: ${{ inputs.dry_run }}
+        run: bun run release:publish

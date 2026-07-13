@@ -43,7 +43,7 @@ test("isJson rejects values that stringify lossy JSON", () => {
   const hiddenArrayKey = ["one"];
   Object.defineProperty(hiddenArrayKey, "debug", { value: true });
   const circularObject: Record<string, unknown> = {};
-  circularObject.self = circularObject;
+  circularObject["self"] = circularObject;
   const circularArray: unknown[] = [];
   circularArray.push(circularArray);
   const shared = { ok: true };

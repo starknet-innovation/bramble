@@ -29,8 +29,8 @@ export const requestApprovalSurface = (
     sender?.id !== extensionId ||
     typeof sender.tab?.id !== "number" ||
     !isRecord(message) ||
-    typeof message.type !== "string" ||
-    !APPROVAL_SURFACE_MESSAGES.has(message.type)
+    typeof message["type"] !== "string" ||
+    !APPROVAL_SURFACE_MESSAGES.has(message["type"])
   ) {
     return;
   }

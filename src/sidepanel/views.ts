@@ -244,15 +244,17 @@ const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | 
     `<h2>Settings</h2>
     <p class="eyebrow">Appearance</p>
     <div class="option-list" role="group" aria-label="Theme">
-      ${(["dark", "light"] as const)
-        .map(
-          (
-            theme,
-          ) => `<button class="option-row" data-theme-id="${theme}" type="button" aria-pressed="${(preferences?.theme ?? "dark") === theme}">
-            <span class="option-copy"><strong>${theme === "light" ? "Light" : "Dark"}</strong></span>
-            ${(preferences?.theme ?? "dark") === theme ? `<span class="option-mark">${icon("check")}</span>` : ""}
-          </button>`,
-        )
+      ${(["system", "dark", "light"] as const)
+        .map((theme) => {
+          const active = (preferences?.theme ?? "system") === theme;
+          const label = theme === "system" ? "System" : theme === "light" ? "Light" : "Dark";
+          const hint =
+            theme === "system" ? `<span class="option-sub">Match the browser</span>` : "";
+          return `<button class="option-row" data-theme-id="${theme}" type="button" aria-pressed="${active}">
+            <span class="option-copy"><strong>${label}</strong>${hint}</span>
+            ${active ? `<span class="option-mark">${icon("check")}</span>` : ""}
+          </button>`;
+        })
         .join("")}
     </div>
     <label><span>Display currency</span>

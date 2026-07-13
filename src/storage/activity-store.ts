@@ -85,22 +85,22 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "summary",
     "token",
   ]) &&
-  typeof value.accountId === "string" &&
-  value.accountId.length > 0 &&
-  typeof value.hash === "string" &&
-  isStarkFieldElement(value.hash) &&
-  isActivityKind(value.kind) &&
-  isStarknetNetworkId(value.networkId) &&
-  isActivityStatus(value.status) &&
-  typeof value.submittedAt === "number" &&
-  Number.isSafeInteger(value.submittedAt) &&
-  value.submittedAt >= 0 &&
-  typeof value.summary === "string" &&
-  value.summary.length > 0 &&
-  value.summary.length <= 200 &&
-  isOptionalDetail(value.amount) &&
-  isOptionalDetail(value.counterparty) &&
-  isOptionalDetail(value.token);
+  typeof value["accountId"] === "string" &&
+  value["accountId"].length > 0 &&
+  typeof value["hash"] === "string" &&
+  isStarkFieldElement(value["hash"]) &&
+  isActivityKind(value["kind"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  isActivityStatus(value["status"]) &&
+  typeof value["submittedAt"] === "number" &&
+  Number.isSafeInteger(value["submittedAt"]) &&
+  value["submittedAt"] >= 0 &&
+  typeof value["summary"] === "string" &&
+  value["summary"].length > 0 &&
+  value["summary"].length <= 200 &&
+  isOptionalDetail(value["amount"]) &&
+  isOptionalDetail(value["counterparty"]) &&
+  isOptionalDetail(value["token"]);
 
 const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry[]> => {
   const stored = await store.get(ACTIVITY_STORE_KEY);

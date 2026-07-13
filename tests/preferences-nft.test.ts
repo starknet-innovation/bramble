@@ -44,7 +44,7 @@ describe("preferences NFT tracking", () => {
   test("accepts preferences stored before the nfts key existed", async () => {
     const store = createMemoryStore();
     const legacy = { ...defaultWalletPreferences() };
-    delete (legacy as Record<string, unknown>).nfts;
+    delete (legacy as Record<string, unknown>)["nfts"];
     await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
 
     const preferences = await createPreferencesStore({ store }).read();

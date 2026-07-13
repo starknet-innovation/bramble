@@ -114,7 +114,7 @@ describe("createPreferencesStore", () => {
   test("accepts preferences stored before the STRK20 prover existed", async () => {
     const store = createMemoryStore();
     const legacy = { ...defaultWalletPreferences() };
-    delete (legacy as Record<string, unknown>).strk20ProverUrl;
+    delete (legacy as Record<string, unknown>)["strk20ProverUrl"];
     await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
 
     const preferences = await createPreferencesStore({ store }).read();
@@ -124,7 +124,7 @@ describe("createPreferencesStore", () => {
   test("accepts preferences stored before rpc overrides existed", async () => {
     const store = createMemoryStore();
     const legacy = { ...defaultWalletPreferences() };
-    delete (legacy as Record<string, unknown>).rpcOverrides;
+    delete (legacy as Record<string, unknown>)["rpcOverrides"];
     await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
 
     const preferences = await createPreferencesStore({ store }).read();
@@ -152,6 +152,26 @@ describe("createPreferencesStore", () => {
     expect((await preferences.read()).accountLabels).toEqual({});
   });
 
+  test("defaults theme to system and accepts every theme choice", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+
+    expect((await preferences.read()).theme).toBe("system");
+
+    await preferences.setDisplay({ theme: "light" });
+    expect((await preferences.read()).theme).toBe("light");
+
+    await preferences.setDisplay({ theme: "dark" });
+    expect((await preferences.read()).theme).toBe("dark");
+
+    await preferences.setDisplay({ theme: "system" });
+    expect((await preferences.read()).theme).toBe("system");
+
+    await expect(
+      preferences.setDisplay({ theme: "midnight" as unknown as "system" }),
+    ).rejects.toThrow("Invalid display preference");
+  });
+
   test("hides and reveals tokens and stays compatible with legacy backups", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });
@@ -166,7 +186,7 @@ describe("createPreferencesStore", () => {
     expect((await preferences.read()).hiddenTokens).toEqual([]);
 
     const legacy = { ...defaultWalletPreferences() };
-    delete (legacy as Record<string, unknown>).hiddenTokens;
+    delete (legacy as Record<string, unknown>)["hiddenTokens"];
     await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
     expect((await createPreferencesStore({ store }).read()).hiddenTokens).toBeUndefined();
   });

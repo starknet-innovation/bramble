@@ -9,9 +9,8 @@
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
 import type { WalletPreferences } from "../storage/preferences-store";
-import { darkSkin } from "../ui/dark-skin";
-import { defaultSkin } from "../ui/default-skin";
 import { applySkin } from "../ui/skin";
+import { colorSchemeForChoice, skinForChoice } from "../ui/theme";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import {
@@ -59,7 +58,7 @@ let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
 let lastContent = "";
-let lastTheme = "";
+let lastSkinName = "";
 let lastActiveView: WalletView = "home";
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
@@ -97,7 +96,7 @@ type ViewTransitionDocument = Document & {
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      const view = button.dataset.view;
+      const view = button.dataset["view"];
       if (!isWalletView(view)) {
         return;
       }
@@ -153,13 +152,13 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
     bindAll();
     return;
   }
-  document.documentElement.dataset.navDirection = direction;
+  document.documentElement.dataset["navDirection"] = direction;
   const transition = doc.startViewTransition(() => {
     renderShell(content, false);
     bindAll();
   });
   void transition.finished.finally(() => {
-    delete document.documentElement.dataset.navDirection;
+    delete document.documentElement.dataset["navDirection"];
   });
 };
 
@@ -292,17 +291,31 @@ const bindAll = (): void => {
   });
 };
 
+// Applies the skin and CSS `color-scheme` for the current theme choice, but
+// only when the resolved skin actually changed — cheap enough to call on every
+// paint. Swapping skin tokens on the root re-themes the whole panel through CSS
+// custom properties without re-rendering any markup. Under the default "system"
+// choice, `color-scheme: light dark` lets the skin's system-color and
+// `light-dark()` values track the browser scheme with no JavaScript, so a live
+// OS/browser scheme flip re-themes the panel purely through CSS; a pinned
+// "dark"/"light" fixes the scheme so the Clean Mono skin cannot be flipped.
+const applyTheme = (): void => {
+  const choice = cache.preferences?.theme ?? "system";
+  const skin = skinForChoice(choice);
+  if (skin.name !== lastSkinName) {
+    lastSkinName = skin.name;
+    document.documentElement.style.setProperty("color-scheme", colorSchemeForChoice(choice));
+    applySkin(skin, document.documentElement);
+  }
+};
+
 // Synchronous paint from the current cache. Navigation calls this first so the
 // screen swaps instantly, then hydrate() streams fresh data in and repaints.
 const paint = (): void => {
   const { status } = cache;
   lastNetworkId = status.networkId;
   lastAccountId = status.activeAccountId;
-  const theme = cache.preferences?.theme ?? "dark";
-  if (theme !== lastTheme) {
-    lastTheme = theme;
-    applySkin(theme === "light" ? defaultSkin : darkSkin, document.documentElement);
-  }
+  applyTheme();
   const scene = !status.hasVault
     ? "onboarding"
     : status.locked
@@ -453,5 +466,9 @@ runtime?.onMessage?.addListener((message) => {
   }
 });
 
-applySkin(darkSkin, document.documentElement);
+// Apply the theme before the first paint. Under the default "system" choice the
+// browser scheme is tracked purely through CSS (`color-scheme: light dark` plus
+// the skin's system-color/`light-dark()` values), so no `matchMedia` listener is
+// needed to re-theme on a live flip.
+applyTheme();
 void render(await wallet.loadStatus());

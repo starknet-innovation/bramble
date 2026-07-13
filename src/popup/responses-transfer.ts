@@ -21,19 +21,19 @@ export type TransferReviewResponse = {
 const isRiskFlagShape = (value: unknown): value is { code: string; message: string } =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["code", "message"]) &&
-  typeof value.code === "string" &&
-  /^[a-z][a-z-]{1,40}$/.test(value.code) &&
-  typeof value.message === "string" &&
-  value.message.length > 0 &&
-  value.message.length <= 300;
+  typeof value["code"] === "string" &&
+  /^[a-z][a-z-]{1,40}$/.test(value["code"]) &&
+  typeof value["message"] === "string" &&
+  value["message"].length > 0 &&
+  value["message"].length <= 300;
 
 const isFeeShape = (value: unknown): value is { overallFee: string; unit: string } =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["overallFee", "unit"]) &&
-  typeof value.overallFee === "string" &&
-  /^(?:0|[1-9][0-9]*)$/.test(value.overallFee) &&
-  typeof value.unit === "string" &&
-  /^[A-Z]{2,10}$/.test(value.unit);
+  typeof value["overallFee"] === "string" &&
+  /^(?:0|[1-9][0-9]*)$/.test(value["overallFee"]) &&
+  typeof value["unit"] === "string" &&
+  /^[A-Z]{2,10}$/.test(value["unit"]);
 
 /**
  * Checks transfer review responses before rendering the review step.
@@ -43,9 +43,9 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     !isRecord(value) ||
     !isJson(value) ||
     !hasOnlyKnownKeys(value, ["ok", "review"]) ||
-    value.ok !== true ||
-    !isRecord(value.review) ||
-    !hasOnlyKnownKeys(value.review, [
+    value["ok"] !== true ||
+    !isRecord(value["review"]) ||
+    !hasOnlyKnownKeys(value["review"], [
       "fee",
       "feeEstimateFailed",
       "flags",
@@ -55,15 +55,15 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
   ) {
     return false;
   }
-  const review = value.review;
+  const review = value["review"];
   return (
-    (review.fee === null || isFeeShape(review.fee)) &&
-    typeof review.feeEstimateFailed === "boolean" &&
-    Array.isArray(review.flags) &&
-    review.flags.every(isRiskFlagShape) &&
-    typeof review.requiresDeployment === "boolean" &&
-    Array.isArray(review.summaries) &&
-    review.summaries.every(
+    (review["fee"] === null || isFeeShape(review["fee"])) &&
+    typeof review["feeEstimateFailed"] === "boolean" &&
+    Array.isArray(review["flags"]) &&
+    review["flags"].every(isRiskFlagShape) &&
+    typeof review["requiresDeployment"] === "boolean" &&
+    Array.isArray(review["summaries"]) &&
+    review["summaries"].every(
       (summary) => typeof summary === "string" && summary.length > 0 && summary.length <= 300,
     )
   );

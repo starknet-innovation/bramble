@@ -5,7 +5,6 @@
  */
 import { describe, expect, test } from "bun:test";
 import { readGetPermissionsInput, readWatchAssetInput } from "../src/background/provider-inputs";
-import { invalidRequestPayload, unknownError } from "../src/background/wallet-rpc-errors";
 import { watchAssetToken } from "../src/background/watch-asset";
 import {
   CONTENT_TARGET,
@@ -18,6 +17,7 @@ import {
   toRuntimeMessage,
 } from "../src/provider/bridge";
 import { readProviderWatchAsset } from "../src/provider/watch-asset-params";
+import { invalidRequestPayload, unknownError } from "../src/shared/rpc-errors";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 const tokenAddress = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";

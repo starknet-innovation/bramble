@@ -12,9 +12,11 @@ export const DEPENDENCY_FIELDS = [
 export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
-  "@biomejs/biome": "2.5.2",
+  "@biomejs/biome": "2.5.3",
   "@playwright/test": "1.61.1",
   "@types/bun": "1.3.14",
+  knip: "6.26.0",
+  madge: "8.0.0",
   typescript: "6.0.3",
 };
 
@@ -35,7 +37,7 @@ export const PINNED_RUNTIME_FILES = [
 ] as const;
 
 export const EXPECTED_GITIGNORE_ENTRIES = [
-  ".claude/",
+  ".claude/*",
   "artifacts/",
   "dist/",
   "node_modules/",
@@ -45,7 +47,9 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "vendor/multisig/",
 ] as const;
 
-export const EXPECTED_README_SECTIONS = [
+export const EXPECTED_README_SECTIONS = ["## Features", "## Quick start", "## Docs"] as const;
+
+export const EXPECTED_ARCHITECTURE_SECTIONS = [
   "## Architecture",
   "## Migration Workflow",
   "## Design System",
@@ -74,22 +78,40 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run scripts/build-extension.ts",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test ./tests",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test ./tests",
+  "check:audit": "bun audit --audit-level=high",
+  "check:coverage": "bun run scripts/check-coverage.ts",
+  "check:cycles": "madge --circular --extensions ts src",
+  "check:deadcode": "knip --no-exit-code",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
+  "check:imports": "bun run scripts/check-import-layers.ts",
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
   "check:lint": "biome check .",
   "check:multisig": "bun run scripts/check-multisig-class.ts",
   "check:types": "tsc --noEmit",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
+  "release:publish": "bun run scripts/publish-chrome-web-store.ts",
   test: "bun test ./tests",
   "test:e2e": "playwright test",
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
   "vendor:krusty": "bun run scripts/vendor-krusty.ts",
   "vendor:multisig": "bun run scripts/vendor-multisig.ts",
+};
+
+export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {
+  types: "recommended",
+};
+
+export const REQUIRED_BIOME_COMPLEXITY_RULES: Readonly<Record<string, string>> = {
+  useLiteralKeys: "off",
+};
+
+export const REQUIRED_BIOME_NURSERY_RULES: Readonly<Record<string, string>> = {
+  noFloatingPromises: "error",
 };
 
 export const REQUIRED_COMPILER_OPTIONS: Readonly<Record<string, boolean>> = {
@@ -100,6 +122,8 @@ export const REQUIRED_COMPILER_OPTIONS: Readonly<Record<string, boolean>> = {
   noEmit: true,
   noFallthroughCasesInSwitch: true,
   noImplicitOverride: true,
+  noImplicitReturns: true,
+  noPropertyAccessFromIndexSignature: true,
   noUncheckedIndexedAccess: true,
   noUnusedLocals: true,
   noUnusedParameters: true,

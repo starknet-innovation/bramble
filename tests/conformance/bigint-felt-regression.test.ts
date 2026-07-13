@@ -8,12 +8,12 @@
  * and that the connect-phase methods accept their spec optional params.
  */
 import { describe, expect, test } from "bun:test";
-import { invalidRequestPayload } from "../../src/background/wallet-rpc-errors";
 import {
   readProviderRequestArguments,
   toRuntimeMessage,
   walletRpcException,
 } from "../../src/provider/bridge";
+import { invalidRequestPayload } from "../../src/shared/rpc-errors";
 import { TOKEN } from "./spec-fixtures";
 import { ORIGIN, REQUEST_ID } from "./wallet-rpc-spec";
 

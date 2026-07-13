@@ -27,11 +27,11 @@ export const isMultisigsResponse = (value: unknown): value is MultisigsResponse 
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["multisigs", "ok", "proposals"]) &&
-  value.ok === true &&
-  Array.isArray(value.multisigs) &&
-  value.multisigs.every(isMultisigRecord) &&
-  Array.isArray(value.proposals) &&
-  value.proposals.every(isMultisigProposalRecord);
+  value["ok"] === true &&
+  Array.isArray(value["multisigs"]) &&
+  value["multisigs"].every(isMultisigRecord) &&
+  Array.isArray(value["proposals"]) &&
+  value["proposals"].every(isMultisigProposalRecord);
 
 /**
  * One watched multisig accepted from the background boundary after an add or
@@ -50,10 +50,10 @@ export const isMultisigResponse = (value: unknown): value is MultisigResponse =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["multisig", "ok", "proposals"]) &&
-  value.ok === true &&
-  isMultisigRecord(value.multisig) &&
-  (value.proposals === undefined ||
-    (Array.isArray(value.proposals) && value.proposals.every(isMultisigProposalRecord)));
+  value["ok"] === true &&
+  isMultisigRecord(value["multisig"]) &&
+  (value["proposals"] === undefined ||
+    (Array.isArray(value["proposals"]) && value["proposals"].every(isMultisigProposalRecord)));
 
 /**
  * One tracked proposal accepted from the background boundary, with the
@@ -72,10 +72,11 @@ export const isMultisigProposalResponse = (value: unknown): value is MultisigPro
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["ok", "proposal", "transactionHash"]) &&
-  value.ok === true &&
-  isMultisigProposalRecord(value.proposal) &&
-  (value.transactionHash === undefined ||
-    (typeof value.transactionHash === "string" && isStarkFieldElement(value.transactionHash)));
+  value["ok"] === true &&
+  isMultisigProposalRecord(value["proposal"]) &&
+  (value["transactionHash"] === undefined ||
+    (typeof value["transactionHash"] === "string" &&
+      isStarkFieldElement(value["transactionHash"])));
 
 /**
  * Pinned-class declaration status accepted from the background boundary.
@@ -94,8 +95,8 @@ export const isMultisigClassStatusResponse = (
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["declared", "ok"]) &&
-  value.ok === true &&
-  typeof value.declared === "boolean";
+  value["ok"] === true &&
+  typeof value["declared"] === "boolean";
 
 /**
  * Deploy submission accepted from the background boundary with the predicted
@@ -114,14 +115,14 @@ export const isMultisigDeployResponse = (value: unknown): value is MultisigDeplo
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["address", "ok", "transactionHash"]) &&
-  value.ok === true &&
-  typeof value.address === "string" &&
-  isStarkFieldElement(value.address) &&
-  typeof value.transactionHash === "string" &&
-  isStarkFieldElement(value.transactionHash);
+  value["ok"] === true &&
+  typeof value["address"] === "string" &&
+  isStarkFieldElement(value["address"]) &&
+  typeof value["transactionHash"] === "string" &&
+  isStarkFieldElement(value["transactionHash"]);
 
 /**
  * Bare acknowledgement accepted from the background boundary.
  */
 export const isOkResponse = (value: unknown): value is { readonly ok: true } =>
-  isRecord(value) && isJson(value) && hasOnlyKnownKeys(value, ["ok"]) && value.ok === true;
+  isRecord(value) && isJson(value) && hasOnlyKnownKeys(value, ["ok"]) && value["ok"] === true;

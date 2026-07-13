@@ -152,9 +152,9 @@ const hasUniqueStrings = (values: readonly string[]): boolean =>
 const isNetworkOption = (value: unknown): value is NetworkOption =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["id", "name"]) &&
-  isStarknetNetworkId(value.id) &&
-  typeof value.name === "string" &&
-  value.name.length > 0;
+  isStarknetNetworkId(value["id"]) &&
+  typeof value["name"] === "string" &&
+  value["name"].length > 0;
 
 const isTokenBalance = (value: unknown): value is TokenBalance =>
   isRecord(value) &&
@@ -169,23 +169,23 @@ const isTokenBalance = (value: unknown): value is TokenBalance =>
     "networkId",
     "symbol",
   ]) &&
-  typeof value.address === "string" &&
-  isStarkFieldElement(value.address) &&
-  typeof value.balance === "string" &&
-  /^(?:0|[1-9][0-9]*)$/.test(value.balance) &&
-  typeof value.decimals === "number" &&
-  Number.isSafeInteger(value.decimals) &&
-  value.decimals >= 0 &&
-  value.decimals <= 36 &&
-  typeof value.formatted === "string" &&
-  value.formatted.length > 0 &&
-  typeof value.id === "string" &&
-  value.id.length > 0 &&
-  typeof value.name === "string" &&
-  value.name.length > 0 &&
-  isStarknetNetworkId(value.networkId) &&
-  typeof value.symbol === "string" &&
-  /^[A-Z0-9]{2,12}$/.test(value.symbol);
+  typeof value["address"] === "string" &&
+  isStarkFieldElement(value["address"]) &&
+  typeof value["balance"] === "string" &&
+  /^(?:0|[1-9][0-9]*)$/.test(value["balance"]) &&
+  typeof value["decimals"] === "number" &&
+  Number.isSafeInteger(value["decimals"]) &&
+  value["decimals"] >= 0 &&
+  value["decimals"] <= 36 &&
+  typeof value["formatted"] === "string" &&
+  value["formatted"].length > 0 &&
+  typeof value["id"] === "string" &&
+  value["id"].length > 0 &&
+  typeof value["name"] === "string" &&
+  value["name"].length > 0 &&
+  isStarknetNetworkId(value["networkId"]) &&
+  typeof value["symbol"] === "string" &&
+  /^[A-Z0-9]{2,12}$/.test(value["symbol"]);
 
 /**
  * Checks popup status responses before rendering.
@@ -203,26 +203,26 @@ export const isWalletStatus = (value: unknown): value is WalletStatus =>
     "networks",
     "ready",
   ]) &&
-  typeof value.accountCount === "number" &&
-  Number.isSafeInteger(value.accountCount) &&
-  value.accountCount >= 0 &&
-  (isAccountId(value.activeAccountId) || value.activeAccountId === null) &&
-  Array.isArray(value.accounts) &&
-  value.accounts.every(isAccountRef) &&
-  hasUniqueStrings(value.accounts.map((account) => account.id)) &&
-  value.accounts.length === value.accountCount &&
-  typeof value.hasVault === "boolean" &&
-  typeof value.locked === "boolean" &&
-  typeof value.network === "string" &&
-  value.network.length > 0 &&
-  isStarknetNetworkId(value.networkId) &&
-  Array.isArray(value.networks) &&
-  value.networks.every(isNetworkOption) &&
-  hasUniqueStrings(value.networks.map((network) => network.id)) &&
-  typeof value.ready === "boolean" &&
-  (value.hasVault || (value.accountCount === 0 && value.activeAccountId === null)) &&
-  (value.activeAccountId === null ||
-    value.accounts.some((account) => account.id === value.activeAccountId));
+  typeof value["accountCount"] === "number" &&
+  Number.isSafeInteger(value["accountCount"]) &&
+  value["accountCount"] >= 0 &&
+  (isAccountId(value["activeAccountId"]) || value["activeAccountId"] === null) &&
+  Array.isArray(value["accounts"]) &&
+  value["accounts"].every(isAccountRef) &&
+  hasUniqueStrings(value["accounts"].map((account) => account.id)) &&
+  value["accounts"].length === value["accountCount"] &&
+  typeof value["hasVault"] === "boolean" &&
+  typeof value["locked"] === "boolean" &&
+  typeof value["network"] === "string" &&
+  value["network"].length > 0 &&
+  isStarknetNetworkId(value["networkId"]) &&
+  Array.isArray(value["networks"]) &&
+  value["networks"].every(isNetworkOption) &&
+  hasUniqueStrings(value["networks"].map((network) => network.id)) &&
+  typeof value["ready"] === "boolean" &&
+  (value["hasVault"] || (value["accountCount"] === 0 && value["activeAccountId"] === null)) &&
+  (value["activeAccountId"] === null ||
+    value["accounts"].some((account) => account.id === value["activeAccountId"]));
 
 /**
  * Checks account-import responses before rendering.
@@ -230,8 +230,8 @@ export const isWalletStatus = (value: unknown): value is WalletStatus =>
 export const isCreateAccountResponse = (value: unknown): value is CreateAccountResponse =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["account", "ok"]) &&
-  value.ok === true &&
-  isAccountRef(value.account);
+  value["ok"] === true &&
+  isAccountRef(value["account"]);
 
 /**
  * Checks granted-account responses before treating approval decisions as done.
@@ -240,10 +240,10 @@ export const isAccountsResponse = (value: unknown): value is AccountsResponse =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["accounts", "ok"]) &&
-  value.ok === true &&
-  Array.isArray(value.accounts) &&
-  value.accounts.every(isAccountRef) &&
-  hasUniqueStrings(value.accounts.map((account) => account.id));
+  value["ok"] === true &&
+  Array.isArray(value["accounts"]) &&
+  value["accounts"].every(isAccountRef) &&
+  hasUniqueStrings(value["accounts"].map((account) => account.id));
 
 /**
  * Checks error responses before displaying text.
@@ -251,8 +251,8 @@ export const isAccountsResponse = (value: unknown): value is AccountsResponse =>
 export const isErrorResponse = (value: unknown): value is ErrorResponse =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["error"]) &&
-  typeof value.error === "string" &&
-  value.error.length > 0;
+  typeof value["error"] === "string" &&
+  value["error"].length > 0;
 
 /**
  * Checks generated mnemonic responses before filling import forms.
@@ -260,9 +260,9 @@ export const isErrorResponse = (value: unknown): value is ErrorResponse =>
 export const isGenerateMnemonicResponse = (value: unknown): value is GenerateMnemonicResponse =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["mnemonic", "ok"]) &&
-  value.ok === true &&
-  typeof value.mnemonic === "string" &&
-  value.mnemonic.trim().split(/\s+/).length >= 12;
+  value["ok"] === true &&
+  typeof value["mnemonic"] === "string" &&
+  value["mnemonic"].trim().split(/\s+/).length >= 12;
 
 /**
  * Checks re-authenticated reveal responses before showing secret material.
@@ -270,11 +270,12 @@ export const isGenerateMnemonicResponse = (value: unknown): value is GenerateMne
 export const isRevealSecretsResponse = (value: unknown): value is RevealSecretsResponse =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["mnemonic", "ok", "privateKey"]) &&
-  value.ok === true &&
-  (value.mnemonic === null ||
-    (typeof value.mnemonic === "string" && value.mnemonic.trim().split(/\s+/).length >= 12)) &&
-  typeof value.privateKey === "string" &&
-  isStarkFieldElement(value.privateKey);
+  value["ok"] === true &&
+  (value["mnemonic"] === null ||
+    (typeof value["mnemonic"] === "string" &&
+      value["mnemonic"].trim().split(/\s+/).length >= 12)) &&
+  typeof value["privateKey"] === "string" &&
+  isStarkFieldElement(value["privateKey"]);
 
 /**
  * Checks plain preferences responses before rendering.
@@ -283,8 +284,8 @@ export const isPreferencesResponse = (value: unknown): value is PreferencesRespo
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["ok", "preferences"]) &&
-  value.ok === true &&
-  isWalletPreferences(value.preferences);
+  value["ok"] === true &&
+  isWalletPreferences(value["preferences"]);
 
 /**
  * Checks balance responses before rendering.
@@ -293,12 +294,12 @@ export const isBalancesResponse = (value: unknown): value is BalancesResponse =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["accountId", "balances", "networkId", "ok"]) &&
-  value.ok === true &&
-  isAccountId(value.accountId) &&
-  Array.isArray(value.balances) &&
-  value.balances.every(isTokenBalance) &&
-  hasUniqueStrings(value.balances.map((balance) => balance.id)) &&
-  isStarknetNetworkId(value.networkId);
+  value["ok"] === true &&
+  isAccountId(value["accountId"]) &&
+  Array.isArray(value["balances"]) &&
+  value["balances"].every(isTokenBalance) &&
+  hasUniqueStrings(value["balances"].map((balance) => balance.id)) &&
+  isStarknetNetworkId(value["networkId"]);
 
 /**
  * Auto-detected token suggestions accepted from the background boundary.
@@ -346,10 +347,10 @@ export const isDetectTokensResponse = (value: unknown): value is DetectTokensRes
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["ok", "suggestions"]) &&
-  value.ok === true &&
-  Array.isArray(value.suggestions) &&
-  value.suggestions.every(isTokenBalance) &&
-  hasUniqueStrings(value.suggestions.map((token) => token.id));
+  value["ok"] === true &&
+  Array.isArray(value["suggestions"]) &&
+  value["suggestions"].every(isTokenBalance) &&
+  hasUniqueStrings(value["suggestions"].map((token) => token.id));
 
 /**
  * Checks fiat price responses before applying values to balances.
@@ -358,10 +359,10 @@ export const isPricesResponse = (value: unknown): value is PricesResponse =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["changes", "currency", "ok", "prices"]) &&
-  value.ok === true &&
-  isDisplayCurrencyValue(value.currency) &&
-  isPriceMap(value.prices) &&
-  (value.changes === undefined || isPriceMap(value.changes));
+  value["ok"] === true &&
+  isDisplayCurrencyValue(value["currency"]) &&
+  isPriceMap(value["prices"]) &&
+  (value["changes"] === undefined || isPriceMap(value["changes"]));
 
 /**
  * Checks token chart responses before drawing a sparkline.
@@ -370,9 +371,9 @@ export const isTokenChartResponse = (value: unknown): value is TokenChartRespons
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["currency", "ok", "points"]) &&
-  value.ok === true &&
-  isDisplayCurrencyValue(value.currency) &&
-  isNumberArray(value.points);
+  value["ok"] === true &&
+  isDisplayCurrencyValue(value["currency"]) &&
+  isNumberArray(value["points"]);
 
 /**
  * Checks transfer submission responses before rendering.
@@ -381,9 +382,9 @@ export const isTransferResponse = (value: unknown): value is TransferResponse =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["ok", "transactionHash"]) &&
-  value.ok === true &&
-  typeof value.transactionHash === "string" &&
-  isStarkFieldElement(value.transactionHash);
+  value["ok"] === true &&
+  typeof value["transactionHash"] === "string" &&
+  isStarkFieldElement(value["transactionHash"]);
 
 /**
  * Checks approval decision responses before updating popup state.
@@ -406,9 +407,9 @@ export const isActivityResponse = (value: unknown): value is ActivityResponse =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["activity", "ok"]) &&
-  value.ok === true &&
-  Array.isArray(value.activity) &&
-  value.activity.every(isActivityEntry);
+  value["ok"] === true &&
+  Array.isArray(value["activity"]) &&
+  value["activity"].every(isActivityEntry);
 
 /**
  * Tracked allowances response accepted from the background boundary.
@@ -425,9 +426,9 @@ export const isAllowancesResponse = (value: unknown): value is AllowancesRespons
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["allowances", "ok"]) &&
-  value.ok === true &&
-  Array.isArray(value.allowances) &&
-  value.allowances.every(isAllowanceRecord);
+  value["ok"] === true &&
+  Array.isArray(value["allowances"]) &&
+  value["allowances"].every(isAllowanceRecord);
 
 /**
  * Checks account deployment status responses before rendering.
@@ -436,6 +437,6 @@ export const isDeploymentStatusResponse = (value: unknown): value is DeploymentS
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, ["accountId", "deployed", "ok"]) &&
-  value.ok === true &&
-  isAccountId(value.accountId) &&
-  typeof value.deployed === "boolean";
+  value["ok"] === true &&
+  isAccountId(value["accountId"]) &&
+  typeof value["deployed"] === "boolean";

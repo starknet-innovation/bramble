@@ -25,27 +25,27 @@ export const readProviderWatchAsset = (params: Json | undefined): ProviderWatchA
   if (
     !isRecord(params) ||
     !hasOnlyKnownKeys(params, ["options", "type"]) ||
-    params.type !== "ERC20" ||
-    !isRecord(params.options) ||
-    !hasOnlyKnownKeys(params.options, ["address", "decimals", "name", "symbol"])
+    params["type"] !== "ERC20" ||
+    !isRecord(params["options"]) ||
+    !hasOnlyKnownKeys(params["options"], ["address", "decimals", "name", "symbol"])
   ) {
     return null;
   }
-  const options = params.options;
+  const options = params["options"];
   if (
-    typeof options.address !== "string" ||
-    !/^0x[0-9a-fA-F]+$/.test(options.address) ||
-    BigInt(options.address) <= 0n ||
-    (options.decimals !== undefined && !isSafeDecimals(options.decimals)) ||
-    (options.name !== undefined && typeof options.name !== "string") ||
-    (options.symbol !== undefined && typeof options.symbol !== "string")
+    typeof options["address"] !== "string" ||
+    !/^0x[0-9a-fA-F]+$/.test(options["address"]) ||
+    BigInt(options["address"]) <= 0n ||
+    (options["decimals"] !== undefined && !isSafeDecimals(options["decimals"])) ||
+    (options["name"] !== undefined && typeof options["name"] !== "string") ||
+    (options["symbol"] !== undefined && typeof options["symbol"] !== "string")
   ) {
     return null;
   }
   return {
-    address: options.address,
-    ...(options.decimals === undefined ? {} : { decimals: options.decimals }),
-    ...(options.name === undefined ? {} : { name: options.name }),
-    ...(options.symbol === undefined ? {} : { symbol: options.symbol }),
+    address: options["address"],
+    ...(options["decimals"] === undefined ? {} : { decimals: options["decimals"] }),
+    ...(options["name"] === undefined ? {} : { name: options["name"] }),
+    ...(options["symbol"] === undefined ? {} : { symbol: options["symbol"] }),
   };
 };

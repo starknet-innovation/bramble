@@ -102,6 +102,9 @@ describe("sidepanel views", () => {
     expect(html).not.toContain('id="active-network"');
     expect(html).not.toContain('id="active-account"');
     expect(html).toContain('data-theme-id="dark"');
+    expect(html).toContain('data-theme-id="light"');
+    expect(html).toContain('data-theme-id="system"');
+    expect(html).toContain("Match the browser");
     expect(html).toContain('id="currency-select"');
     // The dock is a solid flat nav card (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');

@@ -13,18 +13,18 @@ const readWatchAssetOptions = (value: unknown): WatchAssetRequest | null => {
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, ["address", "decimals", "name", "symbol"]) ||
-    typeof value.address !== "string" ||
-    (value.decimals !== undefined && !isSafeDecimals(value.decimals)) ||
-    (value.name !== undefined && typeof value.name !== "string") ||
-    (value.symbol !== undefined && typeof value.symbol !== "string")
+    typeof value["address"] !== "string" ||
+    (value["decimals"] !== undefined && !isSafeDecimals(value["decimals"])) ||
+    (value["name"] !== undefined && typeof value["name"] !== "string") ||
+    (value["symbol"] !== undefined && typeof value["symbol"] !== "string")
   ) {
     return null;
   }
   return {
-    address: value.address,
-    ...(value.decimals === undefined ? {} : { decimals: value.decimals }),
-    ...(value.name === undefined ? {} : { name: value.name }),
-    ...(value.symbol === undefined ? {} : { symbol: value.symbol }),
+    address: value["address"],
+    ...(value["decimals"] === undefined ? {} : { decimals: value["decimals"] }),
+    ...(value["name"] === undefined ? {} : { name: value["name"] }),
+    ...(value["symbol"] === undefined ? {} : { symbol: value["symbol"] }),
   };
 };
 
@@ -35,11 +35,11 @@ export const readGetPermissionsInput = (message: unknown): { readonly origin: st
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["origin", "type"]) ||
-    message.type !== "wallet.getPermissions"
+    message["type"] !== "wallet.getPermissions"
   ) {
     return null;
   }
-  const origin = normalizeWalletOrigin(message.origin);
+  const origin = normalizeWalletOrigin(message["origin"]);
   return origin ? { origin } : null;
 };
 
@@ -52,11 +52,11 @@ export const readWatchAssetInput = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["asset", "origin", "type"]) ||
-    message.type !== "wallet.watchAsset"
+    message["type"] !== "wallet.watchAsset"
   ) {
     return null;
   }
-  const origin = normalizeWalletOrigin(message.origin);
-  const asset = readWatchAssetOptions(message.asset);
+  const origin = normalizeWalletOrigin(message["origin"]);
+  const asset = readWatchAssetOptions(message["asset"]);
   return origin && asset ? { asset, origin } : null;
 };

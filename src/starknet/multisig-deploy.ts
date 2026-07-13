@@ -121,7 +121,7 @@ const isClassNotFoundError = (error: unknown): boolean => {
     return true;
   }
   const baseError = (error as { readonly baseError?: unknown }).baseError;
-  return isRecord(baseError) && baseError.code === 28;
+  return isRecord(baseError) && baseError["code"] === 28;
 };
 
 const requirePinnedCompiledClass = (casm: unknown): void => {
@@ -171,7 +171,7 @@ export const isMultisigClassDeclared = async ({
  * corrupted or swapped bundle can never be declared under this wallet's name.
  */
 export const requireMultisigContractClass = (artifact: unknown): unknown => {
-  if (!isRecord(artifact) || !Array.isArray(artifact.sierra_program)) {
+  if (!isRecord(artifact) || !Array.isArray(artifact["sierra_program"])) {
     throw new WalletError("Bundled multisig class is malformed");
   }
   const computed = hash.computeContractClassHash(

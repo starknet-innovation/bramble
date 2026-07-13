@@ -23,21 +23,21 @@ export const readSaveAddressInput = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["address", "label", "networkId", "type"]) ||
-    message.type !== "wallet.saveAddress" ||
-    typeof message.address !== "string" ||
-    !isStarkFieldElement(message.address) ||
-    typeof message.label !== "string" ||
-    message.label.trim().length === 0 ||
-    message.label.trim().length > 64 ||
-    !isStarknetNetworkId(message.networkId)
+    message["type"] !== "wallet.saveAddress" ||
+    typeof message["address"] !== "string" ||
+    !isStarkFieldElement(message["address"]) ||
+    typeof message["label"] !== "string" ||
+    message["label"].trim().length === 0 ||
+    message["label"].trim().length > 64 ||
+    !isStarknetNetworkId(message["networkId"])
   ) {
     return null;
   }
 
   return {
-    address: message.address,
-    label: message.label.trim(),
-    networkId: message.networkId,
+    address: message["address"],
+    label: message["label"].trim(),
+    networkId: message["networkId"],
   };
 };
 
@@ -47,11 +47,11 @@ export const readSaveAddressInput = (
 export const readRemoveAddressInput = (message: unknown): { readonly id: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["id", "type"]) &&
-  message.type === "wallet.removeAddress" &&
-  typeof message.id === "string" &&
-  message.id.length > 0 &&
-  message.id.length <= 200
-    ? { id: message.id }
+  message["type"] === "wallet.removeAddress" &&
+  typeof message["id"] === "string" &&
+  message["id"].length > 0 &&
+  message["id"].length <= 200
+    ? { id: message["id"] }
     : null;
 
 /**
@@ -62,11 +62,11 @@ export const readSetAccountLabelInput = (
 ): { readonly accountId: string; readonly label: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["accountId", "label", "type"]) &&
-  message.type === "wallet.setAccountLabel" &&
-  isAccountId(message.accountId) &&
-  typeof message.label === "string" &&
-  message.label.length <= 64
-    ? { accountId: message.accountId, label: message.label }
+  message["type"] === "wallet.setAccountLabel" &&
+  isAccountId(message["accountId"]) &&
+  typeof message["label"] === "string" &&
+  message["label"].length <= 64
+    ? { accountId: message["accountId"], label: message["label"] }
     : null;
 
 /**
@@ -76,25 +76,28 @@ export const readSetDisplayInput = (
   message: unknown,
 ): {
   readonly displayCurrency?: "eur" | "gbp" | "usd";
-  readonly theme?: "dark" | "light";
+  readonly theme?: "dark" | "light" | "system";
 } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["displayCurrency", "theme", "type"]) ||
-    message.type !== "wallet.setDisplay"
+    message["type"] !== "wallet.setDisplay"
   ) {
     return null;
   }
   const displayCurrency =
-    message.displayCurrency === "eur" ||
-    message.displayCurrency === "gbp" ||
-    message.displayCurrency === "usd"
-      ? message.displayCurrency
+    message["displayCurrency"] === "eur" ||
+    message["displayCurrency"] === "gbp" ||
+    message["displayCurrency"] === "usd"
+      ? message["displayCurrency"]
       : undefined;
-  const theme = message.theme === "dark" || message.theme === "light" ? message.theme : undefined;
+  const theme =
+    message["theme"] === "dark" || message["theme"] === "light" || message["theme"] === "system"
+      ? message["theme"]
+      : undefined;
   if (
-    (message.displayCurrency !== undefined && displayCurrency === undefined) ||
-    (message.theme !== undefined && theme === undefined)
+    (message["displayCurrency"] !== undefined && displayCurrency === undefined) ||
+    (message["theme"] !== undefined && theme === undefined)
   ) {
     return null;
   }
@@ -112,9 +115,9 @@ export const readImportPreferencesInput = (
 ): { readonly preferences: unknown } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["preferences", "type"]) &&
-  message.type === "wallet.importPreferences" &&
-  isRecord(message.preferences)
-    ? { preferences: message.preferences }
+  message["type"] === "wallet.importPreferences" &&
+  isRecord(message["preferences"])
+    ? { preferences: message["preferences"] }
     : null;
 
 /**
@@ -126,17 +129,17 @@ export const readSetRpcOverrideInput = (
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["networkId", "rpcUrl", "type"]) ||
-    message.type !== "wallet.setRpcOverride" ||
-    !isStarknetNetworkId(message.networkId) ||
-    typeof message.rpcUrl !== "string" ||
-    message.rpcUrl.length > 2048
+    message["type"] !== "wallet.setRpcOverride" ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    typeof message["rpcUrl"] !== "string" ||
+    message["rpcUrl"].length > 2048
   ) {
     return null;
   }
 
   return {
-    networkId: message.networkId,
-    rpcUrl: message.rpcUrl,
+    networkId: message["networkId"],
+    rpcUrl: message["rpcUrl"],
   };
 };
 
@@ -147,12 +150,12 @@ export const readSetStrk20ProverUrlInput = (message: unknown): { readonly url: s
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["type", "url"]) ||
-    message.type !== "wallet.setStrk20ProverUrl" ||
-    typeof message.url !== "string" ||
-    message.url.length > 2048
+    message["type"] !== "wallet.setStrk20ProverUrl" ||
+    typeof message["url"] !== "string" ||
+    message["url"].length > 2048
   ) {
     return null;
   }
 
-  return { url: message.url };
+  return { url: message["url"] };
 };
