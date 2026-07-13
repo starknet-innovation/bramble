@@ -91,6 +91,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:types": "tsc --noEmit",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
+  "release:publish": "bun run scripts/publish-chrome-web-store.ts",
   test: "bun test",
   "test:e2e": "playwright test",
   "test:e2e:build": "bun run build && bun run test:e2e",

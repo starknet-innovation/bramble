@@ -257,6 +257,12 @@ Release zips and SHA-256 checksum files are written to `artifacts/` by
 
 CI uploads those same files as the `mc-wallet-extension` workflow artifact.
 
+Cutting a release and submitting to the Chrome Web Store is documented in
+[`RELEASING.md`](RELEASING.md): pushing a `vX.Y.Z` tag runs
+`.github/workflows/release.yml` to publish a GitHub Release with the packaged
+zip + checksum, and an optional, currently-disabled job can publish to the
+Chrome Web Store once a store account and secrets exist.
+
 ## Transaction replacement
 
 Starknet has no mempool fee-bump or replace-by-nonce as of RPC 0.8: once
