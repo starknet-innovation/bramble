@@ -16,7 +16,7 @@ import type { StarknetNetworkId } from "./networks";
 /**
  * Browser storage key for the fiat price cache.
  */
-export const PRICES_STORE_KEY = "mc-wallet:prices";
+const PRICES_STORE_KEY = "mc-wallet:prices";
 
 /**
  * Browser storage key for the 7-day market chart cache.

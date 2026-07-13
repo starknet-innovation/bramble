@@ -115,7 +115,7 @@ export const padFelt = (value: string): string | null => {
 /**
  * Reduces a validated account to its page-facing address + network id.
  */
-export const toPublicAccount = (account: PublicAccount): PublicAccount => ({
+const toPublicAccount = (account: PublicAccount): PublicAccount => ({
   address: account.address,
   networkId: account.networkId,
 });
@@ -123,7 +123,7 @@ export const toPublicAccount = (account: PublicAccount): PublicAccount => ({
 /**
  * Narrows an unknown value to a page-facing `{ address, networkId }` account.
  */
-export const isPublicAccount = (value: unknown): value is PublicAccount =>
+const isPublicAccount = (value: unknown): value is PublicAccount =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["address", "networkId"]) &&
   typeof value["address"] === "string" &&
@@ -167,7 +167,7 @@ export const providerAccountsResult = (result: unknown): ProviderAccountsResult 
 /**
  * Narrows an unknown value to a spec chain-id result (`{ chainId, ok: true }`).
  */
-export const providerChainIdResult = (result: unknown): { chainId: string } | null =>
+const providerChainIdResult = (result: unknown): { chainId: string } | null =>
   isRecord(result) &&
   isJson(result) &&
   hasOnlyKnownKeys(result, ["chainId", "ok"]) &&

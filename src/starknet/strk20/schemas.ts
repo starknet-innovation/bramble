@@ -38,7 +38,7 @@ const withinField = (value: string): boolean => {
  * Checks whether an untrusted value is a spec FELT: `0x` + hex, within the
  * Stark field.
  */
-export const isStrk20Felt = (value: unknown): value is string =>
+const isStrk20Felt = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length <= 66 &&
   HEX_FELT_PATTERN.test(value) &&
@@ -47,7 +47,7 @@ export const isStrk20Felt = (value: unknown): value is string =>
 /**
  * Checks whether an untrusted value is a spec ADDRESS: a non-zero FELT.
  */
-export const isStrk20Address = (value: unknown): value is string =>
+const isStrk20Address = (value: unknown): value is string =>
   isStrk20Felt(value) && BigInt(value) > 0n;
 
 /**
@@ -55,7 +55,7 @@ export const isStrk20Address = (value: unknown): value is string =>
  * the token's smallest unit. Deposit and withdraw amounts use this directly;
  * transfer additionally accepts the literal "OPEN".
  */
-export const isStrk20Amount = (value: unknown): value is string => isStrk20Felt(value);
+const isStrk20Amount = (value: unknown): value is string => isStrk20Felt(value);
 
 // Checks whether an untrusted value is a transfer amount: a FELT or the literal
 // "OPEN" open-note request.

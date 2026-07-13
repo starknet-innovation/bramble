@@ -25,7 +25,7 @@ export type SpamReason = "absurd-decimals" | "empty-name" | "symbol-spoof";
 /**
  * Decimals above this are treated as absurd; real ERC20 tokens stay well under.
  */
-export const MAX_PLAUSIBLE_DECIMALS = 24;
+const MAX_PLAUSIBLE_DECIMALS = 24;
 
 // Canonical mainnet contracts. ETH and STRK match src/starknet/networks.ts.
 const MAINNET_TOKENS: readonly RegistryToken[] = [

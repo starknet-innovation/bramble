@@ -181,7 +181,7 @@ const refreshProposal = async (
  * Refreshes every tracked proposal for a multisig, tolerating per-proposal
  * read failures so one broken read never hides the rest.
  */
-export const refreshProposals = async (
+const refreshProposals = async (
   deps: MultisigOpsDeps,
   record: MultisigRecord,
   signer: string,

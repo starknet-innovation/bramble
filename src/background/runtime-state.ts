@@ -103,7 +103,7 @@ export const networkRpcUrls = (
 /**
  * Returns the active account for a network, falling back to the first account on that network.
  */
-export const accountForNetwork = (
+const accountForNetwork = (
   vault: Vault,
   networkId: StarknetNetworkId,
   accountId?: string | null,

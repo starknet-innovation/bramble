@@ -48,7 +48,7 @@ export type DeclareExecuteDeps = {
  * Parses a `wallet.addDeclareTransaction` runtime message crossed from the
  * content bridge, re-validating the declare payload and normalizing the origin.
  */
-export const readAddDeclareTransactionInput = (
+const readAddDeclareTransactionInput = (
   message: unknown,
 ): { readonly declare: ProviderDeclare; readonly origin: string } | null => {
   if (

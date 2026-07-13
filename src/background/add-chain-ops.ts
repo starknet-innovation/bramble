@@ -33,7 +33,7 @@ export type AddChainOpsDeps = {
  * Parses a `wallet.addStarknetChain` runtime message crossed from the content
  * bridge, re-validating the chain descriptor and normalizing the origin.
  */
-export const readAddStarknetChainInput = (
+const readAddStarknetChainInput = (
   message: unknown,
 ): { readonly chain: ProviderChain; readonly origin: string } | null => {
   if (
@@ -63,7 +63,7 @@ const toCustomNetwork = (chain: ProviderChain): CustomNetwork => ({
 /**
  * Checks whether a chain id already matches a built-in or stored custom network.
  */
-export const chainAlreadyListed = (chainId: string, preferences: WalletPreferences): boolean => {
+const chainAlreadyListed = (chainId: string, preferences: WalletPreferences): boolean => {
   const key = normalizeChainId(chainId);
   const builtIn = Object.values(STARKNET_NETWORKS).some(
     (network) => normalizeChainId(network.chainId) === key,

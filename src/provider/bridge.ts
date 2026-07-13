@@ -122,7 +122,7 @@ export type ProviderResponse =
 /**
  * Narrows an unknown value to a spec `{ code, message, data? }` error object.
  */
-export const isWalletRpcError = (value: unknown): value is WalletRpcError =>
+const isWalletRpcError = (value: unknown): value is WalletRpcError =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["code", "data", "message"]) &&
   typeof value["code"] === "number" &&
