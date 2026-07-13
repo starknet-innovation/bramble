@@ -47,7 +47,9 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "vendor/multisig/",
 ] as const;
 
-export const EXPECTED_README_SECTIONS = [
+export const EXPECTED_README_SECTIONS = ["## Features", "## Quick start", "## Docs"] as const;
+
+export const EXPECTED_ARCHITECTURE_SECTIONS = [
   "## Architecture",
   "## Migration Workflow",
   "## Design System",

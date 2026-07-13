@@ -4,6 +4,7 @@
 import { readFile } from "node:fs/promises";
 import {
   DEPENDENCY_FIELDS,
+  EXPECTED_ARCHITECTURE_SECTIONS,
   EXPECTED_CONTRIBUTING_RULES,
   EXPECTED_CONTRIBUTING_SECTIONS,
   EXPECTED_DEPENDENCIES,
@@ -42,6 +43,7 @@ const biomeJson = await readJson("biome.json");
 const gitignore = await readFile(".gitignore", "utf8");
 const manifestJson = await readJson("public/manifest.json");
 const readme = await readFile("README.md", "utf8");
+const architecture = await readFile("docs/ARCHITECTURE.md", "utf8");
 const contributing = await readFile("CONTRIBUTING.md", "utf8");
 const tsconfigJson = await readJson("tsconfig.json");
 const buildScript = await readFile("scripts/build-extension.ts", "utf8");
@@ -283,6 +285,12 @@ for (const entry of EXPECTED_GITIGNORE_ENTRIES) {
 for (const section of EXPECTED_README_SECTIONS) {
   if (!readme.includes(section)) {
     failures.push(`README.md must document ${section.slice(3).toLowerCase()}`);
+  }
+}
+
+for (const section of EXPECTED_ARCHITECTURE_SECTIONS) {
+  if (!architecture.includes(section)) {
+    failures.push(`docs/ARCHITECTURE.md must document ${section.slice(3).toLowerCase()}`);
   }
 }
 
