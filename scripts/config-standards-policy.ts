@@ -78,7 +78,7 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run scripts/build-extension.ts",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test ./tests",
   "check:audit": "bun audit --audit-level=high",
   "check:coverage": "bun run scripts/check-coverage.ts",
   "check:cycles": "madge --circular --extensions ts src",
@@ -94,7 +94,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
   "release:publish": "bun run scripts/publish-chrome-web-store.ts",
-  test: "bun test",
+  test: "bun test ./tests",
   "test:e2e": "playwright test",
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",

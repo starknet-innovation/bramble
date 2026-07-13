@@ -1,0 +1,129 @@
+/**
+ * Types + discovery helpers for the injected Starknet wallet provider.
+ *
+ * The terminal is a dApp: it talks to the MC Wallet browser extension through
+ * the wallet's injected `window.starknet_mcWallet` provider (a standard
+ * get-starknet StarknetWindowObject). We prefer that provider specifically, but
+ * fall back to any other injected Starknet wallet so the terminal is usable for
+ * development against Argent/Braavos too.
+ */
+import type { StarknetWindowObject } from "get-starknet-core";
+
+/**
+ * The window key the MC Wallet extension injects its provider under.
+ */
+export const MC_WALLET_WINDOW_KEY = "starknet_mcWallet" as const;
+
+/**
+ * Substring used to recognise the MC Wallet among discovered providers when the
+ * exact injected key is unavailable (e.g. behind get-starknet discovery).
+ */
+export const MC_WALLET_NAME_MATCH = /mc\s*wallet/i;
+
+type StarknetWindow = Window & {
+  readonly [MC_WALLET_WINDOW_KEY]?: StarknetWindowObject;
+};
+
+/**
+ * How often, and for how long, we poll `window` for a wallet provider before
+ * giving up. Browser extensions inject their provider asynchronously after the
+ * page's first paint, so a synchronous read on click frequently loses the race
+ * and returns nothing — which is why "Connect" sometimes did not prompt at all.
+ */
+export const INJECTION_POLL_INTERVAL_MS = 50 as const;
+export const INJECTION_TIMEOUT_MS = 3000 as const;
+
+/**
+ * Reads the MC Wallet provider directly off the window, if the extension has
+ * injected it. Returns null in SSR or when the extension is absent.
+ */
+export const readInjectedMcWallet = (): StarknetWindowObject | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return (window as StarknetWindow)[MC_WALLET_WINDOW_KEY] ?? null;
+};
+
+/**
+ * Picks the MC Wallet from a list of discovered providers, matching first on the
+ * canonical id, then on a name substring. Returns null when none match.
+ */
+export const pickMcWallet = (
+  wallets: readonly StarknetWindowObject[],
+): StarknetWindowObject | null =>
+  wallets.find(
+    (wallet) => wallet.id === "mcWallet" || MC_WALLET_NAME_MATCH.test(wallet.name ?? ""),
+  ) ?? null;
+
+/**
+ * Structural check that an arbitrary window value is a Starknet provider. We
+ * accept either the modern `request` API or the legacy `enable` method so both
+ * current and older wallets (and the test double) are recognised.
+ */
+const isStarknetWindowObject = (value: unknown): value is StarknetWindowObject => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.on === "function" &&
+    (typeof candidate.request === "function" || typeof candidate.enable === "function")
+  );
+};
+
+/**
+ * Scans `window` for every injected Starknet provider (`starknet`,
+ * `starknet_mcWallet`, `starknet_argentX`, `starknet_braavos`, ...). Used as a
+ * development fallback so the terminal works against any wallet, not only MC.
+ */
+export const scanInjectedStarknetWallets = (): readonly StarknetWindowObject[] => {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  const found: StarknetWindowObject[] = [];
+  for (const key of Object.keys(window)) {
+    if (!key.startsWith("starknet")) {
+      continue;
+    }
+    const candidate = (window as unknown as Record<string, unknown>)[key];
+    if (isStarknetWindowObject(candidate) && !found.includes(candidate)) {
+      found.push(candidate);
+    }
+  }
+  return found;
+};
+
+/**
+ * Resolves the injected MC Wallet provider, waiting for the extension to inject
+ * it rather than reading `window` once. Resolves as soon as the provider
+ * appears; on timeout, falls back to any injected Starknet provider (dev). This
+ * fixes the "clicking Connect does nothing" race where the click beat injection.
+ */
+export const waitForInjectedMcWallet = async (
+  timeoutMs: number = INJECTION_TIMEOUT_MS,
+): Promise<StarknetWindowObject | null> => {
+  const immediate = readInjectedMcWallet();
+  if (immediate !== null) {
+    return immediate;
+  }
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return new Promise<StarknetWindowObject | null>((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    const interval = window.setInterval(() => {
+      const mc = readInjectedMcWallet();
+      if (mc !== null) {
+        window.clearInterval(interval);
+        resolve(mc);
+        return;
+      }
+      if (Date.now() >= deadline) {
+        window.clearInterval(interval);
+        const scanned = scanInjectedStarknetWallets();
+        resolve(pickMcWallet(scanned) ?? scanned[0] ?? null);
+      }
+    }, INJECTION_POLL_INTERVAL_MS);
+  });
+};

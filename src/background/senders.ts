@@ -4,6 +4,10 @@
 export type RuntimeSender = {
   readonly id?: string;
   readonly origin?: string;
+  readonly tab?: {
+    readonly id?: number;
+    readonly windowId?: number;
+  };
   readonly url?: string;
 };
 
@@ -93,6 +97,22 @@ export const DAPP_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.strk20PrepareInvoke",
   "wallet.supportedSpecs",
   "wallet.supportedWalletApi",
+  "wallet.switchChain",
+  "wallet.watchAsset",
+]);
+
+/**
+ * Dapp messages that may require a user decision in the wallet UI. The
+ * background opens the approval surface as soon as one arrives so Chrome still
+ * associates the call with the originating page gesture.
+ */
+export const APPROVAL_SURFACE_MESSAGES: ReadonlySet<string> = new Set([
+  "wallet.addDeclareTransaction",
+  "wallet.addInvokeTransaction",
+  "wallet.addStarknetChain",
+  "wallet.requestAccounts",
+  "wallet.signTypedData",
+  "wallet.strk20InvokeTransaction",
   "wallet.switchChain",
   "wallet.watchAsset",
 ]);

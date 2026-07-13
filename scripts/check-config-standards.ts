@@ -120,6 +120,7 @@ if (
   !hasStringList(biomeFiles?.["includes"], [
     "**",
     "!.claude",
+    "!apps",
     "!bun.lock",
     "!dist",
     "!node_modules",
