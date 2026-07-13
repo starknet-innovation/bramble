@@ -152,6 +152,26 @@ describe("createPreferencesStore", () => {
     expect((await preferences.read()).accountLabels).toEqual({});
   });
 
+  test("defaults theme to system and accepts every theme choice", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+
+    expect((await preferences.read()).theme).toBe("system");
+
+    await preferences.setDisplay({ theme: "light" });
+    expect((await preferences.read()).theme).toBe("light");
+
+    await preferences.setDisplay({ theme: "dark" });
+    expect((await preferences.read()).theme).toBe("dark");
+
+    await preferences.setDisplay({ theme: "system" });
+    expect((await preferences.read()).theme).toBe("system");
+
+    await expect(
+      preferences.setDisplay({ theme: "midnight" as unknown as "system" }),
+    ).rejects.toThrow("Invalid display preference");
+  });
+
   test("hides and reveals tokens and stays compatible with legacy backups", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });

@@ -399,4 +399,5 @@ export const BASE_STYLES = `
   .menu-copy strong, .option-copy strong { font-size: ${TYPE.body.size}; font-weight: 600; }
   .menu-value { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .option-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
+  .option-sub { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
 `;

@@ -8,10 +8,11 @@
 
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
-import type { WalletPreferences } from "../storage/preferences-store";
+import type { ThemeChoice, WalletPreferences } from "../storage/preferences-store";
+import { systemPrefersDark, watchSystemScheme } from "../ui/color-scheme";
 import { darkSkin } from "../ui/dark-skin";
 import { defaultSkin } from "../ui/default-skin";
-import { applySkin } from "../ui/skin";
+import { applySkin, type Skin } from "../ui/skin";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import {
@@ -59,7 +60,7 @@ let lastAccountId: string | null = null;
 let lastNetworkId = "SN_MAIN";
 let lastScene = "";
 let lastContent = "";
-let lastTheme = "";
+let lastSkinName = "";
 let lastActiveView: WalletView = "home";
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
@@ -292,17 +293,38 @@ const bindAll = (): void => {
   });
 };
 
+// Resolves the concrete skin for the active theme choice. "system" (the
+// default) follows the browser's color scheme so the panel matches the theme
+// border Chrome draws around it; "dark"/"light" pin a skin. Dark is the
+// standard fallback whenever the browser preference is unavailable or not light.
+const skinForChoice = (choice: ThemeChoice): Skin =>
+  choice === "light"
+    ? defaultSkin
+    : choice === "dark"
+      ? darkSkin
+      : systemPrefersDark()
+        ? darkSkin
+        : defaultSkin;
+
+// Applies the skin for the current theme choice, but only when the resolved
+// skin actually changed — cheap enough to call on every paint and on live
+// color-scheme flips. Swapping skin tokens on the root re-themes the whole
+// panel through CSS custom properties without re-rendering any markup.
+const applyTheme = (): void => {
+  const skin = skinForChoice(cache.preferences?.theme ?? "system");
+  if (skin.name !== lastSkinName) {
+    lastSkinName = skin.name;
+    applySkin(skin, document.documentElement);
+  }
+};
+
 // Synchronous paint from the current cache. Navigation calls this first so the
 // screen swaps instantly, then hydrate() streams fresh data in and repaints.
 const paint = (): void => {
   const { status } = cache;
   lastNetworkId = status.networkId;
   lastAccountId = status.activeAccountId;
-  const theme = cache.preferences?.theme ?? "dark";
-  if (theme !== lastTheme) {
-    lastTheme = theme;
-    applySkin(theme === "light" ? defaultSkin : darkSkin, document.documentElement);
-  }
+  applyTheme();
   const scene = !status.hasVault
     ? "onboarding"
     : status.locked
@@ -453,5 +475,9 @@ runtime?.onMessage?.addListener((message) => {
   }
 });
 
-applySkin(darkSkin, document.documentElement);
+// Re-theme live when the browser flips color scheme while the panel is open, so
+// "system" stays in sync with the browser. Harmless under a pinned dark/light
+// choice: applyTheme's skin-name guard skips the reapply.
+watchSystemScheme(applyTheme);
+applyTheme();
 void render(await wallet.loadStatus());
