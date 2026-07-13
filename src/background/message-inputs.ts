@@ -7,7 +7,12 @@ import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import type { StarknetNetworkId } from "../starknet/networks";
-import { isStarkFieldElement, isStarknetNetworkId, STARK_FIELD_PRIME } from "../starknet/networks";
+import {
+  isHexChainId,
+  isStarkFieldElement,
+  isStarknetNetworkId,
+  STARK_FIELD_PRIME,
+} from "../starknet/networks";
 import { isVaultPassphrase } from "../storage/encrypted-store";
 import { isAccountId } from "../storage/vault-schema";
 import type {
@@ -38,9 +43,6 @@ const isFeltLikeString = (value: unknown): value is string => {
 
 const isEntrypoint = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
-
-const isChainId = (value: unknown): value is string =>
-  typeof value === "string" && /^0x[0-9a-f]+$/.test(value);
 
 const readInvokeCall = (value: unknown): Call | null => {
   if (
@@ -323,7 +325,7 @@ export const readSwitchChainInput = (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["chainId", "origin", "type"]) ||
     message["type"] !== "wallet.switchChain" ||
-    !isChainId(message["chainId"])
+    !isHexChainId(message["chainId"])
   ) {
     return null;
   }

@@ -19,7 +19,7 @@ import { balanceRow } from "./token-row";
 /**
  * Tab ids of the home portfolio section, in display order.
  */
-export const HOME_TABS = ["tokens", "collectibles", "activity"] as const;
+const HOME_TABS = ["tokens", "collectibles", "activity"] as const;
 
 /**
  * One of the home portfolio tabs.
@@ -62,7 +62,7 @@ export const visibleHomeBalances = (
  * User guidance for pending Starknet transactions, shared with the activity
  * screen.
  */
-export const PENDING_TX_HINT =
+const PENDING_TX_HINT =
   "Starknet has no fee-bump or replace-by-fee: a pending transaction can't be sped up, replaced, or cancelled. This is a protocol limitation, not a wallet one, and it usually settles within a few minutes.";
 
 /**

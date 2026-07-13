@@ -13,9 +13,6 @@
  * `filter`) should be animated, and in-flight animations on the same element
  * are cancelled before a new one starts so gestures can retarget mid-flight.
  */
-import { resolveSpring } from "../ui/spring";
-import type { SpringName } from "../ui/tokens";
-
 const MOTION_ID = "mc-motion";
 
 /**
@@ -68,21 +65,6 @@ export const animate = (
   });
   anim.id = id;
   return anim;
-};
-
-/**
- * Spring-driven variant of {@link animate}: resolves a named spring preset to a
- * native `linear()` easing + settle duration, so touchable UI settles with
- * real physics while staying on the compositor. Explicit timing overrides win.
- */
-export const spring = (
-  el: Element,
-  keyframes: Keyframe[],
-  name: SpringName,
-  options: MotionOptions = {},
-): Animation | null => {
-  const { durationMs, easing } = resolveSpring(name);
-  return animate(el, keyframes, { duration: durationMs, easing, ...options });
 };
 
 /**

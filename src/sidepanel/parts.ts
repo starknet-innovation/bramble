@@ -126,7 +126,7 @@ const NAME_ANIMALS = [
  * address, so an account without a user label still reads as a friendly name
  * rather than a raw hex string.
  */
-export const friendlyAccountName = (address: string): string => {
+const friendlyAccountName = (address: string): string => {
   let bits: bigint;
   try {
     bits = BigInt(address);
@@ -218,7 +218,7 @@ export const copyButton = (value: string, label: string): string =>
 /**
  * Renders the network status pill.
  */
-export const networkPill = (status: WalletStatus): string =>
+const networkPill = (status: WalletStatus): string =>
   `<span class="pill"><span class="dot"></span>${escapeHtml(status.network)}</span>`;
 
 /**

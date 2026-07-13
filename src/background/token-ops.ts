@@ -5,7 +5,7 @@
  * extension-page messages.
  */
 
-import { STARKNET_NETWORKS } from "../starknet/networks";
+import { STARKNET_NETWORKS, sameFelt } from "../starknet/networks";
 import type { PriceService } from "../starknet/prices";
 import { isTransportRpcError, type TokenMetadata } from "../starknet/rpc";
 import { isLikelySpam, knownTokensForNetwork } from "../starknet/token-registry";
@@ -26,14 +26,6 @@ export type TokenOpsDeps = {
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
-};
-
-const sameAddress = (left: string, right: string): boolean => {
-  try {
-    return BigInt(left) === BigInt(right);
-  } catch {
-    return left === right;
-  }
 };
 
 /**
@@ -114,7 +106,7 @@ export const handleTokenOps = async (
     const preferences = await preferencesStore.read();
     const tracked = preferences.tokens.filter((token) => token.networkId === context.networkId);
     const candidates = knownTokensForNetwork(context.networkId).filter(
-      (known) => !tracked.some((token) => sameAddress(token.address, known.address)),
+      (known) => !tracked.some((token) => sameFelt(token.address, known.address)),
     );
     if (candidates.length === 0) {
       return { ok: true, suggestions: [] };

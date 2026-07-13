@@ -6,7 +6,7 @@
 import type { Call } from "starknet";
 import type { AddressBookEntry, TokenConfig } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { canonicalFelt, sameFelt } from "./networks";
+import { asFelt, canonicalFelt, sameFelt } from "./networks";
 import { formatTokenAmount } from "./rpc";
 
 const UINT_128_SHIFT = 128n;
@@ -54,17 +54,6 @@ export type VerificationContext = {
 export type VerificationReport = {
   readonly calls: readonly DecodedCall[];
   readonly flags: readonly RiskFlag[];
-};
-
-const asFelt = (value: unknown): bigint | null => {
-  if (typeof value !== "string" || value.length === 0) {
-    return null;
-  }
-  try {
-    return BigInt(value);
-  } catch {
-    return null;
-  }
 };
 
 const shortAddress = (address: string): string => `${address.slice(0, 6)}…${address.slice(-4)}`;

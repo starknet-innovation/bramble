@@ -44,7 +44,6 @@ import {
   activeAccount,
   dockScreen,
   isWalletView,
-  networkOptions,
   noAccountEmpty,
   WALLET_VIEWS,
   type WalletView,
@@ -56,7 +55,7 @@ import { DEFAULT_CURRENCY, tokenDetailFlow, tokensFlow } from "./token-flows";
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
  */
-export { isWalletView, networkOptions, WALLET_VIEWS, type WalletView };
+export { isWalletView, WALLET_VIEWS, type WalletView };
 
 const walletHeader = (
   status: WalletStatus,

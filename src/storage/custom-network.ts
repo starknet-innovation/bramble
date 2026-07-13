@@ -3,7 +3,8 @@
  * kept out of preferences-store.ts so that file stays within the size budget.
  * Follows the built-in network model in starknet/networks.ts.
  */
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "../shared/json";
+import { isCanonicalChainId } from "../starknet/networks";
 
 const isLoopbackHost = (host: string): boolean => host === "localhost" || host === "127.0.0.1";
 
@@ -35,12 +36,6 @@ export type CustomNetwork = {
   readonly rpcUrls?: readonly string[];
 };
 
-const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
-
-const isChainIdHex = (value: unknown): value is string =>
-  typeof value === "string" && /^0x[0-9a-fA-F]{1,64}$/.test(value) && BigInt(value) > 0n;
-
 /**
  * Normalizes a chain id to a decimal key so equal felts written differently
  * (`0x1` vs `0x01`) collapse to one entry.
@@ -63,7 +58,7 @@ const isOptionalCustomUrlList = (value: unknown): value is readonly string[] | u
 export const isCustomNetwork = (value: unknown): value is CustomNetwork =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["blockExplorerUrls", "chainId", "iconUrls", "id", "name", "rpcUrls"]) &&
-  isChainIdHex(value["chainId"]) &&
+  isCanonicalChainId(value["chainId"]) &&
   isNetworkText(value["id"], 256) &&
   isNetworkText(value["name"], 256) &&
   isOptionalCustomUrlList(value["rpcUrls"]) &&

@@ -7,19 +7,9 @@
 import type { Call } from "starknet";
 import type { AllowanceInput } from "../storage/allowance-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { asFelt } from "./networks";
 
 const UINT_128_SHIFT = 128n;
-
-const asFelt = (value: unknown): bigint | null => {
-  if (typeof value !== "string" || value.length === 0) {
-    return null;
-  }
-  try {
-    return BigInt(value);
-  } catch {
-    return null;
-  }
-};
 
 /**
  * One decoded `approve(spender, amount)` call.

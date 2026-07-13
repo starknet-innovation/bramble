@@ -1,7 +1,7 @@
 /**
  * Versioned vault schema and validators for decrypted wallet state.
  */
-import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import {
   isNonZeroStarkFieldElement,
@@ -145,9 +145,6 @@ const isOriginGrant = (value: unknown): value is OriginGrant =>
   value["accountIds"].every(isAccountId) &&
   typeof value["origin"] === "string" &&
   isWalletOrigin(value["origin"]);
-
-const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
 
 /**
  * Creates a deterministic empty current vault.

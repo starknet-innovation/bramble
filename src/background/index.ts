@@ -4,6 +4,7 @@
 import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 import { createKrustyKms } from "../crypto/krusty";
 import type { WalletEventMessage } from "../provider/events";
+import { MULTISIG_CLASS_ARTIFACT } from "../starknet/multisig-deploy";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
 import { createActivityLog, systemClock } from "../storage/activity-store";
 import { createAllowanceStore } from "../storage/allowance-store";
@@ -158,7 +159,7 @@ const multisigLog = (() => {
 // artifact ships inside the extension package, so this fetch never leaves the
 // extension origin; the ops handler re-verifies its class hash before use.
 const loadMultisigClass = async (): Promise<unknown> => {
-  const url = runtime?.getURL?.("vendor/multisig/multisig.contract_class.json");
+  const url = runtime?.getURL?.(MULTISIG_CLASS_ARTIFACT);
   if (!url) {
     throw new Error("multisig class artifact unavailable");
   }

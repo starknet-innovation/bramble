@@ -8,7 +8,7 @@
  * probe and is never surfaced, and none of this data authorizes a transfer.
  */
 import type { TokenConfig } from "../storage/preferences-store";
-import type { StarknetNetworkId } from "./networks";
+import { type StarknetNetworkId, sameFelt } from "./networks";
 
 /**
  * A registry token without its derived preference id.
@@ -25,7 +25,7 @@ export type SpamReason = "absurd-decimals" | "empty-name" | "symbol-spoof";
 /**
  * Decimals above this are treated as absurd; real ERC20 tokens stay well under.
  */
-export const MAX_PLAUSIBLE_DECIMALS = 24;
+const MAX_PLAUSIBLE_DECIMALS = 24;
 
 // Canonical mainnet contracts. ETH and STRK match src/starknet/networks.ts.
 const MAINNET_TOKENS: readonly RegistryToken[] = [
@@ -124,14 +124,6 @@ const foldSymbol = (symbol: string): string => {
     .join("");
 };
 
-const sameAddress = (left: string, right: string): boolean => {
-  try {
-    return BigInt(left) === BigInt(right);
-  } catch {
-    return left === right;
-  }
-};
-
 /**
  * Returns the curated known tokens for a network, each carrying its derived
  * preference id so callers can probe balances or compare against tracked
@@ -169,13 +161,13 @@ export const tokenSpamReasons = (token: SpamCandidate): readonly SpamReason[] =>
   }
   const folded = foldSymbol(token.symbol);
   const spoofs = knownTokensForNetwork(token.networkId).some((known) => {
-    if (foldSymbol(known.symbol) !== folded || sameAddress(known.address, token.address)) {
+    if (foldSymbol(known.symbol) !== folded || sameFelt(known.address, token.address)) {
       return false;
     }
     // A different contract sharing the symbol is only genuine when it is an
     // explicitly allowlisted alternate deployment of that ticker.
     const aliases = LEGITIMATE_ALIASES[known.symbol] ?? [];
-    return !aliases.some((alias) => sameAddress(alias, token.address));
+    return !aliases.some((alias) => sameFelt(alias, token.address));
   });
   if (spoofs) {
     reasons.push("symbol-spoof");

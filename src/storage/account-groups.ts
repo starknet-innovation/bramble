@@ -8,9 +8,8 @@
  * plain preferences store validates its other collections.
  */
 import { WalletError } from "../shared/errors";
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "../shared/json";
 import type { IconName } from "../sidepanel/icons";
-import { hasUniqueStrings } from "./preferences-entries";
 import { isAccountId } from "./vault-schema";
 
 /**

@@ -2,12 +2,9 @@
  * Pure parsers for dapp provider runtime messages that reach the background
  * from the content bridge: permission queries and watch-asset requests.
  */
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, isRecord, isSafeDecimals } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import type { WatchAssetRequest } from "./watch-asset";
-
-const isSafeDecimals = (value: unknown): value is number =>
-  typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 36;
 
 const readWatchAssetOptions = (value: unknown): WatchAssetRequest | null => {
   if (

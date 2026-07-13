@@ -13,7 +13,7 @@ import type { KeyValueStore } from "./kv";
 /**
  * Browser storage key for the activity log.
  */
-export const ACTIVITY_STORE_KEY = "mc-wallet:activity";
+const ACTIVITY_STORE_KEY = "mc-wallet:activity";
 
 const MAX_ENTRIES = 200;
 

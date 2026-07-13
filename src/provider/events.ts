@@ -8,6 +8,7 @@
  * unconnected sites.
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { isHexChainId } from "../starknet/networks";
 import { PAGE_TARGET } from "./bridge";
 
 /**
@@ -44,9 +45,6 @@ const isProviderEventName = (value: unknown): value is ProviderEventName =>
 const isAddressList = (value: unknown): value is readonly string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string" && item.length > 0);
 
-const isChainId = (value: unknown): value is string =>
-  typeof value === "string" && /^0x[0-9a-f]+$/.test(value);
-
 /**
  * Builds a page-targeted accountsChanged event.
  */
@@ -80,7 +78,7 @@ export const readProviderEvent = (value: unknown): ProviderEvent | null => {
   if (value["event"] === "accountsChanged") {
     return isAddressList(value["data"]) ? accountsChangedEvent(value["data"]) : null;
   }
-  return isChainId(value["data"]) ? networkChangedEvent(value["data"]) : null;
+  return isHexChainId(value["data"]) ? networkChangedEvent(value["data"]) : null;
 };
 
 /**
@@ -96,7 +94,7 @@ export const isWalletEventMessage = (value: unknown): value is WalletEventMessag
   return (
     value["event"] === "networkChanged" &&
     hasOnlyKnownKeys(value, ["chainId", "event", "type"]) &&
-    isChainId(value["chainId"])
+    isHexChainId(value["chainId"])
   );
 };
 
