@@ -1,6 +1,7 @@
 {
   "name": "mc-wallet",
   "version": "0.2.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.3",

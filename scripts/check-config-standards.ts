@@ -53,6 +53,7 @@ if (
   !hasOnlyKeys(packageJson, [
     "dependencies",
     "devDependencies",
+    "license",
     "name",
     "packageManager",
     "private",

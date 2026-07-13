@@ -85,6 +85,23 @@ CI runs the same gates. Do not merge around them.
 - Any dependency addition needs a reason in the pull request and must be used immediately.
 - Any change to key derivation, signing, encryption, storage schema, or permissions needs tests.
 
+## Taste
+
+Green gates mean the change is **correct**. They do not mean it is **good**. Two changes can both pass every check and one can still be the wrong one: harder to read a year from now, easier to misuse, a single refactor away from a bug. We hold that second bar too. No script can measure it, so it falls to the author first and the reviewer second — judge a change not only by "does it meet the requirement" but "does it have the right taste."
+
+The sensibility is borrowed from Haskell: push correctness into the types, keep effects at the edges, and prefer code that *cannot* be wrong over code that merely *happens* to be right.
+
+- **Make illegal states unrepresentable.** If a value must never exist, the type should forbid it. Reach for a discriminated union or a branded type before a boolean flag plus a comment, or an "impossible" `default` branch. The best fix for a class of bug is the one that turns it into a compile error.
+- **Parse, don't validate.** Validate untrusted input once, at the boundary, into a precise type — then trust that type everywhere within. A function that takes an `Address` is honest; one that takes a `string` and re-checks it at every call site is not.
+- **Keep the core pure; push effects to the edges.** Clock, randomness, storage, network, and key material live only in their boundary modules — that is what `check:files` enforces, and it is a taste principle before it is a rule. Logic that is a pure function of its inputs is testable without mocks and impossible to make accidentally non-deterministic.
+- **Total over partial.** Prefer functions defined for every input they accept. Handle every case of a union and let the compiler prove exhaustiveness; return a typed result or throw a typed error rather than handing back `undefined` and hoping the caller checks.
+- **Name the domain, not the mechanism.** Types and functions should read like the problem (`ShieldedNote`, `approveInvoke`), not the plumbing (`DataObj`, `handleClick2`). Treating a `string` as an address or a `number` as an amount is primitive obsession — give the concept a name.
+- **Compose small, orthogonal pieces.** One thing, at one level of abstraction. If you cannot describe a function without an "and," split it. Prefer composing existing helpers over adding a parameter — especially a boolean one — to an existing function.
+- **Let the signature be the documentation.** If a reader must read the body to know what a function does or what it can throw, the signature is too weak. Encode the contract in the types; then a comment only has to explain *why*, never *what*.
+- **One source of truth.** Two definitions of the same concept — a version, an address, an error shape — are a divergence waiting to happen. Define it once and import it (see the "Reuse before writing" note in `AGENTS.md`).
+
+The test for good taste: the next person to touch this falls into the pit of success — the easy way to use it is the correct way, and the wrong way does not type-check. If you are writing a comment to warn a future caller off a footgun, first ask whether the types could take the footgun away.
+
 ## Commits & PRs
 
 - Commits must be GPG-signed.
