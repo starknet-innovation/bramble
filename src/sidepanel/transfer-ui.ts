@@ -5,7 +5,7 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
-import { isStarkFieldElement } from "../starknet/networks";
+import { isStarkFieldElement, normalizeFeltInput } from "../starknet/networks";
 import { activityToCsv } from "../storage/activity-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { formatFri } from "./parts";
@@ -18,12 +18,14 @@ const INVALID_REVIEW_ERROR = "invalid transfer review request";
 
 /**
  * Returns an inline error message when the recipient is not a well-formed
- * Starknet address, or `null` when it is valid. Mirrors the background's
- * `isStarkFieldElement` check so the send form rejects the same addresses the
- * wallet would refuse, instead of surfacing a developer error string.
+ * Starknet address, or `null` when it is valid. Normalizes first so a
+ * checksummed (mixed-case) `0x` address is accepted — hex is case-insensitive,
+ * so it denotes the same felt — then mirrors the background's
+ * `isStarkFieldElement` check on the normalized value, rejecting the same
+ * addresses the wallet would refuse instead of surfacing a developer error.
  */
 export const recipientFieldError = (recipient: string): string | null =>
-  isStarkFieldElement(recipient) ? null : INVALID_RECIPIENT_MESSAGE;
+  isStarkFieldElement(normalizeFeltInput(recipient)) ? null : INVALID_RECIPIENT_MESSAGE;
 
 /**
  * Maps the background's developer error string for a malformed recipient onto
@@ -48,7 +50,7 @@ const transferFields = (form: HTMLFormElement) => {
   return {
     accountId: String(data.get("accountId") ?? ""),
     amount: String(data.get("amount") ?? "").trim(),
-    recipient: String(data.get("recipient") ?? "").trim(),
+    recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
     speed: data.get("speed") === "fast" ? ("fast" as const) : ("standard" as const),
     tokenId: String(data.get("tokenId") ?? ""),
   };
