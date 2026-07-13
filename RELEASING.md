@@ -103,6 +103,11 @@ A tag that does not match `v*` triggers nothing.
 Run steps 1-2 locally, then create the Release by hand (Releases → Draft a new
 release), attaching `artifacts/mc-wallet-<version>.zip` and its `.sha256`.
 
+Creating the release via the GitHub UI is also supported: the release step is
+create-or-upload, so it attaches the built assets to an existing (UI-created)
+release rather than failing on the duplicate tag — either a tag push or a UI
+release works.
+
 ## 4. Chrome Web Store — one-time prerequisites
 
 These are **maintainer/manual** steps the automation cannot perform. They must
