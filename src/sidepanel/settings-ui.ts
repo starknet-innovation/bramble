@@ -4,6 +4,7 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { buttonBusy, errorMessage, showToast } from "./dom";
+import { bindGroupControls } from "./group-ui";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -77,6 +78,18 @@ export const bindAddAccount = (deps: SettingsUiDeps): void => {
         buttonBusy(button, false);
       },
     );
+  });
+};
+
+/**
+ * Binds the account-groups controls wherever they appear in the panel — the
+ * manage-accounts "Groups" section, the per-account assignment panels, and the
+ * left drawer's assignment panels — so both entry points share one wiring.
+ */
+export const bindGroups = (deps: SettingsUiDeps): void => {
+  bindGroupControls(deps.app, {
+    rerender: () => rerender(deps),
+    wallet: deps.wallet,
   });
 };
 

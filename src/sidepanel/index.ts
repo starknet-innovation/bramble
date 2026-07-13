@@ -38,6 +38,7 @@ import {
   bindAppearance,
   bindBackup,
   bindContacts,
+  bindGroups,
 } from "./settings-ui";
 import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
@@ -63,6 +64,7 @@ let lastActiveView: WalletView = "home";
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
+let drawerGroupFilter: string | null = null;
 
 // Direction the shell is moving through the screen hierarchy, used to pick a
 // spatially consistent view transition (see ./styles-transitions.ts).
@@ -231,10 +233,14 @@ const bindAll = (): void => {
   bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
   bindHomeUi({
     app,
+    drawerGroupFilter: () => drawerGroupFilter,
     drawerOpen: () => drawerOpen,
     homeTab: () => homeTab,
     networkId: () => lastNetworkId,
     render,
+    setDrawerGroupFilter: (filter) => {
+      drawerGroupFilter = filter;
+    },
     setDrawerOpen: (open) => {
       drawerOpen = open;
     },
@@ -259,6 +265,7 @@ const bindAll = (): void => {
   bindAppearance(settingsDeps);
   bindBackup(settingsDeps);
   bindContacts(settingsDeps);
+  bindGroups(settingsDeps);
   bindAddressBook({ app, render, wallet });
   bindApprovals({ app, render, wallet });
   bindClusterScreens({
@@ -347,6 +354,7 @@ const paint = (): void => {
           cache.multisigs.proposals,
           selectedMultisigId,
           cache.multisigClassDeclared,
+          drawerGroupFilter,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {

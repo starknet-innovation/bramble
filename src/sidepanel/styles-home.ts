@@ -244,6 +244,96 @@ export const HOME_STYLES = `
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* Account groups (folders): filter chips, per-account assignment panel, the
+     icon picker grid, and the manage-accounts group list. Calm, hairline,
+     skin-token only — matching the drawer aesthetic. */
+  .group-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 2px; }
+  button.group-chip {
+    align-items: center;
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-muted);
+    display: inline-flex;
+    font-size: ${TYPE.caption.size};
+    font-weight: 650;
+    gap: 5px;
+    min-height: 28px;
+    padding: 0 ${SPACE.sm};
+  }
+  button.group-chip .icon { height: 14px; width: 14px; }
+  button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  button.group-chip[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  .drawer-account-item { display: grid; gap: 4px; }
+  .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
+  .drawer-account-row .drawer-account, .option-row-line .option-row { flex: 1; min-width: 0; }
+  button.drawer-assign { flex: none; }
+  .option-group-item { display: grid; gap: 4px; }
+  .account-groups-line { display: inline-flex; gap: 4px; margin-top: 2px; }
+  .account-groups-line .icon { color: var(--mc-muted); height: 13px; width: 13px; }
+  .group-assign {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.md};
+    display: grid;
+    gap: ${SPACE.sm};
+    padding: ${SPACE.sm};
+  }
+  .group-assign .eyebrow { margin: 0; }
+  .group-toggle-list { display: grid; gap: 4px; }
+  button.group-toggle {
+    align-items: center;
+    background: transparent;
+    border-radius: ${RADIUS.sm};
+    color: var(--mc-text);
+    display: flex;
+    gap: ${SPACE.sm};
+    justify-content: flex-start;
+    min-height: 36px;
+    padding: 0 ${SPACE.sm};
+    width: 100%;
+  }
+  button.group-toggle:not(:disabled):hover { background: var(--mc-hover); }
+  button.group-toggle[aria-pressed="true"] { background: var(--mc-accent-soft); }
+  .group-toggle-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
+  .group-toggle-icon .icon { height: 16px; width: 16px; }
+  .group-toggle-name { flex: 1; font-size: ${TYPE.body.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+  .group-toggle-mark .icon { height: 16px; width: 16px; }
+  button.group-toggle[aria-pressed="true"] .group-toggle-mark .icon { color: var(--mc-accent); }
+  .new-group-form, .edit-group-form { display: grid; gap: ${SPACE.sm}; }
+  .group-name-input {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.sm};
+    box-shadow: var(--mc-edge);
+    color: var(--mc-text);
+    min-height: 38px;
+    padding: 0 ${SPACE.sm};
+    width: 100%;
+  }
+  .group-icon-picker {
+    display: grid;
+    gap: 4px;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  button.group-icon-option {
+    align-items: center;
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.sm};
+    color: var(--mc-muted);
+    display: inline-flex;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0;
+  }
+  button.group-icon-option .icon { height: 18px; width: 18px; }
+  button.group-icon-option:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  button.group-icon-option[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  .group-manage-list { display: grid; gap: ${SPACE.md}; }
+  .group-manage-row { display: grid; gap: ${SPACE.sm}; }
+  .group-manage-head { align-items: center; display: flex; gap: ${SPACE.sm}; }
+  .group-manage-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
+  .group-manage-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
+  .group-manage-copy strong { font-size: ${TYPE.body.size}; }
+  button[data-remove-group].is-confirming { color: var(--mc-danger); }
+
   button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid var(--mc-accent);
     outline-offset: 2px;

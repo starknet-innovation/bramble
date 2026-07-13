@@ -1,6 +1,7 @@
 /**
  * Typed runtime message client for the side panel UI.
  */
+
 import {
   type ActivityResponse,
   type AllowancesResponse,
@@ -30,6 +31,7 @@ import {
   type TransferReviewResponse,
   type WalletStatus,
 } from "../popup/responses";
+import type { AccountGroupIcon } from "../storage/account-groups";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -329,6 +331,46 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "label update failed");
+    },
+    async createGroup(name: string, icon: AccountGroupIcon): Promise<void> {
+      const response = await sendMessage({ icon, name, type: "wallet.createGroup" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "group create failed");
+    },
+    async renameGroup(id: string, name: string): Promise<void> {
+      const response = await sendMessage({ id, name, type: "wallet.renameGroup" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "group rename failed");
+    },
+    async setGroupIcon(id: string, icon: AccountGroupIcon): Promise<void> {
+      const response = await sendMessage({ icon, id, type: "wallet.setGroupIcon" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "group icon update failed");
+    },
+    async removeGroup(id: string): Promise<void> {
+      const response = await sendMessage({ id, type: "wallet.removeGroup" });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "group remove failed");
+    },
+    async setAccountInGroup(accountId: string, groupId: string, member: boolean): Promise<void> {
+      const response = await sendMessage({
+        accountId,
+        groupId,
+        member,
+        type: "wallet.setAccountInGroup",
+      });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "group membership update failed");
     },
     async setDisplay(input: {
       readonly displayCurrency?: "eur" | "gbp" | "usd";

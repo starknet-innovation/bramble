@@ -271,6 +271,13 @@ const handleMessage = createMessageHandler(
         }
         return store.addNft(input);
       },
+      async createGroup(input) {
+        const store = await preferences;
+        if (!store) {
+          throw new Error("preferences unavailable");
+        }
+        return store.createGroup(input);
+      },
       async importPreferences(input) {
         const store = await preferences;
         if (!store) {
@@ -292,12 +299,40 @@ const handleMessage = createMessageHandler(
         }
         return store.removeAddress(input);
       },
+      async removeGroup(input) {
+        const store = await preferences;
+        if (!store) {
+          throw new Error("preferences unavailable");
+        }
+        return store.removeGroup(input);
+      },
       async removeNft(input) {
         const store = await preferences;
         if (!store) {
           throw new Error("preferences unavailable");
         }
         return store.removeNft(input);
+      },
+      async renameGroup(input) {
+        const store = await preferences;
+        if (!store) {
+          throw new Error("preferences unavailable");
+        }
+        return store.renameGroup(input);
+      },
+      async setAccountInGroup(input) {
+        const store = await preferences;
+        if (!store) {
+          throw new Error("preferences unavailable");
+        }
+        return store.setAccountInGroup(input);
+      },
+      async setGroupIcon(input) {
+        const store = await preferences;
+        if (!store) {
+          throw new Error("preferences unavailable");
+        }
+        return store.setGroupIcon(input);
       },
       async setNftSpam(input) {
         const store = await preferences;

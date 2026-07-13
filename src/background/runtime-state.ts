@@ -32,6 +32,9 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async addNft() {
     throw new Error("preferences unavailable");
   },
+  async createGroup() {
+    throw new Error("preferences unavailable");
+  },
   async importPreferences() {
     throw new Error("preferences unavailable");
   },
@@ -41,7 +44,19 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async removeAddress() {
     throw new Error("preferences unavailable");
   },
+  async removeGroup() {
+    throw new Error("preferences unavailable");
+  },
   async removeNft() {
+    throw new Error("preferences unavailable");
+  },
+  async renameGroup() {
+    throw new Error("preferences unavailable");
+  },
+  async setAccountInGroup() {
+    throw new Error("preferences unavailable");
+  },
+  async setGroupIcon() {
     throw new Error("preferences unavailable");
   },
   async setAccountLabel() {
