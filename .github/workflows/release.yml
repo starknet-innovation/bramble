@@ -98,6 +98,13 @@ jobs:
       # back to auto-generated notes. Uses the gh CLI (present on the runner,
       # authenticated by GITHUB_TOKEN) so there is no third-party release action
       # SHA to pin.
+      #
+      # Idempotent (create-or-upload): a release for the tag can already exist —
+      # e.g. a maintainer cut it via the GitHub UI (a documented path in
+      # RELEASING.md), which creates both the tag and the release, and the tag
+      # push then triggers this workflow. When it exists we only attach/replace
+      # the built assets and leave the human's title/notes untouched; when it
+      # does not we create it with the CHANGELOG/auto-generated notes as before.
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -105,23 +112,31 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          notes_args=(--generate-notes)
-          if [ -f CHANGELOG.md ]; then
-            version="${TAG#v}"
-            section="$(awk -v v="$version" '
-              $0 ~ "^## \\[?" v "\\]?" {capture=1; print; next}
-              capture && /^## / {exit}
-              capture {print}
-            ' CHANGELOG.md)"
-            if [ -n "$section" ]; then
-              printf "%s\n" "$section" > release-notes.md
-              notes_args=(--notes-file release-notes.md)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Release already exists (e.g. created via the GitHub UI): attach or
+            # replace the built assets, preserving the existing title and notes.
+            gh release upload "$TAG" \
+              artifacts/*.zip artifacts/*.zip.sha256 \
+              --clobber
+          else
+            notes_args=(--generate-notes)
+            if [ -f CHANGELOG.md ]; then
+              version="${TAG#v}"
+              section="$(awk -v v="$version" '
+                $0 ~ "^## \\[?" v "\\]?" {capture=1; print; next}
+                capture && /^## / {exit}
+                capture {print}
+              ' CHANGELOG.md)"
+              if [ -n "$section" ]; then
+                printf "%s\n" "$section" > release-notes.md
+                notes_args=(--notes-file release-notes.md)
+              fi
             fi
+            gh release create "$TAG" \
+              --title "$TAG" \
+              "${notes_args[@]}" \
+              artifacts/*.zip artifacts/*.zip.sha256
           fi
-          gh release create "$TAG" \
-            --title "$TAG" \
-            "${notes_args[@]}" \
-            artifacts/*.zip artifacts/*.zip.sha256
 
   # OPTIONAL / GATED. Never runs on a tag push. Only a manual dispatch with
   # publish=true reaches this job, and even then the publish script skips
