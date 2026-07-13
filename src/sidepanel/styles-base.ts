@@ -18,7 +18,9 @@ import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE } from "../ui/toke
 export const BASE_STYLES = `
 
   :root {
-    color-scheme: dark;
+    /* Default to the "system" theme's dual scheme; the entrypoint overrides this
+       inline per theme choice (light dark / dark / light) before first paint. */
+    color-scheme: light dark;
     --mc-font-mono: ${FONT.mono};
     --mc-font-ui: ${FONT.ui};
     /* Recessed group fill (tab tracks, permission/sign panels). */

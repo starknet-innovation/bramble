@@ -8,11 +8,9 @@
 
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
-import type { ThemeChoice, WalletPreferences } from "../storage/preferences-store";
-import { systemPrefersDark, watchSystemScheme } from "../ui/color-scheme";
-import { darkSkin } from "../ui/dark-skin";
-import { defaultSkin } from "../ui/default-skin";
-import { applySkin, type Skin } from "../ui/skin";
+import type { WalletPreferences } from "../storage/preferences-store";
+import { applySkin } from "../ui/skin";
+import { colorSchemeForChoice, skinForChoice } from "../ui/theme";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import {
@@ -293,27 +291,20 @@ const bindAll = (): void => {
   });
 };
 
-// Resolves the concrete skin for the active theme choice. "system" (the
-// default) follows the browser's color scheme so the panel matches the theme
-// border Chrome draws around it; "dark"/"light" pin a skin. Dark is the
-// standard fallback whenever the browser preference is unavailable or not light.
-const skinForChoice = (choice: ThemeChoice): Skin =>
-  choice === "light"
-    ? defaultSkin
-    : choice === "dark"
-      ? darkSkin
-      : systemPrefersDark()
-        ? darkSkin
-        : defaultSkin;
-
-// Applies the skin for the current theme choice, but only when the resolved
-// skin actually changed — cheap enough to call on every paint and on live
-// color-scheme flips. Swapping skin tokens on the root re-themes the whole
-// panel through CSS custom properties without re-rendering any markup.
+// Applies the skin and CSS `color-scheme` for the current theme choice, but
+// only when the resolved skin actually changed — cheap enough to call on every
+// paint. Swapping skin tokens on the root re-themes the whole panel through CSS
+// custom properties without re-rendering any markup. Under the default "system"
+// choice, `color-scheme: light dark` lets the skin's system-color and
+// `light-dark()` values track the browser scheme with no JavaScript, so a live
+// OS/browser scheme flip re-themes the panel purely through CSS; a pinned
+// "dark"/"light" fixes the scheme so the Clean Mono skin cannot be flipped.
 const applyTheme = (): void => {
-  const skin = skinForChoice(cache.preferences?.theme ?? "system");
+  const choice = cache.preferences?.theme ?? "system";
+  const skin = skinForChoice(choice);
   if (skin.name !== lastSkinName) {
     lastSkinName = skin.name;
+    document.documentElement.style.setProperty("color-scheme", colorSchemeForChoice(choice));
     applySkin(skin, document.documentElement);
   }
 };
@@ -475,9 +466,9 @@ runtime?.onMessage?.addListener((message) => {
   }
 });
 
-// Re-theme live when the browser flips color scheme while the panel is open, so
-// "system" stays in sync with the browser. Harmless under a pinned dark/light
-// choice: applyTheme's skin-name guard skips the reapply.
-watchSystemScheme(applyTheme);
+// Apply the theme before the first paint. Under the default "system" choice the
+// browser scheme is tracked purely through CSS (`color-scheme: light dark` plus
+// the skin's system-color/`light-dark()` values), so no `matchMedia` listener is
+// needed to re-theme on a live flip.
 applyTheme();
 void render(await wallet.loadStatus());
