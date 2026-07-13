@@ -7,17 +7,7 @@ import type { WalletStatus } from "../src/popup/responses";
 import { dashboard } from "../src/sidepanel/views";
 import type { AllowanceRecord } from "../src/storage/allowance-store";
 import type { WalletPreferences } from "../src/storage/preferences-store";
-import type { AccountRef } from "../src/storage/vault-schema";
-
-const account: AccountRef = {
-  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  networkId: "SN_MAIN",
-  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-};
+import { account, preferences } from "./support/sidepanel-fixtures";
 
 const status: WalletStatus = {
   accountCount: 1,
@@ -29,13 +19,6 @@ const status: WalletStatus = {
   networkId: "SN_MAIN",
   networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
   ready: true,
-};
-
-const preferences: WalletPreferences = {
-  activeNetworkId: "SN_MAIN",
-  addressBook: [],
-  schemaVersion: 1,
-  tokens: [],
 };
 
 const allowance: AllowanceRecord = {
