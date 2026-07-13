@@ -76,7 +76,7 @@ export const readSetDisplayInput = (
   message: unknown,
 ): {
   readonly displayCurrency?: "eur" | "gbp" | "usd";
-  readonly theme?: "dark" | "light";
+  readonly theme?: "dark" | "light" | "system";
 } | null => {
   if (
     !isRecord(message) ||
@@ -92,7 +92,9 @@ export const readSetDisplayInput = (
       ? message["displayCurrency"]
       : undefined;
   const theme =
-    message["theme"] === "dark" || message["theme"] === "light" ? message["theme"] : undefined;
+    message["theme"] === "dark" || message["theme"] === "light" || message["theme"] === "system"
+      ? message["theme"]
+      : undefined;
   if (
     (message["displayCurrency"] !== undefined && displayCurrency === undefined) ||
     (message["theme"] !== undefined && theme === undefined)

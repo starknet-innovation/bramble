@@ -64,9 +64,11 @@ export type AccountLabels = Readonly<Partial<Record<string, string>>>;
 export type DisplayCurrency = "eur" | "gbp" | "usd";
 
 /**
- * UI theme choice applied through the skin contract.
+ * UI theme choice applied through the skin contract. `"system"` follows the
+ * browser/OS color-scheme preference (light or dark) live; `"dark"` and
+ * `"light"` pin a specific skin regardless of the browser.
  */
-export type ThemeChoice = "dark" | "light";
+export type ThemeChoice = "dark" | "light" | "system";
 
 /**
  * Current plain preferences schema. `rpcOverrides` is optional so preferences
@@ -190,7 +192,7 @@ const isDisplayCurrency = (value: unknown): value is DisplayCurrency =>
   value === "eur" || value === "gbp" || value === "usd";
 
 const isThemeChoice = (value: unknown): value is ThemeChoice =>
-  value === "dark" || value === "light";
+  value === "dark" || value === "light" || value === "system";
 
 const isTokenId = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
@@ -263,7 +265,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   nfts: [],
   rpcOverrides: {},
   schemaVersion: 1,
-  theme: "dark",
+  theme: "system",
   tokens: DEFAULT_TOKENS.map(withTokenId),
 });
 
