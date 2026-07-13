@@ -9,10 +9,10 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 ![Starknet](https://img.shields.io/badge/Starknet-10.0.2-EC796B?style=for-the-badge)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-1.3.3-fbf0df?style=for-the-badge&logo=bun&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-7.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Biome](https://img.shields.io/badge/Biome-2.5.3-60A5FA?style=for-the-badge&logo=biome&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-0.2.0-3ba55d?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.3.0-3ba55d?style=for-the-badge)
 
 </div>
 
