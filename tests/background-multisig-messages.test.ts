@@ -115,9 +115,8 @@ describe("multisig messages", () => {
       harnessExtensionSender,
     );
     expect(confirm).toEqual({ ok: true, transactionHash: "0x7cd" });
-    expect((invokeCalls.at(-1)?.[0] as { entrypoint: string }).entrypoint).toBe(
-      "confirm_transaction",
-    );
+    const confirmed = invokeCalls.at(-1)?.[0] as { entrypoint: string };
+    expect(confirmed.entrypoint).toBe("confirm_transaction");
   });
   test("executes a proposal with quorum", async () => {
     const { handler, invokeCalls } = makeMultisigHarness({
@@ -227,7 +226,8 @@ describe("multisig messages", () => {
         }),
       ),
     );
-    expect((invokeCalls.at(-1)?.[0] as { entrypoint: string }).entrypoint).toBe("deploy_contract");
+    const deployed = invokeCalls.at(-1)?.[0] as { entrypoint: string };
+    expect(deployed.entrypoint).toBe("deploy_contract");
     const listed = (await handler({ type: "wallet.multisigs" }, harnessExtensionSender)) as {
       multisigs: readonly { name?: string }[];
     };

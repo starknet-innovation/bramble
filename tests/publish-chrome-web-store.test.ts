@@ -23,7 +23,7 @@ const FULL_ENV = {
   CWS_CLIENT_SECRET: "client-secret",
   CWS_REFRESH_TOKEN: "refresh-token",
   CWS_EXTENSION_ID: "abcextensionid",
-  CWS_ZIP_PATH: "artifacts/mc-wallet-0.2.0.zip",
+  CWS_ZIP_PATH: "artifacts/mc-wallet-0.3.0.zip",
 } as const;
 
 const config = (overrides: Partial<PublishConfig> = {}): PublishConfig => ({
@@ -31,7 +31,7 @@ const config = (overrides: Partial<PublishConfig> = {}): PublishConfig => ({
   clientSecret: "client-secret",
   refreshToken: "refresh-token",
   extensionId: "abcextensionid",
-  zipPath: "artifacts/mc-wallet-0.2.0.zip",
+  zipPath: "artifacts/mc-wallet-0.3.0.zip",
   publishTarget: "trustedTesters",
   deployPercentage: "",
   dryRun: false,
