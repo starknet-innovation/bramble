@@ -62,11 +62,6 @@ const isAccountDeployed = async (provider: RpcProvider, address: string): Promis
   }
 };
 
-/**
- * Checks whether an account contract exists on-chain (exported for reuse).
- */
-export const isAccountDeployedOn = isAccountDeployed;
-
 const deployAccountContract = async (
   starknetAccount: Account,
   account: AccountRef,
