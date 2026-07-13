@@ -8,7 +8,14 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
+import { type AccountGroupIcon, isAccountGroupIcon } from "../storage/account-groups";
 import { isAccountId } from "../storage/vault-schema";
+
+const isGroupNameText = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
+
+const isGroupIdText = (value: unknown): value is string =>
+  typeof value === "string" && value.length > 0 && value.length <= 80;
 
 /**
  * Parses address-book save messages from extension pages.
@@ -67,6 +74,74 @@ export const readSetAccountLabelInput = (
   typeof message["label"] === "string" &&
   message["label"].length <= 64
     ? { accountId: message["accountId"], label: message["label"] }
+    : null;
+
+/**
+ * Parses new-group creation messages from extension pages.
+ */
+export const readCreateGroupInput = (
+  message: unknown,
+): { readonly icon: AccountGroupIcon; readonly name: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["icon", "name", "type"]) &&
+  message["type"] === "wallet.createGroup" &&
+  isGroupNameText(message["name"]) &&
+  isAccountGroupIcon(message["icon"])
+    ? { icon: message["icon"], name: message["name"].trim() }
+    : null;
+
+/**
+ * Parses group-rename messages from extension pages.
+ */
+export const readRenameGroupInput = (
+  message: unknown,
+): { readonly id: string; readonly name: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["id", "name", "type"]) &&
+  message["type"] === "wallet.renameGroup" &&
+  isGroupIdText(message["id"]) &&
+  isGroupNameText(message["name"])
+    ? { id: message["id"], name: message["name"].trim() }
+    : null;
+
+/**
+ * Parses group icon-change messages from extension pages.
+ */
+export const readSetGroupIconInput = (
+  message: unknown,
+): { readonly icon: AccountGroupIcon; readonly id: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["icon", "id", "type"]) &&
+  message["type"] === "wallet.setGroupIcon" &&
+  isGroupIdText(message["id"]) &&
+  isAccountGroupIcon(message["icon"])
+    ? { icon: message["icon"], id: message["id"] }
+    : null;
+
+/**
+ * Parses group-removal messages from extension pages.
+ */
+export const readRemoveGroupInput = (message: unknown): { readonly id: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["id", "type"]) &&
+  message["type"] === "wallet.removeGroup" &&
+  isGroupIdText(message["id"])
+    ? { id: message["id"] }
+    : null;
+
+/**
+ * Parses account group-membership toggles from extension pages.
+ */
+export const readSetAccountInGroupInput = (
+  message: unknown,
+): { readonly accountId: string; readonly groupId: string; readonly member: boolean } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["accountId", "groupId", "member", "type"]) &&
+  message["type"] === "wallet.setAccountInGroup" &&
+  isAccountId(message["accountId"]) &&
+  isGroupIdText(message["groupId"]) &&
+  typeof message["member"] === "boolean"
+    ? { accountId: message["accountId"], groupId: message["groupId"], member: message["member"] }
     : null;
 
 /**

@@ -5,11 +5,16 @@
  */
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import {
+  readCreateGroupInput,
   readImportPreferencesInput,
   readRemoveAddressInput,
+  readRemoveGroupInput,
+  readRenameGroupInput,
   readSaveAddressInput,
+  readSetAccountInGroupInput,
   readSetAccountLabelInput,
   readSetDisplayInput,
+  readSetGroupIconInput,
   readSetRpcOverrideInput,
   readSetStrk20ProverUrlInput,
   readTypeOnlyInput,
@@ -70,6 +75,46 @@ export const handlePreferenceOps = async (
       return { error: "invalid account label request" };
     }
     return { ok: true, preferences: await preferencesStore.setAccountLabel(input) };
+  }
+
+  if (messageType === "wallet.createGroup") {
+    const input = readCreateGroupInput(message);
+    if (!input) {
+      return { error: "invalid group request" };
+    }
+    return { ok: true, preferences: await preferencesStore.createGroup(input) };
+  }
+
+  if (messageType === "wallet.renameGroup") {
+    const input = readRenameGroupInput(message);
+    if (!input) {
+      return { error: "invalid group request" };
+    }
+    return { ok: true, preferences: await preferencesStore.renameGroup(input) };
+  }
+
+  if (messageType === "wallet.setGroupIcon") {
+    const input = readSetGroupIconInput(message);
+    if (!input) {
+      return { error: "invalid group request" };
+    }
+    return { ok: true, preferences: await preferencesStore.setGroupIcon(input) };
+  }
+
+  if (messageType === "wallet.removeGroup") {
+    const input = readRemoveGroupInput(message);
+    if (!input) {
+      return { error: "invalid group request" };
+    }
+    return { ok: true, preferences: await preferencesStore.removeGroup(input) };
+  }
+
+  if (messageType === "wallet.setAccountInGroup") {
+    const input = readSetAccountInGroupInput(message);
+    if (!input) {
+      return { error: "invalid group request" };
+    }
+    return { ok: true, preferences: await preferencesStore.setAccountInGroup(input) };
   }
 
   if (messageType === "wallet.setDisplay") {

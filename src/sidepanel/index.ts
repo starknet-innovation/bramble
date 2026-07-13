@@ -28,8 +28,8 @@ import { bindHomeUi } from "./home-ui";
 import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
+import { type NavDirection, navDirection } from "./nav-direction";
 import { bindOnboarding } from "./onboarding-ui";
-import { DOCK_VIEWS } from "./parts";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, emptyStatus, type RuntimeApi } from "./runtime";
 import {
@@ -38,6 +38,7 @@ import {
   bindAppearance,
   bindBackup,
   bindContacts,
+  bindGroups,
 } from "./settings-ui";
 import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
@@ -63,28 +64,11 @@ let lastActiveView: WalletView = "home";
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
-
-// Direction the shell is moving through the screen hierarchy, used to pick a
-// spatially consistent view transition (see ./styles-transitions.ts).
-type NavDirection = "forward" | "back" | "swap";
-
-const DETAIL_VIEWS: readonly WalletView[] = [
-  "token-detail",
-  "nft-detail",
-  "multisig-detail",
-  "multisig-propose",
-  "multisig-deploy",
-];
-
-// Dock screens sit at the root (0); flows push one level deeper (1); detail
-// screens deeper still (2). Direction follows the change in depth.
-const viewDepth = (view: WalletView): number =>
-  DOCK_VIEWS.includes(view) ? 0 : DETAIL_VIEWS.includes(view) ? 2 : 1;
-
-const navDirection = (from: WalletView, to: WalletView): NavDirection => {
-  const delta = viewDepth(to) - viewDepth(from);
-  return delta > 0 ? "forward" : delta < 0 ? "back" : "swap";
-};
+let drawerGroupFilter: string | null = null;
+// Which group's bulk members editor is open on the manage-accounts flow (null =
+// all collapsed). Held here so it survives full re-renders, mirroring
+// drawerGroupFilter; self-healed in paint() when its group is deleted.
+let expandedGroupId: string | null = null;
 
 // The View Transitions API is progressively enhanced: typed locally so the
 // build does not depend on the lib.dom version shipping the declarations.
@@ -231,10 +215,18 @@ const bindAll = (): void => {
   bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
   bindHomeUi({
     app,
+    drawerGroupFilter: () => drawerGroupFilter,
     drawerOpen: () => drawerOpen,
+    editGroup: (id) => {
+      expandedGroupId = id;
+      navigate("account");
+    },
     homeTab: () => homeTab,
     networkId: () => lastNetworkId,
     render,
+    setDrawerGroupFilter: (filter) => {
+      drawerGroupFilter = filter;
+    },
     setDrawerOpen: (open) => {
       drawerOpen = open;
     },
@@ -249,9 +241,13 @@ const bindAll = (): void => {
   const settingsDeps = {
     activeAccountId: () => lastAccountId,
     app,
+    expandedGroup: () => expandedGroupId,
     networkId: () => lastNetworkId,
     refresh: () => wallet.loadStatus(),
     render,
+    setExpandedGroup: (id: string | null) => {
+      expandedGroupId = id;
+    },
     wallet,
   };
   bindAccountLabel(settingsDeps);
@@ -259,6 +255,7 @@ const bindAll = (): void => {
   bindAppearance(settingsDeps);
   bindBackup(settingsDeps);
   bindContacts(settingsDeps);
+  bindGroups(settingsDeps);
   bindAddressBook({ app, render, wallet });
   bindApprovals({ app, render, wallet });
   bindClusterScreens({
@@ -324,6 +321,22 @@ const paint = (): void => {
   const animate = scene !== lastScene;
   lastScene = scene;
   const direction = navDirection(lastActiveView, activeView);
+  // Self-heal a stale drawer filter. Group ids are deterministic, so a filter
+  // still pointing at a deleted group would silently re-apply itself once a
+  // same-named group is recreated. Drop it whenever no current group matches,
+  // falling the drawer back to showing all accounts.
+  const currentGroups = cache.preferences?.groups ?? [];
+  if (
+    drawerGroupFilter !== null &&
+    !currentGroups.some((group) => group.id === drawerGroupFilter)
+  ) {
+    drawerGroupFilter = null;
+  }
+  // Self-heal the manage-accounts expanded group the same way: a deleted group's
+  // id must not linger and silently re-open once a same-named group is recreated.
+  if (expandedGroupId !== null && !currentGroups.some((group) => group.id === expandedGroupId)) {
+    expandedGroupId = null;
+  }
   const content = !status.hasVault
     ? onboarding(status)
     : status.locked
@@ -347,6 +360,8 @@ const paint = (): void => {
           cache.multisigs.proposals,
           selectedMultisigId,
           cache.multisigClassDeclared,
+          drawerGroupFilter,
+          expandedGroupId,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {

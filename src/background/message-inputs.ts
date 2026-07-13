@@ -465,11 +465,16 @@ export const readRevealSecretsInput = (
  * Re-exported preference input readers so callers keep one import path.
  */
 export {
+  readCreateGroupInput,
   readImportPreferencesInput,
   readRemoveAddressInput,
+  readRemoveGroupInput,
+  readRenameGroupInput,
   readSaveAddressInput,
+  readSetAccountInGroupInput,
   readSetAccountLabelInput,
   readSetDisplayInput,
+  readSetGroupIconInput,
   readSetRpcOverrideInput,
   readSetStrk20ProverUrlInput,
 } from "./preference-inputs";

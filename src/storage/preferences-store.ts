@@ -6,10 +6,19 @@ import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
 import {
   DEFAULT_NETWORK,
   DEFAULT_TOKENS,
-  isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
+import {
+  type AccountGroupIcon,
+  type AccountGroups,
+  createGroup as createGroupPure,
+  isAccountGroups,
+  removeGroup as removeGroupPure,
+  renameGroup as renameGroupPure,
+  setAccountInGroup as setAccountInGroupPure,
+  setGroupIcon as setGroupIconPure,
+} from "./account-groups";
 import {
   type CustomNetwork,
   isCustomNetwork,
@@ -19,7 +28,39 @@ import {
 import type { KeyValueStore } from "./kv";
 import { isWatchedNft, type WatchedNft, withNftId } from "./nft";
 import { assertStoreAccess, type StoreActor } from "./permissioned-store";
+import {
+  type AccountLabels,
+  type AddressBookEntry,
+  type DisplayCurrency,
+  hasUniqueStrings,
+  isAccountLabels,
+  isAddressBookEntry,
+  isDisplayCurrency,
+  isHiddenTokens,
+  isLabel,
+  isRpcOverrides,
+  isThemeChoice,
+  isTokenConfig,
+  isTokenId,
+  type RpcOverrides,
+  type ThemeChoice,
+  type TokenConfig,
+  withAddressBookId,
+  withTokenId,
+} from "./preferences-entries";
 import { isAccountId } from "./vault-schema";
+
+/**
+ * Re-exported entry types so callers keep importing them from this store.
+ */
+export type {
+  AccountLabels,
+  AddressBookEntry,
+  DisplayCurrency,
+  RpcOverrides,
+  ThemeChoice,
+  TokenConfig,
+} from "./preferences-entries";
 
 /**
  * Browser storage key for non-secret wallet preferences.
@@ -27,52 +68,8 @@ import { isAccountId } from "./vault-schema";
 export const PREFERENCES_STORE_KEY = "mc-wallet:preferences";
 
 /**
- * User-configured ERC20 token metadata.
- */
-export type TokenConfig = {
-  readonly address: string;
-  readonly decimals: number;
-  readonly id: string;
-  readonly name: string;
-  readonly networkId: StarknetNetworkId;
-  readonly symbol: string;
-};
-
-/**
- * User-configured recipient shortcut.
- */
-export type AddressBookEntry = {
-  readonly address: string;
-  readonly id: string;
-  readonly label: string;
-  readonly networkId: StarknetNetworkId;
-};
-
-/**
- * Per-network custom RPC endpoints chosen by the user.
- */
-export type RpcOverrides = Readonly<Partial<Record<StarknetNetworkId, string>>>;
-
-/**
- * User-chosen account display names keyed by account id.
- */
-export type AccountLabels = Readonly<Partial<Record<string, string>>>;
-
-/**
- * Display currency for fiat values.
- */
-export type DisplayCurrency = "eur" | "gbp" | "usd";
-
-/**
- * UI theme choice applied through the skin contract. `"system"` follows the
- * browser/OS color-scheme preference (light or dark) live; `"dark"` and
- * `"light"` pin a specific skin regardless of the browser.
- */
-export type ThemeChoice = "dark" | "light" | "system";
-
-/**
- * Current plain preferences schema. `rpcOverrides` is optional so preferences
- * stored before it existed keep validating.
+ * Current plain preferences schema. Optional fields keep preferences stored
+ * before they existed validating; `groups` is one such field.
  */
 export type WalletPreferences = {
   readonly accountLabels?: AccountLabels;
@@ -80,6 +77,7 @@ export type WalletPreferences = {
   readonly addressBook: readonly AddressBookEntry[];
   readonly customNetworks?: readonly CustomNetwork[];
   readonly displayCurrency?: DisplayCurrency;
+  readonly groups?: AccountGroups;
   readonly hiddenTokens?: readonly string[];
   readonly nfts?: readonly WatchedNft[];
   readonly rpcOverrides?: RpcOverrides;
@@ -95,11 +93,29 @@ export type WalletPreferences = {
 export type WalletPreferencesStore = {
   readonly addCustomNetwork: (network: CustomNetwork) => Promise<WalletPreferences>;
   readonly addNft: (nft: Omit<WatchedNft, "id">) => Promise<WalletPreferences>;
+  readonly createGroup: (input: {
+    readonly icon: AccountGroupIcon;
+    readonly name: string;
+  }) => Promise<WalletPreferences>;
   readonly importPreferences: (candidate: unknown) => Promise<WalletPreferences>;
   readonly read: () => Promise<WalletPreferences>;
   readonly removeAddress: (id: string) => Promise<WalletPreferences>;
+  readonly removeGroup: (input: { readonly id: string }) => Promise<WalletPreferences>;
   readonly removeNft: (id: string) => Promise<WalletPreferences>;
+  readonly renameGroup: (input: {
+    readonly id: string;
+    readonly name: string;
+  }) => Promise<WalletPreferences>;
   readonly saveAddress: (entry: Omit<AddressBookEntry, "id">) => Promise<WalletPreferences>;
+  readonly setAccountInGroup: (input: {
+    readonly accountId: string;
+    readonly groupId: string;
+    readonly member: boolean;
+  }) => Promise<WalletPreferences>;
+  readonly setGroupIcon: (input: {
+    readonly icon: AccountGroupIcon;
+    readonly id: string;
+  }) => Promise<WalletPreferences>;
   readonly setNftSpam: (input: {
     readonly id: string;
     readonly spam: boolean;
@@ -130,82 +146,6 @@ type WalletPreferencesStoreOptions = {
   readonly store: KeyValueStore;
 };
 
-const isSafeDecimals = (value: unknown): value is number =>
-  Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 36;
-
-const isTokenSymbol = (value: unknown): value is string =>
-  typeof value === "string" && /^[A-Z0-9]{2,12}$/.test(value);
-
-const isLabel = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;
-
-const tokenId = (token: Omit<TokenConfig, "id">): string =>
-  `${token.networkId}:${token.symbol}:${token.address}`;
-
-const addressBookId = (entry: Omit<AddressBookEntry, "id">): string =>
-  `${entry.networkId}:${entry.address}`;
-
-const withTokenId = (token: Omit<TokenConfig, "id">): TokenConfig => ({
-  ...token,
-  id: tokenId(token),
-});
-
-const withAddressBookId = (entry: Omit<AddressBookEntry, "id">): AddressBookEntry => ({
-  ...entry,
-  id: addressBookId(entry),
-});
-
-const isTokenConfig = (value: unknown): value is TokenConfig =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "decimals", "id", "name", "networkId", "symbol"]) &&
-  typeof value["address"] === "string" &&
-  isNonZeroStarkFieldElement(value["address"]) &&
-  isSafeDecimals(value["decimals"]) &&
-  typeof value["id"] === "string" &&
-  typeof value["name"] === "string" &&
-  value["name"].trim().length > 0 &&
-  value["name"].trim().length <= 64 &&
-  isStarknetNetworkId(value["networkId"]) &&
-  isTokenSymbol(value["symbol"]) &&
-  value["id"] === `${value["networkId"]}:${value["symbol"]}:${value["address"]}`;
-
-const isAddressBookEntry = (value: unknown): value is AddressBookEntry =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["address", "id", "label", "networkId"]) &&
-  typeof value["address"] === "string" &&
-  isNonZeroStarkFieldElement(value["address"]) &&
-  typeof value["id"] === "string" &&
-  isLabel(value["label"]) &&
-  isStarknetNetworkId(value["networkId"]) &&
-  value["id"] === `${value["networkId"]}:${value["address"]}`;
-
-const hasUniqueStrings = (values: readonly string[]): boolean =>
-  new Set(values).size === values.length;
-
-const isAccountLabels = (value: unknown): value is AccountLabels =>
-  isRecord(value) &&
-  Reflect.ownKeys(value).every(
-    (key) => typeof key === "string" && isAccountId(key) && isLabel(value[key]),
-  );
-
-const isDisplayCurrency = (value: unknown): value is DisplayCurrency =>
-  value === "eur" || value === "gbp" || value === "usd";
-
-const isThemeChoice = (value: unknown): value is ThemeChoice =>
-  value === "dark" || value === "light" || value === "system";
-
-const isTokenId = (value: unknown): value is string =>
-  typeof value === "string" && value.length > 0 && value.length <= 200;
-
-const isHiddenTokens = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) && value.every(isTokenId) && hasUniqueStrings(value);
-
-const isRpcOverrides = (value: unknown): value is RpcOverrides =>
-  isRecord(value) &&
-  Reflect.ownKeys(value).every(
-    (key) => typeof key === "string" && isStarknetNetworkId(key) && isCustomRpcUrl(value[key]),
-  );
-
 /**
  * Checks stored plain preferences before use.
  */
@@ -218,6 +158,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
     "addressBook",
     "customNetworks",
     "displayCurrency",
+    "groups",
     "hiddenTokens",
     "nfts",
     "rpcOverrides",
@@ -234,6 +175,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
       ))) &&
   (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
   (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
+  (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"])) &&
@@ -261,6 +203,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   addressBook: [],
   customNetworks: [],
   displayCurrency: "usd",
+  groups: [],
   hiddenTokens: [],
   nfts: [],
   rpcOverrides: {},
@@ -324,6 +267,15 @@ export const createPreferencesStore = ({
       await writePreferences(store, next);
       return next;
     },
+    async createGroup({ icon, name }) {
+      const preferences = await read();
+      const next = {
+        ...preferences,
+        groups: createGroupPure(preferences.groups ?? [], name, icon),
+      };
+      await writePreferences(store, next);
+      return next;
+    },
     async importPreferences(candidate) {
       if (!isWalletPreferences(candidate)) {
         throw new WalletError("Invalid preferences backup");
@@ -344,6 +296,12 @@ export const createPreferencesStore = ({
       await writePreferences(store, next);
       return next;
     },
+    async removeGroup({ id }) {
+      const preferences = await read();
+      const next = { ...preferences, groups: removeGroupPure(preferences.groups ?? [], id) };
+      await writePreferences(store, next);
+      return next;
+    },
     async removeNft(id) {
       if (typeof id !== "string" || id.length === 0) {
         throw new WalletError("Invalid NFT");
@@ -353,6 +311,27 @@ export const createPreferencesStore = ({
         ...preferences,
         nfts: (preferences.nfts ?? []).filter((stored) => stored.id !== id),
       };
+      await writePreferences(store, next);
+      return next;
+    },
+    async renameGroup({ id, name }) {
+      const preferences = await read();
+      const next = { ...preferences, groups: renameGroupPure(preferences.groups ?? [], id, name) };
+      await writePreferences(store, next);
+      return next;
+    },
+    async setAccountInGroup({ accountId, groupId, member }) {
+      const preferences = await read();
+      const next = {
+        ...preferences,
+        groups: setAccountInGroupPure(preferences.groups ?? [], groupId, accountId, member),
+      };
+      await writePreferences(store, next);
+      return next;
+    },
+    async setGroupIcon({ icon, id }) {
+      const preferences = await read();
+      const next = { ...preferences, groups: setGroupIconPure(preferences.groups ?? [], id, icon) };
       await writePreferences(store, next);
       return next;
     },

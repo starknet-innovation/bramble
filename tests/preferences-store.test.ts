@@ -191,6 +191,66 @@ describe("createPreferencesStore", () => {
     expect((await createPreferencesStore({ store }).read()).hiddenTokens).toBeUndefined();
   });
 
+  test("creates, edits, assigns, and removes account groups", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+    const accountId = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+
+    await preferences.createGroup({ icon: "briefcase", name: "Trading" });
+    await preferences.createGroup({ icon: "coins", name: "Trading" });
+    const created = await preferences.read();
+    expect(created.groups?.map((group) => group.id)).toEqual(["trading", "trading-2"]);
+
+    await preferences.setAccountInGroup({ accountId, groupId: "trading", member: true });
+    await preferences.renameGroup({ id: "trading", name: "Active Trading" });
+    await preferences.setGroupIcon({ icon: "rocket", id: "trading" });
+    const updated = await preferences.read();
+    expect(updated.groups?.[0]).toMatchObject({
+      accountIds: [accountId],
+      icon: "rocket",
+      id: "trading",
+      name: "Active Trading",
+    });
+
+    await preferences.setAccountInGroup({ accountId, groupId: "trading", member: false });
+    await preferences.removeGroup({ id: "trading-2" });
+    const finalState = await preferences.read();
+    expect(finalState.groups).toHaveLength(1);
+    expect(finalState.groups?.[0]?.accountIds).toEqual([]);
+  });
+
+  test("rejects invalid group input and malformed stored groups", async () => {
+    const store = createMemoryStore();
+    const preferences = createPreferencesStore({ store });
+
+    await expect(preferences.createGroup({ icon: "coins", name: "   " })).rejects.toThrow(
+      "Invalid group name",
+    );
+
+    await store.set(
+      PREFERENCES_STORE_KEY,
+      JSON.parse(
+        JSON.stringify({
+          ...defaultWalletPreferences(),
+          groups: [{ accountIds: [], icon: "not-an-icon", id: "x", name: "X" }],
+        }),
+      ),
+    );
+    await expect(createPreferencesStore({ store }).read()).rejects.toThrow(
+      "Invalid stored preferences",
+    );
+  });
+
+  test("accepts preferences stored before groups existed", async () => {
+    const store = createMemoryStore();
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["groups"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+
+    const preferences = await createPreferencesStore({ store }).read();
+    expect(preferences.groups).toBeUndefined();
+  });
+
   test("imports only fully valid preference backups", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });

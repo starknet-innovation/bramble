@@ -214,6 +214,28 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   { message: { displayCurrency: "usd", type: "wallet.setDisplay" }, sender: extensionSender },
   {
+    message: { icon: "folder", name: "Trading", type: "wallet.createGroup" },
+    sender: extensionSender,
+  },
+  {
+    message: { id: "trading", name: "Savings", type: "wallet.renameGroup" },
+    sender: extensionSender,
+  },
+  {
+    message: { icon: "star", id: "trading", type: "wallet.setGroupIcon" },
+    sender: extensionSender,
+  },
+  { message: { id: "trading", type: "wallet.removeGroup" }, sender: extensionSender },
+  {
+    message: {
+      accountId: account.id,
+      groupId: "trading",
+      member: true,
+      type: "wallet.setAccountInGroup",
+    },
+    sender: extensionSender,
+  },
+  {
     message: {
       origin: ORIGIN,
       typedData: { domain: {}, message: {}, primaryType: "X", types: {} },

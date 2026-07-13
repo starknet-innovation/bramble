@@ -10,6 +10,8 @@ import { knownAccountType } from "../starknet/account-types";
 import { isStarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { groupAssignPanel } from "./group-controls";
+import { groupsSection } from "./group-members";
 import { icon } from "./icons";
 import {
   accountAvatar,
@@ -161,14 +163,18 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
 
 /**
  * Account flow: switch the active account, name it, and inspect identifiers.
+ * `expandedGroupId` opens that group's bulk members editor in the Groups
+ * section (null = all collapsed).
  */
 export const accountFlow = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
+  expandedGroupId: string | null = null,
 ): string => {
   const networkAccounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
   const accountType = account ? knownAccountType(account.classHash) : null;
+  const groups = preferences?.groups ?? [];
   return (
     flowHeader("Account", "settings", status, `On ${status.network}`) +
     flowScreen(
@@ -179,18 +185,26 @@ export const accountFlow = (
             ? noAccountEmpty(status)
             : `<div class="option-list" role="group" aria-label="Accounts">
                 ${networkAccounts
-                  .map(
-                    (
-                      stored,
-                    ) => `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
-                      <span class="option-avatar">${accountAvatar(stored.address)}</span>
-                      <span class="option-copy">
-                        <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
-                        <code>${accountLabel(stored.address)}</code>
-                      </span>
-                      ${stored.id === account?.id ? `<span class="option-mark">${icon("check")}</span>` : ""}
-                    </button>`,
-                  )
+                  .map((stored) => {
+                    const memberGroups = groups.filter((group) =>
+                      group.accountIds.includes(stored.id),
+                    );
+                    return `<div class="option-group-item">
+                      <div class="option-row-line">
+                        <button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
+                          <span class="option-avatar">${accountAvatar(stored.address)}</span>
+                          <span class="option-copy">
+                            <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
+                            <code>${accountLabel(stored.address)}</code>
+                            ${memberGroups.length > 0 ? `<span class="account-groups-line">${memberGroups.map((group) => icon(group.icon)).join("")}</span>` : ""}
+                          </span>
+                          ${stored.id === account?.id ? `<span class="option-mark">${icon("check")}</span>` : ""}
+                        </button>
+                        <button class="icon-button ghost" data-assign-toggle="${escapeHtml(stored.id)}" type="button" aria-expanded="false" aria-label="Assign to groups" title="Assign to groups">${icon("folder")}</button>
+                      </div>
+                      ${groupAssignPanel(stored, groups)}
+                    </div>`;
+                  })
                   .join("")}
               </div>`
         }
@@ -202,6 +216,7 @@ export const accountFlow = (
         <button id="new-account" class="secondary" type="button">${icon("wallet")}Add account</button>
         <p id="new-account-result" role="status"></p>
       </section>
+      ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}
       ${
         account
           ? `<section class="section">

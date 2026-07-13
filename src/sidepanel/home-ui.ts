@@ -20,6 +20,9 @@ export type HomeUiDeps = {
   readonly app: Element | null;
   readonly drawerOpen: () => boolean;
   readonly setDrawerOpen: (open: boolean) => void;
+  readonly drawerGroupFilter: () => string | null;
+  readonly setDrawerGroupFilter: (filter: string | null) => void;
+  readonly editGroup: (id: string) => void;
   readonly homeTab: () => HomeTab;
   readonly setHomeTab: (tab: HomeTab) => void;
   readonly networkId: () => string;
@@ -213,6 +216,33 @@ const bindDrawer = (deps: HomeUiDeps): void => {
           buttonBusy(button, false);
         },
       );
+    });
+  });
+
+  // Folder filter chips narrow the listed accounts to a group's members; the
+  // selection persists across re-renders via the entrypoint module var, so the
+  // drawer reopens showing the same folder.
+  root.querySelectorAll<HTMLButtonElement>("[data-group-filter]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const value = chip.dataset["groupFilter"];
+      const next = !value || value === "all" ? null : value;
+      if (next === deps.drawerGroupFilter()) {
+        return;
+      }
+      deps.setDrawerGroupFilter(next);
+      void deps.wallet.loadStatus().then(deps.render);
+    });
+  });
+
+  // The active-group chip's edit affordance jumps to the manage-accounts flow
+  // and opens that group's bulk members editor — bulk editing without the heavy
+  // editor crowding the drawer.
+  root.querySelectorAll<HTMLButtonElement>("[data-edit-group-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["editGroupView"];
+      if (id) {
+        deps.editGroup(id);
+      }
     });
   });
 
