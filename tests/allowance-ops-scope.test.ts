@@ -9,6 +9,7 @@ import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import { memoryAllowanceStore } from "../src/storage/allowance-store";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { makeRuntimeRpc } from "./support/runtime-rpc-stub";
 
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const account: AccountRef = {
@@ -73,41 +74,7 @@ const makeHarness = () => {
   const allowanceStore = memoryAllowanceStore();
   const handler = createMessageHandler(walletStub, "extension-id", {
     allowanceStore,
-    runtimeRpc: {
-      async estimateInvokeFee() {
-        return { overallFee: "1", unit: "FRI" };
-      },
-      async getDeploymentStatus() {
-        return true;
-      },
-      async getNftOwner() {
-        return account.address;
-      },
-      async getTokenBalances() {
-        return [];
-      },
-      async getTokenMetadata() {
-        return { decimals: 18, name: "Ether", symbol: "ETH" };
-      },
-      async getTransactionStatuses() {
-        return {};
-      },
-      async submitDeclareTransaction() {
-        return { classHash: "0x1", transactionHash: "0x1" };
-      },
-      async submitAccountDeployment() {
-        return { transactionHash: "0x7de" };
-      },
-      async submitErc20Transfer() {
-        return {
-          call: { calldata: [], contractAddress: TOKEN, entrypoint: "transfer" },
-          transactionHash: "0x7ab",
-        };
-      },
-      async submitInvokeTransaction(input) {
-        return { calls: input.calls, transactionHash: "0x7cd" };
-      },
-    },
+    runtimeRpc: makeRuntimeRpc(),
     session,
   });
   return { allowanceStore, handler };

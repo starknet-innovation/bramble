@@ -12,6 +12,7 @@ import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import type { DeploymentStatusInput } from "../src/starknet/rpc";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { makeRuntimeRpc } from "./support/runtime-rpc-stub";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const CLASS_HASH = "0x2b31e19e45c06f29234e06e2ee98a9966479ba3067f8785ed972794fdb0065c";
@@ -85,39 +86,18 @@ const makeHandler = (options: {
     },
   };
   const handler = createMessageHandler(wallet, "extension-id", {
-    runtimeRpc: {
-      async estimateInvokeFee() {
-        return { overallFee: "1", unit: "FRI" };
-      },
+    runtimeRpc: makeRuntimeRpc({
       async getDeploymentStatus(input) {
         statusCalls.push(input);
         return options.deployed ?? false;
       },
-      async getNftOwner() {
-        return "0x0";
-      },
-      async getTokenBalances() {
-        return [];
-      },
       async getTokenMetadata() {
         return { decimals: 18, name: "Token", symbol: "TKN" };
-      },
-      async getTransactionStatuses() {
-        return {};
       },
       async submitAccountDeployment() {
         return { transactionHash: "0x7abc" };
       },
-      async submitErc20Transfer() {
-        throw new Error("unused");
-      },
-      async submitInvokeTransaction() {
-        throw new Error("unused");
-      },
-      async submitDeclareTransaction() {
-        return { classHash: "0x1", transactionHash: "0x1" };
-      },
-    },
+    }),
     session,
   });
   return { handler, statusCalls };

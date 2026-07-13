@@ -9,6 +9,7 @@ import { createUnlockSession } from "../src/background/session";
 import { createMemoryStore } from "../src/storage/kv";
 import { createPreferencesStore } from "../src/storage/preferences-store";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { makeRuntimeRpc } from "./support/runtime-rpc-stub";
 
 const CONTRACT = "0x0511a2b3";
 const account: AccountRef = {
@@ -72,42 +73,15 @@ const makeHarness = (options?: { readonly owner?: string }) => {
   const invokeCalls: (readonly unknown[])[] = [];
   const handler = createMessageHandler(walletStub, "extension-id", {
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
-    runtimeRpc: {
-      async estimateInvokeFee() {
-        return { overallFee: "1", unit: "FRI" };
-      },
-      async getDeploymentStatus() {
-        return true;
-      },
+    runtimeRpc: makeRuntimeRpc({
       async getNftOwner() {
         return options?.owner ?? account.address;
-      },
-      async getTokenBalances() {
-        return [];
-      },
-      async getTokenMetadata() {
-        return { decimals: 18, name: "Ether", symbol: "ETH" };
-      },
-      async getTransactionStatuses() {
-        return {};
-      },
-      async submitDeclareTransaction() {
-        return { classHash: "0x1", transactionHash: "0x1" };
-      },
-      async submitAccountDeployment() {
-        return { transactionHash: "0x7de" };
-      },
-      async submitErc20Transfer() {
-        return {
-          call: { calldata: [], contractAddress: CONTRACT, entrypoint: "transfer" },
-          transactionHash: "0x7ab",
-        };
       },
       async submitInvokeTransaction(input) {
         invokeCalls.push(input.calls);
         return { calls: input.calls, transactionHash: "0x7cd" };
       },
-    },
+    }),
     session,
   });
   return { handler, invokeCalls };
