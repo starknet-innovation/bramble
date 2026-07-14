@@ -38,6 +38,20 @@ describe("isPricesResponse", () => {
     expect(isPricesResponse({ currency: "btc", ok: true, prices: {} })).toBe(false);
     expect(isPricesResponse({ currency: "usd", ok: true, prices: { [USDC]: "2" } })).toBe(false);
   });
+
+  test("accepts the optional staleness metadata and rejects malformed variants", () => {
+    expect(
+      isPricesResponse({ asOf: 1000, currency: "usd", ok: true, prices: {}, stale: true }),
+    ).toBe(true);
+    // asOf is nullable (nothing cached yet).
+    expect(
+      isPricesResponse({ asOf: null, currency: "usd", ok: true, prices: {}, stale: false }),
+    ).toBe(true);
+    expect(
+      isPricesResponse({ asOf: "1000", currency: "usd", ok: true, prices: {}, stale: false }),
+    ).toBe(false);
+    expect(isPricesResponse({ currency: "usd", ok: true, prices: {}, stale: "yes" })).toBe(false);
+  });
 });
 
 describe("isTokenChartResponse", () => {

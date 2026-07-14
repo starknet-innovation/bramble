@@ -18,7 +18,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { accountDrawer } from "./account-drawer";
 import { allowancesFlow } from "./allowance-views";
 import { approvalCard } from "./approval-cards";
-import { formatFiat, portfolioDelta, portfolioTotal } from "./fiat";
+import { formatFiat, formatPriceTimestamp, portfolioDelta, portfolioTotal } from "./fiat";
 import {
   accountFlow,
   addressBookFlow,
@@ -155,6 +155,26 @@ const heroDelta = (
     </p>`;
 };
 
+// A degraded-mode notice under the hero total. When the price host is
+// unreachable we serve the last saved prices (or nothing, when the cache is
+// empty), always labelled so a stale value never masquerades as a live one:
+// cached prices read as "last saved · <time>", an empty cache reads as an
+// explicit "unavailable" hint. Empty when prices are current.
+const heroPriceNotice = (
+  priceStale: boolean,
+  hasPrices: boolean,
+  priceAsOf: number | null,
+): string => {
+  if (!priceStale) {
+    return "";
+  }
+  const savedAt = formatPriceTimestamp(priceAsOf);
+  const copy = hasPrices
+    ? `Showing last saved prices${savedAt ? ` · ${savedAt}` : ""}`
+    : "Live prices unavailable right now";
+  return `<p class="hero-stale" role="status">${icon("alert")}<span>${escapeHtml(copy)}</span></p>`;
+};
+
 const homeScreen = (
   status: WalletStatus,
   account: AccountRef | null,
@@ -166,6 +186,8 @@ const homeScreen = (
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
   transactions: readonly ActivityEntry[],
+  priceStale: boolean,
+  priceAsOf: number | null,
 ): string => {
   const showTotal = account !== null && Object.keys(prices).length > 0;
   const total = showTotal ? portfolioTotal(visibleHomeBalances(balances, preferences), prices) : 0;
@@ -176,6 +198,7 @@ const homeScreen = (
       <p class="hero-eyebrow">Total balance</p>
       <p class="hero-total">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(balances, preferences, prices, changes, currency) : ""}
+      ${account !== null ? heroPriceNotice(priceStale, showTotal, priceAsOf) : ""}
       ${
         account
           ? `<button class="hero-chip" data-copy="${escapeHtml(account.address)}" type="button" title="Copy address">${escapeHtml(accountLabel(account.address))}${icon("copy")}</button>`
@@ -310,6 +333,8 @@ export const dashboard = (
   multisigClassDeclared: boolean | "error" | null = null,
   drawerGroupFilter: string | null = null,
   expandedGroupId: string | null = null,
+  priceStale = false,
+  priceAsOf: number | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -397,6 +422,8 @@ export const dashboard = (
             changes,
             currency,
             transactions,
+            priceStale,
+            priceAsOf,
           );
   return `
     ${walletHeader(status, account, preferences)}

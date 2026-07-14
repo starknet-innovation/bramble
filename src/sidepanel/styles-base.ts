@@ -227,6 +227,17 @@ export const BASE_STYLES = `
   .hero-change .hero-change-amt { color: var(--mc-positive); }
   .hero-change.down .hero-change-amt { color: var(--mc-danger); }
   .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
+  /* Degraded-price notice: a muted, low-key line so saved/unavailable prices
+     read as an honest caveat under the total, never as an error state. */
+  .hero-stale {
+    align-items: center;
+    color: var(--mc-muted);
+    display: inline-flex;
+    font-size: ${TYPE.caption.size};
+    font-weight: 500;
+    gap: 5px;
+  }
+  .hero-stale .icon { height: 13px; width: 13px; }
   button.hero-chip {
     align-items: center;
     background: var(--mc-elevated);

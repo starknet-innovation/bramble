@@ -176,6 +176,8 @@ type RenderData = {
   preferences: WalletPreferences | null;
   changes: Readonly<Record<string, number>>;
   prices: Readonly<Record<string, number>>;
+  priceAsOf: number | null;
+  priceStale: boolean;
   status: WalletStatus;
   transactions: Awaited<ReturnType<typeof wallet.loadActivity>>;
 };
@@ -192,6 +194,8 @@ const cache: RenderData = {
   changes: {},
   preferences: null,
   prices: {},
+  priceAsOf: null,
+  priceStale: false,
   status: emptyStatus(),
   transactions: [],
 };
@@ -362,6 +366,8 @@ const paint = (): void => {
           cache.multisigClassDeclared,
           drawerGroupFilter,
           expandedGroupId,
+          cache.priceStale,
+          cache.priceAsOf,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -386,6 +392,8 @@ const render = async (status: WalletStatus): Promise<void> => {
     cache.connectedSites = [];
     cache.prices = {};
     cache.changes = {};
+    cache.priceAsOf = null;
+    cache.priceStale = false;
     cache.chart = [];
     cache.allowances = [];
     paint();
@@ -403,6 +411,8 @@ const render = async (status: WalletStatus): Promise<void> => {
     fill(wallet.loadPrices(), (value) => {
       cache.prices = value.prices;
       cache.changes = value.changes;
+      cache.priceAsOf = value.asOf;
+      cache.priceStale = value.stale;
     });
   }
   if (activeView === "home") {
