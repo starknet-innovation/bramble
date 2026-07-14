@@ -11,14 +11,18 @@ import type { SidepanelWallet } from "./runtime";
 
 /**
  * State the group controls close over: the wallet client, a re-render callback
- * invoked after every successful mutation, and the manage-accounts bulk editor's
- * expanded-group accessor/mutator so a group's members editor can be opened
- * (e.g. right after creating it) and stay open across re-renders.
+ * invoked after every successful mutation, the manage-accounts bulk editor's
+ * expanded-group accessor/mutator (so a group's members editor can be opened —
+ * e.g. right after creating it — and stay open across re-renders), and the
+ * drawer's open assign-panel accessor/mutator (so toggling membership on an
+ * account never collapses its panel under the user).
  */
 export type GroupControlDeps = {
   readonly expandedGroup: () => string | null;
+  readonly openAssign: () => string | null;
   readonly rerender: () => Promise<void>;
   readonly setExpandedGroup: (id: string | null) => void;
+  readonly setOpenAssign: (id: string | null) => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -160,20 +164,20 @@ const bindAssignToggles = (root: Element, deps: GroupControlDeps): void => {
   });
 };
 
-const bindAssignPanels = (root: Element): void => {
+// Open/collapse an account's group-assignment panel. The open account id is
+// held in a module var (mirroring the drawer's group filter and the bulk
+// editor's expanded group) so it survives full re-renders: toggling a
+// membership repaints the shell, and the same account's panel repaints open —
+// letting a user bucket one account into several groups without reopening.
+const bindAssignPanels = (root: Element, deps: GroupControlDeps): void => {
   root.querySelectorAll<HTMLButtonElement>("[data-assign-toggle]").forEach((button) => {
     button.addEventListener("click", () => {
       const accountId = button.dataset["assignToggle"];
       if (!accountId) {
         return;
       }
-      const panel = root.querySelector<HTMLElement>(`[data-group-assign="${accountId}"]`);
-      if (!panel) {
-        return;
-      }
-      const open = panel.hasAttribute("hidden");
-      panel.toggleAttribute("hidden", !open);
-      button.setAttribute("aria-expanded", String(open));
+      deps.setOpenAssign(deps.openAssign() === accountId ? null : accountId);
+      void deps.rerender();
     });
   });
 };
@@ -208,6 +212,6 @@ export const bindGroupControls = (root: Element | null, deps: GroupControlDeps):
   bindEditForms(root, deps);
   bindRemoveButtons(root, deps);
   bindAssignToggles(root, deps);
-  bindAssignPanels(root);
+  bindAssignPanels(root, deps);
   bindGroupExpanders(root, deps);
 };

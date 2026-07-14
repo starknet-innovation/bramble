@@ -128,6 +128,5 @@ export const groupsSection = (
             .join("")}</ul>`
     }
     ${newGroupForm()}
-    <p id="groups-result" role="status"></p>
   </section>`;
 };

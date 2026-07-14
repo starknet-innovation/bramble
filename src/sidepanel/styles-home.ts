@@ -263,12 +263,9 @@ export const HOME_STYLES = `
   button.group-chip .icon { height: 14px; width: 14px; }
   button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
   button.group-chip[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  /* Active chip carries an inline edit affordance; the pair stays together when
-     the chip row wraps. */
-  .group-chip-active { align-items: center; display: inline-flex; gap: 2px; }
-  button.group-chip-edit { color: var(--mc-muted); height: 28px; width: 28px; }
-  button.group-chip-edit .icon { height: 15px; width: 15px; }
-  button.group-chip-edit:not(:disabled):hover { color: var(--mc-accent); }
+  /* Drawer "New group" disclosure: one discoverable create entry at the foot,
+     revealing the shared create form beneath its button. */
+  .drawer-new-group { display: grid; gap: ${SPACE.sm}; }
   .drawer-account-item { display: grid; gap: 4px; }
   .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
   .drawer-account-row .drawer-account, .option-row-line .option-row { flex: 1; min-width: 0; }
@@ -337,7 +334,19 @@ export const HOME_STYLES = `
   .group-manage-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
   .group-manage-copy { display: grid; flex: 1; gap: 1px; min-width: 0; text-align: left; }
   .group-manage-copy strong { font-size: ${TYPE.body.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  button[data-remove-group].is-confirming { color: var(--mc-danger); }
+  /* Two-tap delete confirm: the first tap arms the control and reveals an
+     explicit "Delete?" label beside the icon; a second tap deletes. */
+  button[data-remove-group].is-confirming {
+    color: var(--mc-danger);
+    gap: 4px;
+    padding: 0 ${SPACE.sm};
+    width: auto;
+  }
+  button[data-remove-group].is-confirming::after {
+    content: "Delete?";
+    font-size: ${TYPE.caption.size};
+    font-weight: 650;
+  }
 
   /* Group-centric bulk members editor: an expandable header per group, then a
      roomy checklist of every wallet account. Hairline + skin-token only. */

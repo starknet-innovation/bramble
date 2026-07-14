@@ -22,7 +22,8 @@ export type HomeUiDeps = {
   readonly setDrawerOpen: (open: boolean) => void;
   readonly drawerGroupFilter: () => string | null;
   readonly setDrawerGroupFilter: (filter: string | null) => void;
-  readonly editGroup: (id: string) => void;
+  readonly drawerCreateOpen: () => boolean;
+  readonly setDrawerCreateOpen: (open: boolean) => void;
   readonly homeTab: () => HomeTab;
   readonly setHomeTab: (tab: HomeTab) => void;
   readonly networkId: () => string;
@@ -234,16 +235,14 @@ const bindDrawer = (deps: HomeUiDeps): void => {
     });
   });
 
-  // The active-group chip's edit affordance jumps to the manage-accounts flow
-  // and opens that group's bulk members editor — bulk editing without the heavy
-  // editor crowding the drawer.
-  root.querySelectorAll<HTMLButtonElement>("[data-edit-group-view]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = button.dataset["editGroupView"];
-      if (id) {
-        deps.editGroup(id);
-      }
-    });
+  // The "New group" disclosure reveals the shared create form at the drawer
+  // foot — one discoverable entry, independent of any account row, shown even
+  // when no groups exist yet. Its open state persists across re-renders (via the
+  // entrypoint module var) and is cleared once a group is created.
+  const newGroupButton = root.querySelector<HTMLButtonElement>("#drawer-new-group");
+  newGroupButton?.addEventListener("click", () => {
+    deps.setDrawerCreateOpen(!deps.drawerCreateOpen());
+    void deps.wallet.loadStatus().then(deps.render);
   });
 
   const addButton = root.querySelector<HTMLButtonElement>("#drawer-add-account");

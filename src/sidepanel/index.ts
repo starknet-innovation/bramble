@@ -23,6 +23,7 @@ import {
 } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
+import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
 import { prefersReducedMotion } from "./motion";
@@ -65,9 +66,12 @@ let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
 let drawerGroupFilter: string | null = null;
-// Which group's bulk members editor is open on the manage-accounts flow (null =
-// all collapsed). Held here so it survives full re-renders, mirroring
-// drawerGroupFilter; self-healed in paint() when its group is deleted.
+// Transient group UI selections, held here so they survive full re-renders and
+// are self-healed in paint(): whether the drawer "New group" form is revealed,
+// which account's assign panel is open in the drawer, and which group's bulk
+// members editor is open on the manage-accounts flow (null = none/collapsed).
+let drawerCreateOpen = false;
+let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 
 // The View Transitions API is progressively enhanced: typed locally so the
@@ -215,15 +219,15 @@ const bindAll = (): void => {
   bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
   bindHomeUi({
     app,
+    drawerCreateOpen: () => drawerCreateOpen,
     drawerGroupFilter: () => drawerGroupFilter,
     drawerOpen: () => drawerOpen,
-    editGroup: (id) => {
-      expandedGroupId = id;
-      navigate("account");
-    },
     homeTab: () => homeTab,
     networkId: () => lastNetworkId,
     render,
+    setDrawerCreateOpen: (open) => {
+      drawerCreateOpen = open;
+    },
     setDrawerGroupFilter: (filter) => {
       drawerGroupFilter = filter;
     },
@@ -243,10 +247,17 @@ const bindAll = (): void => {
     app,
     expandedGroup: () => expandedGroupId,
     networkId: () => lastNetworkId,
+    openAssign: () => openAssignId,
     refresh: () => wallet.loadStatus(),
     render,
     setExpandedGroup: (id: string | null) => {
       expandedGroupId = id;
+      // Creating a group opens its bulk editor and settles the drawer's create
+      // disclosure back to closed, so the new group surfaces as a chip/row.
+      drawerCreateOpen = false;
+    },
+    setOpenAssign: (id: string | null) => {
+      openAssignId = id;
     },
     wallet,
   };
@@ -321,22 +332,16 @@ const paint = (): void => {
   const animate = scene !== lastScene;
   lastScene = scene;
   const direction = navDirection(lastActiveView, activeView);
-  // Self-heal a stale drawer filter. Group ids are deterministic, so a filter
-  // still pointing at a deleted group would silently re-apply itself once a
-  // same-named group is recreated. Drop it whenever no current group matches,
-  // falling the drawer back to showing all accounts.
-  const currentGroups = cache.preferences?.groups ?? [];
-  if (
-    drawerGroupFilter !== null &&
-    !currentGroups.some((group) => group.id === drawerGroupFilter)
-  ) {
-    drawerGroupFilter = null;
-  }
-  // Self-heal the manage-accounts expanded group the same way: a deleted group's
-  // id must not linger and silently re-open once a same-named group is recreated.
-  if (expandedGroupId !== null && !currentGroups.some((group) => group.id === expandedGroupId)) {
-    expandedGroupId = null;
-  }
+  // Self-heal stale group selections (filter/expanded/open panel) so a deleted
+  // group or a departed account can never silently re-apply itself on repaint.
+  const healed = healTransientGroupState(
+    { drawerGroupFilter, expandedGroupId, openAssignId },
+    cache.preferences?.groups ?? [],
+    status.accounts.map((stored) => stored.id),
+  );
+  drawerGroupFilter = healed.drawerGroupFilter;
+  expandedGroupId = healed.expandedGroupId;
+  openAssignId = healed.openAssignId;
   const content = !status.hasVault
     ? onboarding(status)
     : status.locked
@@ -362,6 +367,8 @@ const paint = (): void => {
           cache.multisigClassDeclared,
           drawerGroupFilter,
           expandedGroupId,
+          openAssignId,
+          drawerCreateOpen,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {

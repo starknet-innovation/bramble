@@ -310,6 +310,8 @@ export const dashboard = (
   multisigClassDeclared: boolean | "error" | null = null,
   drawerGroupFilter: string | null = null,
   expandedGroupId: string | null = null,
+  openAssignId: string | null = null,
+  drawerCreateOpen = false,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -402,5 +404,5 @@ export const dashboard = (
     ${walletHeader(status, account, preferences)}
     ${screen}
     ${walletDock(activeView, pending.length)}
-    ${accountDrawer(status, account, preferences, drawerGroupFilter)}`;
+    ${accountDrawer(status, account, preferences, drawerGroupFilter, openAssignId, drawerCreateOpen)}`;
 };

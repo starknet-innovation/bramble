@@ -15,9 +15,11 @@ export type SettingsUiDeps = {
   readonly app: Element | null;
   readonly expandedGroup: () => string | null;
   readonly networkId: () => string;
+  readonly openAssign: () => string | null;
   readonly refresh: () => Promise<WalletStatus>;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly setExpandedGroup: (id: string | null) => void;
+  readonly setOpenAssign: (id: string | null) => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -91,8 +93,10 @@ export const bindAddAccount = (deps: SettingsUiDeps): void => {
 export const bindGroups = (deps: SettingsUiDeps): void => {
   bindGroupControls(deps.app, {
     expandedGroup: deps.expandedGroup,
+    openAssign: deps.openAssign,
     rerender: () => rerender(deps),
     setExpandedGroup: deps.setExpandedGroup,
+    setOpenAssign: deps.setOpenAssign,
     wallet: deps.wallet,
   });
 };

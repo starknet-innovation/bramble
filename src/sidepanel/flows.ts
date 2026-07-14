@@ -10,7 +10,7 @@ import { knownAccountType } from "../starknet/account-types";
 import { isStarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { groupAssignPanel } from "./group-controls";
+import { accountGroupsLine } from "./group-controls";
 import { groupsSection } from "./group-members";
 import { icon } from "./icons";
 import {
@@ -189,21 +189,15 @@ export const accountFlow = (
                     const memberGroups = groups.filter((group) =>
                       group.accountIds.includes(stored.id),
                     );
-                    return `<div class="option-group-item">
-                      <div class="option-row-line">
-                        <button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
+                    return `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
                           <span class="option-avatar">${accountAvatar(stored.address)}</span>
                           <span class="option-copy">
                             <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
                             <code>${accountLabel(stored.address)}</code>
-                            ${memberGroups.length > 0 ? `<span class="account-groups-line">${memberGroups.map((group) => icon(group.icon)).join("")}</span>` : ""}
+                            ${accountGroupsLine(memberGroups)}
                           </span>
                           ${stored.id === account?.id ? `<span class="option-mark">${icon("check")}</span>` : ""}
-                        </button>
-                        <button class="icon-button ghost" data-assign-toggle="${escapeHtml(stored.id)}" type="button" aria-expanded="false" aria-label="Assign to groups" title="Assign to groups">${icon("folder")}</button>
-                      </div>
-                      ${groupAssignPanel(stored, groups)}
-                    </div>`;
+                        </button>`;
                   })
                   .join("")}
               </div>`
