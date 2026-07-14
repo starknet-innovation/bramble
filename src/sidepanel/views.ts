@@ -8,7 +8,12 @@
  * ./home-tabs.ts.
  */
 
-import type { ConnectedSite, PendingApproval, WalletStatus } from "../popup/responses";
+import type {
+  ConnectedSite,
+  DiscoveredNft,
+  PendingApproval,
+  WalletStatus,
+} from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { AllowanceRecord } from "../storage/allowance-store";
@@ -335,6 +340,7 @@ export const dashboard = (
   expandedGroupId: string | null = null,
   priceStale = false,
   priceAsOf: number | null = null,
+  discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -375,10 +381,10 @@ export const dashboard = (
     return multisigDeployFlow(status, account, multisigClassDeclared);
   }
   if (activeView === "nfts") {
-    return nftGalleryFlow(status, account, preferences);
+    return nftGalleryFlow(status, account, preferences, discoveredNfts);
   }
   if (activeView === "nft-detail") {
-    return nftDetailFlow(status, account, preferences, selectedNftId);
+    return nftDetailFlow(status, account, preferences, selectedNftId, discoveredNfts);
   }
   if (activeView === "backup") {
     return backupFlow(status);

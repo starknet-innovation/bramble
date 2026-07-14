@@ -18,7 +18,14 @@ export {
   type PendingApprovalsResponse,
   type WatchAssetToken,
 } from "./approvals-responses";
-
+/**
+ * Re-exported NFT auto-discovery validators for one import path.
+ */
+export {
+  type DiscoveredNft,
+  type DiscoverNftsResponse,
+  isDiscoverNftsResponse,
+} from "./responses-nft";
 /**
  * Re-exported transfer-review validators for one import path.
  */

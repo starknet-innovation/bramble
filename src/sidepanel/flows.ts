@@ -111,6 +111,9 @@ const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | n
 const strk20ProverUrlFor = (preferences: WalletPreferences | null): string =>
   preferences?.strk20ProverUrl ?? "";
 
+const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
+  preferences?.nftIndexerUrl ?? "";
+
 /**
  * Network flow: switch the active network and set a custom RPC endpoint.
  */
@@ -157,6 +160,17 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
         </label>
         <button class="secondary" type="submit">${icon("check")}Save prover</button>
         <p id="strk20-prover-result" role="status"></p>
+      </form>
+    </section>
+    <section class="section">
+      <h2>NFT indexer</h2>
+      <form id="nft-indexer-form">
+        <label><span>NFT discovery endpoint</span>
+          <input class="mono" name="indexerUrl" type="url" placeholder="https://…" value="${escapeHtml(nftIndexerUrlFor(preferences))}" autocomplete="off" spellcheck="false" />
+          <span class="hint">Where the wallet lists NFTs an account owns for the auto-discovered gallery. Ownership is re-checked on-chain. Leave empty to only show manually watched NFTs.</span>
+        </label>
+        <button class="secondary" type="submit">${icon("check")}Save indexer</button>
+        <p id="nft-indexer-result" role="status"></p>
       </form>
     </section>`,
   );

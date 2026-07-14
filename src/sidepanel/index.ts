@@ -172,6 +172,7 @@ type RenderData = {
   chart: readonly number[];
   connectedSites: Awaited<ReturnType<typeof wallet.connectedSites>>;
   deployment: boolean | null;
+  discoveredNfts: Awaited<ReturnType<typeof wallet.discoverNfts>>;
   pending: Awaited<ReturnType<typeof wallet.loadPendingApprovals>>;
   preferences: WalletPreferences | null;
   changes: Readonly<Record<string, number>>;
@@ -190,6 +191,7 @@ const cache: RenderData = {
   chart: [],
   connectedSites: [],
   deployment: null,
+  discoveredNfts: [],
   pending: [],
   changes: {},
   preferences: null,
@@ -368,6 +370,7 @@ const paint = (): void => {
           expandedGroupId,
           cache.priceStale,
           cache.priceAsOf,
+          cache.discoveredNfts,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -396,6 +399,7 @@ const render = async (status: WalletStatus): Promise<void> => {
     cache.priceStale = false;
     cache.chart = [];
     cache.allowances = [];
+    cache.discoveredNfts = [];
     paint();
     return;
   }
@@ -433,6 +437,11 @@ const render = async (status: WalletStatus): Promise<void> => {
   if (activeView === "allowances") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;
+    });
+  }
+  if (activeView === "nfts" || activeView === "nft-detail") {
+    fill(wallet.discoverNfts(), (value) => {
+      cache.discoveredNfts = value;
     });
   }
   if (
