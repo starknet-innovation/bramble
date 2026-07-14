@@ -4,6 +4,7 @@
  * through the verified invoke path.
  */
 import type { WalletStatus } from "../popup/responses";
+import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { SidepanelWallet } from "./runtime";
 
@@ -36,7 +37,7 @@ const bindAddForm = (deps: NftUiDeps): void => {
     }
     void deps.wallet
       .addNft(
-        String(data.get("contract") ?? "").trim(),
+        normalizeFeltInput(String(data.get("contract") ?? "")),
         String(data.get("tokenId") ?? "").trim(),
         String(data.get("networkId") ?? ""),
         String(data.get("label") ?? "").trim(),
@@ -68,10 +69,10 @@ const bindSendForm = (deps: NftUiDeps): void => {
     buttonBusy(submitButton, true);
     void deps.wallet
       .transferNft(
-        String(data.get("contract") ?? ""),
+        normalizeFeltInput(String(data.get("contract") ?? "")),
         String(data.get("tokenId") ?? ""),
         String(data.get("networkId") ?? ""),
-        String(data.get("recipient") ?? "").trim(),
+        normalizeFeltInput(String(data.get("recipient") ?? "")),
       )
       .then(
         (transactionHash) => {

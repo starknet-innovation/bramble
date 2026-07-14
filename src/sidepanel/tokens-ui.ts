@@ -5,6 +5,7 @@
  */
 import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { SidepanelWallet } from "./runtime";
 import { compactAmount, tokenGlyph } from "./token-row";
@@ -47,7 +48,7 @@ const bindAddToken = (deps: TokensUiDeps): void => {
 
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const address = String(new FormData(form).get("address") ?? "").trim();
+    const address = normalizeFeltInput(String(new FormData(form).get("address") ?? ""));
     buttonBusy(submitButton, true);
     void deps.wallet.addToken(address).then(
       async () => {

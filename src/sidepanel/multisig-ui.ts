@@ -4,6 +4,7 @@
  * background message client. Pure templates live in multisig-views.ts.
  */
 import type { WalletStatus } from "../popup/responses";
+import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { MultisigClient } from "./multisig-runtime";
 import type { SidepanelWallet } from "./runtime";
@@ -65,7 +66,7 @@ const bindAddForm = (deps: MultisigUiDeps): void => {
     const data = new FormData(form);
     runAction(deps, submitButton, "multisig-add-result", "Checking on-chain…", async () => {
       await deps.multisig.addMultisig(
-        String(data.get("address") ?? "").trim(),
+        normalizeFeltInput(String(data.get("address") ?? "")),
         String(data.get("name") ?? "").trim(),
       );
       return "Multisig watched";
@@ -206,11 +207,13 @@ const bindTrackForm = (deps: MultisigUiDeps): void => {
   });
 };
 
-// Splits a felts textarea on any whitespace or commas, dropping empties.
+// Splits a felts textarea on any whitespace or commas, dropping empties. Each
+// entry is normalized so checksummed (mixed-case) `0x` addresses — common for
+// pasted signer and calldata felts — survive the strict field-element check.
 const parseFelts = (raw: string): readonly string[] =>
   raw
     .split(/[\s,]+/)
-    .map((felt) => felt.trim())
+    .map((felt) => normalizeFeltInput(felt))
     .filter((felt) => felt.length > 0);
 
 const bindProposeForm = (deps: MultisigUiDeps): void => {
@@ -230,7 +233,7 @@ const bindProposeForm = (deps: MultisigUiDeps): void => {
         multisigId,
         salt: String(data.get("salt") ?? "").trim(),
         summary: String(data.get("summary") ?? "").trim(),
-        to: String(data.get("to") ?? "").trim(),
+        to: normalizeFeltInput(String(data.get("to") ?? "")),
       });
       deps.openDetail(multisigId);
       return `Proposal submitted: ${transactionHash}`;

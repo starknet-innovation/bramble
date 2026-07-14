@@ -210,6 +210,20 @@ export const isCanonicalChainId = (value: unknown): value is string =>
   typeof value === "string" && /^0x[0-9a-fA-F]{1,64}$/.test(value) && BigInt(value) > 0n;
 
 /**
+ * Normalizes a pasted felt/address input so a checksummed (mixed-case) `0x`
+ * address survives the strict, lowercase-only field-element check. Hex is
+ * case-insensitive, so an uppercase/checksummed address denotes the same felt
+ * as its lowercase spelling; this canonicalizes it via `canonicalFelt` rather
+ * than re-deriving the conversion. Non-`0x` input (empty, a name, a decimal) is
+ * only trimmed and returned unchanged, so it still fails the field-element
+ * check downstream — this never widens what counts as a valid address.
+ */
+export const normalizeFeltInput = (value: string): string => {
+  const trimmed = value.trim();
+  return trimmed.startsWith("0x") ? (canonicalFelt(trimmed) ?? trimmed) : trimmed;
+};
+
+/**
  * Default network for newly imported accounts.
  */
 export const DEFAULT_NETWORK = STARKNET_NETWORKS.SN_MAIN;

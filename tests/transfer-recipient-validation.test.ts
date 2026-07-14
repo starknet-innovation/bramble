@@ -14,10 +14,20 @@ test("accepts well-formed Starknet field-element recipients", () => {
   expect(recipientFieldError(`0x${"0".repeat(63)}1`)).toBeNull();
 });
 
+test("accepts checksummed (mixed-case) addresses by normalizing the case", () => {
+  // Hex is case-insensitive: a checksummed/mixed-case 0x address (as pasted
+  // from Voyager/Starkscan or another wallet) denotes the same field element
+  // as its lowercase spelling, so it must be accepted, not rejected.
+  expect(
+    recipientFieldError("0x02Fd23d9182193775423497fC0c472E156C57C69E4089A1967fb288A2d84e914"),
+  ).toBeNull();
+  expect(recipientFieldError("0xABC")).toBeNull();
+});
+
 test("rejects malformed recipients with an inline message", () => {
   expect(recipientFieldError("")).toBe(INVALID_RECIPIENT_MESSAGE);
   expect(recipientFieldError("not-an-address")).toBe(INVALID_RECIPIENT_MESSAGE);
-  expect(recipientFieldError("0xABC")).toBe(INVALID_RECIPIENT_MESSAGE);
+  expect(recipientFieldError("0xZZ")).toBe(INVALID_RECIPIENT_MESSAGE);
   expect(
     recipientFieldError("0x800000000000011000000000000000000000000000000000000000000000001"),
   ).toBe(INVALID_RECIPIENT_MESSAGE);
