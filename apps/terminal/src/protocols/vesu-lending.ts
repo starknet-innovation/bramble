@@ -1,23 +1,34 @@
 /**
- * Vesu lending primitives: the resolved pool-config shape, the Vesu API
+ * Vesu V2 lending primitives: the resolved pool-config shape, the Vesu API
  * response parser, the signed-amount (`i257`) helper, and the pure starknet-js
- * calldata builders for the earn (ERC-4626 vToken) and borrow (singleton
+ * calldata builders for the earn (ERC-4626 vToken) and borrow/repay (V2 `Pool`
  * `modify_position`) flows. Kept separate from vesu.ts so the public protocol
  * surface stays within the module size budget. Nothing here touches the
- * network — the HTTP pool fetch and the on-chain `singleton()` read live in
- * vesu.ts; these are pure serializers, integer math, and JSON parsing.
+ * network — the HTTP pool fetch lives in vesu.ts; these are pure serializers,
+ * integer math, and JSON parsing.
  *
- * ⚠️ Contract shapes (entrypoint names, `ModifyPositionParams` field order, the
- * `Amount { amount_type, denomination, value }` enum layout, and the `i257
- * { abs, is_negative }` struct) are transcribed from the Vesu recon and must be
- * re-verified against docs.vesu.xyz / the deployed singleton ABI before any
- * mainnet transaction is signed. starknet-js compiles plain objects depth-first
- * in property order, so the field order below IS the Cairo ABI order.
+ * V2 model (docs.vesu.xyz, mirrored in vesuxyz/vesu-v2 src/pool.cairo &
+ * src/data_model.cairo): there is NO Singleton and NO extension — each pool is
+ * its own `Pool` contract, and borrow/repay call `modify_position(params:
+ * ModifyPositionParams)` directly on that pool contract. The V2 structs are:
+ *   ModifyPositionParams { collateral_asset, debt_asset, user, collateral, debt }
+ *   Amount               { denomination: AmountDenomination, value: i257 }
+ *   AmountDenomination   enum { Native = 0, Assets = 1 }
+ *   i257 (alexandria)    { abs: u256, is_negative: bool }
+ * Note V2's `Amount` has NO `amount_type`/Delta field (that was V1), and
+ * `ModifyPositionParams` has NO leading `pool_id` and NO trailing `data`.
+ * starknet-js compiles plain objects depth-first in property order, so the field
+ * order below IS the Cairo ABI order.
+ *
+ * ⚠️ VERIFY BEFORE FUNDS (issue #67): the shapes above are doc/source-verified
+ * but NOT runtime-verified against the deployed class ABI on a funded mainnet
+ * account. See the per-site TODO(#67) markers. The whole path stays behind the
+ * `VESU_LENDING_ENABLED` gate (constants.ts) until that proof lands.
  */
 import { CairoCustomEnum, type Call, CallData, cairo } from "starknet";
 import { WalletError } from "./support/errors";
 import { isRecord } from "./support/json";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./support/networks";
+import { isNonZeroStarkFieldElement } from "./support/networks";
 import { buildErc20ApproveCall } from "./support/rpc-assets";
 
 /**
@@ -59,6 +70,19 @@ export const parseVesuAmount = (amount: string): bigint => {
     throw new WalletError("Vesu amount must be greater than zero");
   }
   return raw;
+};
+
+/**
+ * Parses a smallest-unit collateral amount, rejecting floats and negatives but
+ * ALLOWING zero — a V2 borrow may add no new collateral (borrowing against an
+ * existing position) and a repay always supplies a zero collateral leg.
+ */
+export const parseVesuCollateralAmount = (amount: string): bigint => {
+  const trimmed = amount.trim();
+  if (!/^(?:0|[1-9][0-9]*)$/.test(trimmed)) {
+    throw new WalletError("Invalid Vesu collateral amount");
+  }
+  return BigInt(trimmed);
 };
 
 // Reads a felt-shaped address string off an untrusted record field, returning
@@ -137,18 +161,6 @@ export const parseVesuPool = (body: unknown): VesuPoolConfig | null => {
 };
 
 /**
- * Parses a `singleton()` view response (a single felt address) into canonical
- * hex, or null when the response is empty or malformed.
- */
-export const parseSingletonAddress = (response: readonly string[]): string | null => {
-  const felt = response[0];
-  if (typeof felt !== "string" || !isStarkFieldElement(felt) || BigInt(felt) === 0n) {
-    return null;
-  }
-  return `0x${BigInt(felt).toString(16)}`;
-};
-
-/**
  * Finds the pool asset config matching an ERC20 address (compared numerically
  * so zero-padding differences do not matter), or null when the pool does not
  * list the asset.
@@ -168,12 +180,12 @@ export const toI257 = (value: bigint): Record<string, unknown> => ({
   is_negative: value < 0n,
 });
 
-// Serializes a Vesu `Amount { amount_type: AmountType, denomination:
-// AmountDenomination, value: i257 }` as a Delta in Assets denomination — the
-// shape borrow/repay use to nudge a position's debt leg by a signed asset
-// amount. Enum variant order fixes the on-chain index (Delta=0, Assets=1).
-const deltaAssetsAmount = (value: bigint): Record<string, unknown> => ({
-  amount_type: new CairoCustomEnum({ Delta: {}, Target: undefined }),
+// Serializes a Vesu V2 `Amount { denomination: AmountDenomination, value: i257 }`
+// in `Assets` denomination — the shape borrow/repay use to move a position's
+// collateral/debt leg by a signed underlying-asset amount. Enum variant order
+// fixes the on-chain index (Native=0, Assets=1), so listing `Native` first with
+// `Assets` active serializes to index 1.
+const assetsAmount = (value: bigint): Record<string, unknown> => ({
   denomination: new CairoCustomEnum({ Native: undefined, Assets: {} }),
   value: toI257(value),
 });
@@ -224,82 +236,107 @@ export const buildVesuWithdrawCalls = (
   ];
 };
 
-// Builds the singleton `modify_position(ModifyPositionParams)` call. The v1
-// struct leads with `pool_id`; the collateral leg is left at a zero Delta so
-// only the debt leg moves.
+// Builds the V2 `Pool.modify_position(ModifyPositionParams)` call, targeting the
+// pool contract directly (no singleton). Field order matches the V2
+// `ModifyPositionParams` struct (collateral_asset, debt_asset, user, collateral,
+// debt); `collateralValue`/`debtValue` are signed `Amount`s in `Assets`
+// denomination (positive = supply/borrow, negative = withdraw/repay).
+//
+// TODO(#67): confirm the entrypoint selector against the deployed V2 ABI on a
+// funded session. The Pool contract reference and vesuxyz/vesu-v2 `IPool` trait
+// name it `modify_position`, but the "Interact" doc pages label the same call
+// `manage_position`; we target `modify_position` (the ABI-level name).
 const buildModifyPositionCall = (
-  singletonAddress: string,
-  poolId: string,
+  poolAddress: string,
   collateralAsset: string,
   debtAsset: string,
   user: string,
+  collateralValue: bigint,
   debtValue: bigint,
 ): Call => ({
   calldata: CallData.compile({
-    pool_id: poolId,
     collateral_asset: collateralAsset,
     debt_asset: debtAsset,
     user,
-    collateral: deltaAssetsAmount(0n),
-    debt: deltaAssetsAmount(debtValue),
-    data: [],
+    collateral: assetsAmount(collateralValue),
+    debt: assetsAmount(debtValue),
   }),
-  contractAddress: singletonAddress,
+  contractAddress: poolAddress,
   entrypoint: "modify_position",
 });
 
 /**
- * Builds the borrow multicall: a single `modify_position` that increases the
- * position's debt leg by `amountRaw` (positive i257). No approval — the account
- * receives the borrowed asset.
- *
- * ⚠️ The shared single-asset `LendingQuote` cannot express the collateral asset
- * a Vesu position is keyed by, so `collateral_asset` is passed as `0x0`. This
- * calldata is structurally correct but incomplete — the collateral asset must
- * be threaded through before any mainnet borrow.
+ * Builds the V2 borrow multicall against the pool contract: when
+ * `collateralAmountRaw > 0`, first approve the pool to pull the collateral
+ * asset, then a single `modify_position` that supplies `collateralAmountRaw`
+ * collateral (positive) and borrows `debtAmountRaw` debt (positive i257). With
+ * `collateralAmountRaw === 0` no approval is emitted and only the debt leg
+ * moves (borrowing against an existing position). The position is keyed by the
+ * real `collateralAsset` — no `0x0` placeholder.
  */
 export const buildVesuBorrowCalls = (
-  singletonAddress: string,
-  poolId: string,
+  poolAddress: string,
+  collateralAsset: string,
+  collateralAmountRaw: bigint,
   debtAsset: string,
-  amountRaw: bigint,
+  debtAmountRaw: bigint,
   accountAddress: string,
 ): readonly Call[] => {
   if (
-    !isNonZeroStarkFieldElement(singletonAddress) ||
+    !isNonZeroStarkFieldElement(poolAddress) ||
+    !isNonZeroStarkFieldElement(collateralAsset) ||
     !isNonZeroStarkFieldElement(debtAsset) ||
     !isNonZeroStarkFieldElement(accountAddress)
   ) {
     throw new WalletError("Invalid Vesu borrow address");
   }
-  return [
-    buildModifyPositionCall(singletonAddress, poolId, "0x0", debtAsset, accountAddress, amountRaw),
-  ];
+  const calls: Call[] = [];
+  if (collateralAmountRaw > 0n) {
+    calls.push(buildErc20ApproveCall(collateralAsset, poolAddress, collateralAmountRaw));
+  }
+  calls.push(
+    buildModifyPositionCall(
+      poolAddress,
+      collateralAsset,
+      debtAsset,
+      accountAddress,
+      collateralAmountRaw,
+      debtAmountRaw,
+    ),
+  );
+  return calls;
 };
 
 /**
- * Builds the repay multicall: approve the singleton to pull the debt asset, then
- * a `modify_position` that decreases the debt leg by `amountRaw` (negative
- * i257).
- *
- * ⚠️ Same collateral-asset gap as {@link buildVesuBorrowCalls}: `collateral_asset`
- * is `0x0` and must be threaded through before any mainnet repay.
+ * Builds the V2 repay multicall against the pool contract: approve the pool to
+ * pull the debt asset, then a `modify_position` with a zero collateral leg and a
+ * negative debt leg (`-debtAmountRaw`, i257) so only debt is repaid. The
+ * position is keyed by the real `collateralAsset`.
  */
 export const buildVesuRepayCalls = (
-  singletonAddress: string,
-  poolId: string,
+  poolAddress: string,
+  collateralAsset: string,
   debtAsset: string,
-  amountRaw: bigint,
+  debtAmountRaw: bigint,
   accountAddress: string,
 ): readonly Call[] => {
   if (
-    !isNonZeroStarkFieldElement(singletonAddress) ||
+    !isNonZeroStarkFieldElement(poolAddress) ||
+    !isNonZeroStarkFieldElement(collateralAsset) ||
+    !isNonZeroStarkFieldElement(debtAsset) ||
     !isNonZeroStarkFieldElement(accountAddress)
   ) {
     throw new WalletError("Invalid Vesu repay address");
   }
   return [
-    buildErc20ApproveCall(debtAsset, singletonAddress, amountRaw),
-    buildModifyPositionCall(singletonAddress, poolId, "0x0", debtAsset, accountAddress, -amountRaw),
+    buildErc20ApproveCall(debtAsset, poolAddress, debtAmountRaw),
+    buildModifyPositionCall(
+      poolAddress,
+      collateralAsset,
+      debtAsset,
+      accountAddress,
+      0n,
+      -debtAmountRaw,
+    ),
   ];
 };

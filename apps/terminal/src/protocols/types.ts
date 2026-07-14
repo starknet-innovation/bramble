@@ -69,7 +69,14 @@ export type LendingAction = "borrow" | "repay" | "supply" | "withdraw";
 
 /**
  * Inputs for a lending quote: which action, which asset and amount, on which
- * pool, for which account.
+ * pool, for which account. In Vesu V2 `poolId` is the `Pool` contract address
+ * (each pool is its own contract). A V2 position is keyed by the
+ * (collateral_asset, debt_asset, user) triple, so borrow/repay additionally
+ * carry the collateral leg: `collateralAsset` is the asset that keys the
+ * position, and `collateralAmount` is the smallest-unit amount of collateral to
+ * supply alongside the borrow (a decimal integer string; "0" means "do not add
+ * collateral", e.g. borrowing against an existing position or repaying). Both
+ * are optional here because supply/withdraw (earn) do not use them.
  */
 export type LendingQuoteParams = {
   readonly action: LendingAction;
@@ -77,20 +84,26 @@ export type LendingQuoteParams = {
   readonly amount: string;
   readonly poolId: string;
   readonly accountAddress: string;
+  readonly collateralAsset?: string;
+  readonly collateralAmount?: string;
 };
 
 /**
- * A lending quote: the resolved pool contract addresses plus the projected
+ * A lending quote: the resolved pool contract address plus the projected
  * position figures (all in smallest units / basis points) a review screen
- * shows before the user commits.
+ * shows before the user commits. In V2 `poolAddress` is the `Pool` contract the
+ * borrow/repay `modify_position` call targets. `collateralAsset` /
+ * `collateralAmount` echo the borrow/repay collateral leg (null for earn).
  */
 export type LendingQuote = {
   readonly action: LendingAction;
   readonly asset: string;
   readonly amount: string;
   readonly poolId: string;
+  readonly poolAddress: string;
+  readonly collateralAsset: string | null;
+  readonly collateralAmount: string | null;
   readonly vTokenAddress: string | null;
-  readonly singletonAddress: string | null;
   readonly supplyApyBps: number | null;
   readonly borrowApyBps: number | null;
 };
