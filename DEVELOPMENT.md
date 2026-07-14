@@ -345,9 +345,13 @@ Until these are on, a red CI guard is **visible but not merge-blocking**.
 
 - **Require a pull request before merging.**
 - **Require status checks to pass** and **require branches to be up to date**.
-  Required checks: **`fast-checks`**, **`pr-guards`**, and **`release-validation`**
-  (the last runs on release/hotfix→main PRs; require it so a promotion can't
-  merge until the full heavy suite is green).
+  Required checks: **`fast-checks`** and **`pr-guards`** only. Do **not** make
+  `release-validation` a required check: it is skipped on `chore/`/`docs/` PRs
+  (by its `if:` gate), and a required-but-skipped check silently blocks those
+  PRs from merging (a well-known GitHub behavior). The full heavy suite still
+  runs on a `release/**`/`hotfix/**` → `main` promotion; reviewers must confirm
+  `release-validation` is green before merging that promotion — process-enforced,
+  not a required-check.
 - **Require ≥ 1 approving review** (and "Require review from Code Owners" — see `.github/CODEOWNERS`).
 - **Restrict direct pushes** (no pushes that bypass a PR).
 - **Block force-pushes and deletions** of `main`.
