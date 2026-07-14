@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../src/popup/responses";
 import { dashboard } from "../src/sidepanel/views";
-import type { AllowanceRecord } from "../src/storage/allowance-store";
+import type { AllowanceView } from "../src/starknet/allowance-discovery";
 import type { WalletPreferences } from "../src/storage/preferences-store";
 import { account, preferences } from "./support/sidepanel-fixtures";
 
@@ -21,11 +21,12 @@ const status: WalletStatus = {
   ready: true,
 };
 
-const allowance: AllowanceRecord = {
+const allowance: AllowanceView = {
   accountId: account.id,
   amount: "1000",
   id: "SN_MAIN:0x49d3657:0x5abcdef1234",
   networkId: "SN_MAIN",
+  source: "wallet",
   spender: "0x5abcdef1234",
   token: "0x49d3657",
 };

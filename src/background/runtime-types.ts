@@ -2,12 +2,12 @@
  * Shared background runtime response and service types.
  */
 import type { StarkSignature } from "../crypto/krusty";
+import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
 import type { Strk20BalanceEntry, Strk20CallAndProof } from "../starknet/strk20/schemas";
 import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
-import type { AllowanceRecord } from "../storage/allowance-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef, Vault } from "../storage/vault-schema";
@@ -222,7 +222,7 @@ export type ActivityResponse = {
  * Tracked allowances returned to extension pages.
  */
 export type AllowancesResponse = {
-  readonly allowances: readonly AllowanceRecord[];
+  readonly allowances: readonly AllowanceView[];
   readonly ok: true;
 };
 

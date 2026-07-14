@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   ALLOWANCE_STORE_KEY,
   allowanceId,
+  allowanceTarget,
   createAllowanceStore,
   isAllowanceRecord,
   memoryAllowanceStore,
@@ -57,6 +58,21 @@ describe("allowance store", () => {
     await store.record(input("0"));
 
     expect(await store.list()).toEqual([]);
+  });
+
+  test("recovers the token and spender an id targets for the owning account", () => {
+    const id = allowanceId(input("1000")) ?? "";
+    expect(allowanceTarget(id, ACCOUNT_ID)).toEqual({
+      spender: "0x5",
+      token: `0x${BigInt(TOKEN).toString(16)}`,
+    });
+  });
+
+  test("rejects an id that belongs to another account or is malformed", () => {
+    const id = allowanceId(input("1000")) ?? "";
+    expect(allowanceTarget(id, "SN_MAIN:0x9999")).toBeNull();
+    expect(allowanceTarget(`${ACCOUNT_ID}:0x1`, ACCOUNT_ID)).toBeNull();
+    expect(allowanceTarget(`${ACCOUNT_ID}:0x0:0x5`, ACCOUNT_ID)).toBeNull();
   });
 
   test("removes by id and ignores malformed stored data", async () => {

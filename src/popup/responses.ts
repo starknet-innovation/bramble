@@ -24,7 +24,7 @@ export {
  */
 export { isTransferReviewResponse, type TransferReviewResponse } from "./responses-transfer";
 
-import { type AllowanceRecord, isAllowanceRecord } from "../storage/allowance-store";
+import { type AllowanceView, isAllowanceView } from "../starknet/allowance-discovery";
 import { isWalletPreferences, type WalletPreferences } from "../storage/preferences-store";
 import { type AccountRef, isAccountId, isAccountRef } from "../storage/vault-schema";
 import { isPendingApprovalsResponse, type PendingApprovalsResponse } from "./approvals-responses";
@@ -412,7 +412,7 @@ export const isActivityResponse = (value: unknown): value is ActivityResponse =>
  * Tracked allowances response accepted from the background boundary.
  */
 export type AllowancesResponse = {
-  readonly allowances: readonly AllowanceRecord[];
+  readonly allowances: readonly AllowanceView[];
   readonly ok: true;
 };
 
@@ -425,7 +425,7 @@ export const isAllowancesResponse = (value: unknown): value is AllowancesRespons
   hasOnlyKnownKeys(value, ["allowances", "ok"]) &&
   value["ok"] === true &&
   Array.isArray(value["allowances"]) &&
-  value["allowances"].every(isAllowanceRecord);
+  value["allowances"].every(isAllowanceView);
 
 /**
  * Checks account deployment status responses before rendering.
