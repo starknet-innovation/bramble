@@ -1,10 +1,26 @@
 name: CI
 
-# Fast PR feedback (the "PR CI" tier of the layered model in DEVELOPMENT.md).
-# Runs on every PR into `main` OR a `release/**` branch — under the
-# roadmap-driven release-branch model those are the only two valid PR targets.
-# Heavier suites (extension build/package, full E2E, dependency audit) run
-# post-merge in release-integration.yml and nightly.yml, not here.
+# Layered CI — the "PR CI" tier of the model in DEVELOPMENT.md.
+#
+# Triggers on every PR into `main` OR a `release/**` branch (the only two valid
+# PR targets) and on push to `main`. Three jobs realize the layering:
+#
+#   - pr-guards          scope + naming enforcement (blocking target/linked-issue
+#                        guards, advisory branch-name guard). Fast, hosted runner.
+#   - fast-checks        the FAST, offline-capable gates that run on EVERY PR:
+#                        biome lint, typecheck, file/config + manifest standards,
+#                        import-layer/cycle checks, unit + conformance tests, and
+#                        the coverage floor. Hosted runner; no crypto/contract
+#                        toolchain, no build, no E2E — so PR feedback stays fast.
+#   - release-validation the FULL heavy pipeline (vendor krusty/multisig, build,
+#                        package, E2E, dependency audit, checksum). Gated to run
+#                        ONLY on release/** and hotfix/** PRs into `main` — the
+#                        complete release-validation suite before a promotion.
+#
+# The heavier post-merge and scheduled tiers live in release-integration.yml
+# (push to release/**) and nightly.yml (full suite + audit vs. the active
+# release branch). Everyday feature/fix/chore PRs into a release branch get only
+# pr-guards + fast-checks; they do not pay for the heavy pipeline.
 on:
   pull_request:
     branches: [main, "release/**"]
@@ -19,8 +35,8 @@ jobs:
   # Blocking guards (PR-target, linked-issue) fail the check; the branch-name
   # guard is advisory (annotation only). Lightweight: runs on a hosted runner,
   # never touches the toolchain, so it returns feedback fast and in parallel
-  # with `check`. NOTE: a red guard here is only *merge-blocking* once it is a
-  # required status check in branch protection (see DEVELOPMENT.md).
+  # with fast-checks. NOTE: a red guard here is only *merge-blocking* once it is
+  # a required status check in branch protection (see DEVELOPMENT.md).
   pr-guards:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -128,7 +144,41 @@ jobs:
               core.setFailed("One or more BLOCKING PR guards failed — see annotations and the job summary above.");
             }
 
-  check:
+  # Fast, offline-capable gates. Runs on EVERY PR (into main or release/**) and
+  # on push to main. No crypto/contract toolchain, no build, no E2E — so PR
+  # feedback stays fast. All steps below are verified to pass without the
+  # vendored krusty/multisig artifacts. (`check:config` is not a separate npm
+  # script — `check:files` already runs both file- and config-standards. The
+  # aggregate `bun run check` is intentionally NOT used here because it chains
+  # check:krusty/check:multisig, which require the vendored artifacts.)
+  fast-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - run: bun install --frozen-lockfile
+      - run: bun run check:lint
+      - run: bun run check:types
+      # check:files runs both file-standards and config-standards.
+      - run: bun run check:files
+      - run: bun run check:extension
+      - run: bun run check:imports
+      - run: bun run check:cycles
+      - run: bun test tests
+      # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).
+      - run: bun run check:coverage
+
+  # FULL release-validation suite — the complete heavy pipeline. Gated to run
+  # ONLY on release/** and hotfix/** PRs into `main` (a release promotion or a
+  # hotfix), i.e. the final validation before code reaches the stable branch.
+  # Everyday feature/fix/chore PRs (and PRs into release/**) do NOT trigger it.
+  release-validation:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.base_ref == 'main' &&
+      (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/'))
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:

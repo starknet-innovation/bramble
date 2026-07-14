@@ -151,20 +151,42 @@ The pull-request template captures items 1–4 as fields and item 5 as a checkbo
 Three tiers, each with a different speed/breadth trade-off. Files:
 `.github/workflows/ci.yml`, `release-integration.yml`, `nightly.yml`.
 
-### 1. PR CI — fast, short feedback (`ci.yml`)
+### 1. PR CI — fast gates + a gated full validation (`ci.yml`)
 
-Trigger: **`pull_request` targeting `main` or `release/**`** (plus `push` to `main`).
+Trigger: **`pull_request` targeting `main` or `release/**`** (plus `push` to
+`main`). Three jobs make the fast/heavy split real:
 
-This is the gate you feel on every PR. It runs the standards + correctness
-checks that don't need the network-heavy crypto/contract toolchain to give a
-verdict, and it runs the **scope & naming guards** (below) in parallel on a
-lightweight runner. It intentionally stays as the project's fast tier — heavier
-build/E2E/audit work is pushed to the post-merge and nightly tiers.
+- **`pr-guards`** — the scope & naming guards (below), on a hosted
+  `ubuntu-latest` runner. Fast.
+- **`fast-checks`** — the fast, offline-capable gates that run on **every PR**:
+  Biome lint (`check:lint`), typecheck (`check:types`), the `check:files`
+  standards gate (which runs **both** file- and config-standards — there is no
+  separate `check:config` script) and the extension-manifest check
+  (`check:extension`), import-layer + cycle checks (`check:imports`,
+  `check:cycles`), unit + conformance tests (`bun test tests`), and the coverage
+  floor (`check:coverage`). Runs on `ubuntu-latest` — **no** crypto/contract
+  toolchain, **no** build, **no** E2E — so PR feedback is fast. It deliberately
+  does **not** run the aggregate `bun run check` (which chains the vendored
+  `check:krusty`/`check:multisig`) or any heavy step.
+- **`release-validation`** — the **full heavy pipeline**: cargo/wasm-pack,
+  `vendor:krusty`, `vendor:multisig`, `bun run check`, coverage floor, `build`,
+  `test:e2e`, `package:extension`, the `apps/terminal` typecheck+build, and the
+  `bun audit` dependency gate (`check:audit`), on the self-hosted CodeBuild
+  runner. It is **gated by a job-level `if:`** so it runs **only on `release/**`
+  and `hotfix/**` PRs into `main`** — the complete release-validation suite
+  before code reaches the stable branch.
 
-What it enforces on a PR: format + lint (Biome), typecheck, the
-`check:files` / `check:config` standards gates, import-layer / cycle checks,
-unit + conformance tests, coverage floor, and the extension-manifest check —
-i.e. the repo's existing `check` pipeline, plus the guards.
+So an everyday `feature/`/`fix/`/`chore/` PR into a release branch — and a
+`chore/`/`docs/` PR into `main` — runs **only `pr-guards` + `fast-checks`** and
+never pays for the heavy pipeline. The heavy pipeline runs when a release is
+promoted (`release/vX.Y` → `main`) or a hotfix lands (`hotfix/*` → `main`), and
+again post-merge and nightly (below).
+
+> Note: because the `apps/terminal` build now lives in `release-validation`, the
+> terminal app is validated on release/hotfix→main promotion (and post-merge via
+> release-integration + nightly), not on every release-branch PR. If per-PR
+> terminal coverage is wanted, add a lightweight terminal typecheck to
+> `fast-checks`.
 
 ### 2. Release-branch integration — broader, post-merge (`release-integration.yml`)
 
@@ -187,9 +209,10 @@ set; otherwise the highest-semver `release/vX.Y` branch; if none exists, exit
 cleanly with a note.
 
 Runs the full **E2E (Playwright)** suite, the **dependency audit** (`bun audit`,
-via `bun run check:audit` — already wired into PR CI; nightly re-runs it against
-the live advisory database so a newly-published advisory is caught even without
-a code change), the extension **build**, and a clearly-labeled **placeholder**
+via `bun run check:audit` — also run in the PR CI `release-validation` job;
+nightly re-runs it against the live advisory database so a newly-published
+advisory is caught even without a code change), the extension **build**, and a
+clearly-labeled **placeholder**
 for perf / regression suites (none exist in-repo yet — the step is an explicit
 no-op and must not be read as a passing gate).
 
@@ -206,14 +229,17 @@ to the matching milestone when one exists.
 
 ### What runs where
 
-| Check | PR CI | Release integration | Nightly |
-| --- | :---: | :---: | :---: |
-| Format + lint, typecheck, standards, unit/conformance tests, coverage | ✅ | | |
-| Scope & naming guards | ✅ | | |
-| Vendor krusty/multisig, extension build, reproducible package | | ✅ | ✅ (build) |
-| Full E2E (Playwright) | | | ✅ |
-| Dependency audit (`bun audit`) | ✅ (fast) | | ✅ (against live DB) |
-| Perf / regression | | | ⚠️ placeholder (no suite exists yet) |
+"PR CI" is `ci.yml`; its `fast-checks` job runs on every PR, while
+`release-validation` runs only on `release/**`/`hotfix/**` → `main` PRs.
+
+| Check | PR CI · fast-checks (every PR) | PR CI · release-validation (release/hotfix→main) | Release integration (push release/**) | Nightly |
+| --- | :---: | :---: | :---: | :---: |
+| Lint, typecheck, file/config + manifest standards, import/cycle, unit/conformance tests, coverage | ✅ | ✅ | | |
+| Scope & naming guards (`pr-guards`) | ✅ | | | |
+| Vendor krusty/multisig, extension build, reproducible package | | ✅ | ✅ | ✅ (build) |
+| Full E2E (Playwright) | | ✅ | | ✅ |
+| Dependency audit (`bun audit`) | | ✅ | | ✅ (live DB) |
+| Perf / regression | | | | ⚠️ placeholder (no suite exists yet) |
 
 ---
 
@@ -319,7 +345,9 @@ Until these are on, a red CI guard is **visible but not merge-blocking**.
 
 - **Require a pull request before merging.**
 - **Require status checks to pass** and **require branches to be up to date**.
-  Required checks: the PR CI **`check`** job and the **`pr-guards`** job.
+  Required checks: **`fast-checks`**, **`pr-guards`**, and **`release-validation`**
+  (the last runs on release/hotfix→main PRs; require it so a promotion can't
+  merge until the full heavy suite is green).
 - **Require ≥ 1 approving review** (and "Require review from Code Owners" — see `.github/CODEOWNERS`).
 - **Restrict direct pushes** (no pushes that bypass a PR).
 - **Block force-pushes and deletions** of `main`.
@@ -329,8 +357,9 @@ Until these are on, a red CI guard is **visible but not merge-blocking**.
 ### `release/*` — branch protection / ruleset
 
 - **Require a pull request before merging.**
-- **Require status checks to pass:** the PR CI **`check`** job **and** the
-  **`pr-guards`** job (so the linked-issue guard is enforced).
+- **Require status checks to pass:** **`fast-checks`** **and** **`pr-guards`**
+  (so the linked-issue guard is enforced). `release-validation` does not run on
+  release-branch PRs, so it is not a required check here.
 - **Require ≥ 1 approving review** (team can review each other's feature/fix/chore PRs).
 - **Block force-pushes and deletions** by non-maintainers.
 
