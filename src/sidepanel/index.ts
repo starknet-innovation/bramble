@@ -8,7 +8,6 @@
 
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
-import type { WalletPreferences } from "../storage/preferences-store";
 import { applySkin } from "../ui/skin";
 import { colorSchemeForChoice, skinForChoice } from "../ui/theme";
 import { bindClusterScreens } from "./cluster-ui";
@@ -31,8 +30,9 @@ import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { bindOnboarding } from "./onboarding-ui";
+import { emptyRenderCache, type RenderData } from "./render-cache";
 import { bindReveal } from "./reveal-ui";
-import { createSidepanelRuntime, emptyStatus, type RuntimeApi } from "./runtime";
+import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -169,43 +169,7 @@ const loadDeployment = async (status: WalletStatus): Promise<boolean | null> => 
   return result ? result.deployed : null;
 };
 
-type RenderData = {
-  allowances: Awaited<ReturnType<typeof wallet.loadAllowances>>;
-  multisigs: Awaited<ReturnType<typeof multisig.loadMultisigs>>;
-  multisigClassDeclared: boolean | "error" | null;
-  balances: Awaited<ReturnType<typeof wallet.loadBalances>>;
-  chart: readonly number[];
-  connectedSites: Awaited<ReturnType<typeof wallet.connectedSites>>;
-  deployment: boolean | null;
-  discoveredNfts: Awaited<ReturnType<typeof wallet.discoverNfts>>;
-  pending: Awaited<ReturnType<typeof wallet.loadPendingApprovals>>;
-  preferences: WalletPreferences | null;
-  changes: Readonly<Record<string, number>>;
-  prices: Readonly<Record<string, number>>;
-  priceAsOf: number | null;
-  priceStale: boolean;
-  status: WalletStatus;
-  transactions: Awaited<ReturnType<typeof wallet.loadActivity>>;
-};
-
-const cache: RenderData = {
-  allowances: [],
-  multisigs: { multisigs: [], proposals: [] },
-  multisigClassDeclared: null,
-  balances: { error: "wallet locked" },
-  chart: [],
-  connectedSites: [],
-  deployment: null,
-  discoveredNfts: [],
-  pending: [],
-  changes: {},
-  preferences: null,
-  prices: {},
-  priceAsOf: null,
-  priceStale: false,
-  status: emptyStatus(),
-  transactions: [],
-};
+const cache: RenderData = emptyRenderCache();
 
 const bindAll = (): void => {
   bindNavigation();
