@@ -337,6 +337,13 @@ const handleMessage = createMessageHandler(
         }
         return store.setGroupIcon(input);
       },
+      async setNftIndexerUrl(input) {
+        const store = await preferences;
+        if (!store) {
+          throw new Error("preferences unavailable");
+        }
+        return store.setNftIndexerUrl(input);
+      },
       async setNftSpam(input) {
         const store = await preferences;
         if (!store) {

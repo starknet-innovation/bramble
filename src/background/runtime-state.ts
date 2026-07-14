@@ -65,6 +65,9 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async setDisplay() {
     throw new Error("preferences unavailable");
   },
+  async setNftIndexerUrl() {
+    throw new Error("preferences unavailable");
+  },
   async setNftSpam() {
     throw new Error("preferences unavailable");
   },

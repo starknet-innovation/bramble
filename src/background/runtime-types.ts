@@ -3,6 +3,7 @@
  */
 import type { StarkSignature } from "../crypto/krusty";
 import type { StarknetNetworkId } from "../starknet/networks";
+import type { DiscoveredNft } from "../starknet/nft-metadata";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
 import type { Strk20BalanceEntry, Strk20CallAndProof } from "../starknet/strk20/schemas";
 import type { RiskFlag } from "../starknet/verify";
@@ -168,6 +169,14 @@ export type DeclareResponse = {
 export type DetectTokensResponse = {
   readonly ok: true;
   readonly suggestions: readonly TokenBalance[];
+};
+
+/**
+ * Auto-discovered, on-chain-verified owned NFTs returned to extension pages.
+ */
+export type DiscoverNftsResponse = {
+  readonly nfts: readonly DiscoveredNft[];
+  readonly ok: true;
 };
 
 /**
@@ -354,6 +363,7 @@ export type RuntimeResponse =
   | DeploymentDataResponse
   | DeploymentStatusResponse
   | DetectTokensResponse
+  | DiscoverNftsResponse
   | SupportedVersionsResponse
   | TransferReviewResponse
   | GenerateMnemonicResponse
