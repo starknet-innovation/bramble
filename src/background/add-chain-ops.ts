@@ -7,7 +7,7 @@
  * with no prompt, per spec.
  */
 import { isProviderChain, type ProviderChain } from "../provider/add-chain-params";
-import { isBlockedOrigin } from "../security/blocklist";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import { STARKNET_NETWORKS } from "../starknet/networks";
@@ -25,6 +25,7 @@ import type { SignatureWaiters } from "./signature-waiters";
 export type AddChainOpsDeps = {
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
+  readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly waiters: SignatureWaiters;
 };
@@ -92,6 +93,7 @@ export const handleAddChainOps = async (
     return null;
   }
   const { approvals, extensionId, preferencesStore, waiters } = deps;
+  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
   const input = readAddStarknetChainInput(message);
   if (!input) {
     return { error: "invalid add chain request" };
@@ -99,7 +101,7 @@ export const handleAddChainOps = async (
   if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
     return { error: "sender origin mismatch" };
   }
-  if (isBlockedOrigin(input.origin)) {
+  if (guard.isBlocked(input.origin)) {
     return { error: "origin blocked" };
   }
   const preferences = await preferencesStore.read();
