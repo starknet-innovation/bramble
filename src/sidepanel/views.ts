@@ -15,8 +15,8 @@ import type {
   WalletStatus,
 } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { ActivityEntry } from "../storage/activity-store";
-import type { AllowanceRecord } from "../storage/allowance-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
@@ -329,7 +329,7 @@ export const dashboard = (
   prices: Readonly<Record<string, number>> = {},
   chart: readonly number[] = [],
   selectedTokenId: string | null = null,
-  allowances: readonly AllowanceRecord[] = [],
+  allowances: readonly AllowanceView[] = [],
   selectedNftId: string | null = null,
   changes: Readonly<Record<string, number>> = {},
   multisigs: readonly MultisigRecord[] = [],

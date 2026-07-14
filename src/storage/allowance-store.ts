@@ -67,11 +67,12 @@ export const allowanceId = (entry: AllowanceInput): string | null => {
 };
 
 /**
- * Checks a stored allowance record before trusting it.
+ * Checks the allowance fields common to a stored record and a display view:
+ * account, amount, network, spender, token, and the deterministic id derived
+ * from them. Split out so the enriched allowance view can reuse the exact same
+ * field validation without re-deriving it.
  */
-export const isAllowanceRecord = (value: unknown): value is AllowanceRecord =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "amount", "id", "networkId", "spender", "token"]) &&
+export const hasValidAllowanceFields = (value: Record<string, unknown>): boolean =>
   isAccountId(value["accountId"]) &&
   isAmount(value["amount"]) &&
   typeof value["id"] === "string" &&
@@ -81,6 +82,47 @@ export const isAllowanceRecord = (value: unknown): value is AllowanceRecord =>
   typeof value["token"] === "string" &&
   isNonZeroStarkFieldElement(value["token"]) &&
   value["id"] === `${value["accountId"]}:${value["token"]}:${value["spender"]}`;
+
+/**
+ * Checks a stored allowance record before trusting it.
+ */
+export const isAllowanceRecord = (value: unknown): value is AllowanceRecord =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "amount", "id", "networkId", "spender", "token"]) &&
+  hasValidAllowanceFields(value);
+
+/**
+ * Recovers the token and spender an allowance id targets, scoped to a specific
+ * account. Returns null unless the id is exactly `<accountId>:<token>:<spender>`
+ * with both a non-zero token and spender felt — so an id belonging to another
+ * account, or a malformed one, is rejected. Lets a revoke resolve its target
+ * from the id alone, covering externally discovered allowances that were never
+ * written to the local store.
+ */
+export const allowanceTarget = (
+  id: string,
+  accountId: string,
+): { readonly spender: string; readonly token: string } | null => {
+  const prefix = `${accountId}:`;
+  if (!id.startsWith(prefix)) {
+    return null;
+  }
+  const parts = id.slice(prefix.length).split(":");
+  if (parts.length !== 2) {
+    return null;
+  }
+  const token = canonicalFelt(parts[0] ?? "");
+  const spender = canonicalFelt(parts[1] ?? "");
+  if (
+    !token ||
+    !spender ||
+    !isNonZeroStarkFieldElement(token) ||
+    !isNonZeroStarkFieldElement(spender)
+  ) {
+    return null;
+  }
+  return { spender, token };
+};
 
 const toRecord = (entry: AllowanceInput): AllowanceRecord | null => {
   const token = canonicalFelt(entry.token);

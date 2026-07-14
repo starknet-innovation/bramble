@@ -3,6 +3,7 @@
  * tests can stub network access.
  */
 
+import { type ExternalAllowanceScan, scanExternalAllowances } from "../starknet/allowance-scan";
 import {
   computeMultisigTransactionId,
   getMultisigConfig,
@@ -65,6 +66,14 @@ export type MultisigRpc = {
  */
 export type RuntimeRpc = {
   readonly estimateInvokeFee: (input: InvokeInput) => ReturnType<typeof estimateInvokeFee>;
+  /**
+   * Discovers ERC20 allowances granted outside this wallet for an account's
+   * tracked tokens. Optional so existing RPC stubs stay valid; when absent the
+   * allowance manager lists only the locally tracked (in-wallet) approvals.
+   */
+  readonly getExternalAllowances?: (
+    input: ExternalAllowanceScan,
+  ) => ReturnType<typeof scanExternalAllowances>;
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -115,6 +124,7 @@ const nftIndexerHttp: NftIndexerHttp = (url) => fetch(url);
  */
 export const defaultRuntimeRpc: RuntimeRpc = {
   estimateInvokeFee,
+  getExternalAllowances: scanExternalAllowances,
   getDeploymentStatus,
   getNftOwner,
   getTokenBalances,
