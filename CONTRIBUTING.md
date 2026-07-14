@@ -48,6 +48,27 @@ bun run package:extension
 
 CI runs the same gates. Do not merge around them.
 
+## Workflow: branches, releases, and PRs
+
+Work follows a **roadmap-driven, release-branch** model. The full, canonical
+guide is **[DEVELOPMENT.md](DEVELOPMENT.md)** — read it before opening your first
+PR. In short:
+
+- `main` is always the latest stable, releasable version. **Do not push work to it.**
+- Each release is a small slice of one roadmap phase, tracked as a **milestone**
+  (`v0.4`, …) mapped 1:1 to a **`release/vX.Y`** branch cut from `main`. A phase
+  (`phase:N` label + tracking issue #79–#87) spans several releases.
+- Cut working branches from the **active release branch** and open PRs **against
+  that release branch — not `main`**:
+  - `feature/<issue>-<desc>`, `fix/<issue>-<desc>`, `chore/<issue>-<desc>`
+  - `release/vX.Y`, `hotfix/<desc>`, `docs/<desc>`
+- A PR into a release branch must reference its roadmap issue (`#N` /
+  `Closes #N`), name its target release, state which acceptance criterion it
+  satisfies, include tests, and stay in scope. CI's `pr-guards` job blocks a
+  working-branch PR aimed at `main` and a release-branch PR with no linked issue.
+- Only `release/**` and `hotfix/**` merge into `main`; a release is promoted with
+  a **merge commit** and tagged `vX.Y.0`. See DEVELOPMENT.md and RELEASING.md.
+
 ## Architecture Rules
 
 - Keep files under 500 lines. Split by behavior, not by arbitrary layers.

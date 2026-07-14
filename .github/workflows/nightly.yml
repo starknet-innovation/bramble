@@ -1,0 +1,288 @@
+name: Nightly
+
+# Full-suite nightly run against the ACTIVE release branch (DEVELOPMENT.md).
+# This is the heaviest tier of the layered CI model: full E2E (Playwright),
+# dependency audit, the extension build, and a placeholder for perf/regression
+# checks (none exist in-repo yet — the step is an explicit NO-OP, never a fake
+# pass). It writes a categorized summary and, on failure, upserts ONE tracking
+# issue for the release.
+#
+# Active-branch resolution order:
+#   1. repo variable `vars.ACTIVE_RELEASE_BRANCH` if set;
+#   2. otherwise the highest-semver `release/vX.Y` branch;
+#   3. if neither exists, exit cleanly with a note (nothing to run).
+on:
+  schedule:
+    # 03:00 UTC daily.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Override the release branch to run against (e.g. release/v0.4). Blank = auto-resolve."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  # Resolve which release branch to test. Runs on a hosted runner; read-only.
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.pick.outputs.branch }}
+    steps:
+      - name: Resolve active release branch
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTIVE_RELEASE_BRANCH: ${{ vars.ACTIVE_RELEASE_BRANCH }}
+          INPUT_BRANCH: ${{ github.event.inputs.branch }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_BRANCH:-}" ]; then
+            echo "Using workflow_dispatch input: $INPUT_BRANCH"
+            echo "branch=$INPUT_BRANCH" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "${ACTIVE_RELEASE_BRANCH:-}" ]; then
+            echo "Using vars.ACTIVE_RELEASE_BRANCH: $ACTIVE_RELEASE_BRANCH"
+            echo "branch=$ACTIVE_RELEASE_BRANCH" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Auto-resolving the highest-semver release/* branch ..."
+          branches="$(gh api --paginate "repos/$GITHUB_REPOSITORY/branches?per_page=100" --jq '.[].name' \
+            | grep -E '^release/v[0-9]+\.[0-9]+$' || true)"
+          if [ -z "$branches" ]; then
+            echo "No release/* branch found and vars.ACTIVE_RELEASE_BRANCH is unset — nothing to run."
+            {
+              echo "### Nightly: no active release branch"
+              echo ""
+              echo "No \`release/*\` branch exists and \`vars.ACTIVE_RELEASE_BRANCH\` is not set."
+              echo "Exiting cleanly — nothing to test."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "branch=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          best="$(printf '%s\n' "$branches" | sed 's#^release/v##' | sort -t. -k1,1n -k2,2n | tail -1)"
+          echo "Resolved: release/v$best"
+          echo "branch=release/v$best" >> "$GITHUB_OUTPUT"
+
+  nightly:
+    needs: resolve
+    if: needs.resolve.outputs.branch != ''
+    runs-on:
+      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.branch }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          scarb-version: 2.18.0
+      - run: cargo install wasm-pack --locked --version 0.13.1
+      - run: bun install --frozen-lockfile
+
+      # --- Gates. Each runs to completion (continue-on-error) so the summary
+      # --- can categorize every result; the job is failed explicitly at the end.
+      - name: Vendor crypto + contract toolchain
+        id: vendor
+        continue-on-error: true
+        run: bun run vendor:krusty && bun run vendor:multisig
+      - name: Build extension
+        id: build
+        continue-on-error: true
+        run: bun run build
+      - name: Dependency audit (bun audit)
+        id: audit
+        continue-on-error: true
+        run: bun run check:audit
+      - name: Install E2E browser
+        id: e2e_install
+        continue-on-error: true
+        run: bun run test:e2e:install
+      - name: Full E2E (Playwright)
+        id: e2e
+        continue-on-error: true
+        run: bun run test:e2e
+      - name: Performance / regression suite (placeholder)
+        id: perf
+        run: |
+          echo "No performance, fuzz, or standalone regression suite exists in this"
+          echo "repo yet. This step is an intentional NO-OP placeholder (see"
+          echo "DEVELOPMENT.md). It asserts nothing and must NOT be read as a"
+          echo "passing perf/regression gate. Wire a real suite here when one exists."
+
+      - name: Categorized summary
+        if: always()
+        env:
+          BRANCH: ${{ needs.resolve.outputs.branch }}
+          VENDOR: ${{ steps.vendor.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          AUDIT: ${{ steps.audit.outcome }}
+          E2E_INSTALL: ${{ steps.e2e_install.outcome }}
+          E2E: ${{ steps.e2e.outcome }}
+        run: |
+          set -euo pipefail
+          declare -A GATES=(
+            ["Vendor toolchain (krusty+multisig)"]="$VENDOR"
+            ["Extension build"]="$BUILD"
+            ["Dependency audit (bun audit)"]="$AUDIT"
+            ["E2E browser install"]="$E2E_INSTALL"
+            ["Full E2E (Playwright)"]="$E2E"
+          )
+          failing=()
+          passing=()
+          for name in "${!GATES[@]}"; do
+            if [ "${GATES[$name]}" = "success" ]; then passing+=("$name"); else failing+=("$name (${GATES[$name]})"); fi
+          done
+          {
+            echo "## Nightly — \`$BRANCH\`"
+            echo ""
+            echo "### Newly failing / failing this run"
+            if [ "${#failing[@]}" -eq 0 ]; then
+              echo "_None — all executed gates passed._"
+            else
+              for f in "${failing[@]}"; do echo "- ${f}"; done
+            fi
+            echo ""
+            echo "### Passing"
+            if [ "${#passing[@]}" -eq 0 ]; then echo "_None._"; else for p in "${passing[@]}"; do echo "- ${p}"; done; fi
+            echo ""
+            echo "### Known failures"
+            echo "_Not auto-classified. A failure is only 'known' once triaged against"
+            echo "the nightly tracking issue below; treat everything under 'Newly"
+            echo "failing' as new until then._"
+            echo ""
+            echo "### Flaky"
+            echo "_Cannot be determined from a single run — flakiness needs run history"
+            echo "(re-run comparison). Not classified here._"
+            echo ""
+            echo "### Regressions"
+            echo "_Cannot be determined from a single run — a regression needs a known-good"
+            echo "baseline from prior runs. Not classified here._"
+            echo ""
+            echo "### Release-blocking"
+            echo "Any failing gate above blocks promoting \`$BRANCH\` to \`main\`. Vendor,"
+            echo "build, and E2E failures are release-blocking; a dependency-audit"
+            echo "failure is release-blocking per CONTRIBUTING.md (high/critical advisory)."
+            echo ""
+            echo "### Recommended next work"
+            if [ "${#failing[@]}" -eq 0 ]; then
+              echo "- Proceed with the release-completion checklist in RELEASING.md."
+            else
+              echo "- Triage the failing gates above against the nightly tracking issue."
+              echo "- Do not promote this release branch to main until they are green."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upsert nightly tracking issue
+        if: always()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          BRANCH: ${{ needs.resolve.outputs.branch }}
+          VENDOR: ${{ steps.vendor.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          AUDIT: ${{ steps.audit.outcome }}
+          E2E_INSTALL: ${{ steps.e2e_install.outcome }}
+          E2E: ${{ steps.e2e.outcome }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH;
+            const gates = [
+              ["Vendor toolchain (krusty+multisig)", process.env.VENDOR],
+              ["Extension build", process.env.BUILD],
+              ["Dependency audit (bun audit)", process.env.AUDIT],
+              ["E2E browser install", process.env.E2E_INSTALL],
+              ["Full E2E (Playwright)", process.env.E2E],
+            ];
+            const failing = gates.filter(([, o]) => o !== "success");
+            const title = `Nightly: ${branch} — failing checks`;
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+
+            if (failing.length === 0) {
+              core.info("Nightly all green — no tracking issue created.");
+              return;
+            }
+
+            // Best-effort: assign the milestone matching the branch version.
+            let milestoneNumber;
+            const version = branch.replace(/^release\//, ""); // e.g. "v0.4"
+            try {
+              const milestones = await github.paginate(github.rest.issues.listMilestones, {
+                owner, repo, state: "all", per_page: 100,
+              });
+              const m = milestones.find((ms) => ms.title === version || ms.title === version.replace(/^v/, ""));
+              if (m) milestoneNumber = m.number;
+            } catch (e) {
+              core.warning(`Could not list milestones: ${e.status || e.message}`);
+            }
+
+            const body = [
+              `Automated nightly run for \`${branch}\` reported failing checks.`,
+              "",
+              `**Run:** ${runUrl}`,
+              `**Last updated:** ${new Date().toISOString()}`,
+              "",
+              "### Failing gates",
+              ...failing.map(([name, outcome]) => `- ${name} (${outcome})`),
+              "",
+              "See the run's job summary for the full categorized report",
+              "(newly failing / known / flaky / regressions / release-blocking).",
+              "",
+              "This issue is upserted by `.github/workflows/nightly.yml`; it is",
+              "updated in place each night and should be closed once the branch is green.",
+            ].join("\n");
+
+            const existingList = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: "open", labels: "ci-cd", per_page: 100,
+            });
+            const existing = existingList.find((i) => i.title === title && !i.pull_request);
+
+            if (existing) {
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              core.info(`Updated tracking issue #${existing.number}.`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner, repo, title, body,
+                labels: ["ci-cd", "release"],
+                ...(milestoneNumber ? { milestone: milestoneNumber } : {}),
+              });
+              core.info(`Created tracking issue #${created.data.number}.`);
+            }
+
+      - name: Fail the job if any gate failed
+        if: always()
+        env:
+          VENDOR: ${{ steps.vendor.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          AUDIT: ${{ steps.audit.outcome }}
+          E2E_INSTALL: ${{ steps.e2e_install.outcome }}
+          E2E: ${{ steps.e2e.outcome }}
+        run: |
+          set -euo pipefail
+          for o in "$VENDOR" "$BUILD" "$AUDIT" "$E2E_INSTALL" "$E2E"; do
+            if [ "$o" != "success" ]; then
+              echo "At least one nightly gate did not pass — failing the job."
+              exit 1
+            fi
+          done
+          echo "All nightly gates passed."

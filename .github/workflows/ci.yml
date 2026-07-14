@@ -1,7 +1,13 @@
 name: CI
 
+# Fast PR feedback (the "PR CI" tier of the layered model in DEVELOPMENT.md).
+# Runs on every PR into `main` OR a `release/**` branch — under the
+# roadmap-driven release-branch model those are the only two valid PR targets.
+# Heavier suites (extension build/package, full E2E, dependency audit) run
+# post-merge in release-integration.yml and nightly.yml, not here.
 on:
   pull_request:
+    branches: [main, "release/**"]
   push:
     branches: [main]
 
@@ -9,6 +15,116 @@ permissions:
   contents: read
 
 jobs:
+  # Scope + naming enforcement for the release-branch workflow (DEVELOPMENT.md).
+  # Blocking guards (PR-target, linked-issue) fail the check; the branch-name
+  # guard is advisory (annotation only). Lightweight: runs on a hosted runner,
+  # never touches the toolchain, so it returns feedback fast and in parallel
+  # with `check`. NOTE: a red guard here is only *merge-blocking* once it is a
+  # required status check in branch protection (see DEVELOPMENT.md).
+  pr-guards:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const base = pr.base.ref;
+            const head = pr.head.ref;
+            // Untrusted fields are read from the event payload in JS (never
+            // interpolated into a shell), so there is no injection surface.
+            const text = `${pr.title || ""}\n${pr.body || ""}`;
+
+            // Automation branches are exempt: the target guard downgrades to a
+            // warning and the branch-name guard is skipped entirely.
+            const BOT_PREFIXES = ["cursor/", "codex/", "ai-findings-autofix/", "qa/", "dependabot/"];
+            const isBot = BOT_PREFIXES.some((p) => head.startsWith(p));
+
+            let blocked = false;
+            const problems = [];
+            const notes = [];
+            const fail = (m) => { blocked = true; problems.push(m); core.error(m); };
+            const warn = (m) => { notes.push(m); core.warning(m); };
+
+            // 1. PR-target guard (BLOCKING). Working branches must never target
+            //    main; they belong on the active release/vX.Y branch.
+            const isWorkBranch = /^(feature|fix|chore)\//.test(head);
+            const isReleaseHead = /^release\//.test(head);
+            const isHotfixHead = /^hotfix\//.test(head);
+            if (base === "main") {
+              if (isWorkBranch) {
+                const m = `PR-target guard: head \`${head}\` is a working branch but targets \`main\`. Retarget this PR to the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Only \`release/**\` and \`hotfix/**\` merge into main.`;
+                if (isBot) { warn(`(advisory — automation branch) ${m}`); } else { fail(m); }
+              } else if (isReleaseHead || isHotfixHead) {
+                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (release promotion / hotfix).`);
+              }
+            }
+
+            // 2. Linked-issue guard (BLOCKING on release/** bases). Every PR into
+            //    a release branch must reference its roadmap issue.
+            if (/^release\//.test(base)) {
+              const closeMatch = text.match(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b/i);
+              const bareMatch = text.match(/#(\d+)\b/);
+              const issueNumber = closeMatch ? Number(closeMatch[1]) : bareMatch ? Number(bareMatch[1]) : null;
+              if (issueNumber === null) {
+                fail(`Linked-issue guard: a PR into \`${base}\` must reference its roadmap issue (\`#N\` or \`Closes/Fixes/Resolves #N\`) in the title or body. Scope changes go to the milestone/roadmap, not implicitly via PRs (see DEVELOPMENT.md).`);
+              } else {
+                // Best-effort milestone match — WARN only, never blocks.
+                const baseVersion = base.replace(/^release\//, ""); // e.g. "v0.4"
+                try {
+                  const { data: issue } = await github.rest.issues.get({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issueNumber,
+                  });
+                  const ms = issue.milestone ? issue.milestone.title : null;
+                  if (!ms) {
+                    warn(`Linked-issue guard (advisory): issue #${issueNumber} has no milestone; expected \`${baseVersion}\` to match base \`${base}\`.`);
+                  } else if (ms !== baseVersion && ms !== baseVersion.replace(/^v/, "")) {
+                    warn(`Linked-issue guard (advisory): issue #${issueNumber} milestone \`${ms}\` does not match base branch version \`${baseVersion}\`. Confirm scope belongs to this release.`);
+                  } else {
+                    notes.push(`Linked-issue guard: PR references #${issueNumber} (milestone \`${ms}\`).`);
+                  }
+                } catch (e) {
+                  warn(`Linked-issue guard (advisory): could not fetch issue #${issueNumber} to verify its milestone (${e.status || e.message}).`);
+                }
+              }
+            }
+
+            // 3. Branch-name guard (ADVISORY). Skipped for automation branches.
+            if (!isBot) {
+              const ok =
+                /^(feature|fix|chore)\/\d+-.+/.test(head) ||
+                /^release\/v\d+\.\d+$/.test(head) ||
+                /^hotfix\/.+/.test(head) ||
+                /^docs\/.+/.test(head);
+              if (!ok) {
+                warn(`Branch-name guard (advisory): head \`${head}\` does not match \`feature/<n>-*\`, \`fix/<n>-*\`, \`chore/<n>-*\`, \`release/vX.Y\`, \`hotfix/*\`, or \`docs/*\`.`);
+              }
+            }
+
+            // Summary.
+            const s = core.summary.addHeading("PR scope & naming guards", 3);
+            s.addRaw(`Base: \`${base}\` - Head: \`${head}\`${isBot ? " - automation branch" : ""}`, true);
+            if (problems.length) {
+              s.addHeading("Blocking failures", 4).addList(problems);
+            }
+            if (notes.length) {
+              s.addHeading("Notes / advisories", 4).addList(notes);
+            }
+            if (!problems.length && !notes.length) {
+              s.addRaw("All guards passed.", true);
+            }
+            await s.write();
+
+            if (blocked) {
+              core.setFailed("One or more BLOCKING PR guards failed — see annotations and the job summary above.");
+            }
+
   check:
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
