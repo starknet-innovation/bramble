@@ -55,6 +55,47 @@ export const bindDashboard = (deps: ShellBindingDeps): void => {
   });
 };
 
+const DEPLOY_WATCH_ATTEMPTS = 12;
+const DEPLOY_WATCH_INTERVAL_MS = 5_000;
+
+/**
+ * The slice of the shell deps the post-deploy watcher touches: the deployment
+ * and status loaders plus the shell re-render. Kept narrower than
+ * `ShellBindingDeps` so both this file and the transfer bindings (which have no
+ * `setActiveView`) can drive it, and so tests can supply a minimal double.
+ */
+export type DeploymentWatchDeps = {
+  readonly render: ShellBindingDeps["render"];
+  readonly wallet: Pick<SidepanelWallet, "loadDeploymentStatus" | "loadStatus">;
+};
+
+/**
+ * Polls deployment status a bounded number of times after a deploy is
+ * submitted, re-rendering once the account reports deployed so the home
+ * "deploy now" banner clears on its own — the design has no background tx
+ * poller, and submitting a deploy triggers no render by itself. Stops silently
+ * once the attempt budget is spent (a manual refresh stays the fallback) and
+ * treats a failed status load as "not yet deployed". Fire-and-forget: callers
+ * `void` it.
+ */
+export const watchDeployment = async (
+  deps: DeploymentWatchDeps,
+  options: { readonly attempts?: number; readonly intervalMs?: number } = {},
+): Promise<void> => {
+  const attempts = options.attempts ?? DEPLOY_WATCH_ATTEMPTS;
+  const intervalMs = options.intervalMs ?? DEPLOY_WATCH_INTERVAL_MS;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, intervalMs);
+    });
+    const deployment = await deps.wallet.loadDeploymentStatus().catch(() => null);
+    if (deployment?.deployed) {
+      await deps.render(await deps.wallet.loadStatus());
+      return;
+    }
+  }
+};
+
 /**
  * Binds the account-deployment action.
  */
@@ -68,6 +109,9 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         showToast("Deployment submitted", "success");
         scopedStatus(button, `Deployment submitted: ${transactionHash}`);
         buttonBusy(button, false);
+        // Nothing else re-renders after a deploy submit, so watch for the
+        // account going live and clear the "deploy now" banner when it does.
+        void watchDeployment(deps);
       },
       (error: unknown) => {
         showToast(errorMessage(error, "Deployment failed"), "error");

@@ -10,6 +10,7 @@ import { activityToCsv } from "../storage/activity-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { formatFri } from "./parts";
 import type { SidepanelWallet } from "./runtime";
+import { watchDeployment } from "./shell-bindings";
 
 const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
 
@@ -88,7 +89,7 @@ const reviewPanelHtml = (review: Review): string => `
  * Binds the two-phase send form: review with decoded summary, flags, and fee,
  * then confirm.
  */
-export const bindTransfer = ({ app, wallet }: TransferUiDeps): void => {
+export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
   const form = app?.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
     return;
@@ -98,9 +99,14 @@ export const bindTransfer = ({ app, wallet }: TransferUiDeps): void => {
   const recipientInput = form?.querySelector<HTMLInputElement>('input[name="recipient"]');
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   let reviewedKey: string | null = null;
+  // Whether the reviewed send will also deploy the account (first send). Held
+  // so the confirm handler knows to watch for deployment; the review is the
+  // only place that reports `requiresDeployment`.
+  let requiresDeployment = false;
 
   const resetReview = (): void => {
     reviewedKey = null;
+    requiresDeployment = false;
     recipientInput?.setCustomValidity("");
     if (reviewPanel) {
       reviewPanel.innerHTML = "";
@@ -139,6 +145,7 @@ export const bindTransfer = ({ app, wallet }: TransferUiDeps): void => {
           (review) => {
             const feeFailed = review.feeEstimateFailed;
             reviewedKey = feeFailed ? null : key;
+            requiresDeployment = review.requiresDeployment;
             if (reviewPanel) {
               reviewPanel.innerHTML = reviewPanelHtml(review);
             }
@@ -182,6 +189,11 @@ export const bindTransfer = ({ app, wallet }: TransferUiDeps): void => {
           showToast("Transaction submitted", "success");
           if (result) {
             result.textContent = `Submitted ${transactionHash}`;
+          }
+          // A first send also deploys the account; watch for it going live so
+          // the home "deploy now" banner clears without a manual refresh.
+          if (requiresDeployment) {
+            void watchDeployment({ render, wallet });
           }
           form.reset();
           resetReview();
