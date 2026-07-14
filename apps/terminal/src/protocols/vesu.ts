@@ -1,28 +1,26 @@
 /**
- * Vesu integration — lending (earn/borrow), fully on-chain. `quoteLending`
- * resolves the pool config from the Vesu API (`GET {VESU_API_BASE}/pools/{poolId}`),
- * reads the singleton address on-chain via `singleton()` on the pool extension,
+ * Vesu V2 integration — lending (earn/borrow), fully on-chain. `quoteLending`
+ * resolves the pool config from the Vesu API (`GET {VESU_API_BASE}/pools/{poolId}`)
  * and projects the position (supply/borrow rates + resolved contract addresses)
- * into a `LendingQuote`. `buildLendingCalls` assembles the documented multicalls
- * for the in-wallet invoke path (earn: approve -> vToken ERC-4626
- * deposit/withdraw; borrow/repay: approve -> singleton `modify_position` with
- * signed i257 amounts). No external SDK — calldata is built with the vendored
- * starknet-js.
+ * into a `LendingQuote`. `buildLendingCalls` assembles the multicalls for the
+ * in-wallet invoke path (earn: approve -> vToken ERC-4626 deposit/withdraw;
+ * borrow/repay: (approve ->) V2 `Pool.modify_position` with signed i257 amounts,
+ * called directly on the pool contract — V2 has no Singleton). No external SDK —
+ * calldata is built with the vendored starknet-js.
  *
- * ⚠️ VERIFY BEFORE FUNDS: the recon pointed at Vesu's STAGING API; the constant
- * now points at production (`VESU_API_BASE`), but pool ids and every resolved
- * address (extension, singleton, vToken) must be re-confirmed on a mainnet
- * explorer / docs.vesu.xyz before signing. LendingQuoteParams carries no
- * `rpcUrls`, so the `singleton()` read runs against the default mainnet endpoint
- * (Vesu is mainnet-only here); thread a configured RPC list through once the
- * shared contract exposes one.
+ * ⚠️ GATED (issue #67): the whole lending path sits behind `VESU_LENDING_ENABLED`
+ * (constants.ts). Both `quoteLending` and `buildLendingCalls` throw while it is
+ * `false`, so no lending quote or calldata can reach a screen or be signed until
+ * the V2 borrow/repay flow is runtime-verified on a funded mainnet account. The
+ * V2 struct shapes are doc/source-verified (docs.vesu.xyz, vesuxyz/vesu-v2) but
+ * NOT yet proven against the deployed class ABI. `LendingQuoteParams` still
+ * carries no `rpcUrls`; Vesu is mainnet-only here.
  */
 import type { Call } from "starknet";
 import { WalletError } from "./support/errors";
 import { isRecord } from "./support/json";
-import { DEFAULT_NETWORK, isNonZeroStarkFieldElement } from "./support/networks";
-import { isTransportRpcError, withRpcFallback } from "./support/provider";
-import { VESU_API_BASE } from "./constants";
+import { isNonZeroStarkFieldElement } from "./support/networks";
+import { VESU_API_BASE, VESU_LENDING_ENABLED } from "./constants";
 import type { LendingParams, LendingQuote, LendingQuoteParams } from "./types";
 import {
   buildVesuBorrowCalls,
@@ -30,10 +28,19 @@ import {
   buildVesuSupplyCalls,
   buildVesuWithdrawCalls,
   findVesuAsset,
-  parseSingletonAddress,
   parseVesuAmount,
+  parseVesuCollateralAmount,
   parseVesuPool,
 } from "./vesu-lending";
+
+// Guards every entry into the Vesu lending path. Throws a stable, explicit error
+// while the feature is disabled so borrow/repay calldata built for V2 but not yet
+// runtime-verified on mainnet (issue #67) can never reach a screen or be signed.
+const assertLendingEnabled = (): void => {
+  if (!VESU_LENDING_ENABLED) {
+    throw new WalletError("Vesu lending is disabled: not yet verified on mainnet (#67)");
+  }
+};
 
 /**
  * Vesu protocol id for tagging quotes and routing.
@@ -61,33 +68,22 @@ const fetchVesuPool = async (poolId: string) => {
   return config;
 };
 
-// Reads `singleton()` on the pool extension, returning null on a semantic
-// (non-transport) failure so a quote still resolves for earn-only flows.
-const resolveSingleton = async (extensionAddress: string): Promise<string | null> =>
-  withRpcFallback([...DEFAULT_NETWORK.rpcUrls], async (provider) => {
-    try {
-      const response = await provider.callContract(
-        { calldata: [], contractAddress: extensionAddress, entrypoint: "singleton" },
-        "latest",
-      );
-      return parseSingletonAddress(response);
-    } catch (error) {
-      if (isTransportRpcError(error)) {
-        throw error;
-      }
-      return null;
-    }
-  });
-
 /**
- * Resolves the Vesu pool config and projects a lending position. Fetches the
- * pool from the Vesu API, resolves the per-asset vToken and current rates,
- * reads the singleton address on-chain, and returns a `LendingQuote` a review
- * screen shows before the user commits. `vTokenAddress` / `singletonAddress` are
- * null when the pool does not list the asset or the singleton read fails.
+ * Resolves the Vesu V2 pool config and projects a lending position. Fetches the
+ * pool from the Vesu API, resolves the per-asset vToken and current rates, and
+ * returns a `LendingQuote` a review screen shows before the user commits. In V2
+ * `poolId` is the `Pool` contract address, so `poolAddress` is that same value
+ * (the contract borrow/repay call `modify_position` on). `vTokenAddress` is null
+ * when the pool does not list the asset. Borrow/repay callers must pass
+ * `collateralAsset` (the asset keying the V2 position) and may pass
+ * `collateralAmount` (smallest-unit collateral to supply; "0" = none); both are
+ * validated and echoed onto the quote.
+ *
+ * Throws while `VESU_LENDING_ENABLED` is false (issue #67).
  */
 export const quoteLending = async (params: LendingQuoteParams): Promise<LendingQuote> => {
-  const { action, amount, asset, poolId } = params;
+  assertLendingEnabled();
+  const { action, amount, asset, poolId, collateralAsset, collateralAmount } = params;
   if (!isNonZeroStarkFieldElement(asset)) {
     throw new WalletError("Invalid Vesu asset");
   }
@@ -96,17 +92,28 @@ export const quoteLending = async (params: LendingQuoteParams): Promise<LendingQ
   }
   const amountRaw = parseVesuAmount(amount);
 
+  let resolvedCollateralAsset: string | null = null;
+  let resolvedCollateralAmount: string | null = null;
+  if (collateralAsset !== undefined) {
+    if (!isNonZeroStarkFieldElement(collateralAsset)) {
+      throw new WalletError("Invalid Vesu collateral asset");
+    }
+    resolvedCollateralAsset = collateralAsset;
+    resolvedCollateralAmount = parseVesuCollateralAmount(collateralAmount ?? "0").toString();
+  }
+
   const config = await fetchVesuPool(poolId);
   const assetConfig = findVesuAsset(config, asset);
-  const singletonAddress = await resolveSingleton(config.extensionAddress);
 
   return {
     action,
     amount: amountRaw.toString(),
     asset,
     borrowApyBps: assetConfig?.borrowApyBps ?? null,
+    collateralAmount: resolvedCollateralAmount,
+    collateralAsset: resolvedCollateralAsset,
+    poolAddress: poolId,
     poolId,
-    singletonAddress,
     supplyApyBps: assetConfig?.supplyApyBps ?? null,
     vTokenAddress: assetConfig?.vTokenAddress ?? null,
   };
@@ -120,22 +127,28 @@ const requireVToken = (quote: LendingQuote): string => {
   return quote.vTokenAddress;
 };
 
-// Narrows a quote to a resolved singleton address for the borrow flows.
-const requireSingleton = (quote: LendingQuote): string => {
-  if (quote.singletonAddress === null) {
-    throw new WalletError("Vesu singleton not resolved for pool");
+// Narrows a quote to a resolved collateral asset for the borrow/repay flows. A
+// V2 position is keyed by (collateral_asset, debt_asset, user), so the real
+// collateral asset is mandatory here — there is no `0x0` fallback.
+const requireCollateralAsset = (quote: LendingQuote): string => {
+  if (quote.collateralAsset === null) {
+    throw new WalletError("Vesu borrow/repay requires a collateral asset");
   }
-  return quote.singletonAddress;
+  return quote.collateralAsset;
 };
 
 /**
- * Builds the Vesu lending multicall for a quoted action, dispatching on
+ * Builds the Vesu V2 lending multicall for a quoted action, dispatching on
  * `quote.action`: supply -> [approve, vToken.deposit]; withdraw ->
- * [vToken.withdraw]; borrow -> [modify_position]; repay -> [approve,
- * modify_position] (with signed i257 debt amounts). Returns starknet-js Calls
- * ready for submitInvokeTransaction; never signs or broadcasts.
+ * [vToken.withdraw]; borrow -> [(approve,) Pool.modify_position]; repay ->
+ * [approve, Pool.modify_position] (with signed i257 amounts, called directly on
+ * the pool contract). Returns starknet-js Calls ready for
+ * submitInvokeTransaction; never signs or broadcasts.
+ *
+ * Throws while `VESU_LENDING_ENABLED` is false (issue #67).
  */
 export const buildLendingCalls = (params: LendingParams): readonly Call[] => {
+  assertLendingEnabled();
   const { accountAddress, quote } = params;
   if (!isNonZeroStarkFieldElement(accountAddress)) {
     throw new WalletError("Invalid Vesu account address");
@@ -151,16 +164,17 @@ export const buildLendingCalls = (params: LendingParams): readonly Call[] => {
       return buildVesuWithdrawCalls(requireVToken(quote), amountRaw, accountAddress);
     case "borrow":
       return buildVesuBorrowCalls(
-        requireSingleton(quote),
-        quote.poolId,
+        quote.poolAddress,
+        requireCollateralAsset(quote),
+        parseVesuCollateralAmount(quote.collateralAmount ?? "0"),
         quote.asset,
         amountRaw,
         accountAddress,
       );
     case "repay":
       return buildVesuRepayCalls(
-        requireSingleton(quote),
-        quote.poolId,
+        quote.poolAddress,
+        requireCollateralAsset(quote),
         quote.asset,
         amountRaw,
         accountAddress,

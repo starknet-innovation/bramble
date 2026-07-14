@@ -78,14 +78,31 @@ export const AVNU_API = {
 } as const;
 
 /**
- * Vesu lending mainnet anchors. Most Vesu addresses (singleton, extension,
- * vTokens) are resolved dynamically from the Vesu API at runtime; only these
- * anchors are stable. VERIFY pool ids/addresses against docs.vesu.xyz.
+ * Vesu V2 lending mainnet anchors. In Vesu V2 there is no Singleton and no
+ * per-pool extension — each pool is its OWN `Pool` contract, and its address IS
+ * the value you call `modify_position` on. `primePoolId` is the V2 "Prime" pool
+ * contract; `multiply` is the V2 Multiply contract. Per-asset vTokens (ERC-4626)
+ * are still resolved dynamically from the Vesu API at runtime. VERIFY these
+ * against docs.vesu.xyz / the deployed class hashes before any mainnet tx.
+ *
+ * Note: `primePoolId` was previously mis-named `genesisPoolId` (a V1 concept);
+ * the value is unchanged — it is the V2 Prime pool contract address.
  */
 export const VESU_ADDRESSES = {
-  genesisPoolId: "0x0451fe483d5921a2919ddd81d0de6696669bccdacd859f72a4fba7656b97c3b5",
   multiply: "0x7964760e90baa28841ec94714151e03fbc13321797e68a874e88f27c9d58513",
+  primePoolId: "0x0451fe483d5921a2919ddd81d0de6696669bccdacd859f72a4fba7656b97c3b5",
 } as const;
+
+/**
+ * Master gate for the Vesu lending (supply/withdraw/borrow/repay) path. The V2
+ * `Pool.modify_position` borrow/repay calldata in this module is built from the
+ * published V2 docs / `vesuxyz/vesu-v2` source but has NOT been runtime-verified
+ * against the deployed contracts on a funded mainnet account (see issue #67).
+ * Until that proof lands this stays `false`, and `quoteLending` /
+ * `buildLendingCalls` throw before any calldata can reach a screen or be signed.
+ * Do NOT flip to `true` without an on-chain borrow/repay proof.
+ */
+export const VESU_LENDING_ENABLED = false;
 
 /**
  * Vesu API base. The recon repo pointed at STAGING; mainnet integrations must
