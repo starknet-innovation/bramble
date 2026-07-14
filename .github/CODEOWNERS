@@ -1,0 +1,23 @@
+# CODEOWNERS — reviewers auto-requested on PRs, and the set GitHub can *require*
+# once branch protection's "Require review from Code Owners" is enabled
+# (see DEVELOPMENT.md → "Branch protection & repo settings to apply by hand").
+#
+# Owner derived from git history: @teddyjfpender is the repository maintainer
+# and the sole committer on `main` at the time this file was added.
+#
+# RECOMMENDED: replace the individual handle with a GitHub team once one exists
+# (e.g. `@starknet-innovation/wallet-maintainers`), so ownership survives
+# personnel changes and a single reviewer is never a bottleneck. This file is a
+# no-op for enforcement until the branch-protection rule above is turned on.
+
+# Default owner for everything in the repo.
+*                       @teddyjfpender
+
+# Security-sensitive boundaries — wallet crypto, encrypted storage, privileged
+# background state, the CI/release pipeline, and the vendoring/standards scripts
+# — always warrant maintainer review, even as the team grows.
+/src/crypto/            @teddyjfpender
+/src/storage/           @teddyjfpender
+/src/background/        @teddyjfpender
+/.github/workflows/     @teddyjfpender
+/scripts/               @teddyjfpender

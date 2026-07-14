@@ -1,0 +1,109 @@
+name: Release integration
+
+# Broader, post-merge integration for the release-branch model (DEVELOPMENT.md).
+# Runs on every push to a `release/**` branch — i.e. after a feature/fix/chore
+# PR merges into the active release branch. It exercises the heavier steps the
+# fast PR CI deliberately skips: the vendored crypto/contract toolchain, the
+# extension build, and the reproducible package. This is the "integration"
+# tier; the full E2E + audit + regression suite runs nightly (nightly.yml).
+#
+# The vendor steps need the private Krusty KMS repo + a Rust/Scarb toolchain.
+# They run on the same self-hosted CodeBuild runner CI uses (toolchain present).
+# If a vendor step fails (e.g. private-repo access or toolchain drift) the job
+# writes a clear explanation to the run summary and then fails honestly — it
+# never fakes success.
+on:
+  push:
+    branches: ["release/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on:
+      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      # Same cargo/wasm-pack cache key as ci.yml so the integration build reuses
+      # the exact toolchain the vendored krusty artifacts are built with.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          scarb-version: 2.18.0
+      - run: cargo install wasm-pack --locked --version 0.13.1
+      - run: bun install --frozen-lockfile
+      # Vendor the Krusty KMS WASM core. On failure, explain the likely cause in
+      # the run summary, then fail (exit 1) — do not mask a real breakage.
+      - name: Vendor Krusty KMS
+        run: |
+          set -o pipefail
+          if ! bun run vendor:krusty; then
+            {
+              echo "### Release integration: \`vendor:krusty\` FAILED"
+              echo ""
+              echo "This step needs network access to the (private) Krusty KMS"
+              echo "repository, \`wasm-pack 0.13.1\`, and a Rust toolchain. A failure"
+              echo "here usually means the runner lacks private-repo access or the"
+              echo "toolchain drifted — it is NOT a wallet source-code failure."
+              echo "See CONTRIBUTING.md and scripts/vendor-krusty.ts."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      # Vendor the pinned multisig contract class (needs scarb 2.18.0 exactly).
+      - name: Vendor multisig contract
+        run: |
+          set -o pipefail
+          if ! bun run vendor:multisig; then
+            {
+              echo "### Release integration: \`vendor:multisig\` FAILED"
+              echo ""
+              echo "This step needs \`scarb 2.18.0\` exactly (the multisig class-hash"
+              echo "pin is only reproducible on that version). A failure here is a"
+              echo "toolchain/vendoring issue, not a wallet source-code failure."
+              echo "See scripts/vendor-multisig.ts."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: Build extension
+        run: bun run build
+      - name: Package extension
+        run: bun run package:extension
+      - name: Verify checksum
+        working-directory: artifacts
+        run: sha256sum -c ./*.zip.sha256
+      - name: Integration summary
+        if: success()
+        run: |
+          {
+            echo "### Release integration: PASS"
+            echo ""
+            echo "Vendored crypto/contract toolchain, built the extension, and produced"
+            echo "a reproducible package on \`${GITHUB_REF_NAME}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+      # Artifact names cannot contain "/", so slugify the branch ref.
+      - name: Compute artifact name
+        id: meta
+        run: echo "name=mc-wallet-extension-$(echo "$GITHUB_REF_NAME" | tr '/' '-')" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.meta.outputs.name }}
+          path: |
+            artifacts/*.zip
+            artifacts/*.zip.sha256
+          if-no-files-found: error

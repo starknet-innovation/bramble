@@ -17,6 +17,46 @@ listing. Two paths exist and share the same packaged bytes:
 > yet. Nothing below embeds a secret value — only secret **names** and the
 > people/roles who hold access.
 
+## 0. Release-branch completion checklist (roadmap-driven model)
+
+Under the release-branch model (see **[DEVELOPMENT.md](DEVELOPMENT.md)**), a
+release is a milestone (`vX.Y`) on a `release/vX.Y` branch cut from `main`. The
+steps below take a scope-complete release branch through a release candidate to
+a tagged, published `vX.Y.0` on `main`. Sections 1–9 remain the mechanics each
+step relies on.
+
+1. **Scope complete.** Every roadmap issue in the `vX.Y` milestone is closed or
+   explicitly deferred to a later milestone; the release's acceptance criteria
+   are met; no unresolved release-blocking regressions remain (check the
+   `Nightly: release/vX.Y — failing checks` tracking issue, if any).
+2. **Version metadata.** Bump `package.json` **and** `public/manifest.json` to
+   `X.Y.0` in lockstep (section 1) and run the single-source guard.
+3. **Gates green.** Required PR CI is green on the release-branch tip; the
+   nightly / full suite (E2E, dependency audit, build — `.github/workflows/nightly.yml`)
+   is green on `release/vX.Y`.
+4. **Release notes.** Draft the notes (CHANGELOG section once #60 lands;
+   otherwise the tag's auto-generated notes).
+5. **Release candidate (when appropriate).** Tag `vX.Y.0-rc.1` on the release
+   branch and run a final validation pass — build + package + `sha256sum -c`
+   (section 2), load the unpacked build, confirm E2E. Iterate `-rc.2`, … if the
+   RC turns up blockers. RC tags are validation only; they do not publish.
+6. **Full validation.** Confirm the RC against the acceptance criteria.
+7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**
+   (not squash — preserve release history), done explicitly by a maintainer.
+8. **Tag `vX.Y.0`** on `main`. The tag push drives the automated pipeline in
+   section 3 (`.github/workflows/release.yml`): build, package, checksum-verify,
+   and create the GitHub Release.
+9. **Publish.** Confirm the GitHub Release; run the optional, gated Chrome Web
+   Store publish via manual dispatch (sections 5–7) when a store account exists.
+10. **Close / archive the `vX.Y` milestone.**
+11. **Cut the next release** branch from the updated `main` and point
+    `vars.ACTIVE_RELEASE_BRANCH` at it (used by the nightly workflow).
+
+**Hotfixes:** branch `hotfix/<desc>` from `main` (or the affected release tag),
+merge into `main`, tag the patch `vX.Y.Z`, then **forward-apply** the same fix to
+any active `release/vX.Y` branch that lacks it. Never leave a fix only on an
+older release branch. See DEVELOPMENT.md → "Hotfixes & backports".
+
 ## 1. Versioning and bump
 
 The extension version is hand-duplicated in two files and kept in lockstep by a
