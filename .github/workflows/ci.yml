@@ -50,17 +50,20 @@ jobs:
             const fail = (m) => { blocked = true; problems.push(m); core.error(m); };
             const warn = (m) => { notes.push(m); core.warning(m); };
 
-            // 1. PR-target guard (BLOCKING). Working branches must never target
-            //    main; they belong on the active release/vX.Y branch.
-            const isWorkBranch = /^(feature|fix|chore)\//.test(head);
-            const isReleaseHead = /^release\//.test(head);
-            const isHotfixHead = /^hotfix\//.test(head);
+            // 1. PR-target guard (BLOCKING). feature/* and fix/* are release
+            //    work and must never target main — they belong on the active
+            //    release/vX.Y branch. chore/* and docs/* are exempt: repo
+            //    plumbing and docs are not part of a release slice and may go
+            //    straight to main (this bootstrap PR is one such chore/*).
+            //    release/** and hotfix/** into main are the normal promotion
+            //    and hotfix paths.
+            const isBlockedIntoMain = /^(feature|fix)\//.test(head);
             if (base === "main") {
-              if (isWorkBranch) {
-                const m = `PR-target guard: head \`${head}\` is a working branch but targets \`main\`. Retarget this PR to the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Only \`release/**\` and \`hotfix/**\` merge into main.`;
+              if (isBlockedIntoMain) {
+                const m = `PR-target guard: head \`${head}\` is a feature/fix working branch but targets \`main\`. Retarget this PR to the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Only \`release/**\`, \`hotfix/**\`, \`chore/**\`, and \`docs/**\` may target main.`;
                 if (isBot) { warn(`(advisory — automation branch) ${m}`); } else { fail(m); }
-              } else if (isReleaseHead || isHotfixHead) {
-                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (release promotion / hotfix).`);
+              } else {
+                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (release/hotfix promotion or chore/docs plumbing).`);
               }
             }
 

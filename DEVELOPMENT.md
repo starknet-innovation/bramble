@@ -105,9 +105,13 @@ main ──●──────────────────────
 | Urgent production fix | `main` or release tag | `hotfix/<desc>` | `main` (then forward-apply) |
 | Docs-only | `release/vX.Y` or `main` | `docs/<desc>` | matching base |
 
-**Working-branch PRs (`feature/`, `fix/`, `chore/`) must never target `main`.**
-CI enforces this (see [Scope & naming enforcement](#scope--naming-enforcement)).
-Only `release/**` and `hotfix/**` branches merge into `main`.
+**`feature/` and `fix/` PRs must never target `main`** — they are release work
+and belong on the active `release/vX.Y` branch. CI **hard-blocks** them from
+`main` (see [Scope & naming enforcement](#scope--naming-enforcement)).
+`release/**` and `hotfix/**` are the normal promotion and hotfix paths into
+`main`. `chore/` and `docs/` PRs normally target the release branch too, but the
+guard **permits** them into `main` for repo plumbing and docs that aren't part
+of a release slice (this workflow-adoption PR is one such `chore/`).
 
 ### Naming conventions
 
@@ -220,9 +224,11 @@ model. Two guards are **blocking** (they fail the check); one is **advisory**
 (annotation only).
 
 - **PR-target guard — BLOCKING.** If the base is `main` and the head is a
-  `feature/`, `fix/`, or `chore/` branch, the check **fails** and tells you to
-  retarget to the active `release/vX.Y` branch. `release/**` and `hotfix/**`
-  into `main` are allowed. Known automation prefixes
+  `feature/` or `fix/` branch, the check **fails** and tells you to retarget to
+  the active `release/vX.Y` branch — feature/fix work does not go straight to
+  `main`. Allowed into `main`: `release/**` and `hotfix/**` (promotion / hotfix
+  paths) **and** `chore/**` / `docs/**` (repo plumbing and docs that aren't part
+  of a release slice). Known automation prefixes
   (`cursor/`, `codex/`, `ai-findings-autofix/`, `qa/`, `dependabot/`) are
   downgraded to a warning, not failed.
 - **Linked-issue guard — BLOCKING.** If the base matches `release/**`, the PR

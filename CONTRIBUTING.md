@@ -64,10 +64,12 @@ PR. In short:
   - `release/vX.Y`, `hotfix/<desc>`, `docs/<desc>`
 - A PR into a release branch must reference its roadmap issue (`#N` /
   `Closes #N`), name its target release, state which acceptance criterion it
-  satisfies, include tests, and stay in scope. CI's `pr-guards` job blocks a
-  working-branch PR aimed at `main` and a release-branch PR with no linked issue.
-- Only `release/**` and `hotfix/**` merge into `main`; a release is promoted with
-  a **merge commit** and tagged `vX.Y.0`. See DEVELOPMENT.md and RELEASING.md.
+  satisfies, include tests, and stay in scope. CI's `pr-guards` job hard-blocks
+  a `feature/`/`fix/` PR aimed at `main` and a release-branch PR with no linked
+  issue (`chore/` and `docs/` may target `main` for plumbing that isn't part of
+  a release slice).
+- Releases are promoted to `main` via `release/**` (a **merge commit**, tagged
+  `vX.Y.0`) and urgent fixes via `hotfix/**`. See DEVELOPMENT.md and RELEASING.md.
 
 ## Architecture Rules
 
