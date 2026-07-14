@@ -9,7 +9,7 @@
  * boundary, so the specific privacy codes reach the dapp intact.
  */
 
-import { isBlockedOrigin } from "../security/blocklist";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { WalletError } from "../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
@@ -42,6 +42,7 @@ export type Strk20OpsDeps = {
   readonly activity: ActivityLog;
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
+  readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -157,7 +158,7 @@ const gateOrigin = (
   if (!isClaimedSenderOrigin(sender, deps.extensionId, origin)) {
     return { error: "sender origin mismatch" };
   }
-  if (isBlockedOrigin(origin)) {
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(origin)) {
     return { error: "origin blocked" };
   }
   return null;

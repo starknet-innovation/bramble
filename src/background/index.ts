@@ -4,6 +4,8 @@
 import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 import { createKrustyKms } from "../crypto/krusty";
 import type { WalletEventMessage } from "../provider/events";
+import { createOriginGuard } from "../security/blocklist";
+import { createPhishingFeed } from "../security/phishing-feed";
 import { MULTISIG_CLASS_ARTIFACT } from "../starknet/multisig-deploy";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
 import { createActivityLog, systemClock } from "../storage/activity-store";
@@ -155,6 +157,21 @@ const multisigLog = (() => {
     return undefined;
   }
 })();
+// Live phishing feed: fetched from the configured source under an explicit host
+// permission, cached in local storage, and refreshed on the first worker wake
+// after its TTL. The guard reads the feed's in-memory snapshot on every check,
+// so a refresh takes effect with no re-wiring; the bundled seed list in
+// blocklist.ts is always enforced, so protection never drops below baseline
+// even before the first fetch or when the source is unreachable.
+const phishingFeed = (() => {
+  try {
+    return createPhishingFeed({ fetch: (url) => fetch(url), store: createBrowserLocalStore() });
+  } catch {
+    return null;
+  }
+})();
+const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
+void phishingFeed?.refresh().catch(() => undefined);
 // Loads the bundled multisig Sierra class for the explicit declare flow. The
 // artifact ships inside the extension package, so this fetch never leaves the
 // extension origin; the ops handler re-verifies its class hash before use.
@@ -402,6 +419,7 @@ const handleMessage = createMessageHandler(
       },
     },
     runtimeRpc: defaultRuntimeRpc,
+    originGuard,
     ...(activityLog ? { activity: activityLog } : {}),
     ...(originHistory ? { originHistory } : {}),
     prices: priceService,

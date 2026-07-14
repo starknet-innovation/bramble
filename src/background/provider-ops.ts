@@ -5,7 +5,7 @@
  * verifies the claimed origin and re-checks the phishing blocklist — a blocked
  * origin gets nothing back even if it still holds an old connection grant.
  */
-import { isBlockedOrigin } from "../security/blocklist";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
@@ -30,6 +30,7 @@ import { canonicalTokenAddress, watchAssetToken } from "./watch-asset";
 export type ProviderOpsDeps = {
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
+  readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -61,6 +62,7 @@ export const handleProviderOps = async (
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
   const { approvals, extensionId, preferencesStore, runtimeRpc, session, waiters, wallet } = deps;
+  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
 
   if (messageType === "wallet.getPermissions") {
     const input = readGetPermissionsInput(message);
@@ -70,7 +72,7 @@ export const handleProviderOps = async (
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
     }
-    if (isBlockedOrigin(input.origin)) {
+    if (guard.isBlocked(input.origin)) {
       return { ok: true, permissions: [] };
     }
     const passphrase = session.getPassphrase();
@@ -86,7 +88,7 @@ export const handleProviderOps = async (
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
     }
-    if (isBlockedOrigin(input.origin)) {
+    if (guard.isBlocked(input.origin)) {
       return { error: "origin blocked" };
     }
     const preferences = await preferencesStore.read();
@@ -122,7 +124,7 @@ export const handleProviderOps = async (
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
     }
-    if (isBlockedOrigin(input.origin)) {
+    if (guard.isBlocked(input.origin)) {
       return { error: "origin blocked" };
     }
     const passphrase = session.getPassphrase();
