@@ -7,6 +7,7 @@ import {
   type AllowancesResponse,
   type ConnectedSitesResponse,
   type DeploymentStatusResponse,
+  type DiscoveredNft,
   isActivityResponse,
   isAllowancesResponse,
   isApprovalDecisionResponse,
@@ -15,6 +16,7 @@ import {
   isCreateAccountResponse,
   isDeploymentStatusResponse,
   isDetectTokensResponse,
+  isDiscoverNftsResponse,
   isErrorResponse,
   isGenerateMnemonicResponse,
   isPendingApprovalsResponse,
@@ -254,15 +256,33 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "token detection failed");
     },
+    async discoverNfts(): Promise<readonly DiscoveredNft[]> {
+      const response = await sendMessage({ type: "wallet.discoverNfts" });
+      return isDiscoverNftsResponse(response) ? response.nfts : [];
+    },
+    async setNftIndexerUrl(url: string): Promise<void> {
+      const response = await sendMessage({ type: "wallet.setNftIndexerUrl", url });
+      if (isPreferencesResponse(response)) {
+        return;
+      }
+      throw responseError(response, "indexer endpoint update failed");
+    },
     async loadPrices(): Promise<{
+      readonly asOf: number | null;
       readonly changes: Readonly<Record<string, number>>;
       readonly prices: Readonly<Record<string, number>>;
+      readonly stale: boolean;
     }> {
       const response = await sendMessage({ type: "wallet.prices" });
       if (!isPricesResponse(response)) {
-        return { changes: {}, prices: {} };
+        return { asOf: null, changes: {}, prices: {}, stale: false };
       }
-      return { changes: response.changes ?? {}, prices: response.prices };
+      return {
+        asOf: response.asOf ?? null,
+        changes: response.changes ?? {},
+        prices: response.prices,
+        stale: response.stale ?? false,
+      };
     },
     async loadTokenChart(address: string): Promise<readonly number[]> {
       const response = await sendMessage({ address, type: "wallet.tokenChart" });

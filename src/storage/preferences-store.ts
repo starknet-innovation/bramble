@@ -78,6 +78,7 @@ export type WalletPreferences = {
   readonly displayCurrency?: DisplayCurrency;
   readonly groups?: AccountGroups;
   readonly hiddenTokens?: readonly string[];
+  readonly nftIndexerUrl?: string;
   readonly nfts?: readonly WatchedNft[];
   readonly rpcOverrides?: RpcOverrides;
   readonly schemaVersion: 1;
@@ -115,6 +116,7 @@ export type WalletPreferencesStore = {
     readonly icon: AccountGroupIcon;
     readonly id: string;
   }) => Promise<WalletPreferences>;
+  readonly setNftIndexerUrl: (input: { readonly url: string }) => Promise<WalletPreferences>;
   readonly setNftSpam: (input: {
     readonly id: string;
     readonly spam: boolean;
@@ -159,6 +161,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
     "displayCurrency",
     "groups",
     "hiddenTokens",
+    "nftIndexerUrl",
     "nfts",
     "rpcOverrides",
     "schemaVersion",
@@ -180,6 +183,8 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
   (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"])) &&
   (value["strk20ProverUrl"] === undefined ||
     (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&
+  (value["nftIndexerUrl"] === undefined ||
+    (typeof value["nftIndexerUrl"] === "string" && isCustomRpcUrl(value["nftIndexerUrl"]))) &&
   (value["nfts"] === undefined ||
     (Array.isArray(value["nfts"]) &&
       value["nfts"].every(isWatchedNft) &&
@@ -410,6 +415,21 @@ export const createPreferencesStore = ({
         overrides[networkId] = trimmed;
       }
       const next = { ...preferences, rpcOverrides: overrides };
+      await writePreferences(store, next);
+      return next;
+    },
+    async setNftIndexerUrl({ url }) {
+      const trimmed = url.trim();
+      if (trimmed.length > 0 && !isCustomRpcUrl(trimmed)) {
+        throw new WalletError("Invalid indexer endpoint");
+      }
+      const preferences = await read();
+      const next = { ...preferences };
+      if (trimmed.length === 0) {
+        delete (next as { nftIndexerUrl?: string }).nftIndexerUrl;
+      } else {
+        (next as { nftIndexerUrl?: string }).nftIndexerUrl = trimmed;
+      }
       await writePreferences(store, next);
       return next;
     },

@@ -6,7 +6,10 @@
  */
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import { buildErc721TransferCall } from "../starknet/nft";
+import { unavailableNftIndexer } from "../starknet/nft-indexer";
+import type { DiscoveredNft } from "../starknet/nft-metadata";
 import { verifyCalls } from "../starknet/verify";
+import { readTypeOnlyInput } from "./message-inputs";
 import { readAddNftInput, readTransferNftInput } from "./nft-inputs";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
@@ -104,6 +107,44 @@ export const handleNftOps = async (
       summary: report.calls[0]?.summary ?? `Send NFT #${input.tokenId}`,
     });
     return { ok: true, transactionHash: result.transactionHash };
+  }
+
+  if (messageType === "wallet.discoverNfts") {
+    if (!readTypeOnlyInput(message, "wallet.discoverNfts")) {
+      return { error: "invalid discover nfts request" };
+    }
+    const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+    if (context.error !== undefined) {
+      return { error: context.error };
+    }
+    const preferences = await deps.preferencesStore.read();
+    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
+    const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
+    const candidates = await indexer.listOwnedNfts({
+      address: context.account.address,
+      indexerUrl: preferences.nftIndexerUrl ?? null,
+      networkId: context.networkId,
+    });
+    // Never trust the indexer's ownership claim: re-prove each token on-chain
+    // with the same owner_of check the manual watch flow uses, dropping any the
+    // account no longer owns (or that fail to read) so the gallery only ever
+    // shows verified holdings.
+    const verified = await Promise.all(
+      candidates.map(async (nft): Promise<DiscoveredNft | null> => {
+        try {
+          const owner = await deps.runtimeRpc.getNftOwner({
+            contractAddress: nft.contract,
+            rpcUrls,
+            tokenId: nft.tokenId,
+          });
+          return BigInt(owner) === BigInt(context.account.address) ? nft : null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const owned = verified.filter((nft): nft is DiscoveredNft => nft !== null);
+    return { nfts: owned, ok: true };
   }
 
   return null;

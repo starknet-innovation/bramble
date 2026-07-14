@@ -94,6 +94,54 @@ const bindSendForm = (deps: NftUiDeps): void => {
   });
 };
 
+// Swaps a gallery image back to the placeholder when it fails to load (or has
+// already failed by the time listeners attach), so a broken or blocked metadata
+// URL degrades gracefully instead of showing a broken-image glyph.
+const bindImages = (deps: NftUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLImageElement>("img.nft-image").forEach((image) => {
+    const markBroken = (): void => {
+      image.classList.add("nft-image--broken");
+    };
+    image.addEventListener("error", markBroken);
+    if (image.complete && image.naturalWidth === 0) {
+      markBroken();
+    }
+  });
+};
+
+// Hides an auto-discovered NFT as spam persistently: it is watched (re-proving
+// ownership on-chain) and then flagged hidden, so it moves to the Hidden section
+// and stays hidden across sessions like a manually watched spam NFT.
+const bindHideDiscovered = (deps: NftUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-hide]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["nftHide"];
+      const contract = button.dataset["nftHideContract"];
+      const tokenId = button.dataset["nftHideToken"];
+      const networkId = button.dataset["nftHideNetwork"];
+      const name = button.dataset["nftHideName"] ?? "";
+      if (!id || !contract || !tokenId || !networkId) {
+        return;
+      }
+      const label = name.length > 0 && name.length <= 64 ? name : "";
+      buttonBusy(button, true);
+      void deps.wallet
+        .addNft(contract, tokenId, networkId, label)
+        .then(() => deps.wallet.setNftSpam(id, true))
+        .then(
+          async () => {
+            showToast("NFT hidden", "success");
+            await rerender(deps);
+          },
+          (error: unknown) => {
+            showToast(errorMessage(error, "NFT update failed"), "error");
+            buttonBusy(button, false);
+          },
+        );
+    });
+  });
+};
+
 const bindRowActions = (deps: NftUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-open]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -151,4 +199,6 @@ export const bindNfts = (deps: NftUiDeps): void => {
   bindAddForm(deps);
   bindSendForm(deps);
   bindRowActions(deps);
+  bindHideDiscovered(deps);
+  bindImages(deps);
 };

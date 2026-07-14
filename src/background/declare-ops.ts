@@ -8,7 +8,7 @@
  * layer; on deny the held request settles as a refusal.
  */
 import { isProviderDeclare, type ProviderDeclare } from "../provider/declare-params";
-import { isBlockedOrigin } from "../security/blocklist";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import { STARKNET_NETWORKS } from "../starknet/networks";
@@ -28,6 +28,7 @@ import type { SignatureWaiters } from "./signature-waiters";
 export type DeclareOpsDeps = {
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
+  readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
@@ -81,6 +82,7 @@ export const handleDeclareOps = async (
     return null;
   }
   const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
+  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
   const input = readAddDeclareTransactionInput(message);
   if (!input) {
     return { error: "invalid declare request" };
@@ -88,7 +90,7 @@ export const handleDeclareOps = async (
   if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
     return { error: "sender origin mismatch" };
   }
-  if (isBlockedOrigin(input.origin)) {
+  if (guard.isBlocked(input.origin)) {
     return { error: "origin blocked" };
   }
   const passphrase = session.getPassphrase();

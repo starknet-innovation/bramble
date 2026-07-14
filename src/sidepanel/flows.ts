@@ -10,7 +10,7 @@ import { knownAccountType } from "../starknet/account-types";
 import { isStarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { groupAssignPanel } from "./group-controls";
+import { accountGroupsLine } from "./group-controls";
 import { groupsSection } from "./group-members";
 import { icon } from "./icons";
 import {
@@ -111,6 +111,9 @@ const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | n
 const strk20ProverUrlFor = (preferences: WalletPreferences | null): string =>
   preferences?.strk20ProverUrl ?? "";
 
+const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
+  preferences?.nftIndexerUrl ?? "";
+
 /**
  * Network flow: switch the active network and set a custom RPC endpoint.
  */
@@ -158,6 +161,17 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
         <button class="secondary" type="submit">${icon("check")}Save prover</button>
         <p id="strk20-prover-result" role="status"></p>
       </form>
+    </section>
+    <section class="section">
+      <h2>NFT indexer</h2>
+      <form id="nft-indexer-form">
+        <label><span>NFT discovery endpoint</span>
+          <input class="mono" name="indexerUrl" type="url" placeholder="https://…" value="${escapeHtml(nftIndexerUrlFor(preferences))}" autocomplete="off" spellcheck="false" />
+          <span class="hint">Where the wallet lists NFTs an account owns for the auto-discovered gallery. Ownership is re-checked on-chain. Leave empty to only show manually watched NFTs.</span>
+        </label>
+        <button class="secondary" type="submit">${icon("check")}Save indexer</button>
+        <p id="nft-indexer-result" role="status"></p>
+      </form>
     </section>`,
   );
 
@@ -189,21 +203,15 @@ export const accountFlow = (
                     const memberGroups = groups.filter((group) =>
                       group.accountIds.includes(stored.id),
                     );
-                    return `<div class="option-group-item">
-                      <div class="option-row-line">
-                        <button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
+                    return `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
                           <span class="option-avatar">${accountAvatar(stored.address)}</span>
                           <span class="option-copy">
                             <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
                             <code>${accountLabel(stored.address)}</code>
-                            ${memberGroups.length > 0 ? `<span class="account-groups-line">${memberGroups.map((group) => icon(group.icon)).join("")}</span>` : ""}
+                            ${accountGroupsLine(memberGroups)}
                           </span>
                           ${stored.id === account?.id ? `<span class="option-mark">${icon("check")}</span>` : ""}
-                        </button>
-                        <button class="icon-button ghost" data-assign-toggle="${escapeHtml(stored.id)}" type="button" aria-expanded="false" aria-label="Assign to groups" title="Assign to groups">${icon("folder")}</button>
-                      </div>
-                      ${groupAssignPanel(stored, groups)}
-                    </div>`;
+                        </button>`;
                   })
                   .join("")}
               </div>`

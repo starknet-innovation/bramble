@@ -5,10 +5,24 @@ import { describe, expect, test } from "bun:test";
 import {
   CURRENCY_SYMBOLS,
   formatFiat,
+  formatPriceTimestamp,
   portfolioDelta,
   portfolioTotal,
   tokenFiatValue,
 } from "../src/sidepanel/fiat";
+
+describe("formatPriceTimestamp", () => {
+  test("formats an epoch as a fixed-UTC last-saved label", () => {
+    // 2026-07-14T14:05:00Z — asserted in UTC so it is timezone-independent.
+    expect(formatPriceTimestamp(1752501900000)).toBe("14 Jul, 14:05 UTC");
+  });
+
+  test("returns null when there is no usable timestamp", () => {
+    expect(formatPriceTimestamp(null)).toBeNull();
+    expect(formatPriceTimestamp(0)).toBeNull();
+    expect(formatPriceTimestamp(Number.NaN)).toBeNull();
+  });
+});
 
 describe("formatFiat", () => {
   test("adds the currency glyph, thousands separators, and two decimals", () => {

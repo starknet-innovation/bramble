@@ -1,21 +1,30 @@
 /**
- * Vendored phishing / malicious-domain blocklist plus lookalike and
- * site-reputation heuristics for dapp origins. Pure module: no clock, network,
+ * Phishing / malicious-domain decisioning for dapp origins: a bundled baseline
+ * blocklist, lookalike / site-reputation heuristics, and a hook for an
+ * externally-supplied dynamic blocklist. Pure module: no clock, network,
  * storage, or browser globals. Callers inject reputation context (first-seen
- * timestamp, prior-connection status, current time) so this file stays
- * deterministic and unit-testable.
+ * timestamp, prior-connection status, current time) and the dynamic blocklist
+ * snapshot so this file stays deterministic and unit-testable.
  *
- * The blocklist is a curated starter set. It is intentionally small, explicit,
- * and easy to extend; it is not a substitute for a live threat feed. Blocking
- * is deny-by-default only for exact known-bad domains, while softer signals
- * (lookalikes, punycode, risky TLDs) surface as warnings the user still
- * decides on.
+ * Product decision (issue #34): phishing protection consumes a live, updatable
+ * remote threat feed *in addition to* the bundled list, rather than remaining a
+ * static baseline. The feed is fetched, validated, and cached by
+ * `phishing-feed.ts`; this module only decides — given a host, the baseline list,
+ * and the current feed snapshot — whether an origin is blocked. The bundled
+ * `BLOCKED_DOMAINS` baseline is the permanent offline floor: it is always consulted
+ * here regardless of feed state, so protection for already-listed domains and
+ * the lookalike / risky-TLD heuristics never depends on the network. Blocking
+ * is deny-by-default only for exact known-bad domains (baseline or feed), while
+ * softer signals (lookalikes, punycode, risky TLDs) surface as warnings the
+ * user still decides on.
  */
 
 /**
- * Known-bad registrable domains. Matching an origin's host to one of these
- * (exactly or as a subdomain) blocks the connection. Starter set of crypto
- * drainer / fake-airdrop patterns; replace or extend with real threat intel.
+ * Bundled baseline of known-bad registrable domains — the always-on offline floor.
+ * Matching an origin's host to one of these (exactly or as a subdomain) blocks
+ * the connection even when the remote feed is unreachable. Crypto drainer /
+ * fake-airdrop patterns; the live feed (see `phishing-feed.ts`) extends this at
+ * runtime without shipping a new build.
  */
 const BLOCKED_DOMAINS: readonly string[] = [
   "airdrop-starknet.com",
@@ -125,6 +134,31 @@ const matchesBase = (host: string, base: string): boolean =>
 const matchesAny = (host: string, bases: readonly string[]): boolean =>
   bases.some((base) => matchesBase(host, base));
 
+// Registrable-domain-aware membership test against a (potentially large)
+// dynamic set: the host matches if it, or any of its parent domains, is a
+// member — so a feed entry "evil.com" also blocks "login.evil.com". Walking
+// the parent suffixes is O(labels) lookups rather than O(entries), keeping the
+// check cheap even for a feed of tens of thousands of domains.
+const hostInSet = (host: string, blocked: ReadonlySet<string>): boolean => {
+  if (blocked.size === 0) {
+    return false;
+  }
+  let candidate = host;
+  while (candidate.length > 0) {
+    if (blocked.has(candidate)) {
+      return true;
+    }
+    const dot = candidate.indexOf(".");
+    if (dot === -1) {
+      return false;
+    }
+    candidate = candidate.slice(dot + 1);
+  }
+  return false;
+};
+
+const EMPTY_BLOCKED: ReadonlySet<string> = new Set();
+
 const foldDigits = (value: string): string =>
   value.replace(/[0-9]/g, (digit) => DIGIT_FOLD[digit] ?? digit);
 
@@ -183,13 +217,21 @@ const reputationWarning = (context: OriginContext): string | null => {
 };
 
 /**
- * Returns whether an origin's host is on the wallet blocklist (exact match or
- * subdomain of a blocked registrable domain). Unparseable origins are not
+ * Returns whether an origin's host is blocked: on the bundled baseline list, or on
+ * the optional dynamic feed snapshot (exact match or subdomain of a blocked
+ * registrable domain in either). The baseline is always checked, so protection
+ * holds even when no feed snapshot is supplied. Unparseable origins are not
  * blocked here; origin validation happens at the message boundary.
  */
-export const isBlockedOrigin = (origin: string): boolean => {
+export const isBlockedOrigin = (
+  origin: string,
+  dynamicBlocked: ReadonlySet<string> = EMPTY_BLOCKED,
+): boolean => {
   const host = hostnameOf(origin);
-  return host !== null && matchesAny(host, BLOCKED_DOMAINS);
+  if (host === null) {
+    return false;
+  }
+  return matchesAny(host, BLOCKED_DOMAINS) || hostInSet(host, dynamicBlocked);
 };
 
 /**
@@ -198,14 +240,18 @@ export const isBlockedOrigin = (origin: string): boolean => {
  * punycode, brand lookalikes, risky TLDs, and first-seen / prior-connection
  * status. Never throws.
  */
-export const originInsights = (origin: string, context: OriginContext = {}): OriginInsight => {
+export const originInsights = (
+  origin: string,
+  context: OriginContext = {},
+  dynamicBlocked: ReadonlySet<string> = EMPTY_BLOCKED,
+): OriginInsight => {
   const host = hostnameOf(origin);
   if (host === null) {
     return { blocked: false, warnings: ["Origin could not be parsed as a valid site."] };
   }
 
   const warnings: string[] = [];
-  const blocked = matchesAny(host, BLOCKED_DOMAINS);
+  const blocked = matchesAny(host, BLOCKED_DOMAINS) || hostInSet(host, dynamicBlocked);
   if (blocked) {
     warnings.push("This domain is on the wallet blocklist of known phishing and scam sites.");
   }
@@ -229,3 +275,34 @@ export const originInsights = (origin: string, context: OriginContext = {}): Ori
 
   return { blocked, warnings };
 };
+
+/**
+ * A pre-bound origin decision surface. It closes over a live accessor for the
+ * dynamic feed snapshot so enforcement call sites can stay ignorant of where
+ * the extra blocklist comes from — they just ask the guard. The baseline list and
+ * heuristics are always applied by the underlying functions.
+ */
+export type OriginGuard = {
+  readonly insights: (origin: string, context?: OriginContext) => OriginInsight;
+  readonly isBlocked: (origin: string) => boolean;
+};
+
+/**
+ * Builds an {@link OriginGuard} over a dynamic-blocklist accessor. The accessor
+ * is read on every call so a background refresh that swaps in a newer feed
+ * snapshot takes effect immediately, with no re-wiring. Omit it for a
+ * baseline-and-heuristics-only guard (the offline baseline).
+ */
+export const createOriginGuard = (
+  dynamicBlocked: () => ReadonlySet<string> = () => EMPTY_BLOCKED,
+): OriginGuard => ({
+  insights: (origin, context) => originInsights(origin, context, dynamicBlocked()),
+  isBlocked: (origin) => isBlockedOrigin(origin, dynamicBlocked()),
+});
+
+/**
+ * Baseline-and-heuristics-only guard used as the safe default wherever a
+ * feed-backed guard has not been wired (tests, degraded startup). Equivalent to
+ * the pre-#34 static behaviour.
+ */
+export const DEFAULT_ORIGIN_GUARD: OriginGuard = createOriginGuard();
