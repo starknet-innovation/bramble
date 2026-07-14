@@ -151,6 +151,67 @@ describe("sidepanel home", () => {
     expect(empty).toContain("No activity yet.");
   });
 
+  // Positional args after expandedGroupId(20): priceStale(21), priceAsOf(22).
+  // The leading args mirror the other home tests; only the trailing pair varies.
+  const homeWithPrices = (
+    prices: Readonly<Record<string, number>>,
+    priceStale: boolean,
+    priceAsOf: number | null,
+  ): string =>
+    dashboard(
+      "home",
+      status,
+      [],
+      preferences,
+      { balances: [] },
+      null,
+      [],
+      [],
+      prices,
+      [],
+      null,
+      [],
+      null,
+      {},
+      [],
+      [],
+      null,
+      null,
+      null,
+      null,
+      priceStale,
+      priceAsOf,
+    );
+
+  test("stale cached prices surface a last-saved notice on the hero", () => {
+    const html = homeWithPrices({ "0x00aa": 5 }, true, 1752501900000);
+    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
+
+    expect(hero).toContain('class="hero-stale"');
+    expect(hero).toContain("Showing last saved prices");
+    expect(hero).toContain("14 Jul, 14:05 UTC");
+    // Cached fiat still renders — the total is not blanked to "—".
+    expect(hero).not.toMatch(/class="hero-total">—/);
+  });
+
+  test("an unreachable host with no cache shows an explicit unavailable hint", () => {
+    const html = homeWithPrices({}, true, null);
+    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
+
+    expect(hero).toContain('class="hero-stale"');
+    expect(hero).toContain("Live prices unavailable right now");
+    // No prices to convert: the total degrades to the em dash, as before.
+    expect(hero).toContain('class="hero-total">—');
+  });
+
+  test("fresh prices render no stale notice", () => {
+    const html = homeWithPrices({ "0x00aa": 5 }, false, 1752501900000);
+    const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
+
+    expect(hero).not.toContain("hero-stale");
+    expect(hero).not.toContain("last saved");
+  });
+
   test("flow screens carry neither the drawer nor the home tabs", () => {
     const html = dashboard("receive", status, [], preferences, { balances: [] });
 

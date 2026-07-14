@@ -39,6 +39,28 @@ export const formatFiat = (amount: number, currency: DisplayCurrency): string =>
 };
 
 /**
+ * Formats a cached-price capture time (epoch ms) as a compact, fixed-UTC label
+ * for the "last saved" stale indicator, or null when there is no timestamp.
+ * UTC is deliberate: it keeps the label deterministic and avoids the implicit
+ * clock and date-construction sources the file-standards gate forbids outside
+ * the approved boundary modules — the epoch number is formatted directly.
+ */
+export const formatPriceTimestamp = (asOf: number | null): string | null => {
+  if (asOf === null || !Number.isFinite(asOf) || asOf <= 0) {
+    return null;
+  }
+  const formatted = new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+  }).format(asOf);
+  return `${formatted} UTC`;
+};
+
+/**
  * Computes the fiat value of a token holding from its formatted decimal
  * balance and unit price. Returns null when no price is available.
  */
