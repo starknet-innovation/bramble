@@ -1,0 +1,88 @@
+name: Roadmap project sync
+
+on:
+  issues:
+    types: [opened, reopened, labeled, unlabeled, closed, transferred, milestoned, demilestoned]
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "Add all currently-open issues to the board"
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - ".github/workflows/roadmap-project-sync.yml"
+
+permissions:
+  contents: read
+  issues: read
+
+env:
+  ORG: starknet-innovation
+  REPO: starknet-innovation/mc-wallet
+  PROJECT_NUMBER: "2"
+
+jobs:
+  # Runs on PRs that touch this file. Read-only: proves PROJECTS_SYNC_TOKEN
+  # can reach board #2 and prints its field schema (field + option IDs).
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query project (read-only)
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_SYNC_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Resolving org project #$PROJECT_NUMBER ..."
+          gh api graphql -f query='
+            query($org:String!, $num:Int!){
+              organization(login:$org){
+                projectV2(number:$num){
+                  id
+                  title
+                  fields(first:50){
+                    nodes{
+                      ... on ProjectV2FieldCommon { id name }
+                      ... on ProjectV2SingleSelectField { id name options { id name } }
+                    }
+                  }
+                }
+              }
+            }' -F org="$ORG" -F num="$PROJECT_NUMBER"
+          echo "OK: token reached the board."
+
+  # Adds an issue to the board whenever it is opened/labeled/closed/etc.
+  add-to-board:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/add-to-project@244f685bbc3b7adfa8466e08b698b5577571133e # v1.0.2
+        with:
+          project-url: https://github.com/orgs/starknet-innovation/projects/2
+          github-token: ${{ secrets.PROJECTS_SYNC_TOKEN }}
+
+  # Manual one-shot: add every currently-open issue to the board.
+  backfill:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.PROJECTS_SYNC_TOKEN }}
+    steps:
+      - name: Add all open issues to the board
+        run: |
+          set -euo pipefail
+          PROJECT_ID=$(gh api graphql -f query='
+            query($org:String!, $num:Int!){ organization(login:$org){ projectV2(number:$num){ id } } }' \
+            -F org="$ORG" -F num="$PROJECT_NUMBER" --jq '.data.organization.projectV2.id')
+          echo "Project node id: $PROJECT_ID"
+          gh issue list --repo "$REPO" --state open --limit 200 --json id,number \
+            | jq -r '.[] | "\(.id) \(.number)"' \
+            | while read -r NODE_ID NUM; do
+                echo "Adding #$NUM ..."
+                gh api graphql -f query='
+                  mutation($project:ID!, $content:ID!){
+                    addProjectV2ItemById(input:{projectId:$project, contentId:$content}){ item { id } }
+                  }' -F project="$PROJECT_ID" -F content="$NODE_ID" >/dev/null || echo "  (skipped #$NUM)"
+              done
+          echo "Backfill complete."
