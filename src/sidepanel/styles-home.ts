@@ -263,9 +263,11 @@ export const HOME_STYLES = `
   button.group-chip .icon { height: 14px; width: 14px; }
   button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
   button.group-chip[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  /* Drawer "New group" disclosure: one discoverable create entry at the foot,
-     revealing the shared create form beneath its button. */
-  .drawer-new-group { display: grid; gap: ${SPACE.sm}; }
+  /* Drawer "Manage groups" disclosure: one discoverable entry at the foot,
+     revealing beneath its button the editable list of existing groups
+     (rename / change icon / delete) and the shared create form. */
+  .drawer-manage-groups { display: grid; gap: ${SPACE.sm}; }
+  .drawer-manage-panel { display: grid; gap: ${SPACE.sm}; }
   .drawer-account-item { display: grid; gap: 4px; }
   .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
   .drawer-account-row .drawer-account, .option-row-line .option-row { flex: 1; min-width: 0; }

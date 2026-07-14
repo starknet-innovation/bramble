@@ -17,7 +17,7 @@ import { escapeHtml } from "../shared/html";
 import type { AccountGroup, AccountGroups } from "../storage/account-groups";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { groupIconPicker, newGroupForm } from "./group-controls";
+import { editGroupForm, newGroupForm } from "./group-controls";
 import { icon } from "./icons";
 import { accountAvatar, accountDisplayName, accountLabel } from "./parts";
 
@@ -71,11 +71,7 @@ const groupMembersEditor = (
         <p class="eyebrow">${count} member${plural}</p>
         <button class="icon-button danger" type="button" data-remove-group="${escapeHtml(group.id)}" aria-label="Delete ${escapeHtml(group.name)}" title="Delete ${escapeHtml(group.name)}">${icon("x")}</button>
       </div>
-      <form class="edit-group-form" data-edit-group="${escapeHtml(group.id)}">
-        <input class="group-name-input" data-group-name maxlength="64" value="${escapeHtml(group.name)}" autocomplete="off" aria-label="Group name" />
-        ${groupIconPicker(group.icon)}
-        <button class="secondary small" type="submit" data-save-group="${escapeHtml(group.id)}">${icon("check")}Save changes</button>
-      </form>
+      ${editGroupForm(group)}
       ${
         accounts.length === 0
           ? '<p class="hint">No accounts yet. Add one above to start bucketing.</p>'

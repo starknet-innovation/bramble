@@ -44,6 +44,20 @@ export const newGroupForm = (): string => `
   </form>`;
 
 /**
+ * Renders the inline "edit group" form (rename input seeded with the current
+ * name, icon picker seeded with the current glyph, save button). Shared by the
+ * manage-accounts bulk editor and the drawer's "Manage groups" list so a group's
+ * name and icon are edited from one template on every surface. Saving is wired by
+ * ./group-ui.ts `bindEditForms`, which chains `renameGroup` then `setGroupIcon`.
+ */
+export const editGroupForm = (group: AccountGroup): string => `
+  <form class="edit-group-form" data-edit-group="${escapeHtml(group.id)}">
+    <input class="group-name-input" data-group-name maxlength="64" value="${escapeHtml(group.name)}" autocomplete="off" aria-label="Group name" />
+    ${groupIconPicker(group.icon)}
+    <button class="secondary small" type="submit" data-save-group="${escapeHtml(group.id)}">${icon("check")}Save changes</button>
+  </form>`;
+
+/**
  * Renders the drawer's folder filter chips: an "All" chip plus one per group,
  * each showing the group's chosen icon. `activeFilter` is the selected group id,
  * or null for "All". Selecting a chip narrows the listed accounts to that

@@ -67,10 +67,11 @@ let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
 let drawerGroupFilter: string | null = null;
 // Transient group UI selections, held here so they survive full re-renders and
-// are self-healed in paint(): whether the drawer "New group" form is revealed,
-// which account's assign panel is open in the drawer, and which group's bulk
-// members editor is open on the manage-accounts flow (null = none/collapsed).
-let drawerCreateOpen = false;
+// are self-healed in paint(): whether the drawer "Manage groups" disclosure is
+// revealed, which account's assign panel is open in the drawer, and which group's
+// inline editor is open (shared by the drawer's manage list and the
+// manage-accounts bulk editor; null = none/collapsed).
+let drawerManageOpen = false;
 let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 
@@ -219,14 +220,14 @@ const bindAll = (): void => {
   bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
   bindHomeUi({
     app,
-    drawerCreateOpen: () => drawerCreateOpen,
     drawerGroupFilter: () => drawerGroupFilter,
+    drawerManageOpen: () => drawerManageOpen,
     drawerOpen: () => drawerOpen,
     homeTab: () => homeTab,
     networkId: () => lastNetworkId,
     render,
-    setDrawerCreateOpen: (open) => {
-      drawerCreateOpen = open;
+    setDrawerManageOpen: (open) => {
+      drawerManageOpen = open;
     },
     setDrawerGroupFilter: (filter) => {
       drawerGroupFilter = filter;
@@ -251,10 +252,11 @@ const bindAll = (): void => {
     refresh: () => wallet.loadStatus(),
     render,
     setExpandedGroup: (id: string | null) => {
+      // Opens a group's inline editor on whichever surface is showing — the
+      // manage-accounts bulk editor or the drawer's "Manage groups" list. Set
+      // right after creating a group so its editor is ready; the drawer's manage
+      // disclosure stays open so the new group appears there for immediate edit.
       expandedGroupId = id;
-      // Creating a group opens its bulk editor and settles the drawer's create
-      // disclosure back to closed, so the new group surfaces as a chip/row.
-      drawerCreateOpen = false;
     },
     setOpenAssign: (id: string | null) => {
       openAssignId = id;
@@ -368,7 +370,7 @@ const paint = (): void => {
           drawerGroupFilter,
           expandedGroupId,
           openAssignId,
-          drawerCreateOpen,
+          drawerManageOpen,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
