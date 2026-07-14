@@ -23,6 +23,7 @@ import {
 } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
+import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
 import { prefersReducedMotion } from "./motion";
@@ -65,9 +66,13 @@ let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
 let drawerGroupFilter: string | null = null;
-// Which group's bulk members editor is open on the manage-accounts flow (null =
-// all collapsed). Held here so it survives full re-renders, mirroring
-// drawerGroupFilter; self-healed in paint() when its group is deleted.
+// Transient group UI selections, held here so they survive full re-renders and
+// are self-healed in paint(): whether the drawer "Manage groups" disclosure is
+// revealed, which account's assign panel is open in the drawer, and which group's
+// inline editor is open (shared by the drawer's manage list and the
+// manage-accounts bulk editor; null = none/collapsed).
+let drawerManageOpen = false;
+let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 
 // The View Transitions API is progressively enhanced: typed locally so the
@@ -222,14 +227,14 @@ const bindAll = (): void => {
   bindHomeUi({
     app,
     drawerGroupFilter: () => drawerGroupFilter,
+    drawerManageOpen: () => drawerManageOpen,
     drawerOpen: () => drawerOpen,
-    editGroup: (id) => {
-      expandedGroupId = id;
-      navigate("account");
-    },
     homeTab: () => homeTab,
     networkId: () => lastNetworkId,
     render,
+    setDrawerManageOpen: (open) => {
+      drawerManageOpen = open;
+    },
     setDrawerGroupFilter: (filter) => {
       drawerGroupFilter = filter;
     },
@@ -249,10 +254,18 @@ const bindAll = (): void => {
     app,
     expandedGroup: () => expandedGroupId,
     networkId: () => lastNetworkId,
+    openAssign: () => openAssignId,
     refresh: () => wallet.loadStatus(),
     render,
     setExpandedGroup: (id: string | null) => {
+      // Opens a group's inline editor on whichever surface is showing — the
+      // manage-accounts bulk editor or the drawer's "Manage groups" list. Set
+      // right after creating a group so its editor is ready; the drawer's manage
+      // disclosure stays open so the new group appears there for immediate edit.
       expandedGroupId = id;
+    },
+    setOpenAssign: (id: string | null) => {
+      openAssignId = id;
     },
     wallet,
   };
@@ -327,22 +340,16 @@ const paint = (): void => {
   const animate = scene !== lastScene;
   lastScene = scene;
   const direction = navDirection(lastActiveView, activeView);
-  // Self-heal a stale drawer filter. Group ids are deterministic, so a filter
-  // still pointing at a deleted group would silently re-apply itself once a
-  // same-named group is recreated. Drop it whenever no current group matches,
-  // falling the drawer back to showing all accounts.
-  const currentGroups = cache.preferences?.groups ?? [];
-  if (
-    drawerGroupFilter !== null &&
-    !currentGroups.some((group) => group.id === drawerGroupFilter)
-  ) {
-    drawerGroupFilter = null;
-  }
-  // Self-heal the manage-accounts expanded group the same way: a deleted group's
-  // id must not linger and silently re-open once a same-named group is recreated.
-  if (expandedGroupId !== null && !currentGroups.some((group) => group.id === expandedGroupId)) {
-    expandedGroupId = null;
-  }
+  // Self-heal stale group selections (filter/expanded/open panel) so a deleted
+  // group or a departed account can never silently re-apply itself on repaint.
+  const healed = healTransientGroupState(
+    { drawerGroupFilter, expandedGroupId, openAssignId },
+    cache.preferences?.groups ?? [],
+    status.accounts.map((stored) => stored.id),
+  );
+  drawerGroupFilter = healed.drawerGroupFilter;
+  expandedGroupId = healed.expandedGroupId;
+  openAssignId = healed.openAssignId;
   const content = !status.hasVault
     ? onboarding(status)
     : status.locked
@@ -371,6 +378,8 @@ const paint = (): void => {
           cache.priceStale,
           cache.priceAsOf,
           cache.discoveredNfts,
+          openAssignId,
+          drawerManageOpen,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {

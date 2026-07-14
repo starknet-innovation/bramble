@@ -341,6 +341,8 @@ export const dashboard = (
   priceStale = false,
   priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
+  openAssignId: string | null = null,
+  drawerManageOpen = false,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -435,5 +437,5 @@ export const dashboard = (
     ${walletHeader(status, account, preferences)}
     ${screen}
     ${walletDock(activeView, pending.length)}
-    ${accountDrawer(status, account, preferences, drawerGroupFilter)}`;
+    ${accountDrawer(status, account, preferences, drawerGroupFilter, openAssignId, drawerManageOpen, expandedGroupId)}`;
 };

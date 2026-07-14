@@ -244,33 +244,110 @@ export const bindCopyButtons = (app: Element | null): void => {
 
 const FOCUS_NAMES = ["address", "amount", "label", "mnemonic", "recipient", "vaultPassphrase"];
 
-/**
- * Captures a selector for the focused control before a re-render.
- */
-export const focusMemo = (): string | null => {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement)) {
-    return null;
+// A data-attribute selector with the value quoted and any embedded quote or
+// backslash escaped, so ids that carry a colon (e.g. `networkId:address`) or a
+// hyphen (e.g. a slugged group id) select reliably.
+const attrSelector = (name: string, value: string): string =>
+  `[${name}="${value.replace(/["\\]/g, "\\$&")}"]`;
+
+// Ordered focus candidates for the account-group control the user just acted on.
+// Every group mutation repaints the whole shell, so focus must be reclaimed: the
+// first selector targets the acted-on control (which survives most mutations —
+// e.g. a toggle only flips `aria-pressed`), and the rest are logical successors
+// for when the control itself is gone (a deleted group, a healed filter). Icon
+// picker options are intentionally omitted: pressing one updates state locally
+// without a repaint, so it never loses focus. Returns [] for non-group controls.
+const groupControlMemo = (element: HTMLElement): readonly string[] => {
+  const data = element.dataset;
+  const groupToggle = data["groupToggle"];
+  const account = data["account"];
+  if (groupToggle !== undefined && account !== undefined) {
+    return [
+      attrSelector("data-group-toggle", groupToggle) + attrSelector("data-account", account),
+      attrSelector("data-assign-toggle", account),
+    ];
   }
-  if (active.id) {
-    return `#${active.id}`;
+  const assignToggle = data["assignToggle"];
+  if (assignToggle !== undefined) {
+    return [attrSelector("data-assign-toggle", assignToggle)];
   }
-  if (isWalletView(active.dataset["view"])) {
-    return `[data-view="${active.dataset["view"]}"]`;
+  const removeGroup = data["removeGroup"];
+  if (removeGroup !== undefined) {
+    // After the confirming tap the group and this button are gone; fall back to
+    // that group's edit toggle (still there after only arming), then any other
+    // group, then the create form.
+    return [
+      attrSelector("data-remove-group", removeGroup),
+      attrSelector("data-group-expand", removeGroup),
+      "[data-group-expand]",
+      "[data-create-group]",
+    ];
   }
-  const name = active.getAttribute("name");
-  if (name && FOCUS_NAMES.includes(name)) {
-    return `[name="${name}"]`;
+  const saveGroup = data["saveGroup"];
+  if (saveGroup !== undefined) {
+    return [
+      attrSelector("data-save-group", saveGroup),
+      attrSelector("data-group-expand", saveGroup),
+    ];
   }
-  return null;
+  const groupExpand = data["groupExpand"];
+  if (groupExpand !== undefined) {
+    return [attrSelector("data-group-expand", groupExpand), "[data-group-expand]"];
+  }
+  const groupFilter = data["groupFilter"];
+  if (groupFilter !== undefined) {
+    // Filtering by a group that is then deleted heals the filter back to "All".
+    return [attrSelector("data-group-filter", groupFilter), '[data-group-filter="all"]'];
+  }
+  if (element.hasAttribute("data-create-group")) {
+    return ["[data-create-group]"];
+  }
+  return [];
 };
 
 /**
- * Restores focus to the equivalent control after a re-render.
+ * Captures ordered selectors for the focused control before a re-render, most
+ * specific first. Group controls contribute successor fallbacks so focus still
+ * lands somewhere sensible when the exact control is removed by the mutation.
+ * Returns [] when nothing focusable is worth restoring — so a non-user repaint
+ * (streaming balances, prices) with no relevant control focused moves nothing.
  */
-export const restoreFocus = (root: Element | null, selector: string | null): void => {
-  if (!selector) {
-    return;
+export const focusMemo = (): readonly string[] => {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) {
+    return [];
   }
-  root?.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+  const group = groupControlMemo(active);
+  if (group.length > 0) {
+    return group;
+  }
+  if (active.id) {
+    return [`#${active.id}`];
+  }
+  if (isWalletView(active.dataset["view"])) {
+    return [`[data-view="${active.dataset["view"]}"]`];
+  }
+  const name = active.getAttribute("name");
+  if (name && FOCUS_NAMES.includes(name)) {
+    return [`[name="${name}"]`];
+  }
+  return [];
+};
+
+/**
+ * Restores focus after a re-render, trying each memoized selector in order and
+ * stopping at the first that resolves to an element that actually takes focus
+ * (so a hidden or removed candidate falls through to its successor).
+ */
+export const restoreFocus = (root: Element | null, selectors: readonly string[]): void => {
+  for (const selector of selectors) {
+    const element = root?.querySelector<HTMLElement>(selector);
+    if (!element) {
+      continue;
+    }
+    element.focus({ preventScroll: true });
+    if (document.activeElement === element) {
+      return;
+    }
+  }
 };
