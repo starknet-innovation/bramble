@@ -1,12 +1,16 @@
 name: Release
 
 # Tag-driven release pipeline (issue #58). Pushing a `vX.Y.Z` tag builds and
-# packages the extension exactly as CI does, publishes a GitHub Release with the
-# reproducible zip + SHA-256, and — only on an explicit manual dispatch with
-# publish=true — pushes that same zip to the Chrome Web Store. The store publish
-# is WIRED BUT DISABLED: it never runs on a tag push and skips cleanly until the
-# four CWS_* secrets exist in the `chrome-web-store` environment. The manual
-# runbook and prerequisites live in RELEASING.md (issue #61).
+# packages the extension via the reusable `release-build.yml` workflow, publishes
+# a GitHub Release with the reproducible zip + SHA-256, and — only on an explicit
+# manual dispatch with publish=true — pushes that same zip to the Chrome Web
+# Store. The store publish is WIRED BUT DISABLED: it never runs on a tag push and
+# skips cleanly until the four CWS_* secrets exist in the `chrome-web-store`
+# environment. The manual runbook and prerequisites live in RELEASING.md.
+#
+# The automatic release-on-merge path (a release/hotfix branch merged into main)
+# lives in auto-release.yml; it calls the SAME reusable build so the heavy
+# pipeline is defined once.
 on:
   push:
     tags:
@@ -33,110 +37,57 @@ on:
         type: boolean
         default: false
 
-# Least privilege: only the Release job needs to write releases; the Chrome Web
-# Store job authenticates with its own CWS_* secrets, not the GitHub token.
+# Least privilege: only the build job needs to write releases (granted in the
+# reusable workflow); the Chrome Web Store job authenticates with its own CWS_*
+# secrets, not the GitHub token.
 permissions:
   contents: read
 
 jobs:
-  build-release:
-    permissions:
-      contents: write
-    runs-on:
-      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+  # Resolve the build inputs from the trigger. A tag push releases that tag; a
+  # manual dispatch only builds the current package version for a store publish
+  # (create_release=false — the dispatch never cuts a GitHub Release).
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.pick.outputs.tag }}
+      ref: ${{ steps.pick.outputs.ref }}
+      create_release: ${{ steps.pick.outputs.create_release }}
     steps:
-      # fetch-depth: 0 so `gh release create --generate-notes` can diff against
-      # the previous tag when no CHANGELOG.md exists yet (issue #60).
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.3
-      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
-      # Same cargo/wasm-pack cache key as ci.yml so the release build reuses the
-      # exact toolchain the vendored krusty artifacts are built with.
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
-      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
-        with:
-          scarb-version: 2.18.0
-      - run: cargo install wasm-pack --locked --version 0.13.1
-      - run: bun install --frozen-lockfile
-      - run: bun run vendor:krusty
-      - run: bun run vendor:multisig
-      # Assert the version single-source invariant (package.json / manifest /
-      # built dist manifest) before publishing anything.
-      - run: bun test tests/conformance/version-single-source.test.ts
-      - run: bun run build
-      - run: bun run package:extension
-      # Confirm the released zip is byte-identical to what its checksum records
-      # (and therefore to the CI artifact at the same commit).
-      - name: Verify checksum
-        working-directory: artifacts
-        run: sha256sum -c ./*.zip.sha256
-      # Consumable by the Chrome Web Store job so store bytes == release bytes.
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: mc-wallet-release
-          path: |
-            artifacts/*.zip
-            artifacts/*.zip.sha256
-          if-no-files-found: error
-      # Create the GitHub Release only on tag pushes. Release notes come from the
-      # matching CHANGELOG.md section when it exists (issue #60); otherwise fall
-      # back to auto-generated notes. Uses the gh CLI (present on the runner,
-      # authenticated by GITHUB_TOKEN) so there is no third-party release action
-      # SHA to pin.
-      #
-      # Idempotent (create-or-upload): a release for the tag can already exist —
-      # e.g. a maintainer cut it via the GitHub UI (a documented path in
-      # RELEASING.md), which creates both the tag and the release, and the tag
-      # push then triggers this workflow. When it exists we only attach/replace
-      # the built assets and leave the human's title/notes untouched; when it
-      # does not we create it with the CHANGELOG/auto-generated notes as before.
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      # Untrusted-input note: REF_NAME/EVENT_NAME are passed via env (never
+      # interpolated into the shell). A tag ref is constrained to `v*` by the
+      # trigger; the dispatch path derives the tag from package.json instead.
+      - name: Resolve build inputs
+        id: pick
         env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            # Release already exists (e.g. created via the GitHub UI): attach or
-            # replace the built assets, preserving the existing title and notes.
-            gh release upload "$TAG" \
-              artifacts/*.zip artifacts/*.zip.sha256 \
-              --clobber
+          if [ "$EVENT_NAME" = "push" ]; then
+            echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "ref=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "create_release=true" >> "$GITHUB_OUTPUT"
           else
-            notes_args=(--generate-notes)
-            if [ -f CHANGELOG.md ]; then
-              version="${TAG#v}"
-              section="$(awk -v v="$version" '
-                $0 ~ "^## \\[?" v "\\]?" {capture=1; print; next}
-                capture && /^## / {exit}
-                capture {print}
-              ' CHANGELOG.md)"
-              if [ -n "$section" ]; then
-                printf "%s\n" "$section" > release-notes.md
-                notes_args=(--notes-file release-notes.md)
-              fi
-            fi
-            gh release create "$TAG" \
-              --title "$TAG" \
-              "${notes_args[@]}" \
-              artifacts/*.zip artifacts/*.zip.sha256
+            version="$(bun --print "require('./package.json').version")"
+            echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+            echo "ref=$REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "create_release=false" >> "$GITHUB_OUTPUT"
           fi
+
+  build-release:
+    needs: prepare
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-build.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      ref: ${{ needs.prepare.outputs.ref }}
+      create_release: ${{ needs.prepare.outputs.create_release == 'true' }}
 
   # OPTIONAL / GATED. Never runs on a tag push. Only a manual dispatch with
   # publish=true reaches this job, and even then the publish script skips
@@ -151,7 +102,7 @@ jobs:
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.3
