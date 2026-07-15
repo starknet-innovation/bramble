@@ -10,6 +10,10 @@ import type { WalletPreferences } from "../storage/preferences-store";
 import type { MultisigClient } from "./multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "./runtime";
 
+// The price snapshot as the runtime client returns it; the cache's price fields
+// derive from this so their types cannot drift from loadPrices.
+type LoadedPrices = Awaited<ReturnType<SidepanelWallet["loadPrices"]>>;
+
 /**
  * Everything a paint reads. Each field mirrors the resolved result of one
  * permissioned runtime call; view-scoped fields stay in their empty state until
@@ -27,10 +31,10 @@ export type RenderData = {
   discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
   preferences: WalletPreferences | null;
-  changes: Readonly<Record<string, number>>;
-  prices: Readonly<Record<string, number>>;
-  priceAsOf: number | null;
-  priceStale: boolean;
+  changes: LoadedPrices["changes"];
+  prices: LoadedPrices["prices"];
+  priceAsOf: LoadedPrices["asOf"];
+  priceStale: LoadedPrices["stale"];
   status: WalletStatus;
   transactions: Awaited<ReturnType<SidepanelWallet["loadActivity"]>>;
 };
