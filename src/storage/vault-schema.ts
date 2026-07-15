@@ -11,6 +11,14 @@ import {
 
 /**
  * Current vault schema version accepted by validators and writers.
+ *
+ * Version anchor for the raw-key-import feature (v0.5): {@link AccountRef} became
+ * a union that admits the `imported-raw-key` variant (a `publicKeyY`-less
+ * account). This is an ADDITIVE, backward-compatible extension of the v2 shape —
+ * existing v2 `starknet-bip44` records still validate unchanged, and no stored
+ * v2 vault needs rewriting — so the version intentionally stays 2 with no
+ * VAULT_MIGRATIONS step. A bump/migration is only required when an existing
+ * stored record must be transformed, which is not the case here.
  */
 export const CURRENT_SCHEMA_VERSION = 2;
 
