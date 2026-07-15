@@ -26,6 +26,7 @@ import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
+import { hydrateView } from "./hydrate";
 import { bindImportKey } from "./import-key-ui";
 import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
@@ -376,79 +377,16 @@ const render = async (status: WalletStatus): Promise<void> => {
     return;
   }
   paint();
-  const jobs: Promise<unknown>[] = [];
-  const fill = <T>(load: Promise<T>, assign: (value: T) => void): void => {
-    jobs.push(load.then(assign).catch(() => undefined));
-  };
-  if (activeView === "home" || activeView === "tokens" || activeView === "token-detail") {
-    fill(wallet.loadBalances(), (value) => {
-      cache.balances = value;
-    });
-    fill(wallet.loadPrices(), (value) => {
-      cache.prices = value.prices;
-      cache.changes = value.changes;
-      cache.priceAsOf = value.asOf;
-      cache.priceStale = value.stale;
-    });
-  }
-  if (activeView === "home") {
-    fill(deployment.load(status, activeView), (value) => {
-      cache.deployment = value;
-    });
-  }
-  if (activeView === "activity" || activeView === "home") {
-    fill(wallet.loadActivity(), (value) => {
-      cache.transactions = value.entries;
-      cache.historyUnavailable = value.historyUnavailable;
-    });
-  }
-  if (activeView === "account") {
-    fill(wallet.loadClassHashVerification(), (value) => {
-      cache.classHashVerification = value;
-    });
-  }
-  if (activeView === "connected-sites") {
-    fill(wallet.connectedSites(), (value) => {
-      cache.connectedSites = value;
-    });
-  }
-  if (activeView === "allowances") {
-    fill(wallet.loadAllowances(), (value) => {
-      cache.allowances = value;
-    });
-  }
-  if (activeView === "nfts" || activeView === "nft-detail") {
-    fill(wallet.discoverNfts(), (value) => {
-      cache.discoveredNfts = value;
-    });
-  }
-  if (
-    activeView === "multisigs" ||
-    activeView === "multisig-detail" ||
-    activeView === "multisig-propose" ||
-    activeView === "multisig-deploy"
-  ) {
-    fill(multisig.loadMultisigs(), (value) => {
-      cache.multisigs = value;
-    });
-  }
-  if (activeView === "multisig-deploy") {
-    fill(multisig.loadClassStatus(), (value) => {
-      cache.multisigClassDeclared = value;
-    });
-  }
-  if (activeView === "token-detail") {
-    const selected = cache.preferences?.tokens.find((token) => token.id === selectedTokenId);
-    if (selected) {
-      fill(wallet.loadTokenChart(selected.address), (value) => {
-        cache.chart = value;
-      });
-    }
-  }
-  if (jobs.length > 0) {
-    await Promise.all(jobs);
-    paint();
-  }
+  await hydrateView({
+    status,
+    activeView,
+    selectedTokenId,
+    cache,
+    wallet,
+    multisig,
+    deployment,
+    paint,
+  });
 };
 
 // Instant navigation: swap the visible screen from cache now, hydrate after.
