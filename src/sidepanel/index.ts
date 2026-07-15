@@ -76,11 +76,9 @@ let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
 let drawerGroupFilter: string | null = null;
 // Transient group UI selections, held here so they survive full re-renders and
-// are self-healed in paint(): whether the drawer "Manage groups" disclosure is
-// revealed, which account's assign panel is open in the drawer, and which group's
-// inline editor is open (shared by the drawer's manage list and the
-// manage-accounts bulk editor; null = none/collapsed).
-let drawerManageOpen = false;
+// are self-healed in paint(): which account's quick folder picker is open in the
+// drawer, and which panel is open in the manage-accounts Groups accordion (a
+// group's bulk editor or the "Create a group" panel; null = all collapsed).
 let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 
@@ -190,14 +188,10 @@ const bindAll = (): void => {
   bindHomeUi({
     app,
     drawerGroupFilter: () => drawerGroupFilter,
-    drawerManageOpen: () => drawerManageOpen,
     drawerOpen: () => drawerOpen,
     homeTab: () => homeTab,
     networkId: () => lastNetworkId,
     render,
-    setDrawerManageOpen: (open) => {
-      drawerManageOpen = open;
-    },
     setDrawerGroupFilter: (filter) => {
       drawerGroupFilter = filter;
     },
@@ -221,10 +215,10 @@ const bindAll = (): void => {
     refresh: () => wallet.loadStatus(),
     render,
     setExpandedGroup: (id: string | null) => {
-      // Opens a group's inline editor on whichever surface is showing — the
-      // manage-accounts bulk editor or the drawer's "Manage groups" list. Set
-      // right after creating a group so its editor is ready; the drawer's manage
-      // disclosure stays open so the new group appears there for immediate edit.
+      // Opens one panel in the manage-accounts Groups accordion — a group's bulk
+      // editor or the "Create a group" panel. Set right after creating a group so
+      // the new group's editor opens (collapsing the create panel) for immediate
+      // rename/re-icon/bucketing.
       expandedGroupId = id;
     },
     setOpenAssign: (id: string | null) => {
@@ -343,7 +337,6 @@ const paint = (): void => {
           cache.priceAsOf,
           cache.discoveredNfts,
           openAssignId,
-          drawerManageOpen,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {

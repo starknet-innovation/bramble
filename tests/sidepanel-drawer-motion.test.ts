@@ -33,7 +33,6 @@ const setup = () => {
     bindHomeUi({
       app,
       drawerGroupFilter: () => null,
-      drawerManageOpen: () => false,
       drawerOpen: () => open,
       homeTab: () => "tokens",
       networkId: () => "SN_MAIN",
@@ -41,7 +40,6 @@ const setup = () => {
         paint();
       },
       setDrawerGroupFilter: () => undefined,
-      setDrawerManageOpen: () => undefined,
       setDrawerOpen: (next) => {
         open = next;
       },

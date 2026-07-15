@@ -2,8 +2,8 @@
  * Edge-case coverage for the account-groups ("folders") UI, complementing the
  * core journeys in ./sidepanel-groups-ui.test.ts. Uses the same shared harness so
  * every assertion checks both the store call and the re-derived DOM. Covers the
- * drawer's group-edit path (rename / change-icon / delete), membership toggle-OFF,
- * self-heal of the active filter when its group is deleted, duplicate names,
+ * drawer's quick per-row folder picker (None), self-heal of the drawer's active
+ * filter when its group is deleted from the manage view, duplicate names,
  * rename-to-empty rejection, cross-surface icon propagation, the NEGATIVE Journey
  * 3 assertion (no per-account assign panel on the manage flow), and focus
  * restoration across the full-repaint that each mutation triggers.
@@ -16,6 +16,8 @@ import {
   restoreFocus,
   restoreRepaintFocus,
 } from "../src/sidepanel/dom";
+import { accountFlow } from "../src/sidepanel/flows";
+import { healTransientGroupState } from "../src/sidepanel/group-state";
 import { type IconName, icon } from "../src/sidepanel/icons";
 import type { AccountGroups } from "../src/storage/account-groups";
 import {
@@ -42,84 +44,9 @@ const glyphHtml = (glyph: IconName): string => {
   return probe.querySelector(".icon")?.outerHTML ?? "";
 };
 
-describe("account drawer group-edit path", () => {
+describe("account drawer quick picker edge cases", () => {
   beforeEach(() => {
     document.body.replaceChildren();
-  });
-
-  test("renames a group from the drawer's Manage groups list in two taps", async () => {
-    const harness = mount([group("briefcase", "work", "Work")], "drawer");
-
-    // Two taps reach the edit affordance: open the disclosure, expand the group.
-    click(harness.container.querySelector("#drawer-manage-groups"));
-    await harness.tick();
-    click(harness.container.querySelector('[data-group-expand="work"]'));
-    await harness.tick();
-
-    const form = harness.container.querySelector('[data-edit-group="work"]');
-    const nameInput = form?.querySelector<HTMLInputElement>("[data-group-name]");
-    if (nameInput) {
-      nameInput.value = "Payroll";
-    }
-    submit(form);
-    await harness.tick();
-
-    expect(harness.calls.renameGroup).toEqual([["work", "Payroll"]]);
-    expect(harness.groups()[0]?.name).toBe("Payroll");
-    // The drawer re-derives: the group's row and its filter chip show the new name.
-    expect(harness.container.querySelector('[data-group-expand="work"]')?.textContent).toContain(
-      "Payroll",
-    );
-    expect(harness.container.querySelector('[data-group-filter="work"]')?.textContent).toContain(
-      "Payroll",
-    );
-  });
-
-  test("changes a group's icon from the drawer's Manage groups list", async () => {
-    const harness = mount([group("folder", "work", "Work")], "drawer");
-
-    click(harness.container.querySelector("#drawer-manage-groups"));
-    await harness.tick();
-    click(harness.container.querySelector('[data-group-expand="work"]'));
-    await harness.tick();
-
-    const form = harness.container.querySelector('[data-edit-group="work"]');
-    click(form?.querySelector('[data-group-icon="rocket"]') ?? null);
-    submit(form);
-    await harness.tick();
-
-    expect(harness.calls.setGroupIcon).toEqual([["work", "rocket"]]);
-    expect(harness.groups()[0]?.icon).toBe("rocket");
-    // The filter chip re-derives the new glyph — the drawer can now change a
-    // group's icon, the original "icons don't change" complaint.
-    const chipGlyph = harness.container
-      .querySelector('[data-group-filter="work"]')
-      ?.querySelector(".icon");
-    expect(chipGlyph?.outerHTML).toBe(glyphHtml("rocket"));
-  });
-
-  test("deletes a group from the drawer's Manage groups list with a two-tap confirm", async () => {
-    const harness = mount([group("briefcase", "work", "Work")], "drawer");
-
-    click(harness.container.querySelector("#drawer-manage-groups"));
-    await harness.tick();
-    click(harness.container.querySelector('[data-group-expand="work"]'));
-    await harness.tick();
-
-    const removeButton = harness.container.querySelector('[data-remove-group="work"]');
-    click(removeButton);
-    await harness.tick();
-    // First tap only arms the confirm.
-    expect(harness.calls.removeGroup).toEqual([]);
-    expect(removeButton?.classList.contains("is-confirming")).toBe(true);
-
-    click(removeButton);
-    await harness.tick();
-    expect(harness.calls.removeGroup).toEqual(["work"]);
-    expect(harness.groups().length).toBe(0);
-    // The chip row disappears; the disclosure stays open with only the create form.
-    expect(harness.container.querySelector(".group-chips")).toBeNull();
-    expect(harness.container.querySelectorAll(".new-group-form").length).toBe(1);
   });
 
   test("picking None clears the account's folder while the picker stays open", async () => {
@@ -160,16 +87,12 @@ describe("account drawer group-edit path", () => {
     ).toBe(false);
   });
 
-  test("deleting the active-filter group self-heals the filter back to All", async () => {
-    const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer");
+  test("deleting the active-filter group heals the drawer filter back to All", async () => {
+    // Delete the group through the manage view (the one place that deletes now),
+    // then prove the shared paint-loop heal drops the drawer's now-dangling
+    // filter and the re-derived drawer shows every account again.
+    const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "account");
 
-    click(harness.container.querySelector('[data-group-filter="work"]'));
-    await harness.tick();
-    // Filtered to Work: only acctA is listed.
-    expect(harness.container.querySelectorAll(".drawer-account-item").length).toBe(1);
-
-    click(harness.container.querySelector("#drawer-manage-groups"));
-    await harness.tick();
     click(harness.container.querySelector('[data-group-expand="work"]'));
     await harness.tick();
     const removeButton = harness.container.querySelector('[data-remove-group="work"]');
@@ -179,17 +102,43 @@ describe("account drawer group-edit path", () => {
     await harness.tick();
 
     expect(harness.calls.removeGroup).toEqual(["work"]);
-    // Filter self-heals to All (no group left): every account is visible again
-    // and the chip row is gone.
-    expect(harness.container.querySelector(".group-chips")).toBeNull();
-    expect(harness.container.querySelectorAll(".drawer-account-item").length).toBe(2);
-    expect(harness.container.querySelector(`[data-switch-account="${acctB.id}"]`)).not.toBeNull();
+    expect(harness.groups().length).toBe(0);
+
+    // The drawer had "work" as its active filter. On the next paint the shared
+    // heal drops it, so the re-derived drawer shows All (no chips, both rows).
+    const healed = healTransientGroupState(
+      { drawerGroupFilter: "work", expandedGroupId: null, openAssignId: null },
+      harness.groups(),
+      status.accounts.map((stored) => stored.id),
+    );
+    expect(healed.drawerGroupFilter).toBeNull();
+
+    const rendered = document
+      .createRange()
+      .createContextualFragment(
+        accountDrawer(
+          status,
+          acctA,
+          { ...preferences, groups: harness.groups() },
+          healed.drawerGroupFilter,
+        ),
+      );
+    expect(rendered.querySelector(".group-chips")).toBeNull();
+    expect(rendered.querySelectorAll(".drawer-account-item").length).toBe(2);
+    expect(rendered.querySelector(`[data-switch-account="${acctB.id}"]`)).not.toBeNull();
+  });
+});
+
+describe("manage-accounts group edge cases", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
   });
 
   test("creates distinct ids for duplicate group names", async () => {
-    const harness = mount([group("briefcase", "work", "Work")], "drawer");
+    const harness = mount([group("briefcase", "work", "Work")], "account");
 
-    click(harness.container.querySelector("#drawer-manage-groups"));
+    // Open the "Create a group" accordion panel, then create a second "Work".
+    click(harness.container.querySelector('[data-group-expand="__create__"]'));
     await harness.tick();
 
     const form = harness.container.querySelector(".new-group-form");
@@ -204,12 +153,6 @@ describe("account drawer group-edit path", () => {
     // Same display name, deterministic collision-free ids.
     expect(harness.groups().map((entry) => entry.id)).toEqual(["work", "work-2"]);
     expect(harness.groups().map((entry) => entry.name)).toEqual(["Work", "Work"]);
-  });
-});
-
-describe("manage-accounts group edge cases", () => {
-  beforeEach(() => {
-    document.body.replaceChildren();
   });
 
   test("rejects a rename to whitespace without mutating the group", async () => {
@@ -287,44 +230,47 @@ describe("group control focus restoration", () => {
     return app;
   };
 
-  const drawer = (groups: AccountGroups, openAssign: string | null, expanded: string | null) =>
-    accountDrawer(status, acctA, { ...preferences, groups }, null, openAssign, true, expanded);
+  // The lean drawer (folder quick picker) and the manage view (group editors).
+  const drawer = (groups: AccountGroups, openAssign: string | null) =>
+    accountDrawer(status, acctA, { ...preferences, groups }, null, openAssign);
+  const manage = (groups: AccountGroups, expanded: string | null) =>
+    accountFlow(status, acctA, { ...preferences, groups }, expanded);
 
   test("reclaims focus on the acted-on folder pick after a repaint", () => {
     const groups = [group("briefcase", "work", "Work")];
-    const app = paintApp(drawer(groups, acctA.id, null));
+    const app = paintApp(drawer(groups, acctA.id));
     const selector = `[data-group-pick="work"][data-account="${acctA.id}"]`;
     app.querySelector<HTMLElement>(selector)?.focus();
     const memo = focusMemo();
 
     // Repaint: the pick is now a fresh node. Focus must return to it.
-    paintApp(drawer(groups, acctA.id, null));
+    paintApp(drawer(groups, acctA.id));
     restoreFocus(app, memo);
     expect(document.activeElement).toBe(app.querySelector(selector));
   });
 
   test("falls back to a successor when the acted-on delete control is removed", () => {
     const groups = [group("briefcase", "work", "Work"), group("piggyBank", "savings", "Savings")];
-    const app = paintApp(drawer(groups, null, "work"));
+    const app = paintApp(manage(groups, "work"));
     app.querySelector<HTMLElement>('[data-remove-group="work"]')?.focus();
     const memo = focusMemo();
 
     // The group is deleted, so neither its remove button nor its expander exist
     // on the repaint; focus falls through to the next group's expander.
     const remaining = [group("piggyBank", "savings", "Savings")];
-    paintApp(drawer(remaining, null, null));
+    paintApp(manage(remaining, null));
     restoreFocus(app, memo);
     expect(document.activeElement).toBe(app.querySelector('[data-group-expand="savings"]'));
   });
 
   test("does not move focus when no tracked control was focused", () => {
     const groups = [group("briefcase", "work", "Work")];
-    const app = paintApp(drawer(groups, null, null));
+    const app = paintApp(drawer(groups, null));
     // Nothing group-related is focused (a non-user/streaming repaint case).
     const memo = focusMemo();
     expect(memo).toEqual([]);
 
-    paintApp(drawer(groups, null, null));
+    paintApp(drawer(groups, null));
     const before = document.activeElement;
     restoreFocus(app, memo);
     // Focus is untouched — restoration never steals onto a group control.
@@ -335,7 +281,7 @@ describe("group control focus restoration", () => {
     const groups = [group("briefcase", "work", "Work")];
     // The "work" group's inline editor is open, so the rename field renders seeded
     // with the stored name "Work".
-    const app = paintApp(drawer(groups, null, "work"));
+    const app = paintApp(manage(groups, "work"));
     const selector = '[data-edit-group="work"] [data-group-name]';
     const input = app.querySelector<HTMLInputElement>(selector);
     if (!input) {
@@ -349,7 +295,7 @@ describe("group control focus restoration", () => {
 
     // A streaming repaint tears the field down and re-renders it from the
     // unchanged stored value ("Work"); focus + text must be reinstated.
-    paintApp(drawer(groups, null, "work"));
+    paintApp(manage(groups, "work"));
     restoreRepaintFocus(app, focus);
 
     const after = app.querySelector<HTMLInputElement>(selector);

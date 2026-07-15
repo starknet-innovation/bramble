@@ -113,7 +113,7 @@ const groupPickOption = (
  * so an account is only ever in one group. `open` keeps the picker expanded
  * across re-renders (the open account id is held in the entrypoint), and
  * `currentGroupId` is the account's current folder (null = ungrouped). Creating
- * a group happens from the surface's own "Manage groups" control, not here.
+ * a group happens on the "Manage accounts & groups" view, not here.
  */
 export const groupPickerPanel = (
   account: AccountRef,
@@ -125,7 +125,7 @@ export const groupPickerPanel = (
     <p class="eyebrow">Folder</p>
     ${
       groups.length === 0
-        ? '<p class="hint">No groups yet. Use "Manage groups" below to create your first.</p>'
+        ? '<p class="hint">No groups yet. Use "Manage accounts &amp; groups" to create one.</p>'
         : `<div class="group-toggle-list">
             ${groupPickOption(account.id, "none", "None", icon("x"), currentGroupId === null)}
             ${groups

@@ -4,6 +4,7 @@
  */
 import { friendlyNetworkError } from "../shared/network-error";
 import { friendlyError } from "./friendly-error";
+import { CREATE_GROUP_PANEL } from "./group-state";
 import { icon } from "./icons";
 import { animate } from "./motion";
 import { isWalletView } from "./parts";
@@ -250,6 +251,11 @@ const FOCUS_NAMES = ["address", "amount", "label", "mnemonic", "recipient", "vau
 const attrSelector = (name: string, value: string): string =>
   `[${name}="${value.replace(/["\\]/g, "\\$&")}"]`;
 
+// Any group editor's expander EXCEPT the "Create a group" accordion panel, so a
+// focus fallback after a deletion lands on a remaining group rather than the
+// create affordance (which sits first in the Groups accordion).
+const REAL_GROUP_EXPAND = `[data-group-expand]:not(${attrSelector("data-group-expand", CREATE_GROUP_PANEL)})`;
+
 // Ordered focus candidates for the account-group control the user just acted on.
 // Every group mutation repaints the whole shell, so focus must be reclaimed: the
 // first selector targets the acted-on control (which survives most mutations —
@@ -285,10 +291,11 @@ const groupControlMemo = (element: HTMLElement): readonly string[] => {
   if (removeGroup !== undefined) {
     // After the confirming tap the group and this button are gone; fall back to
     // that group's edit toggle (still there after only arming), then any other
-    // group, then the create form.
+    // remaining group, then the create panel, then the create form.
     return [
       attrSelector("data-remove-group", removeGroup),
       attrSelector("data-group-expand", removeGroup),
+      REAL_GROUP_EXPAND,
       "[data-group-expand]",
       "[data-create-group]",
     ];
@@ -302,7 +309,11 @@ const groupControlMemo = (element: HTMLElement): readonly string[] => {
   }
   const groupExpand = data["groupExpand"];
   if (groupExpand !== undefined) {
-    return [attrSelector("data-group-expand", groupExpand), "[data-group-expand]"];
+    return [
+      attrSelector("data-group-expand", groupExpand),
+      REAL_GROUP_EXPAND,
+      "[data-group-expand]",
+    ];
   }
   const groupFilter = data["groupFilter"];
   if (groupFilter !== undefined) {

@@ -176,9 +176,12 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
   );
 
 /**
- * Account flow: switch the active account, name it, and inspect identifiers.
- * `expandedGroupId` opens that group's bulk members editor in the Groups
- * section (null = all collapsed).
+ * Manage accounts & groups flow: the single management surface reached from the
+ * drawer's "Manage accounts & groups" entry and the Settings menu. Switch the
+ * active account, add one, manage groups (create/rename/change-icon/delete plus
+ * bulk assignment) in the Groups accordion, name the account, and inspect
+ * identifiers. `expandedGroupId` selects the one open Groups panel — a group's
+ * bulk members editor or the "Create a group" panel (null = all collapsed).
  */
 export const accountFlow = (
   status: WalletStatus,
@@ -190,7 +193,7 @@ export const accountFlow = (
   const accountType = account ? knownAccountType(account.classHash) : null;
   const groups = preferences?.groups ?? [];
   return (
-    flowHeader("Account", status, `On ${status.network}`) +
+    flowHeader("Accounts & groups", status, `On ${status.network}`) +
     flowScreen(
       "account",
       `<section class="section">
