@@ -238,7 +238,7 @@ export const bindActivity = ({ app, render, wallet }: TransferUiDeps): void => {
   exportButton?.addEventListener("click", () => {
     buttonBusy(exportButton, true);
     void wallet.loadActivity().then(
-      (entries) => {
+      ({ entries }) => {
         const blob = new Blob([activityToCsv(entries)], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");

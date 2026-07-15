@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance, WalletStatus } from "../src/popup/responses";
+import { homeTabs } from "../src/sidepanel/home-tabs";
 import { dashboard, WALLET_VIEWS } from "../src/sidepanel/views";
 import { account, preferences, secondAccount } from "./support/sidepanel-fixtures";
 
@@ -178,7 +179,17 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="activity-refresh"');
 
     const empty = dashboard("activity", status, [], preferences, { balances: [] });
-    expect(empty).toContain("Transactions you submit from this wallet appear here.");
+    expect(empty).toContain("No activity yet. On-chain transactions for this account appear here.");
+    expect(empty).not.toContain("Couldn't load on-chain history");
+  });
+
+  test("home activity tab shows a degraded hint when on-chain history is unreachable", () => {
+    const reachable = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, false);
+    expect(reachable).not.toContain("On-chain history unavailable");
+
+    const degraded = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, true);
+    expect(degraded).toContain("On-chain history unavailable");
+    expect(degraded).toContain("No transactions recorded on this device yet.");
   });
 
   test("shows account labels and identicons across header and account flow", () => {

@@ -338,6 +338,7 @@ const paint = (): void => {
           cache.discoveredNfts,
           openAssignId,
           cache.classHashVerification,
+          cache.historyUnavailable,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -360,6 +361,7 @@ const render = async (status: WalletStatus): Promise<void> => {
     cache.classHashVerification = null;
     cache.deployment = null;
     cache.transactions = [];
+    cache.historyUnavailable = false;
     cache.connectedSites = [];
     cache.prices = {};
     cache.changes = {};
@@ -394,7 +396,8 @@ const render = async (status: WalletStatus): Promise<void> => {
   }
   if (activeView === "activity" || activeView === "home") {
     fill(wallet.loadActivity(), (value) => {
-      cache.transactions = value;
+      cache.transactions = value.entries;
+      cache.historyUnavailable = value.historyUnavailable;
     });
   }
   if (activeView === "account") {

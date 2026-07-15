@@ -194,6 +194,7 @@ const homeScreen = (
   transactions: readonly ActivityEntry[],
   priceStale: boolean,
   priceAsOf: number | null,
+  historyUnavailable: boolean,
 ): string => {
   const showTotal = account !== null && Object.keys(prices).length > 0;
   const total = showTotal ? portfolioTotal(visibleHomeBalances(balances, preferences), prices) : 0;
@@ -216,14 +217,21 @@ const homeScreen = (
       ${actionTile("send", "Send", "send", true, account !== null)}
       ${actionTile("receive", "Receive", "receive", false, account !== null)}
     </div>
-    ${homeTabs(balances, preferences, prices, changes, currency, transactions, status)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, transactions, status, historyUnavailable)}`,
   );
 };
+
+// The degraded indicator shown when on-chain history could not be reached, so an
+// empty or short local-only feed never reads as the account's full history.
+// Mirrors the offline-fiat "stale" notice: state the limitation and the action.
+const HISTORY_UNAVAILABLE_NOTICE =
+  "Couldn't load on-chain history. Showing transactions recorded on this device only — check your connection or RPC endpoint and refresh.";
 
 const activityScreen = (
   pending: readonly PendingApproval[],
   status: WalletStatus,
   transactions: readonly ActivityEntry[],
+  historyUnavailable: boolean,
 ): string =>
   dockScreen(
     "activity",
@@ -244,9 +252,10 @@ const activityScreen = (
           <button id="activity-refresh" class="icon-button" type="button" aria-label="Refresh transactions" title="Refresh transactions">${icon("refresh")}</button>
         </div>
       </div>
+      ${historyUnavailable ? `<p class="empty" role="status">${escapeHtml(HISTORY_UNAVAILABLE_NOTICE)}</p>` : ""}
       ${
         transactions.length === 0
-          ? '<p class="empty">Transactions you submit from this wallet appear here.</p>'
+          ? `<p class="empty">${escapeHtml(historyUnavailable ? "No transactions recorded on this device yet." : "No activity yet. On-chain transactions for this account appear here.")}</p>`
           : `<ul class="tx-list">${transactions.map(transactionRow).join("")}</ul>`
       }
       <p id="activity-result" role="status"></p>
@@ -344,6 +353,7 @@ export const dashboard = (
   discoveredNfts: readonly DiscoveredNft[] = [],
   openAssignId: string | null = null,
   classHashVerification: ClassHashVerification | null = null,
+  historyUnavailable = false,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -417,7 +427,7 @@ export const dashboard = (
   }
   const screen =
     activeView === "activity"
-      ? activityScreen(pending, status, transactions)
+      ? activityScreen(pending, status, transactions, historyUnavailable)
       : activeView === "settings"
         ? settingsScreen(status, preferences)
         : homeScreen(
@@ -433,6 +443,7 @@ export const dashboard = (
             transactions,
             priceStale,
             priceAsOf,
+            historyUnavailable,
           );
   return `
     ${walletHeader(status, account, preferences)}
