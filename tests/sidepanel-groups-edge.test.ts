@@ -10,7 +10,12 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { accountDrawer } from "../src/sidepanel/account-drawer";
-import { focusMemo, restoreFocus } from "../src/sidepanel/dom";
+import {
+  captureRepaintFocus,
+  focusMemo,
+  restoreFocus,
+  restoreRepaintFocus,
+} from "../src/sidepanel/dom";
 import { type IconName, icon } from "../src/sidepanel/icons";
 import type { AccountGroups } from "../src/storage/account-groups";
 import {
@@ -324,5 +329,34 @@ describe("group control focus restoration", () => {
     restoreFocus(app, memo);
     // Focus is untouched — restoration never steals onto a group control.
     expect(document.activeElement).toBe(before);
+  });
+
+  test("keeps in-progress rename text, focus, and caret across a repaint", () => {
+    const groups = [group("briefcase", "work", "Work")];
+    // The "work" group's inline editor is open, so the rename field renders seeded
+    // with the stored name "Work".
+    const app = paintApp(drawer(groups, null, "work"));
+    const selector = '[data-edit-group="work"] [data-group-name]';
+    const input = app.querySelector<HTMLInputElement>(selector);
+    if (!input) {
+      throw new Error("rename field missing");
+    }
+    input.focus();
+    // The user has typed past the stored value but not yet saved.
+    input.value = "Work travel";
+    input.setSelectionRange(11, 11);
+    const focus = captureRepaintFocus();
+
+    // A streaming repaint tears the field down and re-renders it from the
+    // unchanged stored value ("Work"); focus + text must be reinstated.
+    paintApp(drawer(groups, null, "work"));
+    restoreRepaintFocus(app, focus);
+
+    const after = app.querySelector<HTMLInputElement>(selector);
+    expect(document.activeElement).toBe(after);
+    // The typed-but-unsaved text survives — restoring focus alone would have
+    // reset the field to "Work".
+    expect(after?.value).toBe("Work travel");
+    expect(after?.selectionStart).toBe(11);
   });
 });

@@ -16,9 +16,9 @@ import { createDeploymentCache } from "./deployment-cache";
 import {
   bindCopyButtons,
   buttonBusy,
+  captureRepaintFocus,
   errorMessage,
-  focusMemo,
-  restoreFocus,
+  restoreRepaintFocus,
   showToast,
 } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
@@ -139,9 +139,9 @@ const renderShell = (content: string, animate: boolean): void => {
   if (!app) {
     return;
   }
-  const focused = focusMemo();
+  const focus = captureRepaintFocus();
   app.innerHTML = `<style>${SIDEPANEL_STYLES}</style><section class="shell${animate ? " shell-animate" : ""}">${content}</section>`;
-  restoreFocus(app, focused);
+  restoreRepaintFocus(app, focus);
 };
 
 // Swaps the shell markup and re-binds listeners. When the scene changed and the
