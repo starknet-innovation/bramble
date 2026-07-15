@@ -76,6 +76,42 @@ describe("decodeTransferEvent", () => {
     ).toBeNull();
   });
 
+  test("is total over a structurally malformed event (non-array keys/data) — skipped, not thrown", () => {
+    // A hostile RPC returning keys/data that are not arrays must be skipped like
+    // any non-transfer, never throw (which would be misread as a transport error
+    // and blank the whole token's history).
+    const bad = { block_number: 1, transaction_hash: "0x1" };
+    expect(
+      decodeTransferEvent(
+        { ...bad, keys: null, data: ["1", "0"] } as unknown as HistoryEvent,
+        ACCOUNT,
+      ),
+    ).toBeNull();
+    expect(
+      decodeTransferEvent(
+        {
+          ...bad,
+          keys: [TRANSFER_EVENT_KEY, ACCOUNT, OTHER],
+          data: null,
+        } as unknown as HistoryEvent,
+        ACCOUNT,
+      ),
+    ).toBeNull();
+  });
+
+  test("rejects a transfer whose counterparty is not a Stark field element", () => {
+    // An out-of-field-range (oversized) counterparty felt is canonicalizable but
+    // not a valid field element; it must be rejected like an invalid hash.
+    const oversized = `0x${"f".repeat(70)}`;
+    expect(decodeTransferEvent(cairo1Transfer(ACCOUNT, oversized, "0x1"), ACCOUNT)).toBeNull();
+  });
+
+  test("keeps a mint (zero-address counterparty) as valid received activity", () => {
+    const decoded = decodeTransferEvent(cairo1Transfer("0x0", ACCOUNT, "0x1"), ACCOUNT);
+    expect(decoded?.direction).toBe("in");
+    expect(sameFelt(decoded?.counterparty ?? "x", "0x0")).toBe(true);
+  });
+
   test("rejects malformed events (bad amount, missing hash, no block)", () => {
     expect(
       decodeTransferEvent(
@@ -168,6 +204,27 @@ const chainEntry = (hash: string, submittedAt: number): ActivityEntry => ({
   token: "ETH",
 });
 
+// One transaction hash, two legs — as a DEX swap emits: an outgoing leg in one
+// token and an incoming leg in another.
+const swapLeg = (
+  token: string,
+  amount: string,
+  summary: string,
+  hash: string,
+  submittedAt: number,
+): ActivityEntry => ({
+  accountId: `SN_MAIN:${ACCOUNT}`,
+  amount,
+  counterparty: OTHER,
+  hash,
+  kind: "transfer",
+  networkId: "SN_MAIN",
+  status: "accepted",
+  submittedAt,
+  summary,
+  token,
+});
+
 describe("mergeActivity", () => {
   test("unions local and chain entries, newest first", () => {
     const merged = mergeActivity(
@@ -192,5 +249,33 @@ describe("mergeActivity", () => {
   test("never returns fewer rows than the local log", () => {
     const local = [localEntry("0xaaa", 1, "accepted"), localEntry("0xbbb", 2, "reverted")];
     expect(mergeActivity(local, [])).toHaveLength(2);
+  });
+
+  test("keeps every leg of a multi-transfer chain tx (swap/multicall) sharing one hash", () => {
+    // Two Transfer events, same transaction_hash — the exact swap shape that a
+    // hash-only key would collapse to a single arbitrary leg.
+    const merged = mergeActivity(
+      [],
+      [
+        swapLeg("ETH", "1.5", "Sent 1.5 ETH to 0x7770…0abc", "0xswap", 9000),
+        swapLeg("USDC", "3000", "Received 3000 USDC from 0x7770…0abc", "0xswap", 9000),
+      ],
+    );
+    expect(merged).toHaveLength(2);
+    expect(merged.map((entry) => entry.token).sort()).toEqual(["ETH", "USDC"]);
+  });
+
+  test("a local record still collapses all chain legs sharing its hash", () => {
+    // When the wallet submitted the transaction locally, its richer summary wins
+    // and absorbs every chain leg of that hash (one row, the local one).
+    const merged = mergeActivity(
+      [localEntry("0xswap", 9000, "accepted")],
+      [
+        swapLeg("ETH", "1.5", "Sent 1.5 ETH to 0x7770…0abc", "0xswap", 9000),
+        swapLeg("USDC", "3000", "Received 3000 USDC from 0x7770…0abc", "0xswap", 9000),
+      ],
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.summary).toBe("Send from wallet 0xswap");
   });
 });

@@ -15,7 +15,7 @@
 import { hash } from "starknet";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { TokenConfig } from "../storage/preferences-store";
-import { canonicalFelt, type StarknetNetworkId, sameFelt } from "./networks";
+import { canonicalFelt, isStarkFieldElement, type StarknetNetworkId, sameFelt } from "./networks";
 import { formatTokenAmount } from "./rpc";
 
 const UINT_128_SHIFT = 128n;
@@ -91,6 +91,14 @@ export const decodeTransferEvent = (
   event: HistoryEvent,
   account: string,
 ): DecodedTransfer | null => {
+  // The event is untrusted RPC output whose `keys`/`data` are only asserted to
+  // be arrays by the cast at the boundary. Guard the shape so a malformed event
+  // (non-array keys/data) is skipped as a non-transfer rather than throwing a
+  // TypeError that would be misclassified as a transport failure and blank a
+  // whole token's history.
+  if (!Array.isArray(event.keys) || !Array.isArray(event.data)) {
+    return null;
+  }
   if (!sameFelt(event.keys[0], TRANSFER_EVENT_KEY)) {
     return null;
   }
@@ -105,6 +113,14 @@ export const decodeTransferEvent = (
   const txHash =
     typeof event.transaction_hash === "string" ? canonicalFelt(event.transaction_hash) : null;
   if (from === null || to === null || amountRaw === null || txHash === null) {
+    return null;
+  }
+  // Validate the counterparty felts symmetrically with the hash (which
+  // isActivityEntry re-checks with isStarkFieldElement at the boundary): a
+  // hostile event must not seat an out-of-field-range counterparty into a
+  // stored/exported entry. A zero address (mint/burn) is a valid field element,
+  // so received-by-mint activity is still kept.
+  if (!isStarkFieldElement(from) || !isStarkFieldElement(to)) {
     return null;
   }
   if (!isSafeBlockNumber(event.block_number)) {
@@ -169,30 +185,48 @@ export const onChainActivityEntry = (input: {
   };
 };
 
-// Dedupe key: transactions are unique per (network, hash). Hashes are
-// canonicalized so a local record ("0x07ab…") and a chain event ("0x7ab…") that
-// name the same transaction collapse to one row.
-const activityKey = (entry: ActivityEntry): string =>
+// Transaction identity: a local record is unique per (network, hash). Hashes
+// are canonicalized so a local record ("0x07ab…") and a chain event ("0x7ab…")
+// that name the same transaction collapse to one row.
+const txKey = (entry: ActivityEntry): string =>
   `${entry.networkId}:${canonicalFelt(entry.hash) ?? entry.hash}`;
+
+// Leg identity for a chain-discovered row. One transaction can emit several
+// Transfer events — a DEX swap emits an outgoing and an incoming leg, a
+// multicall emits many — that all share a hash. Keying on the hash alone would
+// collapse them to one arbitrary leg, so chain rows are keyed on the full
+// (network, hash, token, counterparty, amount) tuple; those fields together
+// distinguish every leg (a swap's legs differ by token, a multicall's by
+// counterparty) while two genuinely identical legs still collapse.
+const legKey = (entry: ActivityEntry): string =>
+  `${txKey(entry)} ${entry.token ?? ""} ${entry.counterparty ?? ""} ${entry.amount ?? ""}`;
 
 /**
  * Merges the wallet's locally recorded activity with transactions discovered on
- * chain, de-duplicated by transaction hash and sorted newest-first. Local
- * records win on a collision: they carry the richer, user-facing summary and a
- * status already reconciled against chain via the pending re-poll, so a locally
- * submitted transfer keeps its identity while its chain-only siblings are added
- * around it. The result is the union, never fewer rows than the local log.
+ * chain, sorted newest-first. A locally submitted transaction collapses every
+ * chain leg that shares its hash: the local record carries the richer,
+ * user-facing summary and a status already reconciled against chain via the
+ * pending re-poll, so it keeps its identity while purely chain-discovered
+ * transactions are added around it. Chain rows with no local record are
+ * de-duplicated per leg, so a swap or multicall keeps all of its transfers
+ * rather than showing one arbitrary leg. The result is the union, never fewer
+ * rows than the local log.
  */
 export const mergeActivity = (
   local: readonly ActivityEntry[],
   onChain: readonly ActivityEntry[],
 ): readonly ActivityEntry[] => {
   const byKey = new Map<string, ActivityEntry>();
+  const localTxKeys = new Set<string>();
   for (const entry of local) {
-    byKey.set(activityKey(entry), entry);
+    localTxKeys.add(txKey(entry));
+    byKey.set(txKey(entry), entry);
   }
   for (const entry of onChain) {
-    const key = activityKey(entry);
+    if (localTxKeys.has(txKey(entry))) {
+      continue;
+    }
+    const key = legKey(entry);
     if (!byKey.has(key)) {
       byKey.set(key, entry);
     }
