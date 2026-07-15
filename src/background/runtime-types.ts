@@ -3,6 +3,7 @@
  */
 import type { StarkSignature } from "../crypto/krusty";
 import type { AllowanceView } from "../starknet/allowance-discovery";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { DiscoveredNft } from "../starknet/nft-metadata";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
@@ -245,6 +246,18 @@ export type DeploymentStatusResponse = {
 };
 
 /**
+ * On-chain class-hash verification returned to extension pages. `verification`
+ * carries the discriminated {@link ClassHashVerification} outcome so the UI can
+ * distinguish verified / mismatch / undeployed / unreachable without re-reading
+ * the chain.
+ */
+export type ClassHashVerificationResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly verification: ClassHashVerification;
+};
+
+/**
  * Supported spec or wallet-API version list returned through the dapp provider
  * bridge for the discovery methods.
  */
@@ -358,6 +371,7 @@ export type RuntimeResponse =
   | BalancesResponse
   | DeclareResponse
   | ChainIdResponse
+  | ClassHashVerificationResponse
   | ConnectedSitesResponse
   | CreateAccountResponse
   | DeploymentDataResponse

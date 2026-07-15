@@ -130,6 +130,25 @@ export const handleWalletOps = async (
     return { accountId: context.account.id, deployed, ok: true };
   }
 
+  if (messageType === "wallet.verifyClassHash") {
+    if (!readTypeOnlyInput(message, "wallet.verifyClassHash")) {
+      return { error: "invalid class hash verification request" };
+    }
+    const context = await activeAccountContext(deps.wallet, deps.session, preferencesStore);
+    if (context.error !== undefined) {
+      return { error: context.error };
+    }
+    if (!runtimeRpc.verifyAccountClassHash) {
+      return { error: "class hash verification unavailable" };
+    }
+    const verification = await runtimeRpc.verifyAccountClassHash({
+      accountAddress: context.account.address,
+      expectedClassHash: context.account.classHash,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], await preferencesStore.read()),
+    });
+    return { accountId: context.account.id, ok: true, verification };
+  }
+
   if (messageType === "wallet.deployAccount") {
     if (!readTypeOnlyInput(message, "wallet.deployAccount")) {
       return { error: "invalid deploy account request" };

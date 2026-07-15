@@ -4,6 +4,7 @@
  */
 
 import { type ExternalAllowanceScan, scanExternalAllowances } from "../starknet/allowance-scan";
+import { type VerifyClassHashInput, verifyAccountClassHash } from "../starknet/class-hash-verify";
 import {
   computeMultisigTransactionId,
   getMultisigConfig,
@@ -94,6 +95,14 @@ export type RuntimeRpc = {
     input: InvokeInput,
   ) => ReturnType<typeof submitInvokeTransaction>;
   /**
+   * On-chain class-hash verification. Optional so existing RPC stubs stay
+   * valid; when absent the account screen reports verification as unavailable
+   * (fail closed — never a silent "verified").
+   */
+  readonly verifyAccountClassHash?: (
+    input: VerifyClassHashInput,
+  ) => ReturnType<typeof verifyAccountClassHash>;
+  /**
    * Multisig read surface. Optional so existing RPC stubs stay valid; when
    * absent the multisig handlers report the feature as unavailable.
    */
@@ -142,4 +151,5 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   submitErc20Transfer,
   submitInvokeTransaction,
   strk20: createHttpStrk20Service(strk20Http),
+  verifyAccountClassHash,
 };

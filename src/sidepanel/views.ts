@@ -16,6 +16,7 @@ import type {
 } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { AllowanceView } from "../starknet/allowance-discovery";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
@@ -342,6 +343,7 @@ export const dashboard = (
   priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
   openAssignId: string | null = null,
+  classHashVerification: ClassHashVerification | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -356,7 +358,7 @@ export const dashboard = (
     return networkFlow(status, preferences);
   }
   if (activeView === "account") {
-    return accountFlow(status, account, preferences, expandedGroupId);
+    return accountFlow(status, account, preferences, expandedGroupId, classHashVerification);
   }
   if (activeView === "address-book") {
     return addressBookFlow(status, preferences);

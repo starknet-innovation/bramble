@@ -12,6 +12,7 @@ import {
   isAllowancesResponse,
   isApprovalDecisionResponse,
   isBalancesResponse,
+  isClassHashVerificationResponse,
   isConnectedSitesResponse,
   isCreateAccountResponse,
   isDeploymentStatusResponse,
@@ -33,6 +34,7 @@ import {
   type TransferReviewResponse,
   type WalletStatus,
 } from "../popup/responses";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { AccountGroupIcon } from "../storage/account-groups";
 
 /**
@@ -125,6 +127,10 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async loadDeploymentStatus(): Promise<DeploymentStatusResponse | null> {
       const response = await sendMessage({ type: "wallet.deploymentStatus" });
       return isDeploymentStatusResponse(response) ? response : null;
+    },
+    async loadClassHashVerification(): Promise<ClassHashVerification | null> {
+      const response = await sendMessage({ type: "wallet.verifyClassHash" });
+      return isClassHashVerificationResponse(response) ? response.verification : null;
     },
     async decideApproval(id: string, approved: boolean): Promise<void> {
       const response = await sendMessage({

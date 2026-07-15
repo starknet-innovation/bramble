@@ -11,6 +11,29 @@ import { MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
+  /* On-chain class-hash verification shown on the account screen: pending stays
+     muted, a confirmed match goes accent, a mismatch is an assertive danger
+     block so it cannot be skimmed past. Icon and text share one baseline. */
+  .verify-status {
+    align-items: center;
+    color: var(--mc-muted);
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: 6px;
+    line-height: ${TYPE.caption.line};
+    margin-top: 6px;
+  }
+  .verify-status .icon { flex: none; }
+  .verify-status.verified { color: var(--mc-accent); font-weight: 600; }
+  .verify-status.mismatch {
+    align-items: flex-start;
+    background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
+    border-radius: ${RADIUS.md};
+    color: var(--mc-danger);
+    font-weight: 600;
+    padding: ${SPACE.sm};
+  }
+  .verify-status.mismatch code { word-break: break-all; }
   /* Account drawer: left sheet over a dimmed backdrop, elevation only */
   .drawer-root { inset: 0; pointer-events: none; position: fixed; z-index: 20; }
   .drawer-root[data-open="true"] { pointer-events: auto; }

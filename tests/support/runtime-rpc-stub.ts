@@ -47,5 +47,11 @@ export const makeRuntimeRpc = (overrides: Partial<RuntimeRpc> = {}): RuntimeRpc 
   async submitInvokeTransaction(input) {
     return { calls: input.calls, transactionHash: "0x7cd" };
   },
+  async verifyAccountClassHash() {
+    // Benign default: report the account as undeployed so no suite implies a
+    // verification result it did not set up. Suites that assert verification
+    // override this per test.
+    return { status: "undeployed" };
+  },
   ...overrides,
 });
