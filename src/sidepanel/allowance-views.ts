@@ -41,7 +41,7 @@ export const allowancesFlow = (
     (allowance) => allowance.networkId === status.networkId && allowance.accountId === account?.id,
   );
   return (
-    flowHeader("Allowances", "settings", status, `${scoped.length} outstanding`) +
+    flowHeader("Allowances", status, `${scoped.length} outstanding`) +
     flowScreen(
       "allowances",
       `<section class="section">

@@ -90,6 +90,9 @@ export const unregisterDom = async (): Promise<void> => {
 // `isAccountId` guard accepts membership toggles, mirroring wallet/account ids.
 export const acctA: AccountRef = { ...account, address: "0x2a", id: "SN_MAIN:0x2a" };
 export const acctB: AccountRef = { ...account, address: "0x3b", id: "SN_MAIN:0x3b" };
+// Id the fake `addAccount` returns, so the "add account joins the folder" flow
+// can assert the follow-up membership call carries the freshly created id.
+export const newAccountId = "SN_MAIN:0x9c";
 
 export const status: WalletStatus = {
   accountCount: 2,
@@ -115,6 +118,7 @@ export type Calls = {
   setGroupIcon: Array<readonly [string, AccountGroupIcon]>;
   removeGroup: string[];
   setAccountInGroup: Array<readonly [string, string, boolean]>;
+  addAccount: string[];
 };
 
 export type Harness = {
@@ -157,7 +161,10 @@ const buildWallet = (
     setGroups(setAccountInGroup(getGroups(), groupId, accountId, member));
     return Promise.resolve();
   },
-  addAccount: (): Promise<void> => Promise.resolve(),
+  addAccount: (networkId: string): Promise<string> => {
+    calls.addAccount.push(networkId);
+    return Promise.resolve(newAccountId);
+  },
   setActiveAccount: (): Promise<void> => Promise.resolve(),
   loadStatus: (): Promise<WalletStatus> => Promise.resolve(status),
 });
@@ -183,6 +190,7 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
   document.body.append(container);
   let groups: AccountGroups = initialGroups;
   const calls: Calls = {
+    addAccount: [],
     createGroup: [],
     renameGroup: [],
     setGroupIcon: [],

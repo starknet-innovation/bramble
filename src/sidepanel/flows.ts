@@ -37,7 +37,7 @@ export const sendFlow = (
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   const canSend = account !== null && tokens.length > 0;
   return (
-    flowHeader("Send", "home", status, account ? `From ${accountLabel(account.address)}` : "") +
+    flowHeader("Send", status, account ? `From ${accountLabel(account.address)}` : "") +
     flowScreen(
       "send",
       `<section class="section">
@@ -81,7 +81,7 @@ export const sendFlow = (
  * Receive flow: show and copy the active account address.
  */
 export const receiveFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Receive", "home", status) +
+  flowHeader("Receive", status) +
   flowScreen(
     "receive",
     `<section class="section">
@@ -118,7 +118,7 @@ const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
  * Network flow: switch the active network and set a custom RPC endpoint.
  */
 export const networkFlow = (status: WalletStatus, preferences: WalletPreferences | null): string =>
-  flowHeader("Network", "settings", status, "Choose where the wallet operates") +
+  flowHeader("Network", status, "Choose where the wallet operates") +
   flowScreen(
     "network",
     `<section class="section">
@@ -190,7 +190,7 @@ export const accountFlow = (
   const accountType = account ? knownAccountType(account.classHash) : null;
   const groups = preferences?.groups ?? [];
   return (
-    flowHeader("Account", "settings", status, `On ${status.network}`) +
+    flowHeader("Account", status, `On ${status.network}`) +
     flowScreen(
       "account",
       `<section class="section">
@@ -262,7 +262,7 @@ export const accountFlow = (
  * vault or any key material.
  */
 export const backupFlow = (status: WalletStatus): string =>
-  flowHeader("Backup & restore", "settings", status, "Preferences, labels, and contacts") +
+  flowHeader("Backup & restore", status, "Preferences, labels, and contacts") +
   flowScreen(
     "backup",
     `<section class="section">
@@ -285,7 +285,7 @@ export const backupFlow = (status: WalletStatus): string =>
  * store and returns through the flow header back control.
  */
 export const connectedSitesFlow = (status: WalletStatus, sites: readonly ConnectedSite[]): string =>
-  flowHeader("Connected sites", "settings", status, `${sites.length} connected`) +
+  flowHeader("Connected sites", status, `${sites.length} connected`) +
   flowScreen(
     "connected-sites",
     `<section class="section">
@@ -319,7 +319,7 @@ export const addressBookFlow = (
   const addresses =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return (
-    flowHeader("Address book", "settings", status, `${addresses.length} saved`) +
+    flowHeader("Address book", status, `${addresses.length} saved`) +
     flowScreen(
       "address-book",
       `<section class="section">

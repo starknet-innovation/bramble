@@ -140,7 +140,7 @@ export const nftGalleryFlow = (
   const visible = visibleItems(watched, discoveredNfts, status.networkId);
   const hidden = watched.filter((nft) => nft.networkId === status.networkId && nft.spam === true);
   return (
-    flowHeader("NFTs", "home", status, `${visible.length} shown`) +
+    flowHeader("NFTs", status, `${visible.length} shown`) +
     flowScreen(
       "nfts",
       `<section class="section">
@@ -225,7 +225,7 @@ export const nftDetailFlow = (
 ): string => {
   const nft = selectedDetail(preferences, discoveredNfts, selectedNftId);
   return (
-    flowHeader("NFT", "nfts", status, nft ? nft.title : "") +
+    flowHeader("NFT", status, nft ? nft.title : "") +
     flowScreen(
       "nft-detail",
       nft === null

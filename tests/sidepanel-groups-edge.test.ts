@@ -117,29 +117,35 @@ describe("account drawer group-edit path", () => {
     expect(harness.container.querySelectorAll(".new-group-form").length).toBe(1);
   });
 
-  test("removing an account from a group clears its icon line while the panel stays open", async () => {
+  test("picking None clears the account's folder while the picker stays open", async () => {
     const harness = mount([group("briefcase", "work", "Work", [acctA.id])], "drawer");
 
     click(harness.container.querySelector(`[data-assign-toggle="${acctA.id}"]`));
     await harness.tick();
-    // The account starts a member: its row shows the group icon line.
+    // The account starts filed under Work: its row shows the folder icon line
+    // and the Work option is the selected pick.
     let row = harness.container
       .querySelector(`[data-switch-account="${acctA.id}"]`)
       ?.closest(".drawer-account-item");
     expect(row?.querySelector(".account-groups-line")).not.toBeNull();
+    expect(
+      harness.container
+        .querySelector(`[data-group-pick="work"][data-account="${acctA.id}"]`)
+        ?.getAttribute("aria-pressed"),
+    ).toBe("true");
 
-    click(
-      harness.container.querySelector(`[data-group-toggle="work"][data-account="${acctA.id}"]`),
-    );
+    click(harness.container.querySelector(`[data-group-pick="none"][data-account="${acctA.id}"]`));
     await harness.tick();
 
     expect(harness.calls.setAccountInGroup).toEqual([[acctA.id, "work", false]]);
     expect(harness.groups()[0]?.accountIds).not.toContain(acctA.id);
-    const toggle = harness.container.querySelector(
-      `[data-group-toggle="work"][data-account="${acctA.id}"]`,
-    );
-    expect(toggle?.getAttribute("aria-pressed")).toBe("false");
-    // The row's icon line is gone, and the assign panel is still open.
+    // None is now the selected pick, the row's icon line is gone, and the picker
+    // is still open.
+    expect(
+      harness.container
+        .querySelector(`[data-group-pick="none"][data-account="${acctA.id}"]`)
+        ?.getAttribute("aria-pressed"),
+    ).toBe("true");
     row = harness.container
       .querySelector(`[data-switch-account="${acctA.id}"]`)
       ?.closest(".drawer-account-item");
@@ -279,14 +285,14 @@ describe("group control focus restoration", () => {
   const drawer = (groups: AccountGroups, openAssign: string | null, expanded: string | null) =>
     accountDrawer(status, acctA, { ...preferences, groups }, null, openAssign, true, expanded);
 
-  test("reclaims focus on the acted-on membership toggle after a repaint", () => {
+  test("reclaims focus on the acted-on folder pick after a repaint", () => {
     const groups = [group("briefcase", "work", "Work")];
     const app = paintApp(drawer(groups, acctA.id, null));
-    const selector = `[data-group-toggle="work"][data-account="${acctA.id}"]`;
+    const selector = `[data-group-pick="work"][data-account="${acctA.id}"]`;
     app.querySelector<HTMLElement>(selector)?.focus();
     const memo = focusMemo();
 
-    // Repaint: the toggle is now a fresh node. Focus must return to it.
+    // Repaint: the pick is now a fresh node. Focus must return to it.
     paintApp(drawer(groups, acctA.id, null));
     restoreFocus(app, memo);
     expect(document.activeElement).toBe(app.querySelector(selector));

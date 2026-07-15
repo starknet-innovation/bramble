@@ -2,8 +2,8 @@
  * Pure templates for the account-groups ("folders") UI, shared across the left
  * account drawer and the manage-accounts flow so every surface renders the same
  * controls from one source: an icon picker, the shared "New group" form, the
- * drawer filter chips, an account's member-group icon line, and the per-account
- * assignment panel. The group-centric bulk members editor and its "Groups"
+ * drawer filter chips, an account's folder icon line, and the per-account
+ * single-select folder picker. The group-centric bulk members editor and its "Groups"
  * section wrapper live in ./group-members.ts, which reuses the picker and form
  * templates here — the canonical place to rename, re-icon, or delete a group.
  * Behaviour lives in ./group-ui.ts; styles in ./styles-home.ts.
@@ -90,33 +90,55 @@ export const accountGroupsLine = (memberGroups: AccountGroups): string =>
         memberGroups.map((group) => group.name).join(", "),
       )}">${memberGroups.map((group) => icon(group.icon)).join("")}</span>`;
 
-const groupToggle = (account: AccountRef, group: AccountGroup): string => {
-  const member = group.accountIds.includes(account.id);
-  return `<button class="group-toggle" type="button" data-group-toggle="${escapeHtml(group.id)}" data-account="${escapeHtml(account.id)}" aria-pressed="${member}">
-    <span class="group-toggle-icon">${icon(group.icon)}</span>
-    <span class="group-toggle-name">${escapeHtml(group.name)}</span>
-    <span class="group-toggle-mark">${member ? icon("check") : icon("plus")}</span>
+// One option in the single-select folder picker. `pick` is the group id, or
+// "none" for the ungrouped choice; `selected` marks the account's current
+// folder. Reuses the .group-toggle styling as the rest of the picker.
+const groupPickOption = (
+  accountId: string,
+  pick: string,
+  name: string,
+  glyph: string,
+  selected: boolean,
+): string =>
+  `<button class="group-toggle" type="button" data-group-pick="${escapeHtml(pick)}" data-account="${escapeHtml(accountId)}" aria-pressed="${selected}">
+    <span class="group-toggle-icon">${glyph}</span>
+    <span class="group-toggle-name">${escapeHtml(name)}</span>
+    ${selected ? `<span class="group-toggle-mark">${icon("check")}</span>` : ""}
   </button>`;
-};
 
 /**
- * Renders the per-account group-assignment panel: one membership toggle per
- * group, each showing the group's icon and whether the account is a member.
- * `open` keeps the panel expanded across re-renders (the open account id is held
- * in the entrypoint), so toggling several groups in one pass never collapses it.
- * Creating a group happens from the surface's own "New group" control, not from
- * inside this panel — keeping one create entry per surface.
+ * Renders the per-account folder picker: a single-select list of the groups
+ * plus a "None" (ungrouped) option, with the account's current folder marked.
+ * Choosing an option files the account into exactly that folder (or clears it),
+ * so an account is only ever in one group. `open` keeps the picker expanded
+ * across re-renders (the open account id is held in the entrypoint), and
+ * `currentGroupId` is the account's current folder (null = ungrouped). Creating
+ * a group happens from the surface's own "Manage groups" control, not here.
  */
-export const groupAssignPanel = (
+export const groupPickerPanel = (
   account: AccountRef,
   groups: AccountGroups,
+  currentGroupId: string | null,
   open: boolean,
 ): string => `
   <div class="group-assign" data-group-assign="${escapeHtml(account.id)}"${open ? "" : " hidden"}>
-    <p class="eyebrow">In groups</p>
+    <p class="eyebrow">Folder</p>
     ${
       groups.length === 0
-        ? '<p class="hint">No groups yet. Use "New group" below to create your first.</p>'
-        : `<div class="group-toggle-list">${groups.map((group) => groupToggle(account, group)).join("")}</div>`
+        ? '<p class="hint">No groups yet. Use "Manage groups" below to create your first.</p>'
+        : `<div class="group-toggle-list">
+            ${groupPickOption(account.id, "none", "None", icon("x"), currentGroupId === null)}
+            ${groups
+              .map((group) =>
+                groupPickOption(
+                  account.id,
+                  group.id,
+                  group.name,
+                  icon(group.icon),
+                  currentGroupId === group.id,
+                ),
+              )
+              .join("")}
+          </div>`
     }
   </div>`;

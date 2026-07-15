@@ -78,11 +78,13 @@ export const HOME_STYLES = `
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .drawer-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .drawer-foot { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.sm}; }
-  .drawer-root[data-open="true"] .drawer-list li { animation: drawer-item ${MOTION.tabMs}ms var(--ease-out) both; }
-  .drawer-root[data-open="true"] .drawer-list li:nth-child(2) { animation-delay: 30ms; }
-  .drawer-root[data-open="true"] .drawer-list li:nth-child(3) { animation-delay: 60ms; }
-  .drawer-root[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
-  .drawer-root[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
+  /* Row stagger is gated behind .is-opening (added only on a genuine open) so a
+     shell repaint that recreates the drawer node cannot replay it. */
+  .drawer-root.is-opening[data-open="true"] .drawer-list li { animation: drawer-item ${MOTION.tabMs}ms var(--ease-out) both; }
+  .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(2) { animation-delay: 30ms; }
+  .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(3) { animation-delay: 60ms; }
+  .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
+  .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
 
   /* Portfolio tabs: text tabs, sliding emerald indicator, trailing actions */
   .home-tabs { display: grid; gap: ${SPACE.sm}; }
@@ -272,6 +274,9 @@ export const HOME_STYLES = `
   .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
   .drawer-account-row .drawer-account, .option-row-line .option-row { flex: 1; min-width: 0; }
   button.drawer-assign { flex: none; }
+  /* Ungrouped rows show a muted folder as a "pick a folder" affordance; a filed
+     account shows its folder's icon at full ink. */
+  button.drawer-assign.is-ungrouped { color: var(--mc-muted); }
   .option-group-item { display: grid; gap: 4px; }
   .account-groups-line { display: inline-flex; gap: 4px; margin-top: 2px; }
   .account-groups-line .icon { color: var(--mc-muted); height: 13px; width: 13px; }

@@ -267,6 +267,16 @@ const groupControlMemo = (element: HTMLElement): readonly string[] => {
       attrSelector("data-assign-toggle", account),
     ];
   }
+  const groupPick = data["groupPick"];
+  if (groupPick !== undefined && account !== undefined) {
+    // The drawer's single-select folder picker: reclaim the acted-on option
+    // (it survives the repaint — only `aria-pressed` moves), else the row's
+    // picker toggle.
+    return [
+      attrSelector("data-group-pick", groupPick) + attrSelector("data-account", account),
+      attrSelector("data-assign-toggle", account),
+    ];
+  }
   const assignToggle = data["assignToggle"];
   if (assignToggle !== undefined) {
     return [attrSelector("data-assign-toggle", assignToggle)];

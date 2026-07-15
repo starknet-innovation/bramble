@@ -1,9 +1,10 @@
 /**
  * Behaviour for the shared account-groups controls rendered by
  * ./group-controls.ts. One `bindGroupControls` entry wires icon pickers,
- * create/edit forms, delete (two-tap) confirmation, per-account membership
- * toggles, and the collapsible assignment panels, so the left drawer and the
- * manage-accounts flow drive identical group behaviour without duplication.
+ * create/edit forms, delete (two-tap) confirmation, the group-centric bulk
+ * membership toggles, the drawer's single-select folder picker, and the
+ * collapsible picker panels, so the left drawer and the manage-accounts flow
+ * drive identical group behaviour without duplication.
  */
 import { isAccountGroupIcon } from "../storage/account-groups";
 import { buttonBusy, errorMessage, showToast } from "./dom";
@@ -164,6 +165,46 @@ const bindAssignToggles = (root: Element, deps: GroupControlDeps): void => {
   });
 };
 
+// Single-select folder picker (drawer row). Choosing a group files the account
+// into exactly that folder — the exclusive setter drops it from any other — and
+// choosing "None" clears its current folder. The current folder is read from
+// the pressed option in the same list, so "None" knows which membership to
+// remove. A tap on the already-selected option is a no-op.
+const bindGroupPickers = (root: Element, deps: GroupControlDeps): void => {
+  root.querySelectorAll<HTMLButtonElement>("[data-group-pick]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const accountId = button.dataset["account"];
+      const pick = button.dataset["groupPick"];
+      if (!accountId || !pick || button.getAttribute("aria-pressed") === "true") {
+        return;
+      }
+      const currentPick = button
+        .closest(".group-toggle-list")
+        ?.querySelector<HTMLElement>('[data-group-pick][aria-pressed="true"]')?.dataset[
+        "groupPick"
+      ];
+      const currentGroup = currentPick && currentPick !== "none" ? currentPick : null;
+      buttonBusy(button, true);
+      const op =
+        pick === "none"
+          ? currentGroup
+            ? deps.wallet.setAccountInGroup(accountId, currentGroup, false)
+            : Promise.resolve()
+          : deps.wallet.setAccountInGroup(accountId, pick, true);
+      void op.then(
+        async () => {
+          showToast(pick === "none" ? "Removed from folder" : "Moved to folder", "success");
+          await deps.rerender();
+        },
+        (error: unknown) => {
+          showToast(errorMessage(error, "Group update failed"), "error");
+          buttonBusy(button, false);
+        },
+      );
+    });
+  });
+};
+
 // Open/collapse an account's group-assignment panel. The open account id is
 // held in a module var (mirroring the drawer's group filter and the bulk
 // editor's expanded group) so it survives full re-renders: toggling a
@@ -212,6 +253,7 @@ export const bindGroupControls = (root: Element | null, deps: GroupControlDeps):
   bindEditForms(root, deps);
   bindRemoveButtons(root, deps);
   bindAssignToggles(root, deps);
+  bindGroupPickers(root, deps);
   bindAssignPanels(root, deps);
   bindGroupExpanders(root, deps);
 };

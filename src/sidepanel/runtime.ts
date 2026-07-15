@@ -90,10 +90,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "add token failed");
     },
-    async addAccount(networkId: string): Promise<void> {
+    async addAccount(networkId: string): Promise<string> {
       const response = await sendMessage({ networkId, type: "wallet.addAccount" });
       if (isCreateAccountResponse(response)) {
-        return;
+        // Surface the created account's id so the caller can file it into the
+        // focused group (the background already returns the account here).
+        return response.account.id;
       }
       throw responseError(response, "add account failed");
     },

@@ -12,6 +12,7 @@ import { applySkin } from "../ui/skin";
 import { colorSchemeForChoice, skinForChoice } from "../ui/theme";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
+import { createDeploymentCache } from "./deployment-cache";
 import {
   bindCopyButtons,
   buttonBusy,
@@ -29,6 +30,7 @@ import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
+import { popView, pushView, type ViewHistory } from "./nav-history";
 import { bindOnboarding } from "./onboarding-ui";
 import { emptyRenderCache, type RenderData } from "./render-cache";
 import { bindReveal } from "./reveal-ui";
@@ -62,6 +64,13 @@ let lastScene = "";
 let lastContent = "";
 let lastSkinName = "";
 let lastActiveView: WalletView = "home";
+// Back-stack of screens to return to (see ./nav-history). navigate() pushes the
+// screen being left; goBack() pops to the true previous one.
+let viewHistory: ViewHistory = [];
+// Set to "back" by goBack() so a pop animates as a reverse transition even when
+// the depth-based navDirection would read it as a lateral swap; consumed and
+// cleared by the next paint().
+let forcedDirection: NavDirection | null = null;
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
@@ -91,6 +100,12 @@ const bindNavigation = (): void => {
       }
       navigate(view);
     });
+  });
+};
+
+const bindBack = (): void => {
+  app?.querySelectorAll<HTMLButtonElement>("[data-nav-back]").forEach((button) => {
+    button.addEventListener("click", goBack);
   });
 };
 
@@ -151,28 +166,12 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
   });
 };
 
-const deployedAccounts = new Set<string>();
-
-const loadDeployment = async (status: WalletStatus): Promise<boolean | null> => {
-  if (activeView !== "home" || !status.hasVault || status.locked) {
-    return null;
-  }
-  const known = `${status.networkId}:${status.activeAccountId ?? ""}`;
-  if (deployedAccounts.has(known)) {
-    return true;
-  }
-  const result = await wallet.loadDeploymentStatus();
-  if (result?.deployed) {
-    deployedAccounts.add(`${status.networkId}:${result.accountId}`);
-    deployedAccounts.add(known);
-  }
-  return result ? result.deployed : null;
-};
-
+const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
 
 const bindAll = (): void => {
   bindNavigation();
+  bindBack();
   bindCopyButtons(app);
   bindOnboarding({ app, render, wallet });
   bindUnlock();
@@ -303,7 +302,8 @@ const paint = (): void => {
       : `dashboard:${activeView}`;
   const animate = scene !== lastScene;
   lastScene = scene;
-  const direction = navDirection(lastActiveView, activeView);
+  const direction = forcedDirection ?? navDirection(lastActiveView, activeView);
+  forcedDirection = null;
   // Self-heal stale group selections (filter/expanded/open panel) so a deleted
   // group or a departed account can never silently re-apply itself on repaint.
   const healed = healTransientGroupState(
@@ -393,7 +393,7 @@ const render = async (status: WalletStatus): Promise<void> => {
     });
   }
   if (activeView === "home") {
-    fill(loadDeployment(status), (value) => {
+    fill(deployment.load(status, activeView), (value) => {
       cache.deployment = value;
     });
   }
@@ -448,8 +448,25 @@ const render = async (status: WalletStatus): Promise<void> => {
 
 // Instant navigation: swap the visible screen from cache now, hydrate after.
 // Any navigation dismisses the account drawer so it never lingers over flows.
+// The screen being left is pushed onto the history so Back can return to it.
 const navigate = (view: WalletView): void => {
+  if (view !== activeView) {
+    viewHistory = pushView(viewHistory, activeView);
+  }
   activeView = view;
+  drawerOpen = false;
+  paint();
+  void wallet.loadStatus().then(render);
+};
+
+// Steps back to the screen the user actually came from (or Home at the root),
+// animating as a reverse transition. Same instant-swap-then-hydrate path as
+// navigate(); the back control in every flow header (`[data-nav-back]`) calls it.
+const goBack = (): void => {
+  const popped = popView(viewHistory);
+  viewHistory = popped.history;
+  forcedDirection = "back";
+  activeView = popped.view;
   drawerOpen = false;
   paint();
   void wallet.loadStatus().then(render);

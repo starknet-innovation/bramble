@@ -62,7 +62,7 @@ describe("sidepanel views", () => {
 
     expect(html).toContain('id="wallet-screen-receive"');
     expect(html).toContain(account.address);
-    expect(html).toMatch(/data-view="home"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
     expect(html).not.toContain('role="tablist"');
     expect(html).not.toContain('id="lock-button"');
@@ -91,7 +91,7 @@ describe("sidepanel views", () => {
 
     expect(html).toMatch(/data-network-id="SN_MAIN"[^>]*aria-pressed="true"/);
     expect(html).toMatch(/data-network-id="SN_SEPOLIA"[^>]*aria-pressed="false"/);
-    expect(html).toMatch(/data-view="settings"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
 
@@ -103,7 +103,7 @@ describe("sidepanel views", () => {
       new RegExp(`data-account-id="${secondAccount.id}"[^>]*aria-pressed="false"`),
     );
     expect(html).toContain(account.classHash);
-    expect(html).toMatch(/data-view="settings"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
 
@@ -259,7 +259,7 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="backup-export"');
     expect(html).toContain('id="backup-import"');
     expect(html).toContain('id="backup-file"');
-    expect(html).toMatch(/data-view="settings"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain('class="wallet-dock"');
   });
 
@@ -286,7 +286,7 @@ describe("sidepanel views", () => {
     expect(html).toContain('name="vaultPassphrase"');
     expect(html).toContain('id="reveal-phrase"');
     expect(html).toContain("is-masked");
-    expect(html).toMatch(/data-view="settings"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
 

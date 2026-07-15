@@ -3,9 +3,10 @@
  * it drives the real drawer and manage-accounts templates via the shared happy-dom
  * harness so each test asserts BOTH that the correct store method is called AND
  * that the UI re-derives from the mutated store. Covers create from the drawer,
- * assign, assign to a second group without the panel collapsing, filter, the empty
- * state, and the manage-accounts rename / change-icon / delete / bucket flows. Edge
- * cases (the drawer edit path, self-heal, duplicates, cross-surface, focus) live in
+ * filter, the empty state, and the manage-accounts rename / change-icon / delete /
+ * bucket flows. The drawer's single-group folder picker and Add-account-joins-the-
+ * -folder live in ./sidepanel-groups-drawer-picker.test.ts; edge cases (the drawer
+ * edit path, self-heal, duplicates, cross-surface, focus) in
  * ./sidepanel-groups-edge.test.ts.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
@@ -65,68 +66,6 @@ describe("account drawer group interactions", () => {
     expect(harness.container.querySelector('[data-group-expand="trading"]')).not.toBeNull();
     expect(
       harness.container.querySelector("#drawer-group-editor-trading")?.hasAttribute("hidden"),
-    ).toBe(false);
-  });
-
-  test("assigns an account to a group and reflects membership on the row", async () => {
-    const harness = mount([group("briefcase", "work", "Work")], "drawer");
-
-    click(harness.container.querySelector(`[data-assign-toggle="${acctA.id}"]`));
-    await harness.tick();
-    const panel = harness.container.querySelector(`[data-group-assign="${acctA.id}"]`);
-    expect(panel?.hasAttribute("hidden")).toBe(false);
-
-    click(
-      harness.container.querySelector(`[data-group-toggle="work"][data-account="${acctA.id}"]`),
-    );
-    await harness.tick();
-
-    expect(harness.calls.setAccountInGroup).toEqual([[acctA.id, "work", true]]);
-    // Store now has the account in the group; the toggle re-derives pressed, and
-    // the account row shows the group's icon.
-    expect(harness.groups()[0]?.accountIds).toContain(acctA.id);
-    const toggle = harness.container.querySelector(
-      `[data-group-toggle="work"][data-account="${acctA.id}"]`,
-    );
-    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
-    const row = harness.container
-      .querySelector(`[data-switch-account="${acctA.id}"]`)
-      ?.closest(".drawer-account-item");
-    expect(row?.querySelector(".account-groups-line")).not.toBeNull();
-  });
-
-  test("assigns to a second group without the panel collapsing", async () => {
-    const harness = mount(
-      [group("briefcase", "work", "Work"), group("piggyBank", "savings", "Savings")],
-      "drawer",
-    );
-
-    click(harness.container.querySelector(`[data-assign-toggle="${acctA.id}"]`));
-    await harness.tick();
-
-    click(
-      harness.container.querySelector(`[data-group-toggle="work"][data-account="${acctA.id}"]`),
-    );
-    await harness.tick();
-    // Panel stays open after the first toggle so a second group can be added in
-    // the same pass.
-    expect(
-      harness.container.querySelector(`[data-group-assign="${acctA.id}"]`)?.hasAttribute("hidden"),
-    ).toBe(false);
-
-    click(
-      harness.container.querySelector(`[data-group-toggle="savings"][data-account="${acctA.id}"]`),
-    );
-    await harness.tick();
-
-    expect(harness.calls.setAccountInGroup).toEqual([
-      [acctA.id, "work", true],
-      [acctA.id, "savings", true],
-    ]);
-    expect(harness.groups()[0]?.accountIds).toContain(acctA.id);
-    expect(harness.groups()[1]?.accountIds).toContain(acctA.id);
-    expect(
-      harness.container.querySelector(`[data-group-assign="${acctA.id}"]`)?.hasAttribute("hidden"),
     ).toBe(false);
   });
 

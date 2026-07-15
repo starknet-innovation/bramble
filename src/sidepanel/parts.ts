@@ -241,16 +241,14 @@ export const flowScreen = (view: WalletView, body: string): string =>
 
 /**
  * Renders the header every flow screen starts with: a back control, the goal
- * title, and the network context.
+ * title, and the network context. The back control carries no static target —
+ * it pops the navigation history (see ./nav-history.ts), so Back always returns
+ * to the screen the user actually came from regardless of how this one was
+ * reached.
  */
-export const flowHeader = (
-  title: string,
-  backView: WalletView,
-  status: WalletStatus,
-  subtitle?: string,
-): string => `
+export const flowHeader = (title: string, status: WalletStatus, subtitle?: string): string => `
   <header class="flow-header">
-    <button class="icon-button ghost" data-view="${backView}" type="button" aria-label="Back" title="Back">${icon("chevronLeft")}</button>
+    <button class="icon-button ghost" data-nav-back type="button" aria-label="Back" title="Back">${icon("chevronLeft")}</button>
     <div class="flow-title">
       <h1>${escapeHtml(title)}</h1>
       ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}

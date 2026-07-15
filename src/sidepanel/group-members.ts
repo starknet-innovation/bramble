@@ -1,7 +1,7 @@
 /**
  * Pure templates for the group-centric bulk members editor rendered in the
- * manage-accounts "Groups" section. Where the per-account panel in
- * ./group-controls.ts toggles a single account across every group, this editor
+ * manage-accounts "Groups" section. Where the per-account picker in
+ * ./group-controls.ts files a single account into one folder, this editor
  * transposes the relationship: it opens one group and lists EVERY wallet
  * account (across networks) as a checklist, so a user can bucket many accounts
  * into a group in one pass without opening each account. The group's rename,
@@ -107,7 +107,7 @@ export const groupsSection = (
   return `
   <section class="section">
     <h2>Groups</h2>
-    <p class="hint">Organise accounts into named folders. Open a group to bucket accounts into it in one pass; an account can belong to several groups.</p>
+    <p class="hint">Organise accounts into named folders. Open a group to file accounts into it in one pass; each account belongs to a single folder, so filing it here moves it out of any other.</p>
     ${
       groups.length === 0
         ? '<p class="empty">No groups yet. Create your first below.</p>'
