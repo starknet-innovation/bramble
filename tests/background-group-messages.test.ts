@@ -55,7 +55,7 @@ describe("account group messages", () => {
     expect(removed).toMatchObject({ ok: true, preferences: { groups: [] } });
   });
 
-  test("buckets several accounts into a group and keeps groups independent", async () => {
+  test("buckets several accounts into a group and keeps membership exclusive", async () => {
     const handler = handlerWithGroups();
     // Distinct, well-formed account ids spanning networks — the bulk editor
     // lists every wallet account regardless of network.
@@ -90,12 +90,13 @@ describe("account group messages", () => {
       },
     });
 
-    // The same account can also belong to a second group, independently.
+    // Filing an account into a second group moves it out of the first — an
+    // account belongs to a single folder (exclusive).
     await handler(
       { accountId: ids[0], groupId: "personal", member: true, type: "wallet.setAccountInGroup" },
       extensionSender,
     );
-    // Removing several from "work" leaves the "personal" membership intact.
+    // Removing the remaining accounts from "work" leaves "personal" intact.
     await handler(
       { accountId: ids[1], groupId: "work", member: false, type: "wallet.setAccountInGroup" },
       extensionSender,
@@ -108,7 +109,7 @@ describe("account group messages", () => {
       ok: true,
       preferences: {
         groups: [
-          { id: "work", accountIds: [ids[0]] },
+          { id: "work", accountIds: [] },
           { id: "personal", accountIds: [ids[0]] },
         ],
       },

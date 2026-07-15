@@ -10,6 +10,7 @@
 import { type Call, CallData } from "starknet";
 import {
   APPROVAL_EVENT_KEY,
+  decodeApprovalEvent,
   type ExternalAllowance,
   parseAllowanceAmount,
 } from "./allowance-discovery";
@@ -63,24 +64,16 @@ export type ExternalAllowanceScan = {
   readonly tokens: readonly string[];
 };
 
+// Decodes each Approval event through the shared, tested decoder (one layout
+// definition for both Cairo generations) and keeps the spenders the requested
+// owner approved. Reusing decodeApprovalEvent avoids a second, drift-prone copy
+// of the key/data layout detection.
 const spendersFromEvents = (events: readonly AllowanceEvent[], owner: string): string[] => {
   const spenders: string[] = [];
   for (const event of events) {
-    if (!sameFelt(event.keys[0], APPROVAL_EVENT_KEY)) {
-      continue;
-    }
-    const [rawOwner, rawSpender] =
-      event.keys.length >= 3 ? [event.keys[1], event.keys[2]] : [event.data[0], event.data[1]];
-    if (typeof rawOwner !== "string" || typeof rawSpender !== "string") {
-      continue;
-    }
-    const canonicalSpender = canonicalFelt(rawSpender);
-    if (
-      sameFelt(rawOwner, owner) &&
-      canonicalSpender &&
-      isNonZeroStarkFieldElement(canonicalSpender)
-    ) {
-      spenders.push(canonicalSpender);
+    const decoded = decodeApprovalEvent(event);
+    if (decoded && sameFelt(decoded.owner, owner)) {
+      spenders.push(decoded.spender);
     }
   }
   return spenders;

@@ -3,8 +3,10 @@
  * active account owns — discovered through the configured indexer and re-proven
  * on-chain in the background — merged with any manually watched collectibles,
  * hides spam behind a toggle, and keeps the manual "Watch an NFT" form for
- * tokens auto-discovery does not surface. Each entry renders its image (with a
- * placeholder fallback wired in nft-ui) plus a collection/token-id caption.
+ * tokens auto-discovery does not surface. Each entry renders a collection/token-id
+ * caption; its remote image loads immediately only for solicited (manually
+ * watched) NFTs, while unsolicited auto-discovered ones show a placeholder until
+ * the user opens them — so an airdropped tile cannot phone home on gallery paint.
  * Detail sends through the verified invoke path.
  */
 import type { DiscoveredNft, WalletStatus } from "../popup/responses";
@@ -83,10 +85,17 @@ const visibleItems = (
 };
 
 // The art tile: the placeholder icon always renders; a present image overlays it
-// and is swapped back out to the placeholder by nft-ui when it fails to load.
-const nftArt = (image: string): string =>
+// only when `reveal` is true, and is swapped back out to the placeholder by
+// nft-ui when it fails to load. Images are withheld (placeholder only) for
+// unsolicited auto-discovered NFTs until the user explicitly opens that NFT, so
+// an airdropped tile cannot deanonymize the wallet (address -> IP) merely by the
+// gallery painting a remote <img>. Solicited (manually watched) NFTs and the
+// opened detail view reveal immediately.
+const nftArt = (image: string, reveal: boolean): string =>
   `<span class="nft-art">${
-    image ? `<img class="nft-image" src="${escapeHtml(image)}" alt="" loading="lazy" />` : ""
+    reveal && image
+      ? `<img class="nft-image" src="${escapeHtml(image)}" alt="" loading="lazy" />`
+      : ""
   }${icon("image")}</span>`;
 
 // The Hide control: a watched entry toggles its stored spam flag; a
@@ -99,7 +108,7 @@ const hideButton = (item: GalleryItem): string =>
 const nftCard = (item: GalleryItem): string => `
   <li class="nft-card">
     <button class="nft-open" data-nft-open="${escapeHtml(item.id)}" type="button">
-      ${nftArt(item.image)}
+      ${nftArt(item.image, item.watched)}
       <span class="nft-copy">
         <strong>${escapeHtml(item.title)}</strong>
         <code>${escapeHtml(item.collection || accountLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
@@ -140,7 +149,7 @@ export const nftGalleryFlow = (
   const visible = visibleItems(watched, discoveredNfts, status.networkId);
   const hidden = watched.filter((nft) => nft.networkId === status.networkId && nft.spam === true);
   return (
-    flowHeader("NFTs", "home", status, `${visible.length} shown`) +
+    flowHeader("NFTs", status, `${visible.length} shown`) +
     flowScreen(
       "nfts",
       `<section class="section">
@@ -225,13 +234,13 @@ export const nftDetailFlow = (
 ): string => {
   const nft = selectedDetail(preferences, discoveredNfts, selectedNftId);
   return (
-    flowHeader("NFT", "nfts", status, nft ? nft.title : "") +
+    flowHeader("NFT", status, nft ? nft.title : "") +
     flowScreen(
       "nft-detail",
       nft === null
         ? '<section class="section"><p class="empty">This NFT is no longer watched.</p></section>'
         : `<section class="section">
-            ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft.image)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
+            ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft.image, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
             <p class="eyebrow">Contract</p>
             <div class="address-line"><code>${escapeHtml(nft.contract)}</code></div>
             <p class="eyebrow">Token id</p>

@@ -1,15 +1,19 @@
 /**
  * Account-groups model checks: deterministic ids, collision suffixing, name
- * and icon validation, membership de-duplication, removal, and immutability.
+ * and icon validation, exclusive single-folder membership, resolving an
+ * account's folder, normalising legacy multi-membership, removal, and
+ * immutability.
  */
 import { describe, expect, test } from "bun:test";
 import {
   type AccountGroups,
+  accountGroup,
   createGroup,
   GROUP_ICONS,
   isAccountGroup,
   isAccountGroupIcon,
   isAccountGroups,
+  normalizeAccountGroups,
   removeGroup,
   renameGroup,
   setAccountInGroup,
@@ -119,18 +123,64 @@ describe("bulk membership (group-centric editor)", () => {
     expect(groups[0]).toBe(afterAdd[0]);
   });
 
-  test("membership is independent across groups", () => {
+  test("filing an account into a group removes it from its previous one (exclusive)", () => {
     let groups = createGroup(createGroup([], "Work", "briefcase"), "Personal", "user");
     const [work, personal] = [groups[0]?.id ?? "", groups[1]?.id ?? ""];
     groups = setAccountInGroup(groups, work, accountA, true);
     groups = setAccountInGroup(groups, work, accountB, true);
-    groups = setAccountInGroup(groups, personal, accountB, true);
     expect(groups[0]?.accountIds).toEqual([accountA, accountB]);
-    expect(groups[1]?.accountIds).toEqual([accountB]);
-    // Removing an account from one group leaves its other memberships intact.
-    groups = setAccountInGroup(groups, work, accountB, false);
+    // Filing B into Personal moves it out of Work — an account is in one folder.
+    groups = setAccountInGroup(groups, personal, accountB, true);
     expect(groups[0]?.accountIds).toEqual([accountA]);
     expect(groups[1]?.accountIds).toEqual([accountB]);
+    // Clearing B leaves it ungrouped without disturbing A's folder.
+    groups = setAccountInGroup(groups, personal, accountB, false);
+    expect(groups[0]?.accountIds).toEqual([accountA]);
+    expect(groups[1]?.accountIds).toEqual([]);
+  });
+
+  test("assigning to an unknown group is a no-op, never stripping a real folder", () => {
+    let groups = createGroup([], "Work", "briefcase");
+    const work = groups[0]?.id ?? "";
+    groups = setAccountInGroup(groups, work, accountA, true);
+    // A stale/unknown target must not remove the account from its real folder.
+    expect(setAccountInGroup(groups, "missing", accountA, true)).toBe(groups);
+    expect(groups[0]?.accountIds).toEqual([accountA]);
+  });
+});
+
+describe("accountGroup", () => {
+  test("resolves the single folder an account is filed under, or null", () => {
+    let groups = createGroup(createGroup([], "Work", "briefcase"), "Personal", "user");
+    const [work, personal] = [groups[0]?.id ?? "", groups[1]?.id ?? ""];
+    expect(accountGroup(groups, accountA)).toBeNull();
+    groups = setAccountInGroup(groups, personal, accountA, true);
+    expect(accountGroup(groups, accountA)?.id).toBe(personal);
+    // Exclusive assignment moves it, so exactly one folder ever resolves.
+    groups = setAccountInGroup(groups, work, accountA, true);
+    expect(accountGroup(groups, accountA)?.id).toBe(work);
+  });
+});
+
+describe("normalizeAccountGroups", () => {
+  test("collapses legacy multi-membership to the first group in stable order", () => {
+    // Legacy data (predating the single-group model) with accountA in two groups.
+    const legacy: AccountGroups = [
+      { accountIds: [accountA, accountB], icon: "briefcase", id: "work", name: "Work" },
+      { accountIds: [accountA], icon: "user", id: "personal", name: "Personal" },
+    ];
+    const normalized = normalizeAccountGroups(legacy);
+    // accountA is kept only in the FIRST group; accountB (single) is untouched.
+    expect(normalized[0]?.accountIds).toEqual([accountA, accountB]);
+    expect(normalized[1]?.accountIds).toEqual([]);
+  });
+
+  test("returns the input unchanged when membership is already exclusive", () => {
+    const clean: AccountGroups = [
+      { accountIds: [accountA], icon: "briefcase", id: "work", name: "Work" },
+      { accountIds: [accountB], icon: "user", id: "personal", name: "Personal" },
+    ];
+    expect(normalizeAccountGroups(clean)).toBe(clean);
   });
 });
 

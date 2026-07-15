@@ -14,6 +14,7 @@ import {
   type AccountGroups,
   createGroup as createGroupPure,
   isAccountGroups,
+  normalizeAccountGroups,
   removeGroup as removeGroupPure,
   renameGroup as renameGroupPure,
   setAccountInGroup as setAccountInGroupPure,
@@ -243,7 +244,14 @@ export const createPreferencesStore = ({
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
     }
-    return stored;
+    // Self-heal legacy multi-group membership on read (the validator stays
+    // permissive so old data loads rather than erroring): collapse each account
+    // to a single folder so every consumer sees the single-group invariant.
+    if (stored.groups === undefined) {
+      return stored;
+    }
+    const groups = normalizeAccountGroups(stored.groups);
+    return groups === stored.groups ? stored : { ...stored, groups };
   };
 
   return {

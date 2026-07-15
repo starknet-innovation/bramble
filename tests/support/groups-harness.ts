@@ -61,19 +61,48 @@ export const installMotionStubs = (): void => {
 // The happy-dom global registrator, loaded lazily so the DOM only exists while a
 // suite runs (other suites keep their non-DOM environment). Each suite calls
 // `registerDom`/`unregisterDom` from its own beforeAll/afterAll.
+//
+// happy-dom's shipped declarations transitively import `happy-dom`'s own type
+// surface, which does not survive this repo's strict `skipLibCheck: false`
+// typecheck (an upstream Console/NodeJS typing incompatibility, unrelated to this
+// harness). A local ambient `declare module` cannot shadow an installed package's
+// types, and weakening `tsconfig`/suppressing the check are hard-rule violations,
+// so the broken declarations must stay out of the program: the module is loaded
+// at runtime only and validated here against the narrow `Registrator` contract we
+// actually use — a checked boundary (parse, don't validate) rather than a blind
+// cast to an assumed shape.
 type Registrator = {
-  isRegistered: boolean;
-  register: () => void;
-  unregister: () => Promise<void>;
+  readonly isRegistered: boolean;
+  readonly register: () => void;
+  readonly unregister: () => Promise<void>;
 };
+
+const HAPPY_DOM_REGISTRATOR_MODULE = "@happy-dom/global-registrator";
+
+const asRegistrator = (value: unknown): Registrator => {
+  // GlobalRegistrator is a class exposing static members, so it is a function
+  // rather than a plain object; validate the members we call either way.
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) {
+    throw new Error("@happy-dom/global-registrator export has an unexpected shape");
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate["isRegistered"] !== "boolean" ||
+    typeof candidate["register"] !== "function" ||
+    typeof candidate["unregister"] !== "function"
+  ) {
+    throw new Error("@happy-dom/global-registrator export has an unexpected shape");
+  }
+  return value as Registrator;
+};
+
 let registrator: Registrator | null = null;
 
 export const registerDom = async (): Promise<void> => {
-  // A non-literal specifier keeps happy-dom's shipped .d.ts out of the strict
-  // `skipLibCheck: false` typecheck while the runtime still gets a real DOM.
-  const specifier = "@happy-dom/global-registrator";
-  const loaded = (await import(specifier)) as { GlobalRegistrator: Registrator };
-  registrator = loaded.GlobalRegistrator;
+  const loaded = (await import(HAPPY_DOM_REGISTRATOR_MODULE)) as {
+    readonly GlobalRegistrator?: unknown;
+  };
+  registrator = asRegistrator(loaded.GlobalRegistrator);
   if (!registrator.isRegistered) {
     registrator.register();
   }
@@ -90,6 +119,9 @@ export const unregisterDom = async (): Promise<void> => {
 // `isAccountId` guard accepts membership toggles, mirroring wallet/account ids.
 export const acctA: AccountRef = { ...account, address: "0x2a", id: "SN_MAIN:0x2a" };
 export const acctB: AccountRef = { ...account, address: "0x3b", id: "SN_MAIN:0x3b" };
+// Id the fake `addAccount` returns, so the "add account joins the folder" flow
+// can assert the follow-up membership call carries the freshly created id.
+export const newAccountId = "SN_MAIN:0x9c";
 
 export const status: WalletStatus = {
   accountCount: 2,
@@ -115,6 +147,7 @@ export type Calls = {
   setGroupIcon: Array<readonly [string, AccountGroupIcon]>;
   removeGroup: string[];
   setAccountInGroup: Array<readonly [string, string, boolean]>;
+  addAccount: string[];
 };
 
 export type Harness = {
@@ -157,7 +190,10 @@ const buildWallet = (
     setGroups(setAccountInGroup(getGroups(), groupId, accountId, member));
     return Promise.resolve();
   },
-  addAccount: (): Promise<void> => Promise.resolve(),
+  addAccount: (networkId: string): Promise<string> => {
+    calls.addAccount.push(networkId);
+    return Promise.resolve(newAccountId);
+  },
   setActiveAccount: (): Promise<void> => Promise.resolve(),
   loadStatus: (): Promise<WalletStatus> => Promise.resolve(status),
 });
@@ -183,6 +219,7 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
   document.body.append(container);
   let groups: AccountGroups = initialGroups;
   const calls: Calls = {
+    addAccount: [],
     createGroup: [],
     renameGroup: [],
     setGroupIcon: [],

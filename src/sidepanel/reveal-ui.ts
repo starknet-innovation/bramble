@@ -24,7 +24,7 @@ export type RevealUiDeps = {
  * region filled in only after the passphrase is confirmed.
  */
 export const revealFlow = (status: WalletStatus): string =>
-  flowHeader("Reveal secrets", "settings", status, "Recovery phrase and active key") +
+  flowHeader("Reveal secrets", status, "Recovery phrase and active key") +
   flowScreen(
     "reveal",
     `<section class="section reveal-warning" role="note">

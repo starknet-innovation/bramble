@@ -3,6 +3,7 @@
  * background message handler: SNIP-12 signing, chain-id reads, and dapp chain
  * switches. Split from messages.ts to keep it within the size budget.
  */
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
@@ -29,6 +30,7 @@ import type { SignatureWaiters } from "./signature-waiters";
 export type ChainOpsDeps = {
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
+  readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
@@ -98,6 +100,7 @@ export const handleChainOps = async (
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
   const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
+  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
 
   if (messageType === "wallet.signTypedData") {
     const input = readSignTypedDataInput(message);
@@ -107,6 +110,12 @@ export const handleChainOps = async (
     }
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
+    }
+    // A blocklisted origin gets no signing prompt even if it still holds an old
+    // connection grant — the phishing feed is the defense for the post-grant
+    // case. Mirror the sibling dapp surfaces (provider-ops, declare, strk20).
+    if (guard.isBlocked(input.origin)) {
+      return { error: "origin blocked" };
     }
     if (!passphrase) {
       return { error: "wallet locked" };
@@ -152,6 +161,11 @@ export const handleChainOps = async (
     }
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
+    }
+    // Fail closed on a blocklisted origin before surfacing a switch prompt, even
+    // with an existing grant — same perimeter as the other dapp surfaces.
+    if (guard.isBlocked(input.origin)) {
+      return { error: "origin blocked" };
     }
     const networkId = networkIdForChainId(input.chainId);
     if (!networkId) {

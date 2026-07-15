@@ -267,6 +267,16 @@ const groupControlMemo = (element: HTMLElement): readonly string[] => {
       attrSelector("data-assign-toggle", account),
     ];
   }
+  const groupPick = data["groupPick"];
+  if (groupPick !== undefined && account !== undefined) {
+    // The drawer's single-select folder picker: reclaim the acted-on option
+    // (it survives the repaint — only `aria-pressed` moves), else the row's
+    // picker toggle.
+    return [
+      attrSelector("data-group-pick", groupPick) + attrSelector("data-account", account),
+      attrSelector("data-assign-toggle", account),
+    ];
+  }
   const assignToggle = data["assignToggle"];
   if (assignToggle !== undefined) {
     return [attrSelector("data-assign-toggle", assignToggle)];
@@ -298,6 +308,17 @@ const groupControlMemo = (element: HTMLElement): readonly string[] => {
   if (groupFilter !== undefined) {
     // Filtering by a group that is then deleted heals the filter back to "All".
     return [attrSelector("data-group-filter", groupFilter), '[data-group-filter="all"]'];
+  }
+  if (data["groupName"] !== undefined) {
+    // The group name/rename field carries no id or name, so it needs its own
+    // selector to be re-focused after a repaint. Scope it to its form: the edit
+    // form is keyed by the group id it renames, the create form by its class, so
+    // the correct field is reclaimed even when both are on screen.
+    const editForm = element.closest("[data-edit-group]");
+    const editGroupId = editForm?.getAttribute("data-edit-group");
+    return editGroupId
+      ? [`${attrSelector("data-edit-group", editGroupId)} [data-group-name]`]
+      : [".new-group-form [data-group-name]"];
   }
   if (element.hasAttribute("data-create-group")) {
     return ["[data-create-group]"];
@@ -350,4 +371,89 @@ export const restoreFocus = (root: Element | null, selectors: readonly string[])
       return;
     }
   }
+};
+
+/**
+ * An in-progress edit in the group name/rename field, captured before a repaint.
+ * The field is server-rendered (empty for the create form, the stored name for a
+ * rename) and torn down by the full-shell swap, so restoring focus alone would
+ * still reset it to that server value. `selector` locates the same field after
+ * the swap; `value` and the caret offsets re-seed the text the user was typing.
+ */
+export type GroupNameDraft = {
+  readonly selectionEnd: number | null;
+  readonly selectionStart: number | null;
+  readonly selector: string;
+  readonly value: string;
+};
+
+/**
+ * Captures the focused group-name field's in-progress value and caret before a
+ * re-render, or null when no such field is focused. Paired with
+ * {@link restoreGroupNameDraft} across the shell swap so a streaming repaint
+ * never discards text the user is mid-typing into a new-group or rename field.
+ */
+export const groupNameDraftMemo = (): GroupNameDraft | null => {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLInputElement) || active.dataset["groupName"] === undefined) {
+    return null;
+  }
+  const [selector] = groupControlMemo(active);
+  if (selector === undefined) {
+    return null;
+  }
+  return {
+    selectionEnd: active.selectionEnd,
+    selectionStart: active.selectionStart,
+    selector,
+    value: active.value,
+  };
+};
+
+/**
+ * Re-seeds a captured group-name draft into the re-rendered field and restores
+ * its caret, so both text and cursor position survive a repaint. A no-op when
+ * there is no draft or the field is gone (e.g. the group was deleted).
+ */
+export const restoreGroupNameDraft = (root: Element | null, draft: GroupNameDraft | null): void => {
+  if (!draft) {
+    return;
+  }
+  const input = root?.querySelector<HTMLInputElement>(draft.selector);
+  if (!input) {
+    return;
+  }
+  input.value = draft.value;
+  if (draft.selectionStart !== null && draft.selectionEnd !== null) {
+    input.setSelectionRange(draft.selectionStart, draft.selectionEnd);
+  }
+};
+
+/**
+ * Everything a full-shell repaint must carry across the DOM swap: the ordered
+ * focus selectors and, when a group-name field is being edited, its in-progress
+ * value and caret. Bundled so the paint loop captures and restores both in one
+ * step rather than juggling the two concerns at the call site.
+ */
+export type RepaintFocus = {
+  readonly groupNameDraft: GroupNameDraft | null;
+  readonly selectors: readonly string[];
+};
+
+/**
+ * Captures the focus target and any in-progress group-name edit before a shell
+ * swap. Pair with {@link restoreRepaintFocus} around the innerHTML replacement.
+ */
+export const captureRepaintFocus = (): RepaintFocus => ({
+  groupNameDraft: groupNameDraftMemo(),
+  selectors: focusMemo(),
+});
+
+/**
+ * Restores the focus target and re-seeds any captured group-name edit after a
+ * shell swap, so neither keyboard focus nor mid-typed text jumps under the user.
+ */
+export const restoreRepaintFocus = (root: Element | null, focus: RepaintFocus): void => {
+  restoreFocus(root, focus.selectors);
+  restoreGroupNameDraft(root, focus.groupNameDraft);
 };

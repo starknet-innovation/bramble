@@ -75,7 +75,7 @@ export const multisigsFlow = (
       (proposal) => proposal.multisigId === record.id && proposal.state !== "executed",
     ).length;
   return (
-    flowHeader("Multisigs", "settings", status, `${scoped.length} watched`) +
+    flowHeader("Multisigs", status, `${scoped.length} watched`) +
     flowScreen(
       "multisigs",
       `<section class="section">
@@ -158,7 +158,7 @@ export const multisigDetailFlow = (
 ): string => {
   if (!record) {
     return (
-      flowHeader("Multisig", "multisigs", status) +
+      flowHeader("Multisig", status) +
       flowScreen("multisig-detail", '<p class="empty">This multisig is no longer watched.</p>')
     );
   }
@@ -166,7 +166,6 @@ export const multisigDetailFlow = (
   return (
     flowHeader(
       multisigDisplayName(record),
-      "multisigs",
       status,
       `${record.quorum} of ${record.signers.length} signers`,
     ) +
@@ -219,12 +218,12 @@ export const multisigProposeFlow = (
 ): string => {
   if (!record) {
     return (
-      flowHeader("New proposal", "multisigs", status) +
+      flowHeader("New proposal", status) +
       flowScreen("multisig-propose", '<p class="empty">This multisig is no longer watched.</p>')
     );
   }
   return (
-    flowHeader("New proposal", "multisig-detail", status, multisigDisplayName(record)) +
+    flowHeader("New proposal", status, multisigDisplayName(record)) +
     flowScreen(
       "multisig-propose",
       `<section class="section">
@@ -252,7 +251,7 @@ export const multisigDeployFlow = (
   account: AccountRef | null,
   declared: boolean | "error" | null,
 ): string =>
-  flowHeader("Deploy multisig", "multisigs", status) +
+  flowHeader("Deploy multisig", status) +
   flowScreen(
     "multisig-deploy",
     `<section class="section">

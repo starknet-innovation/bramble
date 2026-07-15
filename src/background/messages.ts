@@ -134,7 +134,7 @@ const handleRuntimeMessage = async (
   }
 
   const chainResponse = await handleChainOps(
-    { approvals, extensionId, preferencesStore, session, waiters, wallet },
+    { approvals, extensionId, guard, preferencesStore, session, waiters, wallet },
     messageType,
     message,
     sender,

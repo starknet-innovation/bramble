@@ -1,8 +1,8 @@
 /**
  * Left slide-in account drawer opened from the header avatar. Lists this
  * network's accounts with identicons and names, marks the active one, filters
- * by folder/group chips, shows each account's real group membership, lets each
- * account be assigned to groups from a persistent panel, and offers a
+ * by folder/group chips, shows each account's folder on its row icon, lets each
+ * account be filed into a single folder from an inline picker, and offers a
  * discoverable "Manage groups" disclosure — create a group and, per existing
  * group, rename it, change its icon (via the shared picker), or delete it
  * (two-tap confirm) — plus a jump into full account management. Pure template —
@@ -13,14 +13,14 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
-import type { AccountGroup, AccountGroups } from "../storage/account-groups";
+import { type AccountGroup, type AccountGroups, accountGroup } from "../storage/account-groups";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import {
   accountGroupsLine,
   editGroupForm,
-  groupAssignPanel,
   groupFilterChips,
+  groupPickerPanel,
   newGroupForm,
 } from "./group-controls";
 import { icon } from "./icons";
@@ -33,23 +33,28 @@ const drawerAccountRow = (
   groups: AccountGroups,
   openAssignId: string | null,
 ): string => {
-  const memberGroups = groups.filter((group) => group.accountIds.includes(stored.id));
+  const folder = accountGroup(groups, stored.id);
   const assignOpen = stored.id === openAssignId;
+  // The row icon reflects the account's folder (its group's chosen glyph), or a
+  // muted "no folder" folder when ungrouped; tapping it opens the inline picker.
+  const rowGlyph = folder ? folder.icon : "folder";
+  const pickerLabel = folder ? `Folder: ${folder.name}` : "No folder — choose one";
+  const name = accountDisplayName(stored, preferences);
   return `
   <li class="drawer-account-item">
     <div class="drawer-account-row">
       <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === activeId}">
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
-          <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
+          <strong>${escapeHtml(name)}</strong>
           <code>${accountLabel(stored.address)}</code>
-          ${accountGroupsLine(memberGroups)}
+          ${accountGroupsLine(folder ? [folder] : [])}
         </span>
         ${stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>
-      <button class="icon-button ghost drawer-assign" data-assign-toggle="${escapeHtml(stored.id)}" type="button" aria-expanded="${assignOpen}" aria-label="Edit groups for ${escapeHtml(accountDisplayName(stored, preferences))}" title="Edit groups">${icon("folder")}</button>
+      <button class="icon-button ghost drawer-assign${folder ? "" : " is-ungrouped"}" data-assign-toggle="${escapeHtml(stored.id)}" type="button" aria-expanded="${assignOpen}" aria-label="${escapeHtml(`${pickerLabel} for ${name}`)}" title="${escapeHtml(pickerLabel)}">${icon(rowGlyph)}</button>
     </div>
-    ${groupAssignPanel(stored, groups, assignOpen)}
+    ${groupPickerPanel(stored, groups, folder?.id ?? null, assignOpen)}
   </li>`;
 };
 

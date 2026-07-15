@@ -168,22 +168,43 @@ const bindDrawer = (deps: HomeUiDeps): void => {
   }
   const closeButton = root.querySelector<HTMLButtonElement>(".drawer-close");
 
-  const applyOpen = (open: boolean): void => {
+  // Applies the open state to the freshly (re)bound drawer node. The enter
+  // motion — the panel slide and the staggered row keyframe — is gated behind
+  // the `is-opening` class, added ONLY for a genuine open (`animateEnter`).
+  // Every shell repaint recreates the drawer node, so re-applying a persisted
+  // open state must be silent: we skip `is-opening` and, since the fresh node's
+  // baseline is the closed transform, suppress the panel transition for one
+  // frame so it snaps open in place (mirroring bindTabs' moveIndicator) rather
+  // than sliding again.
+  const applyOpen = (open: boolean, animateEnter: boolean): void => {
     root.setAttribute("data-open", String(open));
     trigger.setAttribute("aria-expanded", String(open));
+    root.classList.toggle("is-opening", open && animateEnter);
+    if (open && !animateEnter) {
+      const drawer = root.querySelector<HTMLElement>(".account-drawer");
+      if (drawer) {
+        drawer.style.transition = "none";
+        requestAnimationFrame(() => {
+          drawer.style.transition = "";
+        });
+      }
+    }
   };
 
   const setOpen = (open: boolean, moveFocus: boolean): void => {
     deps.setDrawerOpen(open);
-    applyOpen(open);
+    // A user toggle animates: opening slides the sheet in with the row stagger,
+    // closing slides it back out.
+    applyOpen(open, true);
     if (moveFocus) {
       (open ? closeButton : trigger)?.focus({ preventScroll: true });
     }
   };
 
-  // Restore persisted state before first paint so reopening after a repaint
-  // does not replay the slide.
-  applyOpen(deps.drawerOpen());
+  // Restore persisted state before first paint. This runs on every repaint, so
+  // it must never replay the enter animation — a genuine open goes through
+  // setOpen instead.
+  applyOpen(deps.drawerOpen(), false);
 
   trigger.addEventListener("click", () => setOpen(!deps.drawerOpen(), true));
   root.querySelectorAll<HTMLElement>("[data-drawer-close]").forEach((control) => {
@@ -250,16 +271,27 @@ const bindDrawer = (deps: HomeUiDeps): void => {
   const addButton = root.querySelector<HTMLButtonElement>("#drawer-add-account");
   addButton?.addEventListener("click", () => {
     buttonBusy(addButton, true);
-    void deps.wallet.addAccount(deps.networkId()).then(
-      async () => {
-        showToast("Account added", "success");
-        await deps.render(await deps.wallet.loadStatus());
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Add account failed"), "error");
-        buttonBusy(addButton, false);
-      },
-    );
+    // When a specific folder chip is active, the new account joins it; on "All"
+    // (no filter) it stays ungrouped. The filter is captured before the async
+    // hop so a concurrent repaint cannot change which folder is targeted.
+    const targetGroup = deps.drawerGroupFilter();
+    void deps.wallet
+      .addAccount(deps.networkId())
+      .then(async (accountId) => {
+        if (targetGroup) {
+          await deps.wallet.setAccountInGroup(accountId, targetGroup, true);
+        }
+      })
+      .then(
+        async () => {
+          showToast("Account added", "success");
+          await deps.render(await deps.wallet.loadStatus());
+        },
+        (error: unknown) => {
+          showToast(errorMessage(error, "Add account failed"), "error");
+          buttonBusy(addButton, false);
+        },
+      );
   });
 
   bindDrawerDrag(root, deps.drawerOpen, () => setOpen(false, false));

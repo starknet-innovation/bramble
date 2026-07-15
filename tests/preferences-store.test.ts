@@ -52,6 +52,35 @@ describe("createPreferencesStore", () => {
     );
   });
 
+  test("collapses legacy multi-group membership to a single folder on read", async () => {
+    const store = createMemoryStore();
+    // Seed data that predates the single-group model: SN_MAIN:0x1 filed in two
+    // groups. The validator stays permissive so it loads, then read() self-heals.
+    await store.set(
+      PREFERENCES_STORE_KEY,
+      JSON.parse(
+        JSON.stringify({
+          ...defaultWalletPreferences(),
+          groups: [
+            {
+              accountIds: ["SN_MAIN:0x1", "SN_MAIN:0x2"],
+              icon: "briefcase",
+              id: "work",
+              name: "Work",
+            },
+            { accountIds: ["SN_MAIN:0x1"], icon: "user", id: "personal", name: "Personal" },
+          ],
+        }),
+      ),
+    );
+
+    const preferences = await createPreferencesStore({ store }).read();
+    // The account is kept only in the first group (stable order); the singly
+    // filed account is untouched.
+    expect(preferences.groups?.[0]?.accountIds).toEqual(["SN_MAIN:0x1", "SN_MAIN:0x2"]);
+    expect(preferences.groups?.[1]?.accountIds).toEqual([]);
+  });
+
   test("stores, prefers, and clears custom RPC endpoints per network", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });
