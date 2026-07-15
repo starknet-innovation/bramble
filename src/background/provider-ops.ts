@@ -22,6 +22,7 @@ import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
+import { verificationContext } from "./wallet-ops";
 import { canonicalTokenAddress, watchAssetToken } from "./watch-asset";
 
 /**
@@ -137,11 +138,7 @@ export const handleProviderOps = async (
     if (!account) {
       return { error: "origin not connected" };
     }
-    const report = verifyCalls(input.calls, {
-      account,
-      addressBook: preferences.addressBook,
-      tokens: preferences.tokens,
-    });
+    const report = verifyCalls(input.calls, verificationContext(account, preferences));
     const approval = approvals.requestInvoke({
       calls: input.calls,
       flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
