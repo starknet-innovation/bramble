@@ -6,11 +6,13 @@
  * read is dropped rather than dated with a guess.
  */
 import { describe, expect, test } from "bun:test";
+import type { RpcProvider } from "starknet";
 import { MAX_HISTORY_ENTRIES, TRANSFER_EVENT_KEY } from "../src/starknet/tx-history";
 import {
   collectTransactionHistory,
   type HistoryEventFilter,
   type HistoryRpc,
+  scanTransactionHistory,
 } from "../src/starknet/tx-history-scan";
 import type { TokenConfig } from "../src/storage/preferences-entries";
 
@@ -186,6 +188,75 @@ describe("collectTransactionHistory", () => {
         },
       }),
       scanArgs,
+    );
+    expect(entries).toEqual([]);
+  });
+
+  test("propagates a transport failure reading a block timestamp so the caller degrades", async () => {
+    // A hostile/failing RPC that serves getEvents but errors on the block-header
+    // read must NOT silently drop the row and present a truncated feed as
+    // complete on-chain history — the transport error propagates like getEvents.
+    await expect(
+      collectTransactionHistory(
+        fakeRpc({
+          async getBlockTimestamp() {
+            throw new Error("fetch failed");
+          },
+        }),
+        scanArgs,
+      ),
+    ).rejects.toThrow("fetch failed");
+  });
+});
+
+// Drives the production wrapper through an injected fake provider so the
+// getBlockTimestamp adapter's transport-vs-absent handling is actually covered.
+type FakeProvider = Pick<RpcProvider, "getBlockNumber" | "getBlockWithTxHashes" | "getEvents">;
+
+const fakeProvider = (overrides: Partial<FakeProvider> = {}): RpcProvider =>
+  ({
+    async getBlockNumber() {
+      return 500;
+    },
+    async getBlockWithTxHashes() {
+      return { timestamp: 1_700_000_000 } as Awaited<
+        ReturnType<RpcProvider["getBlockWithTxHashes"]>
+      >;
+    },
+    async getEvents() {
+      return { events: EVENTS } as Awaited<ReturnType<RpcProvider["getEvents"]>>;
+    },
+    ...overrides,
+  }) as unknown as RpcProvider;
+
+const scanProviderArgs = {
+  account: ACCOUNT,
+  accountId: `SN_MAIN:${ACCOUNT}`,
+  networkId: "SN_MAIN" as const,
+  rpcUrls: ["https://rpc.example"],
+  tokens: [eth],
+};
+
+describe("scanTransactionHistory block-timestamp degradation", () => {
+  test("a block-timestamp transport error surfaces as history unavailable, not a shortened feed", async () => {
+    await expect(
+      scanTransactionHistory(scanProviderArgs, () =>
+        fakeProvider({
+          async getBlockWithTxHashes() {
+            throw new Error("fetch failed");
+          },
+        }),
+      ),
+    ).rejects.toThrow("fetch failed");
+  });
+
+  test("a header genuinely without a timestamp drops only that row", async () => {
+    const entries = await scanTransactionHistory(scanProviderArgs, () =>
+      fakeProvider({
+        async getBlockWithTxHashes() {
+          return {} as Awaited<ReturnType<RpcProvider["getBlockWithTxHashes"]>>;
+        },
+      }),
     );
     expect(entries).toEqual([]);
   });

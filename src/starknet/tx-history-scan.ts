@@ -13,6 +13,7 @@
  * allowance scan; a semantic per-token error is skipped so one odd token cannot
  * blank the whole feed.
  */
+import type { RpcProvider } from "starknet";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { TokenConfig } from "../storage/preferences-store";
 import { canonicalFelt, isNonZeroStarkFieldElement, type StarknetNetworkId } from "./networks";
@@ -49,8 +50,11 @@ export type HistoryEventFilter = {
  * The RPC surface history discovery needs: the latest block height (to bound
  * the window), paged event reads, and a per-block timestamp lookup. Kept narrow
  * so a fake can drive it in tests and an {@link RpcProvider} in production.
- * `getBlockTimestamp` returns seconds, or null when that block's header cannot
- * be read (the transaction is then dropped rather than dated with a guess).
+ * `getBlockTimestamp` returns seconds, or null when the block header genuinely
+ * carries no timestamp (that transaction is then dropped rather than dated with
+ * a guess); a transport failure reading the header must THROW so the scan
+ * aborts and the caller degrades with a "history unavailable" indicator, rather
+ * than silently dropping the row and showing a truncated feed as complete.
  */
 export type HistoryRpc = {
   readonly getBlockTimestamp: (blockNumber: number) => Promise<number | null>;
@@ -166,42 +170,50 @@ export const collectTransactionHistory = async (
  * tokens, failing over across the configured RPC endpoints. Returns an empty
  * list when no tokens are tracked; a thrown transport error means "history
  * unavailable" and the caller falls back to the local activity log.
+ * `makeProvider` is an injection seam for tests (mirroring {@link withRpcFallback});
+ * production omits it and gets the real {@link RpcProvider} factory.
  */
-export const scanTransactionHistory = async ({
-  account,
-  accountId,
-  networkId,
-  rpcUrls,
-  tokens,
-}: TransactionHistoryScan): Promise<readonly ActivityEntry[]> => {
+export const scanTransactionHistory = async (
+  { account, accountId, networkId, rpcUrls, tokens }: TransactionHistoryScan,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<readonly ActivityEntry[]> => {
   if (tokens.length === 0) {
     return [];
   }
-  return withRpcFallback(rpcUrls, (provider) =>
-    collectTransactionHistory(
-      {
-        async getBlockTimestamp(blockNumber) {
-          try {
-            const block = await provider.getBlockWithTxHashes(blockNumber);
-            return typeof block.timestamp === "number" ? block.timestamp : null;
-          } catch {
-            return null;
-          }
+  return withRpcFallback(
+    rpcUrls,
+    (provider) =>
+      collectTransactionHistory(
+        {
+          async getBlockTimestamp(blockNumber) {
+            try {
+              const block = await provider.getBlockWithTxHashes(blockNumber);
+              return typeof block.timestamp === "number" ? block.timestamp : null;
+            } catch (error) {
+              // A transport failure reading the header propagates like the
+              // getEvents path: it fails over and ultimately degrades the feed.
+              // Only a semantic/absent-header error drops the single row.
+              if (isTransportRpcError(error)) {
+                throw error;
+              }
+              return null;
+            }
+          },
+          getEvents: (filter) =>
+            provider.getEvents({
+              address: filter.address,
+              chunk_size: filter.chunk_size,
+              from_block: { block_number: filter.from_block },
+              keys: filter.keys.map((group) => [...group]),
+              to_block: "latest",
+              ...(filter.continuation_token === undefined
+                ? {}
+                : { continuation_token: filter.continuation_token }),
+            }),
+          getLatestBlockNumber: () => provider.getBlockNumber(),
         },
-        getEvents: (filter) =>
-          provider.getEvents({
-            address: filter.address,
-            chunk_size: filter.chunk_size,
-            from_block: { block_number: filter.from_block },
-            keys: filter.keys.map((group) => [...group]),
-            to_block: "latest",
-            ...(filter.continuation_token === undefined
-              ? {}
-              : { continuation_token: filter.continuation_token }),
-          }),
-        getLatestBlockNumber: () => provider.getBlockNumber(),
-      },
-      { account, accountId, networkId, tokens },
-    ),
+        { account, accountId, networkId, tokens },
+      ),
+    makeProvider,
   );
 };
