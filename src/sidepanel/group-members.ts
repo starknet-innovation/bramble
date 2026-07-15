@@ -6,7 +6,9 @@
  * account (across networks) as a checklist, so a user can bucket many accounts
  * into a group in one pass without opening each account. The group's rename,
  * icon, and delete controls are consolidated into the editor header so managing
- * a group and its membership happen in one place. Each account toggle reuses
+ * a group and its membership happen in one place, and a leading "Create a group"
+ * panel shares the same accordion so this section owns the whole group lifecycle.
+ * Each account toggle reuses
  * the existing `data-group-toggle`/`data-account` contract wired by
  * ./group-ui.ts `bindGroupControls`, so there is no parallel data path.
  * Behaviour (expand/collapse persistence, membership toggles) lives in
@@ -18,8 +20,27 @@ import type { AccountGroup, AccountGroups } from "../storage/account-groups";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { editGroupForm, newGroupForm } from "./group-controls";
+import { CREATE_GROUP_PANEL } from "./group-state";
 import { icon } from "./icons";
 import { accountAvatar, accountDisplayName, accountLabel } from "./parts";
+
+// The "Create a group" accordion row: a header toggle plus the shared create
+// form as its body. It reuses the same `data-group-expand`/`.group-expand`
+// contract as the per-group editors — with the {@link CREATE_GROUP_PANEL}
+// sentinel as its id — so ./group-ui.ts's `bindGroupExpanders` drives it and it
+// shares the one expanded-panel slot: opening it collapses any open group, and
+// opening a group collapses it. `open` seeds its expanded state.
+const createGroupRow = (open: boolean): string => `
+  <li class="group-manage-row">
+    <button class="group-expand" type="button" data-group-expand="${CREATE_GROUP_PANEL}" aria-expanded="${open}" aria-controls="group-create-panel">
+      <span class="group-manage-icon">${icon("plus")}</span>
+      <span class="group-manage-copy"><strong>Create a group</strong></span>
+      <span class="group-expand-mark">${icon(open ? "chevronDown" : "chevronRight")}</span>
+    </button>
+    <div class="group-members" id="group-create-panel"${open ? "" : " hidden"}>
+      ${newGroupForm()}
+    </div>
+  </li>`;
 
 // One account row in a group's members checklist: avatar, display label,
 // truncated address, an optional network badge (only when the wallet spans
@@ -86,12 +107,17 @@ const groupMembersEditor = (
 };
 
 /**
- * Renders the manage-accounts "Groups" section: the group-centric bulk editor.
- * Each group expands into a members checklist listing every wallet account
- * (across networks) with the group's rename/icon/delete controls in its header;
- * `expandedGroupId` selects which group's editor is open (null = all collapsed).
- * A per-account network badge appears only when `accounts` span more than one
- * network. Keeps the shared "New group" create form at the foot.
+ * Renders the manage-accounts "Groups" section: the one home for group
+ * management — creating a group, renaming/re-iconing/deleting each, and bucketing
+ * accounts into it — as a single accordion. A "Create a group" panel leads, then
+ * one row per group; each group expands into a members checklist listing every
+ * wallet account (across networks) with the group's rename/icon/delete controls
+ * in its header. `expandedGroupId` selects the single open panel — a group id,
+ * the {@link CREATE_GROUP_PANEL} sentinel, or null (all collapsed) — so opening
+ * one panel collapses the previously open one and never piles up. With no groups
+ * yet the create panel starts open so the first group is one step away. A
+ * per-account network badge appears only when `accounts` span more than one
+ * network.
  */
 export const groupsSection = (
   groups: AccountGroups,
@@ -104,25 +130,27 @@ export const groupsSection = (
   const nameById = new Map(networks.map((network) => [network.id, network.name]));
   const networkNameFor = (account: AccountRef): string | null =>
     spanNetworks ? (nameById.get(account.networkId) ?? account.networkId) : null;
+  // The create panel is open when explicitly selected, or by default while no
+  // groups exist (nothing else can be open, so the accordion invariant holds).
+  const createOpen = expandedGroupId === CREATE_GROUP_PANEL || groups.length === 0;
   return `
   <section class="section">
     <h2>Groups</h2>
-    <p class="hint">Organise accounts into named folders. Open a group to file accounts into it in one pass; each account belongs to a single folder, so filing it here moves it out of any other.</p>
-    ${
-      groups.length === 0
-        ? '<p class="empty">No groups yet. Create your first below.</p>'
-        : `<ul class="group-manage-list">${groups
-            .map((group) =>
-              groupMembersEditor(
-                group,
-                accounts,
-                preferences,
-                networkNameFor,
-                group.id === expandedGroupId,
-              ),
-            )
-            .join("")}</ul>`
-    }
-    ${newGroupForm()}
+    <p class="hint">Organise accounts into named folders. Open a group to file accounts into it in one pass; each account belongs to a single folder, so filing it here moves it out of any other. Opening one panel closes the last, so only one stays expanded.</p>
+    <ul class="group-manage-list">
+      ${createGroupRow(createOpen)}
+      ${groups
+        .map((group) =>
+          groupMembersEditor(
+            group,
+            accounts,
+            preferences,
+            networkNameFor,
+            group.id === expandedGroupId,
+          ),
+        )
+        .join("")}
+    </ul>
+    ${groups.length === 0 ? '<p class="hint">No groups yet — create your first above.</p>' : ""}
   </section>`;
 };

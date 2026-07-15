@@ -203,7 +203,6 @@ type UiState = {
   filter: string | null;
   openAssign: string | null;
   expandedGroupId: string | null;
-  manageOpen: boolean;
 };
 
 // Replaces the container's children from markup without innerHTML, so each paint
@@ -229,7 +228,6 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
   const state: UiState = {
     expandedGroupId: null,
     filter: null,
-    manageOpen: false,
     openAssign: null,
   };
   const wallet = buildWallet(
@@ -259,7 +257,6 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
   const homeDeps: HomeUiDeps = {
     app: container,
     drawerGroupFilter: () => state.filter,
-    drawerManageOpen: () => state.manageOpen,
     drawerOpen: () => true,
     homeTab: () => "tokens",
     networkId: () => "SN_MAIN",
@@ -268,9 +265,6 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
     },
     setDrawerGroupFilter: (filter) => {
       state.filter = filter;
-    },
-    setDrawerManageOpen: (open) => {
-      state.manageOpen = open;
     },
     setDrawerOpen: () => undefined,
     setHomeTab: () => undefined,
@@ -297,16 +291,7 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
       const trigger = '<button id="account-trigger" aria-haspopup="dialog"></button>';
       paint(
         container,
-        trigger +
-          accountDrawer(
-            status,
-            acctA,
-            prefs(),
-            state.filter,
-            state.openAssign,
-            state.manageOpen,
-            state.expandedGroupId,
-          ),
+        trigger + accountDrawer(status, acctA, prefs(), state.filter, state.openAssign),
       );
       bindGroupControls(container, groupDeps);
       bindHomeUi(homeDeps);

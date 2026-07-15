@@ -1,28 +1,22 @@
 /**
- * Left slide-in account drawer opened from the header avatar. Lists this
- * network's accounts with identicons and names, marks the active one, filters
- * by folder/group chips, shows each account's folder on its row icon, lets each
- * account be filed into a single folder from an inline picker, and offers a
- * discoverable "Manage groups" disclosure — create a group and, per existing
- * group, rename it, change its icon (via the shared picker), or delete it
- * (two-tap confirm) — plus a jump into full account management. Pure template —
- * open/close state and bindings live in ./home-ui.ts, styles in ./styles-home.ts.
- * Rendered closed on every dock screen; the runtime restores the open state
- * (selected group filter, open assign panel, open manage disclosure, and the
- * group being edited) across re-renders without replaying the slide.
+ * Left slide-in account drawer opened from the header avatar. Kept lean: it
+ * lists this network's accounts with identicons and names, marks the active one,
+ * filters by folder/group chips, shows each account's folder on its row icon,
+ * lets each account be filed into a single folder from an inline quick picker,
+ * offers "Add account", and links to the dedicated "Manage accounts & groups"
+ * view. All group management (create/rename/change-icon/delete and bulk
+ * assignment) lives on that view, not here — the drawer carries no group-CRUD
+ * controls. Pure template — open/close state and bindings live in ./home-ui.ts,
+ * styles in ./styles-home.ts. Rendered closed on every dock screen; the runtime
+ * restores the open state (selected group filter, open assign panel) across
+ * re-renders without replaying the slide.
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
-import { type AccountGroup, type AccountGroups, accountGroup } from "../storage/account-groups";
+import { type AccountGroups, accountGroup } from "../storage/account-groups";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import {
-  accountGroupsLine,
-  editGroupForm,
-  groupFilterChips,
-  groupPickerPanel,
-  newGroupForm,
-} from "./group-controls";
+import { accountGroupsLine, groupFilterChips, groupPickerPanel } from "./group-controls";
 import { icon } from "./icons";
 import { accountAvatar, accountDisplayName, accountLabel } from "./parts";
 
@@ -58,50 +52,13 @@ const drawerAccountRow = (
   </li>`;
 };
 
-// One row in the drawer's "Manage groups" list: a header that expands the
-// group's editor, and — when expanded — a two-tap delete plus the shared
-// rename/icon edit form. Reuses the same `data-group-expand`/`data-remove-group`
-// /`data-save-group` contracts (and `expandedGroupId` open-state) as the
-// manage-accounts Groups section, so ./group-ui.ts binds both identically. This
-// list edits a group's name/icon/existence only; membership stays on the
-// per-account assign panel, so no surface does the same job twice.
-const drawerManageRow = (group: AccountGroup, expanded: boolean): string => `
-  <li class="group-manage-row">
-    <button class="group-expand" type="button" data-group-expand="${escapeHtml(group.id)}" aria-expanded="${expanded}" aria-controls="drawer-group-editor-${escapeHtml(group.id)}">
-      <span class="group-manage-icon">${icon(group.icon)}</span>
-      <span class="group-manage-copy"><strong>${escapeHtml(group.name)}</strong></span>
-      <span class="group-expand-mark">${icon(expanded ? "chevronDown" : "chevronRight")}</span>
-    </button>
-    <div class="group-members" id="drawer-group-editor-${escapeHtml(group.id)}"${expanded ? "" : " hidden"}>
-      <div class="group-members-head">
-        <p class="eyebrow">Edit group</p>
-        <button class="icon-button danger" type="button" data-remove-group="${escapeHtml(group.id)}" aria-label="Delete ${escapeHtml(group.name)}" title="Delete ${escapeHtml(group.name)}">${icon("x")}</button>
-      </div>
-      ${editGroupForm(group)}
-    </div>
-  </li>`;
-
-// The drawer's "Manage groups" disclosure body: the editable list of existing
-// groups plus the single shared create form. Discoverable in one tap (open the
-// disclosure) and edit any group's name/icon/existence in two (expand its row).
-const drawerManageGroups = (groups: AccountGroups, expandedGroupId: string | null): string => `
-  ${
-    groups.length === 0
-      ? '<p class="hint">No groups yet. Create your first below.</p>'
-      : `<ul class="group-manage-list">${groups
-          .map((group) => drawerManageRow(group, group.id === expandedGroupId))
-          .join("")}</ul>`
-  }
-  ${newGroupForm()}`;
-
 /**
  * Renders the account drawer and its backdrop, closed by default. The header
  * avatar trigger toggles `data-open`; backdrop, close control, and Escape all
  * dismiss it. `groupFilter` is the selected group id (null = "All"), narrowing
  * the listed accounts to that group's members. `openAssignId` keeps one
- * account's assign panel expanded across re-renders; `manageOpen` keeps the foot
- * "Manage groups" disclosure revealed, and `expandedGroupId` keeps one group's
- * inline editor open within it, both across re-renders.
+ * account's quick folder picker expanded across re-renders. Group management is
+ * reached through the "Manage accounts & groups" entry, not rendered inline.
  */
 export const accountDrawer = (
   status: WalletStatus,
@@ -109,8 +66,6 @@ export const accountDrawer = (
   preferences: WalletPreferences | null,
   groupFilter: string | null = null,
   openAssignId: string | null = null,
-  manageOpen = false,
-  expandedGroupId: string | null = null,
 ): string => {
   const groups = preferences?.groups ?? [];
   const accounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
@@ -140,10 +95,6 @@ export const accountDrawer = (
               .join("")}</ul>`
       }
       <div class="drawer-foot">
-        <div class="drawer-manage-groups">
-          <button id="drawer-manage-groups" class="secondary" type="button" aria-expanded="${manageOpen}" aria-controls="drawer-manage-groups-panel">${icon("settings")}Manage groups</button>
-          <div id="drawer-manage-groups-panel" class="drawer-manage-panel"${manageOpen ? "" : " hidden"}>${drawerManageGroups(groups, expandedGroupId)}</div>
-        </div>
         <button id="drawer-add-account" class="secondary" type="button">${icon("plus")}Add account</button>
         <button class="menu-row" data-view="account" type="button">
           <span class="menu-icon">${icon("settings")}</span>

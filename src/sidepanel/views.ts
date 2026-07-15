@@ -296,7 +296,7 @@ const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | 
     </label>
     <div class="menu-list" role="group" aria-label="Wallet settings">
       ${menuRow("network", "Network", "globe")}
-      ${menuRow("account", "Account", "wallet")}
+      ${menuRow("account", "Manage accounts & groups", "wallet")}
       ${menuRow("address-book", "Address book", "book")}
       ${menuRow("connected-sites", "Connected sites", "link")}
       ${menuRow("allowances", "Allowances", "lock")}
@@ -342,7 +342,6 @@ export const dashboard = (
   priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
   openAssignId: string | null = null,
-  drawerManageOpen = false,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -437,5 +436,5 @@ export const dashboard = (
     ${walletHeader(status, account, preferences)}
     ${screen}
     ${walletDock(activeView, pending.length)}
-    ${accountDrawer(status, account, preferences, drawerGroupFilter, openAssignId, drawerManageOpen, expandedGroupId)}`;
+    ${accountDrawer(status, account, preferences, drawerGroupFilter, openAssignId)}`;
 };

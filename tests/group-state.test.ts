@@ -5,7 +5,7 @@
  * through untouched.
  */
 import { describe, expect, test } from "bun:test";
-import { healTransientGroupState } from "../src/sidepanel/group-state";
+import { CREATE_GROUP_PANEL, healTransientGroupState } from "../src/sidepanel/group-state";
 import type { AccountGroups } from "../src/storage/account-groups";
 
 const groups: AccountGroups = [
@@ -47,5 +47,16 @@ describe("healTransientGroupState", () => {
     );
 
     expect(healed.openAssignId).toBeNull();
+  });
+
+  test("keeps the Create a group panel sentinel (not a group id) across a heal", () => {
+    const healed = healTransientGroupState(
+      { drawerGroupFilter: null, expandedGroupId: CREATE_GROUP_PANEL, openAssignId: null },
+      groups,
+      ["SN_MAIN:0xabc"],
+    );
+
+    // The sentinel is a UI mode, not a deleted-group id, so it must survive.
+    expect(healed.expandedGroupId).toBe(CREATE_GROUP_PANEL);
   });
 });
