@@ -99,6 +99,16 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "add account failed");
     },
+    async importAccount(networkId: string, privateKey: string): Promise<string> {
+      const response = await sendMessage({ networkId, privateKey, type: "wallet.importAccount" });
+      if (isCreateAccountResponse(response)) {
+        // Surface the imported account's id so the caller can select it, mirroring
+        // addAccount. The raw key travels only in this privileged request and is
+        // never echoed back in the response.
+        return response.account.id;
+      }
+      throw responseError(response, "import account failed");
+    },
     async createAccount(
       mnemonic: string,
       networkId: string,

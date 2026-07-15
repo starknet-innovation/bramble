@@ -20,6 +20,7 @@ import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import { handleChainOps } from "./chain-ops";
 import { handleDeclareOps } from "./declare-ops";
 import { handleDiscoveryOps } from "./discovery-ops";
+import { readImportAccountInput } from "./import-inputs";
 import {
   readAddAccountInput,
   readCreateAccountInput,
@@ -239,6 +240,23 @@ const handleRuntimeMessage = async (
     }
     const account = await wallet.addDerivedAccount({
       networkId: input.networkId,
+      vaultPassphrase: passphrase,
+    });
+    return { account, ok: true };
+  }
+
+  if (messageType === "wallet.importAccount") {
+    const input = readImportAccountInput(message);
+    if (!input) {
+      return { error: "invalid import account request" };
+    }
+    const passphrase = session.getPassphrase();
+    if (!passphrase || !wallet.importRawKeyAccount) {
+      return { error: passphrase ? "wallet unavailable" : "wallet locked" };
+    }
+    const account = await wallet.importRawKeyAccount({
+      networkId: input.networkId,
+      privateKey: input.privateKey,
       vaultPassphrase: passphrase,
     });
     return { account, ok: true };

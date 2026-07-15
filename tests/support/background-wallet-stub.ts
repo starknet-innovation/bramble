@@ -74,6 +74,9 @@ export const createWallet = (
   async ensureNetworkAccount() {
     return account;
   },
+  async importRawKeyAccount() {
+    return account;
+  },
   async getGrantedAccounts(origin: string) {
     return origin === "https://example.com" ? [account] : [];
   },

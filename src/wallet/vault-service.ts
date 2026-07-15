@@ -15,10 +15,19 @@ import { assertStoreAccess, type StoreActor } from "../storage/permissioned-stor
 import {
   type AccountRef,
   CURRENT_SCHEMA_VERSION,
+  type DerivedAccountRef,
+  type ImportedAccountRef,
   isAccountId,
   type Vault,
 } from "../storage/vault-schema";
-import { type AccountDerivationInput, deriveAccount, getOzAccountClassHash } from "./accounts";
+import {
+  type AccountDerivationInput,
+  deriveAccount,
+  deriveImportedAccount,
+  getOzAccountClassHash,
+  nextAccountIndex,
+  sameWalletKey,
+} from "./accounts";
 
 /**
  * Browser storage key for the encrypted wallet vault.
@@ -113,6 +122,17 @@ export type AddDerivedAccountInput = {
 };
 
 /**
+ * Input for importing a standalone account from a raw Starknet private key. The
+ * key is validated and routed to the encrypted vault; it is never persisted in
+ * plain preferences or logged.
+ */
+export type ImportRawKeyAccountInput = {
+  readonly networkId: StarknetNetworkId;
+  readonly privateKey: string;
+  readonly vaultPassphrase: string;
+};
+
+/**
  * Re-authenticated secret export for the active account. Returned only to the
  * privileged reveal flow and never persisted or logged. `mnemonic` is `null`
  * when the vault predates recovery-phrase retention.
@@ -126,10 +146,11 @@ export type RevealedSecrets = {
  * Privileged encrypted-vault wallet service surface.
  */
 export type WalletVaultService = {
-  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
-  readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
+  readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
+  readonly importRawKeyAccount: (input: ImportRawKeyAccountInput) => Promise<ImportedAccountRef>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly getGrantedAccounts: (
     origin: string,
@@ -166,28 +187,6 @@ const findAccount = (vault: Vault, accountId: string): AccountRef => {
     throw new WalletError("Account not found");
   }
   return account;
-};
-
-const sameWalletKey = (left: AccountRef, right: AccountRef): boolean =>
-  left.publicKeyX === right.publicKeyX &&
-  left.publicKeyY === right.publicKeyY &&
-  left.derivation.accountIndex === right.derivation.accountIndex &&
-  left.derivation.addressIndex === right.derivation.addressIndex;
-
-const nextAccountIndex = (
-  accounts: readonly AccountRef[],
-  networkId: StarknetNetworkId,
-): number => {
-  const used = new Set(
-    accounts
-      .filter((account) => account.networkId === networkId)
-      .map((account) => account.derivation.accountIndex),
-  );
-  let index = 0;
-  while (used.has(index)) {
-    index += 1;
-  }
-  return index;
 };
 
 /**
@@ -290,6 +289,29 @@ export const createWalletVaultService = ({
           mnemonic: vault.mnemonic ?? input.mnemonic,
           originGrants: vault.originGrants,
           schemaVersion: CURRENT_SCHEMA_VERSION,
+          signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
+        },
+        input.vaultPassphrase,
+      );
+
+      return account;
+    },
+    async importRawKeyAccount(input) {
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      const { account, privateKey } = await deriveImportedAccount(kms, {
+        networkId: input.networkId,
+        privateKey: input.privateKey,
+      });
+      if (vault.accounts.some((stored) => stored.id === account.id)) {
+        throw new WalletError("Account already exists");
+      }
+
+      await writeVault(
+        encryptedStore,
+        {
+          ...vault,
+          accounts: [...vault.accounts, account],
+          activeAccountId: account.id,
           signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
         },
         input.vaultPassphrase,
@@ -465,6 +487,7 @@ export const createWalletVaultService = ({
     addDerivedAccount: (input) => serialized(() => service.addDerivedAccount(input)),
     createAccount: (input) => serialized(() => service.createAccount(input)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
+    importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
     setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),
