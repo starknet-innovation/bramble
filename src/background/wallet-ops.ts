@@ -4,8 +4,9 @@
  */
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "../starknet/rpc";
+import { mergeActivity } from "../starknet/tx-history";
 import { verifyCalls } from "../starknet/verify";
-import type { ActivityLog } from "../storage/activity-store";
+import type { ActivityEntry, ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
@@ -234,32 +235,86 @@ export const handleWalletOps = async (
     if (!readTypeOnlyInput(message, "wallet.activity")) {
       return { error: "invalid activity request" };
     }
-    const entries = await activity.list();
-    const pendingByNetwork = new Map<StarknetNetworkId, string[]>();
-    for (const entry of entries) {
-      if (entry.status === "pending") {
-        pendingByNetwork.set(entry.networkId, [
-          ...(pendingByNetwork.get(entry.networkId) ?? []),
-          entry.hash,
-        ]);
-      }
-    }
-    if (pendingByNetwork.size === 0) {
-      return { activity: entries, ok: true };
-    }
-    const preferences = await preferencesStore.read();
-    let statuses: Record<string, "accepted" | "pending" | "rejected" | "reverted"> = {};
-    for (const [networkId, hashes] of pendingByNetwork) {
-      const result = await runtimeRpc
-        .getTransactionStatuses({
-          hashes,
-          rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
-        })
-        .catch(() => ({}));
-      statuses = { ...statuses, ...result };
-    }
-    return { activity: await activity.updateStatuses(statuses), ok: true };
+    const local = await reconcilePendingStatuses(deps);
+    const history = await activeAccountHistory(deps);
+    return {
+      activity: mergeActivity(local, history.onChain),
+      ...(history.unavailable ? { historyUnavailable: true } : {}),
+      ok: true,
+    };
   }
 
   return null;
+};
+
+/**
+ * Re-polls the chain status of every locally recorded pending transaction, per
+ * network, and returns the reconciled local activity log. A status query that
+ * fails leaves those hashes pending rather than dropping them.
+ */
+const reconcilePendingStatuses = async (deps: WalletOpsDeps): Promise<readonly ActivityEntry[]> => {
+  const { activity, preferencesStore, runtimeRpc } = deps;
+  const entries = await activity.list();
+  const pendingByNetwork = new Map<StarknetNetworkId, string[]>();
+  for (const entry of entries) {
+    if (entry.status === "pending") {
+      pendingByNetwork.set(entry.networkId, [
+        ...(pendingByNetwork.get(entry.networkId) ?? []),
+        entry.hash,
+      ]);
+    }
+  }
+  if (pendingByNetwork.size === 0) {
+    return entries;
+  }
+  const preferences = await preferencesStore.read();
+  let statuses: Record<string, ActivityEntry["status"]> = {};
+  for (const [networkId, hashes] of pendingByNetwork) {
+    const result = await runtimeRpc
+      .getTransactionStatuses({
+        hashes,
+        rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
+      })
+      .catch(() => ({}));
+    statuses = { ...statuses, ...result };
+  }
+  return activity.updateStatuses(statuses);
+};
+
+/**
+ * Fetches the active account's real on-chain transaction history for the feed.
+ * Degrades honestly: with no history source wired, no active account, or no
+ * tracked tokens it yields an empty list with `unavailable: false`, so the feed
+ * shows the local log without a false "offline" indicator; a thrown transport
+ * error sets `unavailable` so the caller can surface that the history could not
+ * be reached.
+ */
+const activeAccountHistory = async (
+  deps: WalletOpsDeps,
+): Promise<{ readonly onChain: readonly ActivityEntry[]; readonly unavailable: boolean }> => {
+  const scan = deps.runtimeRpc.getTransactionHistory;
+  if (!scan) {
+    return { onChain: [], unavailable: false };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { onChain: [], unavailable: false };
+  }
+  const preferences = await deps.preferencesStore.read();
+  const tokens = preferences.tokens.filter((token) => token.networkId === context.networkId);
+  if (tokens.length === 0) {
+    return { onChain: [], unavailable: false };
+  }
+  try {
+    const onChain = await scan({
+      account: context.account.address,
+      accountId: context.account.id,
+      networkId: context.networkId,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
+      tokens,
+    });
+    return { onChain, unavailable: false };
+  } catch {
+    return { onChain: [], unavailable: true };
+  }
 };

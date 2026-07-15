@@ -161,9 +161,18 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "reveal failed");
     },
-    async loadActivity(): Promise<ActivityResponse["activity"]> {
+    async loadActivity(): Promise<{
+      readonly entries: ActivityResponse["activity"];
+      readonly historyUnavailable: boolean;
+    }> {
       const response = await sendMessage({ type: "wallet.activity" });
-      return isActivityResponse(response) ? response.activity : [];
+      if (!isActivityResponse(response)) {
+        return { entries: [], historyUnavailable: false };
+      }
+      return {
+        entries: response.activity,
+        historyUnavailable: response.historyUnavailable ?? false,
+      };
     },
     async addNft(
       contract: string,

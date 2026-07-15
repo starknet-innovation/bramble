@@ -14,6 +14,10 @@ import { emptyStatus, type SidepanelWallet } from "./runtime";
 // derive from this so their types cannot drift from loadPrices.
 type LoadedPrices = Awaited<ReturnType<SidepanelWallet["loadPrices"]>>;
 
+// The activity snapshot as the runtime client returns it; the cache's activity
+// fields derive from this so they cannot drift from loadActivity.
+type LoadedActivity = Awaited<ReturnType<SidepanelWallet["loadActivity"]>>;
+
 /**
  * Everything a paint reads. Each field mirrors the resolved result of one
  * permissioned runtime call; view-scoped fields stay in their empty state until
@@ -36,7 +40,8 @@ export type RenderData = {
   priceAsOf: LoadedPrices["asOf"];
   priceStale: LoadedPrices["stale"];
   status: WalletStatus;
-  transactions: Awaited<ReturnType<SidepanelWallet["loadActivity"]>>;
+  transactions: LoadedActivity["entries"];
+  historyUnavailable: LoadedActivity["historyUnavailable"];
 };
 
 /**
@@ -62,4 +67,5 @@ export const emptyRenderCache = (): RenderData => ({
   priceStale: false,
   status: emptyStatus(),
   transactions: [],
+  historyUnavailable: false,
 });

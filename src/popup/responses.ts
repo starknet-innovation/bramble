@@ -401,10 +401,14 @@ export const isApprovalDecisionResponse = (value: unknown): value is ApprovalDec
   isAccountsResponse(value) || isPendingApprovalsResponse(value);
 
 /**
- * Activity feed response accepted from the background boundary.
+ * Activity feed response accepted from the background boundary. The feed merges
+ * locally recorded transactions with real on-chain history; `historyUnavailable`
+ * is set when the chain-history source could not be reached, so the UI can show
+ * the local log with a clear degraded indicator instead of a false empty state.
  */
 export type ActivityResponse = {
   readonly activity: readonly ActivityEntry[];
+  readonly historyUnavailable?: boolean;
   readonly ok: true;
 };
 
@@ -414,10 +418,11 @@ export type ActivityResponse = {
 export const isActivityResponse = (value: unknown): value is ActivityResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["activity", "ok"]) &&
+  hasOnlyKnownKeys(value, ["activity", "historyUnavailable", "ok"]) &&
   value["ok"] === true &&
   Array.isArray(value["activity"]) &&
-  value["activity"].every(isActivityEntry);
+  value["activity"].every(isActivityEntry) &&
+  (value["historyUnavailable"] === undefined || typeof value["historyUnavailable"] === "boolean");
 
 /**
  * Tracked allowances response accepted from the background boundary.

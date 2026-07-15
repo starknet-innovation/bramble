@@ -337,6 +337,7 @@ const paint = (): void => {
           cache.priceAsOf,
           cache.discoveredNfts,
           openAssignId,
+          cache.historyUnavailable,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -358,6 +359,7 @@ const render = async (status: WalletStatus): Promise<void> => {
     cache.balances = { error: "wallet locked" };
     cache.deployment = null;
     cache.transactions = [];
+    cache.historyUnavailable = false;
     cache.connectedSites = [];
     cache.prices = {};
     cache.changes = {};
@@ -392,7 +394,8 @@ const render = async (status: WalletStatus): Promise<void> => {
   }
   if (activeView === "activity" || activeView === "home") {
     fill(wallet.loadActivity(), (value) => {
-      cache.transactions = value;
+      cache.transactions = value.entries;
+      cache.historyUnavailable = value.historyUnavailable;
     });
   }
   if (activeView === "connected-sites") {

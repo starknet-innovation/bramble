@@ -44,6 +44,7 @@ import {
 } from "../starknet/rpc";
 import { createHttpStrk20Service, type Strk20Http } from "../starknet/strk20/http-service";
 import type { Strk20Service } from "../starknet/strk20/service";
+import { scanTransactionHistory, type TransactionHistoryScan } from "../starknet/tx-history-scan";
 
 /**
  * Injectable multisig read operations used by the multisig message handlers.
@@ -80,6 +81,15 @@ export type RuntimeRpc = {
   readonly getNftOwner: (input: NftOwnerInput) => ReturnType<typeof getNftOwner>;
   readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
+  /**
+   * Reads the account's recent on-chain transaction history for the activity
+   * feed. Optional so existing RPC stubs stay valid; when absent the feed shows
+   * only locally recorded transactions. A thrown transport error is treated by
+   * the handler as "history unavailable" and degrades to the local log.
+   */
+  readonly getTransactionHistory?: (
+    input: TransactionHistoryScan,
+  ) => ReturnType<typeof scanTransactionHistory>;
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;
@@ -129,6 +139,7 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   getNftOwner,
   getTokenBalances,
   getTokenMetadata,
+  getTransactionHistory: scanTransactionHistory,
   getTransactionStatuses,
   multisig: {
     computeTransactionId: computeMultisigTransactionId,
