@@ -15,6 +15,12 @@ import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "./wallet-ops";
 
+// Bounds how many on-chain owner_of re-proofs run at once during discovery.
+// Candidates are already capped at the indexer boundary (MAX_DISCOVERED_NFTS);
+// verifying them in fixed-size batches keeps the RPC fan-out bounded rather than
+// firing one Promise.all across the whole list.
+const OWNER_CHECK_CONCURRENCY = 5;
+
 /**
  * Handles NFT gallery messages; returns null for other message types.
  */
@@ -128,22 +134,31 @@ export const handleNftOps = async (
     // Never trust the indexer's ownership claim: re-prove each token on-chain
     // with the same owner_of check the manual watch flow uses, dropping any the
     // account no longer owns (or that fail to read) so the gallery only ever
-    // shows verified holdings.
-    const verified = await Promise.all(
-      candidates.map(async (nft): Promise<DiscoveredNft | null> => {
-        try {
-          const owner = await deps.runtimeRpc.getNftOwner({
-            contractAddress: nft.contract,
-            rpcUrls,
-            tokenId: nft.tokenId,
-          });
-          return BigInt(owner) === BigInt(context.account.address) ? nft : null;
-        } catch {
-          return null;
+    // shows verified holdings. Verification runs in fixed-size batches so the
+    // owner_of fan-out stays bounded regardless of how many candidates arrive.
+    const owned: DiscoveredNft[] = [];
+    for (let start = 0; start < candidates.length; start += OWNER_CHECK_CONCURRENCY) {
+      const batch = candidates.slice(start, start + OWNER_CHECK_CONCURRENCY);
+      const verified = await Promise.all(
+        batch.map(async (nft): Promise<DiscoveredNft | null> => {
+          try {
+            const owner = await deps.runtimeRpc.getNftOwner({
+              contractAddress: nft.contract,
+              rpcUrls,
+              tokenId: nft.tokenId,
+            });
+            return BigInt(owner) === BigInt(context.account.address) ? nft : null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      for (const nft of verified) {
+        if (nft !== null) {
+          owned.push(nft);
         }
-      }),
-    );
-    const owned = verified.filter((nft): nft is DiscoveredNft => nft !== null);
+      }
+    }
     return { nfts: owned, ok: true };
   }
 

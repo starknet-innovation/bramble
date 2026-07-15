@@ -1,8 +1,10 @@
 /**
  * HTTP-backed NFT auto-discovery indexer client.
  *
- * ERC-721/1155 ownership cannot be enumerated over plain RPC, so listing the
- * NFTs an account owns needs an external indexer. Following the STRK20 prover
+ * ERC-721 ownership cannot be enumerated over plain RPC, so listing the
+ * NFTs an account owns needs an external indexer (ERC-1155 balances are not
+ * handled: verification re-proves each token through `owner_of`). Following the
+ * STRK20 prover
  * model, the wallet points at an operator-configured indexer URL and speaks one
  * documented wire contract; network access is injected (`http`) so this module
  * stays testable without a real network. Nothing here is trusted on its own: the
@@ -48,6 +50,14 @@ export type NftIndexerService = {
   readonly listOwnedNfts: (input: NftIndexerInput) => Promise<readonly DiscoveredNft[]>;
 };
 
+/**
+ * Hard cap on how many candidate NFTs one discovery response may enqueue. Each
+ * candidate costs an on-chain `owner_of` re-proof in the background, so a hostile
+ * or oversized indexer must not be able to fan out unbounded RPC per render;
+ * records past the cap are dropped here at the untrusted boundary.
+ */
+export const MAX_DISCOVERED_NFTS = 100;
+
 // Joins the configured indexer base URL with the ownership sub-path, tolerating a
 // trailing slash on the base so both `https://i` and `https://i/` behave.
 const ownedNftsUrl = (indexerUrl: string, address: string, networkId: StarknetNetworkId): string =>
@@ -90,6 +100,9 @@ export const createHttpNftIndexer = (http: NftIndexerHttp): NftIndexerService =>
     const discovered: DiscoveredNft[] = [];
     const seen = new Set<string>();
     for (const record of recordsFrom(body)) {
+      if (discovered.length >= MAX_DISCOVERED_NFTS) {
+        break;
+      }
       const nft = normalizeIndexerNft(record, networkId);
       if (nft && !seen.has(nft.id)) {
         seen.add(nft.id);

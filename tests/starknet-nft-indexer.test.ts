@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   createHttpNftIndexer,
+  MAX_DISCOVERED_NFTS,
   type NftIndexerHttp,
   unavailableNftIndexer,
 } from "../src/starknet/nft-indexer";
@@ -77,6 +78,21 @@ describe("createHttpNftIndexer", () => {
       throw new Error("network down");
     });
     expect(await throwing.listOwnedNfts({ address, indexerUrl, networkId: "SN_MAIN" })).toEqual([]);
+  });
+
+  test("caps an oversized response at MAX_DISCOVERED_NFTS to bound owner_of fan-out", async () => {
+    // A hostile/large indexer returns far more candidates than the cap; each
+    // candidate would otherwise cost an on-chain owner_of re-proof downstream.
+    const overflow = Array.from({ length: MAX_DISCOVERED_NFTS + 25 }, (_unused, index) =>
+      record(String(index + 1)),
+    );
+    const { http } = httpReturning(overflow);
+    const nfts = await createHttpNftIndexer(http).listOwnedNfts({
+      address,
+      indexerUrl,
+      networkId: "SN_MAIN",
+    });
+    expect(nfts).toHaveLength(MAX_DISCOVERED_NFTS);
   });
 
   test("the unavailable indexer always returns an empty list", async () => {
