@@ -251,6 +251,18 @@ export const accountFlow = (
         <button id="new-account" class="secondary" type="button">${icon("wallet")}Add account</button>
         <p id="new-account-result" role="status"></p>
       </section>
+      <section class="section">
+        <h2>Import private key</h2>
+        <p class="hint">Add a standalone account on ${escapeHtml(status.network)} from a raw Starknet key you already hold. The key is validated and stored in the encrypted vault, never in plain settings.</p>
+        <form id="import-key-form" class="stack">
+          <label><span>Raw private key</span>
+            <textarea name="rawKey" required autocomplete="off" spellcheck="false" placeholder="0x… (Starknet felt)"></textarea>
+            <span class="hint">Anyone with this key controls the account. Paste it only on a device you trust.</span>
+          </label>
+          <button class="secondary" type="submit">${icon("wallet")}Import account</button>
+          <p id="import-key-result" role="status"></p>
+        </form>
+      </section>
       ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}
       ${
         account

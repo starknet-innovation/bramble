@@ -15,21 +15,59 @@ import {
 export const CURRENT_SCHEMA_VERSION = 2;
 
 /**
- * Public account metadata safe to expose to granted origins.
+ * BIP-44 HD derivation provenance for an account derived from the wallet's
+ * recovery phrase.
  */
-export type AccountRef = {
+export type Bip44Derivation = {
+  readonly accountIndex: number;
+  readonly addressIndex: number;
+  readonly kind: "starknet-bip44";
+};
+
+/**
+ * Provenance for an account imported from a raw Starknet private key. Such an
+ * account has no HD position, so it carries no derivation indices.
+ */
+export type ImportedKeyDerivation = {
+  readonly kind: "imported-raw-key";
+};
+
+/**
+ * Account provenance discriminated by `kind`: HD-derived, or raw-key import.
+ */
+export type AccountDerivation = Bip44Derivation | ImportedKeyDerivation;
+
+type AccountRefCore = {
   readonly address: string;
   readonly classHash: string;
-  readonly derivation: {
-    readonly accountIndex: number;
-    readonly addressIndex: number;
-    readonly kind: "starknet-bip44";
-  };
   readonly id: string;
   readonly networkId: StarknetNetworkId;
   readonly publicKeyX: string;
+};
+
+/**
+ * HD-derived account metadata: carries the full public-key point and the
+ * BIP-44 indices it was derived at.
+ */
+export type DerivedAccountRef = AccountRefCore & {
+  readonly derivation: Bip44Derivation;
   readonly publicKeyY: string;
 };
+
+/**
+ * Account imported from a raw private key. Krusty exposes only the public-key
+ * x-coordinate for an external key (it is the account public key the OZ address
+ * is derived from), so no `publicKeyY` is retained.
+ */
+export type ImportedAccountRef = AccountRefCore & {
+  readonly derivation: ImportedKeyDerivation;
+};
+
+/**
+ * Public account metadata safe to expose to granted origins. Discriminated by
+ * `derivation.kind` into HD-derived and raw-key-imported accounts.
+ */
+export type AccountRef = DerivedAccountRef | ImportedAccountRef;
 
 /**
  * Encrypted-vault reference from an account id to its private key.
@@ -86,12 +124,15 @@ const isSafeIndex = (value: unknown): value is number =>
 const isNonZeroFelt = (value: unknown): value is string =>
   typeof value === "string" && isNonZeroStarkFieldElement(value);
 
-const isDerivation = (value: unknown): value is AccountRef["derivation"] =>
+const isBip44Derivation = (value: unknown): value is Bip44Derivation =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountIndex", "addressIndex", "kind"]) &&
   value["kind"] === "starknet-bip44" &&
   isSafeIndex(value["accountIndex"]) &&
   isSafeIndex(value["addressIndex"]);
+
+const isImportedKeyDerivation = (value: unknown): value is ImportedKeyDerivation =>
+  isRecord(value) && hasOnlyKnownKeys(value, ["kind"]) && value["kind"] === "imported-raw-key";
 
 /**
  * Validates account ids used in public metadata and references.
@@ -107,28 +148,49 @@ export const isAccountId = (value: unknown): value is string => {
   return parts.length === 2 && isStarknetNetworkId(networkId) && isNonZeroFelt(address);
 };
 
-/**
- * Validates public account metadata from decrypted vault data.
- */
-export const isAccountRef = (value: unknown): value is AccountRef =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, [
-    "address",
-    "classHash",
-    "derivation",
-    "id",
-    "networkId",
-    "publicKeyX",
-    "publicKeyY",
-  ]) &&
+const hasValidAccountCore = (value: Record<string, unknown>): boolean =>
   isNonZeroFelt(value["address"]) &&
   isNonZeroFelt(value["classHash"]) &&
-  isDerivation(value["derivation"]) &&
   isAccountId(value["id"]) &&
   isStarknetNetworkId(value["networkId"]) &&
   value["id"] === `${value["networkId"]}:${value["address"]}` &&
-  isNonZeroFelt(value["publicKeyX"]) &&
-  isNonZeroFelt(value["publicKeyY"]);
+  isNonZeroFelt(value["publicKeyX"]);
+
+/**
+ * Validates public account metadata from decrypted vault data. Imported
+ * accounts round-trip without a `publicKeyY`; derived accounts require it.
+ */
+export const isAccountRef = (value: unknown): value is AccountRef => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (isImportedKeyDerivation(value["derivation"])) {
+    return (
+      hasOnlyKnownKeys(value, [
+        "address",
+        "classHash",
+        "derivation",
+        "id",
+        "networkId",
+        "publicKeyX",
+      ]) && hasValidAccountCore(value)
+    );
+  }
+  return (
+    hasOnlyKnownKeys(value, [
+      "address",
+      "classHash",
+      "derivation",
+      "id",
+      "networkId",
+      "publicKeyX",
+      "publicKeyY",
+    ]) &&
+    isBip44Derivation(value["derivation"]) &&
+    isNonZeroFelt(value["publicKeyY"]) &&
+    hasValidAccountCore(value)
+  );
+};
 
 const isSigningKeyRef = (value: unknown): value is SigningKeyRef =>
   isRecord(value) &&

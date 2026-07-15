@@ -26,6 +26,7 @@ import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
+import { bindImportKey } from "./import-key-ui";
 import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
@@ -228,6 +229,7 @@ const bindAll = (): void => {
   };
   bindAccountLabel(settingsDeps);
   bindAddAccount(settingsDeps);
+  bindImportKey(settingsDeps);
   bindAppearance(settingsDeps);
   bindBackup(settingsDeps);
   bindContacts(settingsDeps);

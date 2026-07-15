@@ -18,6 +18,7 @@ import type {
   ConnectedSite,
   CreateVaultAccountInput,
   EnsureNetworkAccountInput,
+  ImportRawKeyAccountInput,
   OriginGrantInput,
   RevokeOriginInput,
   SetActiveAccountInput,
@@ -410,6 +411,12 @@ export type WalletStatusReader = {
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
+  /**
+   * Imports an account from a raw private key. Optional on this narrow dispatch
+   * type so partial test stubs stay valid; the wired vault service always
+   * provides it.
+   */
+  readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,

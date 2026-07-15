@@ -150,6 +150,14 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   { message: { networkId: "SN_MAIN", type: "wallet.addAccount" }, sender: extensionSender },
   {
     message: {
+      networkId: "SN_MAIN",
+      privateKey: SECRET_PRIVATE_KEY,
+      type: "wallet.importAccount",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
       mnemonic: SECRET_MNEMONIC,
       type: "wallet.createAccount",
       vaultPassphrase: SECRET_PASSPHRASE,

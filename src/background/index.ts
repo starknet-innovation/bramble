@@ -209,6 +209,13 @@ const handleMessage = createMessageHandler(
       }
       return service.ensureNetworkAccount(input);
     },
+    async importRawKeyAccount(input) {
+      const service = await wallet;
+      if (!service) {
+        throw new Error("wallet unavailable");
+      }
+      return service.importRawKeyAccount(input);
+    },
     async getGrantedAccounts(origin, vaultPassphrase) {
       const service = await wallet;
       if (!service) {
