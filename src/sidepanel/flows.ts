@@ -7,6 +7,7 @@
 import type { ConnectedSite, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { knownAccountType } from "../starknet/account-types";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import { isStarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
@@ -176,6 +177,28 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
   );
 
 /**
+ * Renders the on-chain class-hash verification state shown beneath the account's
+ * class hash. `null` is the still-loading state (kept visually distinct from a
+ * confirmed result); a `mismatch` is a security signal and is surfaced as an
+ * assertive alert. Only an exact on-chain match reads as verified.
+ */
+export const classHashVerificationBadge = (verification: ClassHashVerification | null): string => {
+  if (verification === null) {
+    return `<p class="verify-status pending" role="status">${icon("refresh")}Verifying on-chain…</p>`;
+  }
+  switch (verification.status) {
+    case "verified":
+      return `<p class="verify-status verified" role="status">${icon("shield")}Verified on-chain</p>`;
+    case "mismatch":
+      return `<p class="verify-status mismatch" role="alert">${icon("alert")}On-chain mismatch — the contract deployed at this address runs class <code>${escapeHtml(verification.onChainClassHash)}</code>, not the class shown above. Do not trust this account until resolved.</p>`;
+    case "undeployed":
+      return `<p class="verify-status pending" role="status">${icon("alert")}Not deployed yet — the class hash cannot be verified on-chain until this account is deployed.</p>`;
+    case "unreachable":
+      return `<p class="verify-status pending" role="status">${icon("alert")}Could not reach the network — shown from local data and not yet verified on-chain.</p>`;
+  }
+};
+
+/**
  * Manage accounts & groups flow: the single management surface reached from the
  * drawer's "Manage accounts & groups" entry and the Settings menu. Switch the
  * active account, add one, manage groups (create/rename/change-icon/delete plus
@@ -188,6 +211,7 @@ export const accountFlow = (
   account: AccountRef | null,
   preferences: WalletPreferences | null,
   expandedGroupId: string | null = null,
+  classHashVerification: ClassHashVerification | null = null,
 ): string => {
   const networkAccounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
   const accountType = account ? knownAccountType(account.classHash) : null;
@@ -247,6 +271,7 @@ export const accountFlow = (
               <div class="address-line"><code>${escapeHtml(account.address)}</code>${copyButton(account.address, "Copy address")}</div>
               <p class="eyebrow">Class hash</p>
               <div class="address-line"><code>${escapeHtml(account.classHash)}</code>${copyButton(account.classHash, "Copy class hash")}</div>
+              ${classHashVerificationBadge(classHashVerification)}
               ${
                 accountType
                   ? `<p class="eyebrow">Account type</p>

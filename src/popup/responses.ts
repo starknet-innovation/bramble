@@ -30,6 +30,13 @@ export {
  * Re-exported transfer-review validators for one import path.
  */
 export { isTransferReviewResponse, type TransferReviewResponse } from "./responses-transfer";
+/**
+ * Re-exported on-chain class-hash verification validator for one import path.
+ */
+export {
+  type ClassHashVerificationResponse,
+  isClassHashVerificationResponse,
+} from "./responses-verify";
 
 import { type AllowanceView, isAllowanceView } from "../starknet/allowance-discovery";
 import { isWalletPreferences, type WalletPreferences } from "../storage/preferences-store";

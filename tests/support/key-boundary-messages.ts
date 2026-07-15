@@ -103,6 +103,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
+  { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
   { message: { type: "wallet.deployAccount" }, sender: extensionSender },
   { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
   { message: { type: "wallet.preferences" }, sender: extensionSender },

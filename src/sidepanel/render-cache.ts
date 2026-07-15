@@ -26,6 +26,7 @@ export type RenderData = {
   multisigClassDeclared: boolean | "error" | null;
   balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
   chart: readonly number[];
+  classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
   deployment: boolean | null;
   discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
@@ -51,6 +52,7 @@ export const emptyRenderCache = (): RenderData => ({
   multisigClassDeclared: null,
   balances: { error: "wallet locked" },
   chart: [],
+  classHashVerification: null,
   connectedSites: [],
   deployment: null,
   discoveredNfts: [],
