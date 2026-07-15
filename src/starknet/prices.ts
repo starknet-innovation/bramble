@@ -352,7 +352,8 @@ export const createPriceService = ({
       ) as Record<string, number>;
       const merged = { ...cache.prices, ...fetched };
       const mergedChanges = { ...(cache.changes ?? {}), ...fetchedChanges };
-      const checked = [...new Set([...(cache.checked ?? []), ...answered.map((o) => o.address)])];
+      const answeredAddresses = new Set(answered.map((outcome) => outcome.address));
+      const checked = [...new Set([...(cache.checked ?? []), ...answeredAddresses])];
       await store
         .set(PRICES_STORE_KEY, {
           changes: mergedChanges,
@@ -361,12 +362,32 @@ export const createPriceService = ({
           prices: merged,
         })
         .catch(() => undefined);
+      // A partial fetch — some addresses answered, some failed — mixes
+      // just-fetched prices with older cached ones for the failed addresses.
+      // Serving that as `asOf: now(), stale: false` would pass days-old values
+      // off as live, so when any requested address was not freshly fetched, flag
+      // the snapshot stale and date it to the OLDEST capture that still
+      // contributes: the cache time when a served price for a failed address
+      // comes from the cache, otherwise now(). Failed addresses with nothing
+      // cached stay absent from `prices` — unavailable, exactly as in the
+      // all-fail path — rather than being passed off as current.
+      const unanswered = wanted.filter((address) => !answeredAddresses.has(address));
+      if (unanswered.length === 0) {
+        return {
+          asOf: now(),
+          changes: sliceChanges(mergedChanges, addresses),
+          currency,
+          prices: sliceCurrency(merged, addresses, currency),
+          stale: false,
+        };
+      }
+      const servesCachedPrice = unanswered.some((address) => merged[address] !== undefined);
       return {
-        asOf: now(),
+        asOf: servesCachedPrice ? snapshotAsOf(cache.fetchedAt) : now(),
         changes: sliceChanges(mergedChanges, addresses),
         currency,
         prices: sliceCurrency(merged, addresses, currency),
-        stale: false,
+        stale: true,
       };
     },
     async getTokenChart({ address, currency, networkId }) {
