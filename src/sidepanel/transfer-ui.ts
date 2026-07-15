@@ -9,6 +9,7 @@ import { isStarkFieldElement, normalizeFeltInput } from "../starknet/networks";
 import { activityToCsv } from "../storage/activity-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { formatFri } from "./parts";
+import { reviewCallsList, reviewPanel, riskFlagMessages } from "./review-render";
 import type { SidepanelWallet } from "./runtime";
 import { watchDeployment } from "./shell-bindings";
 
@@ -75,17 +76,27 @@ const feeLineHtml = (review: Review): string => {
   return "";
 };
 
-const reviewPanelHtml = (review: Review): string => `
-  <div class="review-panel" role="note">
-    ${review.summaries.map((summary) => `<p>${escapeHtml(summary)}</p>`).join("")}
-    ${review.flags.map((flag) => `<p class="review-flag">⚠ ${escapeHtml(flag.message)}</p>`).join("")}
-    ${
-      review.requiresDeployment
-        ? '<p class="review-flag">⚠ This account is not deployed yet; the first send also submits its deployment.</p>'
-        : ""
-    }
-    ${feeLineHtml(review)}
-  </div>`;
+// The deployment notice rides in the shared risk panel so it renders with the
+// same alert affordance as a risk flag; it is informational, not a verify-layer
+// flag, so it stays a separate note here rather than in `verifyCalls`.
+const deploymentNotes = (review: Review): readonly string[] =>
+  review.requiresDeployment
+    ? ["This account is not deployed yet; the first send also submits its deployment."]
+    : [];
+
+/**
+ * Renders the in-wallet Send review from a transfer review report, reusing the
+ * exact decode/risk presentation the dApp approval invoke card uses: decoded
+ * call summaries as a structured `review-calls` list and risk flags in the
+ * shared `review-panel`, so the two surfaces stay at parity. The fee estimate
+ * line is Send-specific (a dApp invoke has no wallet-side estimate) and follows
+ * the shared panel.
+ */
+export const reviewPanelHtml = (review: Review): string =>
+  `${reviewCallsList(review.summaries)}${reviewPanel([
+    ...riskFlagMessages(review.flags),
+    ...deploymentNotes(review),
+  ])}${feeLineHtml(review)}`;
 
 /**
  * Binds the two-phase send form: review with decoded summary, flags, and fee,
