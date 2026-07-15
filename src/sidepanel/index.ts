@@ -34,7 +34,7 @@ import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
 import { bindOnboarding } from "./onboarding-ui";
-import { emptyRenderCache, type RenderData } from "./render-cache";
+import { emptyRenderCache, type RenderData, verificationForActiveAccount } from "./render-cache";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import {
@@ -311,6 +311,14 @@ const paint = (): void => {
   drawerGroupFilter = healed.drawerGroupFilter;
   expandedGroupId = healed.expandedGroupId;
   openAssignId = healed.openAssignId;
+  // Key the class-hash verification by the account it was computed for, so a
+  // stale badge from the previous account never shows against a freshly switched
+  // one — it falls back to its honest "verifying…" state until the new account's
+  // verification lands (mirrors how deployment-cache keys by accountId).
+  const classHashVerification = verificationForActiveAccount(
+    cache.classHashVerification,
+    status.activeAccountId,
+  );
   const content = !status.hasVault
     ? onboarding(status)
     : status.locked
@@ -340,7 +348,7 @@ const paint = (): void => {
           cache.priceAsOf,
           cache.discoveredNfts,
           openAssignId,
-          cache.classHashVerification,
+          classHashVerification,
           cache.historyUnavailable,
         );
   lastActiveView = activeView;

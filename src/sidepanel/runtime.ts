@@ -5,6 +5,7 @@
 import {
   type ActivityResponse,
   type AllowancesResponse,
+  type ClassHashVerificationResponse,
   type ConnectedSitesResponse,
   type DeploymentStatusResponse,
   type DiscoveredNft,
@@ -34,7 +35,6 @@ import {
   type TransferReviewResponse,
   type WalletStatus,
 } from "../popup/responses";
-import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { AccountGroupIcon } from "../storage/account-groups";
 
 /**
@@ -138,9 +138,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({ type: "wallet.deploymentStatus" });
       return isDeploymentStatusResponse(response) ? response : null;
     },
-    async loadClassHashVerification(): Promise<ClassHashVerification | null> {
+    async loadClassHashVerification(): Promise<ClassHashVerificationResponse | null> {
       const response = await sendMessage({ type: "wallet.verifyClassHash" });
-      return isClassHashVerificationResponse(response) ? response.verification : null;
+      // Return the whole response so the caller can key the verification by the
+      // accountId it was computed for — a trust badge must never be shown against
+      // an account it was not computed for, even transiently after a switch.
+      return isClassHashVerificationResponse(response) ? response : null;
     },
     async decideApproval(id: string, approved: boolean): Promise<void> {
       const response = await sendMessage({

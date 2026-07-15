@@ -6,6 +6,7 @@
  */
 
 import type { WalletStatus } from "../popup/responses";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { MultisigClient } from "./multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "./runtime";
@@ -71,3 +72,16 @@ export const emptyRenderCache = (): RenderData => ({
   transactions: [],
   historyUnavailable: false,
 });
+
+/**
+ * The class-hash verification to render for the active account, or null when the
+ * cached result was computed for a different account (or none is cached yet). A
+ * trust badge must never be shown against an account it was not computed for, so
+ * a stale verification from the previous account reverts to the honest
+ * "verifying…" state until the switched-to account's verification lands.
+ */
+export const verificationForActiveAccount = (
+  cached: RenderData["classHashVerification"],
+  activeAccountId: string | null | undefined,
+): ClassHashVerification | null =>
+  cached && cached.accountId === activeAccountId ? cached.verification : null;
