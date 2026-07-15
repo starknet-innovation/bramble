@@ -70,7 +70,7 @@ export const tokensFlow = (
   );
   const balanceById = new Map(balances.map((balance) => [balance.id, balance]));
   return (
-    flowHeader("Tokens", "home", status, "Add, detect, and hide tokens") +
+    flowHeader("Tokens", status, "Add, detect, and hide tokens") +
     flowScreen(
       "tokens",
       `<section class="section">
@@ -137,7 +137,7 @@ export const tokenDetailFlow = (
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   return (
-    flowHeader(token.symbol, "home", status, token.name) +
+    flowHeader(token.symbol, status, token.name) +
     flowScreen(
       "token-detail",
       `<section class="section">

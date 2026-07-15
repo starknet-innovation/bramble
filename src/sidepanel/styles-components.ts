@@ -354,9 +354,9 @@ ${SIGN_REQUEST_STYLES}
   .nft-art {
     align-items: center; aspect-ratio: 1 / 1; background: var(--mc-soft); border-radius: ${RADIUS.md};
     box-shadow: var(--mc-edge); color: var(--mc-muted); display: inline-flex; justify-content: center;
-    transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease}; width: 100%;
+    overflow: hidden; position: relative; transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease}; width: 100%;
   }
-  .nft-art .icon { height: 28px; width: 28px; }
+  .nft-art .icon { height: 28px; width: 28px; } .nft-image { border-radius: inherit; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; } .nft-image--broken { display: none; } .nft-hero { margin: 0 auto ${SPACE.sm}; max-width: 180px; }
   button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--mc-edge), var(--mc-shadow-sm); }
   .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }

@@ -1,11 +1,15 @@
 /**
  * Pure, side-effect-free model for account groups ("folders"): non-secret,
- * organisational metadata that lets a user bucket accounts under a named,
- * icon-tagged group. An account may belong to several groups. Group ids are
- * derived deterministically from the name (slug plus a collision suffix) so
- * this module never reaches for a clock or randomness — every operation is a
- * pure function returning a fresh immutable array, validated the same way the
- * plain preferences store validates its other collections.
+ * organisational metadata that lets a user file each account under a named,
+ * icon-tagged group. The model is a single-group folder: an account belongs to
+ * AT MOST ONE group, so assigning it to a group removes it from every other.
+ * The store keeps membership as per-group `accountIds`; the exclusivity is an
+ * invariant enforced by {@link setAccountInGroup} on assignment and repaired by
+ * {@link normalizeAccountGroups} when reading legacy data that predates it.
+ * Group ids are derived deterministically from the name (slug plus a collision
+ * suffix) so this module never reaches for a clock or randomness — every
+ * operation is a pure function returning a fresh immutable array, validated the
+ * same way the plain preferences store validates its other collections.
  */
 import { WalletError } from "../shared/errors";
 import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "../shared/json";
@@ -44,9 +48,10 @@ export const GROUP_ICONS = [
 export type AccountGroupIcon = (typeof GROUP_ICONS)[number];
 
 /**
- * A user-named bucket of accounts, tagged with a standardised icon. `id` is
+ * A user-named folder of accounts, tagged with a standardised icon. `id` is
  * derived from `name`; `accountIds` holds the member account ids (no order
- * guarantee, always de-duplicated).
+ * guarantee, always de-duplicated). Under the single-group model an account id
+ * appears in at most one group's `accountIds` across the whole collection.
  */
 export type AccountGroup = {
   readonly id: string;
@@ -180,9 +185,14 @@ export const removeGroup = (groups: AccountGroups, id: string): AccountGroups =>
   groups.filter((group) => group.id !== id);
 
 /**
- * Adds or removes an account id from a group's membership, de-duplicating on
- * add. No-op when the group is missing or the membership already matches.
- * Throws {@link WalletError} for a malformed account id. Returns a new array.
+ * Files an account into (`member: true`) or out of (`member: false`) the group
+ * `groupId`, enforcing the single-group folder model: filing an account into a
+ * group also removes it from every OTHER group, so it never belongs to two at
+ * once. `member: false` just clears it from `groupId`, leaving it ungrouped.
+ * A no-op when `groupId` is unknown (so an assignment to a stale id can never
+ * silently strip an account from its real folder) or when membership already
+ * matches. Throws {@link WalletError} for a malformed account id. Returns a new
+ * array; groups whose membership is unchanged keep their identity.
  */
 export const setAccountInGroup = (
   groups: AccountGroups,
@@ -193,19 +203,55 @@ export const setAccountInGroup = (
   if (!isAccountId(accountId)) {
     throw new WalletError("Invalid account id");
   }
+  if (!groups.some((group) => group.id === groupId)) {
+    return groups;
+  }
   return groups.map((group) => {
-    if (group.id !== groupId) {
-      return group;
-    }
     const has = group.accountIds.includes(accountId);
-    if (member === has) {
+    // The target group holds the account iff `member`; every other group must
+    // drop it on assignment (exclusivity) but is untouched on clearing.
+    const shouldHave = group.id === groupId ? member : member ? false : has;
+    if (shouldHave === has) {
       return group;
     }
     return {
       ...group,
-      accountIds: member
+      accountIds: shouldHave
         ? [...group.accountIds, accountId]
         : group.accountIds.filter((existing) => existing !== accountId),
     };
   });
+};
+
+/**
+ * Resolves the single group an account is filed under, or null when it is
+ * ungrouped. Returns the first group listing the account so a legacy record
+ * with the account in several groups still yields one deterministically (the
+ * same one {@link normalizeAccountGroups} keeps).
+ */
+export const accountGroup = (groups: AccountGroups, accountId: string): AccountGroup | null =>
+  groups.find((group) => group.accountIds.includes(accountId)) ?? null;
+
+/**
+ * Repairs legacy data that predates the single-group model: an account listed
+ * in several groups is kept in only the FIRST (in stable array order) and
+ * dropped from the rest, so membership becomes exclusive without losing an
+ * account entirely. Returns the input unchanged when it already satisfies the
+ * invariant, preserving referential identity.
+ */
+export const normalizeAccountGroups = (groups: AccountGroups): AccountGroups => {
+  const claimed = new Set<string>();
+  let changed = false;
+  const next = groups.map((group) => {
+    const kept = group.accountIds.filter((id) => {
+      if (claimed.has(id)) {
+        changed = true;
+        return false;
+      }
+      claimed.add(id);
+      return true;
+    });
+    return kept.length === group.accountIds.length ? group : { ...group, accountIds: kept };
+  });
+  return changed ? next : groups;
 };

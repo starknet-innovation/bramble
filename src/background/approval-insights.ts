@@ -4,7 +4,7 @@
  * grant access. Reputation context (first-seen timestamp, current time) comes
  * from the injected origin-history store; the pure blocklist decides the text.
  */
-import { originInsights } from "../security/blocklist";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import type { OriginHistoryStore } from "../storage/origin-history";
 import type { PendingApproval } from "./approvals";
 
@@ -20,11 +20,12 @@ import type { PendingApproval } from "./approvals";
 export const enrichApprovals = async (
   approvals: readonly PendingApproval[],
   history: OriginHistoryStore,
+  guard: OriginGuard = DEFAULT_ORIGIN_GUARD,
 ): Promise<readonly PendingApproval[]> =>
   Promise.all(
     approvals.map(async (approval) => {
       const firstSeenAt = await history.firstSeen(approval.origin);
-      const insight = originInsights(approval.origin, {
+      const insight = guard.insights(approval.origin, {
         connected: false,
         firstSeenAt,
         now: history.now(),

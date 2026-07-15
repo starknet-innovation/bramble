@@ -3,6 +3,7 @@
  * tests can stub network access.
  */
 
+import { type ExternalAllowanceScan, scanExternalAllowances } from "../starknet/allowance-scan";
 import {
   computeMultisigTransactionId,
   getMultisigConfig,
@@ -15,6 +16,11 @@ import {
   isMultisigClassDeclared,
   type MultisigClassStatusInput,
 } from "../starknet/multisig-deploy";
+import {
+  createHttpNftIndexer,
+  type NftIndexerHttp,
+  type NftIndexerService,
+} from "../starknet/nft-indexer";
 import {
   type BalanceInput,
   type DeclareInput,
@@ -60,6 +66,14 @@ export type MultisigRpc = {
  */
 export type RuntimeRpc = {
   readonly estimateInvokeFee: (input: InvokeInput) => ReturnType<typeof estimateInvokeFee>;
+  /**
+   * Discovers ERC20 allowances granted outside this wallet for an account's
+   * tracked tokens. Optional so existing RPC stubs stay valid; when absent the
+   * allowance manager lists only the locally tracked (in-wallet) approvals.
+   */
+  readonly getExternalAllowances?: (
+    input: ExternalAllowanceScan,
+  ) => ReturnType<typeof scanExternalAllowances>;
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -85,6 +99,11 @@ export type RuntimeRpc = {
    */
   readonly multisig?: MultisigRpc;
   /**
+   * NFT auto-discovery indexer. Optional so existing RPC stubs stay valid; when
+   * absent the discovery handler falls back to an empty owned-NFT list.
+   */
+  readonly nftIndexer?: NftIndexerService;
+  /**
    * STRK20 privacy service. Optional so existing RPC stubs stay valid; when
    * absent the handler falls back to {@link unavailableStrk20Service}, which
    * reports the account as not registered.
@@ -96,11 +115,16 @@ export type RuntimeRpc = {
 // the {@link Strk20Http} shape the HTTP service expects.
 const strk20Http: Strk20Http = (url, init) => fetch(url, init);
 
+// Real network transport for the NFT indexer: a thin `fetch` wrapper matching
+// the {@link NftIndexerHttp} shape the discovery client expects.
+const nftIndexerHttp: NftIndexerHttp = (url) => fetch(url);
+
 /**
  * Production RPC wiring used when no stub is injected.
  */
 export const defaultRuntimeRpc: RuntimeRpc = {
   estimateInvokeFee,
+  getExternalAllowances: scanExternalAllowances,
   getDeploymentStatus,
   getNftOwner,
   getTokenBalances,
@@ -112,6 +136,7 @@ export const defaultRuntimeRpc: RuntimeRpc = {
     getProposalStatus: getMultisigProposalStatus,
     isClassDeclared: isMultisigClassDeclared,
   },
+  nftIndexer: createHttpNftIndexer(nftIndexerHttp),
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,

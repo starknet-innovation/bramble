@@ -95,6 +95,19 @@ export const readRemoveNftInput = (message: unknown): { readonly id: string } | 
     : null;
 
 /**
+ * Parses a set-NFT-indexer-URL request. The URL is shape-validated (custom RPC
+ * rules) in the preferences store; an empty string clears the endpoint.
+ */
+export const readSetNftIndexerUrlInput = (message: unknown): { readonly url: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["type", "url"]) &&
+  message["type"] === "wallet.setNftIndexerUrl" &&
+  typeof message["url"] === "string" &&
+  message["url"].length <= 2048
+    ? { url: message["url"] }
+    : null;
+
+/**
  * Parses a spam-hide toggle for a watched NFT.
  */
 export const readSetNftSpamInput = (

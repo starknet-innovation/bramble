@@ -53,7 +53,7 @@ const bindEndpointForm = (
 };
 
 /**
- * Binds the RPC-override and STRK20-prover endpoint forms.
+ * Binds the RPC-override, STRK20-prover, and NFT-indexer endpoint forms.
  */
 export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
   bindEndpointForm(deps, "#rpc-form", "rpcUrl", "RPC endpoint", (rpcUrl) =>
@@ -61,5 +61,8 @@ export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
   );
   bindEndpointForm(deps, "#strk20-prover-form", "proverUrl", "Prover endpoint", (proverUrl) =>
     deps.wallet.setStrk20ProverUrl(proverUrl),
+  );
+  bindEndpointForm(deps, "#nft-indexer-form", "indexerUrl", "Indexer endpoint", (indexerUrl) =>
+    deps.wallet.setNftIndexerUrl(indexerUrl),
   );
 };

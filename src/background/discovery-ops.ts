@@ -7,7 +7,7 @@
  */
 
 import { API_VERSION_PATTERN } from "../provider/bridge-results";
-import { isBlockedOrigin } from "../security/blocklist";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "../shared/versions";
@@ -31,6 +31,7 @@ export { SUPPORTED_SPECS, SUPPORTED_WALLET_API };
  */
 export type DiscoveryOpsDeps = {
   readonly extensionId: string;
+  readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -79,6 +80,7 @@ export const handleDiscoveryOps = async (
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
   const { extensionId, preferencesStore, runtimeRpc, session, wallet } = deps;
+  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
 
   if (messageType === "wallet.supportedSpecs" || messageType === "wallet.supportedWalletApi") {
     const input = readDiscoveryInput(message, messageType);
@@ -101,7 +103,7 @@ export const handleDiscoveryOps = async (
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
     }
-    if (isBlockedOrigin(input.origin)) {
+    if (guard.isBlocked(input.origin)) {
       return { error: "origin blocked" };
     }
     if (!apiVersionSupported(input.apiVersion)) {

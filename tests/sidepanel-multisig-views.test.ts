@@ -93,7 +93,7 @@ describe("multisig views", () => {
     expect(html).toContain(`data-multisig-open="${multisig.id}"`);
     expect(html).toContain('id="multisig-add-form"');
     expect(html).toContain('data-view="multisig-deploy"');
-    expect(html).toContain('data-view="settings"');
+    expect(html).toContain("data-nav-back");
   });
 
   test("detail shows signers, lifecycle actions, and the track form", () => {

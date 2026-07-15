@@ -210,11 +210,40 @@ and reputation signals before a connection is approved:
   persisted grant and how many accounts it can see. Revoking an origin removes
   its grants from the encrypted vault and broadcasts `accountsChanged` so the
   revoked page immediately sees an empty account list.
-- Phishing blocklist: `src/security/blocklist.ts` vendors a starter blocklist of
-  known-bad domains. `wallet.requestAccounts` from a blocklisted origin is
-  refused with `origin blocked`. This starter list is intentionally small and
-  explicit; replace or extend `BLOCKED_DOMAINS` with a real threat feed for
-  production coverage.
+- Phishing blocklist (seed + live feed): `src/security/blocklist.ts` decides
+  whether an origin is blocked from a bundled seed list (`BLOCKED_DOMAINS`) and
+  an injected dynamic snapshot. `wallet.requestAccounts` — and every other dapp
+  surface (getPermissions, getGrantedAccounts, watchAsset, addInvokeTransaction,
+  addStarknetChain, addDeclareTransaction, deploymentData, STRK20) — from a
+  blocked origin is refused with `origin blocked`.
+- Live phishing feed (decision, issue #34): rather than remaining a static
+  baseline that only updates with an extension release, phishing protection now
+  consumes a live, updatable remote feed *in addition to* the seed. The decision
+  was to adopt a remote feed with a **fail-safe** stance:
+  - `src/security/phishing-feed.ts` fetches a maintained web3 phishing list from
+    a configurable source (default: MetaMask's community-maintained
+    eth-phishing-detect, `https://metamask.github.io/eth-phishing-detect/v1/config.json`)
+    under an explicit new host permission (`https://metamask.github.io/*`).
+  - The payload is validated before use and cached in plain (non-secret) local
+    storage under `mc-wallet:phishing-feed`. Wire format is
+    `{ "blocklist": string[], "version"?: number }`; the eth-phishing-detect
+    `blacklist` key is accepted as an alias and its fuzzy/whitelist fields are
+    ignored (the wallet's own heuristics cover lookalikes).
+  - Refresh cadence: the background worker warms the feed on startup and
+    refetches only when the cache is older than the TTL (6h), so the list
+    refreshes automatically without a new build.
+  - Stale / unavailable behaviour is **fail-safe, never fail-open**: an
+    unreachable or malformed source falls back to the last good cache, and the
+    bundled seed list is always enforced independently — so a network outage can
+    only *reduce* coverage to the shipped baseline, never disable blocking. New
+    domains added to the feed are flagged without an extension release; the seed
+    guarantees existing detections and the lookalike / risky-TLD heuristics keep
+    working offline.
+  - The `OriginGuard` (`createOriginGuard`) closes over the feed's live snapshot
+    accessor so enforcement call sites stay unaware of the feed's origin and a
+    refresh takes effect immediately. A user-facing preference to override the
+    source URL is a documented follow-up (the source is code-configurable today,
+    consistent with how the CoinGecko price base is configured).
 - Lookalike heuristics: punycode detection plus digit-substitution,
   hyphen-insertion, edit-distance, and brand-substring checks against a
   protected list (`starknet.io`, `argent.xyz`, `braavos.app`, `cartridge.gg`,

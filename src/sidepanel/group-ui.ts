@@ -1,9 +1,10 @@
 /**
  * Behaviour for the shared account-groups controls rendered by
  * ./group-controls.ts. One `bindGroupControls` entry wires icon pickers,
- * create/edit forms, delete (two-tap) confirmation, per-account membership
- * toggles, and the collapsible assignment panels, so the left drawer and the
- * manage-accounts flow drive identical group behaviour without duplication.
+ * create/edit forms, delete (two-tap) confirmation, the group-centric bulk
+ * membership toggles, the drawer's single-select folder picker, and the
+ * collapsible picker panels, so the left drawer and the manage-accounts flow
+ * drive identical group behaviour without duplication.
  */
 import { isAccountGroupIcon } from "../storage/account-groups";
 import { buttonBusy, errorMessage, showToast } from "./dom";
@@ -11,14 +12,18 @@ import type { SidepanelWallet } from "./runtime";
 
 /**
  * State the group controls close over: the wallet client, a re-render callback
- * invoked after every successful mutation, and the manage-accounts bulk editor's
- * expanded-group accessor/mutator so a group's members editor can be opened
- * (e.g. right after creating it) and stay open across re-renders.
+ * invoked after every successful mutation, the manage-accounts bulk editor's
+ * expanded-group accessor/mutator (so a group's members editor can be opened —
+ * e.g. right after creating it — and stay open across re-renders), and the
+ * drawer's open assign-panel accessor/mutator (so toggling membership on an
+ * account never collapses its panel under the user).
  */
 export type GroupControlDeps = {
   readonly expandedGroup: () => string | null;
+  readonly openAssign: () => string | null;
   readonly rerender: () => Promise<void>;
   readonly setExpandedGroup: (id: string | null) => void;
+  readonly setOpenAssign: (id: string | null) => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -160,28 +165,70 @@ const bindAssignToggles = (root: Element, deps: GroupControlDeps): void => {
   });
 };
 
-const bindAssignPanels = (root: Element): void => {
+// Single-select folder picker (drawer row). Choosing a group files the account
+// into exactly that folder — the exclusive setter drops it from any other — and
+// choosing "None" clears its current folder. The current folder is read from
+// the pressed option in the same list, so "None" knows which membership to
+// remove. A tap on the already-selected option is a no-op.
+const bindGroupPickers = (root: Element, deps: GroupControlDeps): void => {
+  root.querySelectorAll<HTMLButtonElement>("[data-group-pick]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const accountId = button.dataset["account"];
+      const pick = button.dataset["groupPick"];
+      if (!accountId || !pick || button.getAttribute("aria-pressed") === "true") {
+        return;
+      }
+      const currentPick = button
+        .closest(".group-toggle-list")
+        ?.querySelector<HTMLElement>('[data-group-pick][aria-pressed="true"]')?.dataset[
+        "groupPick"
+      ];
+      const currentGroup = currentPick && currentPick !== "none" ? currentPick : null;
+      buttonBusy(button, true);
+      const op =
+        pick === "none"
+          ? currentGroup
+            ? deps.wallet.setAccountInGroup(accountId, currentGroup, false)
+            : Promise.resolve()
+          : deps.wallet.setAccountInGroup(accountId, pick, true);
+      void op.then(
+        async () => {
+          showToast(pick === "none" ? "Removed from folder" : "Moved to folder", "success");
+          await deps.rerender();
+        },
+        (error: unknown) => {
+          showToast(errorMessage(error, "Group update failed"), "error");
+          buttonBusy(button, false);
+        },
+      );
+    });
+  });
+};
+
+// Open/collapse an account's group-assignment panel. The open account id is
+// held in a module var (mirroring the drawer's group filter and the bulk
+// editor's expanded group) so it survives full re-renders: toggling a
+// membership repaints the shell, and the same account's panel repaints open —
+// letting a user bucket one account into several groups without reopening.
+const bindAssignPanels = (root: Element, deps: GroupControlDeps): void => {
   root.querySelectorAll<HTMLButtonElement>("[data-assign-toggle]").forEach((button) => {
     button.addEventListener("click", () => {
       const accountId = button.dataset["assignToggle"];
       if (!accountId) {
         return;
       }
-      const panel = root.querySelector<HTMLElement>(`[data-group-assign="${accountId}"]`);
-      if (!panel) {
-        return;
-      }
-      const open = panel.hasAttribute("hidden");
-      panel.toggleAttribute("hidden", !open);
-      button.setAttribute("aria-expanded", String(open));
+      deps.setOpenAssign(deps.openAssign() === accountId ? null : accountId);
+      void deps.rerender();
     });
   });
 };
 
-// Expand/collapse a group's bulk members editor in the manage-accounts Groups
-// section. The open group is held in a module var (mirroring the drawer's group
-// filter) so it survives full re-renders; clicking the open group's header
-// collapses it. A re-render repaints the section with the right editor open.
+// Expand/collapse one panel in the manage-accounts Groups accordion: a group's
+// bulk members editor or the "Create a group" panel (whose id is the
+// CREATE_GROUP_PANEL sentinel). The single open id is held in a module var
+// (mirroring the drawer's group filter) so it survives full re-renders; setting
+// it to a new panel collapses the last, and clicking the open panel's header
+// collapses it. A re-render repaints the section with just that panel open.
 const bindGroupExpanders = (root: Element, deps: GroupControlDeps): void => {
   root.querySelectorAll<HTMLButtonElement>("[data-group-expand]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -208,6 +255,7 @@ export const bindGroupControls = (root: Element | null, deps: GroupControlDeps):
   bindEditForms(root, deps);
   bindRemoveButtons(root, deps);
   bindAssignToggles(root, deps);
-  bindAssignPanels(root);
+  bindGroupPickers(root, deps);
+  bindAssignPanels(root, deps);
   bindGroupExpanders(root, deps);
 };

@@ -10,11 +10,19 @@ const manifest = await readJson("public/manifest.json");
 const packageJson = await readJson("package.json");
 
 const expectedBackgroundServiceWorker = "background/index.js";
-const expectedExtensionCsp = "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';";
+// img-src is pinned to self, data: (inline SVG placeholders), and the fixed IPFS
+// gateway only: arbitrary remote hosts cannot load images, so an airdropped NFT
+// with an attacker-hosted image_url cannot deanonymize the wallet (address -> IP).
+const expectedExtensionCsp =
+  "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https://ipfs.io;";
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
 const expectedHostPermissions = [
   "https://api.cartridge.gg/*",
   "https://api.coingecko.com/*",
+  // Maintained web3 phishing feed (issue #34): the default source for the live
+  // malicious-origin blocklist. Configurable per deployment via the feed's
+  // `source` option; pinned here so the manifest stays an explicit allowlist.
+  "https://metamask.github.io/*",
   "http://127.0.0.1:5050/*",
   "http://localhost:5050/*",
 ];
@@ -85,7 +93,9 @@ const contentSecurityPolicy = hasOnlyKeys(manifest["content_security_policy"], [
   ? manifest["content_security_policy"]
   : null;
 if (!contentSecurityPolicy || contentSecurityPolicy["extension_pages"] !== expectedExtensionCsp) {
-  failures.push("manifest CSP must allow only packaged scripts and Krusty WASM");
+  failures.push(
+    "manifest CSP must allow only packaged scripts, Krusty WASM, and self/data/IPFS images",
+  );
 }
 
 const background = hasOnlyKeys(manifest["background"], ["service_worker", "type"])

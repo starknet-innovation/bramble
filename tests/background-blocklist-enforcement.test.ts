@@ -1,8 +1,8 @@
 /**
  * Blocklist enforced beyond connect (A-M2 / A-L1): a blocklisted origin that
  * somehow still holds an old grant must get [] or an error from every dapp
- * surface — getGrantedAccounts, getPermissions, watchAsset, and
- * addInvokeTransaction — not just at requestAccounts.
+ * surface — getGrantedAccounts, getPermissions, watchAsset, addInvokeTransaction,
+ * signTypedData, and switchChain — not just at requestAccounts.
  */
 import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../src/background/messages";
@@ -123,6 +123,28 @@ describe("blocklist enforced beyond connect (A-M2)", () => {
           origin: BLOCKED,
           type: "wallet.addInvokeTransaction",
         },
+        blockedSender,
+      ),
+    ).resolves.toEqual({ error: "origin blocked" });
+  });
+
+  test("signTypedData is rejected for a blocked origin", async () => {
+    await expect(
+      makeHandler()(
+        {
+          origin: BLOCKED,
+          type: "wallet.signTypedData",
+          typedData: { domain: { name: "Airdrop" }, primaryType: "Claim" },
+        },
+        blockedSender,
+      ),
+    ).resolves.toEqual({ error: "origin blocked" });
+  });
+
+  test("switchChain is rejected for a blocked origin", async () => {
+    await expect(
+      makeHandler()(
+        { chainId: "0x534e5f4d41494e", origin: BLOCKED, type: "wallet.switchChain" },
         blockedSender,
       ),
     ).resolves.toEqual({ error: "origin blocked" });

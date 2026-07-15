@@ -10,7 +10,7 @@ import { knownAccountType } from "../starknet/account-types";
 import { isStarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { groupAssignPanel } from "./group-controls";
+import { accountGroupsLine } from "./group-controls";
 import { groupsSection } from "./group-members";
 import { icon } from "./icons";
 import {
@@ -37,7 +37,7 @@ export const sendFlow = (
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   const canSend = account !== null && tokens.length > 0;
   return (
-    flowHeader("Send", "home", status, account ? `From ${accountLabel(account.address)}` : "") +
+    flowHeader("Send", status, account ? `From ${accountLabel(account.address)}` : "") +
     flowScreen(
       "send",
       `<section class="section">
@@ -81,7 +81,7 @@ export const sendFlow = (
  * Receive flow: show and copy the active account address.
  */
 export const receiveFlow = (status: WalletStatus, account: AccountRef | null): string =>
-  flowHeader("Receive", "home", status) +
+  flowHeader("Receive", status) +
   flowScreen(
     "receive",
     `<section class="section">
@@ -111,11 +111,14 @@ const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | n
 const strk20ProverUrlFor = (preferences: WalletPreferences | null): string =>
   preferences?.strk20ProverUrl ?? "";
 
+const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
+  preferences?.nftIndexerUrl ?? "";
+
 /**
  * Network flow: switch the active network and set a custom RPC endpoint.
  */
 export const networkFlow = (status: WalletStatus, preferences: WalletPreferences | null): string =>
-  flowHeader("Network", "settings", status, "Choose where the wallet operates") +
+  flowHeader("Network", status, "Choose where the wallet operates") +
   flowScreen(
     "network",
     `<section class="section">
@@ -158,13 +161,27 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
         <button class="secondary" type="submit">${icon("check")}Save prover</button>
         <p id="strk20-prover-result" role="status"></p>
       </form>
+    </section>
+    <section class="section">
+      <h2>NFT indexer</h2>
+      <form id="nft-indexer-form">
+        <label><span>NFT discovery endpoint</span>
+          <input class="mono" name="indexerUrl" type="url" placeholder="https://…" value="${escapeHtml(nftIndexerUrlFor(preferences))}" autocomplete="off" spellcheck="false" />
+          <span class="hint">Where the wallet lists NFTs an account owns for the auto-discovered gallery. Ownership is re-checked on-chain. Leave empty to only show manually watched NFTs.</span>
+        </label>
+        <button class="secondary" type="submit">${icon("check")}Save indexer</button>
+        <p id="nft-indexer-result" role="status"></p>
+      </form>
     </section>`,
   );
 
 /**
- * Account flow: switch the active account, name it, and inspect identifiers.
- * `expandedGroupId` opens that group's bulk members editor in the Groups
- * section (null = all collapsed).
+ * Manage accounts & groups flow: the single management surface reached from the
+ * drawer's "Manage accounts & groups" entry and the Settings menu. Switch the
+ * active account, add one, manage groups (create/rename/change-icon/delete plus
+ * bulk assignment) in the Groups accordion, name the account, and inspect
+ * identifiers. `expandedGroupId` selects the one open Groups panel — a group's
+ * bulk members editor or the "Create a group" panel (null = all collapsed).
  */
 export const accountFlow = (
   status: WalletStatus,
@@ -176,7 +193,7 @@ export const accountFlow = (
   const accountType = account ? knownAccountType(account.classHash) : null;
   const groups = preferences?.groups ?? [];
   return (
-    flowHeader("Account", "settings", status, `On ${status.network}`) +
+    flowHeader("Accounts & groups", status, `On ${status.network}`) +
     flowScreen(
       "account",
       `<section class="section">
@@ -189,21 +206,15 @@ export const accountFlow = (
                     const memberGroups = groups.filter((group) =>
                       group.accountIds.includes(stored.id),
                     );
-                    return `<div class="option-group-item">
-                      <div class="option-row-line">
-                        <button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
+                    return `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
                           <span class="option-avatar">${accountAvatar(stored.address)}</span>
                           <span class="option-copy">
                             <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
                             <code>${accountLabel(stored.address)}</code>
-                            ${memberGroups.length > 0 ? `<span class="account-groups-line">${memberGroups.map((group) => icon(group.icon)).join("")}</span>` : ""}
+                            ${accountGroupsLine(memberGroups)}
                           </span>
                           ${stored.id === account?.id ? `<span class="option-mark">${icon("check")}</span>` : ""}
-                        </button>
-                        <button class="icon-button ghost" data-assign-toggle="${escapeHtml(stored.id)}" type="button" aria-expanded="false" aria-label="Assign to groups" title="Assign to groups">${icon("folder")}</button>
-                      </div>
-                      ${groupAssignPanel(stored, groups)}
-                    </div>`;
+                        </button>`;
                   })
                   .join("")}
               </div>`
@@ -254,7 +265,7 @@ export const accountFlow = (
  * vault or any key material.
  */
 export const backupFlow = (status: WalletStatus): string =>
-  flowHeader("Backup & restore", "settings", status, "Preferences, labels, and contacts") +
+  flowHeader("Backup & restore", status, "Preferences, labels, and contacts") +
   flowScreen(
     "backup",
     `<section class="section">
@@ -277,7 +288,7 @@ export const backupFlow = (status: WalletStatus): string =>
  * store and returns through the flow header back control.
  */
 export const connectedSitesFlow = (status: WalletStatus, sites: readonly ConnectedSite[]): string =>
-  flowHeader("Connected sites", "settings", status, `${sites.length} connected`) +
+  flowHeader("Connected sites", status, `${sites.length} connected`) +
   flowScreen(
     "connected-sites",
     `<section class="section">
@@ -311,7 +322,7 @@ export const addressBookFlow = (
   const addresses =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return (
-    flowHeader("Address book", "settings", status, `${addresses.length} saved`) +
+    flowHeader("Address book", status, `${addresses.length} saved`) +
     flowScreen(
       "address-book",
       `<section class="section">

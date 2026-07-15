@@ -78,11 +78,13 @@ export const HOME_STYLES = `
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .drawer-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .drawer-foot { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.sm}; }
-  .drawer-root[data-open="true"] .drawer-list li { animation: drawer-item ${MOTION.tabMs}ms var(--ease-out) both; }
-  .drawer-root[data-open="true"] .drawer-list li:nth-child(2) { animation-delay: 30ms; }
-  .drawer-root[data-open="true"] .drawer-list li:nth-child(3) { animation-delay: 60ms; }
-  .drawer-root[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
-  .drawer-root[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
+  /* Row stagger is gated behind .is-opening (added only on a genuine open) so a
+     shell repaint that recreates the drawer node cannot replay it. */
+  .drawer-root.is-opening[data-open="true"] .drawer-list li { animation: drawer-item ${MOTION.tabMs}ms var(--ease-out) both; }
+  .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(2) { animation-delay: 30ms; }
+  .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(3) { animation-delay: 60ms; }
+  .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
+  .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
 
   /* Portfolio tabs: text tabs, sliding emerald indicator, trailing actions */
   .home-tabs { display: grid; gap: ${SPACE.sm}; }
@@ -263,16 +265,13 @@ export const HOME_STYLES = `
   button.group-chip .icon { height: 14px; width: 14px; }
   button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
   button.group-chip[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  /* Active chip carries an inline edit affordance; the pair stays together when
-     the chip row wraps. */
-  .group-chip-active { align-items: center; display: inline-flex; gap: 2px; }
-  button.group-chip-edit { color: var(--mc-muted); height: 28px; width: 28px; }
-  button.group-chip-edit .icon { height: 15px; width: 15px; }
-  button.group-chip-edit:not(:disabled):hover { color: var(--mc-accent); }
   .drawer-account-item { display: grid; gap: 4px; }
   .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
   .drawer-account-row .drawer-account, .option-row-line .option-row { flex: 1; min-width: 0; }
   button.drawer-assign { flex: none; }
+  /* Ungrouped rows show a muted folder as a "pick a folder" affordance; a filed
+     account shows its folder's icon at full ink. */
+  button.drawer-assign.is-ungrouped { color: var(--mc-muted); }
   .option-group-item { display: grid; gap: 4px; }
   .account-groups-line { display: inline-flex; gap: 4px; margin-top: 2px; }
   .account-groups-line .icon { color: var(--mc-muted); height: 13px; width: 13px; }
@@ -337,7 +336,19 @@ export const HOME_STYLES = `
   .group-manage-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
   .group-manage-copy { display: grid; flex: 1; gap: 1px; min-width: 0; text-align: left; }
   .group-manage-copy strong { font-size: ${TYPE.body.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  button[data-remove-group].is-confirming { color: var(--mc-danger); }
+  /* Two-tap delete confirm: the first tap arms the control and reveals an
+     explicit "Delete?" label beside the icon; a second tap deletes. */
+  button[data-remove-group].is-confirming {
+    color: var(--mc-danger);
+    gap: 4px;
+    padding: 0 ${SPACE.sm};
+    width: auto;
+  }
+  button[data-remove-group].is-confirming::after {
+    content: "Delete?";
+    font-size: ${TYPE.caption.size};
+    font-weight: 650;
+  }
 
   /* Group-centric bulk members editor: an expandable header per group, then a
      roomy checklist of every wallet account. Hairline + skin-token only. */

@@ -2,7 +2,7 @@
  * Typed extension message handling for the background service worker.
  */
 
-import { isBlockedOrigin } from "../security/blocklist";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { DEFAULT_NETWORK } from "../starknet/networks";
 import { type PriceService, unavailablePriceService } from "../starknet/prices";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
@@ -83,6 +83,7 @@ const handleRuntimeMessage = async (
   waiters: SignatureWaiters,
   multisigStore: MultisigStore,
   loadMultisigClass: (() => Promise<unknown>) | undefined,
+  guard: OriginGuard,
   message: unknown,
   sender?: RuntimeSender,
 ): Promise<RuntimeResponse> => {
@@ -133,7 +134,7 @@ const handleRuntimeMessage = async (
   }
 
   const chainResponse = await handleChainOps(
-    { approvals, extensionId, preferencesStore, session, waiters, wallet },
+    { approvals, extensionId, guard, preferencesStore, session, waiters, wallet },
     messageType,
     message,
     sender,
@@ -143,7 +144,7 @@ const handleRuntimeMessage = async (
   }
 
   const providerOpsResponse = await handleProviderOps(
-    { approvals, extensionId, preferencesStore, runtimeRpc, session, waiters, wallet },
+    { approvals, extensionId, guard, preferencesStore, runtimeRpc, session, waiters, wallet },
     messageType,
     message,
     sender,
@@ -153,7 +154,7 @@ const handleRuntimeMessage = async (
   }
 
   const discoveryResponse = await handleDiscoveryOps(
-    { extensionId, preferencesStore, runtimeRpc, session, wallet },
+    { extensionId, guard, preferencesStore, runtimeRpc, session, wallet },
     messageType,
     message,
     sender,
@@ -163,7 +164,7 @@ const handleRuntimeMessage = async (
   }
 
   const addChainResponse = await handleAddChainOps(
-    { approvals, extensionId, preferencesStore, waiters },
+    { approvals, extensionId, guard, preferencesStore, waiters },
     messageType,
     message,
     sender,
@@ -173,7 +174,7 @@ const handleRuntimeMessage = async (
   }
 
   const declareResponse = await handleDeclareOps(
-    { approvals, extensionId, preferencesStore, session, waiters, wallet },
+    { approvals, extensionId, guard, preferencesStore, session, waiters, wallet },
     messageType,
     message,
     sender,
@@ -183,7 +184,17 @@ const handleRuntimeMessage = async (
   }
 
   const strk20Response = await handleStrk20Ops(
-    { activity, approvals, extensionId, preferencesStore, runtimeRpc, session, waiters, wallet },
+    {
+      activity,
+      approvals,
+      extensionId,
+      guard,
+      preferencesStore,
+      runtimeRpc,
+      session,
+      waiters,
+      wallet,
+    },
     messageType,
     message,
     sender,
@@ -280,7 +291,7 @@ const handleRuntimeMessage = async (
       return { error: "sender origin mismatch" };
     }
     // A blocklisted origin must see no accounts even if it holds an old grant.
-    if (isBlockedOrigin(input.origin)) {
+    if (guard.isBlocked(input.origin)) {
       return { accounts: [], ok: true };
     }
     // Peek, never renew: content scripts re-query grants automatically after
@@ -300,7 +311,7 @@ const handleRuntimeMessage = async (
     if (!readTypeOnlyInput(message, "wallet.pendingApprovals")) {
       return { error: "invalid pending approvals request" };
     }
-    return { ok: true, pending: await enrichApprovals(approvals.list(), originHistory) };
+    return { ok: true, pending: await enrichApprovals(approvals.list(), originHistory, guard) };
   }
 
   if (messageType === "wallet.requestAccounts") {
@@ -311,7 +322,7 @@ const handleRuntimeMessage = async (
     if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
       return { error: "sender origin mismatch" };
     }
-    if (isBlockedOrigin(input.origin)) {
+    if (guard.isBlocked(input.origin)) {
       return { error: "origin blocked" };
     }
     const passphrase = session.getPassphrase();
@@ -416,6 +427,7 @@ export type MessageHandlerOptions = {
   readonly approvals?: ApprovalQueue;
   readonly loadMultisigClass?: () => Promise<unknown>;
   readonly multisigStore?: MultisigStore;
+  readonly originGuard?: OriginGuard;
   readonly originHistory?: OriginHistoryStore;
   readonly preferencesStore?: WalletPreferencesStore;
   readonly prices?: PriceService;
@@ -440,6 +452,7 @@ export const createMessageHandler = (
   const prices = options.prices ?? unavailablePriceService;
   const allowanceStore = options.allowanceStore ?? memoryAllowanceStore();
   const multisigStore = options.multisigStore ?? memoryMultisigStore();
+  const guard = options.originGuard ?? DEFAULT_ORIGIN_GUARD;
   const waiters = createSignatureWaiters();
   return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
@@ -457,6 +470,7 @@ export const createMessageHandler = (
         waiters,
         multisigStore,
         options.loadMultisigClass,
+        guard,
         message,
         sender,
       );

@@ -10,6 +10,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
+import { nftId } from "../starknet/nft-metadata";
 
 const MAX_TOKEN_ID_DIGITS = 78;
 
@@ -46,7 +47,7 @@ export const isWatchedNft = (value: unknown): value is WatchedNft =>
   isStarknetNetworkId(value["networkId"]) &&
   (value["spam"] === undefined || typeof value["spam"] === "boolean") &&
   isTokenId(value["tokenId"]) &&
-  value["id"] === `${value["networkId"]}:${value["contract"]}:${value["tokenId"]}`;
+  value["id"] === nftId(value["networkId"], value["contract"], value["tokenId"]);
 
 /**
  * Normalizes a watched-NFT input into canonical hex/decimal form and attaches
@@ -58,7 +59,7 @@ export const withNftId = (input: Omit<WatchedNft, "id">): WatchedNft => {
   return {
     contract,
     ...(input.label === undefined ? {} : { label: input.label.trim() }),
-    id: `${input.networkId}:${contract}:${tokenId}`,
+    id: nftId(input.networkId, contract, tokenId),
     networkId: input.networkId,
     ...(input.spam === undefined ? {} : { spam: input.spam }),
     tokenId,

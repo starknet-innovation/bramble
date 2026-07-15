@@ -50,7 +50,7 @@ describe("connected-sites views", () => {
     expect(html).toContain("https://dapp.example");
     expect(html).toContain('data-revoke-origin="https://dapp.example"');
     expect(html).toContain("1 account shared");
-    expect(html).toMatch(/data-view="settings"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
 

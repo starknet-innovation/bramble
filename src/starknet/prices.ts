@@ -5,8 +5,10 @@
  * and testable without a real network; the background worker wires the real
  * `fetch`. Prices are cached under `mc-wallet:prices` and 7-day charts under
  * `mc-wallet:charts` with a TTL clock injected the way the activity store
- * takes one. Every failure degrades to cached-or-empty so the UI can simply
- * omit fiat when offline.
+ * takes one. Every failure degrades to cached-or-empty: when the host is
+ * unreachable the last-known-good prices are still served, flagged `stale`
+ * with the `asOf` capture time so the UI can present them as saved values (or
+ * an explicit "unavailable" hint when nothing is cached) instead of vanishing.
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import type { KeyValueStore } from "../storage/kv";
@@ -60,12 +62,18 @@ export type TokenPriceInput = {
 };
 
 /**
- * Fiat prices keyed by the requested contract address.
+ * Fiat prices keyed by the requested contract address. `asOf` is the epoch (ms)
+ * the returned snapshot was captured, or null when nothing is cached / fiat is
+ * not applicable (off mainnet). `stale` is true when the live host could not be
+ * reached and these values were served from the last-known-good cache, so the
+ * UI can label them rather than pass them off as current.
  */
 export type TokenPrices = {
+  readonly asOf: number | null;
   readonly changes: Readonly<Record<string, number>>;
   readonly currency: DisplayCurrency;
   readonly prices: Readonly<Record<string, number>>;
+  readonly stale: boolean;
 };
 
 /**
@@ -120,6 +128,10 @@ const normalizeAddress = (address: string): string => {
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
+
+// The epoch a cached snapshot was captured, or null when nothing has ever been
+// stored (a zero clock means "never fetched", so there is no last-known time).
+const snapshotAsOf = (fetchedAt: number): number | null => (fetchedAt > 0 ? fetchedAt : null);
 
 const isPriceEntry = (value: unknown): value is PriceEntry =>
   isRecord(value) && CURRENCIES.every((currency) => isFiniteNumber(value[currency]));
@@ -281,11 +293,16 @@ export const createPriceService = ({
       // and simply has no CoinGecko listing; both stay valid until the TTL ends.
       const known = new Set([...Object.keys(cache.prices), ...(cache.checked ?? [])]);
       const covered = wanted.every((address) => known.has(address));
-      if (!platform || wanted.length === 0 || (fresh && covered)) {
+      // Off mainnet and empty requests carry no fiat by design (not "stale"); a
+      // fresh, fully-covered cache is a confirmed-current hit.
+      const noFiat = !platform || wanted.length === 0;
+      if (noFiat || (fresh && covered)) {
         return {
+          asOf: noFiat ? null : snapshotAsOf(cache.fetchedAt),
           changes: sliceChanges(cache.changes ?? {}, addresses),
           currency,
           prices: sliceCurrency(cache.prices, addresses, currency),
+          stale: false,
         };
       }
       // CoinGecko's free simple/token_price endpoint now accepts only one
@@ -313,10 +330,16 @@ export const createPriceService = ({
       );
       const answered = outcomes.filter((outcome) => outcome.ok);
       if (answered.length === 0) {
+        // The host was unreachable for every address: fall back to the
+        // last-known-good cache and flag it stale so the UI shows saved values
+        // (or an "unavailable" hint when the cache is empty) rather than hiding
+        // the portfolio outright.
         return {
+          asOf: snapshotAsOf(cache.fetchedAt),
           changes: sliceChanges(cache.changes ?? {}, addresses),
           currency,
           prices: sliceCurrency(cache.prices, addresses, currency),
+          stale: true,
         };
       }
       const fetched = Object.assign(
@@ -329,7 +352,8 @@ export const createPriceService = ({
       ) as Record<string, number>;
       const merged = { ...cache.prices, ...fetched };
       const mergedChanges = { ...(cache.changes ?? {}), ...fetchedChanges };
-      const checked = [...new Set([...(cache.checked ?? []), ...answered.map((o) => o.address)])];
+      const answeredAddresses = new Set(answered.map((outcome) => outcome.address));
+      const checked = [...new Set([...(cache.checked ?? []), ...answeredAddresses])];
       await store
         .set(PRICES_STORE_KEY, {
           changes: mergedChanges,
@@ -338,10 +362,32 @@ export const createPriceService = ({
           prices: merged,
         })
         .catch(() => undefined);
+      // A partial fetch — some addresses answered, some failed — mixes
+      // just-fetched prices with older cached ones for the failed addresses.
+      // Serving that as `asOf: now(), stale: false` would pass days-old values
+      // off as live, so when any requested address was not freshly fetched, flag
+      // the snapshot stale and date it to the OLDEST capture that still
+      // contributes: the cache time when a served price for a failed address
+      // comes from the cache, otherwise now(). Failed addresses with nothing
+      // cached stay absent from `prices` — unavailable, exactly as in the
+      // all-fail path — rather than being passed off as current.
+      const unanswered = wanted.filter((address) => !answeredAddresses.has(address));
+      if (unanswered.length === 0) {
+        return {
+          asOf: now(),
+          changes: sliceChanges(mergedChanges, addresses),
+          currency,
+          prices: sliceCurrency(merged, addresses, currency),
+          stale: false,
+        };
+      }
+      const servesCachedPrice = unanswered.some((address) => merged[address] !== undefined);
       return {
+        asOf: servesCachedPrice ? snapshotAsOf(cache.fetchedAt) : now(),
         changes: sliceChanges(mergedChanges, addresses),
         currency,
         prices: sliceCurrency(merged, addresses, currency),
+        stale: true,
       };
     },
     async getTokenChart({ address, currency, networkId }) {
@@ -379,7 +425,7 @@ export const createPriceService = ({
  */
 export const unavailablePriceService: PriceService = {
   async getPrices({ currency }) {
-    return { changes: {}, currency, prices: {} };
+    return { asOf: null, changes: {}, currency, prices: {}, stale: false };
   },
   async getTokenChart({ currency }) {
     return { currency, points: [] };

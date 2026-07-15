@@ -19,7 +19,7 @@ import {
   readSetStrk20ProverUrlInput,
   readTypeOnlyInput,
 } from "./message-inputs";
-import { readRemoveNftInput, readSetNftSpamInput } from "./nft-inputs";
+import { readRemoveNftInput, readSetNftIndexerUrlInput, readSetNftSpamInput } from "./nft-inputs";
 import type { RuntimeResponse } from "./runtime-types";
 
 /**
@@ -131,6 +131,14 @@ export const handlePreferenceOps = async (
       return { error: "invalid rpc override request" };
     }
     return { ok: true, preferences: await preferencesStore.setRpcOverride(input) };
+  }
+
+  if (messageType === "wallet.setNftIndexerUrl") {
+    const input = readSetNftIndexerUrlInput(message);
+    if (!input) {
+      return { error: "invalid indexer endpoint request" };
+    }
+    return { ok: true, preferences: await preferencesStore.setNftIndexerUrl(input) };
   }
 
   if (messageType === "wallet.setStrk20ProverUrl") {

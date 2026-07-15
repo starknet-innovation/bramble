@@ -10,6 +10,10 @@ const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8
 
 const jsonResponse = (body: unknown): HttpResponse => ({ json: async () => body, ok: true });
 
+// A failed CoinGecko request (non-ok): readJsonRecord throws, so the address
+// stays uncovered and is not marked freshly fetched.
+const notOk = (): HttpResponse => ({ json: async () => ({}), ok: false });
+
 const makeHarness = (
   handler: (url: string) => HttpResponse,
 ): {
@@ -41,7 +45,13 @@ describe("createPriceService.getPrices", () => {
       currency: "usd",
       networkId: "SN_MAIN",
     });
-    expect(first).toEqual({ changes: {}, currency: "usd", prices: { [USDC]: 2 } });
+    expect(first).toEqual({
+      asOf: 1000,
+      changes: {},
+      currency: "usd",
+      prices: { [USDC]: 2 },
+      stale: false,
+    });
 
     clock.value += 1000;
     const second = await service.getPrices({
@@ -62,21 +72,142 @@ describe("createPriceService.getPrices", () => {
 
     expect(
       await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_SEPOLIA" }),
-    ).toEqual({ changes: {}, currency: "usd", prices: {} });
+    ).toEqual({ asOf: null, changes: {}, currency: "usd", prices: {}, stale: false });
     expect(
       await service.getPrices({ addresses: [], currency: "usd", networkId: "SN_MAIN" }),
-    ).toEqual({ changes: {}, currency: "usd", prices: {} });
+    ).toEqual({ asOf: null, changes: {}, currency: "usd", prices: {}, stale: false });
     expect(calls).toHaveLength(0);
   });
 
-  test("returns empty prices when the feed is offline", async () => {
+  test("returns empty, stale-flagged prices when offline with no cache", async () => {
     const { service } = makeHarness(() => {
       throw new Error("offline");
     });
 
+    // No cache yet and the host is unreachable: nothing to show, but the caller
+    // is told prices are stale so the UI can surface an explicit hint.
     expect(
       await service.getPrices({ addresses: [USDC], currency: "usd", networkId: "SN_MAIN" }),
-    ).toEqual({ changes: {}, currency: "usd", prices: {} });
+    ).toEqual({ asOf: null, changes: {}, currency: "usd", prices: {}, stale: true });
+  });
+
+  test("falls back to the last-known-good prices when the host becomes unreachable", async () => {
+    let online = true;
+    const { clock, service } = makeHarness((url) => {
+      if (!online) {
+        throw new Error("offline");
+      }
+      return url.includes("include_24hr_change")
+        ? jsonResponse({ [USDC]: { eur: 1.5, gbp: 1.2, usd: 2, usd_24h_change: 4 } })
+        : jsonResponse({ [USDC]: { eur: 1.5, gbp: 1.2, usd: 2 } });
+    });
+
+    const live = await service.getPrices({
+      addresses: [USDC],
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    expect(live).toEqual({
+      asOf: 1000,
+      changes: { [USDC]: 4 },
+      currency: "usd",
+      prices: { [USDC]: 2 },
+      stale: false,
+    });
+
+    // Host goes down and the TTL lapses so a refresh is attempted and fails.
+    online = false;
+    clock.value += 10 * 60 * 1000;
+    const fallback = await service.getPrices({
+      addresses: [USDC],
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    // The cached values survive, flagged stale and stamped with the original
+    // capture time (1000), not the failed-refresh clock.
+    expect(fallback).toEqual({
+      asOf: 1000,
+      changes: { [USDC]: 4 },
+      currency: "usd",
+      prices: { [USDC]: 2 },
+      stale: true,
+    });
+
+    // Host recovers on the next refresh: fresh, non-stale prices with a new asOf.
+    online = true;
+    clock.value += 10 * 60 * 1000;
+    const recovered = await service.getPrices({
+      addresses: [USDC],
+      currency: "eur",
+      networkId: "SN_MAIN",
+    });
+    expect(recovered.stale).toBe(false);
+    expect(recovered.asOf).toBe(clock.value);
+    expect(recovered.prices[USDC]).toBe(1.5);
+  });
+
+  // A second tracked token whose CoinGecko request fails while USDC's succeeds.
+  const STRK = `0x${2n.toString(16).padStart(64, "0")}`;
+
+  test("flags a mixed fetch stale and drops a never-cached failed token", async () => {
+    // First call: USDC prices, STRK request returns non-ok. No prior cache, so
+    // STRK has no last-known value to serve.
+    const { clock, service } = makeHarness((url) =>
+      url.includes(USDC) ? jsonResponse({ [USDC]: { eur: 1.5, gbp: 1.2, usd: 2 } }) : notOk(),
+    );
+
+    const mixed = await service.getPrices({
+      addresses: [USDC, STRK],
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    // USDC is fresh, but STRK could not be fetched and was never cached: the
+    // snapshot is flagged stale (so the UI shows the degraded notice) and STRK is
+    // simply absent from prices — unavailable, never passed off as live.
+    expect(mixed.stale).toBe(true);
+    expect(mixed.prices).toEqual({ [USDC]: 2 });
+    expect(mixed.prices[STRK]).toBeUndefined();
+    // No cached data contributed, so the served snapshot is dated to now().
+    expect(mixed.asOf).toBe(clock.value);
+  });
+
+  test("dates a mixed fetch to the oldest contributing capture when serving a cached token", async () => {
+    let strkOnline = true;
+    const { clock, service } = makeHarness((url) => {
+      if (url.includes(USDC)) {
+        return jsonResponse({ [USDC]: { eur: 1.5, gbp: 1.2, usd: 2 } });
+      }
+      return strkOnline ? jsonResponse({ [STRK]: { eur: 3, gbp: 2.5, usd: 4 } }) : notOk();
+    });
+
+    // Warm the cache with both tokens at t=1000.
+    const warm = await service.getPrices({
+      addresses: [USDC, STRK],
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    expect(warm).toEqual({
+      asOf: 1000,
+      changes: {},
+      currency: "usd",
+      prices: { [USDC]: 2, [STRK]: 4 },
+      stale: false,
+    });
+
+    // STRK goes down and the TTL lapses; USDC refreshes fine.
+    strkOnline = false;
+    clock.value += 10 * 60 * 1000;
+    const mixed = await service.getPrices({
+      addresses: [USDC, STRK],
+      currency: "usd",
+      networkId: "SN_MAIN",
+    });
+    // STRK is served from the older cache, so even though USDC is fresh the whole
+    // snapshot is stale and dated to the oldest contributing capture (1000), not
+    // the refresh clock — a days-old value never masquerades as live.
+    expect(mixed.stale).toBe(true);
+    expect(mixed.asOf).toBe(1000);
+    expect(mixed.prices).toEqual({ [USDC]: 2, [STRK]: 4 });
   });
 });
 

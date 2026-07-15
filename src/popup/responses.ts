@@ -18,13 +18,20 @@ export {
   type PendingApprovalsResponse,
   type WatchAssetToken,
 } from "./approvals-responses";
-
+/**
+ * Re-exported NFT auto-discovery validators for one import path.
+ */
+export {
+  type DiscoveredNft,
+  type DiscoverNftsResponse,
+  isDiscoverNftsResponse,
+} from "./responses-nft";
 /**
  * Re-exported transfer-review validators for one import path.
  */
 export { isTransferReviewResponse, type TransferReviewResponse } from "./responses-transfer";
 
-import { type AllowanceRecord, isAllowanceRecord } from "../storage/allowance-store";
+import { type AllowanceView, isAllowanceView } from "../starknet/allowance-discovery";
 import { isWalletPreferences, type WalletPreferences } from "../storage/preferences-store";
 import { type AccountRef, isAccountId, isAccountRef } from "../storage/vault-schema";
 import { isPendingApprovalsResponse, type PendingApprovalsResponse } from "./approvals-responses";
@@ -310,10 +317,12 @@ export type DetectTokensResponse = {
  * Fiat prices keyed by contract address accepted from the background boundary.
  */
 export type PricesResponse = {
+  readonly asOf?: number | null;
   readonly changes?: Readonly<Record<string, number>>;
   readonly currency: "eur" | "gbp" | "usd";
   readonly ok: true;
   readonly prices: Readonly<Record<string, number>>;
+  readonly stale?: boolean;
 };
 
 /**
@@ -355,11 +364,13 @@ export const isDetectTokensResponse = (value: unknown): value is DetectTokensRes
 export const isPricesResponse = (value: unknown): value is PricesResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["changes", "currency", "ok", "prices"]) &&
+  hasOnlyKnownKeys(value, ["asOf", "changes", "currency", "ok", "prices", "stale"]) &&
   value["ok"] === true &&
   isDisplayCurrencyValue(value["currency"]) &&
   isPriceMap(value["prices"]) &&
-  (value["changes"] === undefined || isPriceMap(value["changes"]));
+  (value["changes"] === undefined || isPriceMap(value["changes"])) &&
+  (value["asOf"] === undefined || value["asOf"] === null || isFiniteNumberValue(value["asOf"])) &&
+  (value["stale"] === undefined || typeof value["stale"] === "boolean");
 
 /**
  * Checks token chart responses before drawing a sparkline.
@@ -412,7 +423,7 @@ export const isActivityResponse = (value: unknown): value is ActivityResponse =>
  * Tracked allowances response accepted from the background boundary.
  */
 export type AllowancesResponse = {
-  readonly allowances: readonly AllowanceRecord[];
+  readonly allowances: readonly AllowanceView[];
   readonly ok: true;
 };
 
@@ -425,7 +436,7 @@ export const isAllowancesResponse = (value: unknown): value is AllowancesRespons
   hasOnlyKnownKeys(value, ["allowances", "ok"]) &&
   value["ok"] === true &&
   Array.isArray(value["allowances"]) &&
-  value["allowances"].every(isAllowanceRecord);
+  value["allowances"].every(isAllowanceView);
 
 /**
  * Checks account deployment status responses before rendering.

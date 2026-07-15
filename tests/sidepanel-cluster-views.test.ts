@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../src/popup/responses";
 import { dashboard } from "../src/sidepanel/views";
-import type { AllowanceRecord } from "../src/storage/allowance-store";
+import type { AllowanceView } from "../src/starknet/allowance-discovery";
 import type { WalletPreferences } from "../src/storage/preferences-store";
 import { account, preferences } from "./support/sidepanel-fixtures";
 
@@ -21,11 +21,12 @@ const status: WalletStatus = {
   ready: true,
 };
 
-const allowance: AllowanceRecord = {
+const allowance: AllowanceView = {
   accountId: account.id,
   amount: "1000",
   id: "SN_MAIN:0x49d3657:0x5abcdef1234",
   networkId: "SN_MAIN",
+  source: "wallet",
   spender: "0x5abcdef1234",
   token: "0x49d3657",
 };
@@ -100,7 +101,7 @@ describe("cluster views", () => {
     expect(html).toContain('data-revoke-allowance="SN_MAIN:0x49d3657:0x5abcdef1234"');
     expect(html).toContain("Revoke");
     expect(html).toContain("1000");
-    expect(html).toMatch(/data-view="settings"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });
 
@@ -112,7 +113,7 @@ describe("cluster views", () => {
     expect(html).toContain('data-nft-spam="SN_MAIN:0x511a2b3:5"');
     expect(html).toContain("Hidden");
     expect(html).toContain('data-nft-spam-value="false"');
-    expect(html).toMatch(/data-view="home"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
   });
 
   test("NFT detail shows identifiers and a send form for the selection", () => {
@@ -133,7 +134,7 @@ describe("cluster views", () => {
     );
     expect(html).toContain('id="nft-send-form"');
     expect(html).toContain("0x511a2b3");
-    expect(html).toMatch(/data-view="nfts"[^>]*aria-label="Back"/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
 
     const missing = dashboard(
       "nft-detail",

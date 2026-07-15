@@ -13,8 +13,11 @@ export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@biomejs/biome": "2.5.3",
+  "@happy-dom/global-registrator": "20.10.6",
   "@playwright/test": "1.61.1",
   "@types/bun": "1.3.14",
+  "@types/node": "26.1.0",
+  "happy-dom": "20.10.6",
   knip: "6.26.0",
   madge: "8.0.0",
   typescript: "6.0.3",

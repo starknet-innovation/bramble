@@ -8,30 +8,33 @@
 
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
-import type { WalletPreferences } from "../storage/preferences-store";
 import { applySkin } from "../ui/skin";
 import { colorSchemeForChoice, skinForChoice } from "../ui/theme";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
+import { createDeploymentCache } from "./deployment-cache";
 import {
   bindCopyButtons,
   buttonBusy,
+  captureRepaintFocus,
   errorMessage,
-  focusMemo,
-  restoreFocus,
+  restoreRepaintFocus,
   showToast,
 } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
+import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
 import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
+import { popView, pushView, type ViewHistory } from "./nav-history";
 import { bindOnboarding } from "./onboarding-ui";
+import { emptyRenderCache, type RenderData } from "./render-cache";
 import { bindReveal } from "./reveal-ui";
-import { createSidepanelRuntime, emptyStatus, type RuntimeApi } from "./runtime";
+import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -61,13 +64,22 @@ let lastScene = "";
 let lastContent = "";
 let lastSkinName = "";
 let lastActiveView: WalletView = "home";
+// Back-stack of screens to return to (see ./nav-history). navigate() pushes the
+// screen being left; goBack() pops to the true previous one.
+let viewHistory: ViewHistory = [];
+// Set to "back" by goBack() so a pop animates as a reverse transition even when
+// the depth-based navDirection would read it as a lateral swap; consumed and
+// cleared by the next paint().
+let forcedDirection: NavDirection | null = null;
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
 let drawerGroupFilter: string | null = null;
-// Which group's bulk members editor is open on the manage-accounts flow (null =
-// all collapsed). Held here so it survives full re-renders, mirroring
-// drawerGroupFilter; self-healed in paint() when its group is deleted.
+// Transient group UI selections, held here so they survive full re-renders and
+// are self-healed in paint(): which account's quick folder picker is open in the
+// drawer, and which panel is open in the manage-accounts Groups accordion (a
+// group's bulk editor or the "Create a group" panel; null = all collapsed).
+let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 
 // The View Transitions API is progressively enhanced: typed locally so the
@@ -86,6 +98,12 @@ const bindNavigation = (): void => {
       }
       navigate(view);
     });
+  });
+};
+
+const bindBack = (): void => {
+  app?.querySelectorAll<HTMLButtonElement>("[data-nav-back]").forEach((button) => {
+    button.addEventListener("click", goBack);
   });
 };
 
@@ -119,9 +137,9 @@ const renderShell = (content: string, animate: boolean): void => {
   if (!app) {
     return;
   }
-  const focused = focusMemo();
+  const focus = captureRepaintFocus();
   app.innerHTML = `<style>${SIDEPANEL_STYLES}</style><section class="shell${animate ? " shell-animate" : ""}">${content}</section>`;
-  restoreFocus(app, focused);
+  restoreRepaintFocus(app, focus);
 };
 
 // Swaps the shell markup and re-binds listeners. When the scene changed and the
@@ -146,58 +164,12 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
   });
 };
 
-const deployedAccounts = new Set<string>();
-
-const loadDeployment = async (status: WalletStatus): Promise<boolean | null> => {
-  if (activeView !== "home" || !status.hasVault || status.locked) {
-    return null;
-  }
-  const known = `${status.networkId}:${status.activeAccountId ?? ""}`;
-  if (deployedAccounts.has(known)) {
-    return true;
-  }
-  const result = await wallet.loadDeploymentStatus();
-  if (result?.deployed) {
-    deployedAccounts.add(`${status.networkId}:${result.accountId}`);
-    deployedAccounts.add(known);
-  }
-  return result ? result.deployed : null;
-};
-
-type RenderData = {
-  allowances: Awaited<ReturnType<typeof wallet.loadAllowances>>;
-  multisigs: Awaited<ReturnType<typeof multisig.loadMultisigs>>;
-  multisigClassDeclared: boolean | "error" | null;
-  balances: Awaited<ReturnType<typeof wallet.loadBalances>>;
-  chart: readonly number[];
-  connectedSites: Awaited<ReturnType<typeof wallet.connectedSites>>;
-  deployment: boolean | null;
-  pending: Awaited<ReturnType<typeof wallet.loadPendingApprovals>>;
-  preferences: WalletPreferences | null;
-  changes: Readonly<Record<string, number>>;
-  prices: Readonly<Record<string, number>>;
-  status: WalletStatus;
-  transactions: Awaited<ReturnType<typeof wallet.loadActivity>>;
-};
-
-const cache: RenderData = {
-  allowances: [],
-  multisigs: { multisigs: [], proposals: [] },
-  multisigClassDeclared: null,
-  balances: { error: "wallet locked" },
-  chart: [],
-  connectedSites: [],
-  deployment: null,
-  pending: [],
-  changes: {},
-  preferences: null,
-  prices: {},
-  status: emptyStatus(),
-  transactions: [],
-};
+const deployment = createDeploymentCache(wallet);
+const cache: RenderData = emptyRenderCache();
 
 const bindAll = (): void => {
   bindNavigation();
+  bindBack();
   bindCopyButtons(app);
   bindOnboarding({ app, render, wallet });
   bindUnlock();
@@ -217,10 +189,6 @@ const bindAll = (): void => {
     app,
     drawerGroupFilter: () => drawerGroupFilter,
     drawerOpen: () => drawerOpen,
-    editGroup: (id) => {
-      expandedGroupId = id;
-      navigate("account");
-    },
     homeTab: () => homeTab,
     networkId: () => lastNetworkId,
     render,
@@ -243,10 +211,18 @@ const bindAll = (): void => {
     app,
     expandedGroup: () => expandedGroupId,
     networkId: () => lastNetworkId,
+    openAssign: () => openAssignId,
     refresh: () => wallet.loadStatus(),
     render,
     setExpandedGroup: (id: string | null) => {
+      // Opens one panel in the manage-accounts Groups accordion — a group's bulk
+      // editor or the "Create a group" panel. Set right after creating a group so
+      // the new group's editor opens (collapsing the create panel) for immediate
+      // rename/re-icon/bucketing.
       expandedGroupId = id;
+    },
+    setOpenAssign: (id: string | null) => {
+      openAssignId = id;
     },
     wallet,
   };
@@ -320,23 +296,18 @@ const paint = (): void => {
       : `dashboard:${activeView}`;
   const animate = scene !== lastScene;
   lastScene = scene;
-  const direction = navDirection(lastActiveView, activeView);
-  // Self-heal a stale drawer filter. Group ids are deterministic, so a filter
-  // still pointing at a deleted group would silently re-apply itself once a
-  // same-named group is recreated. Drop it whenever no current group matches,
-  // falling the drawer back to showing all accounts.
-  const currentGroups = cache.preferences?.groups ?? [];
-  if (
-    drawerGroupFilter !== null &&
-    !currentGroups.some((group) => group.id === drawerGroupFilter)
-  ) {
-    drawerGroupFilter = null;
-  }
-  // Self-heal the manage-accounts expanded group the same way: a deleted group's
-  // id must not linger and silently re-open once a same-named group is recreated.
-  if (expandedGroupId !== null && !currentGroups.some((group) => group.id === expandedGroupId)) {
-    expandedGroupId = null;
-  }
+  const direction = forcedDirection ?? navDirection(lastActiveView, activeView);
+  forcedDirection = null;
+  // Self-heal stale group selections (filter/expanded/open panel) so a deleted
+  // group or a departed account can never silently re-apply itself on repaint.
+  const healed = healTransientGroupState(
+    { drawerGroupFilter, expandedGroupId, openAssignId },
+    cache.preferences?.groups ?? [],
+    status.accounts.map((stored) => stored.id),
+  );
+  drawerGroupFilter = healed.drawerGroupFilter;
+  expandedGroupId = healed.expandedGroupId;
+  openAssignId = healed.openAssignId;
   const content = !status.hasVault
     ? onboarding(status)
     : status.locked
@@ -362,6 +333,10 @@ const paint = (): void => {
           cache.multisigClassDeclared,
           drawerGroupFilter,
           expandedGroupId,
+          cache.priceStale,
+          cache.priceAsOf,
+          cache.discoveredNfts,
+          openAssignId,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -386,8 +361,11 @@ const render = async (status: WalletStatus): Promise<void> => {
     cache.connectedSites = [];
     cache.prices = {};
     cache.changes = {};
+    cache.priceAsOf = null;
+    cache.priceStale = false;
     cache.chart = [];
     cache.allowances = [];
+    cache.discoveredNfts = [];
     paint();
     return;
   }
@@ -403,10 +381,12 @@ const render = async (status: WalletStatus): Promise<void> => {
     fill(wallet.loadPrices(), (value) => {
       cache.prices = value.prices;
       cache.changes = value.changes;
+      cache.priceAsOf = value.asOf;
+      cache.priceStale = value.stale;
     });
   }
   if (activeView === "home") {
-    fill(loadDeployment(status), (value) => {
+    fill(deployment.load(status, activeView), (value) => {
       cache.deployment = value;
     });
   }
@@ -423,6 +403,11 @@ const render = async (status: WalletStatus): Promise<void> => {
   if (activeView === "allowances") {
     fill(wallet.loadAllowances(), (value) => {
       cache.allowances = value;
+    });
+  }
+  if (activeView === "nfts" || activeView === "nft-detail") {
+    fill(wallet.discoverNfts(), (value) => {
+      cache.discoveredNfts = value;
     });
   }
   if (
@@ -456,8 +441,25 @@ const render = async (status: WalletStatus): Promise<void> => {
 
 // Instant navigation: swap the visible screen from cache now, hydrate after.
 // Any navigation dismisses the account drawer so it never lingers over flows.
+// The screen being left is pushed onto the history so Back can return to it.
 const navigate = (view: WalletView): void => {
+  if (view !== activeView) {
+    viewHistory = pushView(viewHistory, activeView);
+  }
   activeView = view;
+  drawerOpen = false;
+  paint();
+  void wallet.loadStatus().then(render);
+};
+
+// Steps back to the screen the user actually came from (or Home at the root),
+// animating as a reverse transition. Same instant-swap-then-hydrate path as
+// navigate(); the back control in every flow header (`[data-nav-back]`) calls it.
+const goBack = (): void => {
+  const popped = popView(viewHistory);
+  viewHistory = popped.history;
+  forcedDirection = "back";
+  activeView = popped.view;
   drawerOpen = false;
   paint();
   void wallet.loadStatus().then(render);
