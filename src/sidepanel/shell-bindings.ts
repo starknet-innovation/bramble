@@ -123,7 +123,11 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
 };
 
 /**
- * Binds the network and account pickers, returning to Settings after a switch.
+ * Binds the network and account pickers. A network switch returns to Settings;
+ * selecting an account means "use this account", so it lands on Home showing the
+ * now-active account (matching the drawer's account tap) rather than returning to
+ * the entry point. The flow header's back control still pops the nav history, so
+ * Back returns to wherever the manage view was opened from.
  */
 export const bindPickers = (deps: ShellBindingDeps): void => {
   const { app, wallet, render, setActiveView } = deps;
@@ -168,7 +172,9 @@ export const bindPickers = (deps: ShellBindingDeps): void => {
       }
       void wallet.setActiveAccount(accountId).then(
         async () => {
-          setActiveView("settings");
+          // Picking an account is "use this account": land on Home showing the
+          // now-active account instead of returning to the entry point.
+          setActiveView("home");
           showToast("Account switched", "success");
           await render(await wallet.loadStatus());
         },
