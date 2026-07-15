@@ -70,13 +70,32 @@ jobs:
             }
             core.info(`Resolved merged head branch: ${head || "(none)"}`);
             core.setOutput("head_ref", head);
+      # List the release tags that already exist so the gate can fail a hotfix
+      # promotion closed when it resolves to an already-cut tag (a forgotten
+      # version bump). ls-remote is the same authoritative source the tag step
+      # below uses for its idempotency check.
+      - name: List existing release tags
+        id: tags
+        run: |
+          set -euo pipefail
+          existing="$(git ls-remote --tags origin 'refs/tags/v*' \
+            | sed -E 's#.*refs/tags/##; /\^\{\}$/d' \
+            | tr '\n' ' ')"
+          echo "Existing release tags: ${existing:-(none)}"
+          {
+            echo "existing<<TAGS_EOF"
+            echo "$existing"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
       # Single-source release gate. Emits release/version/tag/kind to the step
       # output; FAILS the job on any drift (e.g. release/vX.Y promoted without the
-      # matching version bump).
+      # matching version bump, or a hotfix/* promotion whose tag already exists
+      # because it forgot to bump the version).
       - name: Release-version gate
         id: gate
         env:
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          EXISTING_TAGS: ${{ steps.tags.outputs.existing }}
         run: bun run check:release-version
       # Create the tag on the merge commit unless the branch is not a promotion
       # or the tag already exists (idempotent).

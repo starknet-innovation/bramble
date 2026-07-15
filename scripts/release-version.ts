@@ -53,6 +53,12 @@ export interface GateInput {
   readonly headRef?: string | undefined;
   /** The tag being released, when asserting it on the build path. */
   readonly releaseTag?: string | undefined;
+  /**
+   * Release tags that already exist (e.g. from `git ls-remote --tags`). Used to
+   * fail a hotfix promotion closed when it resolves to an already-cut tag —
+   * i.e. the hotfix forgot to bump the version. Empty/omitted disables the check.
+   */
+  readonly existingTags?: readonly string[] | undefined;
 }
 
 /** The tag that must carry a given version. */
@@ -128,7 +134,19 @@ export const evaluateRelease = (input: GateInput): ReleaseEvaluation => {
     } else if (isHotfixBranch(input.headRef)) {
       release = true;
       kind = "hotfix";
-      notes.push(`hotfix promotion ${input.headRef}: releasing package version ${version}`);
+      // A hotfix has no branch-implied version to cross-check, so the only
+      // signal that the promotion forgot to bump is that its resolved tag
+      // already exists. Fail closed on that (like the release-branch arm fails
+      // on a stale version) so a forgotten bump surfaces here instead of hitting
+      // the idempotent tag-skip and going green having released nothing.
+      const hotfixTag = tagForVersion(version);
+      if ((input.existingTags ?? []).includes(hotfixTag)) {
+        problems.push(
+          `hotfix promotion ${input.headRef} resolves to ${version}, whose tag ${hotfixTag} already exists — the hotfix did not bump package.json/public/manifest.json; bump to a new version before promoting`,
+        );
+      } else {
+        notes.push(`hotfix promotion ${input.headRef}: releasing package version ${version}`);
+      }
     } else {
       notes.push(`head ${input.headRef} is not a release/hotfix promotion; no release will be cut`);
     }
@@ -152,8 +170,10 @@ const readJson = async (path: string): Promise<Record<string, unknown>> =>
 /**
  * CLI entrypoint. Reads the mirrored versions, applies the gate to the
  * environment (`HEAD_REF` on the auto-release path, `RELEASE_TAG` on the build
- * path), writes `release`/`version`/`tag`/`kind` to `GITHUB_OUTPUT` when
- * present, and exits non-zero on any drift. Returns the process exit code.
+ * path, `EXISTING_TAGS` — the whitespace-separated already-cut tags — so a
+ * hotfix that forgot to bump fails closed), writes `release`/`version`/`tag`/
+ * `kind` to `GITHUB_OUTPUT` when present, and exits non-zero on any drift.
+ * Returns the process exit code.
  */
 export const main = async (
   env: Readonly<Record<string, string | undefined>> = process.env,
@@ -165,6 +185,7 @@ export const main = async (
     manifestVersion: manifestJson["version"],
     headRef: env["HEAD_REF"] === "" ? undefined : env["HEAD_REF"],
     releaseTag: env["RELEASE_TAG"] === "" ? undefined : env["RELEASE_TAG"],
+    existingTags: (env["EXISTING_TAGS"] ?? "").split(/\s+/).filter((tag) => tag.length > 0),
   });
 
   if (!evaluation.ok) {

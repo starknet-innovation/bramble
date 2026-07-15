@@ -108,6 +108,36 @@ describe("evaluateRelease", () => {
     }
   });
 
+  test("cuts a hotfix release when its bumped tag does not yet exist", () => {
+    const evaluation = evaluateRelease({
+      packageVersion: "0.5.1",
+      manifestVersion: "0.5.1",
+      headRef: "hotfix/vault-decrypt",
+      existingTags: ["v0.4.0", "v0.5.0"],
+    });
+    expect(evaluation.ok).toBe(true);
+    if (evaluation.ok) {
+      expect(evaluation.result).toMatchObject({ version: "0.5.1", tag: "v0.5.1", kind: "hotfix" });
+    }
+  });
+
+  test("FAILS a hotfix promotion that forgot to bump (resolved tag already exists)", () => {
+    // The false-green path: a hotfix/* is merged without bumping the version, so
+    // it resolves to the already-cut v0.5.0 tag. Without this guard the workflow
+    // would hit the idempotent tag-skip and go green having released nothing.
+    const evaluation = evaluateRelease({
+      packageVersion: "0.5.0",
+      manifestVersion: "0.5.0",
+      headRef: "hotfix/vault-decrypt",
+      existingTags: ["v0.4.0", "v0.5.0"],
+    });
+    expect(evaluation.ok).toBe(false);
+    if (!evaluation.ok) {
+      expect(evaluation.problems[0]).toContain("tag v0.5.0 already exists");
+      expect(evaluation.problems[0]).toContain("did not bump");
+    }
+  });
+
   test("does not cut a release for a chore/docs merge into main", () => {
     const evaluation = evaluateRelease({ ...sources, headRef: "chore/94-workflow" });
     expect(evaluation.ok).toBe(true);
