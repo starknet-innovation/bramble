@@ -43,11 +43,13 @@ describe("sidepanel views", () => {
     expect(html).toContain('aria-selected="true"');
   });
 
-  test("home keeps send and receive as quick actions, not settings or activity", () => {
+  test("home keeps send, swap, and receive as quick actions, not settings or activity", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const hero = html.slice(html.indexOf("hero"), html.indexOf("wallet-dock"));
 
     expect(hero).toContain('data-view="send"');
+    // Swap sits between Send and Receive on the action row.
+    expect(hero).toMatch(/data-view="send"[\s\S]*data-view="swap"[\s\S]*data-view="receive"/);
     expect(hero).toContain('data-view="receive"');
     expect(hero).not.toContain('data-view="settings"');
     expect(html).not.toContain('id="wallet-screen-receive"');
@@ -207,6 +209,20 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-approval-action="approve"');
     expect(html).toContain('data-approval-action="deny"');
     expect(html).toContain(`data-approval-id="${pending[0]?.id}"`);
+  });
+
+  test("swap flow renders the AVNU screen skeleton with staged sections", () => {
+    const html = dashboard("swap", status, [], preferences, { balances: [] });
+
+    expect(html).toContain("Best route via AVNU");
+    expect(html).toContain('id="swap-sell-amount"');
+    expect(html).toContain('id="swap-flip"');
+    expect(html).toContain('id="swap-review"');
+    // Confirm and receipt stages ship hidden; the bindings stage them.
+    expect(html).toMatch(/id="swap-confirm" hidden/);
+    expect(html).toMatch(/id="swap-done" hidden/);
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
+    expect(html).not.toContain("wallet-dock");
   });
 
   test("explains why sending is unavailable instead of failing silently", () => {

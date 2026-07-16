@@ -6,6 +6,7 @@ import { createKrustyKms } from "../crypto/krusty";
 import type { WalletEventMessage } from "../provider/events";
 import { createOriginGuard } from "../security/blocklist";
 import { createPhishingFeed } from "../security/phishing-feed";
+import { createSwapService, unavailableSwapService } from "../starknet/avnu";
 import { MULTISIG_CLASS_ARTIFACT } from "../starknet/multisig-deploy";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
 import { createActivityLog, systemClock } from "../storage/activity-store";
@@ -148,6 +149,15 @@ const priceService = (() => {
     return createPriceService({ http: (url) => fetch(url), store: createBrowserLocalStore() });
   } catch {
     return unavailablePriceService;
+  }
+})();
+// AVNU swap aggregator boundary (quotes + build calldata); fails closed when
+// fetch is unavailable in this runtime.
+const swapService = (() => {
+  try {
+    return createSwapService({ http: (url, init) => fetch(url, init) });
+  } catch {
+    return unavailableSwapService;
   }
 })();
 const multisigLog = (() => {
@@ -430,6 +440,7 @@ const handleMessage = createMessageHandler(
     ...(activityLog ? { activity: activityLog } : {}),
     ...(originHistory ? { originHistory } : {}),
     prices: priceService,
+    swap: swapService,
     ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
     ...(multisigLog ? { multisigStore: multisigLog } : {}),
     loadMultisigClass,

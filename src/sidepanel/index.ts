@@ -39,6 +39,8 @@ import {
 } from "./settings-ui";
 import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
+import { createSwapClient } from "./swap-client";
+import { bindSwap } from "./swap-ui";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
@@ -49,6 +51,7 @@ const app = document.querySelector("#app");
 const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
 const wallet = createSidepanelRuntime(runtime);
 const multisig = createMultisigClient(runtime);
+const swapClient = createSwapClient(runtime);
 let activeView: WalletView = "home";
 let selectedNftId: string | null = null;
 let selectedMultisigId: string | null = null;
@@ -216,6 +219,16 @@ const bindAll = (): void => {
     wallet,
   });
   bindDisclosures(app);
+  bindSwap({
+    app,
+    balances: () => cache.balances,
+    currency: () => cache.preferences?.displayCurrency ?? "usd",
+    preferences: () => cache.preferences,
+    render,
+    status: () => cache.status,
+    swap: swapClient,
+    wallet,
+  });
   bindClusterScreens({
     app,
     openNft: (id) => {
@@ -359,7 +372,12 @@ const render = async (status: WalletStatus): Promise<void> => {
   const fill = <T>(load: Promise<T>, assign: (value: T) => void): void => {
     jobs.push(load.then(assign).catch(() => undefined));
   };
-  if (activeView === "home" || activeView === "tokens" || activeView === "token-detail") {
+  if (
+    activeView === "home" ||
+    activeView === "swap" ||
+    activeView === "tokens" ||
+    activeView === "token-detail"
+  ) {
     fill(wallet.loadBalances(), (value) => {
       cache.balances = value;
     });

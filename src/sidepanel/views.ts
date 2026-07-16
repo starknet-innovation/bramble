@@ -56,6 +56,7 @@ import {
 } from "./parts";
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
+import { swapFlow } from "./swap-views";
 import { DEFAULT_CURRENCY, tokenDetailFlow, tokensFlow } from "./token-flows";
 
 /**
@@ -215,6 +216,7 @@ const homeScreen = (
     </section>
     <div class="action-row">
       ${actionTile("send", "Send", "send", true, account !== null)}
+      ${actionTile("swap", "Swap", "swap", false, account !== null)}
       ${actionTile("receive", "Receive", "receive", false, account !== null)}
     </div>
     ${homeTabs(balances, preferences, prices, changes, currency, transactions, status)}`,
@@ -368,6 +370,9 @@ export const dashboard = (
   const trackedBalances = "balances" in balances ? balances.balances : [];
   if (activeView === "send") {
     return sendFlow(status, account, preferences);
+  }
+  if (activeView === "swap") {
+    return swapFlow(status, account);
   }
   if (activeView === "receive") {
     return receiveFlow(status, account);

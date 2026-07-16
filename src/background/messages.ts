@@ -3,6 +3,7 @@
  */
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
+import { type SwapService, unavailableSwapService } from "../starknet/avnu";
 import { DEFAULT_NETWORK } from "../starknet/networks";
 import { type PriceService, unavailablePriceService } from "../starknet/prices";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
@@ -52,6 +53,7 @@ import {
 import { createUnlockSession, type UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
 import { handleStrk20Ops } from "./strk20-ops";
+import { handleSwapOps } from "./swap-ops";
 import { handleTokenOps } from "./token-ops";
 import { unlockFailureError } from "./unlock-errors";
 import { handleWalletOps } from "./wallet-ops";
@@ -79,6 +81,7 @@ const handleRuntimeMessage = async (
   activity: ActivityLog,
   originHistory: OriginHistoryStore,
   prices: PriceService,
+  swap: SwapService,
   allowanceStore: AllowanceStore,
   waiters: SignatureWaiters,
   multisigStore: MultisigStore,
@@ -105,6 +108,11 @@ const handleRuntimeMessage = async (
   const opsResponse = await handleWalletOps(opsDeps, messageType, message);
   if (opsResponse) {
     return opsResponse;
+  }
+
+  const swapResponse = await handleSwapOps({ ...opsDeps, swap }, messageType, message);
+  if (swapResponse) {
+    return swapResponse;
   }
 
   const allowanceResponse = await handleAllowanceOps(opsDeps, messageType, message);
@@ -433,6 +441,7 @@ export type MessageHandlerOptions = {
   readonly prices?: PriceService;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
+  readonly swap?: SwapService;
 };
 
 /**
@@ -450,6 +459,7 @@ export const createMessageHandler = (
   const activity = options.activity ?? memoryActivityLog();
   const originHistory = options.originHistory ?? memoryOriginHistory();
   const prices = options.prices ?? unavailablePriceService;
+  const swap = options.swap ?? unavailableSwapService;
   const allowanceStore = options.allowanceStore ?? memoryAllowanceStore();
   const multisigStore = options.multisigStore ?? memoryMultisigStore();
   const guard = options.originGuard ?? DEFAULT_ORIGIN_GUARD;
@@ -466,6 +476,7 @@ export const createMessageHandler = (
         activity,
         originHistory,
         prices,
+        swap,
         allowanceStore,
         waiters,
         multisigStore,

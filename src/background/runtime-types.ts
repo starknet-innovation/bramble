@@ -198,6 +198,22 @@ export type TokenChartResponse = {
 };
 
 /**
+ * Validated AVNU swap quote view returned to extension pages: display-ready
+ * decimal amounts plus the USD figures for the confirmation receipt.
+ */
+export type SwapQuoteResponse = {
+  readonly ok: true;
+  readonly swapQuote: {
+    readonly buyAmount: string;
+    readonly buyAmountInUsd: number;
+    readonly gasFeesInUsd: number;
+    readonly quoteId: string;
+    readonly sellAmount: string;
+    readonly sellAmountInUsd: number;
+  };
+};
+
+/**
  * Transfer submission response returned to extension pages.
  */
 export type TransferResponse = {
@@ -382,6 +398,7 @@ export type RuntimeResponse =
   | SignHashResponse
   | Strk20BalancesResponse
   | Strk20PrepareResponse
+  | SwapQuoteResponse
   | TokenChartResponse
   | TransferResponse
   | WalletStatus

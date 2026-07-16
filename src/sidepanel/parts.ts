@@ -16,6 +16,7 @@ export const WALLET_VIEWS = [
   "activity",
   "settings",
   "send",
+  "swap",
   "receive",
   "network",
   "account",
