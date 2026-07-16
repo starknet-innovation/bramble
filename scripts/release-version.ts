@@ -19,9 +19,6 @@ import { readFile } from "node:fs/promises";
 /** A release version string, `X.Y.Z`. */
 export const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
 
-/** A release tag, `vX.Y.Z`. */
-export const RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
-
 /** A release branch, `release/vX.Y` (no patch component — it covers the line). */
 export const RELEASE_BRANCH = /^release\/v(\d+)\.(\d+)$/;
 

@@ -96,8 +96,13 @@ jobs:
       # (network flake, runner loss) leaves the tag WITHOUT a Release, and a
       # tag-keyed guard would skip forever, never finishing that release.
       #
-      #   - Release already exists -> already cut; skip (a re-run never
-      #     double-cuts, and never needlessly rebuilds a finished release).
+      #   - Release exists AND the tag points at THIS merge commit -> a genuine
+      #     re-run of an already-finished cut; skip (idempotent).
+      #   - Release exists BUT the tag points at a DIFFERENT commit -> the version
+      #     was already released from another commit, yet a new promotion is
+      #     reusing it (a hotfix or re-promotion that forgot to bump). FAIL LOUDLY
+      #     instead of silently skipping — otherwise the hotfix ships no release
+      #     and the operator sees a green no-op.
       #   - Tag exists but no Release -> a prior run half-cut; reuse the tag and
       #     proceed so the reusable build (create-or-upload) completes the cut.
       #   - Neither exists -> create + push the tag, then proceed.
@@ -116,9 +121,21 @@ jobs:
             exit 0
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists — already cut; skipping (idempotent)."
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            # Release exists. Only a re-run of the SAME cut may skip; a new
+            # promotion reusing an already-released version (a forgotten bump)
+            # must fail loudly rather than silently ship nothing.
+            tagged_sha="$(git rev-list -n1 "$TAG" 2>/dev/null || true)"
+            if [ -z "$tagged_sha" ]; then
+              git fetch --no-tags origin "refs/tags/${TAG}:refs/tags/${TAG}" >/dev/null 2>&1 || true
+              tagged_sha="$(git rev-list -n1 "$TAG" 2>/dev/null || true)"
+            fi
+            if [ "$tagged_sha" = "$SHA" ]; then
+              echo "Release ${TAG} already exists on this commit — already cut; skipping (idempotent)."
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::Release ${TAG} already exists on ${tagged_sha:-a different commit}, but this promotion (${SHA}) is a different commit. Version ${TAG#v} was already released; bump package.json and public/manifest.json before promoting (a hotfix or re-promotion must raise the version)."
+            exit 1
           fi
           if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
             echo "Tag ${TAG} exists but no Release — a prior run half-cut; reusing the tag."
