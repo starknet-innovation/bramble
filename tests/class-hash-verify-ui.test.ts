@@ -55,6 +55,32 @@ describe("isClassHashVerificationResponse", () => {
     ).toBe(false);
   });
 
+  test("rejects a verified verdict whose on-chain hash is zero or negative", () => {
+    // A zero on-chain hash means no contract (an undeployed account); the domain
+    // never emits `verified` with one. The parser must not let such a payload
+    // render as "Verified on-chain" — the exact false positive it guards against.
+    for (const onChainClassHash of ["0x0", "0x00", "0", "-0x1"]) {
+      expect(
+        isClassHashVerificationResponse({
+          accountId: ACCOUNT_ID,
+          ok: true,
+          verification: { onChainClassHash, status: "verified" },
+        }),
+      ).toBe(false);
+    }
+  });
+
+  test("rejects a mismatch verdict carrying a zero expected or on-chain hash", () => {
+    for (const verification of [
+      { expectedClassHash: "0x0", onChainClassHash: ON_CHAIN, status: "mismatch" },
+      { expectedClassHash: "0x1", onChainClassHash: "0x0", status: "mismatch" },
+    ]) {
+      expect(
+        isClassHashVerificationResponse({ accountId: ACCOUNT_ID, ok: true, verification }),
+      ).toBe(false);
+    }
+  });
+
   test("rejects a non-ok or unknown-account payload", () => {
     expect(isClassHashVerificationResponse({ ok: false })).toBe(false);
     expect(

@@ -20,8 +20,17 @@ export type ClassHashVerificationResponse = {
   readonly verification: ClassHashVerification;
 };
 
-const isFeltString = (value: unknown): value is string =>
-  typeof value === "string" && asFelt(value) !== null;
+// A positive (non-zero) felt, matching the domain invariant: the on-chain and
+// expected hashes carried by a `verified`/`mismatch` verdict are always
+// non-zero felts (a zero on-chain hash is classified `undeployed`, and the
+// expected hash is validated non-zero before any RPC call). Accepting `0x0`
+// here — or a negative — would let a malformed payload render as a
+// "Verified on-chain" result for an effectively-undeployed class, the exact
+// false positive this parser exists to reject.
+const isNonZeroFelt = (value: unknown): value is string => {
+  const felt = asFelt(value);
+  return felt !== null && felt > 0n;
+};
 
 const isClassHashVerification = (value: unknown): value is ClassHashVerification => {
   if (!isRecord(value)) {
@@ -31,13 +40,13 @@ const isClassHashVerification = (value: unknown): value is ClassHashVerification
     case "verified":
       return (
         hasOnlyKnownKeys(value, ["onChainClassHash", "status"]) &&
-        isFeltString(value["onChainClassHash"])
+        isNonZeroFelt(value["onChainClassHash"])
       );
     case "mismatch":
       return (
         hasOnlyKnownKeys(value, ["expectedClassHash", "onChainClassHash", "status"]) &&
-        isFeltString(value["expectedClassHash"]) &&
-        isFeltString(value["onChainClassHash"])
+        isNonZeroFelt(value["expectedClassHash"]) &&
+        isNonZeroFelt(value["onChainClassHash"])
       );
     case "undeployed":
     case "unreachable":
