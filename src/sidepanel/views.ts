@@ -269,17 +269,18 @@ const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | 
     // controls up top means the Appearance Dark/Light toggle is fully visible on
     // open instead of clipped under the dock, while the deeper flow links below
     // simply scroll into view (matching the Activity screen's behaviour).
+    // Theme is a two-way pin: Dark (default) or Light. A legacy stored
+    // "system" value from before the setting's removal reads as Dark, matching
+    // how the entrypoint resolves it.
     `<h2>Settings</h2>
     <p class="eyebrow">Appearance</p>
     <div class="option-list" role="group" aria-label="Theme">
-      ${(["system", "dark", "light"] as const)
+      ${(["dark", "light"] as const)
         .map((theme) => {
-          const active = (preferences?.theme ?? "system") === theme;
-          const label = theme === "system" ? "System" : theme === "light" ? "Light" : "Dark";
-          const hint =
-            theme === "system" ? `<span class="option-sub">Match the browser</span>` : "";
+          const active = (preferences?.theme === "light" ? "light" : "dark") === theme;
+          const label = theme === "light" ? "Light" : "Dark";
           return `<button class="option-row" data-theme-id="${theme}" type="button" aria-pressed="${active}">
-            <span class="option-copy"><strong>${label}</strong>${hint}</span>
+            <span class="option-copy"><strong>${label}</strong></span>
             ${active ? `<span class="option-mark">${icon("check")}</span>` : ""}
           </button>`;
         })

@@ -19,9 +19,9 @@ import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE, WEIGHT } from "..
 export const BASE_STYLES = `
 
   :root {
-    /* Default to the "system" theme's dual scheme; the entrypoint overrides this
-       inline per theme choice (light dark / dark / light) before first paint. */
-    color-scheme: light dark;
+    /* Default to the dark scheme of the default midnight skin; the entrypoint
+       pins the resolved scheme (dark / light) inline before first paint. */
+    color-scheme: dark;
     --mc-font-mono: ${FONT.mono};
     --mc-font-ui: ${FONT.ui};
     /* Recessed group fill (tab tracks, permission/sign panels). */
@@ -35,7 +35,6 @@ export const BASE_STYLES = `
     --mc-accent-soft: color-mix(in srgb, var(--mc-accent) 13%, var(--mc-panel));
     --mc-positive-soft: color-mix(in srgb, var(--mc-positive) 13%, var(--mc-panel));
     --mc-danger-soft: color-mix(in srgb, var(--mc-danger) 12%, var(--mc-panel));
-    --mc-faint: color-mix(in srgb, var(--mc-muted) 58%, var(--mc-bg));
     --mc-shadow: var(--mc-elev-lg);
     --mc-shadow-sm: var(--mc-elev-sm);
     /* Anchored bottom-bar footprint: one source of truth consumed by the dock
@@ -207,10 +206,13 @@ export const BASE_STYLES = `
     padding: ${SPACE.sm} 0 0;
     text-align: center;
   }
+  /* Muted, not fainter: an extra-faded tier fell below WCAG AA (≈2.4:1 on the
+     light skin), so the eyebrow reads quiet through size, weight, and case
+     while keeping the compliant muted ink. */
   .hero-eyebrow {
-    color: var(--mc-faint);
-    font-size: 11px;
-    font-weight: 600;
+    color: var(--mc-muted);
+    font-size: ${TYPE.micro.size};
+    font-weight: ${WEIGHT.medium};
     letter-spacing: ${TRACKING.eyebrow};
     text-transform: uppercase;
   }
@@ -389,13 +391,19 @@ export const BASE_STYLES = `
     overflow-wrap: anywhere;
   }
 
-  /* Flat list rows: one solid fill, no border, separated by space */
+  /* Flat list rows: one solid fill, no border, separated by space. The flex
+     layout is declared here (not inherited): anchor rows (Help & docs) never
+     pass through the base button rule, and without it their grid-displayed
+     copy block breaks onto its own line. */
   .menu-list, .option-list { display: grid; gap: 8px; }
   button.menu-row, button.option-row, a.menu-row {
+    align-items: center;
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
     box-shadow: var(--mc-edge);
     color: var(--mc-text);
+    display: flex;
+    gap: ${SPACE.sm};
     justify-content: flex-start;
     min-height: 58px;
     padding: 0 ${SPACE.md};

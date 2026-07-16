@@ -267,13 +267,12 @@ const bindAll = (): void => {
 // Applies the skin and CSS `color-scheme` for the current theme choice, but
 // only when the resolved skin actually changed — cheap enough to call on every
 // paint. Swapping skin tokens on the root re-themes the whole panel through CSS
-// custom properties without re-rendering any markup. Under the default "system"
-// choice, `color-scheme: light dark` lets the skin's system-color and
-// `light-dark()` values track the browser scheme with no JavaScript, so a live
-// OS/browser scheme flip re-themes the panel purely through CSS; a pinned
-// "dark"/"light" fixes the scheme so the Clean Mono skin cannot be flipped.
+// custom properties without re-rendering any markup. Both themes are pinned
+// palettes; `color-scheme` is pinned alongside so native form controls render
+// on the same ground and a browser scheme flip can never re-theme the panel.
+// A legacy stored "system" choice resolves to the default dark skin.
 const applyTheme = (): void => {
-  const choice = cache.preferences?.theme ?? "system";
+  const choice = cache.preferences?.theme ?? "dark";
   const skin = skinForChoice(choice);
   if (skin.name !== lastSkinName) {
     lastSkinName = skin.name;
@@ -483,9 +482,7 @@ runtime?.onMessage?.addListener((message) => {
   }
 });
 
-// Apply the theme before the first paint. Under the default "system" choice the
-// browser scheme is tracked purely through CSS (`color-scheme: light dark` plus
-// the skin's system-color/`light-dark()` values), so no `matchMedia` listener is
-// needed to re-theme on a live flip.
+// Apply the theme before the first paint so the pinned skin and color-scheme
+// are in place before any markup renders (no flash of the wrong ground).
 applyTheme();
 void render(await wallet.loadStatus());

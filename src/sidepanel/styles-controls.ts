@@ -116,7 +116,10 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
       background: var(--mc-hover);
     }
   }
-  input::placeholder, textarea::placeholder { color: var(--mc-muted); opacity: 0.7; }
+  /* Placeholders stay at the full muted ink — a faded placeholder fell below
+     WCAG AA (≈2.9:1) on the field fill. Opacity 1 also overrides the UA's own
+     placeholder fade so the token value is what actually renders. */
+  input::placeholder, textarea::placeholder { color: var(--mc-muted); opacity: 1; }
   /* Checkboxes are compact native controls, not text fields: the generic input
      treatment (full-width 46px elevated fill with appearance:none) would erase
      the check entirely. Native rendering + accent-color keeps them crisp and

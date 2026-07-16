@@ -3,28 +3,33 @@
  * the CSS `color-scheme` value the side panel applies to its root. Kept free of
  * DOM access so it can be unit-tested and reused; the entrypoint (see
  * ../sidepanel/index.ts) is the only place that writes the results to the page.
+ *
+ * The wallet ships exactly two designed skins — `midnight` (default) and
+ * `daylight`. The former "system" theme (neutrals from CSS system colors) was
+ * removed: system colors like `ButtonFace`/`GrayText` land far off the designed
+ * surface tiers (fields rendered much lighter than the dark skin, muted text
+ * failed WCAG contrast), so every install now runs a pinned, contrast-audited
+ * palette. `"system"` survives only as a legacy stored value and resolves to
+ * the default dark skin.
  */
 import type { ThemeChoice } from "../storage/preferences-store";
 import { darkSkin } from "./dark-skin";
 import { defaultSkin } from "./default-skin";
 import type { Skin } from "./skin";
-import { systemSkin } from "./system-skin";
 
 /**
- * Resolves the concrete skin for a theme choice. `"system"` (the default) uses
- * `systemSkin`, whose neutrals come from CSS system colors and flip with the
- * browser scheme; `"dark"`/`"light"` pin the Clean Mono `midnight`/`daylight`
- * skins regardless of the browser scheme.
+ * Resolves the concrete skin for a theme choice: `"light"` pins the Clean Mono
+ * `daylight` skin; `"dark"` — and the legacy `"system"` value from installs
+ * that predate the setting's removal — pin the default `midnight` skin.
  */
 export const skinForChoice = (choice: ThemeChoice): Skin =>
-  choice === "light" ? defaultSkin : choice === "dark" ? darkSkin : systemSkin;
+  choice === "light" ? defaultSkin : darkSkin;
 
 /**
- * CSS `color-scheme` value for a theme choice. `"system"` opts the panel into
- * `light dark` so the system-color keywords and `light-dark()` values in
- * `systemSkin` resolve to the browser's active scheme; a pinned `"dark"`/
- * `"light"` fixes the scheme so a pinned Clean Mono skin cannot be flipped by
- * the browser preference.
+ * CSS `color-scheme` value for a theme choice. Always a single pinned scheme —
+ * matching the resolved skin — so native form controls, scrollbars, and the
+ * checkbox accent render on the same ground as the skin, and a browser scheme
+ * flip can never re-theme a pinned palette.
  */
 export const colorSchemeForChoice = (choice: ThemeChoice): string =>
-  choice === "dark" ? "dark" : choice === "light" ? "light" : "light dark";
+  choice === "light" ? "light" : "dark";

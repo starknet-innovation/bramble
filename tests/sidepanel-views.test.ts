@@ -77,12 +77,13 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-view="backup"');
     expect(html).not.toContain('id="active-network"');
     expect(html).not.toContain('id="active-account"');
+    // Theme is a two-way pin (Dark default / Light); the follow-the-browser
+    // "system" option was removed.
     expect(html).toContain('data-theme-id="dark"');
     expect(html).toContain('data-theme-id="light"');
-    expect(html).toContain('data-theme-id="system"');
-    expect(html).toContain("Match the browser");
+    expect(html).not.toContain('data-theme-id="system"');
     expect(html).toContain('id="currency-select"');
-    // The dock is a solid flat nav card (Clean Mono — no glass material).
+    // The dock is a solid anchored bottom bar (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');
   });
 
