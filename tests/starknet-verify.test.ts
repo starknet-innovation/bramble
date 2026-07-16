@@ -116,6 +116,75 @@ describe("verifyCalls", () => {
     expect(report.calls[0]?.kind).toBe("unknown");
     expect(report.calls[0]?.summary).toContain("Call upgrade on");
   });
+
+  test("decodes a known-token transfer_from as an ERC20 amount, not an NFT id", () => {
+    // ERC20 and ERC721 share the transfer_from selector and 4-felt arity; on a
+    // token the wallet knows the third/fourth felts are an amount. Mislabeling
+    // this "Send NFT #1500000000000000000" would hide the real value moved.
+    const report = verifyCalls(
+      [
+        {
+          calldata: [contact.address, account.address, "1500000000000000000", "0"],
+          contractAddress: ETH,
+          entrypoint: "transfer_from",
+        },
+      ],
+      context,
+    );
+
+    expect(report.calls[0]?.kind).toBe("transfer");
+    expect(report.calls[0]?.summary).toContain("Send 1.5 ETH");
+    expect(report.calls[0]?.summary).not.toContain("NFT");
+    // The recipient is calldata[1] (the account itself here), so the self-send
+    // check still runs on the disambiguated transfer.
+    expect(report.flags.map((flag) => flag.code)).toContain("self-transfer");
+  });
+
+  test("keeps a distinct unknown-contract flag for each contract in a multicall", () => {
+    const first = "0xaaaa000000000000000000000000000000000000000000000000000000000001";
+    const second = "0xbbbb000000000000000000000000000000000000000000000000000000000002";
+    const report = verifyCalls(
+      [
+        { calldata: [], contractAddress: first, entrypoint: "foo" },
+        { calldata: [], contractAddress: second, entrypoint: "bar" },
+      ],
+      context,
+    );
+
+    const unknownFlags = report.flags.filter((flag) => flag.code === "unknown-contract");
+    // Both distinct contracts must surface — collapsing by code alone would hide
+    // the second, under-warning the user about a multicall's later contracts.
+    expect(unknownFlags).toHaveLength(2);
+    expect(unknownFlags.some((flag) => flag.message.includes("0xaaaa"))).toBe(true);
+    expect(unknownFlags.some((flag) => flag.message.includes("0xbbbb"))).toBe(true);
+  });
+
+  test("still collapses identical risk lines from a multicall", () => {
+    // Two effectively-unlimited approvals to different spenders on the same
+    // unknown contract raise the same generic unlimited-approval line; that line
+    // is deduped to one, while the two calls keep one unknown-contract flag each
+    // for the same address (identical message → collapsed).
+    const unlimited = (1n << 251n).toString();
+    const otherContract = "0xcccc000000000000000000000000000000000000000000000000000000000003";
+    const report = verifyCalls(
+      [
+        {
+          calldata: ["0x111", unlimited, "0"],
+          contractAddress: otherContract,
+          entrypoint: "approve",
+        },
+        {
+          calldata: ["0x222", unlimited, "0"],
+          contractAddress: otherContract,
+          entrypoint: "approve",
+        },
+      ],
+      context,
+    );
+
+    expect(report.flags.filter((flag) => flag.code === "unlimited-approval")).toHaveLength(1);
+    expect(report.flags.filter((flag) => flag.code === "unknown-contract")).toHaveLength(1);
+  });
 });
 
 describe("isLookalikeAddress", () => {
