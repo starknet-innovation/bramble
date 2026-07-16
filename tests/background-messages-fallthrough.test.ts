@@ -7,8 +7,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../src/background/messages";
+import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import {
+  contentSender,
   createWallet,
   extensionSender as sender,
   vaultPassphrase,
@@ -104,6 +106,43 @@ describe("per-command invalid-input guards", () => {
   test("rejects a malformed unlock request", async () => {
     await expect(handlerUnlocked()({ type: "wallet.unlock" }, sender)).resolves.toEqual({
       error: "invalid unlock request",
+    });
+  });
+});
+
+describe("router gate folding and ordered dispatch", () => {
+  const untrustedSender: RuntimeSender = {
+    id: "other-extension",
+    url: "chrome-extension://other-extension/popup.html",
+  };
+
+  test("an untrusted sender is rejected before any handler runs", async () => {
+    // parseGatedMessage's trusted-sender gate short-circuits: even a perfectly
+    // valid status request never reaches the dispatch table.
+    await expect(handlerUnlocked()({ type: "wallet.status" }, untrustedSender)).resolves.toEqual({
+      error: "untrusted sender",
+    });
+  });
+
+  test("an undefined sender is untrusted", async () => {
+    await expect(handlerUnlocked()({ type: "wallet.status" })).resolves.toEqual({
+      error: "untrusted sender",
+    });
+  });
+
+  test("a privileged message from a content-script sender is rejected", async () => {
+    // wallet.status is privileged (not a dapp message); a content-script page
+    // sender is trusted but not an extension page, so the privileged gate fires.
+    await expect(handlerUnlocked()({ type: "wallet.status" }, contentSender)).resolves.toEqual({
+      error: "privileged sender required",
+    });
+  });
+
+  test("dispatch reaches a late handler through the first-non-null loop", async () => {
+    // wallet.status sits near the end of the ordered table; resolving it proves
+    // the loop iterates past every earlier handler that returns null.
+    await expect(handlerUnlocked()({ type: "wallet.status" }, sender)).resolves.toMatchObject({
+      locked: false,
     });
   });
 });

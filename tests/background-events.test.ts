@@ -41,6 +41,14 @@ describe("walletEventBroadcasts", () => {
     );
   });
 
+  test("also announces the network when an approval switches chains", () => {
+    // A switch-chain approval resolves with the new chain id, so approveOrigin
+    // broadcasts networkChanged alongside the accounts and approvals refresh.
+    expect(
+      walletEventBroadcasts({ type: "wallet.approveOrigin" }, { chainId: MAIN_CHAIN_ID, ok: true }),
+    ).toEqual([accountsChanged, approvalsChanged, networkChanged(MAIN_CHAIN_ID)]);
+  });
+
   test("stays silent on a held connection request — the queue notifier signals it", () => {
     // A held requestAccounts resolves to granted accounts only after approval;
     // the approvals-changed signal is pushed at enqueue time by the notifier,

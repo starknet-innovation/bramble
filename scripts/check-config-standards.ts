@@ -2,7 +2,9 @@
  * Enforces pinned repository configuration, CI, and artifact policy.
  */
 import { readFile } from "node:fs/promises";
+import { biomeComplexityFailures } from "./biome-complexity-policy";
 import {
+  BIOME_COMPLEXITY_RULE_KEYS,
   DEPENDENCY_FIELDS,
   EXPECTED_ARCHITECTURE_SECTIONS,
   EXPECTED_CONTRIBUTING_RULES,
@@ -71,7 +73,17 @@ if (!hasOnlyKeys(tsconfigJson, ["compilerOptions", "include"])) {
   failures.push("tsconfig.json top-level keys must stay explicit");
 }
 
-if (!hasOnlyKeys(biomeJson, ["$schema", "files", "formatter", "javascript", "linter", "vcs"])) {
+if (
+  !hasOnlyKeys(biomeJson, [
+    "$schema",
+    "files",
+    "formatter",
+    "javascript",
+    "linter",
+    "overrides",
+    "vcs",
+  ])
+) {
   failures.push("biome.json top-level keys must stay explicit");
 }
 
@@ -181,7 +193,7 @@ if (
   !biomeRules ||
   !hasOnlyKeys(biomeRules, ["complexity", "nursery", "preset", "style", "suspicious"]) ||
   !biomeComplexity ||
-  !hasOnlyKeys(biomeComplexity, Object.keys(REQUIRED_BIOME_COMPLEXITY_RULES)) ||
+  !hasOnlyKeys(biomeComplexity, BIOME_COMPLEXITY_RULE_KEYS) ||
   !biomeNursery ||
   !hasOnlyKeys(biomeNursery, Object.keys(REQUIRED_BIOME_NURSERY_RULES)) ||
   !biomeStyle ||
@@ -220,6 +232,8 @@ for (const [rule, expected] of Object.entries(REQUIRED_BIOME_NURSERY_RULES)) {
     failures.push(`biome.json nursery rule ${rule} must stay ${expected}`);
   }
 }
+
+failures.push(...biomeComplexityFailures(biomeJson));
 
 const packageScripts = isRecord(packageJson["scripts"]) ? packageJson["scripts"] : null;
 if (

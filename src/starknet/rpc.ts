@@ -415,6 +415,20 @@ export const estimateInvokeFee = async (
   );
 };
 
+const FINALITY_TO_STATUS: Readonly<Record<string, TransactionStatus>> = {
+  ACCEPTED_ON_L1: "accepted",
+  ACCEPTED_ON_L2: "accepted",
+  REJECTED: "rejected",
+};
+// Maps a receipt to a wallet status. REVERTED execution wins (a reverted tx can
+// still be ACCEPTED_ON_L2); the rest is pending.
+const classifyStatus = (receipt: {
+  readonly execution_status?: unknown;
+  readonly finality_status?: unknown;
+}): TransactionStatus =>
+  String(receipt.execution_status ?? "") === "REVERTED"
+    ? "reverted"
+    : (FINALITY_TO_STATUS[String(receipt.finality_status ?? "")] ?? "pending");
 /**
  * Reads finality/execution status for submitted transactions.
  */
@@ -428,20 +442,12 @@ export const getTransactionStatuses = async (
       const entries = await Promise.all(
         hashes.map(async (transactionHash): Promise<readonly [string, TransactionStatus]> => {
           try {
-            const status = await provider.getTransactionStatus(transactionHash);
-            const finality = String(status.finality_status ?? "");
-            const execution = String(status.execution_status ?? "");
-            if (execution === "REVERTED") {
-              return [transactionHash, "reverted"];
-            }
-            if (finality === "REJECTED") {
-              return [transactionHash, "rejected"];
-            }
-            if (finality === "ACCEPTED_ON_L2" || finality === "ACCEPTED_ON_L1") {
-              return [transactionHash, "accepted"];
-            }
-            return [transactionHash, "pending"];
+            return [
+              transactionHash,
+              classifyStatus(await provider.getTransactionStatus(transactionHash)),
+            ];
           } catch (error) {
+            // Transport failures propagate to fail over; semantic errors → pending.
             if (isTransportRpcError(error)) {
               throw error;
             }

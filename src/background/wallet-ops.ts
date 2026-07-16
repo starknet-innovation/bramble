@@ -88,6 +88,193 @@ export const resolveReviewFee = (input: {
     ? { fee: input.fee, feeEstimateFailed: input.fee === null }
     : { fee: null, feeEstimateFailed: false };
 
+type WalletOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
+
+const handleGetBalances: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.getBalances")) {
+    return { error: "invalid balances request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const preferences = await deps.preferencesStore.read();
+  const network = STARKNET_NETWORKS[context.networkId];
+  const balances = await deps.runtimeRpc.getTokenBalances({
+    accountAddress: context.account.address,
+    rpcUrls: networkRpcUrls(network, preferences),
+    tokens: preferences.tokens.filter((token) => token.networkId === network.id),
+  });
+  return { accountId: context.account.id, balances, networkId: network.id, ok: true };
+};
+
+const handleDeploymentStatus: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.deploymentStatus")) {
+    return { error: "invalid deployment status request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const deployed = await deps.runtimeRpc.getDeploymentStatus({
+    accountAddress: context.account.address,
+    rpcUrls: networkRpcUrls(
+      STARKNET_NETWORKS[context.networkId],
+      await deps.preferencesStore.read(),
+    ),
+  });
+  return { accountId: context.account.id, deployed, ok: true };
+};
+
+const handleVerifyClassHash: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.verifyClassHash")) {
+    return { error: "invalid class hash verification request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  if (!deps.runtimeRpc.verifyAccountClassHash) {
+    return { error: "class hash verification unavailable" };
+  }
+  const verification = await deps.runtimeRpc.verifyAccountClassHash({
+    accountAddress: context.account.address,
+    expectedClassHash: context.account.classHash,
+    rpcUrls: networkRpcUrls(
+      STARKNET_NETWORKS[context.networkId],
+      await deps.preferencesStore.read(),
+    ),
+  });
+  return { accountId: context.account.id, ok: true, verification };
+};
+
+const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.deployAccount")) {
+    return { error: "invalid deploy account request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const { account, networkId, vaultPassphrase } = context;
+  const result = await deps.runtimeRpc.submitAccountDeployment({
+    account,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], await deps.preferencesStore.read()),
+    signHash: signerFor(deps, account, vaultPassphrase),
+  });
+  await deps.activity.record({
+    accountId: account.id,
+    hash: result.transactionHash,
+    kind: "deploy",
+    networkId,
+    summary: "Deploy account contract",
+  });
+  return { ok: true, transactionHash: result.transactionHash };
+};
+
+const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
+  const input = readReviewTransferInput(message);
+  if (!input) {
+    return { error: "invalid transfer review request" };
+  }
+  const context = await transferContext(deps, input);
+  if ("error" in context) {
+    return { error: context.error };
+  }
+  const { account, preferences, token, vaultPassphrase } = context;
+  const call = buildErc20TransferCall(
+    token.address,
+    input.recipient,
+    parseTokenAmount(input.amount, token.decimals),
+  );
+  const report = verifyCalls([call], verificationContext(account, preferences));
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
+    .catch(() => true);
+  const estimated = deployed
+    ? await deps.runtimeRpc
+        .estimateInvokeFee({
+          account,
+          calls: [call],
+          rpcUrls,
+          signHash: signerFor(deps, account, vaultPassphrase),
+        })
+        .catch(() => null)
+    : null;
+  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  return {
+    ok: true,
+    review: {
+      fee,
+      feeEstimateFailed,
+      flags: report.flags,
+      requiresDeployment: !deployed,
+      summaries: report.calls.map((decoded) => decoded.summary),
+    },
+  };
+};
+
+const handleTransfer: WalletOpsHandler = async (deps, message) => {
+  const input = readTransferInput(message);
+  if (!input) {
+    return { error: "invalid transfer request" };
+  }
+  const context = await transferContext(deps, input);
+  if ("error" in context) {
+    return { error: context.error };
+  }
+  const { account, preferences, token, vaultPassphrase } = context;
+  const result = await deps.runtimeRpc.submitErc20Transfer({
+    account,
+    amount: input.amount,
+    recipient: input.recipient,
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+    signHash: signerFor(deps, account, vaultPassphrase),
+    speed: input.speed,
+    token,
+  });
+  const report = verifyCalls([result.call], verificationContext(account, preferences));
+  await deps.activity.record({
+    accountId: account.id,
+    amount: input.amount,
+    counterparty: input.recipient,
+    hash: result.transactionHash,
+    kind: "transfer",
+    networkId: account.networkId,
+    summary: report.calls[0]?.summary ?? `Send ${token.symbol}`,
+    token: token.symbol,
+  });
+  return { ok: true, transactionHash: result.transactionHash };
+};
+
+const handleActivity: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.activity")) {
+    return { error: "invalid activity request" };
+  }
+  const local = await reconcilePendingStatuses(deps);
+  const history = await activeAccountHistory(deps);
+  return {
+    activity: mergeActivity(local, history.onChain),
+    ...(history.unavailable ? { historyUnavailable: true } : {}),
+    ok: true,
+  };
+};
+
+/**
+ * Dispatch table for wallet operation messages, keyed by message type. Keeping
+ * each branch a self-contained handler leaves the router a pure lookup.
+ */
+const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
+  "wallet.activity": handleActivity,
+  "wallet.deployAccount": handleDeployAccount,
+  "wallet.deploymentStatus": handleDeploymentStatus,
+  "wallet.getBalances": handleGetBalances,
+  "wallet.reviewTransfer": handleReviewTransfer,
+  "wallet.transfer": handleTransfer,
+  "wallet.verifyClassHash": handleVerifyClassHash,
+};
+
 /**
  * Handles wallet operation messages; returns null for other message types.
  */
@@ -96,174 +283,8 @@ export const handleWalletOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const { activity, preferencesStore, runtimeRpc } = deps;
-
-  if (messageType === "wallet.getBalances") {
-    if (!readTypeOnlyInput(message, "wallet.getBalances")) {
-      return { error: "invalid balances request" };
-    }
-    const context = await activeAccountContext(deps.wallet, deps.session, preferencesStore);
-    if (context.error !== undefined) {
-      return { error: context.error };
-    }
-    const preferences = await preferencesStore.read();
-    const network = STARKNET_NETWORKS[context.networkId];
-    const balances = await runtimeRpc.getTokenBalances({
-      accountAddress: context.account.address,
-      rpcUrls: networkRpcUrls(network, preferences),
-      tokens: preferences.tokens.filter((token) => token.networkId === network.id),
-    });
-    return { accountId: context.account.id, balances, networkId: network.id, ok: true };
-  }
-
-  if (messageType === "wallet.deploymentStatus") {
-    if (!readTypeOnlyInput(message, "wallet.deploymentStatus")) {
-      return { error: "invalid deployment status request" };
-    }
-    const context = await activeAccountContext(deps.wallet, deps.session, preferencesStore);
-    if (context.error !== undefined) {
-      return { error: context.error };
-    }
-    const deployed = await runtimeRpc.getDeploymentStatus({
-      accountAddress: context.account.address,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], await preferencesStore.read()),
-    });
-    return { accountId: context.account.id, deployed, ok: true };
-  }
-
-  if (messageType === "wallet.verifyClassHash") {
-    if (!readTypeOnlyInput(message, "wallet.verifyClassHash")) {
-      return { error: "invalid class hash verification request" };
-    }
-    const context = await activeAccountContext(deps.wallet, deps.session, preferencesStore);
-    if (context.error !== undefined) {
-      return { error: context.error };
-    }
-    if (!runtimeRpc.verifyAccountClassHash) {
-      return { error: "class hash verification unavailable" };
-    }
-    const verification = await runtimeRpc.verifyAccountClassHash({
-      accountAddress: context.account.address,
-      expectedClassHash: context.account.classHash,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], await preferencesStore.read()),
-    });
-    return { accountId: context.account.id, ok: true, verification };
-  }
-
-  if (messageType === "wallet.deployAccount") {
-    if (!readTypeOnlyInput(message, "wallet.deployAccount")) {
-      return { error: "invalid deploy account request" };
-    }
-    const context = await activeAccountContext(deps.wallet, deps.session, preferencesStore);
-    if (context.error !== undefined) {
-      return { error: context.error };
-    }
-    const { account, networkId, vaultPassphrase } = context;
-    const result = await runtimeRpc.submitAccountDeployment({
-      account,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], await preferencesStore.read()),
-      signHash: signerFor(deps, account, vaultPassphrase),
-    });
-    await activity.record({
-      accountId: account.id,
-      hash: result.transactionHash,
-      kind: "deploy",
-      networkId,
-      summary: "Deploy account contract",
-    });
-    return { ok: true, transactionHash: result.transactionHash };
-  }
-
-  if (messageType === "wallet.reviewTransfer") {
-    const input = readReviewTransferInput(message);
-    if (!input) {
-      return { error: "invalid transfer review request" };
-    }
-    const context = await transferContext(deps, input);
-    if ("error" in context) {
-      return { error: context.error };
-    }
-    const { account, preferences, token, vaultPassphrase } = context;
-    const call = buildErc20TransferCall(
-      token.address,
-      input.recipient,
-      parseTokenAmount(input.amount, token.decimals),
-    );
-    const report = verifyCalls([call], verificationContext(account, preferences));
-    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
-    const deployed = await runtimeRpc
-      .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
-      .catch(() => true);
-    const estimated = deployed
-      ? await runtimeRpc
-          .estimateInvokeFee({
-            account,
-            calls: [call],
-            rpcUrls,
-            signHash: signerFor(deps, account, vaultPassphrase),
-          })
-          .catch(() => null)
-      : null;
-    const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
-    return {
-      ok: true,
-      review: {
-        fee,
-        feeEstimateFailed,
-        flags: report.flags,
-        requiresDeployment: !deployed,
-        summaries: report.calls.map((decoded) => decoded.summary),
-      },
-    };
-  }
-
-  if (messageType === "wallet.transfer") {
-    const input = readTransferInput(message);
-    if (!input) {
-      return { error: "invalid transfer request" };
-    }
-    const context = await transferContext(deps, input);
-    if ("error" in context) {
-      return { error: context.error };
-    }
-    const { account, preferences, token, vaultPassphrase } = context;
-    const result = await runtimeRpc.submitErc20Transfer({
-      account,
-      amount: input.amount,
-      recipient: input.recipient,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-      signHash: signerFor(deps, account, vaultPassphrase),
-      speed: input.speed,
-      token,
-    });
-    const report = verifyCalls([result.call], verificationContext(account, preferences));
-    await activity.record({
-      accountId: account.id,
-      amount: input.amount,
-      counterparty: input.recipient,
-      hash: result.transactionHash,
-      kind: "transfer",
-      networkId: account.networkId,
-      summary: report.calls[0]?.summary ?? `Send ${token.symbol}`,
-      token: token.symbol,
-    });
-    return { ok: true, transactionHash: result.transactionHash };
-  }
-
-  if (messageType === "wallet.activity") {
-    if (!readTypeOnlyInput(message, "wallet.activity")) {
-      return { error: "invalid activity request" };
-    }
-    const local = await reconcilePendingStatuses(deps);
-    const history = await activeAccountHistory(deps);
-    return {
-      activity: mergeActivity(local, history.onChain),
-      ...(history.unavailable ? { historyUnavailable: true } : {}),
-      ok: true,
-    };
-  }
-
-  return null;
+  const handler = WALLET_OPS_HANDLERS[messageType];
+  return handler ? handler(deps, message) : null;
 };
 
 /**

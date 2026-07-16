@@ -189,6 +189,19 @@ const findAccount = (vault: Vault, accountId: string): AccountRef => {
   return account;
 };
 
+// The wallet key to derive from when adding a network account: active, else first.
+const selectSourceAccount = (vault: Vault): AccountRef | undefined =>
+  (vault.activeAccountId
+    ? vault.accounts.find((stored) => stored.id === vault.activeAccountId)
+    : null) ?? vault.accounts[0];
+// The existing account deriving `source`'s key onto `networkId`, if any.
+const findNetworkAccount = (
+  vault: Vault,
+  networkId: StarknetNetworkId,
+  source: AccountRef,
+): AccountRef | undefined =>
+  vault.accounts.find((stored) => stored.networkId === networkId && sameWalletKey(stored, source));
+
 /**
  * Extracts the active account's private key and the vault recovery phrase for
  * the re-authenticated reveal flow. Throws when no account is selected or its
@@ -321,17 +334,11 @@ export const createWalletVaultService = ({
     },
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const source =
-        (vault.activeAccountId
-          ? vault.accounts.find((stored) => stored.id === vault.activeAccountId)
-          : null) ?? vault.accounts[0];
+      const source = selectSourceAccount(vault);
       if (!source) {
         throw new WalletError("No account selected");
       }
-
-      const existing = vault.accounts.find(
-        (stored) => stored.networkId === input.networkId && sameWalletKey(stored, source),
-      );
+      const existing = findNetworkAccount(vault, input.networkId, source);
       if (existing) {
         await writeVault(
           encryptedStore,
@@ -345,13 +352,11 @@ export const createWalletVaultService = ({
       if (!signingKey) {
         throw new WalletError("Signing key unavailable");
       }
-
       const classHash = await getOzAccountClassHash(kms, input.networkId);
       const address = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
       if (!isNonZeroStarkFieldElement(address)) {
         throw new WalletError("Krusty KMS returned invalid account address");
       }
-
       const account: AccountRef = {
         ...source,
         address,
@@ -376,7 +381,6 @@ export const createWalletVaultService = ({
         },
         input.vaultPassphrase,
       );
-
       return account;
     },
     generateMnemonic() {

@@ -34,7 +34,13 @@
     "rules": {
       "preset": "recommended",
       "complexity": {
-        "useLiteralKeys": "off"
+        "useLiteralKeys": "off",
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": {
+            "maxAllowedComplexity": 35
+          }
+        }
       },
       "nursery": {
         "noFloatingPromises": "error"
@@ -56,5 +62,29 @@
   },
   "vcs": {
     "enabled": false
-  }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/wallet/**",
+        "src/background/**",
+        "src/starknet/**",
+        "src/storage/**",
+        "src/shared/**",
+        "src/provider/**"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveCognitiveComplexity": {
+              "level": "error",
+              "options": {
+                "maxAllowedComplexity": 12
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

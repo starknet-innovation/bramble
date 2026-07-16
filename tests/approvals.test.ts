@@ -117,3 +117,73 @@ describe("createApprovalQueue", () => {
     ).toThrow("Invalid origin");
   });
 });
+
+// Directly exercises the private payload discriminator: each request kind that
+// carries execution data reconstructs its own payload shape, connection prompts
+// have none, and a non-uuid / unknown id resolves to null.
+describe("createApprovalQueue payload discrimination", () => {
+  const ORIGIN = "https://payload.example";
+
+  test("returns null for a connection prompt (no execution payload)", () => {
+    const queue = createApprovalQueue();
+    const { id } = queue.request(ORIGIN);
+    expect(queue.payload(id)).toBeNull();
+  });
+
+  test("returns null for a non-uuid or unknown id", () => {
+    const queue = createApprovalQueue();
+    expect(queue.payload("not-a-uuid")).toBeNull();
+    expect(queue.payload(crypto.randomUUID())).toBeNull();
+  });
+
+  test("reconstructs typed data for a sign-typed-data prompt", () => {
+    const queue = createApprovalQueue();
+    const typedData = { domain: {}, message: { a: 1 }, primaryType: "X", types: {} };
+    const { id } = queue.requestSignTypedData({ origin: ORIGIN, summary: "Sign", typedData });
+    expect(queue.payload(id)).toEqual({ typedData });
+  });
+
+  test("reconstructs the switch-chain target before the chain/declare branches", () => {
+    const queue = createApprovalQueue();
+    const { id } = queue.requestSwitchChain({
+      chainId: "0x534e5f4d41494e",
+      networkId: "SN_MAIN",
+      origin: ORIGIN,
+      summary: "Switch",
+    });
+    expect(queue.payload(id)).toEqual({ chainId: "0x534e5f4d41494e", networkId: "SN_MAIN" });
+  });
+
+  test("reconstructs an add-chain payload", () => {
+    const queue = createApprovalQueue();
+    const chain = { chainId: "0x1", chainName: "Custom" } as never;
+    const { id } = queue.requestAddChain({ chain, origin: ORIGIN, summaries: ["Add"] });
+    expect(queue.payload(id)).toEqual({ chain });
+  });
+
+  test("reconstructs a declare payload", () => {
+    const queue = createApprovalQueue();
+    const declare = { compiledClassHash: "0x1", contract: {} } as never;
+    const { id } = queue.requestDeclare({ declare, origin: ORIGIN, summaries: ["Declare"] });
+    expect(queue.payload(id)).toEqual({ declare });
+  });
+
+  test("reconstructs strk20 actions", () => {
+    const queue = createApprovalQueue();
+    const actions = [{ amount: "1", kind: "transfer", to: "0x2", token: "0x3" }] as never;
+    const { id } = queue.requestStrk20Invoke({ actions, origin: ORIGIN, summaries: ["Send"] });
+    expect(queue.payload(id)).toEqual({ actions });
+  });
+
+  test("reconstructs deep-cloned invoke calls", () => {
+    const queue = createApprovalQueue();
+    const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }];
+    const { id } = queue.requestInvoke({ calls, flags: [], origin: ORIGIN, summaries: ["Invoke"] });
+    const payload = queue.payload(id);
+
+    expect(payload).toEqual({ calls });
+    // The reconstructed calldata is a fresh array, not the caller's reference.
+    (payload?.calls?.[0]?.calldata as string[])[0] = "0xdead";
+    expect(queue.payload(id)).toEqual({ calls });
+  });
+});

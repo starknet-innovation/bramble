@@ -137,6 +137,21 @@ describe("handleProviderOps guards", () => {
   });
 });
 
+describe("handleProviderOps dispatch", () => {
+  test("returns null for a message type it does not handle", async () => {
+    // The router is a keyed lookup over the provider handlers; an unrelated type
+    // misses the table and yields null so the caller can try the next handler.
+    await expect(
+      handleProviderOps(
+        providerDeps(false),
+        "wallet.unrelated",
+        { type: "wallet.unrelated" },
+        contentSender,
+      ),
+    ).resolves.toBeNull();
+  });
+});
+
 const executeDeps = (locked: boolean): InvokeExecuteDeps => {
   const session = createUnlockSession();
   if (!locked) {

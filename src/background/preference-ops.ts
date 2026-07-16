@@ -3,7 +3,7 @@
  * address book management, account labels, display settings, RPC overrides,
  * and backup import. All are privileged extension-page messages.
  */
-import type { WalletPreferencesStore } from "../storage/preferences-store";
+import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import {
   readCreateGroupInput,
   readImportPreferencesInput,
@@ -23,6 +23,108 @@ import { readRemoveNftInput, readSetNftIndexerUrlInput, readSetNftSpamInput } fr
 import type { RuntimeResponse } from "./runtime-types";
 
 /**
+ * Reads and validates a preference message, then applies its store mutation.
+ * Absent keys are non-preference messages handled by the caller.
+ */
+type PreferenceHandler = (
+  store: WalletPreferencesStore,
+  message: unknown,
+) => Promise<RuntimeResponse>;
+
+/**
+ * Builds a handler that parses `message` with `read`, returns `error` when the
+ * payload is malformed, and otherwise responds with the preferences produced by
+ * `mutate`. Keeps every entry in the dispatch map a pure validate->mutate->respond.
+ */
+const parseThen = <T>(
+  read: (message: unknown) => T | null,
+  error: string,
+  mutate: (store: WalletPreferencesStore, input: T) => Promise<WalletPreferences>,
+): PreferenceHandler => {
+  return async (store, message) => {
+    const input = read(message);
+    if (input === null) {
+      return { error };
+    }
+    return { ok: true, preferences: await mutate(store, input) };
+  };
+};
+
+/**
+ * Maps a preference message type to its handler. Absent keys return null from
+ * {@link handlePreferenceOps} so other operation groups can handle the message.
+ */
+const PREFERENCE_HANDLERS: Readonly<Record<string, PreferenceHandler>> = {
+  "wallet.createGroup": parseThen(readCreateGroupInput, "invalid group request", (store, input) =>
+    store.createGroup(input),
+  ),
+  "wallet.importPreferences": parseThen(
+    readImportPreferencesInput,
+    "invalid preferences backup",
+    (store, input) => store.importPreferences(input.preferences),
+  ),
+  "wallet.preferences": async (store, message) => {
+    if (!readTypeOnlyInput(message, "wallet.preferences")) {
+      return { error: "invalid preferences request" };
+    }
+    return { ok: true, preferences: await store.read() };
+  },
+  "wallet.removeAddress": parseThen(
+    readRemoveAddressInput,
+    "invalid address book request",
+    (store, input) => store.removeAddress(input.id),
+  ),
+  "wallet.removeGroup": parseThen(readRemoveGroupInput, "invalid group request", (store, input) =>
+    store.removeGroup(input),
+  ),
+  "wallet.removeNft": parseThen(readRemoveNftInput, "invalid nft request", (store, input) =>
+    store.removeNft(input.id),
+  ),
+  "wallet.renameGroup": parseThen(readRenameGroupInput, "invalid group request", (store, input) =>
+    store.renameGroup(input),
+  ),
+  "wallet.saveAddress": parseThen(
+    readSaveAddressInput,
+    "invalid address book request",
+    (store, input) => store.saveAddress(input),
+  ),
+  "wallet.setAccountInGroup": parseThen(
+    readSetAccountInGroupInput,
+    "invalid group request",
+    (store, input) => store.setAccountInGroup(input),
+  ),
+  "wallet.setAccountLabel": parseThen(
+    readSetAccountLabelInput,
+    "invalid account label request",
+    (store, input) => store.setAccountLabel(input),
+  ),
+  "wallet.setDisplay": parseThen(readSetDisplayInput, "invalid display request", (store, input) =>
+    store.setDisplay(input),
+  ),
+  "wallet.setGroupIcon": parseThen(readSetGroupIconInput, "invalid group request", (store, input) =>
+    store.setGroupIcon(input),
+  ),
+  "wallet.setNftIndexerUrl": parseThen(
+    readSetNftIndexerUrlInput,
+    "invalid indexer endpoint request",
+    (store, input) => store.setNftIndexerUrl(input),
+  ),
+  "wallet.setNftSpam": parseThen(readSetNftSpamInput, "invalid nft request", (store, input) =>
+    store.setNftSpam(input),
+  ),
+  "wallet.setRpcOverride": parseThen(
+    readSetRpcOverrideInput,
+    "invalid rpc override request",
+    (store, input) => store.setRpcOverride(input),
+  ),
+  "wallet.setStrk20ProverUrl": parseThen(
+    readSetStrk20ProverUrlInput,
+    "invalid prover endpoint request",
+    (store, input) => store.setStrk20ProverUrl(input),
+  ),
+};
+
+/**
  * Handles preference messages; returns null for other message types.
  */
 export const handlePreferenceOps = async (
@@ -30,132 +132,6 @@ export const handlePreferenceOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  if (messageType === "wallet.preferences") {
-    if (!readTypeOnlyInput(message, "wallet.preferences")) {
-      return { error: "invalid preferences request" };
-    }
-    return { ok: true, preferences: await preferencesStore.read() };
-  }
-
-  if (messageType === "wallet.saveAddress") {
-    const input = readSaveAddressInput(message);
-    if (!input) {
-      return { error: "invalid address book request" };
-    }
-    return { ok: true, preferences: await preferencesStore.saveAddress(input) };
-  }
-
-  if (messageType === "wallet.removeAddress") {
-    const input = readRemoveAddressInput(message);
-    if (!input) {
-      return { error: "invalid address book request" };
-    }
-    return { ok: true, preferences: await preferencesStore.removeAddress(input.id) };
-  }
-
-  if (messageType === "wallet.removeNft") {
-    const input = readRemoveNftInput(message);
-    if (!input) {
-      return { error: "invalid nft request" };
-    }
-    return { ok: true, preferences: await preferencesStore.removeNft(input.id) };
-  }
-
-  if (messageType === "wallet.setNftSpam") {
-    const input = readSetNftSpamInput(message);
-    if (!input) {
-      return { error: "invalid nft request" };
-    }
-    return { ok: true, preferences: await preferencesStore.setNftSpam(input) };
-  }
-
-  if (messageType === "wallet.setAccountLabel") {
-    const input = readSetAccountLabelInput(message);
-    if (!input) {
-      return { error: "invalid account label request" };
-    }
-    return { ok: true, preferences: await preferencesStore.setAccountLabel(input) };
-  }
-
-  if (messageType === "wallet.createGroup") {
-    const input = readCreateGroupInput(message);
-    if (!input) {
-      return { error: "invalid group request" };
-    }
-    return { ok: true, preferences: await preferencesStore.createGroup(input) };
-  }
-
-  if (messageType === "wallet.renameGroup") {
-    const input = readRenameGroupInput(message);
-    if (!input) {
-      return { error: "invalid group request" };
-    }
-    return { ok: true, preferences: await preferencesStore.renameGroup(input) };
-  }
-
-  if (messageType === "wallet.setGroupIcon") {
-    const input = readSetGroupIconInput(message);
-    if (!input) {
-      return { error: "invalid group request" };
-    }
-    return { ok: true, preferences: await preferencesStore.setGroupIcon(input) };
-  }
-
-  if (messageType === "wallet.removeGroup") {
-    const input = readRemoveGroupInput(message);
-    if (!input) {
-      return { error: "invalid group request" };
-    }
-    return { ok: true, preferences: await preferencesStore.removeGroup(input) };
-  }
-
-  if (messageType === "wallet.setAccountInGroup") {
-    const input = readSetAccountInGroupInput(message);
-    if (!input) {
-      return { error: "invalid group request" };
-    }
-    return { ok: true, preferences: await preferencesStore.setAccountInGroup(input) };
-  }
-
-  if (messageType === "wallet.setDisplay") {
-    const input = readSetDisplayInput(message);
-    if (!input) {
-      return { error: "invalid display request" };
-    }
-    return { ok: true, preferences: await preferencesStore.setDisplay(input) };
-  }
-
-  if (messageType === "wallet.setRpcOverride") {
-    const input = readSetRpcOverrideInput(message);
-    if (!input) {
-      return { error: "invalid rpc override request" };
-    }
-    return { ok: true, preferences: await preferencesStore.setRpcOverride(input) };
-  }
-
-  if (messageType === "wallet.setNftIndexerUrl") {
-    const input = readSetNftIndexerUrlInput(message);
-    if (!input) {
-      return { error: "invalid indexer endpoint request" };
-    }
-    return { ok: true, preferences: await preferencesStore.setNftIndexerUrl(input) };
-  }
-
-  if (messageType === "wallet.setStrk20ProverUrl") {
-    const input = readSetStrk20ProverUrlInput(message);
-    if (!input) {
-      return { error: "invalid prover endpoint request" };
-    }
-    return { ok: true, preferences: await preferencesStore.setStrk20ProverUrl(input) };
-  }
-
-  if (messageType === "wallet.importPreferences") {
-    const input = readImportPreferencesInput(message);
-    if (!input) {
-      return { error: "invalid preferences backup" };
-    }
-    return { ok: true, preferences: await preferencesStore.importPreferences(input.preferences) };
-  }
-
-  return null;
+  const handler = PREFERENCE_HANDLERS[messageType];
+  return handler ? handler(preferencesStore, message) : null;
 };

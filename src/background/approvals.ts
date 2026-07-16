@@ -135,6 +135,35 @@ export type ApprovalQueue = {
 const cloneCall = (call: Call): Call =>
   Array.isArray(call.calldata) ? { ...call, calldata: [...call.calldata] } : { ...call };
 
+/**
+ * Reconstructs the execution payload held on an entry, discriminating on which
+ * private field is set. Typed data, a switch-chain target, a new chain, a
+ * declare, and strk20 actions each map to their own payload shape; a plain
+ * invoke falls through to its cloned calls. Returns null when no payload was
+ * stored (a connection prompt, or an invoke with no calls).
+ */
+const readApprovalPayload = (approval: ApprovalEntry): ApprovalPayload | null => {
+  if (approval.typedData !== undefined) {
+    return { typedData: approval.typedData };
+  }
+  if (approval.chainId !== undefined && approval.networkId !== undefined) {
+    return { chainId: approval.chainId, networkId: approval.networkId };
+  }
+  if (approval.chain !== undefined) {
+    return { chain: approval.chain };
+  }
+  if (approval.declare !== undefined) {
+    return { declare: approval.declare };
+  }
+  if (approval.actions !== undefined) {
+    return { actions: approval.actions };
+  }
+  if (approval.calls === undefined) {
+    return null;
+  }
+  return { calls: approval.calls.map(cloneCall) };
+};
+
 const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
   id: approval.id,
   kind: approval.kind,
@@ -189,28 +218,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
     },
     payload(id) {
       const approval = entry(id);
-      if (!approval) {
-        return null;
-      }
-      if (approval.typedData !== undefined) {
-        return { typedData: approval.typedData };
-      }
-      if (approval.chainId !== undefined && approval.networkId !== undefined) {
-        return { chainId: approval.chainId, networkId: approval.networkId };
-      }
-      if (approval.chain !== undefined) {
-        return { chain: approval.chain };
-      }
-      if (approval.declare !== undefined) {
-        return { declare: approval.declare };
-      }
-      if (approval.actions !== undefined) {
-        return { actions: approval.actions };
-      }
-      if (approval.calls === undefined) {
-        return null;
-      }
-      return { calls: approval.calls.map(cloneCall) };
+      return approval ? readApprovalPayload(approval) : null;
     },
     request(origin) {
       if (!isWalletOrigin(origin)) {

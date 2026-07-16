@@ -189,6 +189,20 @@ describe("getTransactionStatuses", () => {
     });
   });
 
+  // Pins the extracted classifyStatus lookup: ACCEPTED_ON_L1 also maps to
+  // accepted, and a receipt missing both fields falls through to pending.
+  test("accepts L1 finality and treats a fieldless receipt as pending", async () => {
+    const statuses = await getTransactionStatuses(
+      { hashes: ["0xl1", "0xbare"], rpcUrls: RPC_URLS },
+      () =>
+        statusProvider({
+          "0xbare": {},
+          "0xl1": { execution_status: "SUCCEEDED", finality_status: "ACCEPTED_ON_L1" },
+        }),
+    );
+    expect(statuses).toEqual({ "0xbare": "pending", "0xl1": "accepted" });
+  });
+
   test("treats a semantic per-transaction failure as pending", async () => {
     const semantic = Object.assign(new Error("transaction hash not found"), {
       baseError: { code: 29 },

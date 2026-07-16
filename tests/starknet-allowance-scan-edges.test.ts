@@ -38,6 +38,32 @@ describe("collectExternalAllowances edges", () => {
     expect(found).toHaveLength(50);
   });
 
+  test("accumulates per token in token order, skipping a token that yields no spenders", async () => {
+    // Two tracked tokens through the extracted per-token collection step: the
+    // first has one approved spender with a live allowance, the second emits no
+    // Approval events. The result must carry only the first token's allowance,
+    // proving the per-token accumulation drops empty tokens without aborting.
+    const TOKEN_WITHOUT_SPENDERS = "0x0511a2b3";
+    const rpc: AllowanceRpc = {
+      async callContract() {
+        return ["0x64", "0x0"];
+      },
+      async getEvents(filter) {
+        return BigInt(filter.address) === BigInt(TOKEN)
+          ? { events: [ozEvent(OWNER, SPENDER)] }
+          : { events: [] };
+      },
+    };
+
+    const found = await collectExternalAllowances(rpc, {
+      owner: OWNER,
+      tokens: [TOKEN, TOKEN_WITHOUT_SPENDERS],
+    });
+    expect(found).toEqual([
+      { amount: "100", spender: canonical(SPENDER), token: canonical(TOKEN) },
+    ]);
+  });
+
   test("propagates a transport error rather than skipping the token", async () => {
     const rpc: AllowanceRpc = {
       async callContract() {

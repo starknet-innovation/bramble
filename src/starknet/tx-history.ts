@@ -77,6 +77,45 @@ const uint256From = (low: string | undefined, high: string | undefined): string 
   }
 };
 
+// The (from, to, amount) triple of a Transfer event, canonicalized to 0x-hex
+// felts. Present only when all three parse to in-field-range values.
+type TransferParties = {
+  readonly amountRaw: string;
+  readonly from: string;
+  readonly to: string;
+};
+
+// Reads the parties for whichever Transfer layout the event uses: the Cairo 1
+// layout indexes `from`/`to` as keys[1]/keys[2] with the uint256 amount in
+// data[0..1]; the legacy layout carries all fields in `data`. Returns null
+// unless every field parses to an in-field-range element — validated
+// symmetrically with the hash (which isActivityEntry re-checks at the boundary)
+// so a hostile event cannot seat an out-of-range counterparty into a stored or
+// exported entry. A zero address (mint/burn) is a valid field element, so
+// received-by-mint activity is still kept.
+const readTransferParties = (event: HistoryEvent): TransferParties | null => {
+  const indexed = event.keys.length >= 3;
+  const rawFrom = indexed ? event.keys[1] : event.data[0];
+  const rawTo = indexed ? event.keys[2] : event.data[1];
+  const amountRaw = indexed
+    ? uint256From(event.data[0], event.data[1])
+    : uint256From(event.data[2], event.data[3]);
+  const from = typeof rawFrom === "string" ? canonicalFelt(rawFrom) : null;
+  const to = typeof rawTo === "string" ? canonicalFelt(rawTo) : null;
+  if (from === null || to === null || amountRaw === null) {
+    return null;
+  }
+  if (!isStarkFieldElement(from) || !isStarkFieldElement(to)) {
+    return null;
+  }
+  return { amountRaw, from, to };
+};
+
+// Which side of the transfer the active account sits on, or null when the
+// transfer does not touch it.
+const transferDirection = (parties: TransferParties, account: string): TransferDirection | null =>
+  sameFelt(parties.from, account) ? "out" : sameFelt(parties.to, account) ? "in" : null;
+
 /**
  * Decodes an ERC20 `Transfer` event into a {@link DecodedTransfer} relative to
  * `account`, or null when the event is not a well-formed transfer that touches
@@ -102,42 +141,23 @@ export const decodeTransferEvent = (
   if (!sameFelt(event.keys[0], TRANSFER_EVENT_KEY)) {
     return null;
   }
-  const indexed = event.keys.length >= 3;
-  const rawFrom = indexed ? event.keys[1] : event.data[0];
-  const rawTo = indexed ? event.keys[2] : event.data[1];
-  const amountRaw = indexed
-    ? uint256From(event.data[0], event.data[1])
-    : uint256From(event.data[2], event.data[3]);
-  const from = typeof rawFrom === "string" ? canonicalFelt(rawFrom) : null;
-  const to = typeof rawTo === "string" ? canonicalFelt(rawTo) : null;
+  const parties = readTransferParties(event);
   const txHash =
     typeof event.transaction_hash === "string" ? canonicalFelt(event.transaction_hash) : null;
-  if (from === null || to === null || amountRaw === null || txHash === null) {
-    return null;
-  }
-  // Validate the counterparty felts symmetrically with the hash (which
-  // isActivityEntry re-checks with isStarkFieldElement at the boundary): a
-  // hostile event must not seat an out-of-field-range counterparty into a
-  // stored/exported entry. A zero address (mint/burn) is a valid field element,
-  // so received-by-mint activity is still kept.
-  if (!isStarkFieldElement(from) || !isStarkFieldElement(to)) {
+  if (parties === null || txHash === null) {
     return null;
   }
   if (!isSafeBlockNumber(event.block_number)) {
     return null;
   }
-  const direction: TransferDirection | null = sameFelt(from, account)
-    ? "out"
-    : sameFelt(to, account)
-      ? "in"
-      : null;
+  const direction = transferDirection(parties, account);
   if (direction === null) {
     return null;
   }
   return {
-    amountRaw,
+    amountRaw: parties.amountRaw,
     blockNumber: event.block_number,
-    counterparty: direction === "out" ? to : from,
+    counterparty: direction === "out" ? parties.to : parties.from,
     direction,
     hash: txHash,
   };

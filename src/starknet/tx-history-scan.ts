@@ -168,6 +168,115 @@ const collectTokenTransfers = async (
   return recent.transfers;
 };
 
+// Pages every tracked token over the window, keeping the transfers that touch
+// the account. A per-token semantic failure is skipped so one odd token cannot
+// blank the feed; a transport failure propagates so the caller degrades rather
+// than showing a partial feed as complete.
+const gatherTokenTransfers = async (
+  rpc: HistoryRpc,
+  tokens: readonly TokenConfig[],
+  account: string,
+  fromBlock: number,
+  latestBlock: number,
+): Promise<readonly TokenTransfer[]> => {
+  const transfers: TokenTransfer[] = [];
+  for (const token of tokens) {
+    const address = canonicalFelt(token.address);
+    if (!address || !isNonZeroStarkFieldElement(address)) {
+      continue;
+    }
+    try {
+      for (const keys of transferKeyFilters(account)) {
+        transfers.push(
+          ...(await collectTokenTransfers(rpc, token, account, fromBlock, latestBlock, keys)),
+        );
+      }
+    } catch (error) {
+      if (isTransportRpcError(error)) {
+        throw error;
+      }
+    }
+  }
+  return transfers;
+};
+
+// De-duplicates per transfer leg, not per transaction hash, then keeps the most
+// recent {@link MAX_HISTORY_ENTRIES}. A self-transfer (from = to = account)
+// matches both the outgoing and incoming filter and so is decoded twice into an
+// identical leg, which must collapse; but one transaction can also carry several
+// genuinely distinct legs — a DEX swap emits an outgoing and an incoming
+// transfer under one hash, a multicall many — and those must all survive so the
+// feed does not show one arbitrary leg. Keying on hash alone would wrongly
+// collapse a swap to a single row, and would also silently defeat
+// `mergeActivity`, whose per-leg de-duplication (see its `legKey`) is built to
+// keep every leg of a chain-only transaction. The key mirrors that leg identity:
+// hash plus the fields that distinguish legs of the same transaction (token,
+// counterparty, amount). Fields are joined on a NUL written as a backslash-u
+// escape — never a raw control byte in source — so the separator can never
+// appear inside a felt-derived value.
+const rankRecentTransfers = (transfers: readonly TokenTransfer[]): readonly TokenTransfer[] => {
+  const byLeg = new Map<string, TokenTransfer>();
+  for (const transfer of transfers) {
+    const { amountRaw, counterparty, hash } = transfer.decoded;
+    const legKey = `${hash}\u0000${transfer.token.address}\u0000${counterparty}\u0000${amountRaw}`;
+    if (!byLeg.has(legKey)) {
+      byLeg.set(legKey, transfer);
+    }
+  }
+  return [...byLeg.values()]
+    .sort((a, b) => b.decoded.blockNumber - a.decoded.blockNumber)
+    .slice(0, MAX_HISTORY_ENTRIES);
+};
+
+// Reads each distinct block's timestamp once and in parallel: the reads are
+// independent, so a deep refresh does not pay one serial round-trip per row
+// against a slow public node. Bounded by MAX_HISTORY_ENTRIES distinct blocks.
+const readBlockTimestamps = async (
+  rpc: HistoryRpc,
+  transfers: readonly TokenTransfer[],
+): Promise<ReadonlyMap<number, number | null>> => {
+  const distinctBlocks = [...new Set(transfers.map(({ decoded }) => decoded.blockNumber))];
+  return new Map(
+    await Promise.all(
+      distinctBlocks.map(
+        async (blockNumber) => [blockNumber, await rpc.getBlockTimestamp(blockNumber)] as const,
+      ),
+    ),
+  );
+};
+
+// Joins each ranked transfer with its block timestamp into a validated entry.
+// Re-checks every node-derived row here, not only at the popup boundary: that
+// boundary rejects the whole feed if any single entry is invalid, so one
+// out-of-range value from the node would drop local history too. Dropping the
+// bad row (or one with no readable timestamp) here keeps the rest of the feed
+// intact.
+const datedActivityEntries = (
+  transfers: readonly TokenTransfer[],
+  timestamps: ReadonlyMap<number, number | null>,
+  accountId: string,
+  networkId: StarknetNetworkId,
+): readonly ActivityEntry[] => {
+  const entries: ActivityEntry[] = [];
+  for (const { decoded, token } of transfers) {
+    const seconds = timestamps.get(decoded.blockNumber);
+    if (seconds === null || seconds === undefined) {
+      continue;
+    }
+    const entry = onChainActivityEntry({
+      accountId,
+      decoded,
+      networkId,
+      timestampMs: seconds * 1000,
+      token,
+    });
+    if (isActivityEntry(entry)) {
+      entries.push(entry);
+    }
+  }
+  return entries;
+};
+
 /**
  * Collects the account's recent on-chain transfers across its tracked tokens
  * using an injected RPC surface, most-recent first and capped at
@@ -186,81 +295,10 @@ export const collectTransactionHistory = async (
   }
   const latest = await rpc.getLatestBlockNumber();
   const fromBlock = Math.max(0, latest - HISTORY_BLOCK_WINDOW);
-  const transfers: TokenTransfer[] = [];
-  for (const token of tokens) {
-    const address = canonicalFelt(token.address);
-    if (!address || !isNonZeroStarkFieldElement(address)) {
-      continue;
-    }
-    try {
-      for (const keys of transferKeyFilters(canonicalAccount)) {
-        transfers.push(
-          ...(await collectTokenTransfers(rpc, token, canonicalAccount, fromBlock, latest, keys)),
-        );
-      }
-    } catch (error) {
-      if (isTransportRpcError(error)) {
-        throw error;
-      }
-    }
-  }
-  // De-duplicate per transfer leg, not per transaction hash. A self-transfer
-  // (from = to = account) matches both the outgoing and incoming filter and so
-  // is decoded twice into an identical leg, which must collapse; but one
-  // transaction can also carry several genuinely distinct legs — a DEX swap
-  // emits an outgoing and an incoming transfer under one hash, a multicall many
-  // — and those must all survive so the feed does not show one arbitrary leg.
-  // Keying on hash alone would wrongly collapse a swap to a single row, and
-  // would also silently defeat `mergeActivity`, whose per-leg de-duplication
-  // (see its `legKey`) is built to keep every leg of a chain-only transaction.
-  // The key mirrors that leg identity: hash plus the fields that distinguish
-  // legs of the same transaction (token, counterparty, amount). Fields are
-  // joined on a NUL written as a backslash-u escape — never a raw control byte
-  // in source — so the separator can never appear inside a felt-derived value.
-  const byLeg = new Map<string, TokenTransfer>();
-  for (const transfer of transfers) {
-    const { amountRaw, counterparty, hash } = transfer.decoded;
-    const legKey = `${hash}\u0000${transfer.token.address}\u0000${counterparty}\u0000${amountRaw}`;
-    if (!byLeg.has(legKey)) {
-      byLeg.set(legKey, transfer);
-    }
-  }
-  const recent = [...byLeg.values()]
-    .sort((a, b) => b.decoded.blockNumber - a.decoded.blockNumber)
-    .slice(0, MAX_HISTORY_ENTRIES);
-  // Read each distinct block's timestamp once and in parallel: the reads are
-  // independent, so a deep refresh does not pay one serial round-trip per row
-  // against a slow public node. Bounded by MAX_HISTORY_ENTRIES distinct blocks.
-  const distinctBlocks = [...new Set(recent.map(({ decoded }) => decoded.blockNumber))];
-  const timestamps = new Map(
-    await Promise.all(
-      distinctBlocks.map(
-        async (blockNumber) => [blockNumber, await rpc.getBlockTimestamp(blockNumber)] as const,
-      ),
-    ),
-  );
-  const entries: ActivityEntry[] = [];
-  for (const { decoded, token } of recent) {
-    const seconds = timestamps.get(decoded.blockNumber);
-    if (seconds === null || seconds === undefined) {
-      continue;
-    }
-    const entry = onChainActivityEntry({
-      accountId,
-      decoded,
-      networkId,
-      timestampMs: seconds * 1000,
-      token,
-    });
-    // Re-check every node-derived row here, not only at the popup boundary: that
-    // boundary rejects the whole feed if any single entry is invalid, so one
-    // out-of-range value from the node would drop local history too. Dropping the
-    // bad row here keeps the rest of the feed intact.
-    if (isActivityEntry(entry)) {
-      entries.push(entry);
-    }
-  }
-  return entries;
+  const transfers = await gatherTokenTransfers(rpc, tokens, canonicalAccount, fromBlock, latest);
+  const recent = rankRecentTransfers(transfers);
+  const timestamps = await readBlockTimestamps(rpc, recent);
+  return datedActivityEntries(recent, timestamps, accountId, networkId);
 };
 
 /**

@@ -7,10 +7,20 @@
  * and tests/support/multisig-harness.ts.
  */
 import { describe, expect, test } from "bun:test";
+import type { ProposeMultisigInput } from "../src/background/multisig-inputs";
 import type { MultisigOpsDeps } from "../src/background/multisig-ops";
-import { isProposalSubmitPending, multisigRpc } from "../src/background/multisig-ops";
+import {
+  buildMultisigProposalRecord,
+  defaultSummary,
+  isProposalSubmitPending,
+  multisigRpc,
+} from "../src/background/multisig-ops";
 import type { MultisigProposalRecord, MultisigRecord } from "../src/storage/multisig-store";
-import { harnessExtensionSender, makeMultisigHarness } from "./support/multisig-harness";
+import {
+  HARNESS_TARGET,
+  harnessExtensionSender,
+  makeMultisigHarness,
+} from "./support/multisig-harness";
 
 describe("registry multisig handler guards", () => {
   test("rejects a multisigs list request carrying extra fields", async () => {
@@ -106,5 +116,54 @@ describe("multisig helper guards", () => {
       txId: "0x2",
     };
     expect(await isProposalSubmitPending(deps, proposal)).toBe(false);
+  });
+});
+
+describe("multisig proposal builders", () => {
+  const baseInput: ProposeMultisigInput = {
+    calldata: ["0x5", "0x0"],
+    entrypoint: "transfer",
+    multisigId: "SN_MAIN:0xabc",
+    salt: "0x0",
+    to: HARNESS_TARGET,
+  };
+
+  test("defaultSummary keeps a caller-supplied summary verbatim", () => {
+    expect(defaultSummary({ ...baseInput, summary: "Pay vendor" })).toBe("Pay vendor");
+  });
+
+  test("defaultSummary falls back to the entrypoint plus a shortened address", () => {
+    const summary = defaultSummary(baseInput);
+    expect(summary.startsWith("transfer on ")).toBe(true);
+    // The fallback shortens the target address, so the ellipsis marker appears
+    // and the full 65-character address does not.
+    expect(summary).toContain("…");
+    expect(summary).not.toContain(HARNESS_TARGET);
+  });
+
+  test("buildMultisigProposalRecord assembles an optimistic pending record", () => {
+    const record = buildMultisigProposalRecord({
+      id: "SN_MAIN:0xabc:0x7ff",
+      input: baseInput,
+      multisigId: "SN_MAIN:0xabc",
+      submitTransactionHash: "0xhash",
+      summary: "Pay vendor",
+      txId: "0x7ff",
+    });
+    expect(record).toEqual({
+      call: {
+        calldata: ["0x5", "0x0"],
+        contractAddress: HARNESS_TARGET,
+        entrypoint: "transfer",
+        salt: "0x0",
+      },
+      confirmations: 0,
+      id: "SN_MAIN:0xabc:0x7ff",
+      multisigId: "SN_MAIN:0xabc",
+      state: "pending",
+      submitTransactionHash: "0xhash",
+      summary: "Pay vendor",
+      txId: "0x7ff",
+    });
   });
 });

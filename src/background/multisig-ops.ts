@@ -3,8 +3,9 @@
  * handler: listing watched multisigs, watching one after proving on-chain
  * that it exposes the MultisigComponent views and that the active account is
  * a signer, refreshing config and proposal states, and tracking a proposal
- * id shared out-of-band. Transaction-submitting multisig operations live in
- * multisig-tx-ops.ts.
+ * id shared out-of-band. Each message type maps to one small handler; the
+ * exported router is a single dispatch-map lookup. Transaction-submitting
+ * multisig operations live in multisig-tx-ops.ts.
  */
 import {
   canonicalFelt,
@@ -21,6 +22,7 @@ import {
 } from "../storage/multisig-store";
 import { readTypeOnlyInput } from "./message-inputs";
 import {
+  type ProposeMultisigInput,
   readAddMultisigInput,
   readMultisigIdInput,
   readTrackMultisigProposalInput,
@@ -132,6 +134,42 @@ export const isProposalSubmitPending = async (
   return entries.some((entry) => entry.hash === hash && entry.status === "pending");
 };
 
+const shortAddress = (address: string): string => `${address.slice(0, 8)}…${address.slice(-4)}`;
+
+/**
+ * Default proposal summary used when the proposer supplies none. Kept beside
+ * the record builder so both the tx handler and its tests share one source.
+ */
+export const defaultSummary = (input: ProposeMultisigInput): string =>
+  input.summary ?? `${input.entrypoint} on ${shortAddress(input.to)}`;
+
+/**
+ * Assembles the optimistic pending proposal record stored right after a
+ * submit transaction is broadcast. Pure: no I/O, no clock, no randomness.
+ */
+export const buildMultisigProposalRecord = (input: {
+  readonly input: ProposeMultisigInput;
+  readonly multisigId: string;
+  readonly id: string;
+  readonly txId: string;
+  readonly summary: string;
+  readonly submitTransactionHash: string;
+}): MultisigProposalRecord => ({
+  call: {
+    calldata: input.input.calldata,
+    contractAddress: input.input.to,
+    entrypoint: input.input.entrypoint,
+    salt: input.input.salt,
+  },
+  confirmations: 0,
+  id: input.id,
+  multisigId: input.multisigId,
+  state: "pending",
+  submitTransactionHash: input.submitTransactionHash,
+  summary: input.summary,
+  txId: input.txId,
+});
+
 const scopedList = async (
   store: MultisigStore,
   networkId: StarknetNetworkId,
@@ -199,6 +237,137 @@ const refreshProposals = async (
   );
 };
 
+type MultisigOpsHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
+
+const listMultisigs: MultisigOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.multisigs")) {
+    return { error: "invalid multisigs request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { multisigs: [], ok: true, proposals: [] };
+  }
+  const scoped = await scopedList(deps.multisigStore, context.networkId);
+  return { ...scoped, ok: true };
+};
+
+const addMultisig: MultisigOpsHandler = async (deps, message) => {
+  const input = readAddMultisigInput(message);
+  if (!input) {
+    return { error: "invalid add multisig request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const preferences = await deps.preferencesStore.read();
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
+  const config = await multisigRpc(deps).getConfig({ address: input.address, rpcUrls });
+  if (!config.signers.some((signer) => sameFelt(signer, context.account.address))) {
+    return { error: "the active account is not a signer of this multisig" };
+  }
+  const id = multisigId(context.networkId, input.address);
+  if (!id) {
+    return { error: "invalid add multisig request" };
+  }
+  const record: MultisigRecord = {
+    address: canonicalFelt(input.address) ?? input.address,
+    id,
+    ...(input.name === undefined ? {} : { name: input.name }),
+    networkId: context.networkId,
+    quorum: config.quorum,
+    signers: config.signers,
+  };
+  await deps.multisigStore.upsertMultisig(record);
+  return { multisig: record, ok: true };
+};
+
+const removeMultisig: MultisigOpsHandler = async (deps, message) => {
+  const input = readMultisigIdInput(message, "wallet.removeMultisig");
+  if (!input) {
+    return { error: "invalid remove multisig request" };
+  }
+  await deps.multisigStore.removeMultisig(input.id);
+  return { ok: true };
+};
+
+const refreshMultisig: MultisigOpsHandler = async (deps, message) => {
+  const input = readMultisigIdInput(message, "wallet.refreshMultisig");
+  if (!input) {
+    return { error: "invalid refresh multisig request" };
+  }
+  const resolved = await multisigContext(deps, input.id);
+  if ("error" in resolved) {
+    return { error: resolved.error };
+  }
+  const config = await multisigRpc(deps).getConfig({
+    address: resolved.record.address,
+    rpcUrls: resolved.rpcUrls,
+  });
+  const record: MultisigRecord = {
+    ...resolved.record,
+    quorum: config.quorum,
+    signers: config.signers,
+  };
+  await deps.multisigStore.upsertMultisig(record);
+  const proposals = await refreshProposals(
+    deps,
+    record,
+    resolved.account.account.address,
+    resolved.rpcUrls,
+  );
+  return { multisig: record, ok: true, proposals };
+};
+
+const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
+  const input = readTrackMultisigProposalInput(message);
+  if (!input) {
+    return { error: "invalid track proposal request" };
+  }
+  const resolved = await multisigContext(deps, input.multisigId);
+  if ("error" in resolved) {
+    return { error: resolved.error };
+  }
+  const status = await multisigRpc(deps).getProposalStatus({
+    address: resolved.record.address,
+    rpcUrls: resolved.rpcUrls,
+    signer: resolved.account.account.address,
+    txId: input.txId,
+  });
+  if (status.state === "not-found") {
+    return { error: "no proposal with that id exists on this multisig" };
+  }
+  const id = multisigProposalId(resolved.record.id, input.txId);
+  if (!id) {
+    return { error: "invalid track proposal request" };
+  }
+  const existing = (await deps.multisigStore.listProposals()).find((p) => p.id === id);
+  const proposal: MultisigProposalRecord = {
+    call: existing?.call ?? null,
+    confirmations: status.confirmations,
+    id,
+    multisigId: resolved.record.id,
+    state: status.state,
+    ...(existing?.submitTransactionHash === undefined
+      ? {}
+      : { submitTransactionHash: existing.submitTransactionHash }),
+    summary: input.summary ?? existing?.summary ?? "Shared proposal",
+    txId: canonicalFelt(input.txId) ?? input.txId,
+  };
+  await deps.multisigStore.upsertProposal(proposal);
+  return { ok: true, proposal };
+};
+
+// One handler per registry-level multisig message type; the router below is a
+// single map lookup and unknown types fall through to null.
+const OPS_HANDLERS: Record<string, MultisigOpsHandler> = {
+  "wallet.addMultisig": addMultisig,
+  "wallet.multisigs": listMultisigs,
+  "wallet.refreshMultisig": refreshMultisig,
+  "wallet.removeMultisig": removeMultisig,
+  "wallet.trackMultisigProposal": trackMultisigProposal,
+};
+
 /**
  * Handles registry-level multisig messages; returns null for other types.
  */
@@ -207,124 +376,6 @@ export const handleMultisigOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  if (messageType === "wallet.multisigs") {
-    if (!readTypeOnlyInput(message, "wallet.multisigs")) {
-      return { error: "invalid multisigs request" };
-    }
-    const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-    if (context.error !== undefined) {
-      return { multisigs: [], ok: true, proposals: [] };
-    }
-    const scoped = await scopedList(deps.multisigStore, context.networkId);
-    return { ...scoped, ok: true };
-  }
-
-  if (messageType === "wallet.addMultisig") {
-    const input = readAddMultisigInput(message);
-    if (!input) {
-      return { error: "invalid add multisig request" };
-    }
-    const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-    if (context.error !== undefined) {
-      return { error: context.error };
-    }
-    const preferences = await deps.preferencesStore.read();
-    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
-    const config = await multisigRpc(deps).getConfig({ address: input.address, rpcUrls });
-    if (!config.signers.some((signer) => sameFelt(signer, context.account.address))) {
-      return { error: "the active account is not a signer of this multisig" };
-    }
-    const id = multisigId(context.networkId, input.address);
-    if (!id) {
-      return { error: "invalid add multisig request" };
-    }
-    const record: MultisigRecord = {
-      address: canonicalFelt(input.address) ?? input.address,
-      id,
-      ...(input.name === undefined ? {} : { name: input.name }),
-      networkId: context.networkId,
-      quorum: config.quorum,
-      signers: config.signers,
-    };
-    await deps.multisigStore.upsertMultisig(record);
-    return { multisig: record, ok: true };
-  }
-
-  if (messageType === "wallet.removeMultisig") {
-    const input = readMultisigIdInput(message, "wallet.removeMultisig");
-    if (!input) {
-      return { error: "invalid remove multisig request" };
-    }
-    await deps.multisigStore.removeMultisig(input.id);
-    return { ok: true };
-  }
-
-  if (messageType === "wallet.refreshMultisig") {
-    const input = readMultisigIdInput(message, "wallet.refreshMultisig");
-    if (!input) {
-      return { error: "invalid refresh multisig request" };
-    }
-    const resolved = await multisigContext(deps, input.id);
-    if ("error" in resolved) {
-      return { error: resolved.error };
-    }
-    const config = await multisigRpc(deps).getConfig({
-      address: resolved.record.address,
-      rpcUrls: resolved.rpcUrls,
-    });
-    const record: MultisigRecord = {
-      ...resolved.record,
-      quorum: config.quorum,
-      signers: config.signers,
-    };
-    await deps.multisigStore.upsertMultisig(record);
-    const proposals = await refreshProposals(
-      deps,
-      record,
-      resolved.account.account.address,
-      resolved.rpcUrls,
-    );
-    return { multisig: record, ok: true, proposals };
-  }
-
-  if (messageType === "wallet.trackMultisigProposal") {
-    const input = readTrackMultisigProposalInput(message);
-    if (!input) {
-      return { error: "invalid track proposal request" };
-    }
-    const resolved = await multisigContext(deps, input.multisigId);
-    if ("error" in resolved) {
-      return { error: resolved.error };
-    }
-    const status = await multisigRpc(deps).getProposalStatus({
-      address: resolved.record.address,
-      rpcUrls: resolved.rpcUrls,
-      signer: resolved.account.account.address,
-      txId: input.txId,
-    });
-    if (status.state === "not-found") {
-      return { error: "no proposal with that id exists on this multisig" };
-    }
-    const id = multisigProposalId(resolved.record.id, input.txId);
-    if (!id) {
-      return { error: "invalid track proposal request" };
-    }
-    const existing = (await deps.multisigStore.listProposals()).find((p) => p.id === id);
-    const proposal: MultisigProposalRecord = {
-      call: existing?.call ?? null,
-      confirmations: status.confirmations,
-      id,
-      multisigId: resolved.record.id,
-      state: status.state,
-      ...(existing?.submitTransactionHash === undefined
-        ? {}
-        : { submitTransactionHash: existing.submitTransactionHash }),
-      summary: input.summary ?? existing?.summary ?? "Shared proposal",
-      txId: canonicalFelt(input.txId) ?? input.txId,
-    };
-    await deps.multisigStore.upsertProposal(proposal);
-    return { ok: true, proposal };
-  }
-
-  return null;
+  const handler = OPS_HANDLERS[messageType];
+  return handler ? handler(deps, message) : null;
 };

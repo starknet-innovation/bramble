@@ -62,6 +62,84 @@ const discoverExternalAllowances = async (
   }).catch(() => []);
 };
 
+type AllowanceOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
+
+const handleListAllowances: AllowanceOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.allowances")) {
+    return { error: "invalid allowances request" };
+  }
+  // Scope the list to the active account: allowances granted by one account
+  // must not appear (or be revocable) under another account.
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { allowances: [], ok: true };
+  }
+  const all = await deps.allowanceStore.list();
+  const inWallet = all.filter((entry) => entry.accountId === context.account.id);
+  const external = await discoverExternalAllowances(deps, context);
+  return {
+    allowances: mergeAllowanceViews(inWallet, external, context.account, context.networkId),
+    ok: true,
+  };
+};
+
+const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
+  const input = readRevokeAllowanceInput(message);
+  if (!input) {
+    return { error: "invalid revoke request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const record = (await deps.allowanceStore.list()).find((entry) => entry.id === input.id);
+  if (record && record.accountId !== context.account.id) {
+    return { error: "switch to the account that granted this allowance" };
+  }
+  // A tracked (in-wallet) allowance is revoked from its stored record; an
+  // externally discovered one is not in the store, so its token and spender
+  // are recovered from the id, scoped to the active account. Setting an
+  // allowance to zero can only reduce a spender's reach, and still runs
+  // through the verified invoke path below either way.
+  const target = record ?? allowanceTarget(input.id, context.account.id);
+  if (!target) {
+    return { error: "allowance not found" };
+  }
+  const preferences = await deps.preferencesStore.read();
+  const call = buildErc20ApproveCall(target.token, target.spender, 0n);
+  const report = verifyCalls([call], verificationContext(context.account, preferences));
+  const result = await deps.runtimeRpc.submitInvokeTransaction({
+    account: context.account,
+    calls: [call],
+    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
+    signHash: signerForContext(deps, context),
+  });
+  await deps.activity.record({
+    accountId: context.account.id,
+    hash: result.transactionHash,
+    kind: "invoke",
+    networkId: context.networkId,
+    summary: report.calls[0]?.summary ?? "Revoke approval",
+  });
+  await deps.allowanceStore.record({
+    accountId: context.account.id,
+    amount: "0",
+    networkId: context.networkId,
+    spender: target.spender,
+    token: target.token,
+  });
+  return { ok: true, transactionHash: result.transactionHash };
+};
+
+/**
+ * Dispatch table for allowance-manager messages, keyed by message type. Each
+ * branch is a self-contained handler, leaving the router a pure lookup.
+ */
+const ALLOWANCE_OPS_HANDLERS: Readonly<Record<string, AllowanceOpsHandler>> = {
+  "wallet.allowances": handleListAllowances,
+  "wallet.revokeAllowance": handleRevokeAllowance,
+};
+
 /**
  * Handles allowance-manager messages; returns null for other message types.
  */
@@ -70,72 +148,6 @@ export const handleAllowanceOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  if (messageType === "wallet.allowances") {
-    if (!readTypeOnlyInput(message, "wallet.allowances")) {
-      return { error: "invalid allowances request" };
-    }
-    // Scope the list to the active account: allowances granted by one account
-    // must not appear (or be revocable) under another account.
-    const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-    if (context.error !== undefined) {
-      return { allowances: [], ok: true };
-    }
-    const all = await deps.allowanceStore.list();
-    const inWallet = all.filter((entry) => entry.accountId === context.account.id);
-    const external = await discoverExternalAllowances(deps, context);
-    return {
-      allowances: mergeAllowanceViews(inWallet, external, context.account, context.networkId),
-      ok: true,
-    };
-  }
-
-  if (messageType === "wallet.revokeAllowance") {
-    const input = readRevokeAllowanceInput(message);
-    if (!input) {
-      return { error: "invalid revoke request" };
-    }
-    const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-    if (context.error !== undefined) {
-      return { error: context.error };
-    }
-    const record = (await deps.allowanceStore.list()).find((entry) => entry.id === input.id);
-    if (record && record.accountId !== context.account.id) {
-      return { error: "switch to the account that granted this allowance" };
-    }
-    // A tracked (in-wallet) allowance is revoked from its stored record; an
-    // externally discovered one is not in the store, so its token and spender
-    // are recovered from the id, scoped to the active account. Setting an
-    // allowance to zero can only reduce a spender's reach, and still runs
-    // through the verified invoke path below either way.
-    const target = record ?? allowanceTarget(input.id, context.account.id);
-    if (!target) {
-      return { error: "allowance not found" };
-    }
-    const preferences = await deps.preferencesStore.read();
-    const call = buildErc20ApproveCall(target.token, target.spender, 0n);
-    const report = verifyCalls([call], verificationContext(context.account, preferences));
-    const result = await deps.runtimeRpc.submitInvokeTransaction({
-      account: context.account,
-      calls: [call],
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
-      signHash: signerForContext(deps, context),
-    });
-    await deps.activity.record({
-      accountId: context.account.id,
-      hash: result.transactionHash,
-      kind: "invoke",
-      networkId: context.networkId,
-      summary: report.calls[0]?.summary ?? "Revoke approval",
-    });
-    await deps.allowanceStore.record({
-      accountId: context.account.id,
-      amount: "0",
-      networkId: context.networkId,
-      spender: target.spender,
-      token: target.token,
-    });
-    return { ok: true, transactionHash: result.transactionHash };
-  }
-
-  return null;
+  const handler = ALLOWANCE_OPS_HANDLERS[messageType];
+  return handler ? handler(deps, message) : null;
 };
