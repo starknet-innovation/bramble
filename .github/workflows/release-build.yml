@@ -125,6 +125,14 @@ jobs:
       # in RELEASING.md). When it exists we only attach/replace the built assets
       # and leave the human's title/notes untouched; otherwise we create it with
       # the derived notes.
+      #
+      # The check-then-create is a TOCTOU: two builds for the same tag (a manual
+      # tag-push racing an auto-release cut) could both see "no release" and both
+      # try to create it, and `gh release create` fails if the Release appears in
+      # between. We treat that as a lost race, not a failure — fall back to
+      # attaching our assets to the now-existing Release. If create failed for
+      # any OTHER reason the Release still will not exist and the upload fails
+      # too, so a real error is never masked.
       - name: Create GitHub Release
         if: ${{ inputs.create_release }}
         env:
@@ -132,13 +140,17 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if gh release view "$TAG" >/dev/null 2>&1; then
+          upload() {
             gh release upload "$TAG" \
               artifacts/*.zip artifacts/*.zip.sha256 \
               --clobber
-          else
-            gh release create "$TAG" \
+          }
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            upload
+          elif ! gh release create "$TAG" \
               --title "$TAG" \
               --notes-file release-notes.md \
-              artifacts/*.zip artifacts/*.zip.sha256
+              artifacts/*.zip artifacts/*.zip.sha256; then
+            echo "gh release create failed for ${TAG}; if it now exists a concurrent build won the race, so attaching assets to it instead."
+            upload
           fi
