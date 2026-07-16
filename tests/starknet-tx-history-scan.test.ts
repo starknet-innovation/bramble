@@ -333,6 +333,30 @@ describe("collectTransactionHistory", () => {
     expect(entries).toEqual([]);
   });
 
+  test("short-circuits without any RPC call when the account is not a non-zero felt", async () => {
+    // The account-keyed guard must reject a zero/garbage account before it can
+    // widen the node filters into a wildcard that streams every holder's
+    // transfers. Assert it never touches the RPC surface, not just that the feed
+    // is empty, so a regression that drops the guard is caught here.
+    for (const account of ["0x0", "0x00", "not-a-felt"]) {
+      let touched = false;
+      const spy = (): never => {
+        touched = true;
+        throw new Error("RPC must not be reached for an invalid account");
+      };
+      const entries = await collectTransactionHistory(
+        {
+          getBlockTimestamp: spy,
+          getEvents: spy,
+          getLatestBlockNumber: spy,
+        },
+        { ...scanArgs, account },
+      );
+      expect(entries).toEqual([]);
+      expect(touched).toBe(false);
+    }
+  });
+
   test("propagates a transport failure so the caller can degrade", async () => {
     await expect(
       collectTransactionHistory(

@@ -44,7 +44,12 @@ export const scopedStatus = (element: Element, message: string): boolean => {
   return false;
 };
 
-type ToastTone = "error" | "success";
+/**
+ * The visual tone a toast is shown with. Exported as the one source of truth so
+ * callers that decide a toast's tone type against it rather than re-declaring
+ * the literal union.
+ */
+export type ToastTone = "error" | "success";
 
 const SUCCESS_TOAST_MS = 3200;
 const ERROR_TOAST_MS = 8000;
