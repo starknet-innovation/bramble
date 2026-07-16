@@ -13,7 +13,7 @@
  * allowance scan; a semantic per-token error is skipped so one odd token cannot
  * blank the whole feed.
  */
-import type { ActivityEntry } from "../storage/activity-store";
+import { type ActivityEntry, isActivityEntry } from "../storage/activity-store";
 import type { TokenConfig } from "../storage/preferences-store";
 import { canonicalFelt, isNonZeroStarkFieldElement, type StarknetNetworkId } from "./networks";
 import { isTransportRpcError, withRpcFallback } from "./provider";
@@ -77,11 +77,25 @@ type TokenTransfer = {
   readonly token: TokenConfig;
 };
 
+// Cairo 1 ERC20 `Transfer` indexes `from` (key 1) and `to` (key 2), so the node
+// can return only the account's own transfers instead of every holder's. Without
+// this the scan reads an unbounded stream of third-party transfers and the
+// account's rows almost never fall inside the page budget on a busy token. Two
+// filters are issued — outgoing (`from = account`) and incoming (`to = account`);
+// an empty group is the RPC wildcard for that key position. The client-side
+// `decodeTransferEvent` direction check is kept as defence in case a node ignores
+// the key filter.
+const transferKeyFilters = (account: string): readonly (readonly string[][])[] => [
+  [[TRANSFER_EVENT_KEY], [account]],
+  [[TRANSFER_EVENT_KEY], [], [account]],
+];
+
 const collectTokenTransfers = async (
   rpc: HistoryRpc,
   token: TokenConfig,
   account: string,
   fromBlock: number,
+  keys: readonly string[][],
 ): Promise<readonly TokenTransfer[]> => {
   const transfers: TokenTransfer[] = [];
   let continuationToken: string | undefined;
@@ -90,7 +104,7 @@ const collectTokenTransfers = async (
       address: token.address,
       chunk_size: EVENT_CHUNK_SIZE,
       from_block: fromBlock,
-      keys: [[TRANSFER_EVENT_KEY]],
+      keys,
       ...(continuationToken === undefined ? {} : { continuation_token: continuationToken }),
     });
     for (const event of chunk.events ?? []) {
@@ -132,14 +146,26 @@ export const collectTransactionHistory = async (
       continue;
     }
     try {
-      transfers.push(...(await collectTokenTransfers(rpc, token, canonicalAccount, fromBlock)));
+      for (const keys of transferKeyFilters(canonicalAccount)) {
+        transfers.push(
+          ...(await collectTokenTransfers(rpc, token, canonicalAccount, fromBlock, keys)),
+        );
+      }
     } catch (error) {
       if (isTransportRpcError(error)) {
         throw error;
       }
     }
   }
-  const recent = [...transfers]
+  // A self-transfer (from = to = account) matches both the outgoing and incoming
+  // filter, so collapse to one row per transaction hash before capping.
+  const byHash = new Map<string, TokenTransfer>();
+  for (const transfer of transfers) {
+    if (!byHash.has(transfer.decoded.hash)) {
+      byHash.set(transfer.decoded.hash, transfer);
+    }
+  }
+  const recent = [...byHash.values()]
     .sort((a, b) => b.decoded.blockNumber - a.decoded.blockNumber)
     .slice(0, MAX_HISTORY_ENTRIES);
   const timestamps = new Map<number, number | null>();
@@ -154,9 +180,20 @@ export const collectTransactionHistory = async (
     if (seconds === null || seconds === undefined) {
       continue;
     }
-    entries.push(
-      onChainActivityEntry({ accountId, decoded, networkId, timestampMs: seconds * 1000, token }),
-    );
+    const entry = onChainActivityEntry({
+      accountId,
+      decoded,
+      networkId,
+      timestampMs: seconds * 1000,
+      token,
+    });
+    // Re-check every node-derived row here, not only at the popup boundary: that
+    // boundary rejects the whole feed if any single entry is invalid, so one
+    // out-of-range value from the node would drop local history too. Dropping the
+    // bad row here keeps the rest of the feed intact.
+    if (isActivityEntry(entry)) {
+      entries.push(entry);
+    }
   }
   return entries;
 };
