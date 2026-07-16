@@ -140,6 +140,47 @@ describe("verifyCalls", () => {
     expect(report.flags.map((flag) => flag.code)).toContain("self-transfer");
   });
 
+  test("decodes the camelCase transferFrom dual identically to snake_case", () => {
+    // ERC20/ERC721 contracts expose transfer_from under both the snake_case
+    // Cairo name and its camelCase dual; the boundary accepts either. A
+    // camelCase `transferFrom` must decode to the same amount and raise the same
+    // risk flags — otherwise it falls through to "unknown" and a poisoned or
+    // self recipient sent via the camelCase spelling would evade every warning.
+    const call = (entrypoint: string) => ({
+      calldata: [contact.address, account.address, "1500000000000000000", "0"],
+      contractAddress: ETH,
+      entrypoint,
+    });
+    const snake = verifyCalls([call("transfer_from")], context);
+    const camel = verifyCalls([call("transferFrom")], context);
+
+    expect(camel.calls[0]?.kind).toBe("transfer");
+    // Same decoded value and same flag set as the snake_case spelling.
+    expect(camel.calls[0]?.summary).toBe(snake.calls[0]?.summary);
+    expect(camel.calls[0]?.summary).toContain("Send 1.5 ETH");
+    expect(camel.flags.map((flag) => flag.code)).toEqual(snake.flags.map((flag) => flag.code));
+    expect(camel.flags.map((flag) => flag.code)).toContain("self-transfer");
+  });
+
+  test("flags address-poisoning on a camelCase transferFrom recipient", () => {
+    // The recipient sits at calldata[1] for transfer_from regardless of casing;
+    // the recipient-index flag logic must recognize the camelCase dual too.
+    const poisoned = `${account.address.slice(0, 8)}ffffffffffffffffffffffffffffffffffffffffffffffffffff${account.address.slice(-4)}`;
+    const report = verifyCalls(
+      [
+        {
+          calldata: [account.address, poisoned, "1000000000000000000", "0"],
+          contractAddress: ETH,
+          entrypoint: "transferFrom",
+        },
+      ],
+      context,
+    );
+
+    expect(report.calls[0]?.kind).toBe("transfer");
+    expect(report.flags.map((flag) => flag.code)).toContain("address-poisoning");
+  });
+
   test("keeps a distinct unknown-contract flag for each contract in a multicall", () => {
     const first = "0xaaaa000000000000000000000000000000000000000000000000000000000001";
     const second = "0xbbbb000000000000000000000000000000000000000000000000000000000002";
