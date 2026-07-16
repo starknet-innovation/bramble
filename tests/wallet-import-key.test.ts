@@ -86,6 +86,23 @@ describe("deriveImportedAccount", () => {
       "Invalid private key",
     );
   });
+
+  // Krusty owns crypto and must fail closed: if the KMS hands back a malformed
+  // public key for the probe signature, the import aborts rather than deriving
+  // an OZ address from garbage. A valid-looking key still reaches the KMS (the
+  // guard is on the KMS *result*, not the input), so this is the fail-closed
+  // check on the public-key recovery step unique to raw-key import.
+  test("fails closed when Krusty returns an invalid public key", async () => {
+    const badKms = {
+      ...fakeKms(),
+      async signStarkHash() {
+        return { publicKey: "0x0", r: "0x1", s: "0x2" };
+      },
+    };
+    await expect(
+      deriveImportedAccount(badKms, { networkId: "SN_MAIN", privateKey: importedKey }),
+    ).rejects.toThrow("Krusty KMS returned invalid public key");
+  });
 });
 
 describe("vault-service importRawKeyAccount", () => {
