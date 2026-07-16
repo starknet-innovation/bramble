@@ -7,7 +7,7 @@ import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { isStarkFieldElement, normalizeFeltInput } from "../starknet/networks";
 import { activityToCsv } from "../storage/activity-store";
-import { buttonBusy, errorMessage, showToast } from "./dom";
+import { buttonBusy, errorMessage, showToast, type ToastTone } from "./dom";
 import { formatFri } from "./parts";
 import type { SidepanelWallet } from "./runtime";
 import { watchDeployment } from "./shell-bindings";
@@ -213,6 +213,24 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
 };
 
 /**
+ * Chooses the toast for a completed CSV export. The export now re-reads the feed
+ * through the same path the screen uses, so its on-chain history can be
+ * unavailable at export time even though the CSV still downloads the locally
+ * recorded rows. When that happens the toast says the export is device-records
+ * only, so a partial export is never mistaken for the account's full history;
+ * a full-feed export reads as plain success.
+ */
+export const activityExportToast = (
+  historyUnavailable: boolean,
+): { readonly message: string; readonly tone: ToastTone } =>
+  historyUnavailable
+    ? {
+        message: "Exported this device's records only — on-chain history was unavailable.",
+        tone: "error",
+      }
+    : { message: "Activity exported", tone: "success" };
+
+/**
  * Binds the activity screen refresh and CSV export controls.
  */
 export const bindActivity = ({ app, render, wallet }: TransferUiDeps): void => {
@@ -227,7 +245,7 @@ export const bindActivity = ({ app, render, wallet }: TransferUiDeps): void => {
   exportButton?.addEventListener("click", () => {
     buttonBusy(exportButton, true);
     void wallet.loadActivity().then(
-      ({ entries }) => {
+      ({ entries, historyUnavailable }) => {
         const blob = new Blob([activityToCsv(entries)], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -235,7 +253,8 @@ export const bindActivity = ({ app, render, wallet }: TransferUiDeps): void => {
         anchor.download = "mc-wallet-activity.csv";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        showToast("Activity exported", "success");
+        const toast = activityExportToast(historyUnavailable);
+        showToast(toast.message, toast.tone);
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {
