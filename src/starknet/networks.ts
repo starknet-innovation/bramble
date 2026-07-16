@@ -154,7 +154,7 @@ export const isNonZeroStarkFieldElement = (value: string): boolean =>
  * reduced mod n when signing, so it would derive an account for a different
  * effective scalar than the one the user pasted.
  */
-export const STARK_CURVE_ORDER = BigInt(
+const STARK_CURVE_ORDER = BigInt(
   "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f",
 );
 
