@@ -93,19 +93,28 @@ const decodeCall = (call: Call, context: VerificationContext): DecodedCall => {
   const calldata = Array.isArray(call.calldata) ? call.calldata : [];
   const token = tokenFor(context.tokens, call.contractAddress);
   if (call.entrypoint === "transfer_from" && calldata.length >= 4) {
-    // ERC721 transfer_from(from, to, token_id): calldata is
-    // [from, to, tokenId_low, tokenId_high]. The recipient is calldata[1].
+    // transfer_from(from, to, amountOrId_low, amountOrId_high): calldata is
+    // [from, to, low, high] and the recipient is calldata[1]. ERC20 and ERC721
+    // share this selector and arity, so the third/fourth felts are an ERC20
+    // amount when this contract is a token the wallet knows and an ERC721 token
+    // id otherwise. Without that known-token disambiguation a token
+    // transferFrom would be mislabeled "Send NFT #<amount>", hiding the real
+    // value moved.
+    const from = typeof calldata[0] === "string" ? calldata[0] : "";
     const recipient = typeof calldata[1] === "string" ? calldata[1] : "";
     const low = asFelt(calldata[2]);
     const high = asFelt(calldata[3]);
-    const tokenId = low === null || high === null ? null : low + (high << UINT_128_SHIFT);
-    if (recipient && tokenId !== null) {
+    const amountOrId = low === null || high === null ? null : low + (high << UINT_128_SHIFT);
+    if (recipient && amountOrId !== null) {
+      const fromLabel = from ? ` from ${shortAddress(canonical(from))}` : "";
       return {
         contractAddress: call.contractAddress,
         entrypoint: call.entrypoint,
         // Treated as a transfer so self-send and address-poisoning checks run.
         kind: "transfer",
-        summary: `Send NFT #${tokenId} to ${shortAddress(canonical(recipient))}`,
+        summary: token
+          ? `Send ${amountLabel(amountOrId, token)}${fromLabel} to ${shortAddress(canonical(recipient))}`
+          : `Send NFT #${amountOrId} to ${shortAddress(canonical(recipient))}`,
       };
     }
   }
@@ -188,10 +197,16 @@ const flagsForCall = (
 const dedupeFlags = (flags: readonly RiskFlag[]): readonly RiskFlag[] => {
   const seen = new Set<string>();
   return flags.filter((flag) => {
-    if (seen.has(flag.code)) {
+    // Key on code *and* message, not code alone: two flags that render to the
+    // same user-facing line are redundant, but distinct lines must all survive.
+    // A multicall touching two different unknown contracts raises two
+    // `unknown-contract` flags naming each address — collapsing by code would
+    // silently hide every contract after the first.
+    const key = `${flag.code}\u0000${flag.message}`;
+    if (seen.has(key)) {
       return false;
     }
-    seen.add(flag.code);
+    seen.add(key);
     return true;
   });
 };
