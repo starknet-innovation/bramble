@@ -2,7 +2,7 @@
  * Starknet RPC helpers for ERC20 allowance approvals and ERC721 ownership.
  * Split from ./rpc.ts to keep each module within the size budget.
  */
-import { type Call, CallData, cairo } from "starknet";
+import { type Call, CallData, type Calldata, cairo, type RpcProvider } from "starknet";
 import { WalletError } from "../shared/errors";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
 import { isTransportRpcError, withRpcFallback } from "./provider";
@@ -35,6 +35,35 @@ export type NftOwnerInput = {
   readonly tokenId: string;
 };
 
+// Reads one ERC721 owner entrypoint and returns canonical hex when it answers
+// with a field element, or null when the entrypoint reverts semantically (the
+// wrong casing for this collection, or a malformed answer) so the caller can try
+// the next casing. A transport-level fault is rethrown so withRpcFallback can
+// fail over to the next endpoint rather than masking an outage as "unreadable".
+const tryOwnerEntrypoint = async (
+  provider: RpcProvider,
+  entrypoint: string,
+  contractAddress: string,
+  calldata: Calldata,
+): Promise<string | null> => {
+  try {
+    const response = await provider.callContract(
+      { calldata, contractAddress, entrypoint },
+      "latest",
+    );
+    const owner = response[0];
+    if (typeof owner === "string" && isStarkFieldElement(owner)) {
+      return `0x${BigInt(owner).toString(16)}`;
+    }
+    return null;
+  } catch (error) {
+    if (isTransportRpcError(error)) {
+      throw error;
+    }
+    return null;
+  }
+};
+
 /**
  * Reads the on-chain owner of an ERC721 token as canonical hex, trying the
  * snake_case `owner_of` and camelCase `ownerOf` entrypoints so both the
@@ -51,19 +80,9 @@ export const getNftOwner = async ({
   const calldata = CallData.compile([cairo.uint256(BigInt(tokenId))]);
   return withRpcFallback(rpcUrls, async (provider) => {
     for (const entrypoint of ["owner_of", "ownerOf"]) {
-      try {
-        const response = await provider.callContract(
-          { calldata, contractAddress, entrypoint },
-          "latest",
-        );
-        const owner = response[0];
-        if (typeof owner === "string" && isStarkFieldElement(owner)) {
-          return `0x${BigInt(owner).toString(16)}`;
-        }
-      } catch (error) {
-        if (isTransportRpcError(error)) {
-          throw error;
-        }
+      const owner = await tryOwnerEntrypoint(provider, entrypoint, contractAddress, calldata);
+      if (owner !== null) {
+        return owner;
       }
     }
     throw new WalletError("Could not read NFT owner");

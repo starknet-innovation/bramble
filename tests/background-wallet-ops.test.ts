@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
-import { createActivityLog } from "../src/storage/activity-store";
+import { type ActivityEntry, createActivityLog } from "../src/storage/activity-store";
 import { createMemoryStore } from "../src/storage/kv";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
 
@@ -73,7 +73,20 @@ const walletStub = {
 const makeHarness = (options?: {
   readonly deployed?: boolean;
   readonly estimateFails?: boolean;
+  readonly onChainHistory?: readonly ActivityEntry[];
+  readonly historyThrows?: boolean;
 }) => {
+  const history =
+    options?.historyThrows || options?.onChainHistory
+      ? {
+          async getTransactionHistory(): Promise<readonly ActivityEntry[]> {
+            if (options.historyThrows) {
+              throw new Error("fetch failed");
+            }
+            return options.onChainHistory ?? [];
+          },
+        }
+      : {};
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   let tick = 0;
@@ -129,6 +142,7 @@ const makeHarness = (options?: {
       async submitInvokeTransaction() {
         return { calls: [], transactionHash: "0x7cd" };
       },
+      ...history,
     },
     session,
   });
@@ -226,5 +240,62 @@ describe("wallet operations", () => {
     expect(activity[0]?.status).toBe("accepted");
     expect(activity[0]?.summary).toContain("Send 1.5 ETH");
     expect(statusRequests).toEqual([["0x7ab"]]);
+  });
+
+  test("merges real on-chain history into the feed, deduped against local records", async () => {
+    const chainOnly: ActivityEntry = {
+      accountId: account.id,
+      amount: "3",
+      counterparty: "0x0777000000000000000000000000000000000000000000000000000000000abc",
+      hash: "0xc4a1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      status: "accepted",
+      submittedAt: 5_000_000,
+      summary: "Received 3 ETH from 0x7770…0abc",
+      token: "ETH",
+    };
+    const { handler } = makeHarness({ onChainHistory: [chainOnly] });
+    await handler(
+      {
+        accountId: account.id,
+        amount: "1.5",
+        recipient: "0x777",
+        tokenId,
+        type: "wallet.transfer",
+      },
+      extensionSender,
+    );
+
+    const response = (await handler({ type: "wallet.activity" }, extensionSender)) as {
+      activity: readonly ActivityEntry[];
+      historyUnavailable?: boolean;
+    };
+    // Chain history (newest) appears above the locally-submitted transfer, and
+    // there is no duplicate or degraded indicator.
+    expect(response.activity.map((entry) => entry.hash)).toEqual(["0xc4a1", "0x7ab"]);
+    expect(response.historyUnavailable).toBeUndefined();
+  });
+
+  test("degrades to the local feed with an indicator when history is unreachable", async () => {
+    const { handler } = makeHarness({ historyThrows: true });
+    await handler(
+      {
+        accountId: account.id,
+        amount: "1.5",
+        recipient: "0x777",
+        tokenId,
+        type: "wallet.transfer",
+      },
+      extensionSender,
+    );
+
+    const response = (await handler({ type: "wallet.activity" }, extensionSender)) as {
+      activity: readonly ActivityEntry[];
+      historyUnavailable?: boolean;
+    };
+    expect(response.historyUnavailable).toBe(true);
+    expect(response.activity).toHaveLength(1);
+    expect(response.activity[0]?.hash).toBe("0x7ab");
   });
 });

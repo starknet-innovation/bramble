@@ -7,8 +7,9 @@ import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { isStarkFieldElement, normalizeFeltInput } from "../starknet/networks";
 import { activityToCsv } from "../storage/activity-store";
-import { buttonBusy, errorMessage, showToast } from "./dom";
+import { buttonBusy, errorMessage, showToast, type ToastTone } from "./dom";
 import { formatFri } from "./parts";
+import { reviewCallsList, reviewPanel, riskFlagMessages } from "./review-render";
 import type { SidepanelWallet } from "./runtime";
 import { watchDeployment } from "./shell-bindings";
 
@@ -75,17 +76,27 @@ const feeLineHtml = (review: Review): string => {
   return "";
 };
 
-const reviewPanelHtml = (review: Review): string => `
-  <div class="review-panel" role="note">
-    ${review.summaries.map((summary) => `<p>${escapeHtml(summary)}</p>`).join("")}
-    ${review.flags.map((flag) => `<p class="review-flag">⚠ ${escapeHtml(flag.message)}</p>`).join("")}
-    ${
-      review.requiresDeployment
-        ? '<p class="review-flag">⚠ This account is not deployed yet; the first send also submits its deployment.</p>'
-        : ""
-    }
-    ${feeLineHtml(review)}
-  </div>`;
+// The deployment notice rides in the shared risk panel so it renders with the
+// same alert affordance as a risk flag; it is informational, not a verify-layer
+// flag, so it stays a separate note here rather than in `verifyCalls`.
+const deploymentNotes = (review: Review): readonly string[] =>
+  review.requiresDeployment
+    ? ["This account is not deployed yet; the first send also submits its deployment."]
+    : [];
+
+/**
+ * Renders the in-wallet Send review from a transfer review report, reusing the
+ * exact decode/risk presentation the dApp approval invoke card uses: decoded
+ * call summaries as a structured `review-calls` list and risk flags in the
+ * shared `review-panel`, so the two surfaces stay at parity. The fee estimate
+ * line is Send-specific (a dApp invoke has no wallet-side estimate) and follows
+ * the shared panel.
+ */
+export const reviewPanelHtml = (review: Review): string =>
+  `${reviewCallsList(review.summaries)}${reviewPanel([
+    ...riskFlagMessages(review.flags),
+    ...deploymentNotes(review),
+  ])}${feeLineHtml(review)}`;
 
 /**
  * Binds the two-phase send form: review with decoded summary, flags, and fee,
@@ -97,7 +108,9 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
     return;
   }
   const result = app?.querySelector<HTMLElement>("#transfer-result");
-  const reviewPanel = app?.querySelector<HTMLElement>("#review-panel");
+  // The `#review-panel` container element — named distinctly so it does not
+  // shadow the imported `reviewPanel` render helper used by `reviewPanelHtml`.
+  const reviewPanelEl = app?.querySelector<HTMLElement>("#review-panel");
   const recipientInput = form?.querySelector<HTMLInputElement>('input[name="recipient"]');
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   let reviewedKey: string | null = null;
@@ -110,8 +123,8 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
     reviewedKey = null;
     requiresDeployment = false;
     recipientInput?.setCustomValidity("");
-    if (reviewPanel) {
-      reviewPanel.innerHTML = "";
+    if (reviewPanelEl) {
+      reviewPanelEl.innerHTML = "";
     }
     if (submitButton) {
       submitButton.lastChild?.replaceWith("Review send");
@@ -148,8 +161,8 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
             const feeFailed = review.feeEstimateFailed;
             reviewedKey = feeFailed ? null : key;
             requiresDeployment = review.requiresDeployment;
-            if (reviewPanel) {
-              reviewPanel.innerHTML = reviewPanelHtml(review);
+            if (reviewPanelEl) {
+              reviewPanelEl.innerHTML = reviewPanelHtml(review);
             }
             if (submitButton) {
               submitButton.lastChild?.replaceWith(feeFailed ? "Review send" : "Confirm send");
@@ -159,7 +172,7 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
                 ? "Fee estimate failed. Retry the fee estimate before sending."
                 : "Review the details above, then confirm.";
             }
-            reviewPanel
+            reviewPanelEl
               ?.querySelector<HTMLButtonElement>("#review-retry-fee")
               ?.addEventListener("click", () => {
                 form.requestSubmit();
@@ -213,6 +226,24 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
 };
 
 /**
+ * Chooses the toast for a completed CSV export. The export now re-reads the feed
+ * through the same path the screen uses, so its on-chain history can be
+ * unavailable at export time even though the CSV still downloads the locally
+ * recorded rows. When that happens the toast says the export is device-records
+ * only, so a partial export is never mistaken for the account's full history;
+ * a full-feed export reads as plain success.
+ */
+export const activityExportToast = (
+  historyUnavailable: boolean,
+): { readonly message: string; readonly tone: ToastTone } =>
+  historyUnavailable
+    ? {
+        message: "Exported this device's records only — on-chain history was unavailable.",
+        tone: "error",
+      }
+    : { message: "Activity exported", tone: "success" };
+
+/**
  * Binds the activity screen refresh and CSV export controls.
  */
 export const bindActivity = ({ app, render, wallet }: TransferUiDeps): void => {
@@ -227,7 +258,7 @@ export const bindActivity = ({ app, render, wallet }: TransferUiDeps): void => {
   exportButton?.addEventListener("click", () => {
     buttonBusy(exportButton, true);
     void wallet.loadActivity().then(
-      (entries) => {
+      ({ entries, historyUnavailable }) => {
         const blob = new Blob([activityToCsv(entries)], { type: "text/csv" });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -235,7 +266,8 @@ export const bindActivity = ({ app, render, wallet }: TransferUiDeps): void => {
         anchor.download = "mc-wallet-activity.csv";
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 5000);
-        showToast("Activity exported", "success");
+        const toast = activityExportToast(historyUnavailable);
+        showToast(toast.message, toast.tone);
         buttonBusy(exportButton, false);
       },
       (error: unknown) => {

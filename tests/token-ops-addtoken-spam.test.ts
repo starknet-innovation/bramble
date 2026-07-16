@@ -83,6 +83,24 @@ describe("wallet.addToken spam handling", () => {
     expect(prefs.hiddenTokens ?? []).not.toContain(`SN_MAIN:USDC:${USDC}`);
   });
 
+  test("falls back to the symbol when on-chain metadata has a blank name", async () => {
+    // buildTokenRecord uses the symbol as the display name when the trimmed
+    // on-chain name is empty, so a token with whitespace-only metadata still
+    // gets a usable label rather than a blank one.
+    const { deps, preferencesStore } = makeDeps({ decimals: 6, name: "   ", symbol: "usdc" });
+
+    const response = await handleTokenOps(deps, "wallet.addToken", {
+      address: USDC,
+      type: "wallet.addToken",
+    });
+    expect(response).toMatchObject({ ok: true });
+
+    const prefs = await preferencesStore.read();
+    const stored = prefs.tokens.find((token) => token.address === USDC);
+    expect(stored?.name).toBe("USDC");
+    expect(stored?.symbol).toBe("USDC");
+  });
+
   test("adds a symbol-spoofing token but hides it by default", async () => {
     const { deps, preferencesStore } = makeDeps({
       decimals: 6,

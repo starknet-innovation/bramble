@@ -40,6 +40,9 @@ const walletStub = {
   async ensureNetworkAccount() {
     return account;
   },
+  async importRawKeyAccount() {
+    return account;
+  },
   async getGrantedAccounts() {
     return [account];
   },

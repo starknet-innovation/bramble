@@ -82,7 +82,7 @@ export const unlockWallet = async (sidepanel: Page): Promise<void> => {
 };
 
 /**
- * Opens the activity view and handles a pending connection approval.
+ * Handles a pending connection approval on the takeover screen.
  */
 export const resolveConnectionApproval = async (
   sidepanel: Page,
@@ -93,9 +93,10 @@ export const resolveConnectionApproval = async (
 };
 
 /**
- * Opens the activity view and resolves a pending approval identified by its
- * card eyebrow (for example "Connection request", "Sign request", or
- * "Transaction request"), then approves or denies it.
+ * Resolves a pending approval identified by its card eyebrow (for example
+ * "Connection request", "Sign request", or "Transaction request"). A pending
+ * request proactively takes over the panel's dock views — no navigation is
+ * needed; the decision controls are already on screen.
  */
 export const resolvePendingApproval = async (
   sidepanel: Page,
@@ -103,8 +104,9 @@ export const resolvePendingApproval = async (
   origin: string,
   action: "approve" | "deny",
 ): Promise<void> => {
-  await sidepanel.locator('button.nav-item[data-view="activity"]').click();
+  await expect(sidepanel.getByText("Review request")).toBeVisible();
   await expect(sidepanel.getByText(eyebrow)).toBeVisible();
-  await expect(sidepanel.getByText(origin)).toBeVisible();
+  // The origin renders in both the takeover header and the request card.
+  await expect(sidepanel.getByText(origin).first()).toBeVisible();
   await sidepanel.locator(`[data-approval-action="${action}"]`).click();
 };

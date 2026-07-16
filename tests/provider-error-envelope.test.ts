@@ -74,3 +74,50 @@ describe("wallet_rpc error envelope", () => {
     expect((rejection as { data?: string }).data).toBe("SN_GOERLI");
   });
 });
+
+// Pins the behavior of the private mappers the payload/response builders were
+// decomposed into, especially the cases where the two builders deliberately
+// diverge or where the original if-chain's fall-through order is observable.
+describe("provider bridge decomposition invariants", () => {
+  const chainIdResult = { chainId: "0x534e5f5345504f4c4941", ok: true } as const;
+
+  test("a rejected { ok: false, pending } envelope maps to UNKNOWN_ERROR", () => {
+    expect(
+      toProviderPayload({ ok: false, pending: { id: 1 } }, "wallet_addInvokeTransaction"),
+    ).toEqual({ error: unknownError() });
+  });
+
+  test("readProviderResponse drops a bare false result that providerResponse keeps", () => {
+    // The result reader treats a falsy result as absent (original behavior),
+    // while the content-side builder passes a literal `false` through.
+    const built = providerResponse(request, { result: false });
+    expect(built).toEqual({ id: requestId, result: false, target: PAGE_TARGET });
+    expect(readProviderResponse({ id: requestId, result: false, target: PAGE_TARGET })).toBeNull();
+  });
+
+  test("a chain-id-shaped result under a fall-through method yields the chain id", () => {
+    // The chain-id branch precedes the accounts tail for every late method, so a
+    // chain-id envelope short-circuits to the id string even for mc_accounts.
+    expect(toProviderPayload(chainIdResult, "mc_accounts")).toEqual({
+      result: chainIdResult.chainId,
+    });
+    expect(toProviderPayload(chainIdResult, "wallet_requestChainId")).toEqual({
+      result: chainIdResult.chainId,
+    });
+  });
+
+  test("switch reports success (not the id) for a chain-id result", () => {
+    expect(toProviderPayload(chainIdResult, "wallet_switchStarknetChain")).toEqual({
+      result: true,
+    });
+  });
+
+  test("an unmapped result shape falls through to the accounts tail's UNKNOWN_ERROR", () => {
+    expect(toProviderPayload({ transactionHash: 42 }, "wallet_addInvokeTransaction")).toEqual({
+      error: unknownError(),
+    });
+    expect(toProviderPayload({ transactionHash: "0x1" }, "wallet_addDeclareTransaction")).toEqual({
+      error: unknownError(),
+    });
+  });
+});

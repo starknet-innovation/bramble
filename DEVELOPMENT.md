@@ -284,8 +284,11 @@ A `release/vX.Y` branch may **not** be promoted to `main` until:
 - The **nightly / full suite is green** on the release branch (E2E, audit, build).
 - There are **no unresolved release-blocking regressions** (see the nightly tracking issue).
 - **Release notes and version metadata are complete** — `package.json` and
-  `public/manifest.json` bumped in lockstep to `X.Y.0` (the version single-source
-  guard test must pass).
+  `public/manifest.json` bumped in lockstep to `X.Y.0`, and the `CHANGELOG.md`
+  `[X.Y.0]` section is filled in (`bun run changelog`). The single-source gate
+  (`bun run check:release-version`) must pass: if the version does not match the
+  `release/vX.Y` branch, the auto-release **fails** rather than shipping a
+  mislabeled artifact (issue #59).
 
 ---
 
@@ -297,17 +300,22 @@ See `RELEASING.md` for the Chrome Web Store specifics.
 1. **Confirm scope.** All milestone issues closed or deferred; acceptance
    criteria met; no open release-blocking regressions.
 2. **Version metadata.** Bump `package.json` **and** `public/manifest.json` to
-   `X.Y.0` in lockstep; run `bun test tests/conformance/version-single-source.test.ts`.
+   `X.Y.0` in lockstep; run `bun run check:files` and
+   `bun test tests/conformance/release-version-single-source.test.ts`.
 3. **Gates green.** Required PR CI green on the branch tip; nightly/full suite green.
-4. **Release notes.** Draft the notes (CHANGELOG section if adopted, per #60).
+4. **Changelog.** Fill in the `CHANGELOG.md` `[X.Y.0]` section (`bun run changelog`);
+   it becomes the GitHub Release notes (#60).
 5. **RC tag (when appropriate).** Tag `vX.Y.0-rc.1` on the release branch for a
    final validation pass (loads/installs cleanly, E2E green, package checksum
    verified). Iterate `-rc.2`, … if needed.
 6. **Full validation.** Confirm the RC build against the acceptance criteria.
 7. **Promote.** Merge `release/vX.Y` → `main` as a **merge commit** (not squash —
    preserve the release history). This is done explicitly by a maintainer.
-8. **Tag.** Tag `vX.Y.0` on `main`. The tag push triggers `release.yml`, which
-   builds, packages, verifies the checksum, and creates the GitHub Release.
+8. **Automatic release.** The merge triggers `auto-release.yml`: it derives the
+   version from the merged branch, runs the single-source gate, tags `vX.Y.0` on
+   the merge commit, and cuts the GitHub Release (build, package, checksum,
+   notes) via the reusable `release-build.yml`. **No manual tag push** — push
+   `vX.Y.0` by hand only to backfill a release the automation missed.
 9. **Release notes / publish.** Confirm the GitHub Release notes; the optional
    Chrome Web Store publish is a separate, gated manual dispatch (see `RELEASING.md`).
 10. **Close / archive the milestone.**

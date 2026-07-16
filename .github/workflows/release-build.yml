@@ -1,0 +1,156 @@
+name: Release build
+
+# Reusable release build (issue #58/#59/#60). Called by BOTH release paths so
+# the heavy pipeline is defined once, never duplicated:
+#   - release.yml       — a human `vX.Y.Z` tag push, or a manual Chrome Web
+#                         Store dispatch (create_release=false, build only).
+#   - auto-release.yml  — a release/hotfix branch merged into `main`, which
+#                         computes the version, creates the tag, then calls this.
+#
+# It builds and packages the extension exactly as CI does, ASSERTS the tag
+# matches the single-source version (the gate that was missing when v0.4.0
+# shipped as mc-wallet-0.3.0.zip), derives release notes from CHANGELOG.md
+# (falling back to the commit range), and idempotently creates the GitHub
+# Release with the reproducible zip + SHA-256 attached.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "The vX.Y.Z release tag to build and (optionally) release."
+        type: string
+        required: true
+      ref:
+        description: "Git ref to check out and build (the tag, or the merge commit that carries it)."
+        type: string
+        required: true
+      create_release:
+        description: "Create/update the GitHub Release. False for a build-only run (e.g. a Chrome Web Store dispatch)."
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-release:
+    permissions:
+      contents: write
+    runs-on:
+      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      # fetch-depth: 0 so the notes step can diff against the previous tag and
+      # fall back to the commit range.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+      # Same cargo/wasm-pack cache key as ci.yml so the release build reuses the
+      # exact toolchain the vendored krusty artifacts are built with.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
+        with:
+          scarb-version: 2.18.0
+      - run: cargo install wasm-pack --locked --version 0.13.1
+      - run: bun install --frozen-lockfile
+      - run: bun run vendor:krusty
+      - run: bun run vendor:multisig
+      # SINGLE-SOURCE RELEASE GATE (issue #59). Assert the tag carries exactly the
+      # package.json/manifest version before building anything, so a mislabeled
+      # tag fails here instead of shipping a wrongly-named artifact.
+      - name: Assert tag matches the single-source version
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: bun run check:release-version
+      # Keep asserting the separate wallet-API/spec version axis too.
+      - run: bun test tests/conformance/version-single-source.test.ts
+      - run: bun run build
+      - run: bun run package:extension
+      # Confirm the released zip is byte-identical to what its checksum records
+      # (and therefore to the CI artifact at the same commit).
+      - name: Verify checksum
+        working-directory: artifacts
+        run: sha256sum -c ./*.zip.sha256
+      # Release notes (issue #60): prefer the CHANGELOG.md section maintained on
+      # the release branch; fall back to a deterministic section generated from
+      # the commit range since the previous tag. Both go through the same tested
+      # generator (scripts/generate-changelog.ts). TAG is passed via env (never
+      # interpolated into the shell) and is a workflow input, not event data.
+      - name: Derive release notes
+        if: ${{ inputs.create_release }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          prev="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -Fvx -- "$TAG" | head -1 || true)"
+          if [ -n "$prev" ]; then
+            range="${prev}..${TAG}"
+          else
+            range="$TAG"
+          fi
+          echo "Deriving notes for $version over range: ${range}"
+          commits="$(git log --no-merges --pretty=format:%s "$range" 2>/dev/null || git log --no-merges --pretty=format:%s)"
+          CHANGELOG_VERSION="$version" \
+          CHANGELOG_DATE="$(date -u +%Y-%m-%d)" \
+          CHANGELOG_MODE=notes \
+          CHANGELOG_COMMITS="$commits" \
+            bun run changelog > release-notes.md
+          echo "--- release notes ---"
+          cat release-notes.md
+      # Consumable by the Chrome Web Store job so store bytes == release bytes.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mc-wallet-release
+          path: |
+            artifacts/*.zip
+            artifacts/*.zip.sha256
+          if-no-files-found: error
+      # Create the GitHub Release. Idempotent (create-or-upload): a release for
+      # the tag can already exist (e.g. cut via the GitHub UI, a documented path
+      # in RELEASING.md). When it exists we only attach/replace the built assets
+      # and leave the human's title/notes untouched; otherwise we create it with
+      # the derived notes.
+      #
+      # The check-then-create is a TOCTOU: two builds for the same tag (a manual
+      # tag-push racing an auto-release cut) could both see "no release" and both
+      # try to create it, and `gh release create` fails if the Release appears in
+      # between. We treat that as a lost race, not a failure — fall back to
+      # attaching our assets to the now-existing Release. If create failed for
+      # any OTHER reason the Release still will not exist and the upload fails
+      # too, so a real error is never masked.
+      - name: Create GitHub Release
+        if: ${{ inputs.create_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          upload() {
+            gh release upload "$TAG" \
+              artifacts/*.zip artifacts/*.zip.sha256 \
+              --clobber
+          }
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            upload
+          elif ! gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file release-notes.md \
+              artifacts/*.zip artifacts/*.zip.sha256; then
+            echo "gh release create failed for ${TAG}; if it now exists a concurrent build won the race, so attaching assets to it instead."
+            upload
+          fi

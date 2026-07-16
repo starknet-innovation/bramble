@@ -232,6 +232,87 @@ const sliceChanges = (
   return slice;
 };
 
+// One address's price-request result: parsed prices/changes when the request
+// answered (ok), or just the address on failure so it stays uncovered.
+type PriceOutcome =
+  | {
+      readonly address: string;
+      readonly changes: Record<string, number>;
+      readonly ok: true;
+      readonly prices: Record<string, PriceEntry>;
+    }
+  | { readonly address: string; readonly ok: false };
+
+const priceRequestUrl = (platform: string, address: string): string =>
+  `${COINGECKO_BASE}/simple/token_price/${platform}?contract_addresses=${encodeURIComponent(address)}&vs_currencies=usd,eur,gbp&include_24hr_change=true`;
+
+// Fetches and parses one address on its own request. Never throws: a network
+// failure resolves to an `ok: false` outcome.
+const fetchAddressPrices = (
+  http: HttpFetch,
+  platform: string,
+  address: string,
+): Promise<PriceOutcome> =>
+  readJsonRecord(http, priceRequestUrl(platform, address))
+    .then(
+      (body) =>
+        ({ address, changes: parseChanges(body), ok: true, prices: parsePriceBody(body) }) as const,
+    )
+    .catch(() => ({ address, ok: false }) as const);
+
+const isCacheFresh = (cache: PriceCache, nowMs: number): boolean =>
+  nowMs - cache.fetchedAt < PRICE_TTL_MS;
+
+// Whether every wanted address is covered by the cache — priced OR queried at
+// the last fetch and simply unlisted; both valid until the TTL ends.
+const cacheCovers = (cache: PriceCache, wanted: readonly string[]): boolean => {
+  const known = new Set([...Object.keys(cache.prices), ...(cache.checked ?? [])]);
+  return wanted.every((address) => known.has(address));
+};
+
+// Merges freshly answered prices/changes over the cache and records every
+// answered address as checked.
+const mergeAnsweredPrices = (
+  cache: PriceCache,
+  answered: readonly PriceOutcome[],
+): {
+  readonly checked: readonly string[];
+  readonly mergedChanges: Record<string, number>;
+  readonly mergedPrices: Record<string, PriceEntry>;
+} => {
+  const fetched = Object.assign(
+    {},
+    ...answered.map((outcome) => (outcome.ok ? outcome.prices : {})),
+  ) as Record<string, PriceEntry>;
+  const fetchedChanges = Object.assign(
+    {},
+    ...answered.map((outcome) => (outcome.ok ? outcome.changes : {})),
+  ) as Record<string, number>;
+  return {
+    checked: [
+      ...new Set([...(cache.checked ?? []), ...answered.map((outcome) => outcome.address)]),
+    ],
+    mergedChanges: { ...(cache.changes ?? {}), ...fetchedChanges },
+    mergedPrices: { ...cache.prices, ...fetched },
+  };
+};
+
+// Projects a price snapshot back onto the caller's original address keys.
+const projectPrices = (input: {
+  readonly addresses: readonly string[];
+  readonly asOf: number | null;
+  readonly changes: Readonly<Record<string, number>>;
+  readonly currency: DisplayCurrency;
+  readonly prices: Readonly<Record<string, PriceEntry>>;
+  readonly stale: boolean;
+}): TokenPrices => ({
+  asOf: input.asOf,
+  changes: sliceChanges(input.changes, input.addresses),
+  currency: input.currency,
+  prices: sliceCurrency(input.prices, input.addresses, input.currency),
+  stale: input.stale,
+});
+
 /**
  * Creates the CoinGecko-backed price service with a storage cache and an
  * injected clock and fetch. Missing prices and network failures resolve to
@@ -283,112 +364,97 @@ export const createPriceService = ({
     return Object.fromEntries(kept);
   };
 
+  // Fetches every wanted address in parallel, writes the merged snapshot to the
+  // cache, and projects the result. Reached only when the cache did not already
+  // cover the request.
+  const fetchAndStorePrices = async (
+    cache: PriceCache,
+    platform: string,
+    wanted: readonly string[],
+    addresses: readonly string[],
+    currency: DisplayCurrency,
+  ): Promise<TokenPrices> => {
+    const outcomes = await Promise.all(
+      wanted.map((address) => fetchAddressPrices(http, platform, address)),
+    );
+    const answered = outcomes.filter((outcome) => outcome.ok);
+    if (answered.length === 0) {
+      // The host was unreachable for every address: fall back to the
+      // last-known-good cache, flagged stale (or empty as an "unavailable" hint).
+      return projectPrices({
+        addresses,
+        asOf: snapshotAsOf(cache.fetchedAt),
+        changes: cache.changes ?? {},
+        currency,
+        prices: cache.prices,
+        stale: true,
+      });
+    }
+    const { checked, mergedChanges, mergedPrices } = mergeAnsweredPrices(cache, answered);
+    const answeredAddresses = new Set(answered.map((outcome) => outcome.address));
+    await store
+      .set(PRICES_STORE_KEY, {
+        changes: mergedChanges,
+        checked,
+        fetchedAt: now(),
+        prices: mergedPrices,
+      })
+      .catch(() => undefined);
+    // A partial fetch mixes just-fetched prices with older cached ones for the
+    // failed addresses, so it is flagged stale and dated to the OLDEST capture
+    // that still contributes (the cache time when a served price for a failed
+    // address is cached, otherwise now()). Failed addresses with nothing cached
+    // stay absent from `prices`, exactly as in the all-fail path.
+    const unanswered = wanted.filter((address) => !answeredAddresses.has(address));
+    if (unanswered.length === 0) {
+      return projectPrices({
+        addresses,
+        asOf: now(),
+        changes: mergedChanges,
+        currency,
+        prices: mergedPrices,
+        stale: false,
+      });
+    }
+    const servesCachedPrice = unanswered.some((address) => mergedPrices[address] !== undefined);
+    return projectPrices({
+      addresses,
+      asOf: servesCachedPrice ? snapshotAsOf(cache.fetchedAt) : now(),
+      changes: mergedChanges,
+      currency,
+      prices: mergedPrices,
+      stale: true,
+    });
+  };
+
   return {
     async getPrices({ addresses, currency, networkId }) {
       const platform = PLATFORM_FOR_NETWORK[networkId];
       const wanted = [...new Set(addresses.map(normalizeAddress))].slice(0, MAX_ADDRESSES);
       const cache = await readPriceCache();
-      const fresh = now() - cache.fetchedAt < PRICE_TTL_MS;
-      // An address is "covered" if it is priced OR was queried at the last fetch
-      // and simply has no CoinGecko listing; both stay valid until the TTL ends.
-      const known = new Set([...Object.keys(cache.prices), ...(cache.checked ?? [])]);
-      const covered = wanted.every((address) => known.has(address));
-      // Off mainnet and empty requests carry no fiat by design (not "stale"); a
-      // fresh, fully-covered cache is a confirmed-current hit.
-      const noFiat = !platform || wanted.length === 0;
-      if (noFiat || (fresh && covered)) {
-        return {
-          asOf: noFiat ? null : snapshotAsOf(cache.fetchedAt),
-          changes: sliceChanges(cache.changes ?? {}, addresses),
+      // Off mainnet and empty requests carry no fiat by design (not "stale").
+      if (!platform || wanted.length === 0) {
+        return projectPrices({
+          addresses,
+          asOf: null,
+          changes: cache.changes ?? {},
           currency,
-          prices: sliceCurrency(cache.prices, addresses, currency),
+          prices: cache.prices,
           stale: false,
-        };
+        });
       }
-      // CoinGecko's free simple/token_price endpoint now accepts only one
-      // contract address per request, so query each address on its own request
-      // in parallel. An address is only marked "covered" when its request
-      // actually responded (HTTP ok) — a network failure stays uncovered so it
-      // retries rather than caching a false miss.
-      const outcomes = await Promise.all(
-        wanted.map((address) =>
-          readJsonRecord(
-            http,
-            `${COINGECKO_BASE}/simple/token_price/${platform}?contract_addresses=${encodeURIComponent(address)}&vs_currencies=usd,eur,gbp&include_24hr_change=true`,
-          )
-            .then(
-              (body) =>
-                ({
-                  address,
-                  changes: parseChanges(body),
-                  ok: true,
-                  prices: parsePriceBody(body),
-                }) as const,
-            )
-            .catch(() => ({ address, ok: false }) as const),
-        ),
-      );
-      const answered = outcomes.filter((outcome) => outcome.ok);
-      if (answered.length === 0) {
-        // The host was unreachable for every address: fall back to the
-        // last-known-good cache and flag it stale so the UI shows saved values
-        // (or an "unavailable" hint when the cache is empty) rather than hiding
-        // the portfolio outright.
-        return {
+      // A fresh, fully-covered cache is a confirmed-current hit.
+      if (isCacheFresh(cache, now()) && cacheCovers(cache, wanted)) {
+        return projectPrices({
+          addresses,
           asOf: snapshotAsOf(cache.fetchedAt),
-          changes: sliceChanges(cache.changes ?? {}, addresses),
+          changes: cache.changes ?? {},
           currency,
-          prices: sliceCurrency(cache.prices, addresses, currency),
-          stale: true,
-        };
-      }
-      const fetched = Object.assign(
-        {},
-        ...answered.map((outcome) => (outcome.ok ? outcome.prices : {})),
-      ) as Record<string, PriceEntry>;
-      const fetchedChanges = Object.assign(
-        {},
-        ...answered.map((outcome) => (outcome.ok ? outcome.changes : {})),
-      ) as Record<string, number>;
-      const merged = { ...cache.prices, ...fetched };
-      const mergedChanges = { ...(cache.changes ?? {}), ...fetchedChanges };
-      const answeredAddresses = new Set(answered.map((outcome) => outcome.address));
-      const checked = [...new Set([...(cache.checked ?? []), ...answeredAddresses])];
-      await store
-        .set(PRICES_STORE_KEY, {
-          changes: mergedChanges,
-          checked,
-          fetchedAt: now(),
-          prices: merged,
-        })
-        .catch(() => undefined);
-      // A partial fetch — some addresses answered, some failed — mixes
-      // just-fetched prices with older cached ones for the failed addresses.
-      // Serving that as `asOf: now(), stale: false` would pass days-old values
-      // off as live, so when any requested address was not freshly fetched, flag
-      // the snapshot stale and date it to the OLDEST capture that still
-      // contributes: the cache time when a served price for a failed address
-      // comes from the cache, otherwise now(). Failed addresses with nothing
-      // cached stay absent from `prices` — unavailable, exactly as in the
-      // all-fail path — rather than being passed off as current.
-      const unanswered = wanted.filter((address) => !answeredAddresses.has(address));
-      if (unanswered.length === 0) {
-        return {
-          asOf: now(),
-          changes: sliceChanges(mergedChanges, addresses),
-          currency,
-          prices: sliceCurrency(merged, addresses, currency),
+          prices: cache.prices,
           stale: false,
-        };
+        });
       }
-      const servesCachedPrice = unanswered.some((address) => merged[address] !== undefined);
-      return {
-        asOf: servesCachedPrice ? snapshotAsOf(cache.fetchedAt) : now(),
-        changes: sliceChanges(mergedChanges, addresses),
-        currency,
-        prices: sliceCurrency(merged, addresses, currency),
-        stale: true,
-      };
+      return fetchAndStorePrices(cache, platform, wanted, addresses, currency);
     },
     async getTokenChart({ address, currency, networkId }) {
       const platform = PLATFORM_FOR_NETWORK[networkId];

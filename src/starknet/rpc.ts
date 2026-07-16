@@ -1,7 +1,7 @@
 /**
  * Starknet RPC wallet operations backed by starknet-js and Krusty signatures.
  */
-import { type Account, type Call, CallData, cairo, shortString } from "starknet";
+import { type Account, type Call, CallData, cairo, type RpcProvider, shortString } from "starknet";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
 import type { TokenConfig } from "../storage/preferences-store";
@@ -212,35 +212,38 @@ export const buildErc20TransferCall = (
 /**
  * Reads ERC20 balances through Starknet RPC.
  */
-export const getTokenBalances = async ({
-  accountAddress,
-  rpcUrls,
-  tokens,
-}: BalanceInput): Promise<readonly TokenBalance[]> => {
+export const getTokenBalances = async (
+  { accountAddress, rpcUrls, tokens }: BalanceInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<readonly TokenBalance[]> => {
   if (!isNonZeroStarkFieldElement(accountAddress)) {
     throw new WalletError("Invalid account address");
   }
-  return withRpcFallback(rpcUrls, async (provider) => {
-    const balances = await Promise.all(
-      tokens.map(async (token) => {
-        const response = await provider.callContract(
-          {
-            calldata: CallData.compile([accountAddress]),
-            contractAddress: token.address,
-            entrypoint: "balanceOf",
-          },
-          "latest",
-        );
-        const balance = parseUint256Response(response);
-        return {
-          ...token,
-          balance: balance.toString(),
-          formatted: formatTokenAmount(balance, token.decimals),
-        };
-      }),
-    );
-    return balances;
-  });
+  return withRpcFallback(
+    rpcUrls,
+    async (provider) => {
+      const balances = await Promise.all(
+        tokens.map(async (token) => {
+          const response = await provider.callContract(
+            {
+              calldata: CallData.compile([accountAddress]),
+              contractAddress: token.address,
+              entrypoint: "balanceOf",
+            },
+            "latest",
+          );
+          const balance = parseUint256Response(response);
+          return {
+            ...token,
+            balance: balance.toString(),
+            formatted: formatTokenAmount(balance, token.decimals),
+          };
+        }),
+      );
+      return balances;
+    },
+    makeProvider,
+  );
 };
 
 /**
@@ -305,65 +308,67 @@ export const decodeErc20String = (response: readonly string[]): string => {
  * decimals; name and symbol decode both felt short strings and Cairo
  * ByteArrays.
  */
-export const getTokenMetadata = async ({
-  address,
-  rpcUrls,
-}: TokenMetadataInput): Promise<TokenMetadata> => {
+export const getTokenMetadata = async (
+  { address, rpcUrls }: TokenMetadataInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<TokenMetadata> => {
   if (!isNonZeroStarkFieldElement(address)) {
     throw new WalletError("Invalid token address");
   }
-  return withRpcFallback(rpcUrls, async (provider) => {
-    const [nameResponse, symbolResponse, decimalsResponse] = await Promise.all([
-      provider.callContract(
-        { calldata: [], contractAddress: address, entrypoint: "name" },
-        "latest",
-      ),
-      provider.callContract(
-        { calldata: [], contractAddress: address, entrypoint: "symbol" },
-        "latest",
-      ),
-      provider.callContract(
-        { calldata: [], contractAddress: address, entrypoint: "decimals" },
-        "latest",
-      ),
-    ]);
-    const rawDecimals = decimalsResponse[0];
-    if (typeof rawDecimals !== "string" || !isStarkFieldElement(rawDecimals)) {
-      throw new WalletError("Invalid token decimals");
-    }
-    const decimals = Number(BigInt(rawDecimals));
-    if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 36) {
-      throw new WalletError("Invalid token decimals");
-    }
-    return {
-      decimals,
-      name: decodeErc20String(nameResponse),
-      symbol: decodeErc20String(symbolResponse),
-    };
-  });
+  return withRpcFallback(
+    rpcUrls,
+    async (provider) => {
+      const [nameResponse, symbolResponse, decimalsResponse] = await Promise.all([
+        provider.callContract(
+          { calldata: [], contractAddress: address, entrypoint: "name" },
+          "latest",
+        ),
+        provider.callContract(
+          { calldata: [], contractAddress: address, entrypoint: "symbol" },
+          "latest",
+        ),
+        provider.callContract(
+          { calldata: [], contractAddress: address, entrypoint: "decimals" },
+          "latest",
+        ),
+      ]);
+      const rawDecimals = decimalsResponse[0];
+      if (typeof rawDecimals !== "string" || !isStarkFieldElement(rawDecimals)) {
+        throw new WalletError("Invalid token decimals");
+      }
+      const decimals = Number(BigInt(rawDecimals));
+      if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 36) {
+        throw new WalletError("Invalid token decimals");
+      }
+      return {
+        decimals,
+        name: decodeErc20String(nameResponse),
+        symbol: decodeErc20String(symbolResponse),
+      };
+    },
+    makeProvider,
+  );
 };
 
 /**
  * Signs and submits an ERC20 transfer through an account contract.
  */
-export const submitErc20Transfer = async ({
-  account,
-  amount,
-  recipient,
-  rpcUrls,
-  signHash,
-  speed,
-  token,
-}: TransferInput): Promise<TransferSubmission> => {
+export const submitErc20Transfer = async (
+  { account, amount, recipient, rpcUrls, signHash, speed, token }: TransferInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<TransferSubmission> => {
   const amountRaw = parseTokenAmount(amount, token.decimals);
   const call = buildErc20TransferCall(token.address, recipient, amountRaw);
-  const result = await submitInvokeTransaction({
-    account,
-    calls: [call],
-    rpcUrls,
-    signHash,
-    ...(speed === undefined ? {} : { speed }),
-  });
+  const result = await submitInvokeTransaction(
+    {
+      account,
+      calls: [call],
+      rpcUrls,
+      signHash,
+      ...(speed === undefined ? {} : { speed }),
+    },
+    makeProvider,
+  );
   return {
     call,
     transactionHash: result.transactionHash,
@@ -389,93 +394,106 @@ const scaledBounds = (value: unknown): unknown => {
 /**
  * Estimates the fee for invoke calls without broadcasting anything.
  */
-export const estimateInvokeFee = async ({
-  account,
-  calls,
-  rpcUrls,
-  signHash,
-}: InvokeInput): Promise<FeeEstimate> => {
+export const estimateInvokeFee = async (
+  { account, calls, rpcUrls, signHash }: InvokeInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<FeeEstimate> => {
   if (calls.length === 0) {
     throw new WalletError("No calls to estimate");
   }
-  return withRpcFallback(rpcUrls, async (provider) => {
-    const starknetAccount = krustyAccount(provider, account, signHash);
-    const estimate = await starknetAccount.estimateInvokeFee([...calls]);
-    return {
-      overallFee: BigInt(estimate.overall_fee).toString(),
-      unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
-    };
-  });
+  return withRpcFallback(
+    rpcUrls,
+    async (provider) => {
+      const starknetAccount = krustyAccount(provider, account, signHash);
+      const estimate = await starknetAccount.estimateInvokeFee([...calls]);
+      return {
+        overallFee: BigInt(estimate.overall_fee).toString(),
+        unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
+      };
+    },
+    makeProvider,
+  );
 };
 
+const FINALITY_TO_STATUS: Readonly<Record<string, TransactionStatus>> = {
+  ACCEPTED_ON_L1: "accepted",
+  ACCEPTED_ON_L2: "accepted",
+  REJECTED: "rejected",
+};
+// Maps a receipt to a wallet status. REVERTED execution wins (a reverted tx can
+// still be ACCEPTED_ON_L2); the rest is pending.
+const classifyStatus = (receipt: {
+  readonly execution_status?: unknown;
+  readonly finality_status?: unknown;
+}): TransactionStatus =>
+  String(receipt.execution_status ?? "") === "REVERTED"
+    ? "reverted"
+    : (FINALITY_TO_STATUS[String(receipt.finality_status ?? "")] ?? "pending");
 /**
  * Reads finality/execution status for submitted transactions.
  */
-export const getTransactionStatuses = async ({
-  hashes,
-  rpcUrls,
-}: TransactionStatusInput): Promise<Readonly<Record<string, TransactionStatus>>> =>
-  withRpcFallback(rpcUrls, async (provider) => {
-    const entries = await Promise.all(
-      hashes.map(async (transactionHash): Promise<readonly [string, TransactionStatus]> => {
-        try {
-          const status = await provider.getTransactionStatus(transactionHash);
-          const finality = String(status.finality_status ?? "");
-          const execution = String(status.execution_status ?? "");
-          if (execution === "REVERTED") {
-            return [transactionHash, "reverted"];
+export const getTransactionStatuses = async (
+  { hashes, rpcUrls }: TransactionStatusInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<Readonly<Record<string, TransactionStatus>>> =>
+  withRpcFallback(
+    rpcUrls,
+    async (provider) => {
+      const entries = await Promise.all(
+        hashes.map(async (transactionHash): Promise<readonly [string, TransactionStatus]> => {
+          try {
+            return [
+              transactionHash,
+              classifyStatus(await provider.getTransactionStatus(transactionHash)),
+            ];
+          } catch (error) {
+            // Transport failures propagate to fail over; semantic errors → pending.
+            if (isTransportRpcError(error)) {
+              throw error;
+            }
+            return [transactionHash, "pending"];
           }
-          if (finality === "REJECTED") {
-            return [transactionHash, "rejected"];
-          }
-          if (finality === "ACCEPTED_ON_L2" || finality === "ACCEPTED_ON_L1") {
-            return [transactionHash, "accepted"];
-          }
-          return [transactionHash, "pending"];
-        } catch (error) {
-          if (isTransportRpcError(error)) {
-            throw error;
-          }
-          return [transactionHash, "pending"];
-        }
-      }),
-    );
-    return Object.fromEntries(entries);
-  });
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+    makeProvider,
+  );
 
 /**
  * Signs and submits generic Starknet invoke calls through an account contract,
  * deploying the counterfactual account first when this is its first
  * transaction. `speed: "fast"` scales estimated resource bounds up 1.5x.
  */
-export const submitInvokeTransaction = async ({
-  account,
-  calls,
-  rpcUrls,
-  signHash,
-  speed = "standard",
-}: InvokeInput): Promise<InvokeSubmission> => {
+export const submitInvokeTransaction = async (
+  { account, calls, rpcUrls, signHash, speed = "standard" }: InvokeInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<InvokeSubmission> => {
   if (calls.length === 0) {
     throw new WalletError("No calls to submit");
   }
-  return withRpcFallback(rpcUrls, async (provider) => {
-    const starknetAccount = krustyAccount(provider, account, signHash);
-    await ensureAccountDeployed(provider, starknetAccount, account);
-    const details =
-      speed === "fast"
-        ? {
-            resourceBounds: scaledBounds(
-              (await starknetAccount.estimateInvokeFee([...calls])).resourceBounds,
-            ),
-          }
-        : {};
-    const result = await starknetAccount.execute(
-      [...calls],
-      details as Parameters<Account["execute"]>[1],
-    );
-    return {
-      calls,
-      transactionHash: result.transaction_hash,
-    };
-  });
+  return withRpcFallback(
+    rpcUrls,
+    async (provider) => {
+      const starknetAccount = krustyAccount(provider, account, signHash);
+      await ensureAccountDeployed(provider, starknetAccount, account);
+      const details =
+        speed === "fast"
+          ? {
+              resourceBounds: scaledBounds(
+                (await starknetAccount.estimateInvokeFee([...calls])).resourceBounds,
+              ),
+            }
+          : {};
+      const result = await starknetAccount.execute(
+        [...calls],
+        details as Parameters<Account["execute"]>[1],
+      );
+      return {
+        calls,
+        transactionHash: result.transaction_hash,
+      };
+    },
+    makeProvider,
+  );
 };

@@ -11,10 +11,13 @@ import type { SidepanelWallet } from "./runtime";
 
 /**
  * Shared context: the app root, the runtime client, and a full re-render.
+ * `snoozeApproval` (optional; the takeover's "Not now") parks a pending
+ * request in the Activity list for this panel session without deciding it.
  */
 export type BindingContext = {
   readonly app: Element | null;
   readonly render: (status: WalletStatus) => Promise<void>;
+  readonly snoozeApproval?: (id: string) => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -56,9 +59,11 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
 };
 
 /**
- * Wires the approve/deny buttons on pending dapp connection requests.
+ * Wires the approve/deny buttons on pending dapp requests (the takeover screen
+ * and the Activity list share one decision path) plus the takeover's "Not now"
+ * snooze control.
  */
-export const bindApprovals = ({ app, render, wallet }: BindingContext): void => {
+export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingContext): void => {
   const result = app?.querySelector<HTMLElement>("#approval-result");
   app?.querySelectorAll<HTMLButtonElement>("[data-approval-id]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -70,7 +75,7 @@ export const bindApprovals = ({ app, render, wallet }: BindingContext): void => 
       buttonBusy(button, true);
       void wallet.decideApproval(id, action === "approve").then(
         async () => {
-          showToast(action === "approve" ? "Connection approved" : "Connection denied", "success");
+          showToast(action === "approve" ? "Request approved" : "Request denied", "success");
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
@@ -81,6 +86,14 @@ export const bindApprovals = ({ app, render, wallet }: BindingContext): void => 
           buttonBusy(button, false);
         },
       );
+    });
+  });
+  app?.querySelectorAll<HTMLButtonElement>("[data-approval-later]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["approvalLater"];
+      if (id) {
+        snoozeApproval?.(id);
+      }
     });
   });
 };

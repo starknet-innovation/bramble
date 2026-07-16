@@ -164,6 +164,97 @@ const gateOrigin = (
   return null;
 };
 
+type Strk20OpsHandler = (
+  deps: Strk20OpsDeps,
+  message: unknown,
+  sender: RuntimeSender | undefined,
+) => Promise<RuntimeResponse>;
+
+const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readBalancesMessage(message);
+  if (!input) {
+    return { error: "invalid strk20 balances request" };
+  }
+  const gate = gateOrigin(deps, input.origin, sender);
+  if (gate) {
+    return gate;
+  }
+  const resolved = await resolveAccount(deps, input.origin);
+  if ("error" in resolved) {
+    return resolved;
+  }
+  try {
+    const balances = await readStrk20Balances(strk20Service(deps.runtimeRpc), {
+      account: resolved.account,
+      proverUrl: resolved.proverUrl,
+      rpcUrls: resolved.rpcUrls,
+      tokens: input.tokens,
+    });
+    return { balances, ok: true };
+  } catch (error) {
+    return { error: strk20ErrorMessage(error) };
+  }
+};
+
+const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readPrepareMessage(message);
+  if (!input) {
+    return { error: "invalid strk20 prepare request" };
+  }
+  const gate = gateOrigin(deps, input.origin, sender);
+  if (gate) {
+    return gate;
+  }
+  const resolved = await resolveAccount(deps, input.origin);
+  if ("error" in resolved) {
+    return resolved;
+  }
+  try {
+    const callAndProof = await prepareStrk20CallAndProof(strk20Service(deps.runtimeRpc), {
+      account: resolved.account,
+      actions: input.actions,
+      proverUrl: resolved.proverUrl,
+      rpcUrls: resolved.rpcUrls,
+      simulate: input.simulate,
+    });
+    return { callAndProof, ok: true };
+  } catch (error) {
+    return { error: strk20ErrorMessage(error) };
+  }
+};
+
+const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readInvokeMessage(message);
+  if (!input) {
+    return { error: "invalid strk20 invoke request" };
+  }
+  const gate = gateOrigin(deps, input.origin, sender);
+  if (gate) {
+    return gate;
+  }
+  const resolved = await resolveAccount(deps, input.origin);
+  if ("error" in resolved) {
+    return resolved;
+  }
+  const approval = deps.approvals.requestStrk20Invoke({
+    actions: input.actions,
+    origin: input.origin,
+    summaries: input.actions.map(summarizeStrk20Action),
+  });
+  notifyApprovalsChanged();
+  return deps.waiters.register(approval.id);
+};
+
+/**
+ * Dispatch table for STRK20 privacy messages, keyed by message type. Each branch
+ * is a self-contained handler, leaving the router a pure lookup.
+ */
+const STRK20_OPS_HANDLERS: Readonly<Record<string, Strk20OpsHandler>> = {
+  "wallet.strk20Balances": handleStrk20Balances,
+  "wallet.strk20InvokeTransaction": handleStrk20InvokeTransaction,
+  "wallet.strk20PrepareInvoke": handleStrk20PrepareInvoke,
+};
+
 /**
  * Handles the STRK20 privacy messages; returns null for other message types.
  * The invoke request is never auto-submitted: it is queued as a "Private
@@ -175,82 +266,8 @@ export const handleStrk20Ops = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  if (messageType === "wallet.strk20Balances") {
-    const input = readBalancesMessage(message);
-    if (!input) {
-      return { error: "invalid strk20 balances request" };
-    }
-    const gate = gateOrigin(deps, input.origin, sender);
-    if (gate) {
-      return gate;
-    }
-    const resolved = await resolveAccount(deps, input.origin);
-    if ("error" in resolved) {
-      return resolved;
-    }
-    try {
-      const balances = await readStrk20Balances(strk20Service(deps.runtimeRpc), {
-        account: resolved.account,
-        proverUrl: resolved.proverUrl,
-        rpcUrls: resolved.rpcUrls,
-        tokens: input.tokens,
-      });
-      return { balances, ok: true };
-    } catch (error) {
-      return { error: strk20ErrorMessage(error) };
-    }
-  }
-
-  if (messageType === "wallet.strk20PrepareInvoke") {
-    const input = readPrepareMessage(message);
-    if (!input) {
-      return { error: "invalid strk20 prepare request" };
-    }
-    const gate = gateOrigin(deps, input.origin, sender);
-    if (gate) {
-      return gate;
-    }
-    const resolved = await resolveAccount(deps, input.origin);
-    if ("error" in resolved) {
-      return resolved;
-    }
-    try {
-      const callAndProof = await prepareStrk20CallAndProof(strk20Service(deps.runtimeRpc), {
-        account: resolved.account,
-        actions: input.actions,
-        proverUrl: resolved.proverUrl,
-        rpcUrls: resolved.rpcUrls,
-        simulate: input.simulate,
-      });
-      return { callAndProof, ok: true };
-    } catch (error) {
-      return { error: strk20ErrorMessage(error) };
-    }
-  }
-
-  if (messageType === "wallet.strk20InvokeTransaction") {
-    const input = readInvokeMessage(message);
-    if (!input) {
-      return { error: "invalid strk20 invoke request" };
-    }
-    const gate = gateOrigin(deps, input.origin, sender);
-    if (gate) {
-      return gate;
-    }
-    const resolved = await resolveAccount(deps, input.origin);
-    if ("error" in resolved) {
-      return resolved;
-    }
-    const approval = deps.approvals.requestStrk20Invoke({
-      actions: input.actions,
-      origin: input.origin,
-      summaries: input.actions.map(summarizeStrk20Action),
-    });
-    notifyApprovalsChanged();
-    return deps.waiters.register(approval.id);
-  }
-
-  return null;
+  const handler = STRK20_OPS_HANDLERS[messageType];
+  return handler ? handler(deps, message, sender) : null;
 };
 
 /**

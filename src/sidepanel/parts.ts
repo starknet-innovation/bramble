@@ -16,6 +16,7 @@ export const WALLET_VIEWS = [
   "activity",
   "settings",
   "send",
+  "swap",
   "receive",
   "network",
   "account",
@@ -149,7 +150,7 @@ export const accountDisplayName = (
 
 /**
  * Renders a flat, single-colour avatar chip for an address: one solid fill from
- * a small per-account palette (emerald / blue / amber / violet) with a quiet
+ * a small per-account palette (cobalt / teal / amber / violet) with a quiet
  * person glyph, matching the Clean Mono comp. The tone is chosen
  * deterministically from the address, so an account always keeps the same
  * colour. Fill and glyph ink come from the `--mc-avatar-*` tokens (see

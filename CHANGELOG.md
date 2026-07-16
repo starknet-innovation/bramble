@@ -1,0 +1,55 @@
+# Changelog
+
+All notable changes to MC Wallet are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
+adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+Sections are maintained on the active `release/vX.Y` branch during release prep
+(`bun run changelog`) and consumed as the GitHub Release notes when the release
+is cut. See DEVELOPMENT.md and RELEASING.md.
+
+## [0.5.0] - Unreleased
+
+Phase 5 (hardening, audit & public release — roadmap #83).
+
+### Added
+- In-wallet swaps via the AVNU aggregator: a Swap action between Send and
+  Receive opens a full quote → confirm → execute → receipt flow with live
+  debounced quoting, a searchable verified-token picker (untracked picks are
+  added through the on-chain token flow), value-sanity tiers that warn on
+  bad routes, and an approve-only-sell-token policy gate before signing (#115).
+- Proactive dapp requests: a pending approval takes over the panel's dock
+  views with its full decision card the moment it arrives, with a "Not now"
+  snooze that parks it in Activity (#115).
+- Real on-chain history merged into the activity feed, with per-leg transfer
+  dedup and an explicit flag when only device records are available (#111).
+- On-chain verification of the active account's OZ class hash, surfaced as a
+  verification badge on the account screen (#110).
+- Import a standalone account from a raw Starknet private key, stored only in
+  the encrypted vault (#112).
+- Automated release-on-merge: promoting a `release/*` or `hotfix/*` branch to
+  `main` now cuts the tagged GitHub Release automatically, with the version
+  derived from the merged branch (issue #59, #60).
+
+### Changed
+- Full design-system overhaul: cobalt accent with market semantics split from
+  brand, an anchored bottom dock, de-bordered grouped lists and receipt rows,
+  a restructured settings hub and sub-screens, WCAG AA contrast enforced by
+  test, redesigned toasts with tone chips, and a choreographed swap success
+  moment that returns home on its own (#115).
+- Send review and dApp approval prompts now share one decode/risk pipeline,
+  so both surfaces flag identical calls identically (#109).
+- The release version is single-sourced from `package.json`; the tag, artifact,
+  and changelog all derive from it and a gate fails the release on any drift
+  (closes the gap that shipped `v0.4.0` as `mc-wallet-0.3.0.zip`).
+
+## [0.4.0] - 2026-06-30
+
+### Added
+- First release under the roadmap-driven release-branch model (milestone `v0.4`,
+  Phase 3 — table-stakes parity).
+
+## [0.3.0] - 2026-05-19
+
+### Added
+- Baseline wallet shell established as the initial stable version on `main`.
