@@ -162,6 +162,37 @@ describe("collectTransactionHistory", () => {
     expect(entries.every((entry) => Number.isSafeInteger(entry.submittedAt))).toBe(true);
   });
 
+  test("drops a row whose node-reported hash is not a valid field element", async () => {
+    // A byzantine node reports a transaction hash at/above the Stark field prime,
+    // which is not a real felt. The row must be dropped by the boundary re-check
+    // rather than kept (or blanking the whole feed): the valid sibling survives.
+    const overPrime = "0x800000000000011000000000000000000000000000000000000000000000002";
+    const entries = await collectTransactionHistory(
+      fakeRpc({
+        async getEvents() {
+          return {
+            events: [
+              {
+                block_number: 100,
+                data: ["1000000000000000000", "0"],
+                keys: [TRANSFER_EVENT_KEY, OTHER, ACCOUNT],
+                transaction_hash: "0xa11",
+              },
+              {
+                block_number: 103,
+                data: ["2000000000000000000", "0"],
+                keys: [TRANSFER_EVENT_KEY, OTHER, ACCOUNT],
+                transaction_hash: overPrime,
+              },
+            ],
+          };
+        },
+      }),
+      scanArgs,
+    );
+    expect(entries.map((entry) => entry.hash)).toEqual(["0xa11"]);
+  });
+
   test("caps the feed and only fetches a timestamp once per block", async () => {
     const many: EmittedEvent[] = Array.from({ length: MAX_HISTORY_ENTRIES + 10 }, (_, index) => ({
       block_number: 200 + index,
