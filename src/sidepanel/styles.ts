@@ -31,10 +31,10 @@
  * curves, and everything collapses to a cut under prefers-reduced-motion.
  *
  * Layer order (composed below): scale tokens → base tokens/layout → controls
- * (buttons, forms, focus, gates) → component classes → view-transition
- * choreography → home/motion. The home layer is composed last so its
- * prefers-reduced-motion block wins over every earlier animation and
- * transition.
+ * (buttons, forms, focus, gates) → structure (receipt, segmented control,
+ * disclosure, takeover) → component classes → view-transition choreography →
+ * home/motion. The home layer is composed last so its prefers-reduced-motion
+ * block wins over every earlier animation and transition.
  *
  * Stability contract: interactive controls are borderless (structure comes from
  * elevation, hairline edges, and space); feedback transforms stay within a 2px
@@ -46,11 +46,12 @@ import { BASE_STYLES } from "./styles-base";
 import { COMPONENT_STYLES } from "./styles-components";
 import { CONTROL_STYLES } from "./styles-controls";
 import { HOME_STYLES } from "./styles-home";
+import { STRUCTURE_STYLES } from "./styles-structure";
 import { TOKEN_STYLES } from "./styles-tokens";
 import { TRANSITION_STYLES } from "./styles-transitions";
 
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
-export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${CONTROL_STYLES}${COMPONENT_STYLES}${TRANSITION_STYLES}
+export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${COMPONENT_STYLES}${TRANSITION_STYLES}
 ${HOME_STYLES}`;

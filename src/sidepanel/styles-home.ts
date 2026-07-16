@@ -22,13 +22,13 @@ export const HOME_STYLES = `
     transition: opacity var(--spring-drawer-ms) var(--ease-drawer);
   }
   .drawer-root[data-open="true"] .drawer-backdrop { opacity: 1; }
-  /* Left sheet: a solid panel with a hairline edge and a soft depth shadow,
-     settling with the iOS drawer spring. Enter and exit share one path. */
+  /* Left sheet: a solid panel under a soft depth shadow, settling with the
+     iOS drawer spring. Enter and exit share one path. */
   .account-drawer {
     background: var(--mc-panel);
     border-radius: 0 ${RADIUS.xl} ${RADIUS.xl} 0;
     bottom: 0;
-    box-shadow: var(--mc-edge), var(--mc-elev-lg);
+    box-shadow: var(--mc-elev-lg);
     display: flex;
     flex-direction: column;
     gap: ${SPACE.md};
@@ -67,7 +67,7 @@ export const HOME_STYLES = `
     text-align: left;
     transition:
       background ${MOTION.pressMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms ${MOTION.pop};
+      transform ${MOTION.liftMs}ms var(--ease-out);
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
@@ -184,7 +184,7 @@ export const HOME_STYLES = `
   @media (hover: hover) and (pointer: fine) {
     button.collectible-card:not(:disabled):hover strong { color: var(--mc-accent); }
     button.collectible-card:not(:disabled):hover .collectible-art {
-      box-shadow: var(--mc-edge), var(--mc-shadow-sm);
+      box-shadow: var(--mc-shadow-sm);
     }
   }
   .collectible-art {
@@ -192,7 +192,6 @@ export const HOME_STYLES = `
     aspect-ratio: 1 / 1;
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     display: inline-flex;
     justify-content: center;
@@ -324,9 +323,8 @@ export const HOME_STYLES = `
   button.group-toggle[aria-pressed="true"] .group-toggle-mark .icon { color: var(--mc-accent); }
   .new-group-form, .edit-group-form { display: grid; gap: ${SPACE.sm}; }
   .group-name-input {
-    background: var(--mc-panel);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.sm};
-    box-shadow: var(--mc-edge);
     color: var(--mc-text);
     min-height: 38px;
     padding: 0 ${SPACE.sm};
@@ -339,7 +337,7 @@ export const HOME_STYLES = `
   }
   button.group-icon-option {
     align-items: center;
-    background: var(--mc-soft);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.sm};
     color: var(--mc-muted);
     display: inline-flex;
@@ -353,8 +351,21 @@ export const HOME_STYLES = `
     button.group-icon-option[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); color: var(--mc-accent); }
   }
   button.group-icon-option[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  .group-manage-list { display: grid; gap: ${SPACE.sm}; }
-  .group-manage-row { display: grid; gap: ${SPACE.sm}; }
+  .group-manage-list {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    overflow: hidden;
+  }
+  .group-manage-row { display: grid; position: relative; }
+  .group-manage-row + .group-manage-row::before {
+    background: var(--mc-hairline);
+    content: "";
+    height: 1px;
+    inset: 0 0 auto;
+    left: ${SPACE.lg};
+    position: absolute;
+  }
   .group-manage-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
   .group-manage-copy { display: grid; flex: 1; gap: 1px; min-width: 0; text-align: left; }
   .group-manage-copy strong { font-size: ${TYPE.body.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
@@ -376,14 +387,14 @@ export const HOME_STYLES = `
      roomy checklist of every wallet account. Hairline + skin-token only. */
   button.group-expand {
     align-items: center;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
+    background: transparent;
+    border-radius: 0;
     color: var(--mc-text);
     display: flex;
     gap: ${SPACE.sm};
     justify-content: flex-start;
-    min-height: 48px;
-    padding: 0 ${SPACE.sm};
+    min-height: 52px;
+    padding: 0 ${SPACE.lg};
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
@@ -395,28 +406,35 @@ export const HOME_STYLES = `
   .group-expand-mark { align-items: center; color: var(--mc-muted); display: inline-flex; flex: none; }
   .group-expand-mark .icon { height: 16px; width: 16px; }
   .group-members {
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
+    background: var(--mc-sunken);
     display: grid;
     gap: ${SPACE.sm};
-    padding: ${SPACE.sm};
+    padding: ${SPACE.md} ${SPACE.lg};
   }
   .group-members-head { align-items: center; display: flex; gap: ${SPACE.sm}; }
   .group-members-head .eyebrow { flex: 1; margin: 0; }
   .account-check-list { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; }
   button.account-check {
     align-items: center;
-    background: var(--mc-panel);
+    background: transparent;
     border-radius: ${RADIUS.sm};
-    box-shadow: var(--mc-edge);
     color: var(--mc-text);
     display: flex;
     gap: ${SPACE.sm};
     justify-content: flex-start;
     min-height: 48px;
     padding: 0 ${SPACE.sm};
+    position: relative;
     text-align: left;
     width: 100%;
+  }
+  .account-check-list > * + *::before {
+    background: var(--mc-hairline);
+    content: "";
+    height: 1px;
+    inset: 0 0 auto;
+    left: ${SPACE.sm};
+    position: absolute;
   }
   @media (hover: hover) and (pointer: fine) {
     button.account-check:not(:disabled):hover { background: var(--mc-hover); }
@@ -428,7 +446,7 @@ export const HOME_STYLES = `
   .account-check-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .account-check-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .account-check-net {
-    background: var(--mc-soft);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.full};
     color: var(--mc-muted);
     flex: none;

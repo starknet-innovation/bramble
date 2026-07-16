@@ -56,15 +56,46 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/aurora-drift/);
   });
 
-  test("surfaces are lifted by hairline edges plus a gentle low elevation scale", () => {
-    // The elevation scale reaches CSS as custom properties, and floating chrome
-    // (drawer) plus cards (request card) use a hairline edge — a 1px inset
-    // ring — as their primary structure, with a soft shadow only for lift.
+  test("hairlines are dividers between rows, never rings around surfaces", () => {
+    // The de-bordered language: structure comes from grouped fills, inset
+    // hairline DIVIDERS, and gentle shadows. The old --mc-edge inset ring is
+    // gone from the vocabulary entirely — no surface may draw a border box.
     expect(SIDEPANEL_STYLES).toContain(`--mc-elev-sm: ${SHADOW.sm}`);
     expect(SIDEPANEL_STYLES).toContain(`--mc-elev-md: ${SHADOW.md}`);
-    expect(SIDEPANEL_STYLES).toContain("--mc-edge: inset 0 0 0 1px var(--mc-hairline)");
+    expect(SIDEPANEL_STYLES).not.toContain("--mc-edge");
+    expect(SIDEPANEL_STYLES).not.toMatch(/inset 0 0 0 1px/);
     expect(SIDEPANEL_STYLES).toMatch(/\.account-drawer \{[^}]*background: var\(--mc-panel\)/s);
-    expect(SIDEPANEL_STYLES).toMatch(/\.request-card \{[^}]*box-shadow: var\(--mc-edge\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.request-card \{[^}]*box-shadow: var\(--mc-elev-sm\)/s);
+  });
+
+  test("settings and picker rows live in grouped lists with inset dividers", () => {
+    // Grouped lists are the structural backbone: one soft container per group
+    // of rows (menu, option, address book, group manage), flat transparent
+    // rows inside, separation carried by inset hairline dividers.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.menu-list, \.option-list \{[^}]*background: var\(--mc-panel\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.menu-row, button\.option-row, a\.menu-row \{[^}]*background: transparent/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(/\.address-book \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.menu-list > \* \+ \*::before[^{]*\{[^}]*var\(--mc-hairline\)/s,
+    );
+  });
+
+  test("receipts, disclosures, and the segmented control carry structured content", () => {
+    // Facts read as receipt rows (label left, value right, divider between),
+    // advanced forms collapse behind native details disclosures, and either/or
+    // preferences ride the segmented control — not bordered boxes.
+    expect(SIDEPANEL_STYLES).toMatch(/\.receipt \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.receipt-row \+ \.receipt-row::before \{[^}]*var\(--mc-hairline\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(/details\.disclosure \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.seg-option\[aria-pressed="true"\] \{[^}]*background: var\(--mc-panel\)/s,
+    );
   });
 
   test("the dock is an anchored full-bleed bottom bar, not a floating card", () => {

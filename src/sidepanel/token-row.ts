@@ -22,9 +22,21 @@ export const tokenGlyph = (address: string, symbol: string): string => {
 
 const groupThousands = (whole: string): string => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
+// Display floor for sub-unit amounts: fractions whose first significant digit
+// sits beyond this many places render as "<0.00000001" instead of a longer tail.
+const MAX_FRACTION_PLACES = 8;
+// Significant digits kept on sub-unit amounts (0.00001234 → 0.00001234, 4 sig).
+const SUB_UNIT_SIGNIFICANT = 4;
+
 /**
- * Renders a token amount with grouped thousands and at most five decimals,
- * dropping trailing zeros so "1.0" reads as "1".
+ * THE display policy for token amounts — every view renders amounts through
+ * this one formatter so precision never varies screen to screen. Values of one
+ * or more show grouped thousands and at most five decimals (trailing zeros
+ * dropped, so "1.0" reads as "1"). Sub-unit values keep four significant
+ * digits instead of a fixed cut, so a small balance like 0.00001234 survives
+ * rather than truncating to "0"; anything below the 8-place display floor
+ * reads as "<0.00000001". Raw untruncated strings belong only in inputs and
+ * signed payloads, never in display copy.
  */
 export const compactAmount = (formatted: string): string => {
   const [whole = "0", fraction = ""] = formatted.split(".");
@@ -32,8 +44,21 @@ export const compactAmount = (formatted: string): string => {
   if (fraction.length === 0) {
     return grouped;
   }
-  const trimmed = fraction.slice(0, 5).replace(/0+$/, "");
-  return trimmed.length === 0 ? grouped : `${grouped}.${trimmed}`;
+  const isSubUnit = /^-?0$/.test(whole);
+  if (!isSubUnit) {
+    const trimmed = fraction.slice(0, 5).replace(/0+$/, "");
+    return trimmed.length === 0 ? grouped : `${grouped}.${trimmed}`;
+  }
+  const firstSignificant = fraction.search(/[1-9]/);
+  if (firstSignificant === -1) {
+    return grouped;
+  }
+  if (firstSignificant >= MAX_FRACTION_PLACES) {
+    return `<0.${"0".repeat(MAX_FRACTION_PLACES - 1)}1`;
+  }
+  const end = Math.min(firstSignificant + SUB_UNIT_SIGNIFICANT, MAX_FRACTION_PLACES);
+  const trimmed = fraction.slice(0, end).replace(/0+$/, "");
+  return `${grouped}.${trimmed}`;
 };
 
 const changeBadge = (change: number | undefined): string => {

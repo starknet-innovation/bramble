@@ -27,7 +27,6 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .callout {
     background: var(--mc-panel);
     border-radius: ${RADIUS.lg};
-    box-shadow: var(--mc-edge);
     padding: ${SPACE.md} ${SPACE.lg};
   }
   .callout-icon {
@@ -62,13 +61,37 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .value { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; overflow-wrap: anywhere; }
   .context-line code { overflow-wrap: normal; word-break: normal; }
   .address-line {
-    background: var(--mc-soft);
+    background: var(--mc-panel);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     padding: ${SPACE.sm} ${SPACE.sm} ${SPACE.sm} ${SPACE.md};
   }
   .address-line code { flex: 1; }
-  .request-list, .address-book { display: grid; gap: ${SPACE.sm}; }
+  .request-list { display: grid; gap: ${SPACE.sm}; }
+  /* Address book / connected sites: one grouped surface, flat rows with inset
+     dividers and trailing quiet actions. */
+  .address-book {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    overflow: hidden;
+  }
+  .address-book > li {
+    align-items: center;
+    display: flex;
+    gap: ${SPACE.sm};
+    min-height: 52px;
+    padding: ${SPACE.sm} ${SPACE.md} ${SPACE.sm} ${SPACE.lg};
+    position: relative;
+  }
+  .address-book > li + li::before {
+    background: var(--mc-hairline);
+    content: "";
+    height: 1px;
+    inset: 0 0 auto;
+    left: ${SPACE.lg};
+    position: absolute;
+  }
+  .address-book .stack-tight { flex: 1; }
   /* Token list: de-boxed, flush rows carried by alignment and a single hairline
      divider — no per-row fill/edge/radius box. The right-hand fiat/change column
      is right-aligned with tabular figures; a hover fill still highlights a row. */
@@ -92,7 +115,6 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     align-items: center;
     background: var(--mc-sunken);
     border-radius: ${RADIUS.full};
-    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     display: inline-flex;
     flex: none;
@@ -207,7 +229,6 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   .review-panel {
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     display: grid;
     gap: ${SPACE.sm};
     padding: ${SPACE.md};
@@ -217,17 +238,31 @@ ${SIGN_REQUEST_STYLES}
   .review-flag { color: var(--mc-danger); font-size: ${TYPE.caption.size}; }
   .review-fee { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .tx-hint { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
-  .allowance-list { display: grid; gap: ${SPACE.sm}; }
+  /* Allowances: one grouped surface, flat rows with inset dividers. */
+  .allowance-list {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    overflow: hidden;
+  }
   .allowance-row {
     align-items: center;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     display: flex;
     gap: ${SPACE.sm};
-    padding: ${SPACE.sm} ${SPACE.md};
+    padding: ${SPACE.md} ${SPACE.lg};
+    position: relative;
+  }
+  .allowance-row + .allowance-row::before {
+    background: var(--mc-hairline);
+    content: "";
+    height: 1px;
+    inset: 0 0 auto;
+    left: ${SPACE.lg};
+    position: absolute;
   }
   .allowance-copy { display: grid; flex: 1; gap: 2px; min-width: 0; }
+  /* Revoke is red ink, not a red box — the row stays quiet until hovered. */
+  .allowance-row button.danger { background: transparent; }
   .allowance-copy code { overflow-wrap: anywhere; }
   /* Collectibles gallery: clean image tiles, not boxed cards. Each item is a
      minimally framed art square (a hairline on the art tile only) over a tight
@@ -244,11 +279,11 @@ ${SIGN_REQUEST_STYLES}
   }
   .nft-art {
     align-items: center; aspect-ratio: 1 / 1; background: var(--mc-soft); border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge); color: var(--mc-muted); display: inline-flex; justify-content: center;
+    color: var(--mc-muted); display: inline-flex; justify-content: center;
     overflow: hidden; position: relative; transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease}; width: 100%;
   }
   .nft-art .icon { height: 28px; width: 28px; } .nft-image { border-radius: inherit; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; } .nft-image--broken { display: none; } .nft-hero { margin: 0 auto ${SPACE.sm}; max-width: 180px; }
-  button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--mc-edge), var(--mc-shadow-sm); }
+  button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--mc-shadow-sm); }
   .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .nft-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
@@ -262,11 +297,11 @@ ${SIGN_REQUEST_STYLES}
      gentle low shadow lift a consequential request above the request list. */
   .request-card {
     background: var(--mc-panel);
-    border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge), var(--mc-elev-sm);
+    border-radius: ${RADIUS.lg};
+    box-shadow: var(--mc-elev-sm);
     display: grid;
     gap: ${SPACE.md};
-    padding: ${SPACE.md};
+    padding: ${SPACE.lg};
   }
   .request-copy { display: grid; gap: 2px; min-width: 0; }
   .request-origin { color: var(--mc-text); font-family: var(--mc-font-mono); font-weight: ${WEIGHT.semibold}; overflow-wrap: anywhere; }
@@ -274,7 +309,6 @@ ${SIGN_REQUEST_STYLES}
   .detail {
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     display: grid;
     gap: 2px;
     min-width: 0;
@@ -312,12 +346,12 @@ ${SIGN_REQUEST_STYLES}
     padding: 3px 5px;
     text-align: center;
   }
+  /* Empty states are plain centered copy — an empty list is an absence, not a
+     boxed component demanding attention. */
   .empty {
-    background: var(--mc-sunken);
-    border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     font-size: ${TYPE.label.size};
+    line-height: ${TYPE.body.line};
     padding: ${SPACE.lg} ${SPACE.md};
     text-align: center;
   }
@@ -327,9 +361,8 @@ ${SIGN_REQUEST_STYLES}
   .reveal-danger { color: var(--mc-danger); font-weight: ${WEIGHT.semibold}; }
   .reveal-output { display: grid; gap: ${SPACE.sm}; }
   .reveal-value {
-    background: var(--mc-soft);
+    background: var(--mc-panel);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.mono.size};
     line-height: ${TYPE.mono.line};
@@ -353,7 +386,7 @@ ${SIGN_REQUEST_STYLES}
   .qr-card {
     background: hsl(0 0% 100%);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge), var(--mc-elev-md);
+    box-shadow: var(--mc-elev-md);
     color: hsl(0 0% 8%);
     justify-self: center;
     padding: ${SPACE.sm};
@@ -381,7 +414,7 @@ ${SIGN_REQUEST_STYLES}
     align-items: center;
     background: var(--mc-panel);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge), var(--mc-elev-md);
+    box-shadow: var(--mc-elev-md);
     color: var(--mc-text);
     display: flex;
     font-size: ${TYPE.label.size};

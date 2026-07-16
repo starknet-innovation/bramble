@@ -147,7 +147,6 @@ export const BASE_STYLES = `
     align-items: center;
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     display: inline-flex;
     flex: none;
@@ -255,7 +254,6 @@ export const BASE_STYLES = `
     align-items: center;
     background: var(--mc-elevated);
     border-radius: ${RADIUS.full};
-    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     cursor: pointer;
     display: inline-flex;
@@ -391,27 +389,44 @@ export const BASE_STYLES = `
     overflow-wrap: anywhere;
   }
 
-  /* Flat list rows: one solid fill, no border, separated by space. The flex
-     layout is declared here (not inherited): anchor rows (Help & docs) never
-     pass through the base button rule, and without it their grid-displayed
-     copy block breaks onto its own line. */
-  .menu-list, .option-list { display: grid; gap: 8px; }
+  /* Grouped lists: ONE soft container per group of related rows, flat rows
+     inside split by inset hairline dividers — never a border per row. This is
+     the structural backbone of every settings and picker screen: the group
+     communicates "these belong together", the divider carries separation, and
+     no ring chrome competes with the content. The flex layout is declared on
+     rows directly (not inherited): anchor rows (Help & docs) never pass
+     through the base button rule. */
+  .menu-list, .option-list {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    gap: 0;
+    overflow: hidden;
+  }
+  .menu-list > * + *, .option-list > * + * { position: relative; }
+  .menu-list > * + *::before, .option-list > * + *::before {
+    background: var(--mc-hairline);
+    content: "";
+    height: 1px;
+    left: ${SPACE.lg};
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
   button.menu-row, button.option-row, a.menu-row {
     align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
+    background: transparent;
+    border-radius: 0;
     color: var(--mc-text);
     display: flex;
     gap: ${SPACE.sm};
     justify-content: flex-start;
-    min-height: 58px;
-    padding: 0 ${SPACE.md};
+    min-height: 52px;
+    padding: 0 ${SPACE.lg};
     text-align: left;
     text-decoration: none;
-    transition:
-      background ${MOTION.pressMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms var(--ease-out);
+    transition: background ${MOTION.pressMs}ms ${MOTION.ease};
+    width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
     button.menu-row:not(:disabled):hover, button.option-row:not(:disabled):hover, a.menu-row:hover {
@@ -421,9 +436,12 @@ export const BASE_STYLES = `
   }
   button.menu-row:not(:disabled):active, button.option-row:not(:disabled):active {
     background: var(--mc-soft-press);
-    transform: scale(0.985);
   }
   button.option-row[aria-pressed="true"] { background: var(--mc-accent-soft); }
+  /* Action row: a group-terminal action (e.g. "Add account") reads as accent
+     text inside the group rather than a standalone boxed button. */
+  button.menu-row.row-action { color: var(--mc-accent); }
+  button.menu-row.row-action .menu-icon { color: var(--mc-accent); }
   .menu-icon, .menu-chevron { color: var(--mc-muted); display: inline-flex; flex: none; }
   .menu-icon .icon { height: 20px; width: 20px; }
   .avatar { display: block; height: 100%; width: 100%; }
@@ -432,7 +450,6 @@ export const BASE_STYLES = `
     align-items: center;
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     display: inline-flex;
     flex: none;

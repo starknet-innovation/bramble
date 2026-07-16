@@ -14,7 +14,6 @@ export const SIGN_REQUEST_STYLES = `
   .sign-block {
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     display: grid;
     gap: 6px;
     margin-bottom: ${SPACE.sm};

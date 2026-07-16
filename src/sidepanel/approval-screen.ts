@@ -1,0 +1,63 @@
+/**
+ * Full-screen approval takeover: the proactive surface for dapp requests. The
+ * background opens the side panel on any approval-worthy message (see
+ * ../background/approval-surface.ts); this screen makes the panel itself
+ * proactive — while an unsnoozed request is pending, every dock view renders
+ * the request front and centre with its decision controls, exactly where the
+ * user lands, instead of parking it behind an Activity badge.
+ *
+ * The user is never trapped: "Not now" snoozes the shown request for this
+ * panel session, parking it in the Activity request list (its badge stays),
+ * and the wallet becomes fully usable again. New requests re-take the screen.
+ * Flow screens (send, receive, …) are never interrupted mid-task — the
+ * takeover waits for the next dock view.
+ */
+import type { PendingApproval, WalletStatus } from "../popup/responses";
+import { escapeHtml } from "../shared/html";
+import { approvalCard } from "./approval-cards";
+
+/**
+ * Pending approvals that should take the screen: everything not snoozed this
+ * panel session, oldest first (queue order).
+ */
+export const actionableApprovals = (
+  pending: readonly PendingApproval[],
+  snoozedIds: readonly string[],
+): readonly PendingApproval[] => pending.filter((approval) => !snoozedIds.includes(approval.id));
+
+/**
+ * Renders the takeover for the front of the request queue. Callers guarantee
+ * `actionable` is non-empty. The request card carries the full request and its
+ * approve/deny controls (shared with the Activity list, so one binding path
+ * decides requests everywhere); this screen adds the focused chrome — a clear
+ * title, the network context, queue position, and the "Not now" escape hatch.
+ */
+export const approvalTakeover = (
+  actionable: readonly PendingApproval[],
+  status: WalletStatus,
+): string => {
+  const first = actionable[0];
+  if (!first) {
+    return "";
+  }
+  const queue =
+    actionable.length > 1
+      ? `<p class="takeover-queue">${actionable.length - 1} more request${actionable.length === 2 ? "" : "s"} waiting behind this one.</p>`
+      : "";
+  return `
+  <header class="flow-header">
+    <div class="flow-title">
+      <h1>Review request</h1>
+      <p>${escapeHtml(first.origin)}</p>
+    </div>
+    ${actionable.length > 1 ? `<span class="pill">1 of ${actionable.length}</span>` : `<span class="pill"><span class="dot"></span>${escapeHtml(status.network)}</span>`}
+  </header>
+  <main class="screen flow" id="wallet-screen-approval-takeover" tabindex="-1">
+    <ul class="request-list">${approvalCard(first, status)}</ul>
+    ${queue}
+    <div class="takeover-foot">
+      <button class="ghost small" data-approval-later="${escapeHtml(first.id)}" type="button">Not now — keep it in Activity</button>
+    </div>
+    <p id="approval-result" role="status"></p>
+  </main>`;
+};
