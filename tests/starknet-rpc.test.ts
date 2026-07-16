@@ -150,5 +150,8 @@ describe("starknet RPC helpers", () => {
     ).toBe(`${"A".repeat(31)}BC`);
     expect(decodeErc20String(["not-hex"])).toBe("");
     expect(decodeErc20String([])).toBe("");
+    // A multi-word response whose leading word is not a parseable felt cannot
+    // yield a ByteArray length, so the decoder falls back to the first word.
+    expect(decodeErc20String(["not-a-number", "0x1"])).toBe("");
   });
 });

@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import type { KrustyKms } from "../src/crypto/krusty";
 import { createEncryptedStore } from "../src/storage/encrypted-store";
 import { createMemoryStore } from "../src/storage/kv";
-import type { Vault } from "../src/storage/vault-schema";
+import type { AccountRef, Vault } from "../src/storage/vault-schema";
 import { emptyVault } from "../src/storage/vault-schema";
 import { activeAccountSecrets, createWalletVaultService } from "../src/wallet/vault-service";
 import { fakeKms } from "./fake-kms";
@@ -32,6 +32,15 @@ const seedEmptyService = async () => {
   const encryptedStore = createEncryptedStore(store, vaultKey);
   await encryptedStore.write(emptyVault(), vaultPassphrase);
   return createWalletVaultService({ encryptedStore, kms: fakeKms() });
+};
+
+// Persists an arbitrary (schema-valid) vault, then wires a service over the same
+// store so ensure/derive paths read exactly that seeded state.
+const seedVaultService = async (vault: Vault, kms: KrustyKms = fakeKms()) => {
+  const store = createMemoryStore();
+  const encryptedStore = createEncryptedStore(store, vaultKey);
+  await encryptedStore.write(vault, vaultPassphrase);
+  return createWalletVaultService({ encryptedStore, kms });
 };
 
 describe("vault service guard branches", () => {
@@ -90,6 +99,52 @@ describe("vault service guard branches", () => {
     await expect(
       service.ensureNetworkAccount({ networkId: "SN_SEPOLIA", vaultPassphrase }),
     ).rejects.toThrow("invalid account address");
+  });
+
+  test("ensureNetworkAccount rejects a derived address that collides with a foreign account", async () => {
+    // Two accounts hold different keypairs, but a misbehaving KMS derives an
+    // address equal to the existing Sepolia account's. That account is keyed
+    // differently, so the same-key short circuit misses it and the id-collision
+    // guard must reject the duplicate rather than overwrite it.
+    const mainnet: AccountRef = {
+      address: "0xaaa",
+      classHash: "0x111111",
+      derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_MAIN:0xaaa",
+      networkId: "SN_MAIN",
+      publicKeyX: "0xa1",
+      publicKeyY: "0xa2",
+    };
+    const foreignSepolia: AccountRef = {
+      address: "0xbbb",
+      classHash: "0xabcdef",
+      derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_SEPOLIA:0xbbb",
+      networkId: "SN_SEPOLIA",
+      publicKeyX: "0xb1",
+      publicKeyY: "0xb2",
+    };
+    const seeded: Vault = {
+      accounts: [mainnet, foreignSepolia],
+      activeAccountId: mainnet.id,
+      mnemonic: null,
+      originGrants: [],
+      schemaVersion: 2,
+      signingKeys: [
+        { accountId: mainnet.id, privateKey: "0x123456" },
+        { accountId: foreignSepolia.id, privateKey: "0x654321" },
+      ],
+    };
+    const collidingKms: KrustyKms = {
+      ...fakeKms(),
+      async deriveOzAccountAddress() {
+        return foreignSepolia.address;
+      },
+    };
+    const service = await seedVaultService(seeded, collidingKms);
+    await expect(
+      service.ensureNetworkAccount({ networkId: "SN_SEPOLIA", vaultPassphrase }),
+    ).rejects.toThrow("Account already exists");
   });
 
   test("grantOrigin throws when no account is selected", async () => {

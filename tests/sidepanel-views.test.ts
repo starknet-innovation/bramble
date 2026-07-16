@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance, WalletStatus } from "../src/popup/responses";
-import { activityEmptyCopy, homeTabs } from "../src/sidepanel/home-tabs";
+import { activityEmptyCopy, homeTabs, visibleHomeBalances } from "../src/sidepanel/home-tabs";
 import { dashboard, WALLET_VIEWS } from "../src/sidepanel/views";
 import { account, preferences, secondAccount } from "./support/sidepanel-fixtures";
 
@@ -229,6 +229,19 @@ describe("sidepanel views", () => {
     const degraded = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, true);
     expect(degraded).toContain("On-chain history unavailable");
     expect(degraded).toContain("No transactions recorded on this device yet.");
+  });
+
+  test("home Tokens tab renders a retryable error panel when the balance load failed", () => {
+    // A failed balance load has no balances to hide, so visibleHomeBalances
+    // collapses to an empty list and the panel shows the friendly error plus an
+    // in-panel retry button wired to reload balances.
+    expect(visibleHomeBalances({ error: "fetch failed" }, preferences)).toEqual([]);
+
+    const html = homeTabs({ error: "fetch failed" }, preferences, {}, {}, "usd", [], status, false);
+    expect(html).toContain("panel-error");
+    expect(html).toContain("data-reload-balances");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("No tracked balances yet");
   });
 
   test("home tab and activity dock draw empty-state copy from one shared source", () => {
