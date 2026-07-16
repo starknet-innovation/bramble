@@ -183,6 +183,43 @@ describe("sidepanel views", () => {
       "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.",
     );
     expect(empty).not.toContain("Couldn't load on-chain history");
+
+    // historyUnavailable is the final positional arg: the full-screen degraded
+    // notice must render so an empty feed never reads as the account's full
+    // history when the chain source could not be reached. The penultimate arg is
+    // classHashVerification (unrelated here, so null).
+    const degraded = dashboard(
+      "activity",
+      status,
+      [],
+      preferences,
+      { balances: [] },
+      null,
+      [],
+      [],
+      {},
+      [],
+      null,
+      [],
+      null,
+      {},
+      [],
+      [],
+      null,
+      null,
+      null,
+      null,
+      false,
+      null,
+      [],
+      null,
+      null,
+      true,
+    );
+    expect(degraded).toContain(
+      "load on-chain history. Showing transactions recorded on this device only",
+    );
+    expect(degraded).toContain("No transactions recorded on this device yet.");
   });
 
   test("home activity tab shows a degraded hint when on-chain history is unreachable", () => {

@@ -208,12 +208,17 @@ const legKey = (entry: ActivityEntry): string =>
  * Merges the wallet's locally recorded activity with transactions discovered on
  * chain, sorted newest-first. A locally submitted transaction collapses every
  * chain leg that shares its hash: the local record carries the richer,
- * user-facing summary and a status already reconciled against chain via the
- * pending re-poll, so it keeps its identity while purely chain-discovered
- * transactions are added around it. Chain rows with no local record are
- * de-duplicated per leg, so a swap or multicall keeps all of its transfers
- * rather than showing one arbitrary leg. The result is the union, never fewer
- * rows than the local log.
+ * user-facing summary, so it keeps its identity while purely chain-discovered
+ * transactions are added around it. The one exception is status: a local row
+ * still `pending` is reconciled to `accepted` when the chain scan found a
+ * `Transfer` event for its hash, since an emitted event proves the transaction
+ * was included and succeeded (a reverted transaction emits none). This closes
+ * the gap where the pending status re-poll fails but the event scan succeeds,
+ * which would otherwise leave a confirmed transfer showing as pending. Terminal
+ * local states (`accepted`, `rejected`, `reverted`) are authoritative and left
+ * untouched. Chain rows with no local record are de-duplicated per leg, so a
+ * swap or multicall keeps all of its transfers rather than showing one arbitrary
+ * leg. The result is the union, never fewer rows than the local log.
  */
 export const mergeActivity = (
   local: readonly ActivityEntry[],
@@ -226,7 +231,21 @@ export const mergeActivity = (
     byKey.set(txKey(entry), entry);
   }
   for (const entry of onChain) {
-    if (localTxKeys.has(txKey(entry))) {
+    const tk = txKey(entry);
+    if (localTxKeys.has(tk)) {
+      // A local record owns this transaction and keeps its richer summary, so
+      // the chain leg adds no row. But an emitted `Transfer` proves the
+      // transaction was included and succeeded, so a still-`pending` local row
+      // is reconciled to `accepted` even when the pending status re-poll never
+      // landed. Terminal local states are left untouched.
+      const localMatch = byKey.get(tk);
+      if (
+        localMatch !== undefined &&
+        localMatch.status === "pending" &&
+        entry.status === "accepted"
+      ) {
+        byKey.set(tk, { ...localMatch, status: "accepted" });
+      }
       continue;
     }
     const key = legKey(entry);
