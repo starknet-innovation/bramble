@@ -50,6 +50,31 @@ describe("parseCommitSubject", () => {
     expect(parseCommitSubject("Merge branch 'main'")).toBeNull();
     expect(parseCommitSubject("   ")).toBeNull();
   });
+
+  test("degrades malformed conventional subjects to Other without crashing", () => {
+    // A type with no description is not a usable conventional commit; keep the
+    // raw subject under Other rather than emitting an empty bullet.
+    expect(parseCommitSubject("feat:")).toEqual({
+      type: "other",
+      scope: null,
+      description: "feat:",
+      breaking: false,
+    });
+    expect(parseCommitSubject("feat(scope):")).toMatchObject({ type: "other" });
+    // Trailing whitespace and a CRLF terminator are trimmed off the description.
+    expect(parseCommitSubject("feat: add x\r")).toEqual({
+      type: "feat",
+      scope: null,
+      description: "add x",
+      breaking: false,
+    });
+    expect(parseCommitSubject("  chore(deps):   bump   ")).toEqual({
+      type: "chore",
+      scope: "deps",
+      description: "bump",
+      breaking: false,
+    });
+  });
 });
 
 describe("categoryFor", () => {
