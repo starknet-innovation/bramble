@@ -89,10 +89,21 @@ const tokenFor = (
 const amountLabel = (amount: bigint, token: TokenConfig | undefined): string =>
   token ? `${formatTokenAmount(amount, token.decimals)} ${token.symbol}` : `${amount} units`;
 
+// ERC20/ERC721 contracts expose transfer_from under both the Cairo snake_case
+// name and its camelCase dual (`transferFrom`); a dApp may invoke either. The
+// decoder must treat both as the same call, or a camelCase `transferFrom` to a
+// poisoned or self address would fall through to the "unknown" summary and
+// silently skip the amount decode and the self-transfer / address-poisoning
+// flags. `transfer` and `approve` have no distinct camelCase spelling, so
+// transfer_from is the only selector that needs this. One source of truth so
+// the decode branch and the recipient-index flag logic never drift.
+const isTransferFrom = (entrypoint: string): boolean =>
+  entrypoint === "transfer_from" || entrypoint === "transferFrom";
+
 const decodeCall = (call: Call, context: VerificationContext): DecodedCall => {
   const calldata = Array.isArray(call.calldata) ? call.calldata : [];
   const token = tokenFor(context.tokens, call.contractAddress);
-  if (call.entrypoint === "transfer_from" && calldata.length >= 4) {
+  if (isTransferFrom(call.entrypoint) && calldata.length >= 4) {
     // transfer_from(from, to, amountOrId_low, amountOrId_high): calldata is
     // [from, to, low, high] and the recipient is calldata[1]. ERC20 and ERC721
     // share this selector and arity, so the third/fourth felts are an ERC20
@@ -171,9 +182,9 @@ const flagsForCall = (
   }
 
   if (decoded.kind === "transfer") {
-    // ERC20 transfer(to, ...) puts the recipient first; ERC721
-    // transfer_from(from, to, ...) puts it second.
-    const recipientIndex = call.entrypoint === "transfer_from" ? 1 : 0;
+    // ERC20 transfer(to, ...) puts the recipient first; transfer_from(from, to,
+    // ...) — snake_case or its camelCase dual — puts it second.
+    const recipientIndex = isTransferFrom(call.entrypoint) ? 1 : 0;
     const recipient = typeof calldata[recipientIndex] === "string" ? calldata[recipientIndex] : "";
     if (recipient && sameFelt(recipient, context.account.address)) {
       flags.push({
