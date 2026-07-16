@@ -86,6 +86,23 @@ describe("deriveImportedAccount", () => {
       "Invalid private key",
     );
   });
+
+  // Krusty owns crypto and must fail closed: if the KMS hands back a malformed
+  // public key for the probe signature, the import aborts rather than deriving
+  // an OZ address from garbage. A valid-looking key still reaches the KMS (the
+  // guard is on the KMS *result*, not the input), so this is the fail-closed
+  // check on the public-key recovery step unique to raw-key import.
+  test("fails closed when Krusty returns an invalid public key", async () => {
+    const badKms = {
+      ...fakeKms(),
+      async signStarkHash() {
+        return { publicKey: "0x0", r: "0x1", s: "0x2" };
+      },
+    };
+    await expect(
+      deriveImportedAccount(badKms, { networkId: "SN_MAIN", privateKey: importedKey }),
+    ).rejects.toThrow("Krusty KMS returned invalid public key");
+  });
 });
 
 describe("vault-service importRawKeyAccount", () => {
@@ -139,6 +156,40 @@ describe("vault-service importRawKeyAccount", () => {
 
     await expect(service.status()).resolves.toMatchObject({ hasVault: false });
   });
+
+  // Extending an imported account onto another network goes through the same
+  // ensureNetworkAccount path HD accounts use. It must carry the imported
+  // provenance across — a raw-key account has no HD position and no publicKeyY,
+  // so the derived network account must round-trip as an imported account (not
+  // silently become HD-shaped, which isAccountRef would then reject).
+  test("extends an imported account onto another network keeping imported provenance", async () => {
+    const service = newService();
+    const mainnet = await service.importRawKeyAccount({
+      networkId: "SN_MAIN",
+      privateKey: importedKey,
+      vaultPassphrase,
+    });
+
+    const sepolia = await service.ensureNetworkAccount({
+      networkId: "SN_SEPOLIA",
+      vaultPassphrase,
+    });
+
+    expect(sepolia.derivation).toEqual({ kind: "imported-raw-key" });
+    expect(sepolia).not.toHaveProperty("publicKeyY");
+    expect(sepolia.publicKeyX).toBe(mainnet.publicKeyX);
+    expect(sepolia.networkId).toBe("SN_SEPOLIA");
+    expect(isAccountRef(sepolia)).toBe(true);
+
+    const vault = await service.readVault(vaultPassphrase);
+    expect(vault.accounts).toEqual([mainnet, sepolia]);
+    // The same imported key backs both network accounts; neither entry leaks it
+    // outside signingKeys.
+    expect(vault.signingKeys).toEqual([
+      { accountId: mainnet.id, privateKey: importedKey },
+      { accountId: sepolia.id, privateKey: importedKey },
+    ]);
+  });
 });
 
 describe("readImportAccountInput", () => {
@@ -182,6 +233,70 @@ describe("readImportAccountInput", () => {
         networkId: "SN_MAIN",
         privateKey: importedKey,
         type: "wallet.addAccount",
+      }),
+    ).toBeNull();
+  });
+
+  test("accepts a mixed-case 0x-hex key and canonicalizes it to lowercase", () => {
+    expect(
+      readImportAccountInput({
+        networkId: "SN_SEPOLIA",
+        privateKey: "  0xFeEdFaCe  ",
+        type: "wallet.importAccount",
+      }),
+    ).toEqual({ networkId: "SN_SEPOLIA", privateKey: "0xfeedface" });
+  });
+
+  // Key material must be read only in the documented 0x-hex form. A base-
+  // agnostic parser (BigInt/canonicalFelt) would accept decimal, octal, and
+  // binary and silently reinterpret the paste as a different scalar; the parser
+  // normalizes with normalizeFeltInput (0x-hex only), so these are all rejected
+  // rather than coerced. Matches how every other pasted felt (addresses,
+  // calldata) is normalized.
+  test("rejects a decimal key rather than coercing it to a different felt", () => {
+    // 4276993742 === 0xfeedface: a base-agnostic parser would admit this as the
+    // same key; the 0x-hex-only parser must reject the bare decimal spelling.
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "4276993742",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects an octal- or binary-prefixed key", () => {
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "0o377",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "0b1010",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects a hex-shaped key pasted without the 0x prefix", () => {
+    // Without 0x the base is ambiguous; refuse rather than guess. "10" would be
+    // decimal 10 to BigInt but a user may mean 0x10 — never silently pick one.
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "feedface",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "10",
+        type: "wallet.importAccount",
       }),
     ).toBeNull();
   });
