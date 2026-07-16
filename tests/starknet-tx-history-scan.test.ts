@@ -105,6 +105,47 @@ describe("collectTransactionHistory", () => {
     expect(filters[0]?.from_block).toBe(800_000);
   });
 
+  test("re-reads the most recent block stride when the window overflows the page budget", async () => {
+    // A heavy account: the full-window query keeps returning a continuation token,
+    // so only the window's OLDEST events fit the page budget. The recent stride
+    // near the latest block holds the genuinely newest transfer. The feed must
+    // show that recent transfer, never the stale oldest ones dressed as recent.
+    const requestedRanges: Array<{ from: number; to: number }> = [];
+    const oldest = {
+      block_number: 800_050,
+      data: ["1", "0"],
+      keys: [TRANSFER_EVENT_KEY, OTHER, ACCOUNT],
+      transaction_hash: "0x01d",
+    };
+    const newest = {
+      block_number: 999_000,
+      data: ["2", "0"],
+      keys: [TRANSFER_EVENT_KEY, OTHER, ACCOUNT],
+      transaction_hash: "0x9e9",
+    };
+    const entries = await collectTransactionHistory(
+      fakeRpc({
+        async getEvents(filter) {
+          requestedRanges.push({ from: filter.from_block, to: filter.to_block });
+          // The full window (from_block at the window floor) always overflows;
+          // the narrower recent stride resolves in one page with the new transfer.
+          return filter.from_block <= 800_000
+            ? { continuation_token: "more", events: [oldest] }
+            : { events: [newest] };
+        },
+        async getLatestBlockNumber() {
+          return 1_000_000;
+        },
+      }),
+      scanArgs,
+    );
+    expect(entries.map((entry) => entry.hash)).toEqual(["0x9e9"]);
+    // Every request is bounded above by the pinned latest-height snapshot, and the
+    // recovery read starts one stride below it, not at the window floor.
+    expect(requestedRanges.every((range) => range.to === 1_000_000)).toBe(true);
+    expect(requestedRanges).toContainEqual({ from: 980_000, to: 1_000_000 });
+  });
+
   test("asks the node for only the account's own transfers (in and out)", async () => {
     const filters: HistoryEventFilter[] = [];
     await collectTransactionHistory(

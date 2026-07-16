@@ -27,15 +27,23 @@ import {
 } from "./tx-history";
 
 // Bounds so a refresh stays cheap against a public RPC node: how many event
-// pages to read per token, the page size, and how far back the recent-history
+// pages to read per range, the page size, and how far back the recent-history
 // window reaches. A production indexer would lift these; deeper history beyond
 // the window is intentionally not scanned here.
 const MAX_EVENT_PAGES = 3;
 const EVENT_CHUNK_SIZE = 100;
 const HISTORY_BLOCK_WINDOW = 200_000;
+// `getEvents` streams a block range oldest-first, so a range with more matching
+// events than the page budget yields only its OLDEST events before the budget
+// runs out. When that happens the full window is abandoned and just this most
+// recent slice is re-read, so a heavy account's feed shows genuinely recent
+// transfers instead of the window's oldest ones dressed up as recent.
+const HISTORY_RECENT_STRIDE = 20_000;
 
 /**
  * Minimal event filter this scan issues, mirroring the allowance scan's shape.
+ * `from_block`/`to_block` bound the range read; the scan pins `to_block` to a
+ * snapshot of the latest height so paging is stable as new blocks arrive.
  */
 export type HistoryEventFilter = {
   readonly address: string;
@@ -43,6 +51,7 @@ export type HistoryEventFilter = {
   readonly continuation_token?: string;
   readonly from_block: number;
   readonly keys: readonly string[][];
+  readonly to_block: number;
 };
 
 /**
@@ -90,13 +99,24 @@ const transferKeyFilters = (account: string): readonly (readonly string[][])[] =
   [[TRANSFER_EVENT_KEY], [], [account]],
 ];
 
-const collectTokenTransfers = async (
+type EventPage = {
+  readonly transfers: readonly TokenTransfer[];
+  // True when the page budget ran out with more (newer) events still unread, so
+  // the transfers collected are the oldest of the range rather than all of it.
+  readonly truncated: boolean;
+};
+
+// Pages one block range oldest-first, decoding the account's transfers up to the
+// page budget. Marks the result truncated when the budget was exhausted while
+// the node still had more events to return.
+const pageTokenTransfers = async (
   rpc: HistoryRpc,
   token: TokenConfig,
   account: string,
   fromBlock: number,
+  toBlock: number,
   keys: readonly string[][],
-): Promise<readonly TokenTransfer[]> => {
+): Promise<EventPage> => {
   const transfers: TokenTransfer[] = [];
   let continuationToken: string | undefined;
   for (let page = 0; page < MAX_EVENT_PAGES; page += 1) {
@@ -104,6 +124,7 @@ const collectTokenTransfers = async (
       address: token.address,
       chunk_size: EVENT_CHUNK_SIZE,
       from_block: fromBlock,
+      to_block: toBlock,
       keys,
       ...(continuationToken === undefined ? {} : { continuation_token: continuationToken }),
     });
@@ -114,11 +135,33 @@ const collectTokenTransfers = async (
       }
     }
     if (chunk.continuation_token === undefined) {
-      break;
+      return { transfers, truncated: false };
     }
     continuationToken = chunk.continuation_token;
   }
-  return transfers;
+  return { transfers, truncated: true };
+};
+
+// Collects one token+direction's transfers over the recent-history block range.
+// A range that fits inside the page budget is returned whole; a heavier one would
+// truncate to its OLDEST events (the node streams the range oldest-first), so on
+// overflow the most recent block stride is re-read and used instead — the feed
+// stays genuinely recent rather than surfacing the window's oldest transfers.
+const collectTokenTransfers = async (
+  rpc: HistoryRpc,
+  token: TokenConfig,
+  account: string,
+  fromBlock: number,
+  latestBlock: number,
+  keys: readonly string[][],
+): Promise<readonly TokenTransfer[]> => {
+  const full = await pageTokenTransfers(rpc, token, account, fromBlock, latestBlock, keys);
+  if (!full.truncated) {
+    return full.transfers;
+  }
+  const recentFrom = Math.max(fromBlock, latestBlock - HISTORY_RECENT_STRIDE);
+  const recent = await pageTokenTransfers(rpc, token, account, recentFrom, latestBlock, keys);
+  return recent.transfers;
 };
 
 /**
@@ -148,7 +191,7 @@ export const collectTransactionHistory = async (
     try {
       for (const keys of transferKeyFilters(canonicalAccount)) {
         transfers.push(
-          ...(await collectTokenTransfers(rpc, token, canonicalAccount, fromBlock, keys)),
+          ...(await collectTokenTransfers(rpc, token, canonicalAccount, fromBlock, latest, keys)),
         );
       }
     } catch (error) {
@@ -236,7 +279,7 @@ export const scanTransactionHistory = async ({
             chunk_size: filter.chunk_size,
             from_block: { block_number: filter.from_block },
             keys: filter.keys.map((group) => [...group]),
-            to_block: "latest",
+            to_block: { block_number: filter.to_block },
             ...(filter.continuation_token === undefined
               ? {}
               : { continuation_token: filter.continuation_token }),
