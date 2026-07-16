@@ -168,12 +168,17 @@ export const collectTransactionHistory = async (
   const recent = [...byHash.values()]
     .sort((a, b) => b.decoded.blockNumber - a.decoded.blockNumber)
     .slice(0, MAX_HISTORY_ENTRIES);
-  const timestamps = new Map<number, number | null>();
-  for (const { decoded } of recent) {
-    if (!timestamps.has(decoded.blockNumber)) {
-      timestamps.set(decoded.blockNumber, await rpc.getBlockTimestamp(decoded.blockNumber));
-    }
-  }
+  // Read each distinct block's timestamp once and in parallel: the reads are
+  // independent, so a deep refresh does not pay one serial round-trip per row
+  // against a slow public node. Bounded by MAX_HISTORY_ENTRIES distinct blocks.
+  const distinctBlocks = [...new Set(recent.map(({ decoded }) => decoded.blockNumber))];
+  const timestamps = new Map(
+    await Promise.all(
+      distinctBlocks.map(
+        async (blockNumber) => [blockNumber, await rpc.getBlockTimestamp(blockNumber)] as const,
+      ),
+    ),
+  );
   const entries: ActivityEntry[] = [];
   for (const { decoded, token } of recent) {
     const seconds = timestamps.get(decoded.blockNumber);
