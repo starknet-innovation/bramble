@@ -139,6 +139,40 @@ describe("vault-service importRawKeyAccount", () => {
 
     await expect(service.status()).resolves.toMatchObject({ hasVault: false });
   });
+
+  // Extending an imported account onto another network goes through the same
+  // ensureNetworkAccount path HD accounts use. It must carry the imported
+  // provenance across — a raw-key account has no HD position and no publicKeyY,
+  // so the derived network account must round-trip as an imported account (not
+  // silently become HD-shaped, which isAccountRef would then reject).
+  test("extends an imported account onto another network keeping imported provenance", async () => {
+    const service = newService();
+    const mainnet = await service.importRawKeyAccount({
+      networkId: "SN_MAIN",
+      privateKey: importedKey,
+      vaultPassphrase,
+    });
+
+    const sepolia = await service.ensureNetworkAccount({
+      networkId: "SN_SEPOLIA",
+      vaultPassphrase,
+    });
+
+    expect(sepolia.derivation).toEqual({ kind: "imported-raw-key" });
+    expect(sepolia).not.toHaveProperty("publicKeyY");
+    expect(sepolia.publicKeyX).toBe(mainnet.publicKeyX);
+    expect(sepolia.networkId).toBe("SN_SEPOLIA");
+    expect(isAccountRef(sepolia)).toBe(true);
+
+    const vault = await service.readVault(vaultPassphrase);
+    expect(vault.accounts).toEqual([mainnet, sepolia]);
+    // The same imported key backs both network accounts; neither entry leaks it
+    // outside signingKeys.
+    expect(vault.signingKeys).toEqual([
+      { accountId: mainnet.id, privateKey: importedKey },
+      { accountId: sepolia.id, privateKey: importedKey },
+    ]);
+  });
 });
 
 describe("readImportAccountInput", () => {
