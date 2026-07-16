@@ -7,10 +7,11 @@
  * Surface rules ("Clean Mono"): solid fills only (no gradients, no glass),
  * structure carried by gentle low elevation and hairline edges; list rows are
  * flat fills separated by space, never boxes nested inside boxes. The single
- * emerald accent is reserved for the primary CTA, active states, and positive
- * deltas — everything else stays in the near-mono neutral palette.
+ * cobalt accent is reserved for the primary CTA, active states, and focus;
+ * market semantics (green gains, red losses) stay their own tokens — nothing
+ * else leaves the near-mono neutral palette.
  */
-import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE } from "../ui/tokens";
+import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE, WEIGHT } from "../ui/tokens";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -37,15 +38,18 @@ export const BASE_STYLES = `
     --mc-faint: color-mix(in srgb, var(--mc-muted) 58%, var(--mc-bg));
     --mc-shadow: var(--mc-elev-lg);
     --mc-shadow-sm: var(--mc-elev-sm);
+    /* Anchored bottom-bar footprint: one source of truth consumed by the dock
+       itself, the dock-screen scroll clearance, and the toast stack offset. */
+    --mc-dock-h: calc(${CONTROL.nav} + ${SPACE.sm});
     /* Flat per-account avatar palette: four restrained mid-tone fills (the
-       first is the brand emerald) plus one dark ink for the glyph. Mid-tone by
+       first is the brand cobalt) plus one dark ink for the glyph. Mid-tone by
        design so the same fills and ink read on both skins; defined once here as
        tokens so avatar chips carry no scattered colour literals. */
-    --mc-avatar-0: hsl(152 55% 45%);
-    --mc-avatar-1: hsl(222 62% 60%);
+    --mc-avatar-0: hsl(222 68% 62%);
+    --mc-avatar-1: hsl(168 46% 44%);
     --mc-avatar-2: hsl(28 78% 55%);
     --mc-avatar-3: hsl(265 52% 62%);
-    --mc-avatar-ink: hsl(206 34% 13%);
+    --mc-avatar-ink: hsl(220 34% 12%);
   }
   * { box-sizing: border-box; }
   html, body, #app { min-height: 100%; }
@@ -72,11 +76,11 @@ export const BASE_STYLES = `
     padding: ${SPACE.md} ${SPACE.lg} ${SPACE.md};
   }
   .screen { align-content: start; display: grid; flex: 1; gap: ${SPACE.lg}; }
-  /* Dock screens scroll their content UNDER the floating dock. Reserve
-     clearance below the content equal to the dock footprint (nav height + its
-     padding + its bottom offset) plus a gap, so the last row never hides beneath
-     the sticky dock at any scroll position. Flow screens carry no dock. */
-  .screen:not(.flow) { padding-bottom: calc(${CONTROL.nav} + ${SPACE.xl} + ${SPACE.sm}); }
+  /* Dock screens scroll their content UNDER the anchored bottom bar. Reserve
+     clearance below the content equal to the bar footprint plus a breathing
+     gap, so the last row never hides beneath it at any scroll position. Flow
+     screens carry no dock. */
+  .screen:not(.flow) { padding-bottom: calc(var(--mc-dock-h) + ${SPACE.lg}); }
 
   /* Layout primitives */
   .row, .address-line, .context-line, .callout, .token-row {
@@ -94,12 +98,17 @@ export const BASE_STYLES = `
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     min-width: 0;
   }
+  /* Section heads share the 8px horizontal inset of the de-boxed list rows
+     beneath them, so headings and row content sit on one left edge. The same
+     inset applies to heading rows (a .row leading with an h2) so the Activity
+     screen's titles line up with the transaction text below them. */
   .section-head {
     align-items: baseline;
     display: flex;
     justify-content: space-between;
-    padding: 0 2px;
+    padding: 0 ${SPACE.sm};
   }
+  .section > .row:has(> h2) { padding: 0 ${SPACE.sm}; }
   .section-head h2 { font-size: ${TYPE.body.size}; font-weight: 700; }
   .eyebrow {
     color: var(--mc-muted);
@@ -131,7 +140,9 @@ export const BASE_STYLES = `
     padding: 4px 12px 4px 4px;
     text-align: left;
   }
-  button.account-trigger:not(:disabled):hover { background: var(--mc-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    button.account-trigger:not(:disabled):hover { background: var(--mc-hover); }
+  }
   button.account-trigger:not(:disabled):active { background: var(--mc-soft-press); }
   .brand-mark {
     align-items: center;
@@ -214,7 +225,7 @@ export const BASE_STYLES = `
     letter-spacing: ${TRACKING.amount};
     line-height: ${TYPE.amount.line};
   }
-  /* 24h delta: coloured magnitude (emerald up / red down) beside a muted
+  /* 24h delta: coloured magnitude (green up / red down) beside a muted
      "percent · 24h" window; tabular so digits never jitter as prices stream. */
   .hero-change {
     align-items: center;
@@ -253,7 +264,9 @@ export const BASE_STYLES = `
     min-height: 0;
     padding: 6px ${SPACE.md};
   }
-  button.hero-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  @media (hover: hover) and (pointer: fine) {
+    button.hero-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  }
   button.hero-chip:not(:disabled):active { background: var(--mc-soft-press); }
   .hero-chip .icon { color: var(--mc-muted); height: 14px; width: 14px; }
 
@@ -284,11 +297,15 @@ export const BASE_STYLES = `
     justify-items: center;
     padding: ${SPACE.sm} ${SPACE.xs};
     transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
       color ${MOTION.pressMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms ${MOTION.pop};
+      transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  button.action-tile:not(:disabled):hover .tile-label { color: var(--mc-text); }
-  button.action-tile:not(:disabled):active { transform: scale(0.92); }
+  @media (hover: hover) and (pointer: fine) {
+    button.action-tile:not(:disabled):hover { background: var(--mc-hover); }
+    button.action-tile:not(:disabled):hover .tile-label { color: var(--mc-text); }
+  }
+  button.action-tile:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.94); }
   button.action-tile:disabled { cursor: not-allowed; opacity: 0.4; }
   .tile-icon {
     align-items: center;
@@ -300,52 +317,60 @@ export const BASE_STYLES = `
   .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: 650; }
   .tile-icon .icon { height: 24px; width: 24px; }
 
-  /* Bottom dock: a floating solid nav card — hairline edge + a gentle low
-     shadow lift it a hair off the page while content scrolls under it. Flat,
-     no glass. */
+  /* Bottom dock: an anchored, full-bleed bottom bar — a solid panel drawn to
+     the panel edges, separated from scrolling content by a top hairline and
+     the softest upward shadow. Flat, no glass, no floating card: navigation
+     reads as structural chrome, not a component drifting over the page. */
   .wallet-dock {
     background: var(--mc-panel);
-    border-radius: ${RADIUS.lg};
-    bottom: ${SPACE.sm};
-    box-shadow: var(--mc-edge), var(--mc-elev-md);
+    bottom: 0;
+    box-shadow: inset 0 1px 0 var(--mc-hairline), var(--mc-elev-up);
     display: grid;
-    gap: 2px;
+    gap: ${SPACE.xs};
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    margin-top: auto;
-    padding: 6px;
-    position: sticky;
+    left: 0;
+    min-height: var(--mc-dock-h);
+    padding: ${SPACE.xs} ${SPACE.lg};
+    position: fixed;
+    right: 0;
     z-index: 5;
   }
   button.nav-item {
     background: transparent;
-    border-radius: ${RADIUS.md};
+    border-radius: ${RADIUS.sm};
     color: var(--mc-muted);
     display: grid;
-    font-size: ${TYPE.caption.size};
-    font-weight: 600;
-    gap: 4px;
+    font-size: ${TYPE.micro.size};
+    font-weight: ${WEIGHT.medium};
+    gap: 3px;
     justify-items: center;
+    letter-spacing: ${TRACKING.caption};
     min-height: ${CONTROL.nav};
-    padding: ${SPACE.xs} 2px;
-    transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms ${MOTION.pop};
+    padding: ${SPACE.sm} 2px ${SPACE.xs};
+    transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  button.nav-item:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-  button.nav-item:not(:disabled):active { background: transparent; transform: scale(0.92); }
-  /* Active/focus state is carried by the icon itself — an emerald accent tint,
-     with inactive items muted — never a filled background pill behind it. The
-     dock stays flat: no moving indicator, no accent-soft highlight field. */
+  @media (hover: hover) and (pointer: fine) {
+    button.nav-item:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+    /* The active item keeps its accent under the pointer — hovering the tab
+       you are already on must never read as leaving it. */
+    button.nav-item[aria-selected="true"]:not(:disabled):hover { color: var(--mc-accent); }
+  }
+  button.nav-item:not(:disabled):active { background: transparent; transform: scale(0.96); }
+  /* Active state is carried by ink alone — the accent tints the icon and its
+     label, with inactive items muted — never a filled background pill behind
+     it. The dock stays flat: no moving indicator, no accent-soft field. */
   button.nav-item[aria-selected="true"] { color: var(--mc-accent); }
   .tab-icon {
     align-items: center;
     display: inline-flex;
     justify-content: center;
     min-height: 22px;
-    padding: 6px 16px;
+    padding: 0 ${SPACE.md};
     position: relative;
     transition: color ${MOTION.tabMs}ms ${MOTION.ease};
   }
   .tab-icon .icon { height: 22px; width: 22px; }
-  .tab-icon .badge { position: absolute; right: -4px; top: -2px; }
+  .tab-icon .badge { position: absolute; right: 0; top: -2px; }
   .tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 
   /* Flow screens: back control + goal title */
@@ -378,17 +403,19 @@ export const BASE_STYLES = `
     text-decoration: none;
     transition:
       background ${MOTION.pressMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms ${MOTION.pop};
+      transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  button.menu-row:not(:disabled):hover, button.option-row:not(:disabled):hover, a.menu-row:hover {
-    background: var(--mc-hover);
+  @media (hover: hover) and (pointer: fine) {
+    button.menu-row:not(:disabled):hover, button.option-row:not(:disabled):hover, a.menu-row:hover {
+      background: var(--mc-hover);
+    }
+    button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
   }
   button.menu-row:not(:disabled):active, button.option-row:not(:disabled):active {
     background: var(--mc-soft-press);
     transform: scale(0.985);
   }
   button.option-row[aria-pressed="true"] { background: var(--mc-accent-soft); }
-  button.option-row[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
   .menu-icon, .menu-chevron { color: var(--mc-muted); display: inline-flex; flex: none; }
   .menu-icon .icon { height: 20px; width: 20px; }
   .avatar { display: block; height: 100%; width: 100%; }

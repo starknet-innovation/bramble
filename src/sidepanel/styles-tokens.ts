@@ -28,6 +28,7 @@ export const TOKEN_STYLES = `
     --mc-elev-sm: ${SHADOW.sm};
     --mc-elev-md: ${SHADOW.md};
     --mc-elev-lg: ${SHADOW.lg};
+    --mc-elev-up: ${SHADOW.up};
     --ease-standard: ${EASE.standard};
     --ease-out: ${EASE.out};
     --ease-in-out: ${EASE.inOut};

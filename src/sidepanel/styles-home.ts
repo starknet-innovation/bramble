@@ -70,10 +70,12 @@ export const HOME_STYLES = `
       transform ${MOTION.liftMs}ms ${MOTION.pop};
     width: 100%;
   }
-  button.drawer-account:not(:disabled):hover { background: var(--mc-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    button.drawer-account:not(:disabled):hover { background: var(--mc-hover); }
+    button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+  }
   button.drawer-account:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.985); }
   button.drawer-account[aria-pressed="true"] { background: var(--mc-accent-soft); }
-  button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
   .drawer-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .drawer-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
@@ -86,7 +88,7 @@ export const HOME_STYLES = `
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
 
-  /* Portfolio tabs: text tabs, sliding emerald indicator, trailing actions */
+  /* Portfolio tabs: text tabs, sliding accent indicator, trailing actions */
   .home-tabs { display: grid; gap: ${SPACE.sm}; }
   .tab-bar { align-items: center; display: flex; gap: ${SPACE.sm}; min-height: 36px; }
   .tab-set {
@@ -105,15 +107,22 @@ export const HOME_STYLES = `
     font-weight: 700;
     min-height: 30px;
     padding: 0 10px;
-    transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms ${MOTION.pop};
+    transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  button.home-tab:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+  @media (hover: hover) and (pointer: fine) {
+    button.home-tab:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+    /* The selected tab keeps its accent under the pointer (see the dock). */
+    button.home-tab[aria-selected="true"]:not(:disabled):hover { color: var(--mc-accent); }
+  }
   button.home-tab:not(:disabled):active { background: transparent; transform: scale(0.95); }
   /* Active tab: no box/pill fill — a flat text tab that reads as selected via
-     the emerald accent (matching the sliding .tab-indicator underline and the
+     the cobalt accent (matching the sliding .tab-indicator underline and the
      borderless dock highlight). Inactive tabs stay muted; alignment plus the
      accent carry the state without any background. */
   button.home-tab[aria-selected="true"] { color: var(--mc-accent); }
+  /* The underline glides between tabs on the snappy spring — critically damped
+     (no overshoot), settling from the current position so rapid tab taps
+     retarget smoothly instead of restarting. */
   .tab-indicator {
     background: var(--mc-accent);
     border-radius: ${RADIUS.full};
@@ -121,7 +130,7 @@ export const HOME_STYLES = `
     height: 3px;
     left: 0;
     position: absolute;
-    transition: transform ${MOTION.tabMs}ms var(--ease-in-out), width ${MOTION.tabMs}ms var(--ease-in-out);
+    transition: transform var(--spring-snappy-ms) var(--spring-snappy), width var(--spring-snappy-ms) var(--spring-snappy);
     width: 24px;
   }
   .tab-actions { align-items: center; display: flex; flex: none; gap: 2px; margin-bottom: 6px; }
@@ -162,17 +171,18 @@ export const HOME_STYLES = `
     min-height: 0;
     padding: 0;
     text-align: left;
-    transition: transform ${MOTION.liftMs}ms ${MOTION.pop};
+    transition: transform ${MOTION.liftMs}ms var(--ease-out);
     width: 100%;
   }
   button.collectible-card:not(:disabled):hover { background: transparent; }
-  button.collectible-card:not(:disabled):hover strong { color: var(--mc-accent); }
   button.collectible-card:not(:disabled):active { background: transparent; transform: scale(0.97); }
 
-  /* Hover lift is gated to fine pointers so a tap on touch never leaves an
-     element floating (touch fires a phantom :hover). Pointer devices raise the
-     art tile with a soft shadow; the press scale is universal. */
+  /* Hover feedback is gated to fine pointers so a tap on touch never leaves an
+     element floating (touch fires a phantom :hover). Pointer devices tint the
+     caption and raise the art tile with a soft shadow; the press scale is
+     universal. */
   @media (hover: hover) and (pointer: fine) {
+    button.collectible-card:not(:disabled):hover strong { color: var(--mc-accent); }
     button.collectible-card:not(:disabled):hover .collectible-art {
       box-shadow: var(--mc-edge), var(--mc-shadow-sm);
     }
@@ -194,7 +204,7 @@ export const HOME_STYLES = `
   .collectible-copy strong { font-size: ${TYPE.label.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .collectible-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
 
-  /* Copy confirmation: the glyph flips to an emerald check, then back */
+  /* Copy confirmation: the glyph flips to a success-green check, then back */
   button.copy-confirm, .hero-chip.copy-confirm .icon { color: var(--mc-positive); }
   .copy-confirm .icon { animation: glyph-pop ${MOTION.tabMs}ms ${MOTION.pop} both; }
 
@@ -263,7 +273,13 @@ export const HOME_STYLES = `
     padding: 0 ${SPACE.sm};
   }
   button.group-chip .icon { height: 14px; width: 14px; }
-  button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  /* Selected chips/toggles keep their accent-soft state under the pointer: the
+     pressed-state hover rules below outrank the resting hover rules, so
+     hovering a selected control never visually deselects it. */
+  @media (hover: hover) and (pointer: fine) {
+    button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+    button.group-chip[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  }
   button.group-chip[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
   .drawer-account-item { display: grid; gap: 4px; }
   .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
@@ -296,7 +312,10 @@ export const HOME_STYLES = `
     padding: 0 ${SPACE.sm};
     width: 100%;
   }
-  button.group-toggle:not(:disabled):hover { background: var(--mc-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    button.group-toggle:not(:disabled):hover { background: var(--mc-hover); }
+    button.group-toggle[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+  }
   button.group-toggle[aria-pressed="true"] { background: var(--mc-accent-soft); }
   .group-toggle-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
   .group-toggle-icon .icon { height: 16px; width: 16px; }
@@ -329,7 +348,10 @@ export const HOME_STYLES = `
     padding: 0;
   }
   button.group-icon-option .icon { height: 18px; width: 18px; }
-  button.group-icon-option:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+  @media (hover: hover) and (pointer: fine) {
+    button.group-icon-option:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+    button.group-icon-option[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  }
   button.group-icon-option[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
   .group-manage-list { display: grid; gap: ${SPACE.sm}; }
   .group-manage-row { display: grid; gap: ${SPACE.sm}; }
@@ -364,7 +386,10 @@ export const HOME_STYLES = `
     padding: 0 ${SPACE.sm};
     width: 100%;
   }
-  button.group-expand:not(:disabled):hover { background: var(--mc-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    button.group-expand:not(:disabled):hover { background: var(--mc-hover); }
+    button.group-expand[aria-expanded="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+  }
   button.group-expand[aria-expanded="true"] { background: var(--mc-accent-soft); }
   button.group-expand[aria-expanded="true"] .group-manage-icon { color: var(--mc-accent); }
   .group-expand-mark { align-items: center; color: var(--mc-muted); display: inline-flex; flex: none; }
@@ -393,7 +418,10 @@ export const HOME_STYLES = `
     text-align: left;
     width: 100%;
   }
-  button.account-check:not(:disabled):hover { background: var(--mc-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    button.account-check:not(:disabled):hover { background: var(--mc-hover); }
+    button.account-check[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+  }
   button.account-check[aria-pressed="true"] { background: var(--mc-accent-soft); }
   .account-check .option-avatar { flex: none; }
   .account-check-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
@@ -416,11 +444,6 @@ export const HOME_STYLES = `
   .account-check-mark .icon { color: var(--mc-muted); height: 18px; width: 18px; }
   button.account-check[aria-pressed="true"] .account-check-mark .icon { color: var(--mc-accent); }
 
-  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: 2px solid var(--mc-accent);
-    outline-offset: 2px;
-  }
-
   /* Reduced motion: every animation and transition collapses to a cut, and
      hover lifts and press scales settle to static states */
   @media (prefers-reduced-motion: reduce) {
@@ -434,6 +457,8 @@ export const HOME_STYLES = `
     .account-drawer, .drawer-backdrop, .account-name .icon { transition: none; }
     button.collectible-card:not(:disabled):hover,
     .account-trigger[aria-expanded="true"] .account-name .icon { transform: none; }
+    button:not(:disabled):active,
+    button.icon-button:not(:disabled):active,
     button.action-tile:not(:disabled):active,
     button.collectible-card:not(:disabled):active,
     button.nav-item:not(:disabled):active,

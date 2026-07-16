@@ -1,8 +1,8 @@
 /**
  * System skin checks: the default "system" theme sources its neutrals from CSS
  * system-color keywords (so they match the browser and auto-flip with
- * `color-scheme`) while keeping the emerald brand accent and up/down semantics
- * as fixed `light-dark()` values rather than system colors.
+ * `color-scheme`) while keeping the cobalt brand accent and up/down market
+ * semantics as fixed `light-dark()` values rather than system colors.
  */
 import { expect, test } from "bun:test";
 
@@ -26,7 +26,7 @@ test("system skin border is a CanvasText-derived hairline, not a raw color", () 
   expect(border).toContain("transparent");
 });
 
-test("system skin keeps the emerald brand accent as fixed light-dark values", () => {
+test("system skin keeps the cobalt brand accent as fixed light-dark values", () => {
   // Accent, accent-on-text, and the up/down semantics stay designed tokens —
   // Chrome does not expose the browser accent to an extension page — resolved
   // per ground by light-dark() so contrast holds in both schemes.
@@ -38,10 +38,12 @@ test("system skin keeps the emerald brand accent as fixed light-dark values", ()
   ] as const) {
     expect(systemSkin.tokens[token]).toMatch(/^light-dark\(.+,.+\)$/);
   }
-  // The emerald pair is the daylight/midnight brand green, deep on light and
-  // bright on dark.
-  expect(systemSkin.tokens["--mc-accent"]).toBe("light-dark(#0a7a4d, #2fcf8e)");
+  // The cobalt pair is the daylight/midnight brand blue, deep on light and
+  // bright on dark; the market-positive green stays its own semantic token so
+  // brand and gains never share one colour.
+  expect(systemSkin.tokens["--mc-accent"]).toBe("light-dark(#1f57e0, #5c8dff)");
   expect(systemSkin.tokens["--mc-positive"]).toBe("light-dark(#0a7a4d, #2fcf8e)");
+  expect(systemSkin.tokens["--mc-accent"]).not.toBe(systemSkin.tokens["--mc-positive"]);
 });
 
 test("system skin satisfies the skin contract and applies every token", () => {

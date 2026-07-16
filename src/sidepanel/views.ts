@@ -96,6 +96,7 @@ const dockItem = (
 ): string =>
   `<button class="nav-item" data-view="${view}" type="button" role="tab" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" aria-controls="wallet-screen-${view}" aria-selected="${activeView === view}">
     <span class="tab-icon">${icon(name)}${pendingCount > 0 && view === "activity" ? `<span class="badge">${pendingCount}</span>` : ""}</span>
+    <span class="tab-label">${escapeHtml(label)}</span>
   </button>`;
 
 const walletDock = (activeView: WalletView, pendingCount: number): string => `
@@ -139,7 +140,7 @@ const deployNotice = (account: AccountRef | null, deployment: boolean | null): s
         <p id="deploy-result" role="status"></p>
       </div>`;
 
-// The portfolio 24h delta line under the balance: an emerald/red arrow and
+// The portfolio 24h delta line under the balance: a green/red arrow and
 // magnitude beside a muted "percent · 24h" trailing label. Empty when nothing
 // is priced yet (no baseline), so it never renders a misleading zero-change.
 const heroDelta = (
@@ -299,9 +300,9 @@ const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | 
       ${menuRow("account", "Manage accounts & groups", "wallet")}
       ${menuRow("address-book", "Address book", "book")}
       ${menuRow("connected-sites", "Connected sites", "link")}
-      ${menuRow("allowances", "Allowances", "lock")}
-      ${menuRow("multisigs", "Multisigs", "wallet")}
-      ${menuRow("backup", "Backup & restore", "receive")}
+      ${menuRow("allowances", "Allowances", "coins")}
+      ${menuRow("multisigs", "Multisigs", "users")}
+      ${menuRow("backup", "Backup & restore", "shield")}
       ${menuRow("reveal", "Reveal secrets", "lock")}
     </div>
     <a class="menu-row" href="https://github.com/mc-wallet/mc-wallet#readme" target="_blank" rel="noreferrer">

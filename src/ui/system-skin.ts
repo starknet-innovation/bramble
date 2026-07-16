@@ -28,27 +28,28 @@
  *     its support is narrower than `color-mix()`, which the derived tokens
  *     already require.
  *
- * The emerald brand accent and the up/down semantics are NOT system colors —
- * Chrome does not expose the browser's accent to a normal extension page, so
- * they stay as designed tokens. They keep the exact `daylight`/`midnight`
- * values, selected per ground by `light-dark()` so the CTA fill, active states,
- * gains, and losses read correctly against whichever scheme the browser resolves
- * `color-scheme: light dark` to.
+ * The cobalt brand accent and the up/down market semantics are NOT system
+ * colors — Chrome does not expose the browser's accent to a normal extension
+ * page, so they stay as designed tokens. They keep the exact
+ * `daylight`/`midnight` values, selected per ground by `light-dark()` so the
+ * CTA fill, active states, gains, and losses read correctly against whichever
+ * scheme the browser resolves `color-scheme: light dark` to.
  */
 import type { Skin } from "./skin";
 
 /**
  * Default skin that follows the browser's own light/dark rendering: neutrals
- * from CSS system colors, brand/semantic colors from `light-dark()` emerald.
+ * from CSS system colors, brand color from `light-dark()` cobalt, market
+ * semantics from `light-dark()` green/red.
  */
 export const systemSkin: Skin = {
   name: "system",
   tokens: {
-    "--mc-accent": "light-dark(#0a7a4d, #2fcf8e)",
-    "--mc-accent-text": "light-dark(#ffffff, #04150d)",
+    "--mc-accent": "light-dark(#1f57e0, #5c8dff)",
+    "--mc-accent-text": "light-dark(#ffffff, #0a1220)",
     "--mc-bg": "Canvas",
     "--mc-border": "color-mix(in srgb, CanvasText 12%, transparent)",
-    "--mc-danger": "light-dark(#c23434, #ff6b6b)",
+    "--mc-danger": "light-dark(#c23434, #f87171)",
     "--mc-elevated": "ButtonFace",
     "--mc-muted": "GrayText",
     "--mc-panel": "Canvas",
