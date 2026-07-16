@@ -39,3 +39,14 @@ describe("swap value delta", () => {
     expect(swapValueDeltaPercent(quote(0.39, 0))).toBeNull();
   });
 });
+
+describe("token search ranking", () => {
+  test("exact symbol beats prefix beats name beats substring", async () => {
+    const { rankTokenQueryMatch } = await import("../src/sidepanel/swap-picker");
+    expect(rankTokenQueryMatch({ name: "USDC", symbol: "USDC" }, "usdc")).toBe(0);
+    expect(rankTokenQueryMatch({ name: "Bridged USDC", symbol: "USDC.e" }, "usdc")).toBe(1);
+    expect(rankTokenQueryMatch({ name: "USDC yield", symbol: "fyU" }, "usdc")).toBe(2);
+    expect(rankTokenQueryMatch({ name: "Relend Network USDC", symbol: "rUSDC" }, "usdc")).toBe(3);
+    expect(rankTokenQueryMatch({ name: "Ethereum", symbol: "ETH" }, "usdc")).toBeNull();
+  });
+});

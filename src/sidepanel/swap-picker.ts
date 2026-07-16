@@ -66,6 +66,33 @@ export const setPickerSide = (side: PickerSide | null): void => {
 
 const isAddressText = (value: string): boolean => /^0x[0-9a-fA-F]{3,64}$/.test(value.trim());
 
+/**
+ * Ranks how well a catalog entry matches a text query: exact symbol first,
+ * then symbol prefix, name prefix, and finally substring hits — null when it
+ * does not match. Ties keep the catalog's volume order, so "usdc" surfaces
+ * USDC before Bridged USDC before the long tail.
+ */
+export const rankTokenQueryMatch = (
+  entry: { readonly name: string; readonly symbol: string },
+  query: string,
+): number | null => {
+  const symbol = entry.symbol.toLowerCase();
+  const name = entry.name.toLowerCase();
+  if (symbol === query) {
+    return 0;
+  }
+  if (symbol.startsWith(query)) {
+    return 1;
+  }
+  if (name.startsWith(query)) {
+    return 2;
+  }
+  if (symbol.includes(query) || name.includes(query)) {
+    return 3;
+  }
+  return null;
+};
+
 const trackedByAddress = (deps: SwapPickerDeps, address: string): TokenConfig | undefined =>
   (deps.preferences()?.tokens ?? []).find(
     (token) => token.networkId === deps.status().networkId && sameFelt(token.address, address),
@@ -97,26 +124,48 @@ const ensureCatalog = (deps: SwapPickerDeps, repaint: () => void): void => {
   );
 };
 
-// The sheet's entries: the verified catalog merged with tracked tokens (so a
-// custom token the user added by hand is still findable), tracked-first when
-// the catalog is empty.
-const pickerEntries = (deps: SwapPickerDeps): readonly SwapCatalogTokenView[] => {
+type PickerEntry = SwapCatalogTokenView & {
+  readonly balanceText: string | null;
+  readonly tracked: boolean;
+};
+
+// The sheet's entries in the catalog's volume order (majors first), each
+// annotated with whether the wallet already tracks it and its balance —
+// tracked tokens the catalog misses (hand-added customs) are appended so
+// everything the user owns stays findable, and networks without a catalog
+// fall back to the tracked list alone.
+const pickerEntries = (deps: SwapPickerDeps): readonly PickerEntry[] => {
   const tracked = (deps.preferences()?.tokens ?? []).filter(
     (token) => token.networkId === deps.status().networkId,
   );
-  const fromCatalog = catalog ?? [];
+  const state = deps.balances();
+  const annotate = (entry: SwapCatalogTokenView): PickerEntry => {
+    const match = tracked.find((token) => sameFelt(token.address, entry.address));
+    const balance =
+      match && !("error" in state)
+        ? (state.balances.find((item) => item.id === match.id) ?? null)
+        : null;
+    return {
+      ...entry,
+      balanceText: balance ? compactAmount(balance.formatted) : null,
+      tracked: match !== undefined,
+    };
+  };
+  const fromCatalog = (catalog ?? []).map(annotate);
   const extras = tracked
     .filter((token) => !fromCatalog.some((entry) => sameFelt(entry.address, token.address)))
-    .map((token) => ({
-      address: token.address,
-      decimals: token.decimals,
-      name: token.name,
-      symbol: token.symbol,
-    }));
+    .map((token) =>
+      annotate({
+        address: token.address,
+        decimals: token.decimals,
+        name: token.name,
+        symbol: token.symbol,
+      }),
+    );
   return [...fromCatalog, ...extras];
 };
 
-const filteredEntries = (deps: SwapPickerDeps): readonly SwapCatalogTokenView[] => {
+const filteredEntries = (deps: SwapPickerDeps): readonly PickerEntry[] => {
   const entries = pickerEntries(deps);
   const query = searchText.trim().toLowerCase();
   if (query.length === 0) {
@@ -127,28 +176,28 @@ const filteredEntries = (deps: SwapPickerDeps): readonly SwapCatalogTokenView[] 
       (entry) => sameFelt(entry.address, query) || entry.address.startsWith(query),
     );
   }
-  return entries.filter(
-    (entry) =>
-      entry.symbol.toLowerCase().includes(query) || entry.name.toLowerCase().includes(query),
-  );
+  return entries
+    .map((entry, index) => ({ entry, index, rank: rankTokenQueryMatch(entry, query) }))
+    .filter(
+      (item): item is { entry: PickerEntry; index: number; rank: number } => item.rank !== null,
+    )
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((item) => item.entry);
 };
 
-const entryRow = (deps: SwapPickerDeps, entry: SwapCatalogTokenView): string => {
-  const tracked = trackedByAddress(deps, entry.address);
-  const state = deps.balances();
-  const balance =
-    tracked && !("error" in state)
-      ? (state.balances.find((item) => item.id === tracked.id) ?? null)
-      : null;
-  return `<button class="option-row" role="option" type="button" data-swap-pick-address="${escapeHtml(entry.address)}">
+// One catalog row. The sub-line pairs the symbol with the truncated contract
+// address — the definitive disambiguator when one brand ships twice (native
+// USDC vs the StarkGate-bridged USDC.e share a mark but never an address).
+const entryRow = (
+  entry: PickerEntry,
+): string => `<button class="option-row" role="option" type="button" data-swap-pick-address="${escapeHtml(entry.address)}">
       ${tokenGlyph(entry.address, entry.symbol)}
       <span class="option-copy">
         <strong>${escapeHtml(entry.name)} <span class="swap-verified">${icon("check")}</span></strong>
-        <span class="option-sub">${escapeHtml(entry.symbol)}</span>
+        <span class="option-sub">${escapeHtml(entry.symbol)} · <code>${escapeHtml(accountLabel(entry.address))}</code></span>
       </span>
-      <span class="menu-value">${balance ? escapeHtml(compactAmount(balance.formatted)) : ""}</span>
+      <span class="menu-value">${entry.balanceText ? escapeHtml(entry.balanceText) : ""}</span>
     </button>`;
-};
 
 // Renders the sheet from module state: title, chips for the majors, the
 // filtered list, and an add-by-address fallback when the search is a valid
@@ -192,7 +241,18 @@ const applyPickerUi = (deps: SwapPickerDeps, root: Element): void => {
             <span class="menu-value">Adds the token</span>
           </button>`
         : "";
-    list.innerHTML = entries.map((entry) => entryRow(deps, entry)).join("") + addFallback;
+    const group = (rows: string): string => `<div class="swap-sheet-group">${rows}</div>`;
+    const searching = searchText.trim().length > 0;
+    const mine = entries.filter((entry) => entry.tracked);
+    const rest = entries.filter((entry) => !entry.tracked);
+    // Resting order communicates structure: what you hold first, then the
+    // whole verified catalog in volume order. A search flattens to one ranked
+    // list so the best match is always the first row.
+    list.innerHTML =
+      searching || mine.length === 0 || rest.length === 0
+        ? group(entries.map(entryRow).join("") + addFallback)
+        : `<p class="eyebrow swap-sheet-label">Your tokens</p>${group(mine.map(entryRow).join(""))}
+           <p class="eyebrow swap-sheet-label">All tokens</p>${group(rest.map(entryRow).join(""))}`;
   }
   const status = sheet.querySelector<HTMLElement>("#swap-picker-status");
   if (status) {

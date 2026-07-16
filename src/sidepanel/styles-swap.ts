@@ -186,13 +186,15 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
   }
   button.swap-chip .token-mark, button.swap-chip .token-logo { height: 20px; width: 20px; }
   button.swap-chip .token-mark { font-size: 8px; }
-  .swap-sheet-list {
+  .swap-sheet-list { display: grid; gap: ${SPACE.sm}; }
+  .swap-sheet-label { padding: ${SPACE.xs} ${SPACE.sm} 0; }
+  .swap-sheet-group {
     background: var(--mc-panel);
     border-radius: ${RADIUS.lg};
     display: grid;
   }
-  .swap-sheet-list > * + * { position: relative; }
-  .swap-sheet-list > * + *::before {
+  .swap-sheet-group > * + * { position: relative; }
+  .swap-sheet-group > * + *::before {
     background: var(--mc-hairline);
     content: "";
     height: 1px;
@@ -201,9 +203,10 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
     right: 0;
     top: 0;
   }
-  .swap-sheet-list .option-row { min-height: 60px; }
-  .swap-sheet-list .token-mark, .swap-sheet-list .token-logo { height: 32px; width: 32px; }
-  .swap-sheet-list .token-mark { font-size: 10px; }
+  .swap-sheet-group .option-row { min-height: 60px; }
+  .swap-sheet-group .token-mark, .swap-sheet-group .token-logo { height: 32px; width: 32px; }
+  .swap-sheet-group .token-mark { font-size: 10px; }
+  .swap-sheet-group .option-sub code { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
   /* Verified mark: catalog entries are AVNU-verified; the check reads in the
      success voice beside the name. */
   .swap-verified { color: var(--mc-positive); display: inline-flex; vertical-align: middle; }

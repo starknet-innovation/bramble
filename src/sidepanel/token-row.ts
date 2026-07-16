@@ -17,7 +17,18 @@ import { formatFiat, tokenFiatValue } from "./fiat";
  */
 export const tokenGlyph = (address: string, symbol: string): string => {
   const logo = tokenLogoSvg(address);
-  return logo ?? `<span class="token-mark">${escapeHtml(symbol.slice(0, 3))}</span>`;
+  if (logo) {
+    return logo;
+  }
+  // Letter badges carry a deterministic per-token tint (same derivation as
+  // account avatars) so long token lists stay scannable without brand marks.
+  let tone = 0;
+  try {
+    tone = Number(BigInt(address) % 4n);
+  } catch {
+    tone = 0;
+  }
+  return `<span class="token-mark" data-tone="${tone}">${escapeHtml(symbol.slice(0, 3))}</span>`;
 };
 
 const groupThousands = (whole: string): string => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");

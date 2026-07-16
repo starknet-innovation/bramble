@@ -125,6 +125,12 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     letter-spacing: 0.02em;
     width: 40px;
   }
+  /* Deterministic per-token tint for letter badges (avatar-palette hues) so
+     catalog lists read as distinct rows, not a grey column. */
+  .token-mark[data-tone="0"] { background: color-mix(in srgb, var(--mc-avatar-0) 20%, var(--mc-sunken)); color: color-mix(in srgb, var(--mc-avatar-0) 80%, var(--mc-text)); }
+  .token-mark[data-tone="1"] { background: color-mix(in srgb, var(--mc-avatar-1) 20%, var(--mc-sunken)); color: color-mix(in srgb, var(--mc-avatar-1) 80%, var(--mc-text)); }
+  .token-mark[data-tone="2"] { background: color-mix(in srgb, var(--mc-avatar-2) 20%, var(--mc-sunken)); color: color-mix(in srgb, var(--mc-avatar-2) 80%, var(--mc-text)); }
+  .token-mark[data-tone="3"] { background: color-mix(in srgb, var(--mc-avatar-3) 20%, var(--mc-sunken)); color: color-mix(in srgb, var(--mc-avatar-3) 80%, var(--mc-text)); }
   .token-logo {
     border-radius: ${RADIUS.full};
     flex: none;
