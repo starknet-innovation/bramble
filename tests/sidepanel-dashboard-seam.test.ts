@@ -9,12 +9,21 @@
  * elsewhere; these drive the FULL positional signature so a regression in the
  * call-site ordering, or a screen dropping / mis-routing its trailing argument,
  * is caught end-to-end rather than only where the leaf is exercised directly.
+ *
+ * The class-hash verification type is taken from `dashboard`'s own parameter
+ * list (`Parameters<typeof dashboard>[24]`) rather than imported from
+ * `starknet/class-hash-verify` directly: it keeps the seam objects bound to the
+ * exact type `dashboard` accepts, and avoids a second module-resolver entry into
+ * that subtree (the same subtree the pre-existing `biome check` bug trips on).
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../src/popup/responses";
 import { dashboard, type WalletView } from "../src/sidepanel/views";
-import type { ClassHashVerification } from "../src/starknet/class-hash-verify";
 import { account, preferences, secondAccount } from "./support/sidepanel-fixtures";
+
+// The class-hash verification shape `dashboard` accepts at its 25th positional
+// parameter (0-indexed 24), non-null — i.e. a resolved ClassHashVerification.
+type SeamVerification = NonNullable<Parameters<typeof dashboard>[24]>;
 
 const status: WalletStatus = {
   accountCount: 2,
@@ -39,7 +48,7 @@ const status: WalletStatus = {
 const renderSeam = (
   view: WalletView,
   seam: {
-    readonly classHashVerification?: ClassHashVerification | null;
+    readonly classHashVerification?: SeamVerification | null;
     readonly historyUnavailable?: boolean;
   },
 ): string =>
@@ -72,11 +81,11 @@ const renderSeam = (
     seam.historyUnavailable ?? false,
   );
 
-const VERIFIED: ClassHashVerification = {
+const VERIFIED: SeamVerification = {
   onChainClassHash: account.classHash,
   status: "verified",
 };
-const MISMATCH: ClassHashVerification = {
+const MISMATCH: SeamVerification = {
   expectedClassHash: account.classHash,
   onChainClassHash: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   status: "mismatch",

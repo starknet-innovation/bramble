@@ -178,4 +178,72 @@ describe("background class-hash verification message", () => {
       error: "class hash verification unavailable",
     });
   });
+
+  // Cross-feature seam (#112 raw-key import ↔ #110 class-hash verify): a
+  // raw-key-imported account is an ImportedAccountRef with NO `publicKeyY`. The
+  // verify path resolves the active account and reads its address/classHash, so
+  // an imported account must verify on-chain exactly like a derived one. This
+  // drives the real handler with an imported account active to lock in that the
+  // shared active-account context accepts both account variants.
+  test("verifies an imported (publicKeyY-less) account like a derived one", async () => {
+    const importedAccount: AccountRef = {
+      address: "0x5abc567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+      classHash: "0x6abc567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+      derivation: { kind: "imported-raw-key" },
+      id: "SN_MAIN:0x5abc567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+      networkId: "SN_MAIN",
+      publicKeyX: "0x7abc567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+    };
+    // Guard the premise: this really is the publicKeyY-less variant.
+    expect(importedAccount).not.toHaveProperty("publicKeyY");
+
+    const importedVault = {
+      accounts: [importedAccount],
+      activeAccountId: importedAccount.id,
+    } as unknown as Vault;
+    const importedWalletStub = {
+      ...walletStub,
+      async readVault() {
+        return importedVault;
+      },
+      async status() {
+        return {
+          accountCount: 1,
+          activeAccountId: importedAccount.id,
+          hasVault: true,
+          locked: false,
+          ready: true,
+        };
+      },
+    };
+
+    const calls: VerifyClassHashInput[] = [];
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(importedWalletStub, "extension-id", {
+      runtimeRpc: makeRuntimeRpc({
+        async verifyAccountClassHash(input) {
+          calls.push(input);
+          return { onChainClassHash: importedAccount.classHash, status: "verified" };
+        },
+      }),
+      session,
+    });
+
+    const response = await handler(VERIFY, extensionSender);
+
+    expect(response).toEqual({
+      accountId: importedAccount.id,
+      ok: true,
+      verification: { onChainClassHash: importedAccount.classHash, status: "verified" },
+    });
+    // The imported account's own address/classHash reach the verifier unchanged.
+    expect(calls).toEqual([
+      {
+        accountAddress: importedAccount.address,
+        expectedClassHash: importedAccount.classHash,
+        rpcUrls: ["https://api.cartridge.gg/x/starknet/mainnet"],
+      },
+    ]);
+  });
 });
