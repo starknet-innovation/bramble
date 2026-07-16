@@ -9,6 +9,7 @@
  * happen to agree.
  */
 import { describe, expect, test } from "bun:test";
+import type { Call } from "starknet";
 import type { PendingApproval, WalletStatus } from "../src/popup/responses";
 import { approvalCard } from "../src/sidepanel/approval-cards";
 import { reviewCallsList, reviewPanel, riskFlagMessages } from "../src/sidepanel/review-render";
@@ -71,6 +72,18 @@ const reviewFor = (
     parseTokenAmount("1.5", token.decimals),
   );
   const report = verifyCalls([call], { account, addressBook: [], tokens: [token] });
+  return {
+    flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+    summaries: report.calls.map((decoded) => decoded.summary),
+  };
+};
+
+// Runs the shared verify layer over an arbitrary call list (multicall, unknown
+// selectors, …) and shapes its output for both surfaces from one report.
+const reviewForCalls = (
+  calls: readonly Call[],
+): { readonly flags: readonly Flag[]; readonly summaries: readonly string[] } => {
+  const report = verifyCalls(calls, { account, addressBook: [], tokens: [token] });
   return {
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     summaries: report.calls.map((decoded) => decoded.summary),
@@ -143,5 +156,73 @@ describe("Send review vs dApp invoke card decode/risk parity (#19)", () => {
     expect(reviewPanel(riskFlagMessages(flags))).toBe("");
     expect(dappCard(summaries, flags)).toContain(reviewCallsList(summaries));
     expect(sendReview(summaries, flags)).toContain(reviewCallsList(summaries));
+  });
+
+  test("a multicall renders every decoded summary in order on both surfaces", () => {
+    // transfer + an effectively-unlimited approve: two decoded calls, and the
+    // approve raises the unlimited-approval flag from the shared verify layer.
+    const transfer = buildErc20TransferCall(
+      token.address,
+      CLEAN_RECIPIENT,
+      parseTokenAmount("2", token.decimals),
+    );
+    const approve: Call = {
+      calldata: [CLEAN_RECIPIENT, "0", "1"],
+      contractAddress: token.address,
+      entrypoint: "approve",
+    };
+    const { flags, summaries } = reviewForCalls([transfer, approve]);
+
+    expect(summaries).toHaveLength(2);
+    expect(flags.some((flag) => flag.code === "unlimited-approval")).toBe(true);
+
+    // The single shared list carries both summaries, so multicall ordering can
+    // not diverge between the two surfaces.
+    const list = reviewCallsList(summaries);
+    expect(dappCard(summaries, flags)).toContain(list);
+    expect(sendReview(summaries, flags)).toContain(list);
+    const panel = reviewPanel(riskFlagMessages(flags));
+    expect(dappCard(summaries, flags)).toContain(panel);
+    expect(sendReview(summaries, flags)).toContain(panel);
+  });
+
+  test("the Send-only deployment notice rides in the shared risk panel, not the dApp card", () => {
+    // Clean recipient → no verify-layer flags, so the panel carries only the
+    // deployment notice and `reviewPanel([notice])` is an exact substring.
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    expect(flags).toEqual([]);
+    const deploymentNotice =
+      "This account is not deployed yet; the first send also submits its deployment.";
+
+    const rendered = reviewPanelHtml({
+      fee: null,
+      feeEstimateFailed: false,
+      flags,
+      requiresDeployment: true,
+      summaries,
+    });
+
+    // The notice renders through the shared panel with the same review-flag
+    // affordance a risk flag uses — not as a bespoke inline paragraph.
+    expect(rendered).toContain(reviewPanel([deploymentNotice]));
+    // It is Send-specific (informational, not a verify-layer flag) and must not
+    // appear on the dApp invoke card for the same decoded transfer.
+    expect(dappCard(summaries, flags)).not.toContain(deploymentNotice);
+  });
+
+  test("an unknown selector decodes to the same fallback summary on both surfaces", () => {
+    const unknown: Call = {
+      calldata: ["0x1", "0x2"],
+      contractAddress: token.address,
+      entrypoint: "frobnicate",
+    };
+    const { flags, summaries } = reviewForCalls([unknown]);
+
+    // The decoder falls back to a "Call <entrypoint> on <addr>" summary rather
+    // than silently dropping the call — the same on both surfaces.
+    expect(summaries[0]).toContain("frobnicate");
+    const list = reviewCallsList(summaries);
+    expect(dappCard(summaries, flags)).toContain(list);
+    expect(sendReview(summaries, flags)).toContain(list);
   });
 });

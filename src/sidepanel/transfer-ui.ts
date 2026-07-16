@@ -108,7 +108,9 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
     return;
   }
   const result = app?.querySelector<HTMLElement>("#transfer-result");
-  const reviewPanel = app?.querySelector<HTMLElement>("#review-panel");
+  // The `#review-panel` container element — named distinctly so it does not
+  // shadow the imported `reviewPanel` render helper used by `reviewPanelHtml`.
+  const reviewPanelEl = app?.querySelector<HTMLElement>("#review-panel");
   const recipientInput = form?.querySelector<HTMLInputElement>('input[name="recipient"]');
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   let reviewedKey: string | null = null;
@@ -121,8 +123,8 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
     reviewedKey = null;
     requiresDeployment = false;
     recipientInput?.setCustomValidity("");
-    if (reviewPanel) {
-      reviewPanel.innerHTML = "";
+    if (reviewPanelEl) {
+      reviewPanelEl.innerHTML = "";
     }
     if (submitButton) {
       submitButton.lastChild?.replaceWith("Review send");
@@ -159,8 +161,8 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
             const feeFailed = review.feeEstimateFailed;
             reviewedKey = feeFailed ? null : key;
             requiresDeployment = review.requiresDeployment;
-            if (reviewPanel) {
-              reviewPanel.innerHTML = reviewPanelHtml(review);
+            if (reviewPanelEl) {
+              reviewPanelEl.innerHTML = reviewPanelHtml(review);
             }
             if (submitButton) {
               submitButton.lastChild?.replaceWith(feeFailed ? "Review send" : "Confirm send");
@@ -170,7 +172,7 @@ export const bindTransfer = ({ app, render, wallet }: TransferUiDeps): void => {
                 ? "Fee estimate failed. Retry the fee estimate before sending."
                 : "Review the details above, then confirm.";
             }
-            reviewPanel
+            reviewPanelEl
               ?.querySelector<HTMLButtonElement>("#review-retry-fee")
               ?.addEventListener("click", () => {
                 form.requestSubmit();
