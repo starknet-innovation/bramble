@@ -185,12 +185,20 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".tx-status.accepted { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
-    // Toast tone is a leading semantic dot — success green, error red — so the
-    // surface itself stays a neutral panel.
+    // Toast tone is a leading icon chip — green check on positive-soft for
+    // success, red alert on danger-soft for error — a fixed heuristic the eye
+    // reads before any text, while the surface stays a neutral panel.
     expect(SIDEPANEL_STYLES).toContain(
-      ".toast.success::before { background: var(--mc-positive); }",
+      ".toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }",
     );
-    expect(SIDEPANEL_STYLES).toContain(".toast.error::before { background: var(--mc-danger); }");
+    expect(SIDEPANEL_STYLES).toContain(
+      ".toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }",
+    );
+    // The swap success moment draws its ring and check in the semantic green
+    // and collapses to static marks under reduced motion.
+    expect(SIDEPANEL_STYLES).toMatch(/\.swap-success-ring \{[^}]*animation: swap-draw/s);
+    const reducedBlock = SIDEPANEL_STYLES.slice(SIDEPANEL_STYLES.indexOf("prefers-reduced-motion"));
+    expect(reducedBlock).toContain(".swap-success-ring, .swap-success-check");
     // The pending-count badge ink is the page ground, never the accent's paired
     // text colour (which tracks the accent, not the danger fill).
     expect(SIDEPANEL_STYLES).toMatch(/\.badge \{[^}]*color: var\(--mc-bg\)/s);

@@ -193,18 +193,35 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
      success voice beside the name. */
   .swap-verified { color: var(--mc-positive); display: inline-flex; vertical-align: middle; }
   .swap-verified .icon { height: 13px; width: 13px; }
-  /* Submitted receipt: success is stated once, in the semantic green. */
-  .swap-done { justify-items: center; padding-top: ${SPACE.xl}; text-align: center; }
-  .swap-done .receipt, .swap-done .swap-actions { justify-items: stretch; text-align: left; width: 100%; }
-  .swap-done-mark {
-    align-items: center;
-    background: var(--mc-positive-soft);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-positive);
-    display: inline-flex;
-    height: 56px;
-    justify-content: center;
-    width: 56px;
+  /* Success moment: the ring draws itself, the check follows, the copy rises
+     beneath — a felt confirmation, held briefly before the flow returns home
+     on its own. Stroke-draw keyframes settle to their end state (forwards) and
+     collapse to static marks under reduced motion via the home layer. */
+  .swap-success { gap: ${SPACE.sm}; justify-items: center; padding-top: 56px; text-align: center; }
+  .swap-success-mark { color: var(--mc-positive); display: inline-flex; height: 72px; width: 72px; }
+  .swap-success-mark svg {
+    fill: none;
+    height: 100%;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3.2;
+    width: 100%;
   }
-  .swap-done-mark .icon { height: 26px; width: 26px; }
+  .swap-success-ring {
+    animation: swap-draw 480ms var(--ease-out) 60ms forwards;
+    stroke-dasharray: 158;
+    stroke-dashoffset: 158;
+  }
+  .swap-success-check {
+    animation: swap-draw 300ms var(--ease-out) 460ms forwards;
+    stroke-dasharray: 32;
+    stroke-dashoffset: 32;
+  }
+  @keyframes swap-draw { to { stroke-dashoffset: 0; } }
+  .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint {
+    animation: rise-in 260ms var(--ease-out) both;
+  }
+  .swap-success .swap-success-summary { animation-delay: 60ms; font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.semibold}; }
+  .swap-success .hint { animation-delay: 120ms; }
 `;

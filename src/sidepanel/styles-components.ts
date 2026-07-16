@@ -406,26 +406,38 @@ ${SIGN_REQUEST_STYLES}
     right: ${SPACE.md};
     z-index: 10;
   }
-  /* Toasts are a solid panel pill dragged/dismissed with an interruptible WAAPI
+  /* Toasts are a solid panel card dragged/dismissed with an interruptible WAAPI
      spring from ./dom.ts, so their entrance is not a CSS keyframe (keyframes
-     restart from zero and cannot be grabbed mid-flight). A leading semantic dot
-     tells success from error at a glance without tinting the surface. */
+     restart from zero and cannot be grabbed mid-flight). Fixed scannable
+     anatomy: a leading tone chip — green check for success, red alert for
+     error — reads before any text, so the outcome lands at a glance; the
+     deepest shadow tier makes arrival unmistakable over any content. */
   .toast {
     align-items: center;
     background: var(--mc-panel);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-elev-md);
+    box-shadow: var(--mc-elev-lg);
     color: var(--mc-text);
     display: flex;
     font-size: ${TYPE.label.size};
-    gap: ${SPACE.sm};
-    padding: ${SPACE.sm} ${SPACE.md};
+    font-weight: ${WEIGHT.medium};
+    gap: 10px;
+    padding: 10px ${SPACE.md} 10px 10px;
     pointer-events: auto;
     touch-action: pan-y;
   }
-  .toast::before { background: var(--mc-muted); border-radius: ${RADIUS.full}; content: ""; flex: none; height: 8px; width: 8px; }
-  .toast.success::before { background: var(--mc-positive); }
-  .toast.error::before { background: var(--mc-danger); }
+  .toast-icon {
+    align-items: center;
+    border-radius: ${RADIUS.sm};
+    display: inline-flex;
+    flex: none;
+    height: 30px;
+    justify-content: center;
+    width: 30px;
+  }
+  .toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }
+  .toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }
+  .toast-icon .icon { height: 16px; width: 16px; }
   .toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
   button.toast-copy { height: 30px; min-height: 30px; width: 30px; }
 `;

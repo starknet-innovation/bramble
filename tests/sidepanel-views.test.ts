@@ -218,9 +218,12 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="swap-sell-amount"');
     expect(html).toContain('id="swap-flip"');
     expect(html).toContain('id="swap-review"');
-    // Confirm and receipt stages ship hidden; the bindings stage them.
+    // Confirm and success stages ship hidden; the bindings stage them. The
+    // success moment carries the drawn ring + check marks.
     expect(html).toMatch(/id="swap-confirm" hidden/);
-    expect(html).toMatch(/id="swap-done" hidden/);
+    expect(html).toMatch(/id="swap-success"[^>]*hidden/);
+    expect(html).toContain('class="swap-success-ring"');
+    expect(html).toContain('class="swap-success-check"');
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });

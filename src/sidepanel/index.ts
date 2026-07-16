@@ -223,6 +223,13 @@ const bindAll = (): void => {
     app,
     balances: () => cache.balances,
     currency: () => cache.preferences?.displayCurrency ?? "usd",
+    // The success moment returns home on its own; guard so a user who already
+    // navigated away is never yanked back.
+    navigateHome: () => {
+      if (activeView === "swap") {
+        navigate("home");
+      }
+    },
     preferences: () => cache.preferences,
     render,
     status: () => cache.status,

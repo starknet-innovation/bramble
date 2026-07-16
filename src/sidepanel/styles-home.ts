@@ -475,6 +475,8 @@ export const HOME_STYLES = `
     .account-drawer, .drawer-backdrop, .account-name .icon { transition: none; }
     button.collectible-card:not(:disabled):hover,
     .account-trigger[aria-expanded="true"] .account-name .icon { transform: none; }
+    .swap-success-ring, .swap-success-check { animation: none; stroke-dashoffset: 0; }
+    .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint { animation: none; }
     button:not(:disabled):active,
     button.icon-button:not(:disabled):active,
     button.action-tile:not(:disabled):active,

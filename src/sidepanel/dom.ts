@@ -3,6 +3,7 @@
  * and focus preservation across full re-renders.
  */
 import { friendlyNetworkError } from "../shared/network-error";
+import { resolveSpring } from "../ui/spring";
 import { friendlyError } from "./friendly-error";
 import { CREATE_GROUP_PANEL } from "./group-state";
 import { icon } from "./icons";
@@ -154,10 +155,16 @@ const bindToastSwipe = (toast: HTMLElement): void => {
   el.addEventListener("pointercancel", release);
 };
 
+// The entrance rides the momentum spring (slight overshoot) so arrival is
+// felt, not just seen — a toast that fades in politely goes unnoticed.
+const TOAST_SPRING = resolveSpring("momentum");
+
 /**
- * Shows a transient toast in the fixed stack at the bottom of the shell. It
- * materializes with an interruptible WAAPI spring and can be swiped away; error
- * toasts stay longer and carry a copy control for the message.
+ * Shows a transient toast in the fixed stack at the bottom of the shell.
+ * Anatomy is a fixed scannable heuristic: a leading tone chip (green check /
+ * red alert) the eye reads before any text, then the message, then an error's
+ * copy control. It springs in with a little momentum, can be swiped away, and
+ * error toasts stay longer.
  */
 export const showToast = (message: string, tone: ToastTone): void => {
   const stackId = "toast-stack";
@@ -172,6 +179,10 @@ export const showToast = (message: string, tone: ToastTone): void => {
   const friendly = tone === "error" ? friendlyError(message) : null;
   const toast = document.createElement("div");
   toast.className = `toast ${tone}`;
+  const mark = document.createElement("span");
+  mark.className = "toast-icon";
+  mark.innerHTML = icon(tone === "error" ? "alert" : "check");
+  toast.append(mark);
   const text = document.createElement("span");
   text.className = "toast-text";
   text.textContent = friendly ? friendly.message : message;
@@ -183,10 +194,10 @@ export const showToast = (message: string, tone: ToastTone): void => {
   animate(
     toast,
     [
-      { opacity: 0, transform: "translateY(10px) scale(0.98)" },
+      { opacity: 0, transform: "translateY(18px) scale(0.95)" },
       { opacity: 1, transform: "none" },
     ],
-    { duration: 240 },
+    { duration: TOAST_SPRING.durationMs, easing: TOAST_SPRING.easing },
   );
   bindToastSwipe(toast);
   setTimeout(() => dismissToast(toast, 0), tone === "error" ? ERROR_TOAST_MS : SUCCESS_TOAST_MS);

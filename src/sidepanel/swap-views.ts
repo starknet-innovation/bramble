@@ -75,15 +75,13 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
           <button id="swap-back-button" class="secondary" type="button">Back</button>
         </div>
       </section>
-      <section class="swap-stage swap-done" id="swap-done" hidden>
-        <div class="swap-done-mark">${icon("check")}</div>
+      <section class="swap-stage swap-success" id="swap-success" role="status" hidden>
+        <span class="swap-success-mark" aria-hidden="true">
+          <svg viewBox="0 0 56 56"><circle class="swap-success-ring" cx="28" cy="28" r="25" /><path class="swap-success-check" d="M18 29.5l7 7 14-15" /></svg>
+        </span>
         <h2>Swap submitted</h2>
-        <p class="hint" id="swap-done-copy"></p>
-        <dl class="receipt" id="swap-done-receipt"></dl>
-        <div class="swap-actions">
-          <button id="swap-done-home" data-view="home" type="button">Done</button>
-          <button class="secondary" data-view="activity" type="button">View activity</button>
-        </div>
+        <p class="swap-success-summary" id="swap-success-summary"></p>
+        <p class="hint">Taking you home — track it under Activity.</p>
       </section>
       <p id="swap-result" role="status"></p>`,
     )

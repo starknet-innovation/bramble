@@ -14,7 +14,6 @@ import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { formatFiat } from "./fiat";
 import { icon } from "./icons";
-import { accountLabel } from "./parts";
 import type { BalanceState, SidepanelWallet } from "./runtime";
 import type { SwapClient, SwapQuoteView } from "./swap-client";
 import { bindSwapPicker, pickerSide, repaintSwapPicker, setPickerSide } from "./swap-picker";
@@ -27,6 +26,7 @@ export type SwapUiDeps = {
   readonly app: Element | null;
   readonly balances: () => BalanceState;
   readonly currency: () => DisplayCurrency;
+  readonly navigateHome: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly status: () => WalletStatus;
@@ -43,9 +43,13 @@ let amountText = "";
 let quote: SwapQuoteView | null = null;
 let quoteSeq = 0;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
-let stage: "confirm" | "done" | "edit" = "edit";
-let done: { readonly buyText: string; readonly hash: string; readonly sellText: string } | null =
-  null;
+let stage: "confirm" | "edit" | "success" = "edit";
+let successSummary = "";
+// Hold on the success moment (ring + check draw, copy rise) before the flow
+// returns home on its own; long enough to be FELT, short enough to never feel
+// like a screen the user must dismiss.
+const SUCCESS_HOLD_MS = 1900;
+let successTimer: ReturnType<typeof setTimeout> | null = null;
 
 const tradableTokens = (deps: SwapUiDeps): readonly TokenConfig[] =>
   (deps.preferences()?.tokens ?? []).filter(
@@ -150,7 +154,8 @@ const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
   }
   root.querySelector("#swap-edit")?.toggleAttribute("hidden", stage !== "edit");
   root.querySelector("#swap-confirm")?.toggleAttribute("hidden", stage !== "confirm");
-  root.querySelector("#swap-done")?.toggleAttribute("hidden", stage !== "done");
+  root.querySelector("#swap-success")?.toggleAttribute("hidden", stage !== "success");
+  setText(root, "swap-success-summary", successSummary);
   if (stage === "confirm" && quote && sellToken && buyToken) {
     const receipt = root.querySelector("#swap-confirm-receipt");
     const minReceived = compactAmount((buyAmount * (1 - SLIPPAGE)).toFixed(8));
@@ -162,16 +167,6 @@ const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
         <div class="receipt-row"><dt>Network fee</dt><dd>≈ ${escapeHtml(formatFiat(quote.gasFeesInUsd, "usd"))}</dd></div>
         <div class="receipt-row"><dt>Slippage cap</dt><dd>0.5%</dd></div>
         <div class="receipt-row"><dt>Route</dt><dd>AVNU aggregator</dd></div>`;
-    }
-  }
-  if (stage === "done" && done) {
-    setText(root, "swap-done-copy", `${done.sellText} is on its way to becoming ${done.buyText}.`);
-    const receipt = root.querySelector("#swap-done-receipt");
-    if (receipt) {
-      receipt.innerHTML = `
-        <div class="receipt-row"><dt>Swapped</dt><dd>${escapeHtml(done.sellText)}</dd></div>
-        <div class="receipt-row"><dt>For (est.)</dt><dd>${escapeHtml(done.buyText)}</dd></div>
-        <div class="receipt-row"><dt>Transaction</dt><dd><code>${escapeHtml(accountLabel(done.hash))}</code><button class="icon-button" data-copy="${escapeHtml(done.hash)}" type="button" aria-label="Copy transaction hash">${icon("copy")}</button></dd></div>`;
     }
   }
 };
@@ -242,7 +237,11 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     setPickerSide(null);
     quote = null;
     amountText = "";
-    done = null;
+    successSummary = "";
+    if (successTimer !== null) {
+      clearTimeout(successTimer);
+      successTimer = null;
+    }
     return;
   }
   healSelection(deps);
@@ -303,19 +302,35 @@ export const bindSwap = (deps: SwapUiDeps): void => {
         sellTokenId,
       })
       .then(
-        async (hash) => {
-          done = {
-            buyText: `${compactAmount(executed.buyAmount)} ${buyToken.symbol}`,
-            hash,
-            sellText: `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`,
-          };
-          stage = "done";
+        async () => {
+          // Success choreography: hold on the drawn-check moment, then return
+          // home on our own and land the summary toast there — the user never
+          // has to dismiss anything, and the outcome is stated twice (once
+          // felt, once read). The submitted swap (and its hash) is already in
+          // Activity.
+          const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
+          const buyText = `${compactAmount(executed.buyAmount)} ${buyToken.symbol}`;
+          successSummary = `${sellText} → ~${buyText}`;
+          stage = "success";
           quote = null;
           amountText = "";
-          showToast("Swap submitted", "success");
+          setResult(root, "");
+          applySwapUi(deps, root);
+          if (successTimer !== null) {
+            clearTimeout(successTimer);
+          }
+          successTimer = setTimeout(() => {
+            successTimer = null;
+            stage = "edit";
+            successSummary = "";
+            deps.navigateHome();
+            showToast(`Swapped ${sellText} for ~${buyText}`, "success");
+          }, SUCCESS_HOLD_MS);
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
+          // Failure: say WHY, in the toast and inline, and hand the quote
+          // back for another attempt — never a dead end.
           showToast(errorMessage(error, "Swap failed"), "error");
           setResult(root, errorMessage(error, "Swap failed"));
           buttonBusy(confirmButton, false);
