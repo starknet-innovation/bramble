@@ -14,7 +14,15 @@ name: Release
 on:
   push:
     tags:
+      # Final-release tags only. The single-source gate (check:release-version)
+      # accepts exactly `vX.Y.Z`, so admitting a prerelease tag here — e.g. an RC
+      # `vX.Y.Z-rc.N`, which RELEASING.md documents as validation-only and
+      # explicitly non-publishing — would run the whole reusable build (toolchain,
+      # vendor, package) only to hard-fail at the gate with a misleading "version
+      # mismatch". Excluding hyphenated (prerelease) tags keeps the trigger and
+      # the gate in agreement and honors "RC tags do not publish".
       - "v*"
+      - "!v*-*"
   workflow_dispatch:
     inputs:
       publish:
