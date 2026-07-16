@@ -147,6 +147,28 @@ export const isNonZeroStarkFieldElement = (value: string): boolean =>
   isStarkFieldElement(value) && BigInt(value) > 0n;
 
 /**
+ * Stark curve group order (n). Valid Stark signing scalars live in [1, n).
+ * Distinct from — and strictly smaller than — STARK_FIELD_PRIME, which bounds
+ * field elements (hashes, coordinates, class hashes). The ~2^126-wide gap
+ * [n, P) holds field elements that are NOT valid private keys: a key there is
+ * reduced mod n when signing, so it would derive an account for a different
+ * effective scalar than the one the user pasted.
+ */
+const STARK_CURVE_ORDER = BigInt(
+  "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f",
+);
+
+/**
+ * Checks whether a hex string is a valid Stark private key: a non-zero,
+ * canonical, lowercase field element strictly below the curve order. Use this
+ * — never isNonZeroStarkFieldElement — to validate a raw signing key, so keys
+ * in the [curve order, field prime) gap are rejected rather than silently
+ * reduced mod n by the signer.
+ */
+export const isStarkPrivateKey = (value: string): boolean =>
+  isNonZeroStarkFieldElement(value) && BigInt(value) < STARK_CURVE_ORDER;
+
+/**
  * Compares two candidate field elements by numeric value. Non-numeric inputs
  * never compare equal. This is the one shared implementation — do not
  * re-derive it locally (three copies once drifted across features).
