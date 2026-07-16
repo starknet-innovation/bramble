@@ -77,6 +77,21 @@ const SUPPRESSION_MARKERS = [
   "biome-" + "ignore",
   "eslint-" + "disable",
 ];
+// C0 control bytes are illegal in TypeScript source: a raw NUL or other stray
+// control byte reclassifies the file as binary, so grep/ripgrep and every
+// grep-based guard silently skip it and the bytes are invisible in editors and
+// review. Tab (9), newline (10) and carriage return (13) are the only permitted
+// controls. Scanned by code point rather than a regex so this rule does not
+// itself embed the control characters it forbids.
+const hasControlByte = (text: string): boolean => {
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code < 0x20 && code !== 9 && code !== 10 && code !== 13) {
+      return true;
+    }
+  }
+  return false;
+};
 const DYNAMIC_CODE_PATTERN =
   /\b(?:eval|importScripts)\s*\(|\bnew Function\b|\b(?:setTimeout|setInterval)\s*\(\s*["']|import\s*\(\s*["']https?:\/\//;
 const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
@@ -137,6 +152,10 @@ for (const file of await walk(".")) {
 
   if (file.endsWith(".ts") && !text.trimStart().startsWith("/**")) {
     failures.push(`${file} must start with a doc comment`);
+  }
+
+  if (file.endsWith(".ts") && hasControlByte(text)) {
+    failures.push(`${file} must not contain raw control bytes (use a \\u escape)`);
   }
 
   if (file.startsWith("src/") && file.endsWith(".ts")) {

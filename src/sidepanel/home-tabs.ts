@@ -146,6 +146,17 @@ const RECENT_ACTIVITY_LIMIT = 5;
 const HISTORY_UNAVAILABLE_HINT =
   "On-chain history unavailable — showing this device's records only.";
 
+/**
+ * Empty-state copy for the merged activity feed, shared by the home Activity
+ * tab and the Activity dock screen so the two surfaces can never drift. When
+ * on-chain history is unavailable the feed can only be this device's records;
+ * otherwise it is the merged local + on-chain feed.
+ */
+export const activityEmptyCopy = (historyUnavailable: boolean): string =>
+  historyUnavailable
+    ? "No transactions recorded on this device yet."
+    : "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.";
+
 const activityPanel = (
   transactions: readonly ActivityEntry[],
   historyUnavailable: boolean,
@@ -154,7 +165,7 @@ const activityPanel = (
   return `${historyUnavailable ? `<p class="empty" role="status">${escapeHtml(HISTORY_UNAVAILABLE_HINT)}</p>` : ""}
     ${
       recent.length === 0
-        ? `<p class="empty">${escapeHtml(historyUnavailable ? "No transactions recorded on this device yet." : "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")}</p>`
+        ? `<p class="empty">${escapeHtml(activityEmptyCopy(historyUnavailable))}</p>`
         : `<ul class="tx-list">${recent.map(transactionRow).join("")}</ul>`
     }
     ${

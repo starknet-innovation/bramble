@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance, WalletStatus } from "../src/popup/responses";
-import { homeTabs } from "../src/sidepanel/home-tabs";
+import { activityEmptyCopy, homeTabs } from "../src/sidepanel/home-tabs";
 import { dashboard, WALLET_VIEWS } from "../src/sidepanel/views";
 import { account, preferences, secondAccount } from "./support/sidepanel-fixtures";
 
@@ -192,6 +192,21 @@ describe("sidepanel views", () => {
     const degraded = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, true);
     expect(degraded).toContain("On-chain history unavailable");
     expect(degraded).toContain("No transactions recorded on this device yet.");
+  });
+
+  test("home tab and activity dock draw empty-state copy from one shared source", () => {
+    // Both surfaces must render byte-identical empty-state copy so a future
+    // reword of one can never drift from the other.
+    expect(activityEmptyCopy(true)).toBe("No transactions recorded on this device yet.");
+    expect(activityEmptyCopy(false)).toContain("No activity yet.");
+
+    const homeReachable = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, false);
+    const dockReachable = dashboard("activity", status, [], preferences, { balances: [] });
+    expect(homeReachable).toContain(activityEmptyCopy(false));
+    expect(dockReachable).toContain(activityEmptyCopy(false));
+
+    const homeDegraded = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, true);
+    expect(homeDegraded).toContain(activityEmptyCopy(true));
   });
 
   test("shows account labels and identicons across header and account flow", () => {

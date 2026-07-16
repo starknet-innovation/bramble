@@ -34,7 +34,7 @@ import {
   receiveFlow,
   sendFlow,
 } from "./flows";
-import { homeTabs, transactionRow, visibleHomeBalances } from "./home-tabs";
+import { activityEmptyCopy, homeTabs, transactionRow, visibleHomeBalances } from "./home-tabs";
 import { type IconName, icon } from "./icons";
 import {
   multisigDeployFlow,
@@ -255,7 +255,7 @@ const activityScreen = (
       ${historyUnavailable ? `<p class="empty" role="status">${escapeHtml(HISTORY_UNAVAILABLE_NOTICE)}</p>` : ""}
       ${
         transactions.length === 0
-          ? `<p class="empty">${escapeHtml(historyUnavailable ? "No transactions recorded on this device yet." : "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.")}</p>`
+          ? `<p class="empty">${escapeHtml(activityEmptyCopy(historyUnavailable))}</p>`
           : `<ul class="tx-list">${transactions.map(transactionRow).join("")}</ul>`
       }
       <p id="activity-result" role="status"></p>

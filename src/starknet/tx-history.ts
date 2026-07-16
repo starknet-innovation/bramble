@@ -197,9 +197,12 @@ const txKey = (entry: ActivityEntry): string =>
 // collapse them to one arbitrary leg, so chain rows are keyed on the full
 // (network, hash, token, counterparty, amount) tuple; those fields together
 // distinguish every leg (a swap's legs differ by token, a multicall's by
-// counterparty) while two genuinely identical legs still collapse.
+// counterparty) while two genuinely identical legs still collapse. Fields are
+// joined on a NUL (written as a backslash-u escape, never a raw control byte in
+// source) so the separator can never appear inside a felt-derived value or a
+// free-form token symbol and make two distinct legs alias.
 const legKey = (entry: ActivityEntry): string =>
-  `${txKey(entry)} ${entry.token ?? ""} ${entry.counterparty ?? ""} ${entry.amount ?? ""}`;
+  `${txKey(entry)}\u0000${entry.token ?? ""}\u0000${entry.counterparty ?? ""}\u0000${entry.amount ?? ""}`;
 
 /**
  * Merges the wallet's locally recorded activity with transactions discovered on
