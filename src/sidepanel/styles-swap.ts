@@ -137,6 +137,21 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
   .swap-picker .token-mark, .swap-picker .token-logo { height: 28px; width: 28px; }
   .swap-picker .token-mark { font-size: 9px; }
   .swap-actions { display: grid; gap: ${SPACE.sm}; }
+  /* Quote sanity heuristics: the value delta rides the buy USD line and turns
+     danger when the route loses real value; past the warn threshold an
+     explicit explanation appears, and past high-risk the submit action itself
+     restyles as a danger control labelled "Swap anyway". */
+  .swap-delta-bad, dd.swap-delta-bad { color: var(--mc-danger); }
+  .swap-warning {
+    background: var(--mc-danger-soft);
+    border-radius: ${RADIUS.md};
+    color: var(--mc-danger);
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.medium};
+    line-height: ${TYPE.caption.line};
+    padding: ${SPACE.sm} ${SPACE.md};
+  }
+  button#swap-review.swap-risk { background: var(--mc-danger); color: var(--mc-bg); }
   /* Token picker sheet: a full-screen chooser over the swap screen — search,
      quick chips for the majors, then the verified catalog as a grouped list.
      Solid page ground so the sheet reads as its own place, not a popover. */

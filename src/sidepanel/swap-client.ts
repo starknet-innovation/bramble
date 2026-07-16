@@ -49,6 +49,30 @@ const responseError = (response: unknown, fallback: string): Error =>
   new Error(isErrorResponse(response) ? response.error : fallback);
 
 /**
+ * Value delta of a quote in percent: how much MORE (+) or LESS (−) the buy
+ * side is worth than the sell side, from the aggregator's own USD figures.
+ * This is the swap screen's sanity heuristic — a dust-sized order routed
+ * through a thin or mispriced pool shows up here as a large negative delta
+ * before the user can act on it. Null when either side is unpriced.
+ */
+export const swapValueDeltaPercent = (quote: SwapQuoteView): number | null =>
+  quote.sellAmountInUsd > 0 && quote.buyAmountInUsd > 0
+    ? ((quote.buyAmountInUsd - quote.sellAmountInUsd) / quote.sellAmountInUsd) * 100
+    : null;
+
+/**
+ * Loss thresholds (percent) for the quote sanity tiers: WARN surfaces an
+ * explicit explanation under the quote; HIGH_RISK additionally restyles the
+ * submit action as a danger control labelled "Swap anyway".
+ */
+export const SWAP_LOSS_WARN_PERCENT = 5;
+/**
+ * Loss threshold (percent) above which the submit action turns into an
+ * explicit danger-styled "Swap anyway".
+ */
+export const SWAP_LOSS_HIGH_RISK_PERCENT = 15;
+
+/**
  * One verified catalog entry shown by the token picker. Directory data only:
  * selecting an untracked entry goes through the wallet's add-token flow,
  * which re-reads the token's facts from the contract on-chain.

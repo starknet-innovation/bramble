@@ -221,6 +221,9 @@ describe("sidepanel views", () => {
     // Confirm and success stages ship hidden; the bindings stage them. The
     // success moment carries the drawn ring + check marks.
     expect(html).toMatch(/id="swap-confirm" hidden/);
+    // The quote-sanity warning slot ships hidden; the bindings surface it when
+    // a route returns materially less value than it costs.
+    expect(html).toMatch(/id="swap-warning"[^>]*hidden/);
     expect(html).toMatch(/id="swap-success"[^>]*hidden/);
     expect(html).toContain('class="swap-success-ring"');
     expect(html).toContain('class="swap-success-check"');

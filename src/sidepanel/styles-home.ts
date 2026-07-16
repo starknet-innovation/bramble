@@ -211,6 +211,7 @@ export const HOME_STYLES = `
   button[data-busy] .icon { animation: none; }
   #refresh-button[data-busy] .icon,
   #activity-refresh[data-busy] .icon,
+  #swap-confirm-button[data-busy] .icon,
   #detect-tokens[data-busy] .icon { animation: spin 800ms linear infinite; }
 
   /* Motion: scene entrances stagger the hero, tiles, and first rows with the
@@ -470,7 +471,8 @@ export const HOME_STYLES = `
     .shell-animate .token-list li, .tab-panel.is-entering,
     .drawer-root[data-open="true"] .drawer-list li, .copy-confirm .icon,
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
-    #detect-tokens[data-busy] .icon { animation: none; }
+    #detect-tokens[data-busy] .icon,
+    #swap-confirm-button[data-busy] .icon { animation: none; }
     button, input, select, textarea, .tab-indicator, .tab-icon,
     .account-drawer, .drawer-backdrop, .account-name .icon { transition: none; }
     button.collectible-card:not(:disabled):hover,

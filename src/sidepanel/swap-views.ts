@@ -54,6 +54,7 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
           ${swapPanel("buy", disabled)}
         </div>
         <div class="swap-meta"><span id="swap-rate"></span><span id="swap-gas"></span></div>
+        <p id="swap-warning" class="swap-warning" role="alert" hidden></p>
         <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">Swap</span></button>
       </section>
       <div id="swap-picker" class="swap-sheet" role="dialog" aria-modal="true" aria-label="Choose token" hidden>

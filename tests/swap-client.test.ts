@@ -1,0 +1,41 @@
+/**
+ * Swap client helper checks: the quote value-delta sanity heuristic that
+ * surfaces bad routes (dust orders through thin pools) before the user acts.
+ */
+import { describe, expect, test } from "bun:test";
+import {
+  SWAP_LOSS_HIGH_RISK_PERCENT,
+  SWAP_LOSS_WARN_PERCENT,
+  type SwapQuoteView,
+  swapValueDeltaPercent,
+} from "../src/sidepanel/swap-client";
+
+const quote = (sellUsd: number, buyUsd: number): SwapQuoteView => ({
+  buyAmount: "1",
+  buyAmountInUsd: buyUsd,
+  gasFeesInUsd: 0.01,
+  quoteId: "q",
+  sellAmount: "1",
+  sellAmountInUsd: sellUsd,
+});
+
+describe("swap value delta", () => {
+  test("reports the received-vs-paid difference in percent", () => {
+    expect(swapValueDeltaPercent(quote(0.0855, 0.0853))).toBeCloseTo(-0.234, 2);
+    expect(swapValueDeltaPercent(quote(100, 95))).toBeCloseTo(-5, 5);
+    expect(swapValueDeltaPercent(quote(100, 101))).toBeCloseTo(1, 5);
+  });
+
+  test("a mispriced dust route crosses the warn and high-risk tiers", () => {
+    // The reported oddity: ~3 STRK quoted at ~4.6x its value would read as a
+    // ±78% delta — far past both thresholds, so the UI warns and restyles.
+    const bad = swapValueDeltaPercent(quote(0.39, 0.085)) ?? 0;
+    expect(bad).toBeLessThan(-SWAP_LOSS_HIGH_RISK_PERCENT);
+    expect(SWAP_LOSS_WARN_PERCENT).toBeLessThan(SWAP_LOSS_HIGH_RISK_PERCENT);
+  });
+
+  test("unpriced sides yield null instead of a fake zero", () => {
+    expect(swapValueDeltaPercent(quote(0, 0.085))).toBeNull();
+    expect(swapValueDeltaPercent(quote(0.39, 0))).toBeNull();
+  });
+});

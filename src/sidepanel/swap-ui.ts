@@ -15,7 +15,13 @@ import { buttonBusy, errorMessage, showToast } from "./dom";
 import { formatFiat } from "./fiat";
 import { icon } from "./icons";
 import type { BalanceState, SidepanelWallet } from "./runtime";
-import type { SwapClient, SwapQuoteView } from "./swap-client";
+import {
+  SWAP_LOSS_HIGH_RISK_PERCENT,
+  SWAP_LOSS_WARN_PERCENT,
+  type SwapClient,
+  type SwapQuoteView,
+  swapValueDeltaPercent,
+} from "./swap-client";
 import { bindSwapPicker, pickerSide, repaintSwapPicker, setPickerSide } from "./swap-picker";
 import { compactAmount, tokenGlyph } from "./token-row";
 
@@ -128,7 +134,20 @@ const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
     "swap-sell-usd",
     quote && amountNumber() > 0 ? `≈ ${formatFiat(quote.sellAmountInUsd, currency)}` : "",
   );
-  setText(root, "swap-buy-usd", quote ? `≈ ${formatFiat(quote.buyAmountInUsd, currency)}` : "");
+  // The buy-side USD line carries the sanity heuristic inline: how much the
+  // received value differs from the paid value, from the aggregator's own USD
+  // figures — a bad route on a small order is visible before anything else.
+  const valueDelta = quote ? swapValueDeltaPercent(quote) : null;
+  const buyUsdNode = root.querySelector<HTMLElement>("#swap-buy-usd");
+  if (buyUsdNode) {
+    buyUsdNode.textContent = quote
+      ? `≈ ${formatFiat(quote.buyAmountInUsd, currency)}${valueDelta === null ? "" : ` (${valueDelta > 0 ? "+" : ""}${valueDelta.toFixed(2)}%)`}`
+      : "";
+    buyUsdNode.classList.toggle(
+      "swap-delta-bad",
+      valueDelta !== null && valueDelta <= -SWAP_LOSS_WARN_PERCENT,
+    );
+  }
   const sellAmount = Number(quote?.sellAmount ?? "0");
   const buyAmount = Number(quote?.buyAmount ?? "0");
   // Sub-unit rates keep enough places for the display policy's significant
@@ -144,13 +163,27 @@ const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
   setText(root, "swap-gas", quote ? `Fee ≈ ${formatFiat(quote.gasFeesInUsd, "usd")}` : "");
   const insufficient =
     amountNumber() > 0 && sellBalance !== null && amountNumber() > Number(sellBalance.formatted);
+  const lossPercent = valueDelta !== null && valueDelta < 0 ? -valueDelta : 0;
+  const warning = root.querySelector<HTMLElement>("#swap-warning");
+  if (warning) {
+    const message =
+      quote && lossPercent >= SWAP_LOSS_WARN_PERCENT
+        ? `This route returns ${lossPercent.toFixed(1)}% less value than you pay. Small orders can route poorly — try a larger amount or a different pair.`
+        : "";
+    warning.textContent = message;
+    warning.hidden = message.length === 0;
+  }
+  const highRisk = quote !== null && lossPercent >= SWAP_LOSS_HIGH_RISK_PERCENT;
   const review = root.querySelector<HTMLButtonElement>("#swap-review");
   const reviewLabel = root.querySelector("#swap-review-label");
   if (review && reviewLabel) {
     review.disabled = !quote || insufficient || amountNumber() <= 0;
+    review.classList.toggle("swap-risk", highRisk);
     reviewLabel.textContent = insufficient
       ? `Insufficient ${sellToken?.symbol ?? "balance"}`
-      : "Swap";
+      : highRisk
+        ? `Swap anyway (−${lossPercent.toFixed(1)}%)`
+        : "Swap";
   }
   root.querySelector("#swap-edit")?.toggleAttribute("hidden", stage !== "edit");
   root.querySelector("#swap-confirm")?.toggleAttribute("hidden", stage !== "confirm");
@@ -160,10 +193,15 @@ const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
     const receipt = root.querySelector("#swap-confirm-receipt");
     const minReceived = compactAmount((buyAmount * (1 - SLIPPAGE)).toFixed(8));
     if (receipt) {
+      const deltaRow =
+        valueDelta === null
+          ? ""
+          : `<div class="receipt-row"><dt>Value change</dt><dd${lossPercent >= SWAP_LOSS_WARN_PERCENT ? ' class="swap-delta-bad"' : ""}>${valueDelta > 0 ? "+" : ""}${valueDelta.toFixed(2)}%</dd></div>`;
       receipt.innerHTML = `
         <div class="receipt-row"><dt>You sell</dt><dd>${escapeHtml(compactAmount(quote.sellAmount))} ${escapeHtml(sellToken.symbol)}</dd></div>
         <div class="receipt-row"><dt>You receive (est.)</dt><dd>${escapeHtml(compactAmount(quote.buyAmount))} ${escapeHtml(buyToken.symbol)}</dd></div>
         <div class="receipt-row"><dt>Minimum received</dt><dd>${escapeHtml(minReceived)} ${escapeHtml(buyToken.symbol)}</dd></div>
+        ${deltaRow}
         <div class="receipt-row"><dt>Network fee</dt><dd>≈ ${escapeHtml(formatFiat(quote.gasFeesInUsd, "usd"))}</dd></div>
         <div class="receipt-row"><dt>Slippage cap</dt><dd>0.5%</dd></div>
         <div class="receipt-row"><dt>Route</dt><dd>AVNU aggregator</dd></div>`;
@@ -291,7 +329,11 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     if (!quote || !sellToken || !buyToken || !sellTokenId || !buyTokenId) {
       return;
     }
+    // Pending state: the action itself reports progress — spinner + label —
+    // so the user is never staring at a silent button mid-submission.
     buttonBusy(confirmButton, true);
+    const restingContent = confirmButton.innerHTML;
+    confirmButton.innerHTML = `${icon("refresh")}Submitting swap…`;
     const executed = quote;
     deps.swap
       .execute({
@@ -324,15 +366,19 @@ export const bindSwap = (deps: SwapUiDeps): void => {
             stage = "edit";
             successSummary = "";
             deps.navigateHome();
-            showToast(`Swapped ${sellText} for ~${buyText}`, "success");
+            // Honest state on landing: the transaction is sent and pending,
+            // not yet final — Activity carries it until it settles.
+            showToast(`Transaction sent — ${sellText} → ~${buyText} pending`, "success");
           }, SUCCESS_HOLD_MS);
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {
-          // Failure: say WHY, in the toast and inline, and hand the quote
-          // back for another attempt — never a dead end.
+          // Failure: say WHY, in the toast and inline, restore the resting
+          // action, and hand the quote back for another attempt — never a
+          // dead end.
           showToast(errorMessage(error, "Swap failed"), "error");
           setResult(root, errorMessage(error, "Swap failed"));
+          confirmButton.innerHTML = restingContent;
           buttonBusy(confirmButton, false);
           stage = "edit";
           requestQuote(deps, root);
