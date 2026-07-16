@@ -178,10 +178,16 @@ const activityKey = (entry: ActivityEntry): string =>
 /**
  * Merges the wallet's locally recorded activity with transactions discovered on
  * chain, de-duplicated by transaction hash and sorted newest-first. Local
- * records win on a collision: they carry the richer, user-facing summary and a
- * status already reconciled against chain via the pending re-poll, so a locally
- * submitted transfer keeps its identity while its chain-only siblings are added
- * around it. The result is the union, never fewer rows than the local log.
+ * records win a collision on presentation — they carry the richer, user-facing
+ * summary — so a locally submitted transfer keeps its identity while its
+ * chain-only siblings are added around it. The one exception is status: a local
+ * row still `pending` is reconciled to `accepted` when the chain scan found its
+ * `Transfer` event, since an emitted event proves the transaction was included
+ * and succeeded (a reverted transaction emits none). This closes the gap where
+ * the pending status re-poll fails but the event scan succeeds, which would
+ * otherwise leave a confirmed transfer showing as pending. Terminal local states
+ * (`accepted`, `rejected`, `reverted`) are authoritative and left untouched. The
+ * result is the union, never fewer rows than the local log.
  */
 export const mergeActivity = (
   local: readonly ActivityEntry[],
@@ -193,8 +199,11 @@ export const mergeActivity = (
   }
   for (const entry of onChain) {
     const key = activityKey(entry);
-    if (!byKey.has(key)) {
+    const existing = byKey.get(key);
+    if (existing === undefined) {
       byKey.set(key, entry);
+    } else if (existing.status === "pending" && entry.status === "accepted") {
+      byKey.set(key, { ...existing, status: "accepted" });
     }
   }
   return [...byKey.values()].sort((a, b) => b.submittedAt - a.submittedAt);
