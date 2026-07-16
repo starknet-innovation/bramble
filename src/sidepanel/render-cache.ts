@@ -6,6 +6,7 @@
  */
 
 import type { WalletStatus } from "../popup/responses";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { MultisigClient } from "./multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "./runtime";
@@ -65,3 +66,19 @@ export const emptyRenderCache = (): RenderData => ({
   status: emptyStatus(),
   transactions: [],
 });
+
+/**
+ * The on-chain class-hash verdict to display for the given active account: the
+ * cached verification only when it was resolved for that same account, else
+ * null (the still-verifying state). Gating on the account id at read time is
+ * what guarantees a verdict is never shown under a different account's class
+ * hash — neither the stale value left behind across an account switch (the
+ * cache is not reset synchronously) nor a slow verification that resolved for
+ * an account the user has already left. Fail-safe: anything but an exact
+ * account-id match reads as pending, never as another account's "verified".
+ */
+export const verificationForAccount = (
+  cached: RenderData["classHashVerification"],
+  activeAccountId: string | null,
+): ClassHashVerification | null =>
+  cached && cached.accountId === activeAccountId ? cached.verification : null;

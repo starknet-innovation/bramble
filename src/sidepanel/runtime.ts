@@ -5,6 +5,7 @@
 import {
   type ActivityResponse,
   type AllowancesResponse,
+  type ClassHashVerificationResponse,
   type ConnectedSitesResponse,
   type DeploymentStatusResponse,
   type DiscoveredNft,
@@ -34,7 +35,6 @@ import {
   type TransferReviewResponse,
   type WalletStatus,
 } from "../popup/responses";
-import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { AccountGroupIcon } from "../storage/account-groups";
 
 /**
@@ -128,9 +128,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({ type: "wallet.deploymentStatus" });
       return isDeploymentStatusResponse(response) ? response : null;
     },
-    async loadClassHashVerification(): Promise<ClassHashVerification | null> {
+    async loadClassHashVerification(): Promise<ClassHashVerificationResponse | null> {
+      // Return the whole response (with its `accountId`), not just the verdict,
+      // so the caller can drop a verification that resolved for an account the
+      // user has since switched away from — a stale/foreign verdict must never
+      // be shown under a different account's class hash.
       const response = await sendMessage({ type: "wallet.verifyClassHash" });
-      return isClassHashVerificationResponse(response) ? response.verification : null;
+      return isClassHashVerificationResponse(response) ? response : null;
     },
     async decideApproval(id: string, approved: boolean): Promise<void> {
       const response = await sendMessage({

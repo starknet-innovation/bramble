@@ -32,7 +32,7 @@ import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
 import { bindOnboarding } from "./onboarding-ui";
-import { emptyRenderCache, type RenderData } from "./render-cache";
+import { emptyRenderCache, type RenderData, verificationForAccount } from "./render-cache";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import {
@@ -337,7 +337,7 @@ const paint = (): void => {
           cache.priceAsOf,
           cache.discoveredNfts,
           openAssignId,
-          cache.classHashVerification,
+          verificationForAccount(cache.classHashVerification, status.activeAccountId),
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
