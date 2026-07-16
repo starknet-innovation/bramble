@@ -186,6 +186,70 @@ describe("readImportAccountInput", () => {
     ).toBeNull();
   });
 
+  test("accepts a mixed-case 0x-hex key and canonicalizes it to lowercase", () => {
+    expect(
+      readImportAccountInput({
+        networkId: "SN_SEPOLIA",
+        privateKey: "  0xFeEdFaCe  ",
+        type: "wallet.importAccount",
+      }),
+    ).toEqual({ networkId: "SN_SEPOLIA", privateKey: "0xfeedface" });
+  });
+
+  // Key material must be read only in the documented 0x-hex form. A base-
+  // agnostic parser (BigInt/canonicalFelt) would accept decimal, octal, and
+  // binary and silently reinterpret the paste as a different scalar; the parser
+  // normalizes with normalizeFeltInput (0x-hex only), so these are all rejected
+  // rather than coerced. Matches how every other pasted felt (addresses,
+  // calldata) is normalized.
+  test("rejects a decimal key rather than coercing it to a different felt", () => {
+    // 4276993742 === 0xfeedface: a base-agnostic parser would admit this as the
+    // same key; the 0x-hex-only parser must reject the bare decimal spelling.
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "4276993742",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects an octal- or binary-prefixed key", () => {
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "0o377",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "0b1010",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects a hex-shaped key pasted without the 0x prefix", () => {
+    // Without 0x the base is ambiguous; refuse rather than guess. "10" would be
+    // decimal 10 to BigInt but a user may mean 0x10 — never silently pick one.
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "feedface",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "10",
+        type: "wallet.importAccount",
+      }),
+    ).toBeNull();
+  });
+
   test("rejects a key in the [curve order, field prime) gap at the boundary", () => {
     // curve order + 1: canonicalizes to a felt < field prime, so a field-prime
     // check would wrongly admit it; the curve-order check rejects it here.
