@@ -79,7 +79,8 @@ export const verifyAccountClassHash = async ({
       rpcUrls,
       async (provider): Promise<ClassHashVerification> => {
         const onChainClassHash = await provider.getClassHashAt(accountAddress, "latest");
-        if (asFelt(onChainClassHash) === null) {
+        const onChainFelt = asFelt(onChainClassHash);
+        if (onChainFelt === null) {
           // A healthy node returns the deployed class hash as a felt. A
           // non-felt answer means this endpoint is malfunctioning (or hostile),
           // so throw to fail over to the next endpoint; if every endpoint is
@@ -87,6 +88,14 @@ export const verifyAccountClassHash = async ({
           // `verified` and `mismatch` on-chain hashes genuine felts and never
           // lets a garbage response masquerade as a benign result.
           throw new Error("RPC returned a non-felt class hash");
+        }
+        if (onChainFelt === 0n) {
+          // Some nodes answer a not-yet-deployed address with a zero class hash
+          // instead of a CONTRACT_NOT_FOUND error. A zero class hash means no
+          // contract, so this is an undeployed account — not a `mismatch` (the
+          // advertised hash is always non-zero), which would otherwise raise a
+          // false "do not trust this account" alarm for a merely-undeployed one.
+          return { status: "undeployed" };
         }
         return sameFelt(onChainClassHash, expectedClassHash)
           ? { onChainClassHash, status: "verified" }

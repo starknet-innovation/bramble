@@ -94,6 +94,16 @@ describe("verifyAccountClassHash", () => {
     expect(call).toBe(2);
   });
 
+  test("treats a zero on-chain class hash as undeployed, not a false mismatch", async () => {
+    // A node that answers an undeployed address with 0x0 (instead of
+    // CONTRACT_NOT_FOUND) must not raise a "do not trust this account"
+    // mismatch: a zero class hash means no contract is deployed yet.
+    for (const zero of ["0x0", "0x00", "0"]) {
+      const result = await verify(providerWith(async () => zero));
+      expect(result).toEqual({ status: "undeployed" });
+    }
+  });
+
   test("returns undeployed when the contract is not found (RPC code 20)", async () => {
     const result = await verify(
       providerWith(async () => {
