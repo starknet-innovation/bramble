@@ -139,10 +139,11 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       return isDeploymentStatusResponse(response) ? response : null;
     },
     async loadClassHashVerification(): Promise<ClassHashVerificationResponse | null> {
+      // Return the whole response (with its `accountId`), not just the verdict,
+      // so the caller can drop a verification that resolved for an account the
+      // user has since switched away from — a stale/foreign verdict must never
+      // be shown under a different account's class hash.
       const response = await sendMessage({ type: "wallet.verifyClassHash" });
-      // Return the whole response so the caller can key the verification by the
-      // accountId it was computed for — a trust badge must never be shown against
-      // an account it was not computed for, even transiently after a switch.
       return isClassHashVerificationResponse(response) ? response : null;
     },
     async decideApproval(id: string, approved: boolean): Promise<void> {

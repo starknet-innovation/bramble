@@ -34,7 +34,7 @@ import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
 import { bindOnboarding } from "./onboarding-ui";
-import { emptyRenderCache, type RenderData, verificationForActiveAccount } from "./render-cache";
+import { emptyRenderCache, type RenderData, verificationForAccount } from "./render-cache";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import {
@@ -315,7 +315,7 @@ const paint = (): void => {
   // stale badge from the previous account never shows against a freshly switched
   // one — it falls back to its honest "verifying…" state until the new account's
   // verification lands (mirrors how deployment-cache keys by accountId).
-  const classHashVerification = verificationForActiveAccount(
+  const classHashVerification = verificationForAccount(
     cache.classHashVerification,
     status.activeAccountId,
   );

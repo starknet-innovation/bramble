@@ -74,14 +74,17 @@ export const emptyRenderCache = (): RenderData => ({
 });
 
 /**
- * The class-hash verification to render for the active account, or null when the
- * cached result was computed for a different account (or none is cached yet). A
- * trust badge must never be shown against an account it was not computed for, so
- * a stale verification from the previous account reverts to the honest
- * "verifying…" state until the switched-to account's verification lands.
+ * The on-chain class-hash verdict to display for the given active account: the
+ * cached verification only when it was resolved for that same account, else
+ * null (the still-verifying state). Gating on the account id at read time is
+ * what guarantees a verdict is never shown under a different account's class
+ * hash — neither the stale value left behind across an account switch (the
+ * cache is not reset synchronously) nor a slow verification that resolved for
+ * an account the user has already left. Fail-safe: anything but an exact
+ * account-id match reads as pending, never as another account's "verified".
  */
-export const verificationForActiveAccount = (
+export const verificationForAccount = (
   cached: RenderData["classHashVerification"],
-  activeAccountId: string | null | undefined,
+  activeAccountId: string | null,
 ): ClassHashVerification | null =>
   cached && cached.accountId === activeAccountId ? cached.verification : null;
