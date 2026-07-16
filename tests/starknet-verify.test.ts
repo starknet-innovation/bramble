@@ -185,6 +185,26 @@ describe("verifyCalls", () => {
     expect(report.flags.filter((flag) => flag.code === "unlimited-approval")).toHaveLength(1);
     expect(report.flags.filter((flag) => flag.code === "unknown-contract")).toHaveLength(1);
   });
+
+  test("falls back to a generic summary when transfer_from calldata is malformed", () => {
+    // A transfer_from whose recipient/amount felts do not decode must not throw
+    // or guess — it falls through to the safe "Call <entrypoint>" summary. The
+    // dApp boundary rejects non-felt calldata, so this only happens defensively,
+    // but the decoder must stay total (parse, don't validate).
+    const report = verifyCalls(
+      [
+        {
+          calldata: [account.address, 42 as unknown as string, "5", "0"],
+          contractAddress: ETH,
+          entrypoint: "transfer_from",
+        },
+      ],
+      context,
+    );
+
+    expect(report.calls[0]?.kind).toBe("unknown");
+    expect(report.calls[0]?.summary).toContain("Call transfer_from on");
+  });
 });
 
 describe("isLookalikeAddress", () => {

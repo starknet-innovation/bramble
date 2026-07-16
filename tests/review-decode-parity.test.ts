@@ -11,6 +11,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Call } from "starknet";
 import type { PendingApproval, WalletStatus } from "../src/popup/responses";
+import { escapeHtml } from "../src/shared/html";
 import { approvalCard } from "../src/sidepanel/approval-cards";
 import { reviewCallsList, reviewPanel, riskFlagMessages } from "../src/sidepanel/review-render";
 import { reviewPanelHtml } from "../src/sidepanel/transfer-ui";
@@ -208,6 +209,37 @@ describe("Send review vs dApp invoke card decode/risk parity (#19)", () => {
     // It is Send-specific (informational, not a verify-layer flag) and must not
     // appear on the dApp invoke card for the same decoded transfer.
     expect(dappCard(summaries, flags)).not.toContain(deploymentNotice);
+  });
+
+  test("a multicall to two distinct unknown contracts surfaces both on the dApp card", () => {
+    // Distinct unknown contracts carry distinct flag messages, so the shared
+    // verify layer keeps one flag per contract instead of collapsing them by
+    // code — the invoke card must warn about every unknown contract, not just
+    // the first. (Send is single-call, so this gap is dApp-only; the shared
+    // panel render is what both surfaces would show for the same flags.)
+    const first: Call = {
+      calldata: ["0x1"],
+      contractAddress: "0xaaaa000000000000000000000000000000000000000000000000000000000001",
+      entrypoint: "foo",
+    };
+    const second: Call = {
+      calldata: ["0x2"],
+      contractAddress: "0xbbbb000000000000000000000000000000000000000000000000000000000002",
+      entrypoint: "bar",
+    };
+    const { flags, summaries } = reviewForCalls([first, second]);
+
+    const unknownFlags = flags.filter((flag) => flag.code === "unknown-contract");
+    expect(unknownFlags).toHaveLength(2);
+
+    // The exact shared panel (both distinct flag lines) appears on the card, so
+    // no unknown contract past the first is silently dropped from the review.
+    const panel = reviewPanel(riskFlagMessages(flags));
+    const card = dappCard(summaries, flags);
+    expect(card).toContain(panel);
+    for (const flag of unknownFlags) {
+      expect(card).toContain(escapeHtml(flag.message));
+    }
   });
 
   test("an unknown selector decodes to the same fallback summary on both surfaces", () => {
