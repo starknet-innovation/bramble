@@ -8,6 +8,7 @@ import {
   DEFAULT_NETWORK,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
+  isStarkPrivateKey,
   type StarknetNetworkId,
 } from "../starknet/networks";
 import type { AccountRef, DerivedAccountRef, ImportedAccountRef } from "../storage/vault-schema";
@@ -219,7 +220,7 @@ export const deriveImportedAccount = async (
   input: ImportedAccountInput,
 ): Promise<ImportedAccountResult> => {
   const privateKey = input.privateKey;
-  if (!isNonZeroStarkFieldElement(privateKey)) {
+  if (!isStarkPrivateKey(privateKey)) {
     throw new WalletError("Invalid private key");
   }
 

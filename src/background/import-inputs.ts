@@ -7,8 +7,8 @@
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import {
   canonicalFelt,
-  isNonZeroStarkFieldElement,
   isStarknetNetworkId,
+  isStarkPrivateKey,
   type StarknetNetworkId,
 } from "../starknet/networks";
 
@@ -31,7 +31,7 @@ export const readImportAccountInput = (
   }
 
   const privateKey = canonicalFelt(message["privateKey"].trim());
-  if (privateKey === null || !isNonZeroStarkFieldElement(privateKey)) {
+  if (privateKey === null || !isStarkPrivateKey(privateKey)) {
     return null;
   }
 

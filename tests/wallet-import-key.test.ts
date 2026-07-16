@@ -41,12 +41,43 @@ describe("deriveImportedAccount", () => {
     expect(isAccountRef(account)).toBe(true);
   });
 
-  test("rejects an out-of-range private key", async () => {
+  test("rejects a private key at or above the field prime", async () => {
     await expect(
       deriveImportedAccount(fakeKms(), {
         privateKey: "0x800000000000011000000000000000000000000000000000000000000000001",
       }),
     ).rejects.toThrow("Invalid private key");
+  });
+
+  // A valid Stark signing scalar must be < the curve order n, not merely < the
+  // field prime P. The gap [n, P) holds field elements that are NOT valid keys;
+  // a signer would reduce them mod n and derive an account for a different
+  // effective scalar. These lock the range check to the curve order.
+  test("rejects a private key equal to the curve order", async () => {
+    await expect(
+      deriveImportedAccount(fakeKms(), {
+        privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f",
+      }),
+    ).rejects.toThrow("Invalid private key");
+  });
+
+  test("rejects a private key inside the [curve order, field prime) gap", async () => {
+    await expect(
+      deriveImportedAccount(fakeKms(), {
+        // curve order + 1: passes the field-prime check but is not a valid key.
+        privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d30",
+      }),
+    ).rejects.toThrow("Invalid private key");
+  });
+
+  test("accepts a private key just below the curve order", async () => {
+    const { account } = await deriveImportedAccount(fakeKms(), {
+      networkId: "SN_MAIN",
+      // curve order - 1: the largest valid signing scalar.
+      privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2e",
+    });
+    expect(account.derivation).toEqual({ kind: "imported-raw-key" });
+    expect(isAccountRef(account)).toBe(true);
   });
 
   test("rejects a zero private key", async () => {
@@ -150,6 +181,18 @@ describe("readImportAccountInput", () => {
         networkId: "SN_MAIN",
         privateKey: importedKey,
         type: "wallet.addAccount",
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects a key in the [curve order, field prime) gap at the boundary", () => {
+    // curve order + 1: canonicalizes to a felt < field prime, so a field-prime
+    // check would wrongly admit it; the curve-order check rejects it here.
+    expect(
+      readImportAccountInput({
+        networkId: "SN_MAIN",
+        privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d30",
+        type: "wallet.importAccount",
       }),
     ).toBeNull();
   });
