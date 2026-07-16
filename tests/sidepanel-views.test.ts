@@ -353,6 +353,37 @@ describe("sidepanel views", () => {
     expect(html).toContain("is-masked");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
+    // An HD-derived active account is restorable from the recovery phrase, so no
+    // imported-account caveat and no "(imported)" key label appear.
+    expect(html).not.toContain('id="reveal-imported-note"');
+    expect(html).not.toContain("(imported)");
+  });
+
+  test("reveal flow warns that the recovery phrase does not restore an imported active account", () => {
+    // A raw-key-imported account is not derived from the wallet phrase; the
+    // screen must say so, using only the provenance already in status (never a
+    // secret), so a user does not wrongly trust the phrase as its backup.
+    const imported = {
+      address: "0xa11ceded",
+      classHash: account.classHash,
+      derivation: { kind: "imported-raw-key" as const },
+      id: "SN_MAIN:0xa11ceded",
+      networkId: "SN_MAIN" as const,
+      publicKeyX: account.publicKeyX,
+    };
+    const importedStatus: WalletStatus = {
+      ...status,
+      accountCount: 1,
+      accounts: [imported],
+      activeAccountId: imported.id,
+    };
+    const html = dashboard("reveal", importedStatus, [], preferences, { balances: [] });
+
+    expect(html).toContain('id="reveal-imported-note"');
+    expect(html).toContain("does not restore it");
+    expect(html).toContain("Active account private key (imported)");
+    // The caveat is drawn from account provenance, never from key material.
+    expect(html).not.toContain(imported.publicKeyX);
   });
 
   test("contacts can be removed from the address book flow", () => {
