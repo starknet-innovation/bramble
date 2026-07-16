@@ -186,6 +186,30 @@ describe("Send review vs dApp invoke card decode/risk parity (#19)", () => {
     expect(sendReview(summaries, flags)).toContain(panel);
   });
 
+  test("the Send-only deployment notice rides in the shared risk panel, not the dApp card", () => {
+    // Clean recipient → no verify-layer flags, so the panel carries only the
+    // deployment notice and `reviewPanel([notice])` is an exact substring.
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    expect(flags).toEqual([]);
+    const deploymentNotice =
+      "This account is not deployed yet; the first send also submits its deployment.";
+
+    const rendered = reviewPanelHtml({
+      fee: null,
+      feeEstimateFailed: false,
+      flags,
+      requiresDeployment: true,
+      summaries,
+    });
+
+    // The notice renders through the shared panel with the same review-flag
+    // affordance a risk flag uses — not as a bespoke inline paragraph.
+    expect(rendered).toContain(reviewPanel([deploymentNotice]));
+    // It is Send-specific (informational, not a verify-layer flag) and must not
+    // appear on the dApp invoke card for the same decoded transfer.
+    expect(dappCard(summaries, flags)).not.toContain(deploymentNotice);
+  });
+
   test("an unknown selector decodes to the same fallback summary on both surfaces", () => {
     const unknown: Call = {
       calldata: ["0x1", "0x2"],
