@@ -12,8 +12,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../src/popup/responses";
-import type { ClassHashVerification } from "../src/starknet/class-hash-verify";
 import { dashboard, type WalletView } from "../src/sidepanel/views";
+import type { ClassHashVerification } from "../src/starknet/class-hash-verify";
 import { account, preferences, secondAccount } from "./support/sidepanel-fixtures";
 
 const status: WalletStatus = {
