@@ -204,15 +204,28 @@ export const collectTransactionHistory = async (
       }
     }
   }
-  // A self-transfer (from = to = account) matches both the outgoing and incoming
-  // filter, so collapse to one row per transaction hash before capping.
-  const byHash = new Map<string, TokenTransfer>();
+  // De-duplicate per transfer leg, not per transaction hash. A self-transfer
+  // (from = to = account) matches both the outgoing and incoming filter and so
+  // is decoded twice into an identical leg, which must collapse; but one
+  // transaction can also carry several genuinely distinct legs — a DEX swap
+  // emits an outgoing and an incoming transfer under one hash, a multicall many
+  // — and those must all survive so the feed does not show one arbitrary leg.
+  // Keying on hash alone would wrongly collapse a swap to a single row, and
+  // would also silently defeat `mergeActivity`, whose per-leg de-duplication
+  // (see its `legKey`) is built to keep every leg of a chain-only transaction.
+  // The key mirrors that leg identity: hash plus the fields that distinguish
+  // legs of the same transaction (token, counterparty, amount). Fields are
+  // joined on a NUL written as a backslash-u escape — never a raw control byte
+  // in source — so the separator can never appear inside a felt-derived value.
+  const byLeg = new Map<string, TokenTransfer>();
   for (const transfer of transfers) {
-    if (!byHash.has(transfer.decoded.hash)) {
-      byHash.set(transfer.decoded.hash, transfer);
+    const { amountRaw, counterparty, hash } = transfer.decoded;
+    const legKey = `${hash}\u0000${transfer.token.address}\u0000${counterparty}\u0000${amountRaw}`;
+    if (!byLeg.has(legKey)) {
+      byLeg.set(legKey, transfer);
     }
   }
-  const recent = [...byHash.values()]
+  const recent = [...byLeg.values()]
     .sort((a, b) => b.decoded.blockNumber - a.decoded.blockNumber)
     .slice(0, MAX_HISTORY_ENTRIES);
   // Read each distinct block's timestamp once and in parallel: the reads are

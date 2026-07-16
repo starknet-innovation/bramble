@@ -189,6 +189,46 @@ describe("collectTransactionHistory", () => {
     expect(entries.map((entry) => entry.hash)).toEqual(["0xdead"]);
   });
 
+  test("keeps both legs of a swap that emits two transfers under one hash", async () => {
+    // A DEX swap in one transaction: the account sends ETH and receives USDC,
+    // two distinct Transfer events sharing the swap's transaction hash. Both
+    // legs must survive; collapsing on the hash alone would drop one and show an
+    // arbitrary side of the swap.
+    const USDC_ADDRESS = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
+    const usdc: TokenConfig = {
+      address: USDC_ADDRESS,
+      decimals: 6,
+      id: `SN_MAIN:USDC:${USDC_ADDRESS}`,
+      name: "USD Coin",
+      networkId: "SN_MAIN",
+      symbol: "USDC",
+    };
+    const ethOut: EmittedEvent = {
+      block_number: 400,
+      data: ["1000000000000000000", "0"],
+      keys: [TRANSFER_EVENT_KEY, ACCOUNT, OTHER],
+      transaction_hash: "0x5a1",
+    };
+    const usdcIn: EmittedEvent = {
+      block_number: 400,
+      data: ["2500000000", "0"],
+      keys: [TRANSFER_EVENT_KEY, OTHER, ACCOUNT],
+      transaction_hash: "0x5a1",
+    };
+    const entries = await collectTransactionHistory(
+      fakeRpc({
+        async getEvents(filter) {
+          return { events: filter.address === USDC_ADDRESS ? [usdcIn] : [ethOut] };
+        },
+      }),
+      { ...scanArgs, tokens: [eth, usdc] },
+    );
+    expect(entries.map((entry) => entry.hash)).toEqual(["0x5a1", "0x5a1"]);
+    expect(entries.map((entry) => entry.token).sort()).toEqual(["ETH", "USDC"]);
+    const summaries = entries.map((entry) => entry.summary).sort();
+    expect(summaries).toEqual(["Received 2500 USDC from 0x7770…0abc", "Sent 1 ETH to 0x7770…0abc"]);
+  });
+
   test("drops a node-derived row that fails boundary validation, keeping the rest", async () => {
     // A block whose timestamp overflows the safe-integer range would make
     // submittedAt fail isActivityEntry. It must be dropped individually, not
