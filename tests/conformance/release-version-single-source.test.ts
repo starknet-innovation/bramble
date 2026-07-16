@@ -9,11 +9,14 @@
  * config-standards and manifest checks enforce, asserted here from the release
  * axis so a future edit that desyncs them fails this gate too.
  */
-import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   evaluateRelease,
   isHotfixBranch,
+  main,
   resolveSingleSourceVersion,
   tagForVersion,
   versionFromReleaseBranch,
@@ -180,5 +183,54 @@ describe("repository sources", () => {
   test("the checked-in version matches the active release branch release/v0.5", async () => {
     const packageJson = await readJson("package.json");
     expect(packageJson["version"]).toBe(versionFromReleaseBranch("release/v0.5"));
+  });
+});
+
+describe("main (CLI over the real repository sources)", () => {
+  let dir: string | null = null;
+
+  afterEach(async () => {
+    if (dir !== null) {
+      await rm(dir, { recursive: true, force: true });
+      dir = null;
+    }
+  });
+
+  const outputPath = async (): Promise<string> => {
+    dir = await mkdtemp(join(tmpdir(), "release-version-test-"));
+    return join(dir, "github_output");
+  };
+
+  test("writes release/version/tag/kind to GITHUB_OUTPUT for a release promotion", async () => {
+    const outPath = await outputPath();
+    const code = await main({ HEAD_REF: "release/v0.5", GITHUB_OUTPUT: outPath });
+    expect(code).toBe(0);
+    const output = await readFile(outPath, "utf8");
+    expect(output).toContain("release=true");
+    expect(output).toContain("version=0.5.0");
+    expect(output).toContain("tag=v0.5.0");
+    expect(output).toContain("kind=release");
+  });
+
+  test("treats an empty HEAD_REF as no promotion (release=false)", async () => {
+    const outPath = await outputPath();
+    const code = await main({ HEAD_REF: "", GITHUB_OUTPUT: outPath });
+    expect(code).toBe(0);
+    const output = await readFile(outPath, "utf8");
+    expect(output).toContain("release=false");
+    expect(output).toContain("kind=none");
+  });
+
+  test("exits non-zero when the release tag drifts from the single-source version", async () => {
+    const outPath = await outputPath();
+    const code = await main({ RELEASE_TAG: "v0.4.0", GITHUB_OUTPUT: outPath });
+    expect(code).toBe(1);
+    // The gate fails before any output is written, so nothing is emitted.
+    const written = await readFile(outPath, "utf8").catch(() => null);
+    expect(written).toBeNull();
+  });
+
+  test("succeeds without a GITHUB_OUTPUT target", async () => {
+    expect(await main({ HEAD_REF: "chore/docs" })).toBe(0);
   });
 });

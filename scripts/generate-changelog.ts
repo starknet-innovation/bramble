@@ -153,6 +153,38 @@ const sectionPattern = (version: string): RegExp =>
 export const hasSection = (changelog: string, version: string): boolean =>
   changelog.split("\n").some((line) => sectionPattern(version).test(line));
 
+/**
+ * A heading date that is not yet finalized. A section curated on the release
+ * branch carries `- Unreleased` (or `- TBD`/`- TODO`, or nothing) until the
+ * release is cut; the real date is only known at cut time.
+ */
+const PLACEHOLDER_DATE = /^(?:unreleased|tbd|todo)?$/i;
+
+/**
+ * Stamps the release date onto a section heading whose date is still a
+ * placeholder (`## [0.5.0] - Unreleased` -> `## [0.5.0] - 2026-07-15`). A
+ * heading that already carries a real date is left untouched, so a
+ * deliberately dated section is never rewritten. Used for release notes so the
+ * curated section is reused verbatim except for the pending date.
+ */
+export const stampSectionDate = (section: string, date: string): string => {
+  if (PLACEHOLDER_DATE.test(date.trim())) {
+    return section;
+  }
+  const newlineAt = section.indexOf("\n");
+  const heading = newlineAt === -1 ? section : section.slice(0, newlineAt);
+  const rest = newlineAt === -1 ? "" : section.slice(newlineAt);
+  const match = /^(##\s*\[?[^\]\n]+?\]?)\s*(?:-\s*(.*?))?\s*$/.exec(heading);
+  if (!match) {
+    return section;
+  }
+  const currentDate = (match[2] ?? "").trim();
+  if (!PLACEHOLDER_DATE.test(currentDate)) {
+    return section;
+  }
+  return `${match[1] ?? heading} - ${date}${rest}`;
+};
+
 /** Extracts the section body for a version (heading included), or `null` if absent. */
 export const extractSection = (changelog: string, version: string): string | null => {
   const lines = changelog.split("\n");
@@ -216,7 +248,9 @@ export const main = async (
 
   if (mode === "notes") {
     const fromFile = existing === "" ? null : extractSection(existing, version);
-    process.stdout.write(`${fromFile ?? renderSection(version, date, subjects)}\n`);
+    const section =
+      fromFile !== null ? stampSectionDate(fromFile, date) : renderSection(version, date, subjects);
+    process.stdout.write(`${section}\n`);
     return 0;
   }
 
