@@ -100,7 +100,8 @@ describe("cluster views", () => {
     );
     expect(html).toContain('data-revoke-allowance="SN_MAIN:0x49d3657:0x5abcdef1234"');
     expect(html).toContain("Revoke");
-    expect(html).toContain("1000");
+    // Amounts render through the shared display policy (grouped thousands).
+    expect(html).toContain("1,000");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
   });

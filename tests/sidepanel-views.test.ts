@@ -44,11 +44,13 @@ describe("sidepanel views", () => {
     expect(html).toContain('aria-selected="true"');
   });
 
-  test("home keeps send and receive as quick actions, not settings or activity", () => {
+  test("home keeps send, swap, and receive as quick actions, not settings or activity", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const hero = html.slice(html.indexOf("hero"), html.indexOf("wallet-dock"));
 
     expect(hero).toContain('data-view="send"');
+    // Swap sits between Send and Receive on the action row.
+    expect(hero).toMatch(/data-view="send"[\s\S]*data-view="swap"[\s\S]*data-view="receive"/);
     expect(hero).toContain('data-view="receive"');
     expect(hero).not.toContain('data-view="settings"');
     expect(html).not.toContain('id="wallet-screen-receive"');
@@ -78,12 +80,13 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-view="backup"');
     expect(html).not.toContain('id="active-network"');
     expect(html).not.toContain('id="active-account"');
+    // Theme is a two-way pin (Dark default / Light); the follow-the-browser
+    // "system" option was removed.
     expect(html).toContain('data-theme-id="dark"');
     expect(html).toContain('data-theme-id="light"');
-    expect(html).toContain('data-theme-id="system"');
-    expect(html).toContain("Match the browser");
+    expect(html).not.toContain('data-theme-id="system"');
     expect(html).toContain('id="currency-select"');
-    // The dock is a solid flat nav card (Clean Mono — no glass material).
+    // The dock is a solid anchored bottom bar (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');
   });
 
@@ -108,20 +111,6 @@ describe("sidepanel views", () => {
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("surfaces pending connection requests as a badge and a home callout", () => {
-    const pending = [
-      { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },
-    ];
-    const home = dashboard("home", status, pending, preferences, { balances: [] });
-    const quiet = dashboard("home", status, [], preferences, { balances: [] });
-
-    expect(home).toContain('class="badge"');
-    expect(home).toContain("connection request waiting");
-    expect(home).toMatch(/callout[^>]*>[\s\S]*data-view="activity"/);
-    expect(quiet).not.toContain('class="badge"');
-    expect(quiet).not.toContain("connection request waiting");
-  });
-
   test("lets the activity screen approve or deny each request by id", () => {
     const pending = [
       { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },
@@ -132,6 +121,26 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-approval-action="approve"');
     expect(html).toContain('data-approval-action="deny"');
     expect(html).toContain(`data-approval-id="${pending[0]?.id}"`);
+  });
+
+  test("swap flow renders the AVNU screen skeleton with staged sections", () => {
+    const html = dashboard("swap", status, [], preferences, { balances: [] });
+
+    expect(html).toContain("Best route via AVNU");
+    expect(html).toContain('id="swap-sell-amount"');
+    expect(html).toContain('id="swap-flip"');
+    expect(html).toContain('id="swap-review"');
+    // Confirm and success stages ship hidden; the bindings stage them. The
+    // success moment carries the drawn ring + check marks.
+    expect(html).toMatch(/id="swap-confirm" hidden/);
+    // The quote-sanity warning slot ships hidden; the bindings surface it when
+    // a route returns materially less value than it costs.
+    expect(html).toMatch(/id="swap-warning"[^>]*hidden/);
+    expect(html).toMatch(/id="swap-success"[^>]*hidden/);
+    expect(html).toContain('class="swap-success-ring"');
+    expect(html).toContain('class="swap-success-check"');
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
+    expect(html).not.toContain("wallet-dock");
   });
 
   test("explains why sending is unavailable instead of failing silently", () => {

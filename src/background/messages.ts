@@ -3,6 +3,7 @@
  */
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
+import { type SwapService, unavailableSwapService } from "../starknet/avnu";
 import { DEFAULT_NETWORK } from "../starknet/networks";
 import { type PriceService, unavailablePriceService } from "../starknet/prices";
 import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
@@ -46,29 +47,16 @@ import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import {
   isClaimedSenderOrigin,
   isExtensionPageSender,
-  isPrivilegedMessage,
-  isTrustedSender,
+  parseGatedMessage,
   type RuntimeSender,
 } from "./senders";
 import { createUnlockSession, type UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
 import { handleStrk20Ops } from "./strk20-ops";
+import { handleSwapOps } from "./swap-ops";
 import { handleTokenOps } from "./token-ops";
 import { unlockFailureError } from "./unlock-errors";
 import { handleWalletOps, type WalletOpsDeps } from "./wallet-ops";
-
-const readMessageType = (message: unknown): string | null => {
-  if (typeof message !== "object" || message === null) {
-    return null;
-  }
-
-  const descriptor = Object.getOwnPropertyDescriptor(message, "type");
-  return descriptor?.enumerable === true &&
-    "value" in descriptor &&
-    typeof descriptor.value === "string"
-    ? descriptor.value
-    : null;
-};
 
 // Everything the runtime router hands to a sub-handler. One bag keeps the
 // router body free of per-handler argument plumbing.
@@ -85,6 +73,7 @@ type RouterContext = {
   readonly prices: PriceService;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
+  readonly swap: SwapService;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
 };
@@ -110,29 +99,6 @@ const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   loadMultisigClass: ctx.loadMultisigClass,
   multisigStore: ctx.multisigStore,
 });
-
-// Folds the trusted-sender, message-type, and privileged-sender guards into one
-// parse step: either a usable message type or the exact error the router would
-// have returned, keeping the guards out of the dispatch body.
-type GatedMessage = { readonly messageType: string } | { readonly error: string };
-
-const parseGatedMessage = (
-  message: unknown,
-  sender: RuntimeSender | undefined,
-  extensionId: string,
-): GatedMessage => {
-  if (!isTrustedSender(sender, extensionId)) {
-    return { error: "untrusted sender" };
-  }
-  const messageType = readMessageType(message);
-  if (!messageType) {
-    return { error: "unsupported message" };
-  }
-  if (isPrivilegedMessage(messageType) && !isExtensionPageSender(sender, extensionId)) {
-    return { error: "privileged sender required" };
-  }
-  return { messageType };
-};
 
 const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.createAccount") {
@@ -378,6 +344,8 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
 // Types are partitioned across handlers, so order is readability, not behavior.
 const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleWalletOps(buildOpsDeps(ctx), messageType, message),
+  (ctx, messageType, message) =>
+    handleSwapOps({ ...buildOpsDeps(ctx), swap: ctx.swap }, messageType, message),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleMultisigOps(buildMultisigDeps(ctx), messageType, message),
@@ -463,6 +431,7 @@ export type MessageHandlerOptions = {
   readonly prices?: PriceService;
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
+  readonly swap?: SwapService;
 };
 
 /**
@@ -486,6 +455,7 @@ export const createMessageHandler = (
     prices: options.prices ?? unavailablePriceService,
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session: options.session ?? createUnlockSession(),
+    swap: options.swap ?? unavailableSwapService,
     waiters: createSignatureWaiters(),
     wallet,
   };

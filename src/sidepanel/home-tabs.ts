@@ -1,6 +1,6 @@
 /**
  * Tabbed portfolio section on the home screen: Tokens, Collectibles, and
- * Activity share one section with a sliding emerald indicator and per-tab
+ * Activity share one section with a sliding accent indicator and per-tab
  * trailing actions. All three panels render up front so switching tabs never
  * re-renders the shell — the runtime just toggles visibility. Pure templates;
  * bindings live in ./home-ui.ts, styles in ./styles-home.ts.

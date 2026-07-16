@@ -28,6 +28,7 @@ export const TOKEN_STYLES = `
     --mc-elev-sm: ${SHADOW.sm};
     --mc-elev-md: ${SHADOW.md};
     --mc-elev-lg: ${SHADOW.lg};
+    --mc-elev-up: ${SHADOW.up};
     --ease-standard: ${EASE.standard};
     --ease-out: ${EASE.out};
     --ease-in-out: ${EASE.inOut};
@@ -41,11 +42,10 @@ export const TOKEN_STYLES = `
     --spring-snappy-ms: ${springSnappy.durationMs}ms;
     --spring-momentum: ${springMomentum.easing};
     --spring-momentum-ms: ${springMomentum.durationMs}ms;
-    /* Hairline edge + the two recessed/soft fills derived from skin tokens.
-       These carry structure in the flat Clean Mono look: a crisp 1px inset ring
-       plus, on floating chrome, a gentle low shadow. */
+    /* Hairline ink for DIVIDERS between rows (and the dock's top rule). Rings
+       around surfaces are gone from the language: structure comes from grouped
+       fills, inset dividers, and gentle shadows — never a border per box. */
     --mc-hairline: color-mix(in srgb, var(--mc-text) 12%, transparent);
     --mc-hairline-strong: color-mix(in srgb, var(--mc-text) 18%, transparent);
-    --mc-edge: inset 0 0 0 1px var(--mc-hairline);
   }
 `;

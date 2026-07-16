@@ -34,14 +34,15 @@ describe("accountFlow account-type block", () => {
 
     const html = accountFlow(knownStatus, knownAccount, preferences);
 
-    expect(html).toContain("Account type");
+    // The identifiers render as a receipt: a "Type" row carries the label.
+    expect(html).toContain("<dt>Type</dt>");
     expect(html).toContain("OpenZeppelin (AccountUpgradeable)");
   });
 
   test("omits the account type for an unrecognised class hash", () => {
     // The default fixture account carries an arbitrary (unknown) class hash.
     const html = accountFlow(status, account, preferences);
-    expect(html).not.toContain("Account type");
+    expect(html).not.toContain("<dt>Type</dt>");
   });
 });
 

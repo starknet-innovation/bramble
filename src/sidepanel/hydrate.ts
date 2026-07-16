@@ -39,7 +39,12 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   const fill = <T>(load: Promise<T>, assign: (value: T) => void): void => {
     jobs.push(load.then(assign).catch(() => undefined));
   };
-  if (activeView === "home" || activeView === "tokens" || activeView === "token-detail") {
+  if (
+    activeView === "home" ||
+    activeView === "swap" ||
+    activeView === "tokens" ||
+    activeView === "token-detail"
+  ) {
     fill(wallet.loadBalances(), (value) => {
       cache.balances = value;
     });

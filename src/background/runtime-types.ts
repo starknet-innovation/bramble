@@ -3,6 +3,7 @@
  */
 import type { StarkSignature } from "../crypto/krusty";
 import type { AllowanceView } from "../starknet/allowance-discovery";
+import type { SwapCatalogToken } from "../starknet/avnu";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { DiscoveredNft } from "../starknet/nft-metadata";
@@ -197,6 +198,32 @@ export type TokenChartResponse = {
   readonly currency: DisplayCurrency;
   readonly ok: true;
   readonly points: readonly number[];
+};
+
+/**
+ * Verified AVNU token catalog returned to extension pages for the swap
+ * picker. Directory data only — a selected untracked token is re-validated
+ * on-chain by the add-token flow before the wallet trusts it.
+ */
+export type SwapTokensResponse = {
+  readonly ok: true;
+  readonly swapTokens: readonly SwapCatalogToken[];
+};
+
+/**
+ * Validated AVNU swap quote view returned to extension pages: display-ready
+ * decimal amounts plus the USD figures for the confirmation receipt.
+ */
+export type SwapQuoteResponse = {
+  readonly ok: true;
+  readonly swapQuote: {
+    readonly buyAmount: string;
+    readonly buyAmountInUsd: number;
+    readonly gasFeesInUsd: number;
+    readonly quoteId: string;
+    readonly sellAmount: string;
+    readonly sellAmountInUsd: number;
+  };
 };
 
 /**
@@ -397,6 +424,8 @@ export type RuntimeResponse =
   | SignHashResponse
   | Strk20BalancesResponse
   | Strk20PrepareResponse
+  | SwapQuoteResponse
+  | SwapTokensResponse
   | TokenChartResponse
   | TransferResponse
   | WalletStatus
