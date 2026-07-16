@@ -107,6 +107,94 @@ describe("collectTransactionHistory", () => {
     expect(filters[0]?.from_block).toBe(800_000);
   });
 
+  test("asks the node for only the account's own transfers (in and out)", async () => {
+    const filters: HistoryEventFilter[] = [];
+    await collectTransactionHistory(
+      fakeRpc({
+        async getEvents(filter) {
+          filters.push(filter);
+          return { events: EVENTS };
+        },
+      }),
+      scanArgs,
+    );
+    // Two filters per token: outgoing constrains from (key 1) to the account,
+    // incoming leaves from open and constrains to (key 2). The account is
+    // canonicalized so the node matches the felt regardless of pasted spelling.
+    const canonicalAccount = `0x${BigInt(ACCOUNT).toString(16)}`;
+    expect(filters).toHaveLength(2);
+    expect(filters[0]?.keys).toEqual([[TRANSFER_EVENT_KEY], [canonicalAccount]]);
+    expect(filters[1]?.keys).toEqual([[TRANSFER_EVENT_KEY], [], [canonicalAccount]]);
+    for (const filter of filters) {
+      expect(filter.address).toBe(ETH_ADDRESS);
+    }
+  });
+
+  test("collapses a self-transfer that matches both the in and out filter", async () => {
+    const selfTransfer: EmittedEvent = {
+      block_number: 300,
+      data: ["7", "0"],
+      keys: [TRANSFER_EVENT_KEY, ACCOUNT, ACCOUNT],
+      transaction_hash: "0xdead",
+    };
+    const entries = await collectTransactionHistory(
+      fakeRpc({
+        async getEvents() {
+          return { events: [selfTransfer] };
+        },
+      }),
+      scanArgs,
+    );
+    expect(entries.map((entry) => entry.hash)).toEqual(["0xdead"]);
+  });
+
+  test("drops a node-derived row that fails boundary validation, keeping the rest", async () => {
+    // A block whose timestamp overflows the safe-integer range would make
+    // submittedAt fail isActivityEntry. It must be dropped individually, not
+    // blank the whole feed (which would also lose local history downstream).
+    const entries = await collectTransactionHistory(
+      fakeRpc({
+        async getBlockTimestamp(blockNumber) {
+          return blockNumber === 101 ? Number.MAX_SAFE_INTEGER : 1_700_000_000 + blockNumber;
+        },
+      }),
+      scanArgs,
+    );
+    expect(entries.map((entry) => entry.hash)).toEqual(["0xa11"]);
+    expect(entries.every((entry) => Number.isSafeInteger(entry.submittedAt))).toBe(true);
+  });
+
+  test("drops a row whose node-reported hash is not a valid field element", async () => {
+    // A byzantine node reports a transaction hash at/above the Stark field prime,
+    // which is not a real felt. The row must be dropped by the boundary re-check
+    // rather than kept (or blanking the whole feed): the valid sibling survives.
+    const overPrime = "0x800000000000011000000000000000000000000000000000000000000000002";
+    const entries = await collectTransactionHistory(
+      fakeRpc({
+        async getEvents() {
+          return {
+            events: [
+              {
+                block_number: 100,
+                data: ["1000000000000000000", "0"],
+                keys: [TRANSFER_EVENT_KEY, OTHER, ACCOUNT],
+                transaction_hash: "0xa11",
+              },
+              {
+                block_number: 103,
+                data: ["2000000000000000000", "0"],
+                keys: [TRANSFER_EVENT_KEY, OTHER, ACCOUNT],
+                transaction_hash: overPrime,
+              },
+            ],
+          };
+        },
+      }),
+      scanArgs,
+    );
+    expect(entries.map((entry) => entry.hash)).toEqual(["0xa11"]);
+  });
+
   test("caps the feed and only fetches a timestamp once per block", async () => {
     const many: EmittedEvent[] = Array.from({ length: MAX_HISTORY_ENTRIES + 10 }, (_, index) => ({
       block_number: 200 + index,
