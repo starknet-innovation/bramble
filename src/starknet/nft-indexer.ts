@@ -75,6 +75,44 @@ const recordsFrom = (body: unknown): readonly unknown[] => {
   return [];
 };
 
+// Fetches and JSON-parses the indexer response, degrading to null on a non-ok
+// status, a transport error, or a malformed body so a discovery outage surfaces
+// as an empty gallery rather than a thrown error.
+const fetchIndexerBody = async (http: NftIndexerHttp, url: string): Promise<unknown | null> => {
+  try {
+    const response = await http(url);
+    if (!response.ok) {
+      return null;
+    }
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
+
+// Pure fold of the untrusted record list into canonical NFTs: drops any record
+// that fails normalization or duplicates one already kept, and stops at
+// MAX_DISCOVERED_NFTS so a hostile or oversized indexer cannot fan out unbounded
+// on-chain owner_of re-proofs downstream.
+const dedupeDiscovered = (
+  records: readonly unknown[],
+  networkId: StarknetNetworkId,
+): DiscoveredNft[] => {
+  const discovered: DiscoveredNft[] = [];
+  const seen = new Set<string>();
+  for (const record of records) {
+    if (discovered.length >= MAX_DISCOVERED_NFTS) {
+      break;
+    }
+    const nft = normalizeIndexerNft(record, networkId);
+    if (nft && !seen.has(nft.id)) {
+      seen.add(nft.id);
+      discovered.push(nft);
+    }
+  }
+  return discovered;
+};
+
 /**
  * Builds an {@link NftIndexerService} over the given HTTP transport. A null
  * `indexerUrl` reproduces the unavailable behavior; a set URL drives the
@@ -87,29 +125,8 @@ export const createHttpNftIndexer = (http: NftIndexerHttp): NftIndexerService =>
     if (indexerUrl === null) {
       return [];
     }
-    let body: unknown;
-    try {
-      const response = await http(ownedNftsUrl(indexerUrl, address, networkId));
-      if (!response.ok) {
-        return [];
-      }
-      body = await response.json();
-    } catch {
-      return [];
-    }
-    const discovered: DiscoveredNft[] = [];
-    const seen = new Set<string>();
-    for (const record of recordsFrom(body)) {
-      if (discovered.length >= MAX_DISCOVERED_NFTS) {
-        break;
-      }
-      const nft = normalizeIndexerNft(record, networkId);
-      if (nft && !seen.has(nft.id)) {
-        seen.add(nft.id);
-        discovered.push(nft);
-      }
-    }
-    return discovered;
+    const body = await fetchIndexerBody(http, ownedNftsUrl(indexerUrl, address, networkId));
+    return dedupeDiscovered(recordsFrom(body), networkId);
   },
 });
 

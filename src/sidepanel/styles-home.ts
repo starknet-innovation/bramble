@@ -11,6 +11,29 @@ import { MOTION, RADIUS, SPACE, TYPE } from "../ui/tokens";
  * Home and motion stylesheet fragment consumed by SIDEPANEL_STYLES.
  */
 export const HOME_STYLES = `
+  /* On-chain class-hash verification shown on the account screen: pending stays
+     muted, a confirmed match goes accent, a mismatch is an assertive danger
+     block so it cannot be skimmed past. Icon and text share one baseline. */
+  .verify-status {
+    align-items: center;
+    color: var(--mc-muted);
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: 6px;
+    line-height: ${TYPE.caption.line};
+    margin-top: 6px;
+  }
+  .verify-status .icon { flex: none; }
+  .verify-status.verified { color: var(--mc-accent); font-weight: 600; }
+  .verify-status.mismatch {
+    align-items: flex-start;
+    background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
+    border-radius: ${RADIUS.md};
+    color: var(--mc-danger);
+    font-weight: 600;
+    padding: ${SPACE.sm};
+  }
+  .verify-status.mismatch code { word-break: break-all; }
   /* Account drawer: left sheet over a dimmed backdrop, elevation only */
   .drawer-root { inset: 0; pointer-events: none; position: fixed; z-index: 20; }
   .drawer-root[data-open="true"] { pointer-events: auto; }
@@ -22,13 +45,13 @@ export const HOME_STYLES = `
     transition: opacity var(--spring-drawer-ms) var(--ease-drawer);
   }
   .drawer-root[data-open="true"] .drawer-backdrop { opacity: 1; }
-  /* Left sheet: a solid panel with a hairline edge and a soft depth shadow,
-     settling with the iOS drawer spring. Enter and exit share one path. */
+  /* Left sheet: a solid panel under a soft depth shadow, settling with the
+     iOS drawer spring. Enter and exit share one path. */
   .account-drawer {
     background: var(--mc-panel);
     border-radius: 0 ${RADIUS.xl} ${RADIUS.xl} 0;
     bottom: 0;
-    box-shadow: var(--mc-edge), var(--mc-elev-lg);
+    box-shadow: var(--mc-elev-lg);
     display: flex;
     flex-direction: column;
     gap: ${SPACE.md};
@@ -67,13 +90,15 @@ export const HOME_STYLES = `
     text-align: left;
     transition:
       background ${MOTION.pressMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms ${MOTION.pop};
+      transform ${MOTION.liftMs}ms var(--ease-out);
     width: 100%;
   }
-  button.drawer-account:not(:disabled):hover { background: var(--mc-hover); }
+  @media (hover: hover) and (pointer: fine) {
+    button.drawer-account:not(:disabled):hover { background: var(--mc-hover); }
+    button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
+  }
   button.drawer-account:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.985); }
   button.drawer-account[aria-pressed="true"] { background: var(--mc-accent-soft); }
-  button.drawer-account[aria-pressed="true"]:not(:disabled):hover { background: var(--mc-accent-soft); }
   .drawer-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .drawer-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
@@ -86,7 +111,7 @@ export const HOME_STYLES = `
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
 
-  /* Portfolio tabs: text tabs, sliding emerald indicator, trailing actions */
+  /* Portfolio tabs: text tabs, sliding accent indicator, trailing actions */
   .home-tabs { display: grid; gap: ${SPACE.sm}; }
   .tab-bar { align-items: center; display: flex; gap: ${SPACE.sm}; min-height: 36px; }
   .tab-set {
@@ -105,15 +130,22 @@ export const HOME_STYLES = `
     font-weight: 700;
     min-height: 30px;
     padding: 0 10px;
-    transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms ${MOTION.pop};
+    transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  button.home-tab:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+  @media (hover: hover) and (pointer: fine) {
+    button.home-tab:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+    /* The selected tab keeps its accent under the pointer (see the dock). */
+    button.home-tab[aria-selected="true"]:not(:disabled):hover { color: var(--mc-accent); }
+  }
   button.home-tab:not(:disabled):active { background: transparent; transform: scale(0.95); }
   /* Active tab: no box/pill fill — a flat text tab that reads as selected via
-     the emerald accent (matching the sliding .tab-indicator underline and the
+     the cobalt accent (matching the sliding .tab-indicator underline and the
      borderless dock highlight). Inactive tabs stay muted; alignment plus the
      accent carry the state without any background. */
   button.home-tab[aria-selected="true"] { color: var(--mc-accent); }
+  /* The underline glides between tabs on the snappy spring — critically damped
+     (no overshoot), settling from the current position so rapid tab taps
+     retarget smoothly instead of restarting. */
   .tab-indicator {
     background: var(--mc-accent);
     border-radius: ${RADIUS.full};
@@ -121,7 +153,7 @@ export const HOME_STYLES = `
     height: 3px;
     left: 0;
     position: absolute;
-    transition: transform ${MOTION.tabMs}ms var(--ease-in-out), width ${MOTION.tabMs}ms var(--ease-in-out);
+    transition: transform var(--spring-snappy-ms) var(--spring-snappy), width var(--spring-snappy-ms) var(--spring-snappy);
     width: 24px;
   }
   .tab-actions { align-items: center; display: flex; flex: none; gap: 2px; margin-bottom: 6px; }
@@ -162,19 +194,20 @@ export const HOME_STYLES = `
     min-height: 0;
     padding: 0;
     text-align: left;
-    transition: transform ${MOTION.liftMs}ms ${MOTION.pop};
+    transition: transform ${MOTION.liftMs}ms var(--ease-out);
     width: 100%;
   }
   button.collectible-card:not(:disabled):hover { background: transparent; }
-  button.collectible-card:not(:disabled):hover strong { color: var(--mc-accent); }
   button.collectible-card:not(:disabled):active { background: transparent; transform: scale(0.97); }
 
-  /* Hover lift is gated to fine pointers so a tap on touch never leaves an
-     element floating (touch fires a phantom :hover). Pointer devices raise the
-     art tile with a soft shadow; the press scale is universal. */
+  /* Hover feedback is gated to fine pointers so a tap on touch never leaves an
+     element floating (touch fires a phantom :hover). Pointer devices tint the
+     caption and raise the art tile with a soft shadow; the press scale is
+     universal. */
   @media (hover: hover) and (pointer: fine) {
+    button.collectible-card:not(:disabled):hover strong { color: var(--mc-accent); }
     button.collectible-card:not(:disabled):hover .collectible-art {
-      box-shadow: var(--mc-edge), var(--mc-shadow-sm);
+      box-shadow: var(--mc-shadow-sm);
     }
   }
   .collectible-art {
@@ -182,7 +215,6 @@ export const HOME_STYLES = `
     aspect-ratio: 1 / 1;
     background: var(--mc-soft);
     border-radius: ${RADIUS.md};
-    box-shadow: var(--mc-edge);
     color: var(--mc-muted);
     display: inline-flex;
     justify-content: center;
@@ -194,7 +226,7 @@ export const HOME_STYLES = `
   .collectible-copy strong { font-size: ${TYPE.label.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .collectible-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
 
-  /* Copy confirmation: the glyph flips to an emerald check, then back */
+  /* Copy confirmation: the glyph flips to a success-green check, then back */
   button.copy-confirm, .hero-chip.copy-confirm .icon { color: var(--mc-positive); }
   .copy-confirm .icon { animation: glyph-pop ${MOTION.tabMs}ms ${MOTION.pop} both; }
 
@@ -202,6 +234,7 @@ export const HOME_STYLES = `
   button[data-busy] .icon { animation: none; }
   #refresh-button[data-busy] .icon,
   #activity-refresh[data-busy] .icon,
+  #swap-confirm-button[data-busy] .icon,
   #detect-tokens[data-busy] .icon { animation: spin 800ms linear infinite; }
 
   /* Motion: scene entrances stagger the hero, tiles, and first rows with the
@@ -246,181 +279,6 @@ export const HOME_STYLES = `
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Account groups (folders): filter chips, per-account assignment panel, the
-     icon picker grid, and the manage-accounts group list. Calm, hairline,
-     skin-token only — matching the drawer aesthetic. */
-  .group-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 2px; }
-  button.group-chip {
-    align-items: center;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
-    display: inline-flex;
-    font-size: ${TYPE.caption.size};
-    font-weight: 650;
-    gap: 5px;
-    min-height: 28px;
-    padding: 0 ${SPACE.sm};
-  }
-  button.group-chip .icon { height: 14px; width: 14px; }
-  button.group-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
-  button.group-chip[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  .drawer-account-item { display: grid; gap: 4px; }
-  .drawer-account-row, .option-row-line { align-items: center; display: flex; gap: 6px; }
-  .drawer-account-row .drawer-account, .option-row-line .option-row { flex: 1; min-width: 0; }
-  button.drawer-assign { flex: none; }
-  /* Ungrouped rows show a muted folder as a "pick a folder" affordance; a filed
-     account shows its folder's icon at full ink. */
-  button.drawer-assign.is-ungrouped { color: var(--mc-muted); }
-  .option-group-item { display: grid; gap: 4px; }
-  .account-groups-line { display: inline-flex; gap: 4px; margin-top: 2px; }
-  .account-groups-line .icon { color: var(--mc-muted); height: 13px; width: 13px; }
-  .group-assign {
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
-    display: grid;
-    gap: ${SPACE.sm};
-    padding: ${SPACE.sm};
-  }
-  .group-assign .eyebrow { margin: 0; }
-  .group-toggle-list { display: grid; gap: 4px; }
-  button.group-toggle {
-    align-items: center;
-    background: transparent;
-    border-radius: ${RADIUS.sm};
-    color: var(--mc-text);
-    display: flex;
-    gap: ${SPACE.sm};
-    justify-content: flex-start;
-    min-height: 36px;
-    padding: 0 ${SPACE.sm};
-    width: 100%;
-  }
-  button.group-toggle:not(:disabled):hover { background: var(--mc-hover); }
-  button.group-toggle[aria-pressed="true"] { background: var(--mc-accent-soft); }
-  .group-toggle-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
-  .group-toggle-icon .icon { height: 16px; width: 16px; }
-  .group-toggle-name { flex: 1; font-size: ${TYPE.body.size}; overflow: hidden; text-align: left; text-overflow: ellipsis; text-wrap: nowrap; }
-  .group-toggle-mark .icon { height: 16px; width: 16px; }
-  button.group-toggle[aria-pressed="true"] .group-toggle-mark .icon { color: var(--mc-accent); }
-  .new-group-form, .edit-group-form { display: grid; gap: ${SPACE.sm}; }
-  .group-name-input {
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.sm};
-    box-shadow: var(--mc-edge);
-    color: var(--mc-text);
-    min-height: 38px;
-    padding: 0 ${SPACE.sm};
-    width: 100%;
-  }
-  .group-icon-picker {
-    display: grid;
-    gap: 4px;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-  button.group-icon-option {
-    align-items: center;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.sm};
-    color: var(--mc-muted);
-    display: inline-flex;
-    justify-content: center;
-    min-height: 34px;
-    padding: 0;
-  }
-  button.group-icon-option .icon { height: 18px; width: 18px; }
-  button.group-icon-option:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
-  button.group-icon-option[aria-pressed="true"] { background: var(--mc-accent-soft); color: var(--mc-accent); }
-  .group-manage-list { display: grid; gap: ${SPACE.sm}; }
-  .group-manage-row { display: grid; gap: ${SPACE.sm}; }
-  .group-manage-icon { align-items: center; color: var(--mc-muted); display: inline-flex; }
-  .group-manage-copy { display: grid; flex: 1; gap: 1px; min-width: 0; text-align: left; }
-  .group-manage-copy strong { font-size: ${TYPE.body.size}; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  /* Two-tap delete confirm: the first tap arms the control and reveals an
-     explicit "Delete?" label beside the icon; a second tap deletes. */
-  button[data-remove-group].is-confirming {
-    color: var(--mc-danger);
-    gap: 4px;
-    padding: 0 ${SPACE.sm};
-    width: auto;
-  }
-  button[data-remove-group].is-confirming::after {
-    content: "Delete?";
-    font-size: ${TYPE.caption.size};
-    font-weight: 650;
-  }
-
-  /* Group-centric bulk members editor: an expandable header per group, then a
-     roomy checklist of every wallet account. Hairline + skin-token only. */
-  button.group-expand {
-    align-items: center;
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
-    color: var(--mc-text);
-    display: flex;
-    gap: ${SPACE.sm};
-    justify-content: flex-start;
-    min-height: 48px;
-    padding: 0 ${SPACE.sm};
-    width: 100%;
-  }
-  button.group-expand:not(:disabled):hover { background: var(--mc-hover); }
-  button.group-expand[aria-expanded="true"] { background: var(--mc-accent-soft); }
-  button.group-expand[aria-expanded="true"] .group-manage-icon { color: var(--mc-accent); }
-  .group-expand-mark { align-items: center; color: var(--mc-muted); display: inline-flex; flex: none; }
-  .group-expand-mark .icon { height: 16px; width: 16px; }
-  .group-members {
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.md};
-    display: grid;
-    gap: ${SPACE.sm};
-    padding: ${SPACE.sm};
-  }
-  .group-members-head { align-items: center; display: flex; gap: ${SPACE.sm}; }
-  .group-members-head .eyebrow { flex: 1; margin: 0; }
-  .account-check-list { display: grid; gap: 4px; max-height: 320px; overflow-y: auto; }
-  button.account-check {
-    align-items: center;
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.sm};
-    box-shadow: var(--mc-edge);
-    color: var(--mc-text);
-    display: flex;
-    gap: ${SPACE.sm};
-    justify-content: flex-start;
-    min-height: 48px;
-    padding: 0 ${SPACE.sm};
-    text-align: left;
-    width: 100%;
-  }
-  button.account-check:not(:disabled):hover { background: var(--mc-hover); }
-  button.account-check[aria-pressed="true"] { background: var(--mc-accent-soft); }
-  .account-check .option-avatar { flex: none; }
-  .account-check-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
-  .account-check-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
-  .account-check-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  .account-check-net {
-    background: var(--mc-soft);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
-    flex: none;
-    font-size: ${TYPE.caption.size};
-    font-weight: 650;
-    max-width: 92px;
-    overflow: hidden;
-    padding: 2px ${SPACE.sm};
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-  }
-  .account-check-mark { flex: none; }
-  .account-check-mark .icon { color: var(--mc-muted); height: 18px; width: 18px; }
-  button.account-check[aria-pressed="true"] .account-check-mark .icon { color: var(--mc-accent); }
-
-  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: 2px solid var(--mc-accent);
-    outline-offset: 2px;
-  }
-
   /* Reduced motion: every animation and transition collapses to a cut, and
      hover lifts and press scales settle to static states */
   @media (prefers-reduced-motion: reduce) {
@@ -429,11 +287,16 @@ export const HOME_STYLES = `
     .shell-animate .token-list li, .tab-panel.is-entering,
     .drawer-root[data-open="true"] .drawer-list li, .copy-confirm .icon,
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
-    #detect-tokens[data-busy] .icon { animation: none; }
+    #detect-tokens[data-busy] .icon,
+    #swap-confirm-button[data-busy] .icon { animation: none; }
     button, input, select, textarea, .tab-indicator, .tab-icon,
     .account-drawer, .drawer-backdrop, .account-name .icon { transition: none; }
     button.collectible-card:not(:disabled):hover,
     .account-trigger[aria-expanded="true"] .account-name .icon { transform: none; }
+    .swap-success-ring, .swap-success-check { animation: none; stroke-dashoffset: 0; }
+    .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint { animation: none; }
+    button:not(:disabled):active,
+    button.icon-button:not(:disabled):active,
     button.action-tile:not(:disabled):active,
     button.collectible-card:not(:disabled):active,
     button.nav-item:not(:disabled):active,

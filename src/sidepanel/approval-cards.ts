@@ -7,14 +7,8 @@ import type { PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { icon } from "./icons";
 import { accountLabel } from "./parts";
+import { reviewCallsList, reviewPanel, riskFlagMessages } from "./review-render";
 import { signRequestDetails } from "./sign-request";
-
-const reviewPanel = (items: readonly string[]): string =>
-  items.length === 0
-    ? ""
-    : `<div class="review-panel" role="note">${items
-        .map((item) => `<p class="review-flag">${icon("alert")}${escapeHtml(item)}</p>`)
-        .join("")}</div>`;
 
 // Shared approve/deny controls (one long template line so it is not re-wrapped);
 // `approve` is disabled when the wallet is locked or the origin is blocked.
@@ -58,9 +52,9 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       <p class="eyebrow">Transaction request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">${status.locked ? "Unlock the wallet to review and approve this transaction." : "Review each call carefully. Approving signs and submits it from your active account."}</p>
-      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+      ${reviewCallsList(approval.summaries ?? [])}
     </div>
-    ${reviewPanel([...(approval.flags ?? []).map((flag) => flag.message), ...(approval.insights ?? [])])}
+    ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
     ${decisionRow(approval, "Approve", status.locked)}
   </li>`;
 
@@ -82,7 +76,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       <p class="eyebrow">Private transaction request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action. Approving builds the proof and submits it from your active account."}</p>
-      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+      ${reviewCallsList(approval.summaries ?? [])}
     </div>
     ${reviewPanel(approval.insights ?? [])}
     ${decisionRow(approval, "Approve", status.locked)}
@@ -94,7 +88,7 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
       <p class="eyebrow">Network switch request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network. Nothing changes unless you approve."}</p>
-      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+      ${reviewCallsList(approval.summaries ?? [])}
     </div>
     ${reviewPanel(approval.insights ?? [])}
     ${decisionRow(approval, "Switch network", status.locked)}
@@ -106,7 +100,7 @@ const addChainCard = (approval: PendingApproval): string => `
       <p class="eyebrow">Add network request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">This site is asking to add a custom Starknet network. Nothing is saved unless you approve.</p>
-      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+      ${reviewCallsList(approval.summaries ?? [])}
     </div>
     ${reviewPanel(approval.insights ?? [])}
     ${decisionRow(approval, "Add network", false)}
@@ -118,7 +112,7 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       <p class="eyebrow">Declare contract request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">${status.locked ? "Unlock the wallet to review and declare this contract class." : "Approving signs and submits a declare transaction from your active account."}</p>
-      ${!approval.summaries?.length ? "" : `<ul class="review-calls">${approval.summaries.map((summary) => `<li class="review-call">${escapeHtml(summary)}</li>`).join("")}</ul>`}
+      ${reviewCallsList(approval.summaries ?? [])}
     </div>
     ${reviewPanel(approval.insights ?? [])}
     ${decisionRow(approval, "Declare", status.locked)}

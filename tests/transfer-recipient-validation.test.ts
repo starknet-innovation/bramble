@@ -5,7 +5,11 @@
  */
 import { expect, test } from "bun:test";
 
-import { friendlyReviewError, recipientFieldError } from "../src/sidepanel/transfer-ui";
+import {
+  activityExportToast,
+  friendlyReviewError,
+  recipientFieldError,
+} from "../src/sidepanel/transfer-ui";
 
 const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
 
@@ -42,4 +46,17 @@ test("maps the background review error onto the friendly recipient message", () 
 test("passes other review errors through unchanged", () => {
   expect(friendlyReviewError(new Error("network unreachable"))).toBe("network unreachable");
   expect(friendlyReviewError("boom")).toBe("Transfer review failed");
+});
+
+test("labels a CSV export as device-records-only when on-chain history was unavailable", () => {
+  // The export re-reads the feed, so its on-chain scan can degrade at export
+  // time. A degraded export still downloads the local rows but must not read as
+  // a complete-history success, or the user trusts a partial file as the whole
+  // account history.
+  const degraded = activityExportToast(true);
+  expect(degraded.tone).toBe("error");
+  expect(degraded.message).toContain("device's records only");
+
+  const full = activityExportToast(false);
+  expect(full).toEqual({ message: "Activity exported", tone: "success" });
 });

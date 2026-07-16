@@ -19,6 +19,11 @@ const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/
 const expectedHostPermissions = [
   "https://api.cartridge.gg/*",
   "https://api.coingecko.com/*",
+  // AVNU swap aggregator (quotes + build calldata) for the in-wallet swap
+  // flow, per network. Responses are validated in src/starknet/avnu.ts and
+  // policy-checked in src/background/swap-ops.ts before anything is signed.
+  "https://starknet.api.avnu.fi/*",
+  "https://sepolia.api.avnu.fi/*",
   // Maintained web3 phishing feed (issue #34): the default source for the live
   // malicious-origin blocklist. Configurable per deployment via the feed's
   // `source` option; pinned here so the manifest stays an explicit allowlist.

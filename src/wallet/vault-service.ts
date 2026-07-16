@@ -15,10 +15,19 @@ import { assertStoreAccess, type StoreActor } from "../storage/permissioned-stor
 import {
   type AccountRef,
   CURRENT_SCHEMA_VERSION,
+  type DerivedAccountRef,
+  type ImportedAccountRef,
   isAccountId,
   type Vault,
 } from "../storage/vault-schema";
-import { type AccountDerivationInput, deriveAccount, getOzAccountClassHash } from "./accounts";
+import {
+  type AccountDerivationInput,
+  deriveAccount,
+  deriveImportedAccount,
+  getOzAccountClassHash,
+  nextAccountIndex,
+  sameWalletKey,
+} from "./accounts";
 
 /**
  * Browser storage key for the encrypted wallet vault.
@@ -113,6 +122,17 @@ export type AddDerivedAccountInput = {
 };
 
 /**
+ * Input for importing a standalone account from a raw Starknet private key. The
+ * key is validated and routed to the encrypted vault; it is never persisted in
+ * plain preferences or logged.
+ */
+export type ImportRawKeyAccountInput = {
+  readonly networkId: StarknetNetworkId;
+  readonly privateKey: string;
+  readonly vaultPassphrase: string;
+};
+
+/**
  * Re-authenticated secret export for the active account. Returned only to the
  * privileged reveal flow and never persisted or logged. `mnemonic` is `null`
  * when the vault predates recovery-phrase retention.
@@ -126,10 +146,11 @@ export type RevealedSecrets = {
  * Privileged encrypted-vault wallet service surface.
  */
 export type WalletVaultService = {
-  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
-  readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
+  readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
+  readonly importRawKeyAccount: (input: ImportRawKeyAccountInput) => Promise<ImportedAccountRef>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly getGrantedAccounts: (
     origin: string,
@@ -168,27 +189,18 @@ const findAccount = (vault: Vault, accountId: string): AccountRef => {
   return account;
 };
 
-const sameWalletKey = (left: AccountRef, right: AccountRef): boolean =>
-  left.publicKeyX === right.publicKeyX &&
-  left.publicKeyY === right.publicKeyY &&
-  left.derivation.accountIndex === right.derivation.accountIndex &&
-  left.derivation.addressIndex === right.derivation.addressIndex;
-
-const nextAccountIndex = (
-  accounts: readonly AccountRef[],
+// The wallet key to derive from when adding a network account: active, else first.
+const selectSourceAccount = (vault: Vault): AccountRef | undefined =>
+  (vault.activeAccountId
+    ? vault.accounts.find((stored) => stored.id === vault.activeAccountId)
+    : null) ?? vault.accounts[0];
+// The existing account deriving `source`'s key onto `networkId`, if any.
+const findNetworkAccount = (
+  vault: Vault,
   networkId: StarknetNetworkId,
-): number => {
-  const used = new Set(
-    accounts
-      .filter((account) => account.networkId === networkId)
-      .map((account) => account.derivation.accountIndex),
-  );
-  let index = 0;
-  while (used.has(index)) {
-    index += 1;
-  }
-  return index;
-};
+  source: AccountRef,
+): AccountRef | undefined =>
+  vault.accounts.find((stored) => stored.networkId === networkId && sameWalletKey(stored, source));
 
 /**
  * Extracts the active account's private key and the vault recovery phrase for
@@ -297,19 +309,36 @@ export const createWalletVaultService = ({
 
       return account;
     },
+    async importRawKeyAccount(input) {
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      const { account, privateKey } = await deriveImportedAccount(kms, {
+        networkId: input.networkId,
+        privateKey: input.privateKey,
+      });
+      if (vault.accounts.some((stored) => stored.id === account.id)) {
+        throw new WalletError("Account already exists");
+      }
+
+      await writeVault(
+        encryptedStore,
+        {
+          ...vault,
+          accounts: [...vault.accounts, account],
+          activeAccountId: account.id,
+          signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
+        },
+        input.vaultPassphrase,
+      );
+
+      return account;
+    },
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const source =
-        (vault.activeAccountId
-          ? vault.accounts.find((stored) => stored.id === vault.activeAccountId)
-          : null) ?? vault.accounts[0];
+      const source = selectSourceAccount(vault);
       if (!source) {
         throw new WalletError("No account selected");
       }
-
-      const existing = vault.accounts.find(
-        (stored) => stored.networkId === input.networkId && sameWalletKey(stored, source),
-      );
+      const existing = findNetworkAccount(vault, input.networkId, source);
       if (existing) {
         await writeVault(
           encryptedStore,
@@ -323,13 +352,11 @@ export const createWalletVaultService = ({
       if (!signingKey) {
         throw new WalletError("Signing key unavailable");
       }
-
       const classHash = await getOzAccountClassHash(kms, input.networkId);
       const address = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
       if (!isNonZeroStarkFieldElement(address)) {
         throw new WalletError("Krusty KMS returned invalid account address");
       }
-
       const account: AccountRef = {
         ...source,
         address,
@@ -354,7 +381,6 @@ export const createWalletVaultService = ({
         },
         input.vaultPassphrase,
       );
-
       return account;
     },
     generateMnemonic() {
@@ -465,6 +491,7 @@ export const createWalletVaultService = ({
     addDerivedAccount: (input) => serialized(() => service.addDerivedAccount(input)),
     createAccount: (input) => serialized(() => service.createAccount(input)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
+    importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
     setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),

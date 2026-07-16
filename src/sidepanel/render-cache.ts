@@ -6,6 +6,7 @@
  */
 
 import type { WalletStatus } from "../popup/responses";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { MultisigClient } from "./multisig-runtime";
 import { emptyStatus, type SidepanelWallet } from "./runtime";
@@ -13,6 +14,10 @@ import { emptyStatus, type SidepanelWallet } from "./runtime";
 // The price snapshot as the runtime client returns it; the cache's price fields
 // derive from this so their types cannot drift from loadPrices.
 type LoadedPrices = Awaited<ReturnType<SidepanelWallet["loadPrices"]>>;
+
+// The activity snapshot as the runtime client returns it; the cache's activity
+// fields derive from this so they cannot drift from loadActivity.
+type LoadedActivity = Awaited<ReturnType<SidepanelWallet["loadActivity"]>>;
 
 /**
  * Everything a paint reads. Each field mirrors the resolved result of one
@@ -26,6 +31,7 @@ export type RenderData = {
   multisigClassDeclared: boolean | "error" | null;
   balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
   chart: readonly number[];
+  classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
   connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
   deployment: boolean | null;
   discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
@@ -36,7 +42,8 @@ export type RenderData = {
   priceAsOf: LoadedPrices["asOf"];
   priceStale: LoadedPrices["stale"];
   status: WalletStatus;
-  transactions: Awaited<ReturnType<SidepanelWallet["loadActivity"]>>;
+  transactions: LoadedActivity["entries"];
+  historyUnavailable: LoadedActivity["historyUnavailable"];
 };
 
 /**
@@ -51,6 +58,7 @@ export const emptyRenderCache = (): RenderData => ({
   multisigClassDeclared: null,
   balances: { error: "wallet locked" },
   chart: [],
+  classHashVerification: null,
   connectedSites: [],
   deployment: null,
   discoveredNfts: [],
@@ -62,4 +70,21 @@ export const emptyRenderCache = (): RenderData => ({
   priceStale: false,
   status: emptyStatus(),
   transactions: [],
+  historyUnavailable: false,
 });
+
+/**
+ * The on-chain class-hash verdict to display for the given active account: the
+ * cached verification only when it was resolved for that same account, else
+ * null (the still-verifying state). Gating on the account id at read time is
+ * what guarantees a verdict is never shown under a different account's class
+ * hash — neither the stale value left behind across an account switch (the
+ * cache is not reset synchronously) nor a slow verification that resolved for
+ * an account the user has already left. Fail-safe: anything but an exact
+ * account-id match reads as pending, never as another account's "verified".
+ */
+export const verificationForAccount = (
+  cached: RenderData["classHashVerification"],
+  activeAccountId: string | null,
+): ClassHashVerification | null =>
+  cached && cached.accountId === activeAccountId ? cached.verification : null;

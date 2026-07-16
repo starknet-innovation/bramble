@@ -13,26 +13,22 @@ import { colorSchemeForChoice, skinForChoice } from "../ui/theme";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { createDeploymentCache } from "./deployment-cache";
-import {
-  bindCopyButtons,
-  buttonBusy,
-  captureRepaintFocus,
-  errorMessage,
-  restoreRepaintFocus,
-  showToast,
-} from "./dom";
+import { bindDisclosures } from "./disclosures";
+import { bindCopyButtons, captureRepaintFocus, restoreRepaintFocus } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
+import { hydrateView } from "./hydrate";
+import { bindImportKey } from "./import-key-ui";
 import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
-import { bindOnboarding } from "./onboarding-ui";
-import { emptyRenderCache, type RenderData } from "./render-cache";
+import { bindOnboarding, bindUnlock } from "./onboarding-ui";
+import { emptyRenderCache, type RenderData, verificationForAccount } from "./render-cache";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import {
@@ -45,6 +41,8 @@ import {
 } from "./settings-ui";
 import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
+import { createSwapClient } from "./swap-client";
+import { bindSwap } from "./swap-ui";
 import { bindActivity, bindTransfer } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
@@ -55,6 +53,7 @@ const app = document.querySelector("#app");
 const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
 const wallet = createSidepanelRuntime(runtime);
 const multisig = createMultisigClient(runtime);
+const swapClient = createSwapClient(runtime);
 let activeView: WalletView = "home";
 let selectedNftId: string | null = null;
 let selectedMultisigId: string | null = null;
@@ -81,6 +80,9 @@ let drawerGroupFilter: string | null = null;
 // group's bulk editor or the "Create a group" panel; null = all collapsed).
 let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
+// Requests the user parked with the takeover's "Not now" for this panel
+// session; self-healed in paint() so a decided request never lingers here.
+let snoozedApprovalIds: readonly string[] = [];
 
 // The View Transitions API is progressively enhanced: typed locally so the
 // build does not depend on the lib.dom version shipping the declarations.
@@ -104,32 +106,6 @@ const bindNavigation = (): void => {
 const bindBack = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-nav-back]").forEach((button) => {
     button.addEventListener("click", goBack);
-  });
-};
-
-const bindUnlock = (): void => {
-  const form = app?.querySelector<HTMLFormElement>("#unlock-form");
-  const result = app?.querySelector<HTMLElement>("#form-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const vaultPassphrase = String(new FormData(form).get("vaultPassphrase") ?? "");
-    buttonBusy(submitButton, true);
-    void wallet.unlockVault(vaultPassphrase).then(
-      async (status) => {
-        activeView = "home";
-        showToast("Vault unlocked", "success");
-        await render(status);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Unlock failed"), "error");
-        if (result) {
-          result.textContent = errorMessage(error, "Unlock failed");
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
   });
 };
 
@@ -172,7 +148,9 @@ const bindAll = (): void => {
   bindBack();
   bindCopyButtons(app);
   bindOnboarding({ app, render, wallet });
-  bindUnlock();
+  bindUnlock({ app, render, wallet }, () => {
+    activeView = "home";
+  });
   const shellDeps = {
     app,
     render,
@@ -228,12 +206,39 @@ const bindAll = (): void => {
   };
   bindAccountLabel(settingsDeps);
   bindAddAccount(settingsDeps);
+  bindImportKey(settingsDeps);
   bindAppearance(settingsDeps);
   bindBackup(settingsDeps);
   bindContacts(settingsDeps);
   bindGroups(settingsDeps);
   bindAddressBook({ app, render, wallet });
-  bindApprovals({ app, render, wallet });
+  bindApprovals({
+    app,
+    render,
+    snoozeApproval: (id) => {
+      snoozedApprovalIds = [...snoozedApprovalIds, id];
+      paint();
+    },
+    wallet,
+  });
+  bindDisclosures(app);
+  bindSwap({
+    app,
+    balances: () => cache.balances,
+    currency: () => cache.preferences?.displayCurrency ?? "usd",
+    // The success moment returns home on its own; guard so a user who already
+    // navigated away is never yanked back.
+    navigateHome: () => {
+      if (activeView === "swap") {
+        navigate("home");
+      }
+    },
+    preferences: () => cache.preferences,
+    render,
+    status: () => cache.status,
+    swap: swapClient,
+    wallet,
+  });
   bindClusterScreens({
     app,
     openNft: (id) => {
@@ -267,13 +272,12 @@ const bindAll = (): void => {
 // Applies the skin and CSS `color-scheme` for the current theme choice, but
 // only when the resolved skin actually changed — cheap enough to call on every
 // paint. Swapping skin tokens on the root re-themes the whole panel through CSS
-// custom properties without re-rendering any markup. Under the default "system"
-// choice, `color-scheme: light dark` lets the skin's system-color and
-// `light-dark()` values track the browser scheme with no JavaScript, so a live
-// OS/browser scheme flip re-themes the panel purely through CSS; a pinned
-// "dark"/"light" fixes the scheme so the Clean Mono skin cannot be flipped.
+// custom properties without re-rendering any markup. Both themes are pinned
+// palettes; `color-scheme` is pinned alongside so native form controls render
+// on the same ground and a browser scheme flip can never re-theme the panel.
+// A legacy stored "system" choice resolves to the default dark skin.
 const applyTheme = (): void => {
-  const choice = cache.preferences?.theme ?? "system";
+  const choice = cache.preferences?.theme ?? "dark";
   const skin = skinForChoice(choice);
   if (skin.name !== lastSkinName) {
     lastSkinName = skin.name;
@@ -308,6 +312,17 @@ const paint = (): void => {
   drawerGroupFilter = healed.drawerGroupFilter;
   expandedGroupId = healed.expandedGroupId;
   openAssignId = healed.openAssignId;
+  // Key the class-hash verification by the account it was computed for, so a
+  // stale badge from the previous account never shows against a freshly switched
+  // one — it falls back to its honest "verifying…" state until the new account's
+  // verification lands (mirrors how deployment-cache keys by accountId).
+  const classHashVerification = verificationForAccount(
+    cache.classHashVerification,
+    status.activeAccountId,
+  );
+  snoozedApprovalIds = snoozedApprovalIds.filter((id) =>
+    cache.pending.some((approval) => approval.id === id),
+  );
   const content = !status.hasVault
     ? onboarding(status)
     : status.locked
@@ -337,6 +352,9 @@ const paint = (): void => {
           cache.priceAsOf,
           cache.discoveredNfts,
           openAssignId,
+          classHashVerification,
+          cache.historyUnavailable,
+          snoozedApprovalIds,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -355,88 +373,30 @@ const render = async (status: WalletStatus): Promise<void> => {
   cache.preferences =
     status.hasVault && !status.locked ? await wallet.loadPreferences().catch(() => null) : null;
   if (!status.hasVault || status.locked) {
-    cache.balances = { error: "wallet locked" };
-    cache.deployment = null;
-    cache.transactions = [];
-    cache.connectedSites = [];
-    cache.prices = {};
-    cache.changes = {};
-    cache.priceAsOf = null;
-    cache.priceStale = false;
-    cache.chart = [];
-    cache.allowances = [];
-    cache.discoveredNfts = [];
+    // Reset every view-scoped field to its locked/empty state from the single
+    // source (emptyRenderCache) rather than a hand-maintained field list here,
+    // so no field — present or future — can be forgotten and leak stale state
+    // (e.g. multisig proposals) across a lock. The status/pending/preferences
+    // just refreshed above are preserved.
+    Object.assign(cache, emptyRenderCache(), {
+      pending: cache.pending,
+      preferences: cache.preferences,
+      status,
+    });
     paint();
     return;
   }
   paint();
-  const jobs: Promise<unknown>[] = [];
-  const fill = <T>(load: Promise<T>, assign: (value: T) => void): void => {
-    jobs.push(load.then(assign).catch(() => undefined));
-  };
-  if (activeView === "home" || activeView === "tokens" || activeView === "token-detail") {
-    fill(wallet.loadBalances(), (value) => {
-      cache.balances = value;
-    });
-    fill(wallet.loadPrices(), (value) => {
-      cache.prices = value.prices;
-      cache.changes = value.changes;
-      cache.priceAsOf = value.asOf;
-      cache.priceStale = value.stale;
-    });
-  }
-  if (activeView === "home") {
-    fill(deployment.load(status, activeView), (value) => {
-      cache.deployment = value;
-    });
-  }
-  if (activeView === "activity" || activeView === "home") {
-    fill(wallet.loadActivity(), (value) => {
-      cache.transactions = value;
-    });
-  }
-  if (activeView === "connected-sites") {
-    fill(wallet.connectedSites(), (value) => {
-      cache.connectedSites = value;
-    });
-  }
-  if (activeView === "allowances") {
-    fill(wallet.loadAllowances(), (value) => {
-      cache.allowances = value;
-    });
-  }
-  if (activeView === "nfts" || activeView === "nft-detail") {
-    fill(wallet.discoverNfts(), (value) => {
-      cache.discoveredNfts = value;
-    });
-  }
-  if (
-    activeView === "multisigs" ||
-    activeView === "multisig-detail" ||
-    activeView === "multisig-propose" ||
-    activeView === "multisig-deploy"
-  ) {
-    fill(multisig.loadMultisigs(), (value) => {
-      cache.multisigs = value;
-    });
-  }
-  if (activeView === "multisig-deploy") {
-    fill(multisig.loadClassStatus(), (value) => {
-      cache.multisigClassDeclared = value;
-    });
-  }
-  if (activeView === "token-detail") {
-    const selected = cache.preferences?.tokens.find((token) => token.id === selectedTokenId);
-    if (selected) {
-      fill(wallet.loadTokenChart(selected.address), (value) => {
-        cache.chart = value;
-      });
-    }
-  }
-  if (jobs.length > 0) {
-    await Promise.all(jobs);
-    paint();
-  }
+  await hydrateView({
+    status,
+    activeView,
+    selectedTokenId,
+    cache,
+    wallet,
+    multisig,
+    deployment,
+    paint,
+  });
 };
 
 // Instant navigation: swap the visible screen from cache now, hydrate after.
@@ -483,9 +443,7 @@ runtime?.onMessage?.addListener((message) => {
   }
 });
 
-// Apply the theme before the first paint. Under the default "system" choice the
-// browser scheme is tracked purely through CSS (`color-scheme: light dark` plus
-// the skin's system-color/`light-dark()` values), so no `matchMedia` listener is
-// needed to re-theme on a live flip.
+// Apply the theme before the first paint so the pinned skin and color-scheme
+// are in place before any markup renders (no flash of the wrong ground).
 applyTheme();
 void render(await wallet.loadStatus());

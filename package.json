@@ -1,6 +1,6 @@
 {
   "name": "mc-wallet",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -18,7 +18,9 @@
     "check:krusty": "bun run scripts/check-krusty-adapter.ts",
     "check:lint": "biome check .",
     "check:multisig": "bun run scripts/check-multisig-class.ts",
+    "check:release-version": "bun run scripts/release-version.ts",
     "check:types": "tsc --noEmit",
+    "changelog": "bun run scripts/generate-changelog.ts",
     "format": "biome check --write .",
     "package:extension": "bun run scripts/package-extension.ts",
     "release:publish": "bun run scripts/publish-chrome-web-store.ts",

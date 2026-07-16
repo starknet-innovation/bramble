@@ -9,23 +9,25 @@ import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { type AllowanceView, isUnlimitedAllowance } from "../starknet/allowance-discovery";
 import type { AccountRef } from "../storage/vault-schema";
-import { icon } from "./icons";
 import { accountLabel, flowHeader, flowScreen } from "./parts";
+import { compactAmount } from "./token-row";
 
 const amountLabel = (amount: string): string =>
-  isUnlimitedAllowance(amount) ? "Unlimited" : amount;
+  isUnlimitedAllowance(amount) ? "Unlimited" : compactAmount(amount);
 
 const sourceLabel = (source: AllowanceView["source"]): string =>
-  source === "external" ? "On-chain" : "This wallet";
+  source === "external" ? "on-chain" : "this wallet";
 
+// One allowance per row: the spender leads (it is who can move funds), with
+// the token, amount, and provenance as one quiet supporting line — never three
+// stacked label/value pairs fighting for attention.
 const allowanceRow = (allowance: AllowanceView): string => `
   <li class="allowance-row">
     <div class="allowance-copy">
-      <p class="eyebrow">Spender · ${escapeHtml(sourceLabel(allowance.source))}</p>
       <code>${escapeHtml(accountLabel(allowance.spender))}</code>
-      <p class="hint">Token ${escapeHtml(accountLabel(allowance.token))} · Amount ${escapeHtml(amountLabel(allowance.amount))}</p>
+      <p class="hint">${escapeHtml(amountLabel(allowance.amount))} of ${escapeHtml(accountLabel(allowance.token))} · ${escapeHtml(sourceLabel(allowance.source))}</p>
     </div>
-    <button class="secondary small danger" data-revoke-allowance="${escapeHtml(allowance.id)}" type="button">${icon("x")}Revoke</button>
+    <button class="ghost small danger" data-revoke-allowance="${escapeHtml(allowance.id)}" type="button">Revoke</button>
   </li>`;
 
 /**

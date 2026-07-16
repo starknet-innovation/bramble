@@ -46,6 +46,9 @@ describe("privileged message gate", () => {
       "wallet.unlock",
       "wallet.transfer",
       "wallet.importPreferences",
+      // Raw-key import carries a private key in its payload, so it must never be
+      // dapp-reachable; pin it explicitly so it can never drift into DAPP_MESSAGES.
+      "wallet.importAccount",
       // Never-registered types must fail closed rather than default open.
       "wallet.someFutureMessage",
     ]) {
@@ -64,5 +67,22 @@ describe("privileged message gate", () => {
         contentSender,
       ),
     ).resolves.toEqual({ error: "privileged sender required" });
+  });
+
+  test("content scripts cannot reach the raw-key import path", async () => {
+    // A dapp-origin sender presenting a private key must be turned away at the
+    // privilege gate — before any parsing or vault access — so the key-import
+    // path is only ever reachable from an extension page.
+    const response = await handleMessage(
+      {
+        networkId: "SN_MAIN",
+        privateKey: "0xfeedface",
+        type: "wallet.importAccount",
+      },
+      contentSender,
+    );
+    expect(response).toEqual({ error: "privileged sender required" });
+    // The rejection must not echo the attacker-supplied key anywhere.
+    expect(JSON.stringify(response)).not.toContain("feedface");
   });
 });

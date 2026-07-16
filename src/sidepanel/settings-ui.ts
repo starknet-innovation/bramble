@@ -136,7 +136,7 @@ export const bindAppearance = (deps: SettingsUiDeps): void => {
     button.addEventListener("click", () => {
       const theme = button.dataset["themeId"];
       if (
-        (theme !== "dark" && theme !== "light" && theme !== "system") ||
+        (theme !== "dark" && theme !== "light") ||
         button.getAttribute("aria-pressed") === "true"
       ) {
         return;

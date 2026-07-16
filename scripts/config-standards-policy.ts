@@ -93,7 +93,9 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
   "check:lint": "biome check .",
   "check:multisig": "bun run scripts/check-multisig-class.ts",
+  "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
+  changelog: "bun run scripts/generate-changelog.ts",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
   "release:publish": "bun run scripts/publish-chrome-web-store.ts",
@@ -112,6 +114,38 @@ export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {
 export const REQUIRED_BIOME_COMPLEXITY_RULES: Readonly<Record<string, string>> = {
   useLiteralKeys: "off",
 };
+
+/**
+ * Keys that must appear (and only these) under linter.rules.complexity. The
+ * cognitive-complexity gate is validated separately because its value is an
+ * object rather than a plain level string.
+ */
+export const BIOME_COMPLEXITY_RULE_KEYS = [
+  "noExcessiveCognitiveComplexity",
+  "useLiteralKeys",
+] as const;
+
+/**
+ * Repo-wide cognitive-complexity ceiling. Current non-wallet code passes at 35.
+ */
+export const REPO_MAX_COGNITIVE_COMPLEXITY = 35;
+
+/**
+ * Strict cognitive-complexity ceiling for the refactored wallet-logic modules.
+ */
+export const WALLET_MAX_COGNITIVE_COMPLEXITY = 12;
+
+/**
+ * Globs that receive the strict wallet-logic cognitive-complexity override.
+ */
+export const WALLET_COMPLEXITY_GLOBS = [
+  "src/wallet/**",
+  "src/background/**",
+  "src/starknet/**",
+  "src/storage/**",
+  "src/shared/**",
+  "src/provider/**",
+] as const;
 
 export const REQUIRED_BIOME_NURSERY_RULES: Readonly<Record<string, string>> = {
   noFloatingPromises: "error",

@@ -3,14 +3,24 @@
 This runbook takes MC Wallet from a version bump to a published Chrome Web Store
 listing. Two paths exist and share the same packaged bytes:
 
-- **Automated** — pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`,
-  which builds, packages, and creates a GitHub Release. An **optional, currently
-  disabled** job can publish to the Chrome Web Store (see
-  [Chrome Web Store publish](#chrome-web-store-publish)).
+- **Automatic (release-on-merge)** — merging a `release/*` (or `hotfix/*`) branch
+  into `main` runs `.github/workflows/auto-release.yml`, which derives the
+  version from the merged branch, creates the `vX.Y.Z` tag on the merge commit,
+  and calls the reusable `release-build.yml` to build, package, generate the
+  changelog notes, and create the GitHub Release. **No manual tag push.**
+- **Tag-driven** — pushing a `vX.Y.Z` tag by hand runs
+  `.github/workflows/release.yml`, which calls the same reusable build. Use this
+  only for a one-off or backfilled release; the normal path is the automatic one.
 - **Manual** — the same steps done by hand. This is the fallback when automation
   is unavailable or a credential is missing, and it is the source of truth for
   the human prerequisites (store account, listing assets, review, rollback) that
   the automation cannot create.
+
+Both automated paths share one heavy pipeline (`release-build.yml`) and one
+**single-source version gate**: the tag must equal the `package.json` /
+`public/manifest.json` version, or the release fails before any artifact is
+built (`bun run check:release-version`). An **optional, currently disabled** job
+can publish to the Chrome Web Store (see [Chrome Web Store publish](#6-triggering-the-optional-chrome-web-store-publish)).
 
 > Scope note: automation is issue #58; this document is issue #61. The Chrome
 > Web Store publish is **wired but disabled** because there is no store account
@@ -43,9 +53,12 @@ step relies on.
 6. **Full validation.** Confirm the RC against the acceptance criteria.
 7. **Promote to `main`.** Merge `release/vX.Y` → `main` as a **merge commit**
    (not squash — preserve release history), done explicitly by a maintainer.
-8. **Tag `vX.Y.0`** on `main`. The tag push drives the automated pipeline in
-   section 3 (`.github/workflows/release.yml`): build, package, checksum-verify,
-   and create the GitHub Release.
+8. **Automatic release.** The merge triggers `auto-release.yml`: it derives the
+   version from the merged branch, cross-checks it against
+   `package.json`/`manifest` (the single-source gate — a promotion that skipped
+   step 2 fails here), tags `vX.Y.0` on the merge commit, and cuts the GitHub
+   Release with the artifact + changelog notes. No manual tag push is needed;
+   push `vX.Y.0` by hand only to backfill a release the automation missed.
 9. **Publish.** Confirm the GitHub Release; run the optional, gated Chrome Web
    Store publish via manual dispatch (sections 5–7) when a store account exists.
 10. **Close / archive the `vX.Y` milestone.**
@@ -59,24 +72,28 @@ older release branch. See DEVELOPMENT.md → "Hotfixes & backports".
 
 ## 1. Versioning and bump
 
-The extension version is hand-duplicated in two files and kept in lockstep by a
-guard test:
+The release version has **one source of truth**: `package.json` → `version`.
+`public/manifest.json` → `version` mirrors it, and three gates forbid drift
+(issue #59):
 
-- `package.json` → `version`
-- `public/manifest.json` → `version`
-- Guard: `tests/conformance/version-single-source.test.ts` (also enforced by
-  `scripts/check-config-standards.ts`, which fails the build if the two versions
-  differ or are not `x.y.z`).
+- `scripts/check-config-standards.ts` and `scripts/check-extension-manifest.ts`
+  fail the build if the two versions differ or are not `x.y.z` (offline, every PR).
+- `scripts/release-version.ts` (`bun run check:release-version`) is the **release
+  gate**: it asserts the tag equals `v<version>` and, on an auto-release, that the
+  `release/vX.Y` branch implies exactly that version — the check that was missing
+  when `v0.4.0` shipped as `mc-wallet-0.3.0.zip`. Its pure logic is unit-tested in
+  `tests/conformance/release-version-single-source.test.ts`.
 
-To bump, edit **both** files to the same new semver, then run the guard:
+To bump, edit **both** files to the same new semver (a `release/vX.Y` branch
+ships `X.Y.0`), then run the gates:
 
 ```sh
-bun test tests/conformance/version-single-source.test.ts
+bun test tests/conformance/release-version-single-source.test.ts
+bun run check:files
 ```
 
 Chrome Web Store rejects re-publishing the same or a lower version, so the new
-version **must be strictly greater** than the currently published one. Single-
-sourcing the version is tracked in issue #59; until it lands, bump both fields.
+version **must be strictly greater** than the currently published one.
 
 ## 2. Build, package, and verify locally
 
@@ -114,27 +131,37 @@ bun test
 The full `bun run check` (plus `vendor:krusty`, `vendor:multisig`, `build`,
 `test:e2e`) runs in CI, which needs network + the Rust/Scarb toolchain.
 
-## 3. Cutting a release (automated)
+## 3. Cutting a release (automatic on merge)
 
-1. Ensure `main` is green in CI and the version is bumped (step 1).
-2. Create and push the version tag:
+The normal path needs **no tag push**. When `release/vX.Y` (or a `hotfix/*`
+branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 
-   ```sh
-   git tag v0.2.0      # must match the version in package.json / manifest
-   git push origin v0.2.0
-   ```
+1. resolves the merged head branch from the PR on the merge commit; a chore/docs
+   merge resolves to no release and the workflow exits cleanly;
+2. runs the single-source gate — derives `X.Y.0` from `release/vX.Y` (or the
+   package version for a hotfix) and **fails** if `package.json`/`manifest` do
+   not match, so a promotion that skipped the version bump cannot ship;
+3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
+   idempotent, so a re-run never double-cuts);
+4. calls the reusable `release-build.yml`, which installs the toolchain exactly
+   as CI does, runs `vendor:krusty`/`vendor:multisig`/`build`/`package:extension`,
+   re-asserts the tag ↔ version gate, verifies the `.zip` matches its `.sha256`,
+   uploads the `mc-wallet-release` artifact, and creates the **GitHub Release**
+   with the zip + `.sha256` attached.
 
-3. `.github/workflows/release.yml` (`build-release` job) then:
-   - installs the toolchain exactly as CI does, runs `vendor:krusty`,
-     `vendor:multisig`, `bun run build`, `bun run package:extension`;
-   - asserts the version single-source guard before publishing;
-   - verifies the `.zip` matches its `.sha256`;
-   - uploads the zip + checksum as the `mc-wallet-release` workflow artifact;
-   - creates a **GitHub Release** for the tag with the zip + `.sha256` attached.
+Release notes come from the matching `CHANGELOG.md` section (issue #60) — kept
+current on the release branch via `bun run changelog` — falling back to a
+deterministic section generated from the commit range since the previous tag.
 
-   Release notes come from the matching `CHANGELOG.md` section when it exists
-   (issue #60); until then the workflow falls back to GitHub's auto-generated
-   notes (the commit range since the previous tag).
+### Backfill / one-off (tag-driven)
+
+To cut a release the automation missed, push the tag by hand; it drives the same
+reusable build via `.github/workflows/release.yml`:
+
+```sh
+git tag v0.2.0      # must match the version in package.json / manifest
+git push origin v0.2.0
+```
 
 A tag that does not match `v*` triggers nothing.
 
@@ -288,12 +315,19 @@ window) is a dashboard-only option and is intentionally not automated.
 
 ## 9. Where automation hooks in
 
-- `.github/workflows/release.yml` — tag-driven Release + optional CWS publish.
+- `.github/workflows/auto-release.yml` — automatic release-on-merge: derive the
+  version from the merged branch, tag, and cut the Release.
+- `.github/workflows/release.yml` — tag-driven backfill Release + optional CWS
+  publish.
+- `.github/workflows/release-build.yml` — the reusable heavy build both paths
+  call (build, package, tag ↔ version gate, notes, Release).
+- `scripts/release-version.ts` — the single-source version gate and
+  branch → version derivation (#59).
+- `scripts/generate-changelog.ts` — deterministic `CHANGELOG.md` section
+  generation and release-notes extraction (#60).
 - `scripts/package-extension.ts` — the single source of the packaged artifact.
 - `scripts/publish-chrome-web-store.ts` — the CWS publish client (skips when
   unconfigured, fails closed on real errors).
-- Follow-ups: single-source the version (#59); adopt `CHANGELOG.md` for release
-  notes (#60).
 
 ## References
 

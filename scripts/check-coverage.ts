@@ -6,15 +6,15 @@
  * E2E-driven UI modules are intentionally not unit-covered and would fail any
  * positive per-file threshold. This gate instead runs the suite with coverage
  * and asserts the aggregate ("All files") line and function percentages stay at
- * or above the floor. The floor sits a few points below the measured baseline
- * (functions 88.67%, lines 88.84%) so it guards against regressions without
+ * or above the floor. The floor sits just below the measured baseline
+ * (functions 96.19%, lines 97.45%) so it guards against regressions without
  * being flaky. Coverage is only computed here, never during the fast offline
  * `bun test` gate.
  */
 import process from "node:process";
 
-const MIN_FUNCTION_PERCENT = 85;
-const MIN_LINE_PERCENT = 85;
+const MIN_FUNCTION_PERCENT = 95;
+const MIN_LINE_PERCENT = 95;
 
 const child = Bun.spawn(["bun", "test", "tests", "--coverage"], {
   stderr: "pipe",

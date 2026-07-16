@@ -68,6 +68,85 @@ const readDiscoveryInput = (message: unknown, type: string): DiscoveryInput | nu
 const apiVersionSupported = (apiVersion: string | undefined): boolean =>
   apiVersion === undefined || SUPPORTED_WALLET_API.includes(apiVersion);
 
+type DiscoveryOpsHandler = (
+  deps: DiscoveryOpsDeps,
+  messageType: string,
+  message: unknown,
+  sender: RuntimeSender | undefined,
+) => Promise<RuntimeResponse>;
+
+const handleSupportedVersions: DiscoveryOpsHandler = async (_deps, messageType, message) => {
+  const input = readDiscoveryInput(message, messageType);
+  if (!input) {
+    return { error: "invalid discovery request" };
+  }
+  if (!apiVersionSupported(input.apiVersion)) {
+    return { error: "unsupported api version" };
+  }
+  const versions = messageType === "wallet.supportedSpecs" ? SUPPORTED_SPECS : SUPPORTED_WALLET_API;
+  return { ok: true, versions: [...versions] };
+};
+
+const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, message, sender) => {
+  const { extensionId, preferencesStore, runtimeRpc, session, wallet } = deps;
+  const input = readDiscoveryInput(message, "wallet.deploymentData");
+  if (!input) {
+    return { error: "invalid deployment data request" };
+  }
+  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
+  }
+  if (!apiVersionSupported(input.apiVersion)) {
+    return { error: "unsupported api version" };
+  }
+  const passphrase = session.getPassphrase();
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const preferences = await preferencesStore.read();
+  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  if (!account) {
+    return { error: "origin not connected" };
+  }
+  const network = STARKNET_NETWORKS[account.networkId];
+  const deployed = await runtimeRpc.getDeploymentStatus({
+    accountAddress: account.address,
+    rpcUrls: networkRpcUrls(network, preferences),
+  });
+  if (deployed) {
+    return { error: "account already deployed" };
+  }
+  try {
+    const deployment = ozAccountDeployment(account);
+    return {
+      deployment: {
+        address: deployment.contractAddress,
+        calldata: [...deployment.constructorCalldata],
+        classHash: deployment.classHash,
+        salt: deployment.addressSalt,
+        version: 1,
+      },
+      ok: true,
+    };
+  } catch {
+    return { error: "deployment data not available" };
+  }
+};
+
+/**
+ * Dispatch table for read-only discovery messages, keyed by message type. The
+ * two version queries share one handler that reads the requested type.
+ */
+const DISCOVERY_OPS_HANDLERS: Readonly<Record<string, DiscoveryOpsHandler>> = {
+  "wallet.deploymentData": handleDeploymentData,
+  "wallet.supportedSpecs": handleSupportedVersions,
+  "wallet.supportedWalletApi": handleSupportedVersions,
+};
+
 /**
  * Handles read-only discovery messages; returns null for other message types.
  * Origin gating on `wallet.deploymentData` mirrors the other provider methods:
@@ -79,70 +158,6 @@ export const handleDiscoveryOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const { extensionId, preferencesStore, runtimeRpc, session, wallet } = deps;
-  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
-
-  if (messageType === "wallet.supportedSpecs" || messageType === "wallet.supportedWalletApi") {
-    const input = readDiscoveryInput(message, messageType);
-    if (!input) {
-      return { error: "invalid discovery request" };
-    }
-    if (!apiVersionSupported(input.apiVersion)) {
-      return { error: "unsupported api version" };
-    }
-    const versions =
-      messageType === "wallet.supportedSpecs" ? SUPPORTED_SPECS : SUPPORTED_WALLET_API;
-    return { ok: true, versions: [...versions] };
-  }
-
-  if (messageType === "wallet.deploymentData") {
-    const input = readDiscoveryInput(message, "wallet.deploymentData");
-    if (!input) {
-      return { error: "invalid deployment data request" };
-    }
-    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
-      return { error: "sender origin mismatch" };
-    }
-    if (guard.isBlocked(input.origin)) {
-      return { error: "origin blocked" };
-    }
-    if (!apiVersionSupported(input.apiVersion)) {
-      return { error: "unsupported api version" };
-    }
-    const passphrase = session.getPassphrase();
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    const preferences = await preferencesStore.read();
-    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-    const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-    if (!account) {
-      return { error: "origin not connected" };
-    }
-    const network = STARKNET_NETWORKS[account.networkId];
-    const deployed = await runtimeRpc.getDeploymentStatus({
-      accountAddress: account.address,
-      rpcUrls: networkRpcUrls(network, preferences),
-    });
-    if (deployed) {
-      return { error: "account already deployed" };
-    }
-    try {
-      const deployment = ozAccountDeployment(account);
-      return {
-        deployment: {
-          address: deployment.contractAddress,
-          calldata: [...deployment.constructorCalldata],
-          classHash: deployment.classHash,
-          salt: deployment.addressSalt,
-          version: 1,
-        },
-        ok: true,
-      };
-    } catch {
-      return { error: "deployment data not available" };
-    }
-  }
-
-  return null;
+  const handler = DISCOVERY_OPS_HANDLERS[messageType];
+  return handler ? handler(deps, messageType, message, sender) : null;
 };

@@ -28,6 +28,9 @@ export const handleMessage = createMessageHandler(
     async ensureNetworkAccount() {
       throw new Error("wallet unavailable");
     },
+    async importRawKeyAccount() {
+      throw new Error("wallet unavailable");
+    },
     async getGrantedAccounts() {
       throw new Error("wallet unavailable");
     },

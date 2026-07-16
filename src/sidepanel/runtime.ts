@@ -5,6 +5,7 @@
 import {
   type ActivityResponse,
   type AllowancesResponse,
+  type ClassHashVerificationResponse,
   type ConnectedSitesResponse,
   type DeploymentStatusResponse,
   type DiscoveredNft,
@@ -12,6 +13,7 @@ import {
   isAllowancesResponse,
   isApprovalDecisionResponse,
   isBalancesResponse,
+  isClassHashVerificationResponse,
   isConnectedSitesResponse,
   isCreateAccountResponse,
   isDeploymentStatusResponse,
@@ -99,6 +101,16 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "add account failed");
     },
+    async importAccount(networkId: string, privateKey: string): Promise<string> {
+      const response = await sendMessage({ networkId, privateKey, type: "wallet.importAccount" });
+      if (isCreateAccountResponse(response)) {
+        // Surface the imported account's id so the caller can select it, mirroring
+        // addAccount. The raw key travels only in this privileged request and is
+        // never echoed back in the response.
+        return response.account.id;
+      }
+      throw responseError(response, "import account failed");
+    },
     async createAccount(
       mnemonic: string,
       networkId: string,
@@ -125,6 +137,14 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     async loadDeploymentStatus(): Promise<DeploymentStatusResponse | null> {
       const response = await sendMessage({ type: "wallet.deploymentStatus" });
       return isDeploymentStatusResponse(response) ? response : null;
+    },
+    async loadClassHashVerification(): Promise<ClassHashVerificationResponse | null> {
+      // Return the whole response (with its `accountId`), not just the verdict,
+      // so the caller can drop a verification that resolved for an account the
+      // user has since switched away from — a stale/foreign verdict must never
+      // be shown under a different account's class hash.
+      const response = await sendMessage({ type: "wallet.verifyClassHash" });
+      return isClassHashVerificationResponse(response) ? response : null;
     },
     async decideApproval(id: string, approved: boolean): Promise<void> {
       const response = await sendMessage({
@@ -161,9 +181,18 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "reveal failed");
     },
-    async loadActivity(): Promise<ActivityResponse["activity"]> {
+    async loadActivity(): Promise<{
+      readonly entries: ActivityResponse["activity"];
+      readonly historyUnavailable: boolean;
+    }> {
       const response = await sendMessage({ type: "wallet.activity" });
-      return isActivityResponse(response) ? response.activity : [];
+      if (!isActivityResponse(response)) {
+        return { entries: [], historyUnavailable: false };
+      }
+      return {
+        entries: response.activity,
+        historyUnavailable: response.historyUnavailable ?? false,
+      };
     },
     async addNft(
       contract: string,
@@ -403,7 +432,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
     },
     async setDisplay(input: {
       readonly displayCurrency?: "eur" | "gbp" | "usd";
-      readonly theme?: "dark" | "light" | "system";
+      readonly theme?: "dark" | "light";
     }): Promise<void> {
       const response = await sendMessage({ ...input, type: "wallet.setDisplay" });
       if (isPreferencesResponse(response)) {

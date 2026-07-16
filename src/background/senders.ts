@@ -125,3 +125,43 @@ export const APPROVAL_SURFACE_MESSAGES: ReadonlySet<string> = new Set([
  */
 export const isPrivilegedMessage = (type: unknown): boolean =>
   typeof type === "string" && type.startsWith("wallet.") && !DAPP_MESSAGES.has(type);
+
+/**
+ * Result of gating an inbound runtime message: a usable message type, or the
+ * exact error the dispatcher returns.
+ */
+export type GatedMessage = { readonly messageType: string } | { readonly error: string };
+
+const readMessageType = (message: unknown): string | null => {
+  if (typeof message !== "object" || message === null) {
+    return null;
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(message, "type");
+  return descriptor?.enumerable === true &&
+    "value" in descriptor &&
+    typeof descriptor.value === "string"
+    ? descriptor.value
+    : null;
+};
+
+/**
+ * Folds the trusted-sender, message-type, and privileged-sender guards into one
+ * parse step, keeping the guards out of the dispatch body.
+ */
+export const parseGatedMessage = (
+  message: unknown,
+  sender: RuntimeSender | undefined,
+  extensionId: string,
+): GatedMessage => {
+  if (!isTrustedSender(sender, extensionId)) {
+    return { error: "untrusted sender" };
+  }
+  const messageType = readMessageType(message);
+  if (!messageType) {
+    return { error: "unsupported message" };
+  }
+  if (isPrivilegedMessage(messageType) && !isExtensionPageSender(sender, extensionId)) {
+    return { error: "privileged sender required" };
+  }
+  return { messageType };
+};

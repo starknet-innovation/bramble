@@ -342,109 +342,115 @@ export const readProviderRequest = (value: unknown): ProviderRequest | null => {
   };
 };
 
+// Narrows a raw success value to the first provider result shape it satisfies,
+// else null. One source of truth for the response reader and the builder below.
+const parseProviderResult = (raw: unknown) =>
+  providerAccountsResult(raw) ??
+  providerDeploymentResult(raw) ??
+  providerInvokeResult(raw) ??
+  providerDeclareResult(raw) ??
+  providerStrk20CallAndProof(raw) ??
+  providerStrk20Balances(raw) ??
+  providerStringArrayResult(raw) ??
+  (typeof raw === "boolean" ? raw : null) ??
+  (typeof raw === "string" && raw.length > 0 ? raw : null);
+
+// A valid page response: page target, UUID id, and EXACTLY one of error/result.
+type ProviderResponseEnvelope = {
+  readonly error?: WalletRpcError;
+  readonly id: string;
+  readonly result?: unknown;
+  readonly target: typeof PAGE_TARGET;
+};
+const isProviderResponseEnvelope = (value: unknown): value is ProviderResponseEnvelope =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["error", "id", "result", "target"]) &&
+  value["target"] === PAGE_TARGET &&
+  typeof value["id"] === "string" &&
+  isUuid(value["id"]) &&
+  (value["error"] === undefined || isWalletRpcError(value["error"])) &&
+  (value["error"] !== undefined) !== Object.hasOwn(value, "result");
+const readErrorEnvelope = (id: string, error: WalletRpcError): ProviderResponse => ({
+  error,
+  id,
+  target: PAGE_TARGET,
+});
+// A `false` result is rejected here (as the original did), unlike providerResponse.
+const readResultEnvelope = (id: string, rawResult: unknown): ProviderResponse | null => {
+  const result = parseProviderResult(rawResult);
+  return result ? { id, result, target: PAGE_TARGET } : null;
+};
 /**
  * Parses content-script responses before resolving in-page provider requests.
  */
 export const readProviderResponse = (value: unknown): ProviderResponse | null => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["error", "id", "result", "target"]) ||
-    value["target"] !== PAGE_TARGET ||
-    typeof value["id"] !== "string" ||
-    !isUuid(value["id"]) ||
-    (value["error"] !== undefined && !isWalletRpcError(value["error"])) ||
-    (value["error"] !== undefined && Object.hasOwn(value, "result")) ||
-    (value["error"] === undefined && !Object.hasOwn(value, "result"))
-  ) {
-    return null;
-  }
-
-  if (value["error"] === undefined) {
-    const result =
-      providerAccountsResult(value["result"]) ??
-      providerDeploymentResult(value["result"]) ??
-      providerInvokeResult(value["result"]) ??
-      providerDeclareResult(value["result"]) ??
-      providerStrk20CallAndProof(value["result"]) ??
-      providerStrk20Balances(value["result"]) ??
-      providerStringArrayResult(value["result"]) ??
-      (typeof value["result"] === "boolean" ? value["result"] : null) ??
-      (typeof value["result"] === "string" && value["result"].length > 0 ? value["result"] : null);
-    return result ? { id: value["id"], result, target: PAGE_TARGET } : null;
-  }
-
-  return {
-    id: value["id"],
-    error: value["error"],
-    target: PAGE_TARGET,
-  };
+  if (!isProviderResponseEnvelope(value)) return null;
+  return value["error"] === undefined
+    ? readResultEnvelope(value["id"], value["result"])
+    : readErrorEnvelope(value["id"], value["error"]);
 };
 
-/**
- * Maps supported provider methods to safe background messages.
- */
-export const toRuntimeMessage = (
-  request: ProviderRequest,
+type RuntimeBuilder = (params: Json | undefined, origin: string) => RuntimeMessage | null;
+
+// Discovery methods gate on a valid optional api_version, echoing it back when
+// present; a malformed api_version is rejected as a bad payload.
+const versionedMessage = <
+  T extends "wallet.deploymentData" | "wallet.supportedSpecs" | "wallet.supportedWalletApi",
+>(
+  params: Json | undefined,
   origin: string,
-): RuntimeMessage | null => {
-  if (!isProviderMethod(request.method) || !isWalletOrigin(origin)) {
-    return null;
-  }
-  if (request.method === "mc_accounts") {
-    return { origin, type: "wallet.getGrantedAccounts" };
-  }
-  if (request.method === "wallet_getPermissions") {
-    const apiVersion = readApiVersionParam(request.params);
-    return apiVersion === null ? null : { origin, type: "wallet.getPermissions" };
-  }
-  if (request.method === "wallet_watchAsset") {
-    const asset = readProviderWatchAsset(request.params);
+  type: T,
+): { apiVersion?: string; origin: string; type: T } | null => {
+  const apiVersion = readApiVersionParam(params);
+  return apiVersion === null ? null : { origin, type, ...(apiVersion ? { apiVersion } : {}) };
+};
+
+// The legacy mc_requestAccounts alias shares wallet_requestAccounts' param gate.
+const requestAccountsMessage: RuntimeBuilder = (params, origin) =>
+  isRequestAccountsParams(params) ? { origin, type: "wallet.requestAccounts" } : null;
+
+// One builder per method, mirroring the original if-chain's normalize-then-wrap;
+// exhaustive over ProviderMethod, so a new method cannot be routed without one.
+const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
+  mc_accounts: (_params, origin) => ({ origin, type: "wallet.getGrantedAccounts" }),
+  mc_requestAccounts: requestAccountsMessage,
+  wallet_requestAccounts: requestAccountsMessage,
+  wallet_getPermissions: (params, origin) =>
+    readApiVersionParam(params) === null ? null : { origin, type: "wallet.getPermissions" },
+  wallet_requestChainId: (params, origin) =>
+    readApiVersionParam(params) === null ? null : { origin, type: "wallet.getChainId" },
+  wallet_supportedSpecs: (params, origin) =>
+    versionedMessage(params, origin, "wallet.supportedSpecs"),
+  wallet_supportedWalletApi: (params, origin) =>
+    versionedMessage(params, origin, "wallet.supportedWalletApi"),
+  wallet_deploymentData: (params, origin) =>
+    versionedMessage(params, origin, "wallet.deploymentData"),
+  wallet_watchAsset: (params, origin) => {
+    const asset = readProviderWatchAsset(params);
     return asset ? { asset, origin, type: "wallet.watchAsset" } : null;
-  }
-  if (request.method === "wallet_addInvokeTransaction") {
-    const calls = providerInvokeCalls(request.params);
+  },
+  wallet_addInvokeTransaction: (params, origin) => {
+    const calls = providerInvokeCalls(params);
     return calls ? { calls, origin, type: "wallet.addInvokeTransaction" } : null;
-  }
-  if (request.method === "wallet_addStarknetChain") {
-    const chain = readProviderChain(request.params);
+  },
+  wallet_addStarknetChain: (params, origin) => {
+    const chain = readProviderChain(params);
     return chain ? { chain, origin, type: "wallet.addStarknetChain" } : null;
-  }
-  if (request.method === "wallet_addDeclareTransaction") {
-    const declare = readProviderDeclare(request.params);
+  },
+  wallet_addDeclareTransaction: (params, origin) => {
+    const declare = readProviderDeclare(params);
     return declare ? { declare, origin, type: "wallet.addDeclareTransaction" } : null;
-  }
-  if (request.method === "wallet_requestChainId") {
-    const apiVersion = readApiVersionParam(request.params);
-    return apiVersion === null ? null : { origin, type: "wallet.getChainId" };
-  }
-  if (request.method === "wallet_supportedSpecs") {
-    const apiVersion = readApiVersionParam(request.params);
-    return apiVersion === null
-      ? null
-      : { origin, type: "wallet.supportedSpecs", ...(apiVersion ? { apiVersion } : {}) };
-  }
-  if (request.method === "wallet_supportedWalletApi") {
-    const apiVersion = readApiVersionParam(request.params);
-    return apiVersion === null
-      ? null
-      : { origin, type: "wallet.supportedWalletApi", ...(apiVersion ? { apiVersion } : {}) };
-  }
-  if (request.method === "wallet_deploymentData") {
-    const apiVersion = readApiVersionParam(request.params);
-    return apiVersion === null
-      ? null
-      : { origin, type: "wallet.deploymentData", ...(apiVersion ? { apiVersion } : {}) };
-  }
-  if (request.method === "wallet_signTypedData") {
-    const typedData = readTypedDataParam(request.params);
+  },
+  wallet_signTypedData: (params, origin) => {
+    const typedData = readTypedDataParam(params);
     return typedData === null ? null : { origin, typedData, type: "wallet.signTypedData" };
-  }
-  if (request.method === "wallet_strk20Balances") {
-    const tokens = readStrk20BalancesParams(request.params);
+  },
+  wallet_strk20Balances: (params, origin) => {
+    const tokens = readStrk20BalancesParams(params);
     return tokens ? { origin, tokens, type: "wallet.strk20Balances" } : null;
-  }
-  if (request.method === "wallet_strk20PrepareInvoke") {
-    const prepared = readStrk20PrepareParams(request.params);
+  },
+  wallet_strk20PrepareInvoke: (params, origin) => {
+    const prepared = readStrk20PrepareParams(params);
     return prepared
       ? {
           actions: prepared.actions,
@@ -453,20 +459,27 @@ export const toRuntimeMessage = (
           type: "wallet.strk20PrepareInvoke",
         }
       : null;
-  }
-  if (request.method === "wallet_strk20InvokeTransaction") {
-    const actions = readStrk20InvokeParams(request.params);
+  },
+  wallet_strk20InvokeTransaction: (params, origin) => {
+    const actions = readStrk20InvokeParams(params);
     return actions ? { actions, origin, type: "wallet.strk20InvokeTransaction" } : null;
-  }
-  if (request.method === "wallet_switchStarknetChain") {
-    const chainId = providerSwitchChainId(request.params);
+  },
+  wallet_switchStarknetChain: (params, origin) => {
+    const chainId = providerSwitchChainId(params);
     return chainId ? { chainId, origin, type: "wallet.switchChain" } : null;
-  }
-  // The tail also serves the legacy mc_requestAccounts alias (no params).
-  return isRequestAccountsParams(request.params)
-    ? { origin, type: "wallet.requestAccounts" }
-    : null;
+  },
 };
+
+/**
+ * Maps supported provider methods to safe background messages.
+ */
+export const toRuntimeMessage = (
+  request: ProviderRequest,
+  origin: string,
+): RuntimeMessage | null =>
+  isProviderMethod(request.method) && isWalletOrigin(origin)
+    ? RUNTIME_BUILDERS[request.method](request.params, origin)
+    : null;
 
 /**
  * Builds a page-targeted provider response for the in-page script.
@@ -478,19 +491,8 @@ export const providerResponse = (
   if (payload.error !== undefined) {
     return { error: payload.error, id: request.id, target: PAGE_TARGET };
   }
-  const result =
-    providerAccountsResult(payload.result) ??
-    providerDeploymentResult(payload.result) ??
-    providerInvokeResult(payload.result) ??
-    providerDeclareResult(payload.result) ??
-    providerStrk20CallAndProof(payload.result) ??
-    providerStrk20Balances(payload.result) ??
-    providerStringArrayResult(payload.result) ??
-    (typeof payload.result === "boolean" ? payload.result : null) ??
-    (typeof payload.result === "string" && payload.result.length > 0 ? payload.result : null);
-  if (result === null || result === undefined) {
-    return { error: unknownError(), id: request.id, target: PAGE_TARGET };
-  }
-
-  return { id: request.id, result, target: PAGE_TARGET };
+  const result = parseProviderResult(payload.result);
+  return result === null
+    ? { error: unknownError(), id: request.id, target: PAGE_TARGET }
+    : { id: request.id, result, target: PAGE_TARGET };
 };

@@ -48,7 +48,9 @@ export const TYPE = {
   body: { line: "1.45", size: "14px" },
   caption: { line: "1.35", size: "12px" },
   display: { line: "1.2", size: "22px" },
+  headline: { line: "1.15", size: "28px" },
   label: { line: "1.3", size: "13px" },
+  micro: { line: "1.2", size: "11px" },
   mono: { line: "1.5", size: "12px" },
   title: { line: "1.2", size: "17px" },
 } as const;
@@ -128,17 +130,21 @@ export const SIZE = {
 
 /**
  * Elevation / shadow scale for the "Clean Mono" look: gentle, low, near-diffuse
- * shadows tinted by the active skin background through `color-mix` so they read
- * correctly in both light and dark. Elevation is deliberately restrained —
- * cards lift by a hair, floating chrome (dock, drawer) by a little more — so the
- * interface stays flat and calm rather than glossy. Structure is carried mostly
- * by hairline edges; these shadows only add the softest separation.
+ * shadows cast in a fixed cool-slate ink. Shadows are always darker than the
+ * surface beneath them — a background-tinted shadow reads as a white glow on a
+ * light ground, i.e. no elevation at all — so the ink is a deep slate at a low
+ * alpha that deepens dark surfaces and grounds light ones equally. Elevation is
+ * deliberately restrained — cards lift by a hair, floating chrome (dock,
+ * drawer) by a little more — so the interface stays flat and calm rather than
+ * glossy. Structure is carried mostly by hairline edges; these shadows only
+ * add the softest separation. `up` is the dock's upward cast.
  */
 export const SHADOW = {
-  lg: "0 24px 60px color-mix(in srgb, var(--mc-bg) 55%, transparent)",
-  md: "0 12px 30px color-mix(in srgb, var(--mc-bg) 45%, transparent)",
-  sm: "0 4px 14px color-mix(in srgb, var(--mc-bg) 34%, transparent)",
-  xs: "0 1px 2px color-mix(in srgb, var(--mc-bg) 40%, transparent)",
+  lg: "0 24px 60px hsl(222 40% 4% / 0.36)",
+  md: "0 12px 30px hsl(222 40% 4% / 0.24)",
+  sm: "0 4px 14px hsl(222 40% 4% / 0.16)",
+  up: "0 -8px 24px hsl(222 40% 4% / 0.10)",
+  xs: "0 1px 2px hsl(222 40% 4% / 0.12)",
 } as const;
 
 /**

@@ -148,40 +148,36 @@ type WalletPreferencesStoreOptions = {
   readonly store: KeyValueStore;
 };
 
-/**
- * Checks stored plain preferences before use.
- */
-export const isWalletPreferences = (value: unknown): value is WalletPreferences =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, [
-    "accountLabels",
-    "activeNetworkId",
-    "addressBook",
-    "customNetworks",
-    "displayCurrency",
-    "groups",
-    "hiddenTokens",
-    "nftIndexerUrl",
-    "nfts",
-    "rpcOverrides",
-    "schemaVersion",
-    "strk20ProverUrl",
-    "theme",
-    "tokens",
-  ]) &&
-  (value["customNetworks"] === undefined ||
-    (Array.isArray(value["customNetworks"]) &&
-      value["customNetworks"].every(isCustomNetwork) &&
-      hasUniqueStrings(
-        value["customNetworks"].map((network) => normalizeChainId(network.chainId)),
-      ))) &&
+const PREFERENCE_KEYS: readonly string[] = [
+  "accountLabels",
+  "activeNetworkId",
+  "addressBook",
+  "customNetworks",
+  "displayCurrency",
+  "groups",
+  "hiddenTokens",
+  "nftIndexerUrl",
+  "nfts",
+  "rpcOverrides",
+  "schemaVersion",
+  "strk20ProverUrl",
+  "theme",
+  "tokens",
+];
+// Optional-section guards, each pure, keeping the main guard a single `&&` chain.
+const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
+  value["customNetworks"] === undefined ||
+  (Array.isArray(value["customNetworks"]) &&
+    value["customNetworks"].every(isCustomNetwork) &&
+    hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
+const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
   (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
   (value["theme"] === undefined || isThemeChoice(value["theme"])) &&
-  (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"])) &&
+  (value["rpcOverrides"] === undefined || isRpcOverrides(value["rpcOverrides"]));
+const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
   (value["strk20ProverUrl"] === undefined ||
     (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&
   (value["nftIndexerUrl"] === undefined ||
@@ -189,7 +185,18 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
   (value["nfts"] === undefined ||
     (Array.isArray(value["nfts"]) &&
       value["nfts"].every(isWatchedNft) &&
-      hasUniqueStrings(value["nfts"].map((nft) => nft.id)))) &&
+      hasUniqueStrings(value["nfts"].map((nft) => nft.id))));
+
+/**
+ * Checks stored plain preferences before use.
+ */
+export const isWalletPreferences = (value: unknown): value is WalletPreferences =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, PREFERENCE_KEYS) &&
+  hasValidCustomNetworks(value) &&
+  hasValidOptionalEntries(value) &&
+  hasValidUrlAndNftFields(value) &&
   value["schemaVersion"] === 1 &&
   isStarknetNetworkId(value["activeNetworkId"]) &&
   Array.isArray(value["addressBook"]) &&
@@ -213,7 +220,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   nfts: [],
   rpcOverrides: {},
   schemaVersion: 1,
-  theme: "system",
+  theme: "dark",
   tokens: DEFAULT_TOKENS.map(withTokenId),
 });
 

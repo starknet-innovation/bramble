@@ -181,11 +181,11 @@ describe("createPreferencesStore", () => {
     expect((await preferences.read()).accountLabels).toEqual({});
   });
 
-  test("defaults theme to system and accepts every theme choice", async () => {
+  test("defaults theme to dark and accepts every theme choice", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });
 
-    expect((await preferences.read()).theme).toBe("system");
+    expect((await preferences.read()).theme).toBe("dark");
 
     await preferences.setDisplay({ theme: "light" });
     expect((await preferences.read()).theme).toBe("light");
@@ -193,6 +193,10 @@ describe("createPreferencesStore", () => {
     await preferences.setDisplay({ theme: "dark" });
     expect((await preferences.read()).theme).toBe("dark");
 
+    // "system" is a legacy value from the removed follow-the-browser theme: no
+    // UI writes it anymore, but the store keeps accepting it so restoring an
+    // old backup (or an un-migrated stored value) never fails validation. The
+    // side panel resolves it to the default dark skin (see ui/theme.ts).
     await preferences.setDisplay({ theme: "system" });
     expect((await preferences.read()).theme).toBe("system");
 

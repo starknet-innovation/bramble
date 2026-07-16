@@ -31,7 +31,11 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
 const isMnemonicText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
-const isTransferAmount = (value: unknown): value is string =>
+/**
+ * Checks a human-entered decimal token amount string (shared by the transfer
+ * and swap input readers; parsing/scaling happens later via parseTokenAmount).
+ */
+export const isTransferAmount = (value: unknown): value is string =>
   typeof value === "string" && /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value.trim());
 
 const isFeltLikeString = (value: unknown): value is string => {

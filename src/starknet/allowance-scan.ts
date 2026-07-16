@@ -122,6 +122,59 @@ const readAllowance = async (
   return amount && amount !== "0" ? { amount, spender, token } : null;
 };
 
+// Canonicalizes and validates the tracked token list once, dropping any entry
+// that is not a non-zero field element so the scan loop below stays a flat map
+// over already-trustworthy tokens (parse, don't re-validate mid-loop).
+const canonicalTokens = (tokens: readonly string[]): string[] => {
+  const valid: string[] = [];
+  for (const raw of tokens) {
+    const token = canonicalFelt(raw);
+    if (token && isNonZeroStarkFieldElement(token)) {
+      valid.push(token);
+    }
+  }
+  return valid;
+};
+
+// Collects every live, non-zero allowance the owner granted on a single token:
+// discover the approved spenders from Approval events, then read each one's
+// current on-chain allowance. Dropping the zero/absent reads here keeps
+// collectExternalAllowances a flat fetch -> collect-per-token -> accumulate.
+const collectTokenAllowances = async (
+  rpc: AllowanceRpc,
+  token: string,
+  owner: string,
+): Promise<ExternalAllowance[]> => {
+  const spenders = await discoverSpenders(rpc, token, owner);
+  const allowances: ExternalAllowance[] = [];
+  for (const spender of spenders) {
+    const allowance = await readAllowance(rpc, token, owner, spender);
+    if (allowance) {
+      allowances.push(allowance);
+    }
+  }
+  return allowances;
+};
+
+// Collects one token's allowances, isolating a per-token failure: a semantic
+// (non-transport) fault means the contract has no usable Approval log and is
+// swallowed as an empty result, while a transport fault propagates so the caller
+// can fail over to another RPC endpoint rather than silently dropping a token.
+const collectTokenAllowancesSafe = async (
+  rpc: AllowanceRpc,
+  token: string,
+  owner: string,
+): Promise<readonly ExternalAllowance[]> => {
+  try {
+    return await collectTokenAllowances(rpc, token, owner);
+  } catch (error) {
+    if (isTransportRpcError(error)) {
+      throw error;
+    }
+    return [];
+  }
+};
+
 /**
  * Collects the current external allowances for an owner across the given tokens
  * using an injected RPC surface. Separated from {@link scanExternalAllowances}
@@ -137,24 +190,8 @@ export const collectExternalAllowances = async (
     return [];
   }
   const discovered: ExternalAllowance[] = [];
-  for (const rawToken of tokens) {
-    const token = canonicalFelt(rawToken);
-    if (!token || !isNonZeroStarkFieldElement(token)) {
-      continue;
-    }
-    try {
-      const spenders = await discoverSpenders(rpc, token, canonicalOwner);
-      for (const spender of spenders) {
-        const allowance = await readAllowance(rpc, token, canonicalOwner, spender);
-        if (allowance) {
-          discovered.push(allowance);
-        }
-      }
-    } catch (error) {
-      if (isTransportRpcError(error)) {
-        throw error;
-      }
-    }
+  for (const token of canonicalTokens(tokens)) {
+    discovered.push(...(await collectTokenAllowancesSafe(rpc, token, canonicalOwner)));
   }
   return discovered;
 };
