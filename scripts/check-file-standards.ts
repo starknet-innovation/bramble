@@ -86,6 +86,7 @@ const HTML_SINK_FILES = new Set([
   // Swap screen dynamic regions (chips, picker rows, receipts): every
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
   "src/sidepanel/swap-ui.ts",
+  "src/sidepanel/swap-picker.ts",
 ]);
 const HTML_SINK_PATTERN =
   /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML)\b/;

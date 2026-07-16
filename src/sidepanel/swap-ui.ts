@@ -17,6 +17,7 @@ import { icon } from "./icons";
 import { accountLabel } from "./parts";
 import type { BalanceState, SidepanelWallet } from "./runtime";
 import type { SwapClient, SwapQuoteView } from "./swap-client";
+import { bindSwapPicker, pickerSide, repaintSwapPicker, setPickerSide } from "./swap-picker";
 import { compactAmount, tokenGlyph } from "./token-row";
 
 /**
@@ -43,7 +44,6 @@ let quote: SwapQuoteView | null = null;
 let quoteSeq = 0;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 let stage: "confirm" | "done" | "edit" = "edit";
-let picking: "buy" | "sell" | null = null;
 let done: { readonly buyText: string; readonly hash: string; readonly sellText: string } | null =
   null;
 
@@ -151,22 +151,6 @@ const applySwapUi = (deps: SwapUiDeps, root: Element): void => {
   root.querySelector("#swap-edit")?.toggleAttribute("hidden", stage !== "edit");
   root.querySelector("#swap-confirm")?.toggleAttribute("hidden", stage !== "confirm");
   root.querySelector("#swap-done")?.toggleAttribute("hidden", stage !== "done");
-  const picker = root.querySelector<HTMLElement>("#swap-picker");
-  if (picker) {
-    picker.hidden = picking === null;
-    if (picking !== null) {
-      picker.innerHTML = tradableTokens(deps)
-        .map((token) => {
-          const balance = balanceFor(deps, token.id);
-          return `<button class="option-row" role="option" type="button" data-swap-pick="${escapeHtml(token.id)}">
-              ${tokenGlyph(token.address, token.symbol)}
-              <span class="option-copy"><strong>${escapeHtml(token.symbol)}</strong><span class="option-sub">${escapeHtml(token.name)}</span></span>
-              <span class="menu-value">${balance ? escapeHtml(compactAmount(balance.formatted)) : "0"}</span>
-            </button>`;
-        })
-        .join("");
-    }
-  }
   if (stage === "confirm" && quote && sellToken && buyToken) {
     const receipt = root.querySelector("#swap-confirm-receipt");
     const minReceived = compactAmount((buyAmount * (1 - SLIPPAGE)).toFixed(8));
@@ -231,6 +215,21 @@ const scheduleQuote = (deps: SwapUiDeps, root: Element): void => {
   quoteTimer = setTimeout(() => requestQuote(deps, root), QUOTE_DEBOUNCE_MS);
 };
 
+// Applies a picker selection to one side, swapping the pair when the chosen
+// token already occupies the other side, then re-quotes.
+const applySelection =
+  (deps: SwapUiDeps, root: Element) =>
+  (side: "buy" | "sell", tokenId: string): void => {
+    if (side === "sell") {
+      buyTokenId = tokenId === buyTokenId ? sellTokenId : buyTokenId;
+      sellTokenId = tokenId;
+    } else {
+      sellTokenId = tokenId === sellTokenId ? buyTokenId : sellTokenId;
+      buyTokenId = tokenId;
+    }
+    requestQuote(deps, root);
+  };
+
 /**
  * Binds the swap screen. Safe to call on every render; when the swap screen
  * is not mounted it resets the transient stage (keeping the chosen pair) so
@@ -240,7 +239,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
   const root = deps.app?.querySelector("#wallet-screen-swap")?.parentElement;
   if (!root) {
     stage = "edit";
-    picking = null;
+    setPickerSide(null);
     quote = null;
     amountText = "";
     done = null;
@@ -268,29 +267,14 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     requestQuote(deps, root);
   });
   root.querySelector("#swap-sell-token")?.addEventListener("click", () => {
-    picking = picking === "sell" ? null : "sell";
-    applySwapUi(deps, root);
+    setPickerSide(pickerSide() === "sell" ? null : "sell");
+    repaintSwapPicker(deps, root);
   });
   root.querySelector("#swap-buy-token")?.addEventListener("click", () => {
-    picking = picking === "buy" ? null : "buy";
-    applySwapUi(deps, root);
+    setPickerSide(pickerSide() === "buy" ? null : "buy");
+    repaintSwapPicker(deps, root);
   });
-  root.querySelector("#swap-picker")?.addEventListener("click", (event) => {
-    const row = (event.target as Element).closest<HTMLElement>("[data-swap-pick]");
-    const id = row?.dataset["swapPick"];
-    if (!id || !picking) {
-      return;
-    }
-    if (picking === "sell") {
-      buyTokenId = id === buyTokenId ? sellTokenId : buyTokenId;
-      sellTokenId = id;
-    } else {
-      sellTokenId = id === sellTokenId ? buyTokenId : sellTokenId;
-      buyTokenId = id;
-    }
-    picking = null;
-    requestQuote(deps, root);
-  });
+  bindSwapPicker(deps, root, applySelection(deps, root));
   root.querySelector("#swap-review")?.addEventListener("click", () => {
     if (quote) {
       stage = "confirm";

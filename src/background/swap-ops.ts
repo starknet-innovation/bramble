@@ -16,6 +16,7 @@ import { STARKNET_NETWORKS, sameFelt } from "../starknet/networks";
 import { formatTokenAmount, parseTokenAmount } from "../starknet/rpc";
 import { verifyCalls } from "../starknet/verify";
 import type { TokenConfig } from "../storage/preferences-store";
+import { readTypeOnlyInput } from "./message-inputs";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import { readSwapExecuteInput, readSwapQuoteInput } from "./swap-inputs";
@@ -73,6 +74,18 @@ export const handleSwapOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
+  if (messageType === "wallet.swapTokens") {
+    if (!readTypeOnlyInput(message, "wallet.swapTokens")) {
+      return { error: "invalid swap tokens request" };
+    }
+    const preferences = await deps.preferencesStore.read();
+    try {
+      return { ok: true, swapTokens: await deps.swap.listTokens(preferences.activeNetworkId) };
+    } catch (error) {
+      return { error: errorText(error, "token list unavailable") };
+    }
+  }
+
   if (messageType === "wallet.swapQuote") {
     const input = readSwapQuoteInput(message);
     if (!input) {

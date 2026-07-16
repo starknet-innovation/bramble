@@ -137,6 +137,62 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
   .swap-picker .token-mark, .swap-picker .token-logo { height: 28px; width: 28px; }
   .swap-picker .token-mark { font-size: 9px; }
   .swap-actions { display: grid; gap: ${SPACE.sm}; }
+  /* Token picker sheet: a full-screen chooser over the swap screen — search,
+     quick chips for the majors, then the verified catalog as a grouped list.
+     Solid page ground so the sheet reads as its own place, not a popover. */
+  .swap-sheet {
+    background: var(--mc-bg);
+    display: flex;
+    flex-direction: column;
+    gap: ${SPACE.md};
+    inset: 0;
+    overflow-y: auto;
+    padding: ${SPACE.md} ${SPACE.lg} ${SPACE.lg};
+    position: fixed;
+    z-index: 15;
+  }
+  .swap-sheet:not([hidden]) { animation: panel-enter ${MOTION.enterMs}ms var(--ease-out) both; }
+  .swap-sheet-head { align-items: center; display: flex; justify-content: space-between; }
+  .swap-sheet-head h2 { flex: 1; text-align: center; }
+  /* Symmetry spacer: the close button sits right, so the title centre-line
+     needs matching space on the left. */
+  .swap-sheet-head::before { content: ""; flex: none; width: 40px; }
+  input.swap-search { flex: none; }
+  .swap-chips { display: flex; flex-wrap: wrap; gap: ${SPACE.sm}; }
+  button.swap-chip {
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-text);
+    font-size: ${TYPE.label.size};
+    font-weight: ${WEIGHT.semibold};
+    gap: 6px;
+    min-height: 36px;
+    padding: 0 ${SPACE.md} 0 ${SPACE.sm};
+  }
+  button.swap-chip .token-mark, button.swap-chip .token-logo { height: 20px; width: 20px; }
+  button.swap-chip .token-mark { font-size: 8px; }
+  .swap-sheet-list {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+  }
+  .swap-sheet-list > * + * { position: relative; }
+  .swap-sheet-list > * + *::before {
+    background: var(--mc-hairline);
+    content: "";
+    height: 1px;
+    left: ${SPACE.lg};
+    position: absolute;
+    right: 0;
+    top: 0;
+  }
+  .swap-sheet-list .option-row { min-height: 60px; }
+  .swap-sheet-list .token-mark, .swap-sheet-list .token-logo { height: 32px; width: 32px; }
+  .swap-sheet-list .token-mark { font-size: 10px; }
+  /* Verified mark: catalog entries are AVNU-verified; the check reads in the
+     success voice beside the name. */
+  .swap-verified { color: var(--mc-positive); display: inline-flex; vertical-align: middle; }
+  .swap-verified .icon { height: 13px; width: 13px; }
   /* Submitted receipt: success is stated once, in the semantic green. */
   .swap-done { justify-items: center; padding-top: ${SPACE.xl}; text-align: center; }
   .swap-done .receipt, .swap-done .swap-actions { justify-items: stretch; text-align: left; width: 100%; }

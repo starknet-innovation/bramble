@@ -118,6 +118,12 @@ const makeHarness = (options?: {
   const buildRequests: unknown[] = [];
   const submitted: unknown[] = [];
   const swap: SwapService = {
+    async listTokens() {
+      return [
+        { address: ETH_TOKEN_ADDRESS, decimals: 18, name: "Ether", symbol: "ETH" },
+        { address: STRK_TOKEN_ADDRESS, decimals: 18, name: "Starknet Token", symbol: "STRK" },
+      ];
+    },
     async buildCalls(input) {
       buildRequests.push(input);
       if (options?.buildError) {
@@ -157,6 +163,18 @@ const makeHarness = (options?: {
 };
 
 describe("swap operations", () => {
+  test("swapTokens returns the verified catalog for the active network", async () => {
+    const { handler } = makeHarness();
+    const response = await handler({ type: "wallet.swapTokens" }, extensionSender);
+    expect(response).toMatchObject({
+      ok: true,
+      swapTokens: [
+        { address: ETH_TOKEN_ADDRESS, symbol: "ETH" },
+        { address: STRK_TOKEN_ADDRESS, symbol: "STRK" },
+      ],
+    });
+  });
+
   test("quote returns a display-ready view for the tracked pair", async () => {
     const { handler, quoteRequests } = makeHarness();
     const response = await handler(

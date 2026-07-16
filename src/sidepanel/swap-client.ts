@@ -49,6 +49,29 @@ const responseError = (response: unknown, fallback: string): Error =>
   new Error(isErrorResponse(response) ? response.error : fallback);
 
 /**
+ * One verified catalog entry shown by the token picker. Directory data only:
+ * selecting an untracked entry goes through the wallet's add-token flow,
+ * which re-reads the token's facts from the contract on-chain.
+ */
+export type SwapCatalogTokenView = {
+  readonly address: string;
+  readonly decimals: number;
+  readonly name: string;
+  readonly symbol: string;
+};
+
+const isCatalogToken = (value: unknown): value is SwapCatalogTokenView =>
+  isRecord(value) &&
+  typeof value["address"] === "string" &&
+  /^0x[0-9a-f]{1,64}$/.test(value["address"]) &&
+  typeof value["decimals"] === "number" &&
+  Number.isInteger(value["decimals"]) &&
+  typeof value["name"] === "string" &&
+  value["name"].length > 0 &&
+  typeof value["symbol"] === "string" &&
+  value["symbol"].length > 0;
+
+/**
  * Swap client surface returned by createSwapClient.
  */
 export type SwapClient = ReturnType<typeof createSwapClient>;
@@ -77,6 +100,18 @@ export const createSwapClient = (runtime?: RuntimeApi) => {
         return response["transactionHash"];
       }
       throw responseError(response, "swap failed");
+    },
+    async tokens(): Promise<readonly SwapCatalogTokenView[]> {
+      const response = await sendMessage({ type: "wallet.swapTokens" });
+      if (
+        isRecord(response) &&
+        response["ok"] === true &&
+        Array.isArray(response["swapTokens"]) &&
+        response["swapTokens"].every(isCatalogToken)
+      ) {
+        return response["swapTokens"];
+      }
+      throw responseError(response, "token list unavailable");
     },
     async quote(input: {
       readonly amount: string;

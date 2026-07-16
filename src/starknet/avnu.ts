@@ -61,6 +61,19 @@ export type SwapQuote = {
 };
 
 /**
+ * One validated catalog entry from AVNU's verified token list: enough to let
+ * the user FIND a token. Selecting an untracked entry still goes through the
+ * wallet's add-token path, which reads name/symbol/decimals from the contract
+ * on-chain — the catalog is a directory, never the source of truth.
+ */
+export type SwapCatalogToken = {
+  readonly address: string;
+  readonly decimals: number;
+  readonly name: string;
+  readonly symbol: string;
+};
+
+/**
  * One validated Starknet call returned by AVNU's build endpoint.
  */
 export type SwapCall = {
@@ -97,6 +110,7 @@ export type SwapBuildInput = {
 export type SwapService = {
   readonly buildCalls: (input: SwapBuildInput) => Promise<readonly SwapCall[]>;
   readonly getQuote: (input: SwapQuoteInput) => Promise<SwapQuote>;
+  readonly listTokens: (networkId: StarknetNetworkId) => Promise<readonly SwapCatalogToken[]>;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -120,6 +134,30 @@ const isEntrypoint = (value: unknown): value is string =>
   typeof value === "string" && /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(value);
 
 const MAX_CALLDATA_LENGTH = 2000;
+const MAX_CATALOG_TOKENS = 200;
+
+const isTokenText = (value: unknown, maxLength: number): value is string =>
+  typeof value === "string" && value.trim().length > 0 && value.length <= maxLength;
+
+// Reads one catalog entry; returns null (skipped) rather than failing the
+// whole list — entries are display candidates only, and anything the user
+// selects is re-validated on-chain by the add-token flow.
+const readCatalogToken = (value: unknown): SwapCatalogToken | null =>
+  isRecord(value) &&
+  isFelt(value["address"]) &&
+  typeof value["decimals"] === "number" &&
+  Number.isInteger(value["decimals"]) &&
+  value["decimals"] >= 0 &&
+  value["decimals"] <= 36 &&
+  isTokenText(value["name"], 64) &&
+  isTokenText(value["symbol"], 20)
+    ? {
+        address: value["address"],
+        decimals: value["decimals"],
+        name: value["name"].trim(),
+        symbol: value["symbol"].trim(),
+      }
+    : null;
 
 const baseUrlFor = (networkId: StarknetNetworkId): string => {
   const base = AVNU_BASE_URLS[networkId];
@@ -211,6 +249,22 @@ export const createSwapService = ({ http }: { readonly http: SwapHttp }): SwapSe
     }
     return payload["calls"].map(readCall);
   },
+  async listTokens(networkId) {
+    const response = await http(
+      `${baseUrlFor(networkId)}/v1/starknet/tokens?tag=Verified&size=${MAX_CATALOG_TOKENS}&page=0`,
+    );
+    if (!response.ok) {
+      throw new Error("token list failed");
+    }
+    const payload = await response.json();
+    if (!isRecord(payload) || !Array.isArray(payload["content"])) {
+      throw new Error("invalid token list response");
+    }
+    return payload["content"]
+      .map(readCatalogToken)
+      .filter((token): token is SwapCatalogToken => token !== null)
+      .slice(0, MAX_CATALOG_TOKENS);
+  },
   async getQuote(input) {
     const query = new URLSearchParams({
       buyTokenAddress: input.buyTokenAddress,
@@ -238,4 +292,5 @@ export const createSwapService = ({ http }: { readonly http: SwapHttp }): SwapSe
 export const unavailableSwapService: SwapService = {
   buildCalls: () => Promise.reject(new Error("swap service unavailable")),
   getQuote: () => Promise.reject(new Error("swap service unavailable")),
+  listTokens: () => Promise.reject(new Error("swap service unavailable")),
 };

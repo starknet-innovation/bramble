@@ -146,8 +146,29 @@ describe("avnu swap service", () => {
     }
   });
 
+  test("lists the verified catalog, skipping malformed entries", async () => {
+    const payload = {
+      content: [
+        { address: ETH, decimals: 18, logoUri: "https://x", name: "Ethereum", symbol: "ETH" },
+        { address: "not-a-felt", decimals: 18, name: "Bad", symbol: "BAD" },
+        { address: STRK, decimals: 200, name: "Bad decimals", symbol: "BAD2" },
+        { address: STRK, decimals: 18, name: "Starknet Token", symbol: "STRK" },
+      ],
+    };
+    const service = createSwapService({ http: httpReturning(payload) });
+    const tokens = await service.listTokens("SN_MAIN");
+    expect(tokens.map((token) => token.symbol)).toEqual(["ETH", "STRK"]);
+    expect(httpReturning.lastUrl).toContain("/v1/starknet/tokens?tag=Verified");
+    const failing = createSwapService({ http: httpReturning({}, false) });
+    await expect(failing.listTokens("SN_MAIN")).rejects.toThrow("token list failed");
+    await expect(
+      createSwapService({ http: httpReturning({}) }).listTokens("SN_DEVNET"),
+    ).rejects.toThrow("not available");
+  });
+
   test("the unavailable default fails closed", async () => {
     await expect(unavailableSwapService.getQuote(quoteInput)).rejects.toThrow("unavailable");
+    await expect(unavailableSwapService.listTokens("SN_MAIN")).rejects.toThrow("unavailable");
     await expect(
       unavailableSwapService.buildCalls({
         networkId: "SN_MAIN",

@@ -146,6 +146,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     },
     sender: extensionSender,
   },
+  { message: { type: "wallet.swapTokens" }, sender: extensionSender },
   {
     message: {
       amount: "0.1",

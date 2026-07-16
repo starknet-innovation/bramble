@@ -54,9 +54,18 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
           ${swapPanel("buy", disabled)}
         </div>
         <div class="swap-meta"><span id="swap-rate"></span><span id="swap-gas"></span></div>
-        <div id="swap-picker" class="swap-picker" role="listbox" aria-label="Tokens" hidden></div>
         <button id="swap-review" type="button" disabled>${icon("swap")}<span id="swap-review-label">Swap</span></button>
       </section>
+      <div id="swap-picker" class="swap-sheet" role="dialog" aria-modal="true" aria-label="Choose token" hidden>
+        <header class="swap-sheet-head">
+          <h2 id="swap-picker-title">Receive</h2>
+          <button id="swap-picker-close" class="icon-button ghost" type="button" aria-label="Close token picker">${icon("x")}</button>
+        </header>
+        <input id="swap-picker-search" class="swap-search" placeholder="Token name or address" autocomplete="off" spellcheck="false" aria-label="Token name or address" />
+        <div id="swap-picker-chips" class="swap-chips"></div>
+        <div id="swap-picker-list" class="swap-sheet-list" role="listbox" aria-label="Tokens"></div>
+        <p id="swap-picker-status" class="empty" role="status" hidden></p>
+      </div>
       <section class="swap-stage" id="swap-confirm" hidden>
         <p class="eyebrow">Confirm swap</p>
         <dl class="receipt" id="swap-confirm-receipt"></dl>
