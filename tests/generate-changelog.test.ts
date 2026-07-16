@@ -3,15 +3,20 @@
  * category grouping, deterministic section rendering, and idempotent insertion.
  * No git, no clock, no file I/O — the date and commit list are supplied.
  */
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   categoryFor,
   extractSection,
   groupCommits,
   hasSection,
   insertSection,
+  main,
   parseCommitSubject,
   renderSection,
+  stampSectionDate,
 } from "../scripts/generate-changelog";
 
 describe("parseCommitSubject", () => {
@@ -158,5 +163,128 @@ describe("insertSection", () => {
     const next = insertSection("# Changelog\n", "## [0.1.0] - 2026-01-01\n\n- first", "0.1.0");
     expect(next).toContain("# Changelog");
     expect(next).toContain("## [0.1.0]");
+  });
+});
+
+describe("stampSectionDate", () => {
+  test("stamps the release date over an Unreleased placeholder", () => {
+    const stamped = stampSectionDate("## [0.5.0] - Unreleased\n\n### Added\n- thing", "2026-07-15");
+    expect(stamped).toBe("## [0.5.0] - 2026-07-15\n\n### Added\n- thing");
+  });
+
+  test("stamps a heading that has no date at all", () => {
+    expect(stampSectionDate("## [0.5.0]\n\n- thing", "2026-07-15")).toBe(
+      "## [0.5.0] - 2026-07-15\n\n- thing",
+    );
+  });
+
+  test("leaves an already-dated heading untouched", () => {
+    const section = "## [0.4.0] - 2026-06-30\n\n- older";
+    expect(stampSectionDate(section, "2026-07-15")).toBe(section);
+  });
+
+  test("does not stamp when the supplied date is itself a placeholder", () => {
+    const section = "## [0.5.0] - Unreleased\n\n- thing";
+    expect(stampSectionDate(section, "unreleased")).toBe(section);
+  });
+});
+
+describe("main", () => {
+  let dir: string | null = null;
+
+  afterEach(async () => {
+    if (dir !== null) {
+      await rm(dir, { recursive: true, force: true });
+      dir = null;
+    }
+  });
+
+  const scratchFile = async (name: string): Promise<string> => {
+    dir = await mkdtemp(join(tmpdir(), "changelog-test-"));
+    return join(dir, name);
+  };
+
+  const captureStdout = async (
+    fn: () => Promise<number>,
+  ): Promise<{ out: string; code: number }> => {
+    const chunks: string[] = [];
+    const original = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8"));
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      const code = await fn();
+      return { out: chunks.join(""), code };
+    } finally {
+      process.stdout.write = original;
+    }
+  };
+
+  test("notes mode prefers an existing section and stamps its pending date", async () => {
+    const file = await scratchFile("CHANGELOG.md");
+    await Bun.write(
+      file,
+      ["# Changelog", "", "## [0.5.0] - Unreleased", "", "### Added", "- curated line", ""].join(
+        "\n",
+      ),
+    );
+    const { out, code } = await captureStdout(() =>
+      main({
+        CHANGELOG_VERSION: "0.5.0",
+        CHANGELOG_MODE: "notes",
+        CHANGELOG_FILE: file,
+        CHANGELOG_DATE: "2026-07-15",
+        CHANGELOG_COMMITS: "feat: ignored because the curated section wins",
+      }),
+    );
+    expect(code).toBe(0);
+    expect(out).toContain("## [0.5.0] - 2026-07-15");
+    expect(out).toContain("- curated line");
+    expect(out).not.toContain("Unreleased");
+    expect(out).not.toContain("ignored");
+  });
+
+  test("notes mode falls back to generating from commits when no section exists", async () => {
+    const file = await scratchFile("CHANGELOG.md");
+    const { out, code } = await captureStdout(() =>
+      main({
+        CHANGELOG_VERSION: "0.6.0",
+        CHANGELOG_MODE: "notes",
+        CHANGELOG_FILE: file,
+        CHANGELOG_DATE: "2026-08-01",
+        CHANGELOG_COMMITS: "feat(x): new thing\nMerge pull request #9 from y",
+      }),
+    );
+    expect(code).toBe(0);
+    expect(out).toContain("## [0.6.0] - 2026-08-01");
+    expect(out).toContain("- **x:** new thing");
+  });
+
+  test("update mode inserts the section and is idempotent on a second run", async () => {
+    const file = await scratchFile("CHANGELOG.md");
+    const env = {
+      CHANGELOG_VERSION: "0.6.0",
+      CHANGELOG_MODE: "update",
+      CHANGELOG_FILE: file,
+      CHANGELOG_DATE: "2026-08-01",
+      CHANGELOG_COMMITS: "fix: repair it",
+    } as const;
+    expect(await main(env)).toBe(0);
+    const first = await readFile(file, "utf8");
+    expect(first).toContain("# Changelog");
+    expect(first).toContain("## [0.6.0] - 2026-08-01");
+    expect(first).toContain("- repair it");
+    expect(await main(env)).toBe(0);
+    const second = await readFile(file, "utf8");
+    expect(second).toBe(first);
+  });
+
+  test("rejects a missing version and an unknown mode", async () => {
+    const file = await scratchFile("CHANGELOG.md");
+    expect(await main({ CHANGELOG_MODE: "notes", CHANGELOG_FILE: file })).toBe(1);
+    expect(
+      await main({ CHANGELOG_VERSION: "0.6.0", CHANGELOG_MODE: "bogus", CHANGELOG_FILE: file }),
+    ).toBe(1);
   });
 });
