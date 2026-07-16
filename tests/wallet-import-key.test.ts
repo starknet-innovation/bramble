@@ -7,8 +7,9 @@ import { describe, expect, test } from "bun:test";
 import { readImportAccountInput } from "../src/background/import-inputs";
 import { createEncryptedStore } from "../src/storage/encrypted-store";
 import { createMemoryStore } from "../src/storage/kv";
+import type { AccountRef } from "../src/storage/vault-schema";
 import { isAccountRef } from "../src/storage/vault-schema";
-import { deriveImportedAccount } from "../src/wallet/accounts";
+import { deriveImportedAccount, nextAccountIndex, sameWalletKey } from "../src/wallet/accounts";
 import { createWalletVaultService } from "../src/wallet/vault-service";
 import { fakeKms } from "./fake-kms";
 
@@ -236,5 +237,76 @@ describe("isAccountRef imported round-trip", () => {
         publicKeyX: "0xabc",
       }),
     ).toBe(false);
+  });
+});
+
+const bip44Account = (
+  publicKeyX: string,
+  accountIndex: number,
+  addressIndex = 0,
+  networkId: "SN_MAIN" | "SN_SEPOLIA" = "SN_MAIN",
+): AccountRef => ({
+  address: `0x${publicKeyX.slice(2)}a`,
+  classHash: "0x111111",
+  derivation: { accountIndex, addressIndex, kind: "starknet-bip44" },
+  id: `${networkId}:0x${publicKeyX.slice(2)}a`,
+  networkId,
+  publicKeyX,
+  publicKeyY: "0xdef",
+});
+
+const importedAccount = (
+  publicKeyX: string,
+  networkId: "SN_MAIN" | "SN_SEPOLIA" = "SN_MAIN",
+): AccountRef => ({
+  address: `0x${publicKeyX.slice(2)}b`,
+  classHash: "0x111111",
+  derivation: { kind: "imported-raw-key" },
+  id: `${networkId}:0x${publicKeyX.slice(2)}b`,
+  networkId,
+  publicKeyX,
+});
+
+describe("sameWalletKey", () => {
+  test("matches HD accounts only on the same key and derivation position", () => {
+    expect(sameWalletKey(bip44Account("0xabc", 0), bip44Account("0xabc", 0))).toBe(true);
+    // Same key, different account index -> a distinct HD account.
+    expect(sameWalletKey(bip44Account("0xabc", 0), bip44Account("0xabc", 1))).toBe(false);
+    // Same key and account index, different address index -> still distinct.
+    expect(sameWalletKey(bip44Account("0xabc", 0, 0), bip44Account("0xabc", 0, 1))).toBe(false);
+    // Different key.
+    expect(sameWalletKey(bip44Account("0xabc", 0), bip44Account("0xdef", 0))).toBe(false);
+  });
+
+  test("matches imported accounts on the public key alone (no HD position)", () => {
+    expect(sameWalletKey(importedAccount("0xabc"), importedAccount("0xabc"))).toBe(true);
+    expect(sameWalletKey(importedAccount("0xabc"), importedAccount("0xdef"))).toBe(false);
+  });
+
+  test("never conflates an imported account with an HD account of the same key", () => {
+    expect(sameWalletKey(bip44Account("0xabc", 0), importedAccount("0xabc"))).toBe(false);
+    expect(sameWalletKey(importedAccount("0xabc"), bip44Account("0xabc", 0))).toBe(false);
+  });
+});
+
+describe("nextAccountIndex", () => {
+  test("returns the lowest unused HD index, skipping imported accounts", () => {
+    const accounts = [
+      bip44Account("0xa", 0),
+      bip44Account("0xb", 2),
+      // An imported account holds no HD position and must not occupy an index.
+      importedAccount("0xc"),
+    ];
+    expect(nextAccountIndex(accounts, "SN_MAIN")).toBe(1);
+  });
+
+  test("counts only the target network's HD accounts", () => {
+    const accounts = [
+      bip44Account("0xa", 0, 0, "SN_MAIN"),
+      bip44Account("0xb", 1, 0, "SN_SEPOLIA"),
+    ];
+    // Sepolia's index 1 must not push the mainnet next index past 1.
+    expect(nextAccountIndex(accounts, "SN_MAIN")).toBe(1);
+    expect(nextAccountIndex([], "SN_MAIN")).toBe(0);
   });
 });
