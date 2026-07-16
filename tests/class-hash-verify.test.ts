@@ -67,9 +67,31 @@ describe("verifyAccountClassHash", () => {
     });
   });
 
-  test("does not report verified when the node returns a non-felt value", async () => {
+  test("treats a non-felt node answer as unreachable, never verified or a bogus mismatch", async () => {
+    // A malfunctioning/hostile node that answers with a non-felt cannot be
+    // trusted: the result must not be `verified`, and it must not be a
+    // `mismatch` carrying a non-felt hash (an illegal state the UI boundary
+    // would silently drop). It degrades to `unreachable`.
     const result = await verify(providerWith(async () => "not-a-felt"));
-    expect(result.status).toBe("mismatch");
+    expect(result).toEqual({ status: "unreachable" });
+  });
+
+  test("fails over past an endpoint that returns a non-felt to one that returns the real hash", async () => {
+    let call = 0;
+    const result = await verifyAccountClassHash({
+      accountAddress: ADDRESS,
+      expectedClassHash: EXPECTED,
+      makeProvider: () =>
+        ({
+          async getClassHashAt() {
+            call += 1;
+            return call === 1 ? "garbage" : EXPECTED;
+          },
+        }) as unknown as RpcProvider,
+      rpcUrls: ["https://bad.example/rpc", "https://good.example/rpc"],
+    });
+    expect(result).toEqual({ onChainClassHash: EXPECTED, status: "verified" });
+    expect(call).toBe(2);
   });
 
   test("returns undeployed when the contract is not found (RPC code 20)", async () => {

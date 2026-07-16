@@ -11,7 +11,7 @@
  */
 import type { RpcProvider } from "starknet";
 import { WalletError } from "../shared/errors";
-import { isNonZeroStarkFieldElement, sameFelt } from "./networks";
+import { asFelt, isNonZeroStarkFieldElement, sameFelt } from "./networks";
 import { isContractNotFoundError, isTransportRpcError, withRpcFallback } from "./provider";
 
 /**
@@ -56,7 +56,8 @@ export type VerifyClassHashInput = {
  *   signal the caller must surface prominently.
  * - `undeployed` — no contract exists at the address yet.
  * - `unreachable` — every configured endpoint failed at the transport level
- *   (offline / node down), so the class could not be checked.
+ *   (offline / node down) or returned an unusable non-felt answer, so the
+ *   class could not be checked.
  *
  * Any other (semantic) RPC error propagates: the wallet never turns an
  * unexpected failure into a `verified` or otherwise benign state.
@@ -78,6 +79,15 @@ export const verifyAccountClassHash = async ({
       rpcUrls,
       async (provider): Promise<ClassHashVerification> => {
         const onChainClassHash = await provider.getClassHashAt(accountAddress, "latest");
+        if (asFelt(onChainClassHash) === null) {
+          // A healthy node returns the deployed class hash as a felt. A
+          // non-felt answer means this endpoint is malfunctioning (or hostile),
+          // so throw to fail over to the next endpoint; if every endpoint is
+          // unusable the outcome degrades to `unreachable`. This keeps the
+          // `verified` and `mismatch` on-chain hashes genuine felts and never
+          // lets a garbage response masquerade as a benign result.
+          throw new Error("RPC returned a non-felt class hash");
+        }
         return sameFelt(onChainClassHash, expectedClassHash)
           ? { onChainClassHash, status: "verified" }
           : { expectedClassHash, onChainClassHash, status: "mismatch" };
