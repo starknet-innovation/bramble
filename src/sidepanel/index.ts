@@ -368,19 +368,16 @@ const render = async (status: WalletStatus): Promise<void> => {
   cache.preferences =
     status.hasVault && !status.locked ? await wallet.loadPreferences().catch(() => null) : null;
   if (!status.hasVault || status.locked) {
-    cache.balances = { error: "wallet locked" };
-    cache.classHashVerification = null;
-    cache.deployment = null;
-    cache.transactions = [];
-    cache.historyUnavailable = false;
-    cache.connectedSites = [];
-    cache.prices = {};
-    cache.changes = {};
-    cache.priceAsOf = null;
-    cache.priceStale = false;
-    cache.chart = [];
-    cache.allowances = [];
-    cache.discoveredNfts = [];
+    // Reset every view-scoped field to its locked/empty state from the single
+    // source (emptyRenderCache) rather than a hand-maintained field list here,
+    // so no field — present or future — can be forgotten and leak stale state
+    // (e.g. multisig proposals) across a lock. The status/pending/preferences
+    // just refreshed above are preserved.
+    Object.assign(cache, emptyRenderCache(), {
+      pending: cache.pending,
+      preferences: cache.preferences,
+      status,
+    });
     paint();
     return;
   }

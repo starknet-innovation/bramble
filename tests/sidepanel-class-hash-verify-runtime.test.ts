@@ -6,7 +6,7 @@
  * (never a fabricated "verified" verdict).
  */
 import { describe, expect, test } from "bun:test";
-import { verificationForAccount } from "../src/sidepanel/render-cache";
+import { emptyRenderCache, verificationForAccount } from "../src/sidepanel/render-cache";
 import { createSidepanelRuntime } from "../src/sidepanel/runtime";
 import type { ClassHashVerification } from "../src/starknet/class-hash-verify";
 
@@ -91,5 +91,38 @@ describe("verificationForAccount", () => {
 
   test("is pending when no account is active even if a verdict is cached", () => {
     expect(verificationForAccount(verified, null)).toBeNull();
+  });
+});
+
+describe("emptyRenderCache (lock-reset single source)", () => {
+  // The render loop resets the cache on lock by delegating to emptyRenderCache
+  // (preserving only the freshly-read status/pending/preferences), so every
+  // view-scoped field must return to its locked/empty baseline here. A field
+  // that emptyRenderCache forgets would survive a lock and leak stale state —
+  // this guards against the reset drifting behind newly added fields.
+  const empty = emptyRenderCache();
+
+  test("clears the on-chain / verification fields the wallet must not retain locked", () => {
+    expect(empty.classHashVerification).toBeNull();
+    expect(empty.transactions).toEqual([]);
+    expect(empty.historyUnavailable).toBe(false);
+    // Previously omitted from the hand-written lock reset: multisig state must
+    // also reset so a prior session's proposals cannot linger post-lock.
+    expect(empty.multisigs).toEqual({ multisigs: [], proposals: [] });
+    expect(empty.multisigClassDeclared).toBeNull();
+  });
+
+  test("clears the remaining view-scoped lists and price fields", () => {
+    expect(empty.allowances).toEqual([]);
+    expect(empty.discoveredNfts).toEqual([]);
+    expect(empty.connectedSites).toEqual([]);
+    expect(empty.chart).toEqual([]);
+    expect(empty.deployment).toBeNull();
+    expect(empty.prices).toEqual({});
+    expect(empty.changes).toEqual({});
+    expect(empty.priceAsOf).toBeNull();
+    expect(empty.priceStale).toBe(false);
+    // The locked shell: balances carries the explicit "wallet locked" marker.
+    expect(empty.balances).toEqual({ error: "wallet locked" });
   });
 });
