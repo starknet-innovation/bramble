@@ -155,10 +155,13 @@ export type VaultV2 = {
  * cases and needs no shape change beyond v2: a vault migrated from schema v1
  * (where the phrase was never stored, so its seed accounts stay signable through
  * their retained keys but phrase-dependent operations are read-only), and a
- * Ledger-only wallet created with no seed material at all. A mnemonic-less vault
- * is only ever created with keyless Ledger accounts (see
- * {@link accountsRequireMnemonic}); the legacy null-with-seed shape is
- * grandfathered by the validator so those wallets never fail closed.
+ * Ledger-only wallet created with no seed material at all. The phrase-coverage
+ * rule is enforced at the mutation boundary, not the schema: `addDerivedAccount`
+ * refuses to derive a new HD account when `mnemonic` is null (it has nothing to
+ * derive from), and `createLedgerVault` only ever writes null over a fresh store.
+ * The grandfathered legacy null-with-seed shape stays valid at this schema so
+ * those v1-migrated wallets never fail closed — which is exactly why the coverage
+ * rule cannot be a validator invariant.
  */
 export type VaultV3 = {
   readonly accounts: readonly AccountRef[];
@@ -259,18 +262,6 @@ export const isAccountRef = (value: unknown): value is AccountRef => {
  */
 export const isKeylessAccount = (account: AccountRef): account is LedgerAccountRef =>
   account.derivation.kind === "ledger";
-
-/**
- * True when an account set requires the vault to retain a recovery phrase: any
- * HD-derived (`starknet-bip44`) or imported-raw-key account is seed/key-backed
- * and so may not live in a mnemonic-less vault, whereas a set of only keyless
- * Ledger accounts (or an empty set) needs no phrase. One source of truth for the
- * mnemonic-coverage rule the create/add paths enforce at the mutation boundary:
- * a Ledger-only wallet is created with no mnemonic, and this predicate is what a
- * caller checks before it would otherwise leave a seed account unrecoverable.
- */
-export const accountsRequireMnemonic = (accounts: readonly AccountRef[]): boolean =>
-  accounts.some((account) => !isKeylessAccount(account));
 
 const isSigningKeyRef = (value: unknown): value is SigningKeyRef =>
   isRecord(value) &&

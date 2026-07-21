@@ -5,7 +5,6 @@ import { describe, expect, test } from "bun:test";
 import { ledgerAccountPath } from "../src/starknet/ledger-path";
 import {
   type AccountRef,
-  accountsRequireMnemonic,
   CURRENT_SCHEMA_VERSION,
   emptyVault,
   isAccountId,
@@ -108,15 +107,6 @@ describe("mnemonic-less Ledger-only vault", () => {
     // stays valid so those wallets never fail closed.
     expect(isVaultV3(currentVault)).toBe(true);
     expect(currentVault.mnemonic).toBeNull();
-  });
-
-  test("accountsRequireMnemonic is the one source of truth for phrase coverage", () => {
-    const ledger = ledgerAccount as AccountRef;
-    const seed = account as AccountRef;
-    expect(accountsRequireMnemonic([])).toBe(false);
-    expect(accountsRequireMnemonic([ledger])).toBe(false);
-    expect(accountsRequireMnemonic([seed])).toBe(true);
-    expect(accountsRequireMnemonic([ledger, seed])).toBe(true);
   });
 });
 
