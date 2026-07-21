@@ -59,6 +59,7 @@ const ledgerAccount: AccountRef = {
 const deviceQueue = (privateKey: string): LedgerSignQueue => ({
   pending: () => [],
   reject: () => false,
+  rejectAll: () => 0,
   settle: () => false,
   async request(request) {
     const sig = starkCurve.sign(request.messageHash, privateKey);

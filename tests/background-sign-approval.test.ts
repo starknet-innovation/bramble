@@ -178,6 +178,7 @@ describe("signTypedData approval gate", () => {
     const wrongKeyQueue: LedgerSignQueue = {
       pending: () => [],
       reject: () => false,
+      rejectAll: () => 0,
       settle: () => false,
       async request(request) {
         const sig = starkCurve.sign(request.messageHash, "0xdeadbeef");

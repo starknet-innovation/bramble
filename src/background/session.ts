@@ -39,9 +39,14 @@ export type UnlockSessionStore = {
  * `getPassphrase` renews the inactivity window and is for user-initiated
  * operations; `peekPassphrase` reads without renewing and is for passive
  * paths (status polling, event re-queries) so they can never hold the
- * wallet unlocked forever.
+ * wallet unlocked forever. `generation` returns a monotonic counter that
+ * changes whenever the unlocked session boundary changes (a fresh unlock, or
+ * any lock/expiry clear): a long-running operation that captured the value
+ * when it started can re-check it before committing a side effect and fail
+ * closed if the session it was authorized under is no longer current.
  */
 export type UnlockSession = {
+  readonly generation: () => number;
   readonly getPassphrase: () => string | null;
   readonly isUnlocked: () => boolean;
   readonly lock: () => void;
@@ -76,6 +81,11 @@ export const createUnlockSession = (
   let expiresAt = 0;
   let passphrase: string | null = null;
   let persistedAt = 0;
+  // Monotonic session-boundary counter. Bumped on every unlock and every clear
+  // (lock or expiry), so a value captured while unlocked is only still current
+  // if neither a lock nor a re-unlock has happened since. Never a clock/random
+  // value — a plain incrementing integer keeps this module pure.
+  let generationCounter = 0;
 
   const persist = (): void => {
     if (!store || passphrase === null) {
@@ -89,6 +99,7 @@ export const createUnlockSession = (
     expiresAt = 0;
     passphrase = null;
     persistedAt = 0;
+    generationCounter += 1;
     void store?.clear().catch(() => undefined);
     // Drop any derived-key cache (e.g. the vault AES key) so locking or expiry
     // leaves no usable key material behind in worker memory.
@@ -119,6 +130,9 @@ export const createUnlockSession = (
   };
 
   return {
+    generation() {
+      return generationCounter;
+    },
     getPassphrase,
     isUnlocked() {
       return peekPassphrase() !== null;
@@ -145,6 +159,7 @@ export const createUnlockSession = (
       // ponytail: background memory session, replace with OS-backed unlock if needed.
       passphrase = nextPassphrase;
       expiresAt = now() + ttlMs;
+      generationCounter += 1;
       persist();
     },
   };

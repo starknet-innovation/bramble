@@ -38,6 +38,38 @@ describe("createUnlockSession", () => {
     expect(session.isUnlocked()).toBe(false);
   });
 
+  test("bumps the generation on unlock, lock, and expiry but not on activity", () => {
+    let now = 1_000;
+    const session = createUnlockSession(100, () => now);
+
+    const atStart = session.generation();
+    session.unlock(PASSPHRASE);
+    const afterUnlock = session.generation();
+    expect(afterUnlock).not.toBe(atStart);
+
+    // Activity (getPassphrase renewal) keeps the same session generation, so a
+    // long-running op parked mid-session is not spuriously invalidated.
+    now = 1_050;
+    expect(session.getPassphrase()).toBe(PASSPHRASE);
+    expect(session.generation()).toBe(afterUnlock);
+
+    // An explicit lock changes the boundary.
+    session.lock();
+    const afterLock = session.generation();
+    expect(afterLock).not.toBe(afterUnlock);
+
+    // A re-unlock changes it again, so a stale pre-lock value never matches.
+    session.unlock(PASSPHRASE);
+    const afterReunlock = session.generation();
+    expect(afterReunlock).not.toBe(afterLock);
+    expect(afterReunlock).not.toBe(afterUnlock);
+
+    // Lazy expiry clears the session and bumps the generation as well.
+    now = 2_000;
+    expect(session.getPassphrase()).toBeNull();
+    expect(session.generation()).not.toBe(afterReunlock);
+  });
+
   test("renews the expiry on activity instead of locking mid-use", () => {
     let now = 1_000;
     const session = createUnlockSession(100, () => now);

@@ -33,12 +33,26 @@ export type PendingLedgerSign = LedgerSignRequest & {
 export type LedgerSignQueue = {
   readonly pending: () => readonly PendingLedgerSign[];
   readonly reject: (id: string, reason: string) => boolean;
+  /**
+   * Rejects every currently-parked request with `reason` and returns how many
+   * were rejected. Used on an explicit `wallet.lock` so a device sign parked
+   * for the side panel can never be completed and broadcast after the lock —
+   * each rejection settles the held dapp waiter with `reason` and clears its
+   * approval through the executor's normal error path. Fails closed.
+   */
+  readonly rejectAll: (reason: string) => number;
   readonly request: (request: LedgerSignRequest) => Promise<DeviceSignature>;
   readonly settle: (id: string, signature: DeviceSignature) => boolean;
 };
 
 type Waiter = {
   readonly cancelTimeout: () => void;
+  // The unlock-session generation captured when this request was parked. The
+  // device round-trip can outlive the session that authorized it (the user
+  // locks, or the session expires, while the device is confirming); settle
+  // compares this against the live generation and fails closed on a change so a
+  // signature is never verified/broadcast under a session that no longer holds.
+  readonly generation: number;
   readonly intent: PendingLedgerSign;
   readonly reject: (error: WalletError) => void;
   readonly resolve: (signature: DeviceSignature) => void;
@@ -64,10 +78,16 @@ const SIGN_TIMEOUT_REASON = "sign-timeout";
  * parked, so the background can badge or wake the panel; it defaults to a no-op
  * for tests that drive `settle`/`reject` directly. `timeout`, when provided,
  * bounds each parked request so an unopened panel never hangs the promise.
+ * `currentGeneration` reads the live unlock-session generation (see
+ * {@link UnlockSession.generation}); the queue captures it when a request is
+ * parked and re-checks it at settle so a device signature that returns after a
+ * lock/expiry is rejected rather than broadcast. It defaults to a constant, so
+ * a queue wired without a session simply never observes a generation change.
  */
 export const createLedgerSignQueue = (
   onRequest: () => void = () => undefined,
   timeout?: LedgerSignQueueTimeout,
+  currentGeneration: () => number = () => 0,
 ): LedgerSignQueue => {
   const waiters = new Map<string, Waiter>();
   let counter = 0;
@@ -92,9 +112,18 @@ export const createLedgerSignQueue = (
       waiter.reject(new WalletError(reason));
       return true;
     },
+    rejectAll(reason) {
+      // Snapshot ids first: `take` mutates the map as each waiter is removed.
+      const ids = [...waiters.keys()];
+      for (const id of ids) {
+        take(id)?.reject(new WalletError(reason));
+      }
+      return ids.length;
+    },
     request(request) {
       counter += 1;
       const id = `ledger-sign-${counter}`;
+      const generation = currentGeneration();
       return new Promise<DeviceSignature>((resolve, reject) => {
         const cancelTimeout = timeout
           ? timeout.schedule(() => {
@@ -102,13 +131,22 @@ export const createLedgerSignQueue = (
               waiter?.reject(new WalletError(SIGN_TIMEOUT_REASON));
             }, timeout.ms)
           : () => undefined;
-        waiters.set(id, { cancelTimeout, intent: { ...request, id }, reject, resolve });
+        waiters.set(id, { cancelTimeout, generation, intent: { ...request, id }, reject, resolve });
         onRequest();
       });
     },
     settle(id, signature) {
       const waiter = take(id);
       if (!waiter) {
+        return false;
+      }
+      // Fail closed on a session-boundary change: if the wallet locked or the
+      // session expired (and re-unlocked) while the device was signing, the
+      // signature is no longer authorized under the current session — reject the
+      // parked promise instead of resolving it, so nothing is verified or
+      // broadcast across the lock.
+      if (currentGeneration() !== waiter.generation) {
+        waiter.reject(new WalletError("wallet locked"));
         return false;
       }
       waiter.resolve(signature);

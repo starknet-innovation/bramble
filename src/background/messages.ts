@@ -316,6 +316,9 @@ const handleLock: RouterHandler = async (ctx, messageType, message) => {
   if (!readTypeOnlyInput(message, "wallet.lock")) {
     return { error: "invalid lock request" };
   }
+  // Revoke in-flight device signs before clearing the session so a parked Ledger
+  // sign can't be completed and broadcast after the lock (see LedgerSignQueue).
+  ctx.ledgerSignQueue.rejectAll("wallet locked");
   ctx.session.lock();
   return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
 };
@@ -444,11 +447,10 @@ export type MessageHandlerOptions = {
   readonly swap?: SwapService;
 };
 
-// A parked Ledger sign is treated as abandoned if no side panel fulfils it
-// within this window: generous enough never to cut off an active on-device
-// confirmation, but bounded so a dapp-initiated sign whose panel never opens
-// cannot hang the dapp promise forever inside a living worker. The timer is
-// injected into the queue so the queue module itself holds no `setTimeout`.
+// A parked Ledger sign is abandoned if no side panel fulfils it within this
+// window: generous enough never to cut off an active on-device confirmation,
+// but bounded so a sign whose panel never opens cannot hang the dapp promise
+// forever. Injected so the queue module itself holds no `setTimeout`.
 const LEDGER_SIGN_TIMEOUT: LedgerSignQueueTimeout = {
   ms: 300_000,
   schedule: (onElapsed, ms) => {
@@ -465,6 +467,8 @@ export const createMessageHandler = (
   extensionId: string,
   options: MessageHandlerOptions = {},
 ) => {
+  // Resolve the session before the queue so the queue can read its generation.
+  const session = options.session ?? createUnlockSession();
   const ctx: RouterContext = {
     activity: options.activity ?? memoryActivityLog(),
     allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
@@ -472,14 +476,15 @@ export const createMessageHandler = (
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue:
-      options.ledgerSignQueue ?? createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT),
+      options.ledgerSignQueue ??
+      createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, session.generation),
     loadMultisigClass: options.loadMultisigClass,
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     originHistory: options.originHistory ?? memoryOriginHistory(),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
-    session: options.session ?? createUnlockSession(),
+    session,
     swap: options.swap ?? unavailableSwapService,
     waiters: createSignatureWaiters(),
     wallet,

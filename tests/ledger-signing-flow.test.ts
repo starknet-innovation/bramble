@@ -119,6 +119,7 @@ const walletStub = {
 const deviceQueue = (privateKey: string): LedgerSignQueue => ({
   pending: () => [],
   reject: () => false,
+  rejectAll: () => 0,
   settle: () => false,
   async request(request) {
     const sig = starkCurve.sign(request.messageHash, privateKey);
@@ -184,6 +185,7 @@ describe("Ledger signing flow through the dispatcher", () => {
       ledgerSignQueue: {
         pending: () => [],
         reject: () => false,
+        rejectAll: () => 0,
         settle: () => false,
         request() {
           return Promise.reject(new Error("unreachable"));

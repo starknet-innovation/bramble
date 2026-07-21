@@ -75,6 +75,41 @@ describe("createLedgerSignQueue", () => {
     expect(queue.pending()).toHaveLength(0);
   });
 
+  test("rejects a settle whose session generation changed while parked", async () => {
+    // The unlock session locked (and/or re-unlocked) while the device was
+    // signing: the generation the request captured no longer matches the live
+    // one, so settle must fail closed — reject the promise, report false, and
+    // never resolve the signature — so nothing is verified/broadcast post-lock.
+    let generation = 1;
+    const queue = createLedgerSignQueue(
+      () => undefined,
+      undefined,
+      () => generation,
+    );
+    const pendingSignature = queue.request(request);
+    const id = queue.pending()[0]?.id ?? "";
+
+    generation = 2; // a lock (and re-unlock) bumped the session boundary.
+    expect(queue.settle(id, { r: "0x9", s: "0xa" })).toBe(false);
+    await expect(pendingSignature).rejects.toThrow("wallet locked");
+    expect(queue.pending()).toHaveLength(0);
+  });
+
+  test("settles normally when the session generation is unchanged", async () => {
+    const generation = 5;
+    const queue = createLedgerSignQueue(
+      () => undefined,
+      undefined,
+      () => generation,
+    );
+    // No lock: settle sees the same generation the request captured at park time.
+    const pendingSignature = queue.request(request);
+    const id = queue.pending()[0]?.id ?? "";
+
+    expect(queue.settle(id, { r: "0x9", s: "0xa" })).toBe(true);
+    await expect(pendingSignature).resolves.toEqual({ r: "0x9", s: "0xa" });
+  });
+
   test("settling before the timeout cancels the timer", async () => {
     let cancelled = false;
     const queue = createLedgerSignQueue(() => undefined, {
