@@ -70,3 +70,12 @@ export const requestTransport = async (): Promise<LedgerTransport> => {
  */
 export const deviceClientFrom = (transport: LedgerTransport): LedgerDeviceClient =>
   newStarknetClient(transport);
+
+/**
+ * Closes an open transport, releasing the WebHID device so it is not left
+ * claimed. Propagates any close error to the caller, which closes in a `finally`
+ * and must not let a close failure mask the operation's real result (fail
+ * closed). This is the counterpart to {@link openConnectedTransport} /
+ * {@link requestTransport}; the device is opened and closed only here.
+ */
+export const closeTransport = (transport: LedgerTransport): Promise<void> => transport.close();

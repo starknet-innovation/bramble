@@ -10,7 +10,7 @@ import type { LedgerSignRequestSummary, WalletStatus } from "../src/popup/respon
 import type { LedgerDeviceClient } from "../src/sidepanel/ledger/client";
 import type { LedgerSignOutcome } from "../src/sidepanel/ledger/runtime-client";
 import { createLedgerSignRuntime } from "../src/sidepanel/ledger/sign-runtime";
-import type { LedgerConnector } from "../src/sidepanel/ledger/sign-session";
+import type { LedgerConnector, LedgerDeviceSession } from "../src/sidepanel/ledger/sign-session";
 import { ledgerAccountPath } from "../src/starknet/ledger-path";
 import { registerDom, unregisterDom } from "./support/groups-harness";
 
@@ -74,13 +74,22 @@ const okClient = (): LedgerDeviceClient =>
     }),
   );
 
+// A connector expressed in terms of the device CLIENT; the harness wraps each
+// resolved client in an OWNED session whose `close` bumps a counter, so the
+// runtime tests confirm the transport is released without a real WebHID handle.
+type ClientConnector = {
+  readonly openConnected: () => Promise<LedgerDeviceClient | null>;
+  readonly request: () => Promise<LedgerDeviceClient>;
+};
+
 type Harness = {
+  readonly closed: () => number;
   readonly mount: HTMLElement;
   readonly reports: LedgerSignOutcome[];
 };
 
 const mountRuntime = (
-  connector: LedgerConnector,
+  source: ClientConnector,
   pending: readonly LedgerSignRequestSummary[],
 ): Harness & { readonly poll: () => Promise<void> } => {
   document.body.replaceChildren();
@@ -89,6 +98,18 @@ const mountRuntime = (
   mount.hidden = true;
   document.body.append(mount);
   const reports: LedgerSignOutcome[] = [];
+  let closed = 0;
+  const wrap = (client: LedgerDeviceClient): LedgerDeviceSession => ({
+    client,
+    close: () => {
+      closed += 1;
+      return Promise.resolve();
+    },
+  });
+  const connector: LedgerConnector = {
+    openConnected: () => source.openConnected().then((client) => (client ? wrap(client) : null)),
+    request: () => source.request().then(wrap),
+  };
   const runtime = createLedgerSignRuntime({
     connector,
     mount,
@@ -101,7 +122,7 @@ const mountRuntime = (
       loadLedgerSignPending: () => Promise.resolve(pending),
     },
   });
-  return { mount, poll: runtime.poll, reports };
+  return { closed: () => closed, mount, poll: runtime.poll, reports };
 };
 
 const click = (mount: HTMLElement, selector: string): void => {
@@ -144,9 +165,10 @@ describe("Ledger sign runtime (DOM)", () => {
     await tick();
 
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
-    // Dismissed after success.
+    // Dismissed after success, and the owned transport was released.
     expect(h.mount.hidden).toBe(true);
     expect(h.mount.children.length).toBe(0);
+    expect(h.closed()).toBe(1);
   });
 
   test("the connect button click resolves a gesture and signs", async () => {

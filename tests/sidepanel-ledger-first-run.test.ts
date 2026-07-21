@@ -181,7 +181,7 @@ const entryHarness = () => {
   const added: Array<readonly [string, number, string]> = [];
   const connector: LedgerConnector = {
     openConnected: () => Promise.resolve(null),
-    request: () => Promise.resolve(enumerateClient),
+    request: () => Promise.resolve({ client: enumerateClient, close: () => Promise.resolve() }),
   };
   const wallet = {
     addLedgerAccount: (networkId: string, accountIndex: number, publicKeyX: string) => {
@@ -252,5 +252,34 @@ describe("createLedgerOnboardEntry", () => {
 
     expect(h.added).toEqual([["SN_MAIN", 0, candidate(0).publicKeyX]]);
     expect(h.created).toEqual([]);
+  });
+
+  test("cancelling first-run setup clears the captured passphrase from the stash", async () => {
+    const h = entryHarness();
+    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE);
+    expect(h.mount.hidden).toBe(false);
+
+    // Dismiss the overlay from the connect stage via the rendered cancel control.
+    click(h.mount, "[data-ledger-onboard-cancel]");
+    expect(h.mount.hidden).toBe(true);
+
+    // Prove the stash was cleared: re-entering through the add-account trigger now
+    // ADDS a keyless account rather than creating a vault — createLedgerVault is
+    // never called again, so the dismissed passphrase is not reused or retained.
+    const app = document.createElement("div");
+    const trigger = document.createElement("button");
+    trigger.setAttribute("data-connect-ledger", "");
+    app.append(trigger);
+    document.body.append(app);
+    h.entry.bindTriggers(app);
+
+    click(app, "[data-connect-ledger]");
+    click(h.mount, "[data-ledger-onboard-connect]");
+    await tick();
+    click(h.mount, '[data-ledger-select="0"]');
+    await tick();
+
+    expect(h.created).toEqual([]);
+    expect(h.added).toEqual([["SN_MAIN", 0, candidate(0).publicKeyX]]);
   });
 });

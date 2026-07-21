@@ -37,15 +37,39 @@ import {
 import type { LedgerSignOutcome } from "./runtime-client";
 
 /**
- * A source of a live device client. `openConnected` attempts a SILENT reconnect
+ * An OWNED device session: the {@link LedgerDeviceClient} plus the `close` that
+ * releases the underlying WebHID transport. The transport is a serial pipe held
+ * open until `close` runs, so a session MUST be closed on every outcome
+ * (success, failure, retry, cancel) or the device stays claimed and later
+ * attempts — here or in other Ledger clients — block. Use
+ * {@link closeLedgerSessionQuietly} to close fail-closed in a `finally`.
+ */
+export type LedgerDeviceSession = {
+  readonly client: LedgerDeviceClient;
+  readonly close: () => Promise<void>;
+};
+
+/**
+ * A source of a live device session. `openConnected` attempts a SILENT reconnect
  * of an already-granted device (resolving `null` when none is connected, so the
  * caller falls back to a gesture); `request` runs the gesture-gated native
  * picker and MUST be called from a user click. Both may reject with a
- * {@link LedgerRejection}.
+ * {@link LedgerRejection}. Every resolved session OWNS a transport the caller
+ * must close (see {@link LedgerDeviceSession}).
  */
 export type LedgerConnector = {
-  readonly openConnected: () => Promise<LedgerDeviceClient | null>;
-  readonly request: () => Promise<LedgerDeviceClient>;
+  readonly openConnected: () => Promise<LedgerDeviceSession | null>;
+  readonly request: () => Promise<LedgerDeviceSession>;
+};
+
+/**
+ * Closes a device session best-effort, swallowing any close error. Called in a
+ * `finally` on every outcome so the WebHID transport is always released; a close
+ * failure must NEVER mask the sign result or the original device error (fail
+ * closed), so it is intentionally not propagated.
+ */
+export const closeLedgerSessionQuietly = async (session: LedgerDeviceSession): Promise<void> => {
+  await session.close().catch(() => undefined);
 };
 
 /**
@@ -140,25 +164,31 @@ export const createLedgerSignController = (
     deps.render(null);
   };
 
-  // Resolves a client through `obtain`, then blind-signs. A `null` client (no
+  // Resolves a session through `obtain`, then blind-signs. A `null` session (no
   // granted device) parks the connect state for a gesture; any thrown
   // device/transport failure becomes a typed error state, leaving the request
-  // parked so a retry or cancel can still resolve it (nothing submitted).
-  const drive = async (obtain: () => Promise<LedgerDeviceClient | null>): Promise<void> => {
+  // parked so a retry or cancel can still resolve it (nothing submitted). The
+  // session owns the WebHID transport, so it is closed in the `finally` on every
+  // outcome (signed, failed, connect-parked) — the device is never left claimed.
+  const drive = async (obtain: () => Promise<LedgerDeviceSession | null>): Promise<void> => {
     if (!current || busy) {
       return;
     }
     busy = true;
+    let session: LedgerDeviceSession | null = null;
     try {
-      const client = await obtain();
-      if (client) {
-        await signWith(client);
+      session = await obtain();
+      if (session) {
+        await signWith(session.client);
       } else {
         show({ kind: "connect" });
       }
     } catch (error) {
       show(errorPhase(asLedgerRejection(error).code));
     } finally {
+      if (session) {
+        await closeLedgerSessionQuietly(session);
+      }
       busy = false;
     }
   };

@@ -29,12 +29,15 @@ import type { LedgerConnector } from "./sign-session";
  * Collaborators the onboarding binder needs: the overlay `mount` it owns, the
  * device `connector`, the active `networkId`, an `existingIds` accessor for
  * duplicate detection, a per-candidate on-chain `describe`, the `create` action
- * for the chosen account, the panel wallet client (for address derivation), and
- * a `refresh` run after a successful add.
+ * for the chosen account, the panel wallet client (for address derivation), a
+ * `refresh` run after a successful add, and an `onCancel` hook run when the user
+ * dismisses the overlay.
  *
  * `create` is injected rather than fixed so one runtime serves both entry points:
  * the first-run screen wires it to `createLedgerVault` (a brand-new Ledger-only
  * wallet), while the add-to-existing-wallet entry wires it to `addLedgerAccount`.
+ * `onCancel` lets the first-run entry clear its captured setup secret when the
+ * overlay is dismissed, so a cancelled setup leaves nothing sensitive in memory.
  */
 export type LedgerOnboardRuntimeDeps = {
   readonly connector: LedgerConnector;
@@ -43,6 +46,7 @@ export type LedgerOnboardRuntimeDeps = {
   readonly existingIds: () => ReadonlySet<string>;
   readonly mount: HTMLElement;
   readonly networkId: () => string;
+  readonly onCancel: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
 };
@@ -64,13 +68,17 @@ export type LedgerOnboardRuntime = {
 export const createLedgerOnboardRuntime = (
   deps: LedgerOnboardRuntimeDeps,
 ): LedgerOnboardRuntime => {
-  const { connector, create, describe, existingIds, mount, networkId, refresh, wallet } = deps;
+  const { connector, create, describe, existingIds, mount, networkId, onCancel, refresh, wallet } =
+    deps;
   let controller: LedgerOnboardController;
 
   const bindControls = (): void => {
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-onboard-connect]")
       ?.addEventListener("click", () => controller.connect());
+    mount
+      .querySelector<HTMLButtonElement>("[data-ledger-onboard-cancel]")
+      ?.addEventListener("click", () => controller.cancel());
     for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-ledger-select]")) {
       button.addEventListener("click", () => {
         const index = Number(button.dataset["ledgerSelect"]);
@@ -112,6 +120,7 @@ export const createLedgerOnboardRuntime = (
     describe: (account) => describe(account.address, networkId()),
     enumerate: (client) => enumerateLedgerPubKeys(client),
     existingIds,
+    onCancel,
     refresh,
     render,
   });

@@ -34,14 +34,25 @@ export const addAccountChooser = (): string => `
     </button>
   </div>`;
 
+// The dismiss control rendered in every onboarding state so the full-screen
+// overlay can always be exited (connect / reading / picker / error) — returning
+// the user to the screen behind it (first-run choice or the account screen) and,
+// on first run, clearing the captured setup unlock secret.
+const ledgerOnboardCancel = (): string =>
+  '<button class="ghost small" data-ledger-onboard-cancel type="button">Cancel</button>';
+
 /**
  * The pre-picker device states. `connect` needs a user gesture; `reading` is the
- * silent enumeration wait; `error` shows a catalog message with a retry.
+ * silent enumeration wait; `error` shows a catalog message with a retry. Each
+ * state carries a Cancel control so the overlay is dismissable at every stage.
  */
 export const ledgerConnectPrompt = (): string => `
   <div class="review-panel" role="note">
     <p class="hint">Your browser will ask you to select your Ledger. This only connects it — no funds move.</p>
-    <button class="primary" data-ledger-onboard-connect type="button">${icon("shield")}Connect a Ledger</button>
+    <div class="row">
+      <button class="primary" data-ledger-onboard-connect type="button">${icon("shield")}Connect a Ledger</button>
+      ${ledgerOnboardCancel()}
+    </div>
   </div>`;
 
 /**
@@ -50,6 +61,7 @@ export const ledgerConnectPrompt = (): string => `
 export const ledgerReadingPrompt = (): string => `
   <div class="review-panel" role="note">
     <p class="hint">Reading accounts from your device…</p>
+    ${ledgerOnboardCancel()}
   </div>`;
 
 /**
@@ -58,7 +70,10 @@ export const ledgerReadingPrompt = (): string => `
 export const ledgerOnboardError = (message: string): string => `
   <div class="review-panel" role="note">
     <p class="review-flag">${escapeHtml(message)}</p>
-    <button class="secondary" data-ledger-onboard-connect type="button">${icon("refresh")}Try again</button>
+    <div class="row">
+      <button class="secondary" data-ledger-onboard-connect type="button">${icon("refresh")}Try again</button>
+      ${ledgerOnboardCancel()}
+    </div>
   </div>`;
 
 const deployedLabel = (deployed: boolean | null): string =>
@@ -90,9 +105,13 @@ const candidateRow = (candidate: LedgerCandidate): string => {
 /**
  * The account picker: one row per enumerated candidate with its address,
  * deployed status, balance, and an Add control (disabled/duplicate rows show a
- * badge instead). Callers stream candidates in as they resolve.
+ * badge instead). Callers stream candidates in as they resolve. A Cancel control
+ * is always rendered so the picker stage can be dismissed without selecting.
  */
-export const ledgerAccountPicker = (candidates: readonly LedgerCandidate[]): string =>
-  candidates.length === 0
-    ? '<p class="empty">No accounts read from the device yet.</p>'
-    : `<ul class="allowance-list">${candidates.map(candidateRow).join("")}</ul>`;
+export const ledgerAccountPicker = (candidates: readonly LedgerCandidate[]): string => {
+  const body =
+    candidates.length === 0
+      ? '<p class="empty">No accounts read from the device yet.</p>'
+      : `<ul class="allowance-list">${candidates.map(candidateRow).join("")}</ul>`;
+  return `${body}<div class="row">${ledgerOnboardCancel()}</div>`;
+};

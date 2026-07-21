@@ -15,6 +15,7 @@ import type { LedgerSignOutcome } from "../src/sidepanel/ledger/runtime-client";
 import {
   createLedgerSignController,
   type LedgerConnector,
+  type LedgerDeviceSession,
   type LedgerSignView,
 } from "../src/sidepanel/ledger/sign-session";
 import { ledgerAccountPath } from "../src/starknet/ledger-path";
@@ -63,16 +64,38 @@ const okSign = (): ReturnType<LedgerDeviceClient["signHash"]> =>
     s: new Uint8Array([2]),
   });
 
+// A connector expressed in terms of the device CLIENT (no transport). The
+// harness wraps each resolved client in an OWNED session whose `close` bumps a
+// counter, so tests assert the transport is released on every outcome without a
+// real WebHID handle.
+type ClientConnector = {
+  readonly openConnected: () => Promise<LedgerDeviceClient | null>;
+  readonly request: () => Promise<LedgerDeviceClient>;
+};
+
 type Harness = {
+  readonly closed: () => number;
   readonly connector: LedgerConnector;
   readonly reports: LedgerSignOutcome[];
   readonly views: (LedgerSignView | null)[];
 };
 
-const harness = (connector: LedgerConnector): Harness => {
+const harness = (source: ClientConnector): Harness => {
   const reports: LedgerSignOutcome[] = [];
   const views: (LedgerSignView | null)[] = [];
-  return { connector, reports, views };
+  let closed = 0;
+  const wrap = (client: LedgerDeviceClient): LedgerDeviceSession => ({
+    client,
+    close: () => {
+      closed += 1;
+      return Promise.resolve();
+    },
+  });
+  const connector: LedgerConnector = {
+    openConnected: () => source.openConnected().then((client) => (client ? wrap(client) : null)),
+    request: () => source.request().then(wrap),
+  };
+  return { closed: () => closed, connector, reports, views };
 };
 
 const controllerFor = (h: Harness) =>
@@ -102,6 +125,8 @@ describe("Ledger sign controller", () => {
     expect(phases(h.views)).toEqual(["confirming", null]);
     // The raw device (r, s) was reported to the background queue for this id.
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
+    // The owned transport is released on the success path.
+    expect(h.closed()).toBe(1);
   });
 
   test("surfaces the connect gesture when no device is granted, then signs", async () => {
@@ -321,6 +346,77 @@ describe("Ledger sign controller", () => {
 
     expect(opens).toBe(1);
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
+  });
+
+  test("closes the device session when the sign fails", async () => {
+    // A locked device throws on the pre-check version read after the session is
+    // obtained, so the drive lands in the error branch — and must still close.
+    const h = harness({
+      openConnected: () =>
+        Promise.resolve(
+          fakeClient(okSign, {
+            getAppVersion: () => Promise.reject(new Error("device is locked")),
+          }),
+        ),
+      request: () => Promise.reject(new Error("unused")),
+    });
+    controllerFor(h).present(REQUEST);
+    await tick();
+
+    expect(h.views.at(-1)?.phase.kind).toBe("error");
+    expect(h.reports).toEqual([]);
+    // The transport is released even though the sign failed (fail closed).
+    expect(h.closed()).toBe(1);
+  });
+
+  test("closes the device session even when the user cancels an in-flight connect", async () => {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const h = harness({
+      openConnected: () => gate.then(() => fakeClient(okSign)),
+      request: () => Promise.reject(new Error("unused")),
+    });
+    const controller = controllerFor(h);
+    controller.present(REQUEST); // starts the drive; openConnected awaits the gate
+    await controller.cancel(); // user dismisses while the open is in flight
+    release(); // the session now resolves; the in-flight drive continues
+    await tick();
+    await tick();
+
+    // The drive's finally still ran: nothing was signed (current was cleared by
+    // cancel), a clean rejection was reported, and the transport was released.
+    expect(h.reports).toEqual([{ error: "rejected-on-device", id: "ledger-sign-1" }]);
+    expect(h.closed()).toBe(1);
+  });
+
+  test("a close failure is swallowed and does not mask the sign result", async () => {
+    // The session's close rejects, but the sign already succeeded: the failure
+    // must be swallowed (fail closed) so the reported (r, s) and dismissal stand.
+    const reports: LedgerSignOutcome[] = [];
+    const views: (LedgerSignView | null)[] = [];
+    const connector: LedgerConnector = {
+      openConnected: () =>
+        Promise.resolve({
+          client: fakeClient(okSign),
+          close: () => Promise.reject(new Error("close failed")),
+        }),
+      request: () => Promise.reject(new Error("unused")),
+    };
+    const controller = createLedgerSignController({
+      connector,
+      render: (view) => views.push(view),
+      report: (outcome) => {
+        reports.push(outcome);
+        return Promise.resolve();
+      },
+    });
+    controller.present(REQUEST);
+    await tick();
+
+    expect(reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
+    expect(views.at(-1)).toBeNull();
   });
 
   test("connect and retry are no-ops when nothing is active", async () => {

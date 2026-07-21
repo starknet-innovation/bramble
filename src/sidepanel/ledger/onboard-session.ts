@@ -12,7 +12,11 @@ import type { LedgerAccountRef } from "../../storage/vault-schema";
 import type { LedgerPubKeyEntry } from "../../wallet/accounts";
 import { assertLedgerAppReady, type LedgerDeviceClient, ledgerPublicKeyX } from "./client";
 import { asLedgerRejection, ledgerMessage } from "./errors";
-import type { LedgerConnector } from "./sign-session";
+import {
+  closeLedgerSessionQuietly,
+  type LedgerConnector,
+  type LedgerDeviceSession,
+} from "./sign-session";
 
 /**
  * Default number of account indices to enumerate for the picker (indices
@@ -80,8 +84,9 @@ export type LedgerCandidateState = {
  * background: the device connector, the enumeration reader, the address
  * derivation (background `deriveLedgerAccounts`), the per-candidate on-chain
  * `describe`, the set of ids already in the vault (duplicate detection), the
- * `create` call (background `addLedgerAccount`), a `render` sink, and a `refresh`
- * run after a successful add.
+ * `create` call (background `addLedgerAccount`), a `render` sink, a `refresh`
+ * run after a successful add, and an `onCancel` hook run when the user dismisses
+ * the flow (the first-run entry uses it to clear the captured setup secret).
  */
 export type LedgerOnboardControllerDeps = {
   readonly connector: LedgerConnector;
@@ -90,6 +95,7 @@ export type LedgerOnboardControllerDeps = {
   readonly describe: (account: LedgerAccountRef) => Promise<LedgerCandidateState>;
   readonly enumerate: (client: LedgerDeviceClient) => Promise<readonly LedgerPubKeyEntry[]>;
   readonly existingIds: () => ReadonlySet<string>;
+  readonly onCancel: () => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;
 };
@@ -138,9 +144,13 @@ export const createLedgerOnboardController = (
     }
     busy = true;
     deps.render({ kind: "reading" });
+    // The session owns the WebHID transport; the device is only needed for the
+    // silent enumeration (account creation is a background op), so it is closed
+    // in the `finally` on every outcome — read, error, or nothing granted.
+    let session: LedgerDeviceSession | null = null;
     try {
-      const client = await deps.connector.request();
-      const entries = await deps.enumerate(client);
+      session = await deps.connector.request();
+      const entries = await deps.enumerate(session.client);
       const accounts = await deps.derive(entries);
       candidates = accounts.map(toCandidate);
       deps.render({ candidates, kind: "picker" });
@@ -157,6 +167,9 @@ export const createLedgerOnboardController = (
     } catch (error) {
       deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
     } finally {
+      if (session) {
+        await closeLedgerSessionQuietly(session);
+      }
       busy = false;
     }
   };
@@ -187,6 +200,7 @@ export const createLedgerOnboardController = (
   return {
     cancel() {
       candidates = [];
+      deps.onCancel();
       deps.render(null);
     },
     connect() {

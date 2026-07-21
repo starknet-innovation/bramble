@@ -149,10 +149,21 @@ const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> = {}) =>
   const views: (LedgerOnboardView | null)[] = [];
   const created: Array<readonly [number, string]> = [];
   let refreshed = 0;
+  let closed = 0;
+  let cancels = 0;
   const accounts = [candidateAccount(0), candidateAccount(1)];
+  // request() hands back an OWNED session; its close bumps a counter so tests
+  // assert the enumeration transport is released on every outcome.
   const connector: LedgerConnector = {
     openConnected: () => Promise.resolve(null),
-    request: () => Promise.resolve(enumerateClient(2)),
+    request: () =>
+      Promise.resolve({
+        client: enumerateClient(2),
+        close: () => {
+          closed += 1;
+          return Promise.resolve();
+        },
+      }),
   };
   const deps: LedgerOnboardControllerDeps = {
     connector,
@@ -173,6 +184,9 @@ const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> = {}) =>
         ),
       ),
     existingIds: () => new Set<string>(),
+    onCancel: () => {
+      cancels += 1;
+    },
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
@@ -180,7 +194,15 @@ const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> = {}) =>
     render: (view) => views.push(view),
     ...overrides,
   };
-  return { accounts, created, deps, refreshed: () => refreshed, views };
+  return {
+    accounts,
+    cancels: () => cancels,
+    closed: () => closed,
+    created,
+    deps,
+    refreshed: () => refreshed,
+    views,
+  };
 };
 
 const kinds = (views: readonly (LedgerOnboardView | null)[]): readonly (string | null)[] =>
@@ -276,11 +298,35 @@ describe("Ledger onboard controller", () => {
     expect(final?.kind === "error" && final.message).toBe("Account already exists");
   });
 
-  test("cancel dismisses the overlay", () => {
+  test("cancel dismisses the overlay and runs the onCancel hook", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.start();
     controller.cancel();
     expect(h.views.at(-1)).toBeNull();
+    // The onCancel hook fired (the entry uses it to clear the setup passphrase).
+    expect(h.cancels()).toBe(1);
+  });
+
+  test("closes the enumeration session after a successful connect", async () => {
+    const h = onboardHarness();
+    const controller = createLedgerOnboardController(h.deps);
+    controller.connect();
+    await tick();
+    // The device is only needed for enumeration, so the transport is released
+    // once the picker is populated.
+    expect(h.closed()).toBe(1);
+  });
+
+  test("closes the enumeration session when enumeration fails", async () => {
+    const h = onboardHarness({
+      enumerate: () => Promise.reject(new LedgerRejection("device-locked")),
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    controller.connect();
+    await tick();
+    expect(h.views.at(-1)?.kind).toBe("error");
+    // The transport is released even on the failure path (fail closed).
+    expect(h.closed()).toBe(1);
   });
 });

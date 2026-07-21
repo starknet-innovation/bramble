@@ -62,9 +62,10 @@ const mountRuntime = () => {
   document.body.append(app);
   const added: Array<readonly [string, number, string]> = [];
   let refreshed = 0;
+  let cancels = 0;
   const connector: LedgerConnector = {
     openConnected: () => Promise.resolve(null),
-    request: () => Promise.resolve(enumerateClient),
+    request: () => Promise.resolve({ client: enumerateClient, close: () => Promise.resolve() }),
   };
   const networkId = () => "SN_MAIN";
   const runtime = createLedgerOnboardRuntime({
@@ -77,6 +78,9 @@ const mountRuntime = () => {
     existingIds: () => new Set<string>(),
     mount,
     networkId,
+    onCancel: () => {
+      cancels += 1;
+    },
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
@@ -86,7 +90,7 @@ const mountRuntime = () => {
     },
   });
   runtime.bindTriggers(app);
-  return { added, app, mount, refreshed: () => refreshed, runtime };
+  return { added, app, cancels: () => cancels, mount, refreshed: () => refreshed, runtime };
 };
 
 const click = (root: ParentNode, selector: string): void => {
@@ -125,5 +129,34 @@ describe("Ledger onboarding runtime (DOM)", () => {
     h.runtime.start();
     expect(h.mount.hidden).toBe(false);
     expect(h.mount.textContent).toContain("Connect a Ledger");
+  });
+
+  test("the connect state renders a cancel control that tears down the overlay", () => {
+    const h = mountRuntime();
+    h.runtime.start();
+    const cancel = h.mount.querySelector<HTMLButtonElement>("[data-ledger-onboard-cancel]");
+    expect(cancel).not.toBeNull();
+
+    click(h.mount, "[data-ledger-onboard-cancel]");
+    // The overlay is dismissed (returning to the screen behind it) and the
+    // onCancel hook fired.
+    expect(h.mount.hidden).toBe(true);
+    expect(h.mount.children.length).toBe(0);
+    expect(h.cancels()).toBe(1);
+  });
+
+  test("the picker stage is dismissable via its cancel control", async () => {
+    const h = mountRuntime();
+    click(h.app, "[data-connect-ledger]");
+    click(h.mount, "[data-ledger-onboard-connect]");
+    await tick();
+    // Picker is showing with a reachable cancel control alongside the candidates.
+    expect(h.mount.querySelectorAll("[data-ledger-select]").length).toBe(2);
+    expect(h.mount.querySelector("[data-ledger-onboard-cancel]")).not.toBeNull();
+
+    click(h.mount, "[data-ledger-onboard-cancel]");
+    expect(h.mount.hidden).toBe(true);
+    expect(h.added).toEqual([]);
+    expect(h.cancels()).toBe(1);
   });
 });

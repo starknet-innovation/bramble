@@ -66,6 +66,12 @@ export const createLedgerOnboardEntry = (deps: {
     existingIds: () => new Set(cache.status.accounts.map((stored) => stored.id)),
     mount,
     networkId: () => ledgerSetup?.networkId ?? cache.status.networkId,
+    // Dismissing the overlay drops the captured first-run passphrase so a
+    // cancelled setup never leaves it sitting in memory (add-account has no
+    // stash, so this is a harmless no-op there).
+    onCancel: () => {
+      ledgerSetup = null;
+    },
     refresh,
     wallet,
   });
