@@ -7,7 +7,8 @@
  * background-strk20-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { LEDGER_DAPP_SIGNING_UNSUPPORTED } from "../src/background/ledger-signer";
+import { ec } from "starknet";
+import type { LedgerSignQueue } from "../src/background/ledger-sign-queue";
 import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeRpc } from "../src/background/runtime-rpc";
 import { unavailablePreferencesStore } from "../src/background/runtime-state";
@@ -35,6 +36,10 @@ const account: AccountRef = {
   publicKeyX: "0xabc",
   publicKeyY: "0xdef",
 };
+const { starkCurve } = ec;
+// The fake device's private key; the Ledger account's stored publicKeyX is its
+// real Stark public x-coordinate so a good device signature verifies.
+const LEDGER_KEY = "0x1234567890abcdef";
 const ledgerAccount: AccountRef = {
   address: "0xfedfed",
   classHash: "0xabcdef",
@@ -46,8 +51,20 @@ const ledgerAccount: AccountRef = {
   },
   id: "SN_SEPOLIA:0xfedfed",
   networkId: "SN_SEPOLIA",
-  publicKeyX: "0xabc",
+  publicKeyX: starkCurve.getStarkKey(LEDGER_KEY),
 };
+
+// A fake device: signs whatever hash it is handed with a chosen private key — no
+// hardware or WebHID. LEDGER_KEY verifies against publicKeyX; any other fails.
+const deviceQueue = (privateKey: string): LedgerSignQueue => ({
+  pending: () => [],
+  reject: () => false,
+  settle: () => false,
+  async request(request) {
+    const sig = starkCurve.sign(request.messageHash, privateKey);
+    return { r: `0x${sig.r.toString(16)}`, s: `0x${sig.s.toString(16)}` };
+  },
+});
 const contentSender: RuntimeSender = { id: "extension-id", url: `${origin}/app` };
 const mismatchSender: RuntimeSender = { id: "extension-id", url: "https://evil.example/app" };
 const status: WalletStatus = {
@@ -301,30 +318,69 @@ describe("executeStrk20InvokeApproval", () => {
     ).resolves.toEqual({ error: "wallet locked" });
   });
 
-  test("refuses a keyless Ledger account with a clear message, nothing submitted", async () => {
+  // Builds strk20-execute deps for the keyless Ledger account: signing routes
+  // through the injected device queue (never the vault). `onSubmit` fires only
+  // after the signer verifies, so a failed sign leaves it false. A missing queue
+  // exercises the fail-closed no-queue path.
+  const ledgerDeps = (queue: LedgerSignQueue | undefined, onSubmit: () => void) => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    const deps = {
+    return {
       activity: memoryActivityLog(),
+      ...(queue ? { ledgerSignQueue: queue } : {}),
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {
           return { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
         },
       },
-      runtimeRpc: rpcStub(() => {
-        throw new Error("must not submit for a Ledger account");
+      runtimeRpc: rpcStub(async (input: InvokeInput) => {
+        // Drive the signer so the device round-trip and verify gate run before
+        // "broadcast"; a verification failure throws here, before onSubmit.
+        await input.signHash("0xabc123");
+        onSubmit();
+        return { calls: input.calls, transactionHash: "0x123" };
       }),
       session,
+      // signHash must never run for a Ledger account (it has no vault key).
       wallet: walletStub([ledgerAccount]),
     };
+  };
 
-    await expect(
-      executeStrk20InvokeApproval(deps, {
-        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
-        origin,
+  test("routes a keyless Ledger account to the device and submits on a good signature", async () => {
+    let submitted = false;
+    const result = await executeStrk20InvokeApproval(
+      ledgerDeps(deviceQueue(LEDGER_KEY), () => {
+        submitted = true;
       }),
-    ).resolves.toEqual({ error: LEDGER_DAPP_SIGNING_UNSUPPORTED });
+      { actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }], origin },
+    );
+    expect(result).toEqual({ ok: true, transactionHash: "0x123" });
+    expect(submitted).toBe(true);
+  });
+
+  test("aborts with nothing submitted when the device signature does not verify", async () => {
+    let submitted = false;
+    const result = await executeStrk20InvokeApproval(
+      ledgerDeps(deviceQueue("0xdeadbeef"), () => {
+        submitted = true;
+      }),
+      { actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }], origin },
+    );
+    expect(result).toEqual({ error: "Ledger signature verification failed" });
+    expect(submitted).toBe(false);
+  });
+
+  test("fails closed with nothing submitted when no device queue is wired", async () => {
+    let submitted = false;
+    const result = await executeStrk20InvokeApproval(
+      ledgerDeps(undefined, () => {
+        submitted = true;
+      }),
+      { actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }], origin },
+    );
+    expect(result).toEqual({ error: "Ledger signing unavailable" });
+    expect(submitted).toBe(false);
   });
 
   test("submits the invoke and drives the signHash callback into the wallet", async () => {

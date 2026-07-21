@@ -96,6 +96,7 @@ const applyInvoke: ApproveApplier = async (deps, approval) => {
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
     { origin: approval.origin, payload },
   );
@@ -114,6 +115,7 @@ const applyStrk20Invoke: ApproveApplier = async (deps, approval) => {
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
     { actions: payload.actions, origin: approval.origin },
   );
@@ -178,6 +180,7 @@ const applyDeclare: ApproveApplier = async (deps, approval) => {
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
     { declare: payload.declare, origin: approval.origin },
   );

@@ -13,9 +13,10 @@ import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { accountHashSigner } from "./account-hash-signer";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
-import { ledgerDappSigningError } from "./ledger-signer";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
@@ -40,6 +41,11 @@ export type DeclareOpsDeps = {
  * Dependencies needed to execute a held declare approval once the user signs off.
  */
 export type DeclareExecuteDeps = {
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
+   * stubs stay valid; a Ledger declare with no queue wired fails closed.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -134,17 +140,15 @@ export const executeDeclareApproval = async (
   if (!account) {
     return { error: "origin not connected" };
   }
-  const ledgerError = ledgerDappSigningError(account);
-  if (ledgerError) {
-    return { error: ledgerError };
-  }
+  // A keyless Ledger account signs on the device (verified against publicKeyX),
+  // every other account through the vault — the same seam wallet-initiated txns
+  // use. A Ledger account with no queue wired throws, aborting the submit.
   const result = await runtimeRpc.submitDeclareTransaction({
     account,
     compiledClassHash: input.declare.compiledClassHash,
     contractClass: input.declare.contractClass,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: (messageHash) =>
-      wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase: passphrase }),
+    signHash: accountHashSigner(deps, account, passphrase),
     ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
   });
   return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };

@@ -4,9 +4,7 @@
  * switches. Split from messages.ts to keep it within the size budget.
  */
 
-import type { StarkSignature } from "../crypto/krusty";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
-import { WalletError } from "../shared/errors";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
@@ -14,11 +12,10 @@ import {
 } from "../starknet/networks";
 import { typedDataHash } from "../starknet/typed-data";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
-import { type AccountRef, isKeylessAccount } from "../storage/vault-schema";
+import { accountHashSigner } from "./account-hash-signer";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
-import { ledgerStarkHashSigner } from "./ledger-signer";
 import {
   readOriginRequestInput,
   readSignTypedDataInput,
@@ -46,25 +43,6 @@ export type ChainOpsDeps = {
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
-};
-
-// Signs an approved SNIP-12 hash for the resolved account, branching on kind
-// exactly as signerFor does: a keyless Ledger account routes to the device queue
-// and is verified against publicKeyX; every other account uses the vault path.
-const signApprovedHash = (
-  deps: Pick<ChainOpsDeps, "ledgerSignQueue" | "wallet">,
-  account: AccountRef,
-  messageHash: string,
-  vaultPassphrase: string,
-): Promise<StarkSignature> => {
-  if (isKeylessAccount(account)) {
-    const queue = deps.ledgerSignQueue;
-    if (!queue) {
-      throw new WalletError("Ledger signing unavailable");
-    }
-    return ledgerStarkHashSigner(account, (request) => queue.request(request))(messageHash);
-  }
-  return deps.wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase });
 };
 
 /**
@@ -112,8 +90,9 @@ export const executeSignApproval = async (
     return { error: "invalid typed data" };
   }
   // A keyless Ledger account signs typed data on the device (verified against
-  // publicKeyX) instead of the vault, mirroring the signerFor Ledger branch.
-  const signature = await signApprovedHash(deps, account, messageHash, passphrase);
+  // publicKeyX) instead of the vault; accountHashSigner makes the same choice as
+  // every other submitting path.
+  const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
   return { ok: true, signature };
 };
 
