@@ -484,3 +484,14 @@ export const restoreRepaintFocus = (root: Element | null, focus: RepaintFocus): 
   restoreFocus(root, focus.selectors);
   restoreGroupNameDraft(root, focus.groupNameDraft);
 };
+
+/**
+ * Replaces an element's children with markup parsed as a document fragment — the
+ * audited string-HTML sink for panel sub-regions that render their own escaped
+ * template (e.g. the Ledger sign overlay) outside the main shell repaint. The
+ * caller MUST pass markup whose dynamic text is already escaped (via a pure view
+ * template); this performs no sanitisation.
+ */
+export const renderFragment = (target: Element, markup: string): void => {
+  target.replaceChildren(document.createRange().createContextualFragment(markup));
+};

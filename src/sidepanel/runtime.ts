@@ -36,6 +36,7 @@ import {
   type WalletStatus,
 } from "../popup/responses";
 import type { AccountGroupIcon } from "../storage/account-groups";
+import { createLedgerRuntimeClient } from "./ledger/runtime-client";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -85,6 +86,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
 
   return {
+    ...createLedgerRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {

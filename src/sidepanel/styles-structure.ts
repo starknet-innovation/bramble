@@ -158,4 +158,21 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   .takeover-queue { color: var(--mc-muted); font-size: ${TYPE.caption.size}; text-align: center; }
   .takeover-foot { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.md}; }
   .takeover-foot button.ghost { justify-self: center; min-height: ${SPACE.xl}; }
+
+  /* Ledger sign takeover: a keyless-Ledger request parks in the background and
+     must be fulfilled from the panel that owns the device, so while one is
+     pending it takes the whole panel over the dashboard — the user confirms on
+     the device wherever they were. Owned outside the shell repaint so streaming
+     data never resets an in-flight device prompt. */
+  .ledger-sign-overlay {
+    background: var(--mc-bg);
+    display: grid;
+    grid-template-rows: auto 1fr;
+    inset: 0;
+    overflow-y: auto;
+    padding: ${SPACE.lg};
+    position: fixed;
+    z-index: 40;
+  }
+  .ledger-sign-overlay[hidden] { display: none; }
 `;

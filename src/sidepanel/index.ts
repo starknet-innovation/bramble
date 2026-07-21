@@ -22,6 +22,8 @@ import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
 import { hydrateView } from "./hydrate";
 import { bindImportKey } from "./import-key-ui";
+import { webHidConnector } from "./ledger/sign-connector";
+import { createLedgerSignRuntime } from "./ledger/sign-runtime";
 import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
@@ -142,6 +144,21 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
 
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
+
+// Ledger sign takeover lives outside #app so a dashboard repaint (which replaces
+// the shell markup) never resets an in-flight device prompt. Polled from the
+// render cycle; when the background parks a keyless-Ledger signature it fires a
+// wallet event, the panel re-renders, and poll() surfaces the request here.
+const ledgerSignMount = document.createElement("div");
+ledgerSignMount.className = "ledger-sign-overlay";
+ledgerSignMount.hidden = true;
+document.body.append(ledgerSignMount);
+const ledgerSign = createLedgerSignRuntime({
+  connector: webHidConnector,
+  mount: ledgerSignMount,
+  status: () => cache.status,
+  wallet,
+});
 
 const bindAll = (): void => {
   bindNavigation();
@@ -387,6 +404,9 @@ const render = async (status: WalletStatus): Promise<void> => {
     return;
   }
   paint();
+  // Surface any parked keyless-Ledger signature for this now-unlocked panel; the
+  // takeover renders itself over the dashboard and drives the device.
+  void ledgerSign.poll();
   await hydrateView({
     status,
     activeView,
