@@ -22,9 +22,11 @@ export {
  * Re-exported Ledger response validators for one import path.
  */
 export {
+  isLedgerAccountStatusResponse,
   isLedgerAccountsResponse,
   isLedgerSignPendingResponse,
   isOkResponse,
+  type LedgerAccountStatusResponse,
   type LedgerAccountsResponse,
   type LedgerSignPendingResponse,
   type LedgerSignRequestSummary,

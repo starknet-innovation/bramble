@@ -77,6 +77,9 @@ const walletStub = {
   async createAccount() {
     return ledgerAccount;
   },
+  async createLedgerVault() {
+    return ledgerAccount;
+  },
   async deriveLedgerAccounts() {
     return [ledgerAccount];
   },
@@ -207,6 +210,90 @@ describe("privileged Ledger messages", () => {
       extensionSender,
     );
     expect(response).toEqual({ account: ledgerAccount, ok: true });
+  });
+
+  test("creates a mnemonic-less Ledger vault on first run", async () => {
+    const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
+    const response = await handler(
+      {
+        accountIndex: 2,
+        networkId: "SN_MAIN",
+        publicKeyX,
+        type: "wallet.createLedgerVault",
+        vaultPassphrase,
+      },
+      extensionSender,
+    );
+    expect(response).toEqual({ account: ledgerAccount, ok: true });
+  });
+
+  test("rejects a malformed create-ledger-vault request", async () => {
+    const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
+    const response = await handler(
+      { accountIndex: -1, networkId: "SN_MAIN", publicKeyX, type: "wallet.createLedgerVault" },
+      extensionSender,
+    );
+    expect(response).toEqual({ error: "invalid create ledger vault request" });
+  });
+
+  test("reads a candidate's on-chain deployed status and STRK balance", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(walletStub, "extension-id", {
+      runtimeRpc: makeRuntimeRpc({
+        async getDeploymentStatus() {
+          return true;
+        },
+        async getTokenBalances() {
+          return [
+            {
+              address: "0x1",
+              balance: "1500000000000000000",
+              decimals: 18,
+              formatted: "1.5",
+              id: "SN_MAIN:STRK:0x1",
+              name: "Starknet Token",
+              networkId: "SN_MAIN",
+              symbol: "STRK",
+            },
+          ];
+        },
+      }),
+      session,
+    });
+
+    const response = await handler(
+      { address: ledgerAccount.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
+      extensionSender,
+    );
+    expect(response).toEqual({ balance: "1.5 STRK", deployed: true, ok: true });
+  });
+
+  test("degrades a candidate's status to unavailable when the RPC fails", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(walletStub, "extension-id", {
+      runtimeRpc: makeRuntimeRpc({
+        getDeploymentStatus: () => Promise.reject(new Error("rpc down")),
+        getTokenBalances: () => Promise.reject(new Error("rpc down")),
+      }),
+      session,
+    });
+
+    const response = await handler(
+      { address: ledgerAccount.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
+      extensionSender,
+    );
+    expect(response).toEqual({ balance: null, deployed: null, ok: true });
+  });
+
+  test("rejects a malformed ledger-account-status request", async () => {
+    const { handler } = handlerWith(deviceQueue(PRIVATE_KEY));
+    const response = await handler(
+      { address: "not-a-felt", networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
+      extensionSender,
+    );
+    expect(response).toEqual({ error: "invalid ledger account status request" });
   });
 
   test("derives account-picker candidates", async () => {

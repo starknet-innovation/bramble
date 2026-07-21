@@ -32,6 +32,9 @@ export const createWalletReader = (
     async createAccount(input) {
       return (await required()).createAccount(input);
     },
+    async createLedgerVault(input) {
+      return (await required()).createLedgerVault(input);
+    },
     async deriveLedgerAccounts(input) {
       return (await required()).deriveLedgerAccounts(input);
     },

@@ -180,10 +180,24 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   {
     message: {
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: account.publicKeyX,
+      type: "wallet.createLedgerVault",
+      vaultPassphrase: SECRET_PASSPHRASE,
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
       entries: [{ accountIndex: 0, publicKeyX: account.publicKeyX }],
       networkId: "SN_MAIN",
       type: "wallet.deriveLedgerAccounts",
     },
+    sender: extensionSender,
+  },
+  {
+    message: { address: account.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
     sender: extensionSender,
   },
   { message: { type: "wallet.ledgerSignPending" }, sender: extensionSender },

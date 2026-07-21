@@ -9,6 +9,7 @@
 import {
   isCreateAccountResponse,
   isErrorResponse,
+  isLedgerAccountStatusResponse,
   isLedgerAccountsResponse,
   isLedgerSignPendingResponse,
   isOkResponse,
@@ -16,6 +17,15 @@ import {
   type LedgerSignRequestSummary,
 } from "../../popup/responses";
 import type { LedgerPubKeyEntry } from "../../wallet/accounts";
+
+/**
+ * One Ledger candidate's best-effort on-chain state as the panel consumes it:
+ * deployed status and balance display string, each null when the RPC degraded.
+ */
+export type LedgerAccountStatus = {
+  readonly balance: string | null;
+  readonly deployed: boolean | null;
+};
 
 /**
  * The panel's reply to one pending device sign: either the device `(r, s)` for
@@ -37,10 +47,20 @@ export type LedgerRuntimeClient = {
     publicKeyX: string,
   ) => Promise<string>;
   readonly completeLedgerSign: (outcome: LedgerSignOutcome) => Promise<void>;
+  readonly createLedgerVault: (
+    networkId: string,
+    accountIndex: number,
+    publicKeyX: string,
+    vaultPassphrase: string,
+  ) => Promise<string>;
   readonly deriveLedgerAccounts: (
     networkId: string,
     entries: readonly LedgerPubKeyEntry[],
   ) => Promise<LedgerAccountsResponse["accounts"]>;
+  readonly ledgerAccountStatus: (
+    address: string,
+    networkId: string,
+  ) => Promise<LedgerAccountStatus>;
   readonly loadLedgerSignPending: () => Promise<readonly LedgerSignRequestSummary[]>;
 };
 
@@ -75,12 +95,36 @@ export const createLedgerRuntimeClient = (
     }
     throw failure(response, "complete Ledger sign failed");
   },
+  async createLedgerVault(networkId, accountIndex, publicKeyX, vaultPassphrase) {
+    const response = await sendMessage({
+      accountIndex,
+      networkId,
+      publicKeyX,
+      type: "wallet.createLedgerVault",
+      vaultPassphrase,
+    });
+    if (isCreateAccountResponse(response)) {
+      // Surface the created account's id, mirroring addLedgerAccount. Only the
+      // device public key, index, and the (write-only) passphrase cross — no seed
+      // is generated and no key material is echoed back.
+      return response.account.id;
+    }
+    throw failure(response, "create Ledger wallet failed");
+  },
   async deriveLedgerAccounts(networkId, entries) {
     const response = await sendMessage({ entries, networkId, type: "wallet.deriveLedgerAccounts" });
     if (isLedgerAccountsResponse(response)) {
       return response.accounts;
     }
     throw failure(response, "derive Ledger accounts failed");
+  },
+  async ledgerAccountStatus(address, networkId) {
+    const response = await sendMessage({ address, networkId, type: "wallet.ledgerAccountStatus" });
+    // Fail soft: an unrecognised reply degrades to "checking/unavailable" so the
+    // picker never blocks or shows a fabricated deployed status or balance.
+    return isLedgerAccountStatusResponse(response)
+      ? { balance: response.balance, deployed: response.deployed }
+      : { balance: null, deployed: null };
   },
   async loadLedgerSignPending() {
     const response = await sendMessage({ type: "wallet.ledgerSignPending" });

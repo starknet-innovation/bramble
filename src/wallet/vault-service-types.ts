@@ -117,6 +117,14 @@ export type AddLedgerAccountInput = {
 };
 
 /**
+ * Input for creating a brand-new mnemonic-less vault whose first account is a
+ * keyless Ledger account. The user still sets an unlock passphrase (it encrypts
+ * the account registry and settings); no seed or private key is generated, shown,
+ * or retained. Used only on first run — creating over an existing vault fails.
+ */
+export type CreateLedgerVaultInput = AddLedgerAccountInput;
+
+/**
  * Input for deriving addresses for a batch of enumerated Ledger (index, public
  * key) pairs to build the account picker. A public-key derivation only — it
  * reads no secrets and writes nothing to the vault.
@@ -143,6 +151,7 @@ export type WalletVaultService = {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
   readonly addLedgerAccount: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;
+  readonly createLedgerVault: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
   readonly deriveLedgerAccounts: (
     input: DeriveLedgerAccountsInput,
   ) => Promise<readonly LedgerAccountRef[]>;

@@ -52,6 +52,75 @@ export const readAddLedgerAccountInput = (message: unknown): AddLedgerAccountReq
   };
 };
 
+/**
+ * Parsed request to create a brand-new mnemonic-less vault whose first account
+ * is a keyless Ledger account. Carries the vault passphrase (which encrypts the
+ * account registry) plus the device public key and index; no seed is generated.
+ */
+export type CreateLedgerVaultRequest = {
+  readonly accountIndex: number;
+  readonly networkId: StarknetNetworkId;
+  readonly publicKeyX: string;
+  readonly vaultPassphrase: string;
+};
+
+/**
+ * Parses a `wallet.createLedgerVault` request or returns null when malformed.
+ */
+export const readCreateLedgerVaultInput = (message: unknown): CreateLedgerVaultRequest | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, [
+      "accountIndex",
+      "networkId",
+      "publicKeyX",
+      "type",
+      "vaultPassphrase",
+    ]) ||
+    message["type"] !== "wallet.createLedgerVault" ||
+    !isLedgerAccountIndex(message["accountIndex"]) ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    !isNonZeroFeltString(message["publicKeyX"]) ||
+    typeof message["vaultPassphrase"] !== "string"
+  ) {
+    return null;
+  }
+  return {
+    accountIndex: message["accountIndex"],
+    networkId: message["networkId"],
+    publicKeyX: message["publicKeyX"],
+    vaultPassphrase: message["vaultPassphrase"],
+  };
+};
+
+/**
+ * Parsed request for one Ledger candidate's best-effort on-chain state: its
+ * deployed status and balance at an address on a network. Read-only and
+ * dapp-unreachable; carries no secret material.
+ */
+export type LedgerAccountStatusRequest = {
+  readonly address: string;
+  readonly networkId: StarknetNetworkId;
+};
+
+/**
+ * Parses a `wallet.ledgerAccountStatus` request or returns null when malformed.
+ */
+export const readLedgerAccountStatusInput = (
+  message: unknown,
+): LedgerAccountStatusRequest | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["address", "networkId", "type"]) ||
+    message["type"] !== "wallet.ledgerAccountStatus" ||
+    !isNonZeroFeltString(message["address"]) ||
+    !isStarknetNetworkId(message["networkId"])
+  ) {
+    return null;
+  }
+  return { address: message["address"], networkId: message["networkId"] };
+};
+
 const isPubKeyEntry = (value: unknown): value is LedgerPubKeyEntry =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountIndex", "publicKeyX"]) &&

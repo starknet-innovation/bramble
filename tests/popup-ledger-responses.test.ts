@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  isLedgerAccountStatusResponse,
   isLedgerAccountsResponse,
   isLedgerSignPendingResponse,
   isOkResponse,
@@ -67,6 +68,28 @@ describe("isOkResponse", () => {
     expect(isOkResponse({ ok: true, extra: 1 })).toBe(false);
     expect(isOkResponse({ ok: false })).toBe(false);
     expect(isOkResponse({ error: "x" })).toBe(false);
+  });
+});
+
+describe("isLedgerAccountStatusResponse", () => {
+  test("accepts a resolved or degraded on-chain status", () => {
+    expect(isLedgerAccountStatusResponse({ balance: "1.5 STRK", deployed: true, ok: true })).toBe(
+      true,
+    );
+    expect(isLedgerAccountStatusResponse({ balance: null, deployed: null, ok: true })).toBe(true);
+    expect(isLedgerAccountStatusResponse({ balance: "0 STRK", deployed: false, ok: true })).toBe(
+      true,
+    );
+  });
+
+  test("rejects a wrong-typed field, extra key, or non-ok shape", () => {
+    expect(isLedgerAccountStatusResponse({ balance: 1.5, deployed: true, ok: true })).toBe(false);
+    expect(isLedgerAccountStatusResponse({ balance: null, deployed: "yes", ok: true })).toBe(false);
+    expect(
+      isLedgerAccountStatusResponse({ balance: null, deployed: null, extra: 1, ok: true }),
+    ).toBe(false);
+    expect(isLedgerAccountStatusResponse({ balance: null, deployed: null, ok: false })).toBe(false);
+    expect(isLedgerAccountStatusResponse(null)).toBe(false);
   });
 });
 

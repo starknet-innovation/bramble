@@ -39,6 +39,7 @@ export type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
   ConnectedSite,
+  CreateLedgerVaultInput,
   CreateVaultAccountInput,
   DeriveLedgerAccountsInput,
   EnsureNetworkAccountInput,
@@ -258,6 +259,39 @@ export const createWalletVaultService = ({
 
       return account;
     },
+    async createLedgerVault(input) {
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      // First-run only: a mnemonic-less Ledger vault is created over a fresh
+      // store. Refuse if any account or a recovery phrase already exists so this
+      // can never quietly drop an existing seeded wallet's key material.
+      if (vault.accounts.length > 0 || vault.mnemonic !== null) {
+        throw new WalletError("Wallet already exists");
+      }
+      const account = await deriveLedgerAccount(kms, {
+        accountIndex: input.accountIndex,
+        networkId: input.networkId,
+        publicKeyX: input.publicKeyX,
+        ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
+      });
+
+      // The vault holds no seed and no signing key: the account is keyless, so
+      // the mnemonic stays null and signingKeys stays empty. The relaxed
+      // account↔signingKey bijection admits exactly this shape.
+      await writeVault(
+        encryptedStore,
+        {
+          accounts: [account],
+          activeAccountId: account.id,
+          mnemonic: null,
+          originGrants: [],
+          schemaVersion: CURRENT_SCHEMA_VERSION,
+          signingKeys: [],
+        },
+        input.vaultPassphrase,
+      );
+
+      return account;
+    },
     deriveLedgerAccounts(input) {
       return deriveLedgerAccountRefs(kms, { entries: input.entries, networkId: input.networkId });
     },
@@ -420,6 +454,7 @@ export const createWalletVaultService = ({
     addDerivedAccount: (input) => serialized(() => service.addDerivedAccount(input)),
     addLedgerAccount: (input) => serialized(() => service.addLedgerAccount(input)),
     createAccount: (input) => serialized(() => service.createAccount(input)),
+    createLedgerVault: (input) => serialized(() => service.createLedgerVault(input)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),

@@ -50,6 +50,18 @@ export type LedgerAccountsResponse = {
   readonly ok: true;
 };
 
+/**
+ * One Ledger candidate's best-effort on-chain state accepted from the background
+ * boundary: whether the account is deployed and its balance display string. Both
+ * fields are nullable — a degraded RPC yields `null` so the picker shows
+ * "checking"/"unavailable" rather than blocking or fabricating a value.
+ */
+export type LedgerAccountStatusResponse = {
+  readonly balance: string | null;
+  readonly deployed: boolean | null;
+  readonly ok: true;
+};
+
 const isLedgerSignRequestSummary = (value: unknown): value is LedgerSignRequestSummary =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountId", "id", "messageHash", "path"]) &&
@@ -77,6 +89,21 @@ export const isLedgerSignPendingResponse = (value: unknown): value is LedgerSign
  */
 export const isOkResponse = (value: unknown): value is OkResponse =>
   isRecord(value) && hasOnlyKnownKeys(value, ["ok"]) && value["ok"] === true;
+
+/**
+ * Checks per-candidate on-chain status responses before the picker renders a
+ * deployed badge or balance, so a malformed reply degrades to unavailable rather
+ * than showing a fabricated status.
+ */
+export const isLedgerAccountStatusResponse = (
+  value: unknown,
+): value is LedgerAccountStatusResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["balance", "deployed", "ok"]) &&
+  value["ok"] === true &&
+  (value["balance"] === null || typeof value["balance"] === "string") &&
+  (value["deployed"] === null || typeof value["deployed"] === "boolean");
 
 /**
  * Checks derived Ledger account responses before rendering the account picker.

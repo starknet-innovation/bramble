@@ -18,6 +18,7 @@ import type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
   ConnectedSite,
+  CreateLedgerVaultInput,
   CreateVaultAccountInput,
   DeriveLedgerAccountsInput,
   EnsureNetworkAccountInput,
@@ -394,9 +395,11 @@ export type LedgerSignPendingResponse = {
 };
 
 /**
- * Acknowledgement response for operations with no payload.
+ * One Ledger candidate's on-chain state for the picker; each null when degraded.
  */
-export type OkResponse = {
+export type LedgerAccountStatusResponse = {
+  readonly balance: string | null;
+  readonly deployed: boolean | null;
   readonly ok: true;
 };
 
@@ -421,13 +424,14 @@ export type RuntimeResponse =
   | SupportedVersionsResponse
   | TransferReviewResponse
   | GenerateMnemonicResponse
+  | LedgerAccountStatusResponse
   | LedgerSignPendingResponse
   | MultisigClassStatusResponse
   | MultisigDeployResponse
   | MultisigProposalResponse
   | MultisigResponse
   | MultisigsResponse
-  | OkResponse
+  | { readonly ok: true }
   | PendingApprovalResponse
   | PermissionsResponse
   | PreferencesResponse
@@ -456,6 +460,13 @@ export type WalletStatusReader = {
    */
   readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  /**
+   * Creates a brand-new mnemonic-less vault whose first account is keyless
+   * Ledger. Optional on this narrow dispatch type so partial test stubs stay
+   * valid; the wired vault service always provides it. Fails closed over an
+   * existing vault so it can never drop a seeded wallet's key material.
+   */
+  readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
   /**
    * Derives Ledger account-picker candidates. Optional on this narrow dispatch
    * type so partial test stubs stay valid; the wired vault service provides it.

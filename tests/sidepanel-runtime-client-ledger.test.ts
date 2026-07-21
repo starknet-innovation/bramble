@@ -46,6 +46,46 @@ describe("Ledger runtime wrappers", () => {
     ).rejects.toThrow("add Ledger account failed");
   });
 
+  test("createLedgerVault sends index/network/pubkey/passphrase and returns the id", async () => {
+    const { sent, wallet } = captureRuntime({ account, ok: true });
+    expect(await wallet.createLedgerVault("SN_MAIN", 0, "0xabc", "correct horse battery")).toBe(
+      account.id,
+    );
+    expect(sent[0]).toEqual({
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: "0xabc",
+      type: "wallet.createLedgerVault",
+      vaultPassphrase: "correct horse battery",
+    });
+  });
+
+  test("createLedgerVault throws its fallback on an unrecognised reply", async () => {
+    await expect(
+      runtimeReturning({ ok: true }).createLedgerVault("SN_MAIN", 0, "0xabc", "pass"),
+    ).rejects.toThrow("create Ledger wallet failed");
+  });
+
+  test("ledgerAccountStatus returns the resolved on-chain state", async () => {
+    const { sent, wallet } = captureRuntime({ balance: "1.5 STRK", deployed: true, ok: true });
+    expect(await wallet.ledgerAccountStatus("0x123", "SN_MAIN")).toEqual({
+      balance: "1.5 STRK",
+      deployed: true,
+    });
+    expect(sent[0]).toEqual({
+      address: "0x123",
+      networkId: "SN_MAIN",
+      type: "wallet.ledgerAccountStatus",
+    });
+  });
+
+  test("ledgerAccountStatus degrades to unavailable on an unrecognised reply", async () => {
+    expect(await runtimeReturning({ ok: false }).ledgerAccountStatus("0x123", "SN_MAIN")).toEqual({
+      balance: null,
+      deployed: null,
+    });
+  });
+
   test("deriveLedgerAccounts sends entries and returns the derived list", async () => {
     const entries = [{ accountIndex: 0, publicKeyX: "0xabc" }];
     const { sent, wallet } = captureRuntime({ accounts: [ledgerAccount], ok: true });

@@ -2,10 +2,14 @@
  * Vault schema checks reject ambiguous decrypted wallet state.
  */
 import { describe, expect, test } from "bun:test";
+import { ledgerAccountPath } from "../src/starknet/ledger-path";
 import {
+  type AccountRef,
+  accountsRequireMnemonic,
   CURRENT_SCHEMA_VERSION,
   emptyVault,
   isAccountId,
+  isKeylessAccount,
   isVaultV1,
   isVaultV3,
 } from "../src/storage/vault-schema";
@@ -64,6 +68,55 @@ describe("isVaultV3 (current schema)", () => {
 
   test("rejects unexpected keys", () => {
     expect(isVaultV3({ ...currentVault, label: "unexpected" })).toBe(false);
+  });
+});
+
+const ledgerAccount = {
+  address: "0xdef123",
+  classHash: "0x111111",
+  derivation: {
+    accountIndex: 0,
+    eip2645application: "LedgerW" as const,
+    kind: "ledger" as const,
+    path: ledgerAccountPath(0),
+  },
+  id: "SN_MAIN:0xdef123",
+  networkId: "SN_MAIN",
+  publicKeyX: "0xabc",
+};
+
+const ledgerOnlyVault = {
+  accounts: [ledgerAccount],
+  activeAccountId: ledgerAccount.id,
+  mnemonic: null,
+  originGrants: [],
+  schemaVersion: 3 as const,
+  signingKeys: [],
+};
+
+describe("mnemonic-less Ledger-only vault", () => {
+  test("validates a keyless Ledger vault that stores no recovery phrase", () => {
+    // The mnemonic-less Ledger-only wallet needs no schema bump beyond v3: a null
+    // mnemonic with an all-keyless account set and empty signing keys is already
+    // a valid v3 vault under the relaxed account↔signingKey bijection.
+    expect(isVaultV3(ledgerOnlyVault)).toBe(true);
+    expect(isKeylessAccount(ledgerAccount as AccountRef)).toBe(true);
+  });
+
+  test("still accepts the grandfathered legacy null-phrase seed vault", () => {
+    // A v1-migrated wallet carries seed accounts with a null mnemonic; that shape
+    // stays valid so those wallets never fail closed.
+    expect(isVaultV3(currentVault)).toBe(true);
+    expect(currentVault.mnemonic).toBeNull();
+  });
+
+  test("accountsRequireMnemonic is the one source of truth for phrase coverage", () => {
+    const ledger = ledgerAccount as AccountRef;
+    const seed = account as AccountRef;
+    expect(accountsRequireMnemonic([])).toBe(false);
+    expect(accountsRequireMnemonic([ledger])).toBe(false);
+    expect(accountsRequireMnemonic([seed])).toBe(true);
+    expect(accountsRequireMnemonic([ledger, seed])).toBe(true);
   });
 });
 
