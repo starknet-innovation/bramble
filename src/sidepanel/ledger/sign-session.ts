@@ -21,8 +21,19 @@
  * decision flow is exercised without hardware.
  */
 import type { LedgerSignRequestSummary } from "../../popup/responses";
-import { type LedgerDeviceClient, ledgerSignHashOnDevice } from "./client";
-import { asLedgerRejection, type LedgerRejectionCode, ledgerMessage } from "./errors";
+import { sameFelt } from "../../starknet/networks";
+import {
+  assertLedgerAppReady,
+  type LedgerDeviceClient,
+  ledgerPublicKeyX,
+  ledgerSignHashOnDevice,
+} from "./client";
+import {
+  asLedgerRejection,
+  LedgerRejection,
+  type LedgerRejectionCode,
+  ledgerMessage,
+} from "./errors";
 import type { LedgerSignOutcome } from "./runtime-client";
 
 /**
@@ -112,6 +123,17 @@ export const createLedgerSignController = (
       return;
     }
     show({ kind: "confirming" });
+    // Shared pre-check before the on-device confirm: assert the Starknet app is
+    // at/above the pinned floor (a locked/disconnected device surfaces here as a
+    // thrown transport error on the version read), then confirm the device holds
+    // the account's key at `path` — a mismatch is the wrong Ledger and gets that
+    // actionable copy instead of a post-sign verify failure. Fund safety still
+    // rests on the background verify gate; this only fails faster and clearer.
+    await assertLedgerAppReady(client);
+    const devicePublicKeyX = await ledgerPublicKeyX(client, request.path);
+    if (!sameFelt(devicePublicKeyX, request.publicKeyX)) {
+      throw new LedgerRejection("wrong-device");
+    }
     const signature = await ledgerSignHashOnDevice(client, request.path, request.messageHash);
     await deps.report({ id: request.id, r: signature.r, s: signature.s });
     current = null;

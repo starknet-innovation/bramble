@@ -11,16 +11,40 @@
 import { WalletError } from "../shared/errors";
 import { type DeviceSignature, verifyStarkSignature } from "../starknet/ledger-verify";
 import type { StarkHashSigner } from "../starknet/provider";
-import type { LedgerAccountRef } from "../storage/vault-schema";
+import { type AccountRef, isKeylessAccount, type LedgerAccountRef } from "../storage/vault-schema";
+
+/**
+ * The single user-facing reason a dapp-initiated invoke/declare/private-transfer
+ * is refused for a keyless Ledger account. These submit paths route signing
+ * straight through the vault (no device queue), so a Ledger account has no key
+ * there; rather than surface the vault's internal "signing key unavailable", the
+ * dapp gets this explicit, actionable message. Kept as one constant so the three
+ * submit paths never drift. (Wallet-initiated flows DO route Ledger to the
+ * device; only the dapp submit paths are gated here.)
+ */
+export const LEDGER_DAPP_SIGNING_UNSUPPORTED =
+  "Ledger accounts can't sign dapp transactions yet. Switch to a software account for this site.";
+
+/**
+ * Guard for the dapp submit paths: returns the fixed refusal message when the
+ * resolved account is a keyless Ledger account, or null when signing may proceed.
+ * Fail-closed and shared so provider-ops, declare-ops, and strk20-ops agree.
+ */
+export const ledgerDappSigningError = (account: AccountRef): string | null =>
+  isKeylessAccount(account) ? LEDGER_DAPP_SIGNING_UNSUPPORTED : null;
 
 /**
  * A request to sign one hash on a Ledger device at a specific account and its
- * stored derivation path. Carries no secret material.
+ * stored derivation path. Carries no secret material: `publicKeyX` is the
+ * account's PUBLIC x-coordinate, threaded so the panel can reject a wrong device
+ * (a mismatch against the key the device reports at `path`) up front, before the
+ * on-device confirm — the background verify gate remains the fund-safety check.
  */
 export type LedgerSignRequest = {
   readonly accountId: string;
   readonly messageHash: string;
   readonly path: string;
+  readonly publicKeyX: string;
 };
 
 /**
@@ -44,6 +68,7 @@ export const ledgerStarkHashSigner =
       accountId: account.id,
       messageHash,
       path: account.derivation.path,
+      publicKeyX: account.publicKeyX,
     });
     if (!verifyStarkSignature({ hash: messageHash, publicKeyX: account.publicKeyX, signature })) {
       throw new WalletError("Ledger signature verification failed");

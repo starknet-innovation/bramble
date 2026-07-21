@@ -15,6 +15,7 @@ import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
+import { ledgerDappSigningError } from "./ledger-signer";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
@@ -132,6 +133,10 @@ export const executeDeclareApproval = async (
   const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
+  }
+  const ledgerError = ledgerDappSigningError(account);
+  if (ledgerError) {
+    return { error: ledgerError };
   }
   const result = await runtimeRpc.submitDeclareTransaction({
     account,

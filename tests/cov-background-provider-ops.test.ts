@@ -6,6 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { createApprovalQueue } from "../src/background/approvals";
+import { LEDGER_DAPP_SIGNING_UNSUPPORTED } from "../src/background/ledger-signer";
 import {
   executeInvokeApproval,
   handleProviderOps,
@@ -166,6 +167,60 @@ const executeDeps = (locked: boolean): InvokeExecuteDeps => {
     wallet,
   };
 };
+
+const ledgerAccount: AccountRef = {
+  address: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  derivation: {
+    accountIndex: 0,
+    eip2645application: "LedgerW",
+    kind: "ledger",
+    path: "m/2645'/1195502025'/1470455285'/0'/0'/0",
+  },
+  id: "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  networkId: "SN_MAIN",
+  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+};
+
+// A wallet whose granted account for the origin is a keyless Ledger account, and
+// whose signHash MUST NEVER be called on the dapp submit paths (they refuse a
+// Ledger account up front). The preferences store pins the active network so the
+// grant resolves.
+const ledgerExecuteDeps = (): InvokeExecuteDeps => {
+  const session = createUnlockSession();
+  session.unlock(vaultPassphrase);
+  return {
+    activity: memoryActivityLog(),
+    allowanceStore: memoryAllowanceStore(),
+    preferencesStore: {
+      async read() {
+        return { activeNetworkId: "SN_MAIN" };
+      },
+    } as unknown as InvokeExecuteDeps["preferencesStore"],
+    runtimeRpc: {
+      submitInvokeTransaction() {
+        throw new Error("must not submit for a Ledger account");
+      },
+    } as unknown as RuntimeRpc,
+    session,
+    wallet: {
+      ...(wallet as object),
+      async getGrantedAccounts() {
+        return [ledgerAccount];
+      },
+    } as unknown as ProviderOpsDeps["wallet"],
+  };
+};
+
+describe("executeInvokeApproval Ledger guard", () => {
+  test("refuses a keyless Ledger account with a clear message, nothing submitted", async () => {
+    const result = await executeInvokeApproval(ledgerExecuteDeps(), {
+      origin: ORIGIN,
+      payload: invoke,
+    });
+    expect(result).toEqual({ error: LEDGER_DAPP_SIGNING_UNSUPPORTED });
+  });
+});
 
 describe("executeInvokeApproval failure branches", () => {
   test("reports approval-not-found when the held payload has no calls", async () => {

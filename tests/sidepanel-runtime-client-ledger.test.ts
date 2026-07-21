@@ -110,6 +110,7 @@ describe("Ledger runtime wrappers", () => {
         id: "ledger-sign-1",
         messageHash: "0x1",
         path: ledgerAccountPath(0),
+        publicKeyX: "0xabc",
       },
     ];
     const { sent, wallet } = captureRuntime({ ok: true, pending });

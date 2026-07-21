@@ -6,7 +6,12 @@
 import { describe, expect, test } from "bun:test";
 import { createLedgerSignQueue } from "../src/background/ledger-sign-queue";
 
-const request = { accountId: "SN_MAIN:0x1", messageHash: "0x2", path: "m/2645'/0'/0'/0'/0'/0" };
+const request = {
+  accountId: "SN_MAIN:0x1",
+  messageHash: "0x2",
+  path: "m/2645'/0'/0'/0'/0'/0",
+  publicKeyX: "0x3",
+};
 
 describe("createLedgerSignQueue", () => {
   test("parks a request, exposes it as pending, and resolves it on settle", async () => {
@@ -49,5 +54,40 @@ describe("createLedgerSignQueue", () => {
     void queue.request(request);
     const ids = queue.pending().map((intent) => intent.id);
     expect(new Set(ids).size).toBe(2);
+  });
+
+  test("an injected timeout rejects an unfulfilled request with sign-timeout", async () => {
+    const timers: (() => void)[] = [];
+    const queue = createLedgerSignQueue(() => undefined, {
+      ms: 1000,
+      schedule: (onElapsed) => {
+        timers.push(onElapsed);
+        return () => undefined;
+      },
+    });
+    const pendingSignature = queue.request(request);
+    expect(queue.pending()).toHaveLength(1);
+
+    // The panel never opened: the injected timer elapses.
+    timers[0]?.();
+    await expect(pendingSignature).rejects.toThrow("sign-timeout");
+    // The waiter is removed so it never settles late.
+    expect(queue.pending()).toHaveLength(0);
+  });
+
+  test("settling before the timeout cancels the timer", async () => {
+    let cancelled = false;
+    const queue = createLedgerSignQueue(() => undefined, {
+      ms: 1000,
+      schedule: () => () => {
+        cancelled = true;
+      },
+    });
+    const pendingSignature = queue.request(request);
+    const id = queue.pending()[0]?.id ?? "";
+
+    expect(queue.settle(id, { r: "0x9", s: "0xa" })).toBe(true);
+    await expect(pendingSignature).resolves.toEqual({ r: "0x9", s: "0xa" });
+    expect(cancelled).toBe(true);
   });
 });

@@ -12,6 +12,7 @@ import {
   executeDeclareApproval,
   handleDeclareOps,
 } from "../src/background/declare-ops";
+import { LEDGER_DAPP_SIGNING_UNSUPPORTED } from "../src/background/ledger-signer";
 import type { RuntimeRpc } from "../src/background/runtime-rpc";
 import { unavailablePreferencesStore } from "../src/background/runtime-state";
 import type { RuntimeSender } from "../src/background/senders";
@@ -31,6 +32,20 @@ const account: AccountRef = {
   networkId: "SN_MAIN",
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+};
+
+const ledgerAccount: AccountRef = {
+  address: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  derivation: {
+    accountIndex: 0,
+    eip2645application: "LedgerW",
+    kind: "ledger",
+    path: "m/2645'/1195502025'/1470455285'/0'/0'/0",
+  },
+  id: "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  networkId: "SN_MAIN",
+  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
 
 const declare = {
@@ -161,6 +176,15 @@ describe("executeDeclareApproval", () => {
     await expect(executeDeclareApproval(deps, { declare, origin })).resolves.toEqual({
       error: "origin not connected",
     });
+  });
+
+  test("refuses a keyless Ledger account with a clear message, nothing signed", async () => {
+    const signed: string[] = [];
+    const deps = executeDeps({ signed, wallet: walletStub([ledgerAccount], signed) });
+    await expect(executeDeclareApproval(deps, { declare, origin })).resolves.toEqual({
+      error: LEDGER_DAPP_SIGNING_UNSUPPORTED,
+    });
+    expect(signed).toEqual([]);
   });
 
   test("signs and submits the declare, returning the node hashes", async () => {

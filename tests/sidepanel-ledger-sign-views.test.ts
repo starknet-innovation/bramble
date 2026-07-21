@@ -15,6 +15,7 @@ const request: LedgerSignRequestSummary = {
   id: "ledger-sign-1",
   messageHash: "0xabc",
   path: ledgerAccountPath(3),
+  publicKeyX: "0xabc",
 };
 
 const status: WalletStatus = {

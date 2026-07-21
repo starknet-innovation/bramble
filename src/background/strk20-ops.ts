@@ -28,6 +28,7 @@ import type { WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
+import { ledgerDappSigningError } from "./ledger-signer";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
@@ -283,6 +284,10 @@ export const executeStrk20InvokeApproval = async (
   const resolved = await resolveAccount(deps, approval.origin);
   if ("error" in resolved) {
     return resolved;
+  }
+  const ledgerError = ledgerDappSigningError(resolved.account);
+  if (ledgerError) {
+    return { error: ledgerError };
   }
   try {
     const callAndProof = await prepareStrk20CallAndProof(strk20Service(deps.runtimeRpc), {

@@ -48,6 +48,7 @@ describe("ledgerStarkHashSigner", () => {
       accountId: account.id,
       messageHash: "0x1e240",
       path: ledgerAccountPath(3),
+      publicKeyX,
     });
     expect(signature.publicKey).toBe(publicKeyX);
     expect(
@@ -70,6 +71,7 @@ describe("ledgerStarkHashSigner", () => {
         accountId: account.id,
         messageHash: "0xdead",
         path: account.derivation.path,
+        publicKeyX,
       }),
     );
     await expect(sign("0x1e240")).rejects.toThrow("Ledger signature verification failed");

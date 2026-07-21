@@ -23,7 +23,11 @@ import { handleDeclareOps } from "./declare-ops";
 import { handleDiscoveryOps } from "./discovery-ops";
 import { readImportAccountInput } from "./import-inputs";
 import { handleLedgerOps } from "./ledger-ops";
-import { createLedgerSignQueue, type LedgerSignQueue } from "./ledger-sign-queue";
+import {
+  createLedgerSignQueue,
+  type LedgerSignQueue,
+  type LedgerSignQueueTimeout,
+} from "./ledger-sign-queue";
 import {
   readAddAccountInput,
   readCreateAccountInput,
@@ -440,6 +444,19 @@ export type MessageHandlerOptions = {
   readonly swap?: SwapService;
 };
 
+// A parked Ledger sign is treated as abandoned if no side panel fulfils it
+// within this window: generous enough never to cut off an active on-device
+// confirmation, but bounded so a dapp-initiated sign whose panel never opens
+// cannot hang the dapp promise forever inside a living worker. The timer is
+// injected into the queue so the queue module itself holds no `setTimeout`.
+const LEDGER_SIGN_TIMEOUT: LedgerSignQueueTimeout = {
+  ms: 300_000,
+  schedule: (onElapsed, ms) => {
+    const handle = setTimeout(onElapsed, ms);
+    return () => clearTimeout(handle);
+  },
+};
+
 /**
  * Creates the trusted background runtime message dispatcher.
  */
@@ -454,7 +471,8 @@ export const createMessageHandler = (
     approvals: options.approvals ?? createApprovalQueue(),
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
-    ledgerSignQueue: options.ledgerSignQueue ?? createLedgerSignQueue(notifyApprovalsChanged),
+    ledgerSignQueue:
+      options.ledgerSignQueue ?? createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT),
     loadMultisigClass: options.loadMultisigClass,
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     originHistory: options.originHistory ?? memoryOriginHistory(),

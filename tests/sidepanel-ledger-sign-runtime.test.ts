@@ -22,6 +22,7 @@ const PENDING: LedgerSignRequestSummary = {
   id: "ledger-sign-1",
   messageHash: "0xabc",
   path: ledgerAccountPath(0),
+  publicKeyX: "0xabc",
 };
 
 const status: WalletStatus = {
@@ -38,10 +39,29 @@ const status: WalletStatus = {
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-const fakeClient = (signHash: LedgerDeviceClient["signHash"]): LedgerDeviceClient => ({
-  getAppVersion: () => Promise.reject(new Error("unused")),
-  getPubKey: () => Promise.reject(new Error("unused")),
+// A 64-byte device key X‖Y whose X-coordinate canonicalizes to PENDING.publicKeyX
+// ("0xabc"), so the sign path's shared pre-check (version + key match) passes.
+const DEVICE_PUBLIC_KEY = Uint8Array.from([
+  ...Array(30).fill(0),
+  0x0a,
+  0xbc,
+  ...Array(32).fill(0xff),
+]);
+
+const okVersion = (): ReturnType<LedgerDeviceClient["getAppVersion"]> =>
+  Promise.resolve({ errorMessage: "No errors", major: 2, minor: 1, patch: 0, returnCode: 0x9000 });
+
+const okPubKey = (): ReturnType<LedgerDeviceClient["getPubKey"]> =>
+  Promise.resolve({ errorMessage: "No errors", publicKey: DEVICE_PUBLIC_KEY, returnCode: 0x9000 });
+
+const fakeClient = (
+  signHash: LedgerDeviceClient["signHash"],
+  overrides: Partial<LedgerDeviceClient> = {},
+): LedgerDeviceClient => ({
+  getAppVersion: okVersion,
+  getPubKey: okPubKey,
   signHash,
+  ...overrides,
 });
 
 const okClient = (): LedgerDeviceClient =>
@@ -171,15 +191,20 @@ describe("Ledger sign runtime (DOM)", () => {
 
   test("the retry button re-drives the device after a recoverable error", async () => {
     let attempt = 0;
-    const client = fakeClient(() =>
-      attempt++ === 0
-        ? Promise.reject(new Error("device is locked"))
-        : Promise.resolve({
-            errorMessage: "No errors",
-            r: new Uint8Array([1]),
-            returnCode: 0x9000,
-            s: new Uint8Array([2]),
-          }),
+    const client = fakeClient(
+      () =>
+        Promise.resolve({
+          errorMessage: "No errors",
+          r: new Uint8Array([1]),
+          returnCode: 0x9000,
+          s: new Uint8Array([2]),
+        }),
+      {
+        // A locked device surfaces on the pre-check's version read (signHash would
+        // swallow the throw), so drive the recoverable error from getAppVersion.
+        getAppVersion: () =>
+          attempt++ === 0 ? Promise.reject(new Error("device is locked")) : okVersion(),
+      },
     );
     const h = mountRuntime(
       {

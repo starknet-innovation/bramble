@@ -7,6 +7,7 @@
  * background-strk20-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
+import { LEDGER_DAPP_SIGNING_UNSUPPORTED } from "../src/background/ledger-signer";
 import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeRpc } from "../src/background/runtime-rpc";
 import { unavailablePreferencesStore } from "../src/background/runtime-state";
@@ -33,6 +34,19 @@ const account: AccountRef = {
   networkId: "SN_SEPOLIA",
   publicKeyX: "0xabc",
   publicKeyY: "0xdef",
+};
+const ledgerAccount: AccountRef = {
+  address: "0xfedfed",
+  classHash: "0xabcdef",
+  derivation: {
+    accountIndex: 0,
+    eip2645application: "LedgerW",
+    kind: "ledger",
+    path: "m/2645'/1195502025'/1470455285'/0'/0'/0",
+  },
+  id: "SN_SEPOLIA:0xfedfed",
+  networkId: "SN_SEPOLIA",
+  publicKeyX: "0xabc",
 };
 const contentSender: RuntimeSender = { id: "extension-id", url: `${origin}/app` };
 const mismatchSender: RuntimeSender = { id: "extension-id", url: "https://evil.example/app" };
@@ -285,6 +299,32 @@ describe("executeStrk20InvokeApproval", () => {
         origin,
       }),
     ).resolves.toEqual({ error: "wallet locked" });
+  });
+
+  test("refuses a keyless Ledger account with a clear message, nothing submitted", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const deps = {
+      activity: memoryActivityLog(),
+      preferencesStore: {
+        ...unavailablePreferencesStore,
+        async read() {
+          return { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
+        },
+      },
+      runtimeRpc: rpcStub(() => {
+        throw new Error("must not submit for a Ledger account");
+      }),
+      session,
+      wallet: walletStub([ledgerAccount]),
+    };
+
+    await expect(
+      executeStrk20InvokeApproval(deps, {
+        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+        origin,
+      }),
+    ).resolves.toEqual({ error: LEDGER_DAPP_SIGNING_UNSUPPORTED });
   });
 
   test("submits the invoke and drives the signHash callback into the wallet", async () => {

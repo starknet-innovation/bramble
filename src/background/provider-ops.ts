@@ -15,6 +15,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { recordApproveAllowances } from "./allowance-ops";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalPayload, ApprovalQueue } from "./approvals";
+import { ledgerDappSigningError } from "./ledger-signer";
 import { readAddInvokeTransactionInput } from "./message-inputs";
 import { readGetPermissionsInput, readWatchAssetInput } from "./provider-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -238,6 +239,10 @@ export const executeInvokeApproval = async (
     return resolved;
   }
   const { account, passphrase, preferences } = resolved;
+  const ledgerError = ledgerDappSigningError(account);
+  if (ledgerError) {
+    return { error: ledgerError };
+  }
   const result = await runtimeRpc.submitInvokeTransaction({
     account,
     calls,

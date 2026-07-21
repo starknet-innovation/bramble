@@ -322,6 +322,7 @@ describe("privileged Ledger messages", () => {
       accountId: ledgerAccount.id,
       messageHash: DEPLOY_HASH,
       path: ledgerAccount.derivation.path,
+      publicKeyX: ledgerAccount.publicKeyX,
     });
 
     const pending = await handler({ type: "wallet.ledgerSignPending" }, extensionSender);

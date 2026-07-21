@@ -21,6 +21,7 @@ const pending = {
   id: "ledger-sign-1",
   messageHash: "0xabc",
   path: ledgerAccountPath(0),
+  publicKeyX: "0xabc",
 };
 
 const ledgerAccount = {
@@ -52,6 +53,9 @@ describe("isLedgerSignPendingResponse", () => {
     );
     expect(
       isLedgerSignPendingResponse({ ok: true, pending: [{ ...pending, accountId: "nope" }] }),
+    ).toBe(false);
+    expect(
+      isLedgerSignPendingResponse({ ok: true, pending: [{ ...pending, publicKeyX: "zz" }] }),
     ).toBe(false);
     expect(isLedgerSignPendingResponse({ ok: true, pending: [{ ...pending, extra: 1 }] })).toBe(
       false,
