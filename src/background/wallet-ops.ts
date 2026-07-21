@@ -2,14 +2,18 @@
  * RPC-heavy wallet operations dispatched from the background message handler:
  * balances, deployment, transfer review and submission, and the activity feed.
  */
+import { WalletError } from "../shared/errors";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks";
+import type { StarkHashSigner } from "../starknet/provider";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "../starknet/rpc";
 import { mergeActivity } from "../starknet/tx-history";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityEntry, ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
-import type { AccountRef } from "../storage/vault-schema";
+import { type AccountRef, isKeylessAccount } from "../storage/vault-schema";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
+import { ledgerStarkHashSigner } from "./ledger-signer";
 import { readReviewTransferInput, readTransferInput, readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
@@ -22,6 +26,11 @@ import type { UnlockSession } from "./session";
 export type WalletOpsDeps = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
+   * stubs stay valid; a Ledger signing request with no queue wired fails closed.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -68,9 +77,25 @@ const transferContext = async (
   return { account, preferences, token, vaultPassphrase } as const;
 };
 
-const signerFor =
-  (deps: WalletOpsDeps, account: AccountRef, vaultPassphrase: string) => (messageHash: string) =>
+// Chooses the signing backend by account kind BEFORE any by-id vault key lookup:
+// a keyless Ledger account routes to the panel/device queue (with the
+// verify-before-broadcast gate), while every other account signs through the
+// Krusty vault path. A Ledger account with no queue wired fails closed.
+const signerFor = (
+  deps: WalletOpsDeps,
+  account: AccountRef,
+  vaultPassphrase: string,
+): StarkHashSigner => {
+  if (isKeylessAccount(account)) {
+    const queue = deps.ledgerSignQueue;
+    if (!queue) {
+      throw new WalletError("Ledger signing unavailable");
+    }
+    return ledgerStarkHashSigner(account, (request) => queue.request(request));
+  }
+  return (messageHash) =>
     deps.wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase });
+};
 
 /**
  * Classifies a transfer review's fee outcome so callers can tell an intentional

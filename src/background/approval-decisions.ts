@@ -12,6 +12,7 @@ import { executeAddChainApproval } from "./add-chain-ops";
 import type { ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
 import { executeSignApproval, executeSwitchChainApproval } from "./chain-ops";
 import { executeDeclareApproval } from "./declare-ops";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readApprovalIdInput } from "./message-inputs";
 import { executeInvokeApproval } from "./provider-ops";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -27,6 +28,7 @@ export type ApprovalDecisionDeps = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -124,7 +126,12 @@ const applySignTypedData: ApproveApplier = async (deps, approval) => {
     return reject(NOT_FOUND);
   }
   const result = await executeSignApproval(
-    { preferencesStore: deps.preferencesStore, session: deps.session, wallet: deps.wallet },
+    {
+      preferencesStore: deps.preferencesStore,
+      session: deps.session,
+      wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+    },
     { origin: approval.origin, typedData: payload.typedData },
   );
   return settleExecutor(result);

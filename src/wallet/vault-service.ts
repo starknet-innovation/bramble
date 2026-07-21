@@ -1,7 +1,7 @@
 /**
  * Wallet vault service: privileged account metadata persistence behind encryption.
  */
-import type { KrustyKms, StarkSignature } from "../crypto/krusty";
+import type { KrustyKms } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import { isWalletOrigin } from "../shared/origin";
 import {
@@ -15,76 +15,47 @@ import { assertStoreAccess, type StoreActor } from "../storage/permissioned-stor
 import {
   type AccountRef,
   CURRENT_SCHEMA_VERSION,
-  type DerivedAccountRef,
-  type ImportedAccountRef,
   isAccountId,
   type Vault,
 } from "../storage/vault-schema";
 import {
-  type AccountDerivationInput,
   deriveAccount,
   deriveImportedAccount,
+  deriveLedgerAccount,
+  deriveLedgerAccountRefs,
   getOzAccountClassHash,
   nextAccountIndex,
   sameWalletKey,
 } from "./accounts";
+import type { ConnectedSite, RevealedSecrets, WalletVaultService } from "./vault-service-types";
+
+/**
+ * Re-exports the vault-service type surface (split into `vault-service-types.ts`
+ * for the file-size budget) so existing importers keep resolving these from the
+ * service module. Trust boundary and failure behavior are documented on each
+ * type at its definition.
+ */
+export type {
+  AddDerivedAccountInput,
+  AddLedgerAccountInput,
+  ConnectedSite,
+  CreateVaultAccountInput,
+  DeriveLedgerAccountsInput,
+  EnsureNetworkAccountInput,
+  ImportRawKeyAccountInput,
+  OriginGrantInput,
+  RevealedSecrets,
+  RevokeOriginInput,
+  SetActiveAccountInput,
+  SignHashInput,
+  WalletStatus,
+  WalletVaultService,
+} from "./vault-service-types";
 
 /**
  * Browser storage key for the encrypted wallet vault.
  */
 export const VAULT_STORE_KEY = "mc-wallet:vault";
-
-/**
- * Public wallet status shown to popup and provider callers.
- */
-export type WalletStatus = {
-  readonly accountCount: number;
-  readonly activeAccountId: string | null;
-  readonly hasVault: boolean;
-  readonly locked: boolean;
-  readonly ready: boolean;
-};
-
-/**
- * Account creation input including the vault encryption passphrase.
- */
-export type CreateVaultAccountInput = AccountDerivationInput & {
-  readonly vaultPassphrase: string;
-};
-
-/**
- * Privileged hash-signing input.
- */
-export type SignHashInput = {
-  readonly accountId?: string;
-  readonly messageHash: string;
-  readonly vaultPassphrase: string;
-};
-
-/**
- * Origin grant input for account access permissions.
- */
-export type OriginGrantInput = {
-  readonly accountId?: string;
-  readonly origin: string;
-  readonly vaultPassphrase: string;
-};
-
-/**
- * Origin revocation input for the connected-sites permissions manager.
- */
-export type RevokeOriginInput = {
-  readonly origin: string;
-  readonly vaultPassphrase: string;
-};
-
-/**
- * A site with a persisted origin grant plus how many accounts it can see.
- */
-export type ConnectedSite = {
-  readonly accountCount: number;
-  readonly origin: string;
-};
 
 /**
  * Derives the connected-sites list (origin plus granted account count) from a
@@ -95,73 +66,6 @@ export const connectedSitesFromVault = (vault: Vault): readonly ConnectedSite[] 
   vault.originGrants
     .map((grant) => ({ accountCount: grant.accountIds.length, origin: grant.origin }))
     .sort((left, right) => left.origin.localeCompare(right.origin));
-
-/**
- * Active account selection input.
- */
-export type SetActiveAccountInput = {
-  readonly accountId: string;
-  readonly vaultPassphrase: string;
-};
-
-/**
- * Input for deriving the selected wallet account onto another Starknet network.
- */
-export type EnsureNetworkAccountInput = {
-  readonly networkId: StarknetNetworkId;
-  readonly vaultPassphrase: string;
-};
-
-/**
- * Input for adding a freshly derived account on a network using the vault's
- * retained recovery phrase.
- */
-export type AddDerivedAccountInput = {
-  readonly networkId: StarknetNetworkId;
-  readonly vaultPassphrase: string;
-};
-
-/**
- * Input for importing a standalone account from a raw Starknet private key. The
- * key is validated and routed to the encrypted vault; it is never persisted in
- * plain preferences or logged.
- */
-export type ImportRawKeyAccountInput = {
-  readonly networkId: StarknetNetworkId;
-  readonly privateKey: string;
-  readonly vaultPassphrase: string;
-};
-
-/**
- * Re-authenticated secret export for the active account. Returned only to the
- * privileged reveal flow and never persisted or logged. `mnemonic` is `null`
- * when the vault predates recovery-phrase retention.
- */
-export type RevealedSecrets = {
-  readonly mnemonic: string | null;
-  readonly privateKey: string;
-};
-
-/**
- * Privileged encrypted-vault wallet service surface.
- */
-export type WalletVaultService = {
-  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<DerivedAccountRef>;
-  readonly createAccount: (input: CreateVaultAccountInput) => Promise<DerivedAccountRef>;
-  readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
-  readonly generateMnemonic: () => Promise<string>;
-  readonly importRawKeyAccount: (input: ImportRawKeyAccountInput) => Promise<ImportedAccountRef>;
-  readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
-  readonly getGrantedAccounts: (
-    origin: string,
-    vaultPassphrase: string,
-  ) => Promise<readonly AccountRef[]>;
-  readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
-  readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
-  readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
-  readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
-  readonly status: () => Promise<WalletStatus>;
-};
 
 type WalletVaultServiceOptions = {
   readonly actor?: StoreActor;
@@ -332,6 +236,31 @@ export const createWalletVaultService = ({
 
       return account;
     },
+    async addLedgerAccount(input) {
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      const account = await deriveLedgerAccount(kms, {
+        accountIndex: input.accountIndex,
+        networkId: input.networkId,
+        publicKeyX: input.publicKeyX,
+        ...(input.eip2645application ? { eip2645application: input.eip2645application } : {}),
+      });
+      if (vault.accounts.some((stored) => stored.id === account.id)) {
+        throw new WalletError("Account already exists");
+      }
+
+      // A Ledger account is keyless: it is added to `accounts` with no matching
+      // `signingKeys` entry, which the relaxed vault bijection allows.
+      await writeVault(
+        encryptedStore,
+        { ...vault, accounts: [...vault.accounts, account], activeAccountId: account.id },
+        input.vaultPassphrase,
+      );
+
+      return account;
+    },
+    deriveLedgerAccounts(input) {
+      return deriveLedgerAccountRefs(kms, { entries: input.entries, networkId: input.networkId });
+    },
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const source = selectSourceAccount(vault);
@@ -489,6 +418,7 @@ export const createWalletVaultService = ({
   return {
     ...service,
     addDerivedAccount: (input) => serialized(() => service.addDerivedAccount(input)),
+    addLedgerAccount: (input) => serialized(() => service.addLedgerAccount(input)),
     createAccount: (input) => serialized(() => service.createAccount(input)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),

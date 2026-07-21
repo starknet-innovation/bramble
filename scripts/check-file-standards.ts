@@ -38,6 +38,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/discovery-ops.ts",
   "src/background/declare-ops.ts",
   "src/background/import-inputs.ts",
+  "src/background/ledger-ops.ts",
+  "src/background/ledger-sign-queue.ts",
+  "src/background/ledger-signer.ts",
   "src/background/signature-waiters.ts",
   "src/background/index.ts",
   "src/background/message-inputs.ts",
@@ -50,6 +53,8 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/session.ts",
   "src/background/unlock-errors.ts",
   "src/background/wallet-ops.ts",
+  "src/background/wallet-reader.ts",
+  "src/background/ledger-inputs.ts",
   "src/crypto/krusty.ts",
   "src/popup/responses.ts",
   "src/provider/bridge-results.ts",
@@ -61,6 +66,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/sidepanel/onboarding-ui.ts",
   "src/sidepanel/reveal-ui.ts",
   "src/sidepanel/runtime.ts",
+  "src/starknet/ledger-verify.ts",
   "src/starknet/provider.ts",
   "src/starknet/rpc.ts",
   "src/storage/encrypted-store.ts",
@@ -68,6 +74,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/storage/vault-schema.ts",
   "src/wallet/accounts.ts",
   "src/wallet/vault-service.ts",
+  "src/wallet/vault-service-types.ts",
 ]);
 const SECRET_MATERIAL_PATTERN =
   /\b(?:mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase)\b/i;

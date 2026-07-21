@@ -13,11 +13,13 @@ import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
-import type { AccountRef, Vault } from "../storage/vault-schema";
+import type { AccountRef, LedgerAccountRef, Vault } from "../storage/vault-schema";
 import type {
   AddDerivedAccountInput,
+  AddLedgerAccountInput,
   ConnectedSite,
   CreateVaultAccountInput,
+  DeriveLedgerAccountsInput,
   EnsureNetworkAccountInput,
   ImportRawKeyAccountInput,
   OriginGrantInput,
@@ -27,6 +29,7 @@ import type {
   WalletStatus as VaultStatus,
 } from "../wallet/vault-service";
 import type { PendingApproval } from "./approvals";
+import type { PendingLedgerSign } from "./ledger-sign-queue";
 
 /**
  * Network selector option returned to extension pages.
@@ -382,6 +385,15 @@ export type MultisigDeployResponse = {
 };
 
 /**
+ * Pending device-sign requests returned to the side panel that owns the Ledger
+ * transport, so it can drive each one on the device and call back with `(r, s)`.
+ */
+export type LedgerSignPendingResponse = {
+  readonly ok: true;
+  readonly pending: readonly PendingLedgerSign[];
+};
+
+/**
  * Acknowledgement response for operations with no payload.
  */
 export type OkResponse = {
@@ -409,6 +421,7 @@ export type RuntimeResponse =
   | SupportedVersionsResponse
   | TransferReviewResponse
   | GenerateMnemonicResponse
+  | LedgerSignPendingResponse
   | MultisigClassStatusResponse
   | MultisigDeployResponse
   | MultisigProposalResponse
@@ -437,7 +450,19 @@ export type RuntimeResponse =
  */
 export type WalletStatusReader = {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
+  /**
+   * Stores a keyless Ledger account. Optional on this narrow dispatch type so
+   * partial test stubs stay valid; the wired vault service always provides it.
+   */
+  readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  /**
+   * Derives Ledger account-picker candidates. Optional on this narrow dispatch
+   * type so partial test stubs stay valid; the wired vault service provides it.
+   */
+  readonly deriveLedgerAccounts?: (
+    input: DeriveLedgerAccountsInput,
+  ) => Promise<readonly LedgerAccountRef[]>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
   /**

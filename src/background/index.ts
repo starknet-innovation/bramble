@@ -29,6 +29,7 @@ import { createMessageHandler } from "./messages";
 import { defaultRuntimeRpc } from "./runtime-rpc";
 import type { RuntimeSender } from "./senders";
 import { createUnlockSession, type UnlockSessionStore } from "./session";
+import { createWalletReader } from "./wallet-reader";
 
 type RuntimeApi = {
   readonly getURL?: (path: string) => string;
@@ -196,263 +197,168 @@ const loadMultisigClass = async (): Promise<unknown> => {
   }
   return response.json();
 };
-const handleMessage = createMessageHandler(
-  {
-    async addDerivedAccount(input) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.id ?? "", {
+  approvals,
+  session,
+  preferencesStore: {
+    async addCustomNetwork(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.addDerivedAccount(input);
+      return store.addCustomNetwork(input);
     },
-    async createAccount(input) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async addNft(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.createAccount(input);
+      return store.addNft(input);
     },
-    async ensureNetworkAccount(input) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async createGroup(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.ensureNetworkAccount(input);
+      return store.createGroup(input);
     },
-    async importRawKeyAccount(input) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async importPreferences(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.importRawKeyAccount(input);
+      return store.importPreferences(input);
     },
-    async getGrantedAccounts(origin, vaultPassphrase) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async read() {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.getGrantedAccounts(origin, vaultPassphrase);
+      return store.read();
     },
-    async generateMnemonic() {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async removeAddress(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.generateMnemonic();
+      return store.removeAddress(input);
     },
-    async grantOrigin(input) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async removeGroup(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.grantOrigin(input);
+      return store.removeGroup(input);
     },
-    async readVault(vaultPassphrase) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async removeNft(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.readVault(vaultPassphrase);
+      return store.removeNft(input);
     },
-    async revokeOrigin(input) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async renameGroup(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.revokeOrigin(input);
+      return store.renameGroup(input);
     },
-    async setActiveAccount(input) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async setAccountInGroup(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.setActiveAccount(input);
+      return store.setAccountInGroup(input);
     },
-    async signHash(input) {
-      const service = await wallet;
-      if (!service) {
-        throw new Error("wallet unavailable");
+    async setGroupIcon(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.signHash(input);
+      return store.setGroupIcon(input);
     },
-    async status() {
-      const service = await wallet;
-      if (!service) {
-        return {
-          accountCount: 0,
-          activeAccountId: null,
-          hasVault: false,
-          locked: true,
-          ready: false,
-        };
+    async setNftIndexerUrl(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
       }
-      return service.status();
+      return store.setNftIndexerUrl(input);
+    },
+    async setNftSpam(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setNftSpam(input);
+    },
+    async setAccountLabel(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setAccountLabel(input);
+    },
+    async setDisplay(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setDisplay(input);
+    },
+    async saveAddress(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.saveAddress(input);
+    },
+    async setActiveNetwork(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setActiveNetwork(input);
+    },
+    async setRpcOverride(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setRpcOverride(input);
+    },
+    async setStrk20ProverUrl(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setStrk20ProverUrl(input);
+    },
+    async setTokenHidden(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.setTokenHidden(input);
+    },
+    async upsertToken(input) {
+      const store = await preferences;
+      if (!store) {
+        throw new Error("preferences unavailable");
+      }
+      return store.upsertToken(input);
     },
   },
-  runtime?.id ?? "",
-  {
-    approvals,
-    session,
-    preferencesStore: {
-      async addCustomNetwork(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.addCustomNetwork(input);
-      },
-      async addNft(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.addNft(input);
-      },
-      async createGroup(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.createGroup(input);
-      },
-      async importPreferences(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.importPreferences(input);
-      },
-      async read() {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.read();
-      },
-      async removeAddress(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.removeAddress(input);
-      },
-      async removeGroup(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.removeGroup(input);
-      },
-      async removeNft(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.removeNft(input);
-      },
-      async renameGroup(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.renameGroup(input);
-      },
-      async setAccountInGroup(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setAccountInGroup(input);
-      },
-      async setGroupIcon(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setGroupIcon(input);
-      },
-      async setNftIndexerUrl(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setNftIndexerUrl(input);
-      },
-      async setNftSpam(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setNftSpam(input);
-      },
-      async setAccountLabel(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setAccountLabel(input);
-      },
-      async setDisplay(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setDisplay(input);
-      },
-      async saveAddress(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.saveAddress(input);
-      },
-      async setActiveNetwork(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setActiveNetwork(input);
-      },
-      async setRpcOverride(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setRpcOverride(input);
-      },
-      async setStrk20ProverUrl(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setStrk20ProverUrl(input);
-      },
-      async setTokenHidden(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.setTokenHidden(input);
-      },
-      async upsertToken(input) {
-        const store = await preferences;
-        if (!store) {
-          throw new Error("preferences unavailable");
-        }
-        return store.upsertToken(input);
-      },
-    },
-    runtimeRpc: defaultRuntimeRpc,
-    originGuard,
-    ...(activityLog ? { activity: activityLog } : {}),
-    ...(originHistory ? { originHistory } : {}),
-    prices: priceService,
-    swap: swapService,
-    ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
-    ...(multisigLog ? { multisigStore: multisigLog } : {}),
-    loadMultisigClass,
-  },
-);
+  runtimeRpc: defaultRuntimeRpc,
+  originGuard,
+  ...(activityLog ? { activity: activityLog } : {}),
+  ...(originHistory ? { originHistory } : {}),
+  prices: priceService,
+  swap: swapService,
+  ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
+  ...(multisigLog ? { multisigStore: multisigLog } : {}),
+  loadMultisigClass,
+});
 
 const broadcastEvent = (event: WalletEventMessage): void => {
   void runtime?.sendMessage?.(event).catch(() => undefined);

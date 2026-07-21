@@ -22,6 +22,8 @@ import { handleChainOps } from "./chain-ops";
 import { handleDeclareOps } from "./declare-ops";
 import { handleDiscoveryOps } from "./discovery-ops";
 import { readImportAccountInput } from "./import-inputs";
+import { handleLedgerOps } from "./ledger-ops";
+import { createLedgerSignQueue, type LedgerSignQueue } from "./ledger-sign-queue";
 import {
   readAddAccountInput,
   readCreateAccountInput,
@@ -66,6 +68,7 @@ type RouterContext = {
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
   readonly guard: OriginGuard;
+  readonly ledgerSignQueue: LedgerSignQueue;
   readonly loadMultisigClass: (() => Promise<unknown>) | undefined;
   readonly multisigStore: MultisigStore;
   readonly originHistory: OriginHistoryStore;
@@ -88,6 +91,7 @@ type RouterHandler = (
 const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activity: ctx.activity,
   allowanceStore: ctx.allowanceStore,
+  ledgerSignQueue: ctx.ledgerSignQueue,
   preferencesStore: ctx.preferencesStore,
   runtimeRpc: ctx.runtimeRpc,
   session: ctx.session,
@@ -344,6 +348,7 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
 // Types are partitioned across handlers, so order is readability, not behavior.
 const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleWalletOps(buildOpsDeps(ctx), messageType, message),
+  (ctx, messageType, message) => handleLedgerOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) =>
     handleSwapOps({ ...buildOpsDeps(ctx), swap: ctx.swap }, messageType, message),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
@@ -423,6 +428,7 @@ export type MessageHandlerOptions = {
   readonly activity?: ActivityLog;
   readonly allowanceStore?: AllowanceStore;
   readonly approvals?: ApprovalQueue;
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly loadMultisigClass?: () => Promise<unknown>;
   readonly multisigStore?: MultisigStore;
   readonly originGuard?: OriginGuard;
@@ -448,6 +454,7 @@ export const createMessageHandler = (
     approvals: options.approvals ?? createApprovalQueue(),
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
+    ledgerSignQueue: options.ledgerSignQueue ?? createLedgerSignQueue(notifyApprovalsChanged),
     loadMultisigClass: options.loadMultisigClass,
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     originHistory: options.originHistory ?? memoryOriginHistory(),
