@@ -16,6 +16,8 @@ import {
   type AccountRef,
   CURRENT_SCHEMA_VERSION,
   isAccountId,
+  isKeylessAccount,
+  type SigningKeyRef,
   type Vault,
 } from "../storage/vault-schema";
 import {
@@ -106,6 +108,48 @@ const findNetworkAccount = (
   source: AccountRef,
 ): AccountRef | undefined =>
   vault.accounts.find((stored) => stored.networkId === networkId && sameWalletKey(stored, source));
+
+// Derives `source`'s account onto `networkId`, returning the new `AccountRef`
+// together with the signing-key entries the vault must gain for it. A keyless
+// Ledger source stays keyless: it re-derives a Ledger account on the target
+// network from its stored `publicKeyX` + device derivation metadata (reusing
+// `deriveLedgerAccount`, which resolves the TARGET network's class hash and the
+// counterfactual address the same way), and needs no signing key. Any keyed
+// account clones its retained signing key onto the derived address, and fails
+// closed ("Signing key unavailable") if that key is somehow absent.
+const deriveNetworkAccount = async (
+  kms: KrustyKms,
+  vault: Vault,
+  source: AccountRef,
+  networkId: StarknetNetworkId,
+): Promise<{ readonly account: AccountRef; readonly signingKeys: readonly SigningKeyRef[] }> => {
+  if (isKeylessAccount(source)) {
+    const account = await deriveLedgerAccount(kms, {
+      accountIndex: source.derivation.accountIndex,
+      eip2645application: source.derivation.eip2645application,
+      networkId,
+      publicKeyX: source.publicKeyX,
+    });
+    return { account, signingKeys: [] };
+  }
+  const signingKey = vault.signingKeys.find((stored) => stored.accountId === source.id);
+  if (!signingKey) {
+    throw new WalletError("Signing key unavailable");
+  }
+  const classHash = await getOzAccountClassHash(kms, networkId);
+  const address = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
+  if (!isNonZeroStarkFieldElement(address)) {
+    throw new WalletError("Krusty KMS returned invalid account address");
+  }
+  const account: AccountRef = {
+    ...source,
+    address,
+    classHash,
+    id: `${networkId}:${address}`,
+    networkId,
+  };
+  return { account, signingKeys: [{ accountId: account.id, privateKey: signingKey.privateKey }] };
+};
 
 /**
  * Extracts the active account's private key and the vault recovery phrase for
@@ -311,22 +355,16 @@ export const createWalletVaultService = ({
         return existing;
       }
 
-      const signingKey = vault.signingKeys.find((stored) => stored.accountId === source.id);
-      if (!signingKey) {
-        throw new WalletError("Signing key unavailable");
-      }
-      const classHash = await getOzAccountClassHash(kms, input.networkId);
-      const address = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
-      if (!isNonZeroStarkFieldElement(address)) {
-        throw new WalletError("Krusty KMS returned invalid account address");
-      }
-      const account: AccountRef = {
-        ...source,
-        address,
-        classHash,
-        id: `${input.networkId}:${address}`,
-        networkId: input.networkId,
-      };
+      // A keyless Ledger source derives a keyless Ledger account on the target
+      // network (no signing key required); every keyed account clones its
+      // retained key onto the derived address. Both fail closed inside the
+      // helper if their required material is absent.
+      const { account, signingKeys } = await deriveNetworkAccount(
+        kms,
+        vault,
+        source,
+        input.networkId,
+      );
       if (vault.accounts.some((stored) => stored.id === account.id)) {
         throw new WalletError("Account already exists");
       }
@@ -337,10 +375,7 @@ export const createWalletVaultService = ({
           ...vault,
           accounts: [...vault.accounts, account],
           activeAccountId: account.id,
-          signingKeys: [
-            ...vault.signingKeys,
-            { accountId: account.id, privateKey: signingKey.privateKey },
-          ],
+          signingKeys: [...vault.signingKeys, ...signingKeys],
         },
         input.vaultPassphrase,
       );

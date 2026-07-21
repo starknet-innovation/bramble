@@ -104,3 +104,49 @@ describe("createLedgerVault", () => {
     ).rejects.toThrow("No recovery phrase stored for this wallet");
   });
 });
+
+describe("ensureNetworkAccount for a keyless Ledger account", () => {
+  test("derives a new keyless Ledger account on a fresh network with no signing key", async () => {
+    const { service } = makeService();
+    const mainnet = await service.createLedgerVault({
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: "0xdef123",
+      vaultPassphrase,
+    });
+
+    // Switching a keyless Ledger account to a network it has no account on must
+    // derive the counterfactual account from the stored device publicKeyX + the
+    // TARGET network's class hash — never throw "Signing key unavailable"
+    // (a Ledger account holds no signing key by design).
+    const sepolia = await service.ensureNetworkAccount({
+      networkId: "SN_SEPOLIA",
+      vaultPassphrase,
+    });
+
+    // Address = fake-KMS(publicKeyX, SN_SEPOLIA class hash) = "0xdef123" body +
+    // "abcdef" (SN_SEPOLIA OZ class hash slice), so the address tracks the target
+    // network's class hash, not mainnet's. The device derivation metadata (index,
+    // application, path) is rebuilt deterministically for the same device slot.
+    expect(sepolia).toEqual({
+      address: "0xdef123abcdef",
+      classHash: "0xabcdef",
+      derivation: {
+        accountIndex: 0,
+        eip2645application: "LedgerW",
+        kind: "ledger",
+        path: ledgerAccountPath(0),
+      },
+      id: "SN_SEPOLIA:0xdef123abcdef",
+      networkId: "SN_SEPOLIA",
+      publicKeyX: "0xdef123",
+    });
+
+    const vault = await service.readVault(vaultPassphrase);
+    // Still keyless on the new network: no signing-key entry is created for it.
+    expect(vault.signingKeys).toEqual([]);
+    expect(vault.accounts).toEqual([mainnet, sepolia]);
+    expect(vault.activeAccountId).toBe(sepolia.id);
+    expect(isVaultV3(vault)).toBe(true);
+  });
+});
