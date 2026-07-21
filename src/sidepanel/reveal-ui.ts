@@ -31,6 +31,21 @@ export type RevealUiDeps = {
 export const revealFlow = (status: WalletStatus): string => {
   const activeAccount = status.accounts.find((stored) => stored.id === status.activeAccountId);
   const activeIsImported = activeAccount?.derivation.kind === "imported-raw-key";
+  // A Ledger account's private key never leaves the device, so there is no phrase
+  // or key to reveal here. Show the device-recovery note instead of the reveal
+  // form — never fabricate or display a phrase for a hardware account.
+  if (activeAccount?.derivation.kind === "ledger") {
+    return (
+      flowHeader("Reveal secrets", status, "Hardware account") +
+      flowScreen(
+        "reveal",
+        `<section class="section" role="note">
+          <p class="eyebrow">Recovery</p>
+          <p class="hint">This account lives on your Ledger. Its keys never leave the device, so there is no recovery phrase or private key to reveal here. Recover this account from your Ledger device itself, using the recovery phrase you set up with Ledger — not this wallet.</p>
+        </section>`,
+      )
+    );
+  }
   return (
     flowHeader("Reveal secrets", status, "Recovery phrase and active key") +
     flowScreen(

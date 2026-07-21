@@ -66,21 +66,22 @@ const mountRuntime = () => {
     openConnected: () => Promise.resolve(null),
     request: () => Promise.resolve(enumerateClient),
   };
+  const networkId = () => "SN_MAIN";
   const runtime = createLedgerOnboardRuntime({
     connector,
+    create: (accountIndex, publicKeyX) => {
+      added.push([networkId(), accountIndex, publicKeyX]);
+      return Promise.resolve();
+    },
     describe: () => Promise.resolve({ balance: null, deployed: null }),
     existingIds: () => new Set<string>(),
     mount,
-    networkId: () => "SN_MAIN",
+    networkId,
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
     },
     wallet: {
-      addLedgerAccount: (networkId, accountIndex, publicKeyX) => {
-        added.push([networkId, accountIndex, publicKeyX]);
-        return Promise.resolve(candidate(accountIndex).id);
-      },
       deriveLedgerAccounts: () => Promise.resolve([candidate(0), candidate(1)]),
     },
   });

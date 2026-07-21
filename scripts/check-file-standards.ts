@@ -64,6 +64,8 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/sidepanel/gate-views.ts",
   "src/sidepanel/ledger/client.ts",
   "src/sidepanel/ledger/errors.ts",
+  "src/sidepanel/ledger/first-run.ts",
+  "src/sidepanel/ledger/onboard-entry.ts",
   "src/sidepanel/ledger/runtime-client.ts",
   "src/sidepanel/ledger/sign-runtime.ts",
   "src/sidepanel/ledger/sign-session.ts",

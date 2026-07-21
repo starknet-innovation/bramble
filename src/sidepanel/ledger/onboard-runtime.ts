@@ -28,17 +28,23 @@ import type { LedgerConnector } from "./sign-session";
 /**
  * Collaborators the onboarding binder needs: the overlay `mount` it owns, the
  * device `connector`, the active `networkId`, an `existingIds` accessor for
- * duplicate detection, a per-candidate on-chain `describe`, the panel wallet
- * client, and a `refresh` run after a successful add.
+ * duplicate detection, a per-candidate on-chain `describe`, the `create` action
+ * for the chosen account, the panel wallet client (for address derivation), and
+ * a `refresh` run after a successful add.
+ *
+ * `create` is injected rather than fixed so one runtime serves both entry points:
+ * the first-run screen wires it to `createLedgerVault` (a brand-new Ledger-only
+ * wallet), while the add-to-existing-wallet entry wires it to `addLedgerAccount`.
  */
 export type LedgerOnboardRuntimeDeps = {
   readonly connector: LedgerConnector;
+  readonly create: (accountIndex: number, publicKeyX: string) => Promise<void>;
   readonly describe: (address: string, networkId: string) => Promise<LedgerCandidateState>;
   readonly existingIds: () => ReadonlySet<string>;
   readonly mount: HTMLElement;
   readonly networkId: () => string;
   readonly refresh: () => Promise<void>;
-  readonly wallet: Pick<SidepanelWallet, "addLedgerAccount" | "deriveLedgerAccounts">;
+  readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
 };
 
 /**
@@ -58,7 +64,7 @@ export type LedgerOnboardRuntime = {
 export const createLedgerOnboardRuntime = (
   deps: LedgerOnboardRuntimeDeps,
 ): LedgerOnboardRuntime => {
-  const { connector, describe, existingIds, mount, networkId, refresh, wallet } = deps;
+  const { connector, create, describe, existingIds, mount, networkId, refresh, wallet } = deps;
   let controller: LedgerOnboardController;
 
   const bindControls = (): void => {
@@ -101,9 +107,7 @@ export const createLedgerOnboardRuntime = (
 
   controller = createLedgerOnboardController({
     connector,
-    create: async (accountIndex, publicKeyX) => {
-      await wallet.addLedgerAccount(networkId(), accountIndex, publicKeyX);
-    },
+    create,
     derive: (entries) => wallet.deriveLedgerAccounts(networkId(), entries),
     describe: (account) => describe(account.address, networkId()),
     enumerate: (client) => enumerateLedgerPubKeys(client),
