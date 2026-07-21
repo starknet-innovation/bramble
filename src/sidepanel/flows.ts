@@ -298,6 +298,11 @@ export const accountFlow = (
           <p id="import-key-result" role="status"></p>
         </form>
       </section>
+      <section class="section">
+        <h2>Connect a Ledger</h2>
+        <p class="hint">Add a hardware account on ${escapeHtml(status.network)} from a Ledger device. Its private key never leaves the device; this reads only public keys to build the account list. The account is counterfactual until its first transaction — fund its address with STRK before sending.</p>
+        <button id="connect-ledger" class="secondary" data-connect-ledger type="button">${icon("shield")}Connect a Ledger</button>
+      </section>
       ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}
       ${
         account

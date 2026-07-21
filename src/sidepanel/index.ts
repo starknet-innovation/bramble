@@ -22,6 +22,7 @@ import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
 import { hydrateView } from "./hydrate";
 import { bindImportKey } from "./import-key-ui";
+import { createLedgerOnboardRuntime } from "./ledger/onboard-runtime";
 import { webHidConnector } from "./ledger/sign-connector";
 import { createLedgerSignRuntime } from "./ledger/sign-runtime";
 import { prefersReducedMotion } from "./motion";
@@ -160,6 +161,27 @@ const ledgerSign = createLedgerSignRuntime({
   wallet,
 });
 
+// Ledger onboarding overlay (add a keyless hardware account to this wallet).
+// Its own overlay outside #app for the same repaint-survival reason as the sign
+// takeover. The picker's per-candidate deployed/balance state is left
+// unavailable pending a background per-address status query (follow-up); the
+// controller degrades gracefully, showing addresses the user can still select.
+const ledgerOnboardMount = document.createElement("div");
+ledgerOnboardMount.className = "ledger-sign-overlay";
+ledgerOnboardMount.hidden = true;
+document.body.append(ledgerOnboardMount);
+const ledgerOnboard = createLedgerOnboardRuntime({
+  connector: webHidConnector,
+  describe: () => Promise.resolve({ balance: null, deployed: null }),
+  existingIds: () => new Set(cache.status.accounts.map((stored) => stored.id)),
+  mount: ledgerOnboardMount,
+  networkId: () => cache.status.networkId,
+  refresh: async () => {
+    await render(await wallet.loadStatus());
+  },
+  wallet,
+});
+
 const bindAll = (): void => {
   bindNavigation();
   bindBack();
@@ -239,6 +261,7 @@ const bindAll = (): void => {
     wallet,
   });
   bindDisclosures(app);
+  ledgerOnboard.bindTriggers(app);
   bindSwap({
     app,
     balances: () => cache.balances,
