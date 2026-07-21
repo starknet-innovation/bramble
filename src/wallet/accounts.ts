@@ -5,13 +5,23 @@ import type { KrustyKms } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
 import {
+  isLedgerAccountIndex,
+  LEDGER_EIP2645_APPLICATION,
+  ledgerAccountPath,
+} from "../starknet/ledger-path";
+import {
   DEFAULT_NETWORK,
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   isStarkPrivateKey,
   type StarknetNetworkId,
 } from "../starknet/networks";
-import type { AccountRef, DerivedAccountRef, ImportedAccountRef } from "../storage/vault-schema";
+import type {
+  AccountRef,
+  DerivedAccountRef,
+  ImportedAccountRef,
+  LedgerAccountRef,
+} from "../storage/vault-schema";
 
 const OZ_ACCOUNT_VERSION = "3.0.0";
 
@@ -161,6 +171,116 @@ export const deriveAccount = async (
     },
     privateKey,
   };
+};
+
+/**
+ * A device-enumerated (index, public-key x-coordinate) pair read from a Ledger.
+ * The public key comes from the device; the wallet derives no key material.
+ */
+export type LedgerPubKeyEntry = {
+  readonly accountIndex: number;
+  readonly publicKeyX: string;
+};
+
+/**
+ * Ledger account creation input. The public key and its account index come from
+ * the device; the derivation path is rebuilt deterministically from the index
+ * (one source of truth with the device client), so a stored path always matches
+ * the one used to enumerate and sign.
+ */
+export type LedgerAccountInput = LedgerPubKeyEntry & {
+  readonly classHash?: string;
+  readonly eip2645application?: string;
+  readonly networkId?: StarknetNetworkId;
+};
+
+const validatedNetworkClassHash = async (
+  kms: KrustyKms,
+  networkId: StarknetNetworkId,
+  classHash: string | undefined,
+): Promise<string> => {
+  const resolved = classHash ?? (await getOzAccountClassHash(kms, networkId));
+  if (!isNonZeroStarkFieldElement(resolved)) {
+    throw new WalletError("Invalid account class hash");
+  }
+  return resolved;
+};
+
+/**
+ * Derives keyless Ledger account metadata from a device-provided public key.
+ *
+ * Reuses the same `kms.deriveOzAccountAddress(publicKeyX, classHash)` call HD and
+ * imported accounts use, so the counterfactual address a Ledger account is funded
+ * at equals the one it will deploy to. No seed, no private key, and no new Krusty
+ * entry point: address derivation from an external public key is a public-key op,
+ * not signing, so it does not weaken "Krusty owns crypto / fail closed". Throws a
+ * `WalletError` on an out-of-range index or an invalid public key or KMS result.
+ */
+export const deriveLedgerAccount = async (
+  kms: KrustyKms,
+  input: LedgerAccountInput,
+): Promise<LedgerAccountRef> => {
+  if (!isLedgerAccountIndex(input.accountIndex)) {
+    throw new WalletError("Invalid Ledger account index");
+  }
+  if (!isNonZeroStarkFieldElement(input.publicKeyX)) {
+    throw new WalletError("Invalid Ledger public key");
+  }
+
+  const networkId = input.networkId ?? DEFAULT_NETWORK.id;
+  if (!isStarknetNetworkId(networkId)) {
+    throw new WalletError("Invalid Starknet network");
+  }
+
+  const classHash = await validatedNetworkClassHash(kms, networkId, input.classHash);
+  const address = await kms.deriveOzAccountAddress(input.publicKeyX, classHash);
+  if (!isNonZeroStarkFieldElement(address)) {
+    throw new WalletError("Krusty KMS returned invalid account address");
+  }
+
+  return {
+    address,
+    classHash,
+    derivation: {
+      accountIndex: input.accountIndex,
+      eip2645application: input.eip2645application ?? LEDGER_EIP2645_APPLICATION,
+      kind: "ledger",
+      path: ledgerAccountPath(input.accountIndex),
+    },
+    id: `${networkId}:${address}`,
+    networkId,
+    publicKeyX: input.publicKeyX,
+  };
+};
+
+/**
+ * Derives account metadata for a batch of enumerated Ledger (index, public key)
+ * pairs on one network, resolving the class hash once and deriving addresses in
+ * parallel. Backs the multi-index account picker. Throws if any entry is invalid.
+ */
+export const deriveLedgerAccountRefs = async (
+  kms: KrustyKms,
+  input: {
+    readonly classHash?: string;
+    readonly entries: readonly LedgerPubKeyEntry[];
+    readonly networkId?: StarknetNetworkId;
+  },
+): Promise<readonly LedgerAccountRef[]> => {
+  const networkId = input.networkId ?? DEFAULT_NETWORK.id;
+  if (!isStarknetNetworkId(networkId)) {
+    throw new WalletError("Invalid Starknet network");
+  }
+  const classHash = await validatedNetworkClassHash(kms, networkId, input.classHash);
+  return Promise.all(
+    input.entries.map((entry) =>
+      deriveLedgerAccount(kms, {
+        accountIndex: entry.accountIndex,
+        classHash,
+        networkId,
+        publicKeyX: entry.publicKeyX,
+      }),
+    ),
+  );
 };
 
 /**

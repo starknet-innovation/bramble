@@ -3,6 +3,7 @@
  */
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
+import { isLedgerAccountIndex, isLedgerAccountPath } from "../starknet/ledger-path";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
@@ -12,15 +13,16 @@ import {
 /**
  * Current vault schema version accepted by validators and writers.
  *
- * Version anchor for the raw-key-import feature (v0.5): {@link AccountRef} became
- * a union that admits the `imported-raw-key` variant (a `publicKeyY`-less
- * account). This is an ADDITIVE, backward-compatible extension of the v2 shape —
- * existing v2 `starknet-bip44` records still validate unchanged, and no stored
- * v2 vault needs rewriting — so the version intentionally stays 2 with no
- * VAULT_MIGRATIONS step. A bump/migration is only required when an existing
- * stored record must be transformed, which is not the case here.
+ * Version anchor for the Ledger hardware-account feature (v3): {@link AccountRef}
+ * now admits a keyless `ledger` variant that holds no {@link SigningKeyRef}, so
+ * the account↔signingKey bijection is relaxed for that kind alone. Unlike the
+ * additive `imported-raw-key` extension (which still stored a key and so needed
+ * no bump), a keyless account changes what counts as a valid vault: an old
+ * validator would reject it. The version is therefore bumped to 3 with one
+ * adjacent {@link VaultMigrationStep} that rewrites nothing — a stored v2 vault
+ * has no Ledger account, so migration only stamps the new version.
  */
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 /**
  * BIP-44 HD derivation provenance for an account derived from the wallet's
@@ -41,9 +43,23 @@ export type ImportedKeyDerivation = {
 };
 
 /**
- * Account provenance discriminated by `kind`: HD-derived, or raw-key import.
+ * Provenance for a Ledger hardware account. The private key never leaves the
+ * device, so this carries only the coordinates needed to ask the device to sign
+ * again: the exact EIP-2645 path handed to the device, its account index, and
+ * the pinned application segment. No key material is ever retained.
  */
-export type AccountDerivation = Bip44Derivation | ImportedKeyDerivation;
+export type LedgerDerivation = {
+  readonly accountIndex: number;
+  readonly eip2645application: string;
+  readonly kind: "ledger";
+  readonly path: string;
+};
+
+/**
+ * Account provenance discriminated by `kind`: HD-derived, raw-key import, or a
+ * keyless Ledger hardware account.
+ */
+export type AccountDerivation = Bip44Derivation | ImportedKeyDerivation | LedgerDerivation;
 
 type AccountRefCore = {
   readonly address: string;
@@ -72,10 +88,20 @@ export type ImportedAccountRef = AccountRefCore & {
 };
 
 /**
- * Public account metadata safe to expose to granted origins. Discriminated by
- * `derivation.kind` into HD-derived and raw-key-imported accounts.
+ * Keyless Ledger hardware account. Krusty exposes only the public-key
+ * x-coordinate the OZ address is derived from, matching the imported-account
+ * shape, but this account holds no {@link SigningKeyRef}: every signature is
+ * produced on the device at its stored {@link LedgerDerivation.path}.
  */
-export type AccountRef = DerivedAccountRef | ImportedAccountRef;
+export type LedgerAccountRef = AccountRefCore & {
+  readonly derivation: LedgerDerivation;
+};
+
+/**
+ * Public account metadata safe to expose to granted origins. Discriminated by
+ * `derivation.kind` into HD-derived, raw-key-imported, and Ledger accounts.
+ */
+export type AccountRef = DerivedAccountRef | ImportedAccountRef | LedgerAccountRef;
 
 /**
  * Encrypted-vault reference from an account id to its private key.
@@ -106,11 +132,10 @@ export type VaultV1 = {
 };
 
 /**
- * Current encrypted vault schema. `mnemonic` retains the wallet recovery
- * phrase so more accounts can be derived and the phrase can be revealed after
- * re-authentication; it is `null` for vaults migrated from schema v1 (where
- * the phrase was never stored) so those wallets stay read-only for those
- * operations without failing closed.
+ * Legacy schema-v2 vault, reachable only through migration. Its accounts are
+ * key-backed only (`starknet-bip44` or `imported-raw-key`); a keyless Ledger
+ * account is invalid at this version. `mnemonic` retains the recovery phrase
+ * (null for vaults migrated from v1). New writes always use {@link VaultV3}.
  */
 export type VaultV2 = {
   readonly accounts: readonly AccountRef[];
@@ -122,9 +147,26 @@ export type VaultV2 = {
 };
 
 /**
+ * Current encrypted vault schema. Identical in shape to v2 but its accounts may
+ * include the keyless {@link LedgerAccountRef} variant, so the account↔signingKey
+ * bijection is relaxed to require a key for every non-Ledger account only.
+ * `mnemonic` retains the recovery phrase; it is `null` for vaults migrated from
+ * schema v1 (where the phrase was never stored) so those wallets stay read-only
+ * for phrase-dependent operations without failing closed.
+ */
+export type VaultV3 = {
+  readonly accounts: readonly AccountRef[];
+  readonly activeAccountId: string | null;
+  readonly mnemonic: string | null;
+  readonly originGrants: readonly OriginGrant[];
+  readonly schemaVersion: 3;
+  readonly signingKeys: readonly SigningKeyRef[];
+};
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV2;
+export type Vault = VaultV3;
 
 const isSafeIndex = (value: unknown): value is number =>
   Number.isSafeInteger(value) && Number(value) >= 0;
@@ -141,6 +183,15 @@ const isBip44Derivation = (value: unknown): value is Bip44Derivation =>
 
 const isImportedKeyDerivation = (value: unknown): value is ImportedKeyDerivation =>
   isRecord(value) && hasOnlyKnownKeys(value, ["kind"]) && value["kind"] === "imported-raw-key";
+
+const isLedgerDerivation = (value: unknown): value is LedgerDerivation =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountIndex", "eip2645application", "kind", "path"]) &&
+  value["kind"] === "ledger" &&
+  isLedgerAccountIndex(value["accountIndex"]) &&
+  typeof value["eip2645application"] === "string" &&
+  value["eip2645application"].length > 0 &&
+  isLedgerAccountPath(value["path"]);
 
 /**
  * Validates account ids used in public metadata and references.
@@ -164,41 +215,44 @@ const hasValidAccountCore = (value: Record<string, unknown>): boolean =>
   value["id"] === `${value["networkId"]}:${value["address"]}` &&
   isNonZeroFelt(value["publicKeyX"]);
 
+const KEYLESS_ACCOUNT_KEYS = [
+  "address",
+  "classHash",
+  "derivation",
+  "id",
+  "networkId",
+  "publicKeyX",
+] as const;
+const DERIVED_ACCOUNT_KEYS = [...KEYLESS_ACCOUNT_KEYS, "publicKeyY"] as const;
+
 /**
- * Validates public account metadata from decrypted vault data. Imported
- * accounts round-trip without a `publicKeyY`; derived accounts require it.
+ * Validates public account metadata from decrypted vault data. Imported and
+ * Ledger accounts round-trip without a `publicKeyY`; HD-derived accounts require
+ * it. Ledger membership is discriminated by the `derivation` union.
  */
 export const isAccountRef = (value: unknown): value is AccountRef => {
   if (!isRecord(value)) {
     return false;
   }
-  if (isImportedKeyDerivation(value["derivation"])) {
-    return (
-      hasOnlyKnownKeys(value, [
-        "address",
-        "classHash",
-        "derivation",
-        "id",
-        "networkId",
-        "publicKeyX",
-      ]) && hasValidAccountCore(value)
-    );
+  const derivation = value["derivation"];
+  if (isImportedKeyDerivation(derivation) || isLedgerDerivation(derivation)) {
+    return hasOnlyKnownKeys(value, KEYLESS_ACCOUNT_KEYS) && hasValidAccountCore(value);
   }
   return (
-    hasOnlyKnownKeys(value, [
-      "address",
-      "classHash",
-      "derivation",
-      "id",
-      "networkId",
-      "publicKeyX",
-      "publicKeyY",
-    ]) &&
-    isBip44Derivation(value["derivation"]) &&
+    hasOnlyKnownKeys(value, DERIVED_ACCOUNT_KEYS) &&
+    isBip44Derivation(derivation) &&
     isNonZeroFelt(value["publicKeyY"]) &&
     hasValidAccountCore(value)
   );
 };
+
+/**
+ * True when an account holds no signing key in the vault: a Ledger hardware
+ * account signs on-device, so it is the one account kind exempt from the
+ * account↔signingKey bijection. One source of truth for that exemption.
+ */
+export const isKeylessAccount = (account: AccountRef): account is LedgerAccountRef =>
+  account.derivation.kind === "ledger";
 
 const isSigningKeyRef = (value: unknown): value is SigningKeyRef =>
   isRecord(value) &&
@@ -219,7 +273,7 @@ const isOriginGrant = (value: unknown): value is OriginGrant =>
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV2 => ({
+export const emptyVault = (): VaultV3 => ({
   accounts: [],
   activeAccountId: null,
   mnemonic: null,
@@ -231,7 +285,25 @@ export const emptyVault = (): VaultV2 => ({
 const isRetainedMnemonic = (value: unknown): value is string | null =>
   value === null || (typeof value === "string" && value.trim().length > 0);
 
-const hasValidVaultReferences = (value: Record<string, unknown>): boolean => {
+// Relaxed account↔signingKey bijection: every signing key must map to an
+// account, and every account must hold exactly one signing key UNLESS it is a
+// keyless Ledger account, which must hold none. For key-backed-only vaults
+// (v1/v2, where a Ledger account cannot appear) this is identical to a strict
+// bijection. Extracted so the main validator stays within the complexity budget.
+const hasValidKeyBindings = (
+  accounts: readonly AccountRef[],
+  signingKeys: readonly SigningKeyRef[],
+): boolean =>
+  signingKeys.every((key) => accounts.some((account) => account.id === key.accountId)) &&
+  accounts.every(
+    (account) =>
+      signingKeys.some((key) => key.accountId === account.id) === !isKeylessAccount(account),
+  );
+
+const hasValidVaultReferences = (
+  value: Record<string, unknown>,
+  options: { readonly ledgerAllowed: boolean },
+): boolean => {
   if (
     (!isAccountId(value["activeAccountId"]) && value["activeAccountId"] !== null) ||
     !Array.isArray(value["accounts"]) ||
@@ -246,7 +318,10 @@ const hasValidVaultReferences = (value: Record<string, unknown>): boolean => {
   const signingKeys = value["signingKeys"];
 
   return (
-    accounts.every(isAccountRef) &&
+    accounts.every(
+      (account) =>
+        isAccountRef(account) && (options.ledgerAllowed || account.derivation.kind !== "ledger"),
+    ) &&
     hasUniqueStrings(accounts.map((account) => account.id)) &&
     originGrants.every(isOriginGrant) &&
     hasUniqueStrings(originGrants.map((grant) => grant.origin)) &&
@@ -256,8 +331,7 @@ const hasValidVaultReferences = (value: Record<string, unknown>): boolean => {
     ) &&
     signingKeys.every(isSigningKeyRef) &&
     hasUniqueStrings(signingKeys.map((key) => key.accountId)) &&
-    signingKeys.every((key) => accounts.some((account) => account.id === key.accountId)) &&
-    accounts.every((account) => signingKeys.some((key) => key.accountId === account.id)) &&
+    hasValidKeyBindings(accounts, signingKeys) &&
     (accounts.length === 0
       ? value["activeAccountId"] === null
       : value["activeAccountId"] !== null &&
@@ -266,7 +340,8 @@ const hasValidVaultReferences = (value: Record<string, unknown>): boolean => {
 };
 
 /**
- * Validates the legacy schema-v1 vault used only as a migration source.
+ * Validates the legacy schema-v1 vault used only as a migration source. Predates
+ * Ledger accounts, so keyless accounts are rejected here.
  */
 export const isVaultV1 = (value: unknown): value is VaultV1 =>
   isRecord(value) &&
@@ -279,22 +354,38 @@ export const isVaultV1 = (value: unknown): value is VaultV1 =>
     "signingKeys",
   ]) &&
   value["schemaVersion"] === 1 &&
-  hasValidVaultReferences(value);
+  hasValidVaultReferences(value, { ledgerAllowed: false });
+
+const V2_V3_KEYS = [
+  "accounts",
+  "activeAccountId",
+  "mnemonic",
+  "originGrants",
+  "schemaVersion",
+  "signingKeys",
+] as const;
 
 /**
- * Validates the current vault schema and internal references.
+ * Validates the legacy schema-v2 vault used only as a migration source. Predates
+ * Ledger accounts, so its account↔signingKey bijection is strict: a keyless
+ * account is rejected at this version.
  */
 export const isVaultV2 = (value: unknown): value is VaultV2 =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, [
-    "accounts",
-    "activeAccountId",
-    "mnemonic",
-    "originGrants",
-    "schemaVersion",
-    "signingKeys",
-  ]) &&
+  hasOnlyKnownKeys(value, V2_V3_KEYS) &&
+  value["schemaVersion"] === 2 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, { ledgerAllowed: false });
+
+/**
+ * Validates the current vault schema and internal references, admitting the
+ * keyless Ledger account variant.
+ */
+export const isVaultV3 = (value: unknown): value is VaultV3 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V2_V3_KEYS) &&
   value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value);
+  hasValidVaultReferences(value, { ledgerAllowed: true });
