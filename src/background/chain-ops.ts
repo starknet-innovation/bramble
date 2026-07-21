@@ -5,6 +5,7 @@
  */
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
+import { walletErrorMessage } from "../shared/errors";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
@@ -91,9 +92,17 @@ export const executeSignApproval = async (
   }
   // A keyless Ledger account signs typed data on the device (verified against
   // publicKeyX) instead of the vault; accountHashSigner makes the same choice as
-  // every other submitting path.
-  const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
-  return { ok: true, signature };
+  // every other submitting path. A device rejection/timeout/verify-failure, or a
+  // Ledger account with no queue wired, throws a WalletError from the sign path:
+  // catch it and return `{ error }` (mirroring invoke/declare) so the applier
+  // settles the held dapp request with the real reason instead of leaving it to
+  // hang on an unhandled throw. Fails closed — no signature returned on error.
+  try {
+    const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
+    return { ok: true, signature };
+  } catch (error) {
+    return { error: walletErrorMessage(error, "sign typed data request failed") };
+  }
 };
 
 type ChainOpsHandler = (

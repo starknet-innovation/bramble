@@ -363,25 +363,54 @@ describe("privileged Ledger messages", () => {
   test("SNIP-12 typed data fails closed on a device signature that does not verify", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
-    await expect(
-      executeSignApproval(
-        {
-          ledgerSignQueue: deviceQueue("0xdeadbeef"),
-          preferencesStore: {
-            async read() {
-              return { activeNetworkId: "SN_MAIN" } as unknown as WalletPreferences;
-            },
-          } as never,
-          session,
-          wallet: {
-            async getGrantedAccounts() {
-              return [ledgerAccount];
-            },
-          } as unknown as WalletStatusReader,
-        },
-        { origin: "https://dapp.example", typedData: TYPED_DATA },
-      ),
-    ).rejects.toThrow("Ledger signature verification failed");
+    // A verify-failure must be RETURNED as `{ error }`, not thrown: the sign
+    // applier settles the held dapp request only from a returned result, so a
+    // throw here would leave the dapp promise hanging (as invoke/declare once
+    // did). No signature is leaked to the dapp on error.
+    const result = await executeSignApproval(
+      {
+        ledgerSignQueue: deviceQueue("0xdeadbeef"),
+        preferencesStore: {
+          async read() {
+            return { activeNetworkId: "SN_MAIN" } as unknown as WalletPreferences;
+          },
+        } as never,
+        session,
+        wallet: {
+          async getGrantedAccounts() {
+            return [ledgerAccount];
+          },
+        } as unknown as WalletStatusReader,
+      },
+      { origin: "https://dapp.example", typedData: TYPED_DATA },
+    );
+    expect(result).toEqual({ error: "Ledger signature verification failed" });
+    expect("signature" in result).toBe(false);
+  });
+
+  test("SNIP-12 typed data returns { error } (not a throw) when no device queue is wired", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    // A keyless Ledger account with no queue makes accountHashSigner throw a
+    // WalletError up front. It must surface as a returned `{ error }` so the
+    // applier settles the dapp waiter rather than hanging on an unhandled throw.
+    const result = await executeSignApproval(
+      {
+        preferencesStore: {
+          async read() {
+            return { activeNetworkId: "SN_MAIN" } as unknown as WalletPreferences;
+          },
+        } as never,
+        session,
+        wallet: {
+          async getGrantedAccounts() {
+            return [ledgerAccount];
+          },
+        } as unknown as WalletStatusReader,
+      },
+      { origin: "https://dapp.example", typedData: TYPED_DATA },
+    );
+    expect(result).toEqual({ error: "Ledger signing unavailable" });
   });
 
   test("reports no pending sign for an unknown id", async () => {
