@@ -14,7 +14,14 @@ import type {
 } from "../storage/multisig-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { icon } from "./icons";
-import { accountLabel, copyButton, flowHeader, flowScreen, noAccountEmpty } from "./parts";
+import {
+  accountLabel,
+  copyButton,
+  flowHeader,
+  flowScreen,
+  hardwareBadge,
+  noAccountEmpty,
+} from "./parts";
 
 const multisigDisplayName = (record: MultisigRecord): string =>
   record.name ?? accountLabel(record.address);
@@ -139,12 +146,22 @@ const proposalRow = (proposal: MultisigProposalRecord, quorum: number): string =
     ${proposalActions(proposal)}
   </li>`;
 
-const signerRow = (signer: string, account: AccountRef | null): string => `
+const signerRow = (
+  signer: string,
+  account: AccountRef | null,
+  accounts: readonly AccountRef[],
+): string => {
+  // Badge a signer that is a Ledger account in THIS wallet, so a co-signer can
+  // see at a glance which signers are hardware-backed here.
+  const local = accounts.find((stored) => sameFelt(stored.address, signer));
+  return `
   <li class="address-line">
     <code>${escapeHtml(accountLabel(signer))}</code>
     ${account && sameFelt(signer, account.address) ? '<span class="pill">You</span>' : ""}
+    ${local ? hardwareBadge(local) : ""}
     ${copyButton(signer, "Copy signer address")}
   </li>`;
+};
 
 /**
  * Renders one multisig's detail screen: on-chain config, tracked proposals
@@ -180,7 +197,7 @@ export const multisigDetailFlow = (
         </div>
         <p class="address-line"><code>${escapeHtml(record.address)}</code>${copyButton(record.address, "Copy multisig address")}</p>
         <h2>Signers</h2>
-        <ul class="address-book">${record.signers.map((signer) => signerRow(signer, account)).join("")}</ul>
+        <ul class="address-book">${record.signers.map((signer) => signerRow(signer, account, status.accounts)).join("")}</ul>
         <span class="hint">Signer and quorum changes are proposals the multisig sends to itself (add_signers, remove_signers, change_quorum).</span>
         <p id="multisig-detail-result" role="status"></p>
       </section>
@@ -242,6 +259,27 @@ export const multisigProposeFlow = (
   );
 };
 
+// A picker of this wallet's accounts on the active network, each inserting its
+// address into the signers field. Ledger accounts carry the hardware badge, so a
+// hardware key can be added as a signer with one tap (its address is all the
+// signer set needs — no device interaction to be a signer).
+const signerPicker = (status: WalletStatus): string => {
+  const accounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
+  if (accounts.length === 0) {
+    return "";
+  }
+  const rows = accounts
+    .map(
+      (stored) =>
+        `<button class="secondary small" data-signer-insert="${escapeHtml(stored.address)}" type="button">${icon("plus")}<code>${escapeHtml(accountLabel(stored.address))}</code>${hardwareBadge(stored)}</button>`,
+    )
+    .join("");
+  return `<div class="stack">
+    <span class="hint">Add a signer from this wallet's accounts:</span>
+    <div class="row wrap">${rows}</div>
+  </div>`;
+};
+
 /**
  * Renders the deploy form for a new multisig from the pinned class, including
  * the declare-first path when the class is missing on the active network.
@@ -271,6 +309,7 @@ export const multisigDeployFlow = (
       }
       <form id="multisig-deploy-form">
         <label><span>Signer addresses (one per line)</span><textarea class="mono" name="signers" rows="4" required autocomplete="off" spellcheck="false">${account ? escapeHtml(account.address) : ""}</textarea></label>
+        ${signerPicker(status)}
         <label><span>Quorum (confirmations required)</span><input name="quorum" inputmode="numeric" value="1" required autocomplete="off" /></label>
         <label><span>Salt</span><input class="mono" name="salt" value="0x0" autocomplete="off" spellcheck="false" /></label>
         <span class="hint">The contract address is derived from the class, signers, quorum, and salt — the same inputs always produce the same address on every network. Name it after it finalizes, when you add it to your watched multisigs.</span>
