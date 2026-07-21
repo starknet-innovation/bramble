@@ -211,6 +211,16 @@ export const formatFri = (fri: string): string => {
 };
 
 /**
+ * Renders the hardware-wallet badge for a Ledger account, or an empty string for
+ * any other account kind. Keyed off the account's `derivation.kind`, so the badge
+ * is a total function of provenance — a software account can never render it.
+ */
+export const hardwareBadge = (account: AccountRef): string =>
+  account.derivation.kind === "ledger"
+    ? `<span class="pill pill-hardware">${icon("shield")}Hardware</span>`
+    : "";
+
+/**
  * Renders an icon button that copies a value to the clipboard.
  */
 export const copyButton = (value: string, label: string): string =>
