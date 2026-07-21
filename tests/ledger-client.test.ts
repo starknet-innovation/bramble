@@ -20,8 +20,11 @@ const OK = { errorMessage: "No errors", returnCode: 0x9000 };
 
 const bytes = (values: readonly number[]): Uint8Array => Uint8Array.from(values);
 
-// A 65-byte uncompressed key: 0x04 ‖ X(32) ‖ Y(32). X here is 0x…0102 padded.
-const publicKey = bytes([0x04, ...Array(31).fill(0), 0x02, ...Array(32).fill(0xff)]);
+// The real `@ledgerhq/hw-app-starknet` getPubKey returns 64 bytes X(32) ‖ Y(32)
+// with the SEC1 format byte already stripped (its getStarkKey reads X back as
+// publicKey.slice(0, 32)). X here is 0x…02; Y is all 0xff. A prefixed 65-byte
+// fake would let the old slice(1, 33) "recover" X by luck and hide the bug.
+const publicKey = bytes([...Array(31).fill(0), 0x02, ...Array(32).fill(0xff)]);
 
 const fakeClient = (overrides: Partial<LedgerDeviceClient> = {}): LedgerDeviceClient => ({
   async getAppVersion() {
@@ -96,14 +99,17 @@ describe("ledgerSignHashOnDevice", () => {
     });
   });
 
-  test("detects a blind-signing-disabled refusal from the error message", async () => {
+  test("maps an ExecutionError from signHash to blind-signing-disabled", async () => {
+    // The real signHash swallows every thrown transport error and folds any
+    // non-accepted status word (e.g. the conditions-not-satisfied returned when
+    // blind signing is off) into ExecutionError (0x6f00) — never a distinct word.
     const client = fakeClient({
       async signHash() {
         return {
-          errorMessage: "Blind signing must be enabled",
+          errorMessage: "Execution Error",
           r: bytes([]),
           s: bytes([]),
-          returnCode: 0x6985,
+          returnCode: 0x6f00,
           v: 0,
         };
       },
@@ -113,25 +119,36 @@ describe("ledgerSignHashOnDevice", () => {
     });
   });
 
-  test("maps a thrown transport error by its signature", async () => {
+  test("maps an unexpected sign status word to unexpected-device-error", async () => {
     const client = fakeClient({
       async signHash() {
-        throw new Error("LockedDeviceError: device is locked");
+        return { errorMessage: "Bad INS", r: bytes([]), s: bytes([]), returnCode: 0x6e01, v: 0 };
       },
     });
     await expect(ledgerSignHashOnDevice(client, "m", "0x1")).rejects.toMatchObject({
-      code: "device-locked",
+      code: "unexpected-device-error",
     });
   });
+});
 
-  test("wraps an unrecognized thrown value as unexpected-device-error", async () => {
+describe("thrown transport errors on the version read", () => {
+  // getAppVersion (unlike getPubKey/signHash) lets a thrown transport error
+  // propagate, so mapThrown classifies a locked/disconnected/busy device there.
+  test("maps a thrown LockedDeviceError to device-locked", async () => {
     const client = fakeClient({
-      async signHash() {
+      async getAppVersion() {
+        throw new Error("LockedDeviceError: device is locked");
+      },
+    });
+    await expect(ledgerAppVersion(client)).rejects.toMatchObject({ code: "device-locked" });
+  });
+
+  test("wraps an unrecognized thrown value as an unexpected-device-error rejection", async () => {
+    const client = fakeClient({
+      async getAppVersion() {
         throw "weird";
       },
     });
-    await expect(ledgerSignHashOnDevice(client, "m", "0x1")).rejects.toBeInstanceOf(
-      LedgerRejection,
-    );
+    await expect(ledgerAppVersion(client)).rejects.toBeInstanceOf(LedgerRejection);
   });
 });

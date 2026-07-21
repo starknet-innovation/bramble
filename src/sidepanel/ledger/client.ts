@@ -6,6 +6,16 @@
  * and maps every device return code and thrown transport error to the typed
  * {@link LedgerRejection} catalog. Fails closed — an unrecognized status becomes
  * `unexpected-device-error`, never a raw error.
+ *
+ * Classification is grounded in how the real `@ledgerhq/hw-app-starknet` behaves,
+ * not in assumptions: `getAppVersion` lets a thrown transport error propagate
+ * (so a locked/disconnected/busy device is caught via {@link mapThrown} on the
+ * version read), while `getPubKey`/`signHash` catch every thrown transport error
+ * internally and report it as an `ExecutionError` (0x6f00) return code — and
+ * their `sendApdu` only passes NoError/BadCla/BadIns/InvalidP1P2/UserRejected, so
+ * any other status word (e.g. the conditions-not-satisfied the Starknet app
+ * returns when blind signing is disabled) also surfaces as `ExecutionError`.
+ * Sign-path classification therefore keys off that return code, not a message.
  */
 import type { DeviceSignature } from "../../starknet/ledger-verify";
 import { LedgerRejection, type LedgerRejectionCode } from "./errors";
@@ -64,6 +74,9 @@ export const MC_LEDGER_STARKNET_APP_MIN: LedgerAppVersion = { major: 2, minor: 0
 // from the ledger package (type-only imports above keep tests light).
 const STATUS_OK = 0x9000;
 const STATUS_USER_REJECTED = 0x6e04;
+// The catch-all the library reports for every thrown transport error and for any
+// status word its `sendApdu` does not explicitly accept (see the module header).
+const STATUS_EXECUTION_ERROR = 0x6f00;
 
 const toHex = (bytes: Uint8Array): string => {
   let hex = "";
@@ -78,27 +91,44 @@ const toHex = (bytes: Uint8Array): string => {
 const feltFromBytes = (bytes: Uint8Array): string =>
   `0x${BigInt(`0x${toHex(bytes)}`).toString(16)}`;
 
-// The device returns a 65-byte uncompressed public key (0x04 ‖ X ‖ Y); the OZ
-// account address is derived from X, so only X is kept.
-const publicKeyXOf = (publicKey: Uint8Array): string => feltFromBytes(publicKey.slice(1, 33));
+// `@ledgerhq/hw-app-starknet` `getPubKey` already strips the SEC1 format byte and
+// returns 64 bytes `X ‖ Y` (its `getStarkKey` reads the Stark key back as
+// `publicKey.slice(0, 32)`). X is therefore the first 32 bytes, not bytes [1,33).
+// The OZ account address is derived from X, so only X is kept.
+const publicKeyXOf = (publicKey: Uint8Array): string => feltFromBytes(publicKey.slice(0, 32));
 
-// Best-effort classification of a non-OK device return code. Blind-signing being
-// disabled is reported by the app when a signHash is refused by that setting;
-// its exact status word varies by app build, so the error message is also
-// checked. UNVERIFIED against hardware (v4 wired-but-untested).
-const classifyDeviceStatus = (returnCode: number, errorMessage: string): LedgerRejection => {
+// Classifies a non-OK return code from a SILENT op (version / public-key read).
+// The library hands back UserRejected verbatim; every other non-accepted status
+// (and every swallowed transport error) is collapsed to ExecutionError, which is
+// not actionable here, so it fails closed to `unexpected-device-error`.
+const classifyDeviceStatus = (returnCode: number): LedgerRejection =>
+  returnCode === STATUS_USER_REJECTED
+    ? new LedgerRejection("rejected-on-device", returnCode)
+    : new LedgerRejection("unexpected-device-error", returnCode);
+
+// Classifies a non-OK return code from `signHash`. The library reports a user
+// rejection as UserRejected, but folds every other on-device refusal — including
+// the conditions-not-satisfied the Starknet app returns when blind signing is
+// disabled — into ExecutionError. Blind signing being off is the one recoverable,
+// actionable sign-time failure (the user enables it and retries), and the shared
+// pre-check has already ruled out a locked/disconnected/wrong/too-old device
+// before this runs, so ExecutionError here is surfaced as that unblock prompt.
+const classifySignStatus = (returnCode: number): LedgerRejection => {
   if (returnCode === STATUS_USER_REJECTED) {
     return new LedgerRejection("rejected-on-device", returnCode);
   }
-  if (/blind/i.test(errorMessage)) {
+  if (returnCode === STATUS_EXECUTION_ERROR) {
     return new LedgerRejection("blind-signing-disabled", returnCode);
   }
   return new LedgerRejection("unexpected-device-error", returnCode);
 };
 
 // Maps a thrown transport error to a rejection by its class name/message
-// signature (DisconnectedDevice, LockedDeviceError, a claimed device, …).
-// UNVERIFIED against hardware; the default is unexpected-device-error.
+// signature (DisconnectedDevice, LockedDeviceError, a claimed device, …). This
+// is reachable because `getAppVersion` lets transport throws propagate (unlike
+// `getPubKey`/`signHash`, which swallow them into ExecutionError), so the shared
+// pre-check's version read is where a locked/disconnected/busy device surfaces.
+// The default is unexpected-device-error.
 const THROWN_SIGNATURES: readonly (readonly [RegExp, LedgerRejectionCode])[] = [
   [/locked/i, "device-locked"],
   [/disconnect/i, "disconnected-mid-sign"],
@@ -122,12 +152,9 @@ const runDevice = async <T>(op: () => Promise<T>): Promise<T> => {
   }
 };
 
-const requireOk = (response: {
-  readonly errorMessage: string;
-  readonly returnCode: number;
-}): void => {
+const requireOk = (response: { readonly returnCode: number }): void => {
   if (response.returnCode !== STATUS_OK) {
-    throw classifyDeviceStatus(response.returnCode, response.errorMessage);
+    throw classifyDeviceStatus(response.returnCode);
   }
 };
 
@@ -185,6 +212,8 @@ export const ledgerSignHashOnDevice = async (
   hash: string,
 ): Promise<DeviceSignature> => {
   const response = await runDevice(() => client.signHash(path, hash));
-  requireOk(response);
+  if (response.returnCode !== STATUS_OK) {
+    throw classifySignStatus(response.returnCode);
+  }
   return { r: feltFromBytes(response.r), s: feltFromBytes(response.s) };
 };
