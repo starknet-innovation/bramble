@@ -5,6 +5,7 @@
  * `wallet.denyOrigin` rejects the held request with a spec USER_REFUSED_OP so
  * the dapp promise settles rather than hanging. Only extension pages reach here.
  */
+import { walletErrorMessage } from "../shared/errors";
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
@@ -233,7 +234,25 @@ const applyApproveDecision = async (
   if (!approval) {
     return NOT_FOUND;
   }
-  const result = await APPROVE_APPLIERS[approval.kind](deps, approval);
+  let result: ApplyResult;
+  try {
+    result = await APPROVE_APPLIERS[approval.kind](deps, approval);
+  } catch (error) {
+    // Shared fail-closed settlement boundary. The executor-backed appliers
+    // return `{ error }` on a handled failure (which flows through the normal
+    // settle path below), but any *thrown* error — a signer/executor that
+    // throws from deeper than its own catch, a store read that rejects before
+    // the executor's try, or a future applier with no catch — would otherwise
+    // skip settlement and removal, hanging the held dapp waiter and stranding
+    // the approval. Settle the waiter with the same error-envelope shape the
+    // success path uses and remove the approval exactly as normal completion
+    // does. This runs ONLY on a throw (the try returned nothing), so it can
+    // never double-settle a result that already took the path below.
+    const settled: RuntimeResponse = { error: walletErrorMessage(error, "wallet request failed") };
+    deps.waiters.settle(input.id, settled);
+    deps.approvals.approve(input.id);
+    return settled;
+  }
   if (result.status === "reject") {
     return result.response;
   }

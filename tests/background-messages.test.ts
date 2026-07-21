@@ -221,25 +221,8 @@ describe("createMessageHandler", () => {
       "extension-id",
       { approvals, session },
     );
-    const failingHandler = createMessageHandler(
-      {
-        ...createWallet(),
-        async grantOrigin() {
-          throw new Error("grant failed");
-        },
-      },
-      "extension-id",
-      { approvals, session },
-    );
 
     await handler({ type: "wallet.unlock", vaultPassphrase }, sender);
-    await expect(
-      failingHandler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
-    ).resolves.toEqual({ error: "grant failed" });
-    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toMatchObject({
-      ok: true,
-      pending: [{ id: pending.id, origin: pending.origin }],
-    });
     await expect(
       handler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
     ).resolves.toEqual({
@@ -254,6 +237,41 @@ describe("createMessageHandler", () => {
       ok: true,
       pending: [],
     });
+  });
+
+  test("a thrown grant during approve fails closed: the approval is cleared, not left retryable", async () => {
+    // The shared settlement boundary in applyApproveDecision catches ANY thrown
+    // applier/executor error (here grantOrigin throws a non-WalletError). It must
+    // clear the approval exactly as a normal completion does — never leave a
+    // stuck, silently-retryable entry — and surface a curated failure via
+    // walletErrorMessage rather than leaking the raw internal message.
+    const approvals = createApprovalQueue();
+    const pending = approvals.request("https://example.com");
+    const session = createUnlockSession();
+    const failingHandler = createMessageHandler(
+      {
+        ...createWallet(),
+        async grantOrigin() {
+          throw new Error("grant failed");
+        },
+      },
+      "extension-id",
+      { approvals, session },
+    );
+
+    await failingHandler({ type: "wallet.unlock", vaultPassphrase }, sender);
+    await expect(
+      failingHandler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
+    ).resolves.toEqual({ error: "wallet request failed" });
+    // The approval is gone — the boundary removed it fail-closed.
+    await expect(failingHandler({ type: "wallet.pendingApprovals" }, sender)).resolves.toEqual({
+      ok: true,
+      pending: [],
+    });
+    // A second approve of the now-cleared id finds nothing to approve.
+    await expect(
+      failingHandler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
+    ).resolves.toEqual({ error: "approval not found" });
   });
 
   test("rejects malformed approval ids", async () => {
