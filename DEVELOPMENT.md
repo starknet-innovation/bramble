@@ -249,14 +249,18 @@ The `pr-guards` job in `ci.yml` (using `actions/github-script`) enforces the
 model. Two guards are **blocking** (they fail the check); one is **advisory**
 (annotation only).
 
-- **PR-target guard — BLOCKING.** If the base is `main` and the head is a
-  `feature/` or `fix/` branch, the check **fails** and tells you to retarget to
-  the active `release/vX.Y` branch — feature/fix work does not go straight to
-  `main`. Allowed into `main`: `release/**` and `hotfix/**` (promotion / hotfix
-  paths) **and** `chore/**` / `docs/**` (repo plumbing and docs that aren't part
-  of a release slice). Known automation prefixes
-  (`cursor/`, `codex/`, `ai-findings-autofix/`, `qa/`, `dependabot/`) are
-  downgraded to a warning, not failed.
+- **PR-target guard — BLOCKING (fail-closed).** Only an explicit allowlist of
+  head-branch categories may target `main`: `release/**` and `hotfix/**`
+  (promotion / hotfix paths), `chore/**` / `docs/**` (repo plumbing and docs
+  that aren't part of a release slice), and the known automation prefixes
+  (`cursor/`, `codex/`, `ai-findings-autofix/`, `qa/`, `dependabot/`).
+  **Everything else** — `feat/`, `feature/`, `fix/`, or any unknown/typo prefix
+  — is treated as feature-like release work: if it targets `main` the check
+  **fails** and tells you to retarget to the active `release/vX.Y` branch.
+  Feature work does not go straight to `main`; it is promoted via a release
+  branch so it passes through `release-validation`. (This is deliberately an
+  allowlist, not a blocklist of known feature prefixes, so a new or misspelled
+  prefix cannot slip past the guard and skip release-validation.)
 - **Linked-issue guard — BLOCKING.** If the base matches `release/**`, the PR
   title or body must reference an issue (`#N` or `Closes/Fixes/Resolves #N`);
   otherwise the check **fails**. Best-effort: it fetches the referenced issue's

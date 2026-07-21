@@ -66,20 +66,28 @@ jobs:
             const fail = (m) => { blocked = true; problems.push(m); core.error(m); };
             const warn = (m) => { notes.push(m); core.warning(m); };
 
-            // 1. PR-target guard (BLOCKING). feature/* and fix/* are release
-            //    work and must never target main — they belong on the active
-            //    release/vX.Y branch. chore/* and docs/* are exempt: repo
-            //    plumbing and docs are not part of a release slice and may go
-            //    straight to main (this bootstrap PR is one such chore/*).
-            //    release/** and hotfix/** into main are the normal promotion
-            //    and hotfix paths.
-            const isBlockedIntoMain = /^(feature|fix)\//.test(head);
+            // 1. PR-target guard (BLOCKING, FAIL-CLOSED). Only an explicit
+            //    allowlist of head-branch categories may target `main`:
+            //      release/**, hotfix/**  — promotion and hotfix paths
+            //      chore/**,   docs/**    — repo plumbing and docs, not part of
+            //                               a release slice (this PR is one)
+            //    plus the automation prefixes in BOT_PREFIXES.
+            //    EVERYTHING ELSE is treated as feature-like release work and
+            //    must go through the active `release/vX.Y` branch, so a PR into
+            //    `main` FAILS. This is deliberately fail-closed: we allowlist
+            //    what may reach main rather than blocklisting a couple of known
+            //    feature prefixes. That closes the gap where a prefix we didn't
+            //    explicitly recognize — `feat/`, `feature/`, `fix/`, or any
+            //    unknown/typo prefix — slipped straight to main and skipped
+            //    release-validation. Adding a new legit direct-to-main category
+            //    now requires editing ALLOWED_INTO_MAIN below, on purpose.
+            const ALLOWED_INTO_MAIN = /^(release|hotfix|chore|docs)\//;
+            const isAllowedIntoMain = ALLOWED_INTO_MAIN.test(head) || isBot;
             if (base === "main") {
-              if (isBlockedIntoMain) {
-                const m = `PR-target guard: head \`${head}\` is a feature/fix working branch but targets \`main\`. Retarget this PR to the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Only \`release/**\`, \`hotfix/**\`, \`chore/**\`, and \`docs/**\` may target main.`;
-                if (isBot) { warn(`(advisory — automation branch) ${m}`); } else { fail(m); }
+              if (isAllowedIntoMain) {
+                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (${isBot ? "automation branch" : "release/hotfix promotion or chore/docs plumbing"}).`);
               } else {
-                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (release/hotfix promotion or chore/docs plumbing).`);
+                fail(`PR-target guard: head \`${head}\` is not an allowed \`main\` target — it is treated as feature-like release work and must target the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Retarget this PR to that release branch. Only \`release/**\`, \`hotfix/**\`, \`chore/**\`, \`docs/**\`, and automation branches may target main directly.`);
               }
             }
 
