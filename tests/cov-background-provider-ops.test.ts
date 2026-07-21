@@ -258,7 +258,11 @@ describe("executeInvokeApproval Ledger device routing", () => {
     expect(submitted).toBe(true);
   });
 
-  test("aborts with nothing submitted when the device signature does not verify", async () => {
+  test("returns the verify-failure error with nothing submitted when the device signature does not verify", async () => {
+    // The signer throws a WalletError on a bad device signature; the executor
+    // catches it and returns `{ error }` (rather than throwing) so the approval
+    // applier settles the held dapp request with the real reason instead of
+    // leaving it to hang. Nothing is broadcast.
     let submitted = false;
     await expect(
       executeInvokeApproval(
@@ -267,11 +271,14 @@ describe("executeInvokeApproval Ledger device routing", () => {
         }),
         { origin: ORIGIN, payload: invoke },
       ),
-    ).rejects.toThrow("Ledger signature verification failed");
+    ).resolves.toEqual({ error: "Ledger signature verification failed" });
     expect(submitted).toBe(false);
   });
 
-  test("fails closed with nothing submitted when no device queue is wired", async () => {
+  test("fails closed with an error response and nothing submitted when no device queue is wired", async () => {
+    // A keyless Ledger account with no queue throws "Ledger signing unavailable"
+    // from the signer seam; the executor returns it as `{ error }` so the held
+    // request settles fail-closed rather than hanging on an unhandled throw.
     let submitted = false;
     await expect(
       executeInvokeApproval(
@@ -280,7 +287,7 @@ describe("executeInvokeApproval Ledger device routing", () => {
         }),
         { origin: ORIGIN, payload: invoke },
       ),
-    ).rejects.toThrow("Ledger signing unavailable");
+    ).resolves.toEqual({ error: "Ledger signing unavailable" });
     expect(submitted).toBe(false);
   });
 });

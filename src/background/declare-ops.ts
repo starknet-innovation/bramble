@@ -9,6 +9,7 @@
  */
 import { isProviderDeclare, type ProviderDeclare } from "../provider/declare-params";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
+import { walletErrorMessage } from "../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import { STARKNET_NETWORKS } from "../starknet/networks";
@@ -142,14 +143,22 @@ export const executeDeclareApproval = async (
   }
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam wallet-initiated txns
-  // use. A Ledger account with no queue wired throws, aborting the submit.
-  const result = await runtimeRpc.submitDeclareTransaction({
-    account,
-    compiledClassHash: input.declare.compiledClassHash,
-    contractClass: input.declare.contractClass,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: accountHashSigner(deps, account, passphrase),
-    ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
-  });
-  return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
+  // use. A device rejection/timeout/verify-failure, or a Ledger account with no
+  // queue wired, throws a WalletError from the sign path: catch it and return
+  // `{ error }` (mirroring executeStrk20InvokeApproval) so the applier settles
+  // the held dapp request with the real reason instead of leaving it to hang on
+  // an unhandled throw. Fails closed — nothing is submitted on error.
+  try {
+    const result = await runtimeRpc.submitDeclareTransaction({
+      account,
+      compiledClassHash: input.declare.compiledClassHash,
+      contractClass: input.declare.contractClass,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+      signHash: accountHashSigner(deps, account, passphrase),
+      ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
+    });
+    return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
+  } catch (error) {
+    return { error: walletErrorMessage(error, "declare request failed") };
+  }
 };

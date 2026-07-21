@@ -238,7 +238,10 @@ describe("executeDeclareApproval", () => {
     expect(submitted).toBe(true);
   });
 
-  test("aborts with nothing submitted when the device signature does not verify", async () => {
+  test("returns the verify-failure error with nothing submitted when the device signature does not verify", async () => {
+    // The signer throws a WalletError on a bad device signature; the executor
+    // catches it and returns `{ error }` (rather than throwing) so the approval
+    // applier settles the held dapp request instead of leaving it to hang.
     let submitted = false;
     await expect(
       executeDeclareApproval(
@@ -247,7 +250,7 @@ describe("executeDeclareApproval", () => {
         }),
         { declare, origin },
       ),
-    ).rejects.toThrow("Ledger signature verification failed");
+    ).resolves.toEqual({ error: "Ledger signature verification failed" });
     expect(submitted).toBe(false);
   });
 

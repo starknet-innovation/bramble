@@ -6,6 +6,7 @@
  * origin gets nothing back even if it still holds an old connection grant.
  */
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
+import { walletErrorMessage } from "../shared/errors";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
@@ -247,20 +248,28 @@ export const executeInvokeApproval = async (
   const { account, passphrase, preferences } = resolved;
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam the wallet-initiated
-  // paths use. A Ledger account with no queue wired throws, aborting the submit.
-  const result = await runtimeRpc.submitInvokeTransaction({
-    account,
-    calls,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: accountHashSigner(deps, account, passphrase),
-  });
-  await activity.record({
-    accountId: account.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: account.networkId,
-    summary: `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
-  });
-  await recordApproveAllowances(allowanceStore, calls, account);
-  return { ok: true, transactionHash: result.transactionHash };
+  // paths use. A device rejection/timeout/verify-failure, or a Ledger account
+  // with no queue wired, throws a WalletError from the sign path: catch it and
+  // return `{ error }` (mirroring executeStrk20InvokeApproval) so the applier
+  // settles the held dapp request with the real reason instead of leaving it to
+  // hang on an unhandled throw. Fails closed — nothing is submitted on error.
+  try {
+    const result = await runtimeRpc.submitInvokeTransaction({
+      account,
+      calls,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+      signHash: accountHashSigner(deps, account, passphrase),
+    });
+    await activity.record({
+      accountId: account.id,
+      hash: result.transactionHash,
+      kind: "invoke",
+      networkId: account.networkId,
+      summary: `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
+    });
+    await recordApproveAllowances(allowanceStore, calls, account);
+    return { ok: true, transactionHash: result.transactionHash };
+  } catch (error) {
+    return { error: walletErrorMessage(error, "invoke request failed") };
+  }
 };
