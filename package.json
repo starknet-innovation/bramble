@@ -43,6 +43,9 @@
     "typescript": "6.0.3"
   },
   "dependencies": {
+    "@ledgerhq/hw-app-starknet": "3.0.2",
+    "@ledgerhq/hw-transport": "6.35.6",
+    "@ledgerhq/hw-transport-webhid": "6.36.0",
     "starknet": "10.0.2"
   }
 }
