@@ -7,6 +7,7 @@ import type { WalletStatus } from "../popup/responses";
 import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { MultisigClient } from "./multisig-runtime";
+import { bindSignerInsertButtons } from "./multisig-signers-field";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -260,22 +261,7 @@ const bindDeployScreen = (deps: MultisigUiDeps): void => {
 
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-deploy-form");
   const signersField = form?.querySelector<HTMLTextAreaElement>('textarea[name="signers"]');
-  // Insert a picked account's address into the signers field, one per line, and
-  // never twice — the signer set is a set of addresses, so a Ledger account is
-  // added exactly like a software one (no device interaction to be a signer).
-  for (const button of deps.app?.querySelectorAll<HTMLButtonElement>("[data-signer-insert]") ??
-    []) {
-    button.addEventListener("click", () => {
-      const address = button.dataset["signerInsert"];
-      if (!signersField || !address) {
-        return;
-      }
-      const existing = signersField.value.split(/[\s,]+/).filter((line) => line.length > 0);
-      if (!existing.some((line) => line === address)) {
-        signersField.value = [...existing, address].join("\n");
-      }
-    });
-  }
+  bindSignerInsertButtons(deps.app, signersField);
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
