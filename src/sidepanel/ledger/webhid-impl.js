@@ -13,6 +13,10 @@
  * This module holds no logic and swallows nothing — every failure propagates to
  * `transport.ts`, which maps it to a typed `LedgerRejection` (fail closed).
  */
+// Import first: installs the `Buffer` global before the Ledger libraries below
+// evaluate (they reference it at module-eval time and the browser has none).
+import "./buffer-polyfill";
+
 import { StarknetClient } from "@ledgerhq/hw-app-starknet";
 import TransportWebHID from "@ledgerhq/hw-transport-webhid";
 
