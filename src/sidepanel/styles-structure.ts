@@ -175,4 +175,59 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     z-index: 40;
   }
   .ledger-sign-overlay[hidden] { display: none; }
+
+  /* Ledger onboarding overlay: the same repaint-surviving full-panel takeover as
+     the sign overlay, but its states carry no header, so it lays out its single
+     child itself. The short states (chooser / connect / reading / error) render
+     an .onboard-hero that fills the viewport and centres its content block; the
+     account picker renders a top-aligned .onboard-picker that scrolls when its
+     list outgrows the panel. All rhythm comes from the scale tokens. */
+  .ledger-onboard-overlay {
+    background: var(--mc-bg);
+    display: grid;
+    inset: 0;
+    overflow-y: auto;
+    padding: ${SPACE.lg};
+    position: fixed;
+    z-index: 40;
+  }
+  .ledger-onboard-overlay[hidden] { display: none; }
+  .onboard-hero {
+    align-content: center;
+    display: grid;
+    gap: ${SPACE.lg};
+    justify-items: center;
+    min-block-size: 100%;
+    text-align: center;
+  }
+  .onboard-hero .gate-head { display: grid; gap: 6px; max-width: 34ch; }
+  .onboard-hero .gate-head h1 {
+    font-size: ${TYPE.title.size};
+    font-weight: ${WEIGHT.bold};
+    letter-spacing: -0.02em;
+  }
+  .onboard-hero .add-account-chooser { display: grid; gap: ${SPACE.sm}; text-align: left; width: 100%; }
+  .onboard-actions { display: grid; gap: ${SPACE.sm}; justify-items: stretch; width: 100%; }
+  .onboard-actions button { width: 100%; }
+  .onboard-actions .ghost { justify-self: center; width: auto; }
+  .onboard-picker { align-content: start; display: grid; gap: ${SPACE.md}; }
+  .onboard-picker .gate-head { display: grid; gap: 6px; }
+  .onboard-picker .gate-head h1 {
+    font-size: ${TYPE.title.size};
+    font-weight: ${WEIGHT.bold};
+    letter-spacing: -0.02em;
+  }
+  .onboard-picker [data-ledger-load-more] { justify-self: start; }
+  /* Selection row: the checkbox and the account copy sit on one tappable label
+     across the full row width. */
+  .select-row {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    flex: 1;
+    gap: ${SPACE.md};
+    min-width: 0;
+  }
+  .select-check { accent-color: var(--mc-accent); flex: none; height: ${SPACE.lg}; width: ${SPACE.lg}; }
+  .allowance-row.is-duplicate { opacity: 0.68; }
 `;

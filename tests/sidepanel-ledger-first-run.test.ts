@@ -72,6 +72,16 @@ const click = (root: ParentNode, selector: string): void => {
   button.dispatchEvent(new window.Event("click", { bubbles: true }));
 };
 
+// Toggles a picker checkbox and fires the change event the runtime listens for.
+const check = (root: ParentNode, selector: string): void => {
+  const input = root.querySelector<HTMLInputElement>(selector);
+  if (!input) {
+    throw new Error(`missing ${selector}`);
+  }
+  input.checked = !input.checked;
+  input.dispatchEvent(new window.Event("change", { bubbles: true }));
+};
+
 describe("bindLedgerFirstRun", () => {
   beforeEach(() => {
     document.body.replaceChildren();
@@ -203,9 +213,11 @@ const entryHarness = () => {
   } as unknown as SidepanelWallet;
   let refreshed = 0;
   const entry = createLedgerOnboardEntry({
+    addHd: () => Promise.resolve(),
     cache,
     connector,
     mount,
+    openImport: () => undefined,
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
@@ -227,7 +239,8 @@ describe("createLedgerOnboardEntry", () => {
 
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    click(h.mount, '[data-ledger-select="1"]');
+    check(h.mount, '[data-ledger-toggle="1"]');
+    click(h.mount, "[data-ledger-add-selected]");
     await tick();
 
     expect(h.created).toEqual([["SN_MAIN", 1, candidate(1).publicKeyX, PASSPHRASE]]);
@@ -247,7 +260,8 @@ describe("createLedgerOnboardEntry", () => {
     click(app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    click(h.mount, '[data-ledger-select="0"]');
+    check(h.mount, '[data-ledger-toggle="0"]');
+    click(h.mount, "[data-ledger-add-selected]");
     await tick();
 
     expect(h.added).toEqual([["SN_MAIN", 0, candidate(0).publicKeyX]]);
@@ -276,7 +290,8 @@ describe("createLedgerOnboardEntry", () => {
     click(app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    click(h.mount, '[data-ledger-select="0"]');
+    check(h.mount, '[data-ledger-toggle="0"]');
+    click(h.mount, "[data-ledger-add-selected]");
     await tick();
 
     expect(h.created).toEqual([]);

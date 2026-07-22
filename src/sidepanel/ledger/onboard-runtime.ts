@@ -1,23 +1,27 @@
 /**
  * Binds the Ledger onboarding controller to the DOM: it owns an overlay (like
  * the sign runtime, outside the shell repaint so an in-flight enumeration is not
- * reset by streaming data), renders the connect/reading/picker/error states, and
- * wires their controls. `bindTriggers` (re-)wires the in-shell "Connect a Ledger"
- * entry each paint; `start` opens the overlay. Device I/O is injected via
+ * reset by streaming data), renders the chooser/connect/reading/picker/error
+ * states, and wires their controls. `bindTriggers` (re-)wires the in-shell
+ * "Connect a Ledger" entry each paint; `start` opens the connect overlay;
+ * `startAddAccount` opens the add-account chooser. Device I/O is injected via
  * {@link LedgerConnector} and the on-chain `describe`, so the binder runs under
  * happy-dom with fakes. Markup comes from the escaped onboarding templates,
  * inserted through the audited dom.ts fragment sink.
  */
+import type { LedgerAccountRef } from "../../storage/vault-schema";
 import { renderFragment } from "../dom";
 import type { SidepanelWallet } from "../runtime";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
   type LedgerCandidateState,
+  type LedgerOnboardAddKind,
   type LedgerOnboardController,
   type LedgerOnboardView,
 } from "./onboard-session";
 import {
+  addAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
   ledgerOnboardError,
@@ -29,9 +33,11 @@ import type { LedgerConnector } from "./sign-session";
  * Collaborators the onboarding binder needs: the overlay `mount` it owns, the
  * device `connector`, the active `networkId`, an `existingIds` accessor for
  * duplicate detection, a per-candidate on-chain `describe`, the `create` action
- * for the chosen account, the panel wallet client (for address derivation), a
- * `refresh` run after a successful add, and an `onCancel` hook run when the user
- * dismisses the overlay.
+ * for a chosen account (given the whole account so its target network is
+ * unambiguous even mid-batch), the HD-derive route `addHd`, the import route
+ * `openImport`, the panel wallet client (for address derivation), a `refresh`
+ * run after a successful add, and an `onCancel` hook run when the user dismisses
+ * the overlay.
  *
  * `create` is injected rather than fixed so one runtime serves both entry points:
  * the first-run screen wires it to `createLedgerVault` (a brand-new Ledger-only
@@ -40,25 +46,32 @@ import type { LedgerConnector } from "./sign-session";
  * overlay is dismissed, so a cancelled setup leaves nothing sensitive in memory.
  */
 export type LedgerOnboardRuntimeDeps = {
+  readonly addHd: () => Promise<void>;
   readonly connector: LedgerConnector;
-  readonly create: (accountIndex: number, publicKeyX: string) => Promise<void>;
+  readonly create: (account: LedgerAccountRef) => Promise<void>;
   readonly describe: (address: string, networkId: string) => Promise<LedgerCandidateState>;
   readonly existingIds: () => ReadonlySet<string>;
   readonly mount: HTMLElement;
   readonly networkId: () => string;
   readonly onCancel: () => void;
+  readonly openImport: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
 };
 
 /**
- * The Ledger onboarding runtime. `start` opens the connect prompt; `bindTriggers`
- * re-wires the in-shell entry control after each paint.
+ * The Ledger onboarding runtime. `start` opens the connect prompt;
+ * `startAddAccount` opens the add-account chooser; `bindTriggers` re-wires the
+ * in-shell entry control after each paint.
  */
 export type LedgerOnboardRuntime = {
   readonly bindTriggers: (app: Element | null) => void;
   readonly start: () => void;
+  readonly startAddAccount: () => void;
 };
+
+const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
+  value === "hd" || value === "import" || value === "ledger";
 
 /**
  * Creates the DOM-bound Ledger onboarding runtime. The controller persists
@@ -72,6 +85,28 @@ export const createLedgerOnboardRuntime = (
     deps;
   let controller: LedgerOnboardController;
 
+  const bindSelection = (): void => {
+    for (const input of mount.querySelectorAll<HTMLInputElement>("[data-ledger-toggle]")) {
+      input.addEventListener("change", () => {
+        const index = Number(input.dataset["ledgerToggle"]);
+        if (Number.isSafeInteger(index)) {
+          controller.toggle(index);
+        }
+      });
+    }
+  };
+
+  const bindChooser = (): void => {
+    for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-add-kind]")) {
+      button.addEventListener("click", () => {
+        const kind = button.dataset["addKind"];
+        if (isAddKind(kind)) {
+          controller.choose(kind);
+        }
+      });
+    }
+  };
+
   const bindControls = (): void => {
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-onboard-connect]")
@@ -79,17 +114,20 @@ export const createLedgerOnboardRuntime = (
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-onboard-cancel]")
       ?.addEventListener("click", () => controller.cancel());
-    for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-ledger-select]")) {
-      button.addEventListener("click", () => {
-        const index = Number(button.dataset["ledgerSelect"]);
-        if (Number.isSafeInteger(index)) {
-          controller.select(index);
-        }
-      });
-    }
+    mount
+      .querySelector<HTMLButtonElement>("[data-ledger-load-more]")
+      ?.addEventListener("click", () => controller.loadMore());
+    mount
+      .querySelector<HTMLButtonElement>("[data-ledger-add-selected]")
+      ?.addEventListener("click", () => controller.addSelected());
+    bindSelection();
+    bindChooser();
   };
 
   const bodyFor = (view: LedgerOnboardView): string => {
+    if (view.kind === "chooser") {
+      return addAccountChooser();
+    }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();
     }
@@ -97,7 +135,7 @@ export const createLedgerOnboardRuntime = (
       return ledgerReadingPrompt();
     }
     if (view.kind === "picker") {
-      return ledgerAccountPicker(view.candidates);
+      return ledgerAccountPicker(view.candidates, view.selected);
     }
     return ledgerOnboardError(view.message);
   };
@@ -114,13 +152,15 @@ export const createLedgerOnboardRuntime = (
   };
 
   controller = createLedgerOnboardController({
+    addHd: () => deps.addHd(),
     connector,
     create,
     derive: (entries) => wallet.deriveLedgerAccounts(networkId(), entries),
     describe: (account) => describe(account.address, networkId()),
-    enumerate: (client) => enumerateLedgerPubKeys(client),
+    enumerate: (client, startIndex) => enumerateLedgerPubKeys(client, startIndex),
     existingIds,
     onCancel,
+    openImport: () => deps.openImport(),
     refresh,
     render,
   });
@@ -133,6 +173,9 @@ export const createLedgerOnboardRuntime = (
     },
     start() {
       controller.start();
+    },
+    startAddAccount() {
+      controller.showChooser();
     },
   };
 };

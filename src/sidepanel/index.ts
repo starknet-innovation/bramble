@@ -14,7 +14,7 @@ import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { createDeploymentCache } from "./deployment-cache";
 import { bindDisclosures } from "./disclosures";
-import { bindCopyButtons, captureRepaintFocus, restoreRepaintFocus } from "./dom";
+import { bindCopyButtons, captureRepaintFocus, restoreRepaintFocus, showToast } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
@@ -167,13 +167,19 @@ const ledgerSign = createLedgerSignRuntime({
 // same repaint-survival reason as the sign takeover; the first-run stash and the
 // create/add branch live in ./ledger/onboard-entry so this file stays in budget.
 const ledgerOnboardMount = document.createElement("div");
-ledgerOnboardMount.className = "ledger-sign-overlay";
+ledgerOnboardMount.className = "ledger-onboard-overlay";
 ledgerOnboardMount.hidden = true;
 document.body.append(ledgerOnboardMount);
+// The chooser's non-Ledger routes: HD-derive, and import (via the account flow).
 const ledgerOnboard = createLedgerOnboardEntry({
+  addHd: async () => {
+    await wallet.addAccount(lastNetworkId);
+    showToast("Account added", "success");
+  },
   cache,
   connector: webHidConnector,
   mount: ledgerOnboardMount,
+  openImport: () => navigate("account"),
   refresh: async () => {
     await render(await wallet.loadStatus());
   },
@@ -240,6 +246,8 @@ const bindAll = (): void => {
     setOpenAssign: (id: string | null) => {
       openAssignId = id;
     },
+    // "Add account" opens the type chooser (New HD / Import / Connect a Ledger).
+    startAddAccount: ledgerOnboard.startAddAccount,
     wallet,
   };
   bindAccountLabel(settingsDeps);

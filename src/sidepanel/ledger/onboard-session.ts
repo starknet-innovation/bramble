@@ -1,11 +1,20 @@
 /**
- * Pure orchestration for Ledger onboarding: the version gate plus the silent
- * multi-index public-key enumeration that backs the account picker. The device
- * client is injected (the structural {@link LedgerDeviceClient}), so this runs
- * without hardware. It reads no secrets and derives no key material — it only
- * reads public keys the device already holds and rebuilds each EIP-2645 path
- * deterministically from its index (one source of truth with sign-time), so a
- * stored path always matches the one used to enumerate and sign.
+ * Pure orchestration for Ledger onboarding: the version gate, the silent
+ * PAGINATED public-key enumeration that backs the account picker, and the
+ * add-account chooser dispatch. The device client is injected (the structural
+ * {@link LedgerDeviceClient}), so this runs without hardware. It reads no
+ * secrets and derives no key material — it only reads public keys the device
+ * already holds and rebuilds each EIP-2645 path deterministically from its
+ * index (one source of truth with sign-time), so a stored path always matches
+ * the one used to enumerate and sign.
+ *
+ * Enumeration is paginated: each device round reads one PAGE of indices and the
+ * controller accumulates pages, exposing `loadMore` to fetch the next page
+ * (append, never refetch). The picker is multi-select — the user toggles the
+ * indices they want and adds them all at once through the injected `create`
+ * path. HD/import routing is injected too (`addHd`/`openImport`), so the one
+ * controller can back the whole "add an account" entry, not just the device
+ * subflow.
  */
 import { ledgerAccountPath } from "../../starknet/ledger-path";
 import type { LedgerAccountRef } from "../../storage/vault-schema";
@@ -19,27 +28,30 @@ import {
 } from "./sign-session";
 
 /**
- * Default number of account indices to enumerate for the picker (indices
- * `0..N-1`). The device app only needs to be open and unlocked; enumeration is
- * silent (no per-index on-device button press).
+ * Number of account indices read per enumeration page (a page is `start` …
+ * `start + LEDGER_PAGE_SIZE - 1`). The device app only needs to be open and
+ * unlocked; every read is silent (no per-index on-device button press).
  */
-export const LEDGER_ENUMERATION_COUNT = 5;
+export const LEDGER_PAGE_SIZE = 5;
 
 /**
- * Reads the app version (rejecting a below-minimum app with `app-below-minimum`),
- * then reads the public-key x-coordinate for account indices `0..count-1`,
- * SILENTLY and one round-trip at a time (WebHID is a serial pipe). Returns the
- * enumerated `(index, publicKeyX)` pairs for {@link deriveLedgerAccountRefs} to
- * turn into candidate accounts. Any device/transport failure propagates as a
- * typed {@link LedgerRejection} so the caller aborts cleanly.
+ * Reads the app version (rejecting a below-minimum app with `app-below-minimum`)
+ * on every call, then reads the public-key x-coordinate for one page of account
+ * indices — `startIndex … startIndex + count - 1` — SILENTLY and one round-trip
+ * at a time (WebHID is a serial pipe). Returns the enumerated `(index,
+ * publicKeyX)` pairs for {@link LedgerOnboardController} to derive into
+ * candidates. Any device/transport failure propagates as a typed
+ * {@link LedgerRejection} so the caller aborts cleanly.
  */
 export const enumerateLedgerPubKeys = async (
   client: LedgerDeviceClient,
-  count: number = LEDGER_ENUMERATION_COUNT,
+  startIndex = 0,
+  count: number = LEDGER_PAGE_SIZE,
 ): Promise<readonly LedgerPubKeyEntry[]> => {
   await assertLedgerAppReady(client);
   const entries: LedgerPubKeyEntry[] = [];
-  for (let accountIndex = 0; accountIndex < count; accountIndex += 1) {
+  for (let offset = 0; offset < count; offset += 1) {
+    const accountIndex = startIndex + offset;
     const publicKeyX = await ledgerPublicKeyX(client, ledgerAccountPath(accountIndex));
     entries.push({ accountIndex, publicKeyX });
   }
@@ -60,13 +72,25 @@ export type LedgerCandidate = {
 };
 
 /**
- * The onboarding device-prompt view the binder renders: connect gesture, silent
- * read, the account picker, or a typed error.
+ * The three routes the add-account chooser can dispatch: derive the next HD
+ * account, jump to the raw-key import form, or open the Ledger device subflow.
+ */
+export type LedgerOnboardAddKind = "hd" | "import" | "ledger";
+
+/**
+ * The onboarding device-prompt view the binder renders: the add-account
+ * chooser, the connect gesture, the silent read, the multi-select account
+ * picker (with the currently-selected indices), or a typed error.
  */
 export type LedgerOnboardView =
+  | { readonly kind: "chooser" }
   | { readonly kind: "connect" }
   | { readonly kind: "reading" }
-  | { readonly kind: "picker"; readonly candidates: readonly LedgerCandidate[] }
+  | {
+      readonly kind: "picker";
+      readonly candidates: readonly LedgerCandidate[];
+      readonly selected: readonly number[];
+    }
   | { readonly kind: "error"; readonly message: string };
 
 /**
@@ -79,23 +103,31 @@ export type LedgerCandidateState = {
 };
 
 /**
- * Collaborators the onboarding controller drives, all injected so the connect →
- * enumerate → derive → describe → create flow runs without hardware or a live
- * background: the device connector, the enumeration reader, the address
- * derivation (background `deriveLedgerAccounts`), the per-candidate on-chain
- * `describe`, the set of ids already in the vault (duplicate detection), the
- * `create` call (background `addLedgerAccount`), a `render` sink, a `refresh`
- * run after a successful add, and an `onCancel` hook run when the user dismisses
- * the flow (the first-run entry uses it to clear the captured setup secret).
+ * Collaborators the onboarding controller drives, all injected so the chooser →
+ * connect → enumerate → derive → describe → create flow runs without hardware or
+ * a live background: the device connector, the paginated enumeration reader
+ * (page start injected), the address derivation (background
+ * `deriveLedgerAccounts`), the per-candidate on-chain `describe`, the set of ids
+ * already in the vault (duplicate detection), the `create` call (background
+ * `addLedgerAccount`/`createLedgerVault`, given the whole account so its target
+ * network is unambiguous even mid-batch), a `render` sink, a `refresh` run after
+ * a successful add, the HD-derive route `addHd`, the import route `openImport`,
+ * and an `onCancel` hook run when the user dismisses the flow (the first-run
+ * entry uses it to clear the captured setup secret).
  */
 export type LedgerOnboardControllerDeps = {
+  readonly addHd: () => Promise<void>;
   readonly connector: LedgerConnector;
-  readonly create: (accountIndex: number, publicKeyX: string) => Promise<void>;
+  readonly create: (account: LedgerAccountRef) => Promise<void>;
   readonly derive: (entries: readonly LedgerPubKeyEntry[]) => Promise<readonly LedgerAccountRef[]>;
   readonly describe: (account: LedgerAccountRef) => Promise<LedgerCandidateState>;
-  readonly enumerate: (client: LedgerDeviceClient) => Promise<readonly LedgerPubKeyEntry[]>;
+  readonly enumerate: (
+    client: LedgerDeviceClient,
+    startIndex: number,
+  ) => Promise<readonly LedgerPubKeyEntry[]>;
   readonly existingIds: () => ReadonlySet<string>;
   readonly onCancel: () => void;
+  readonly openImport: () => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;
 };
@@ -105,25 +137,42 @@ export type LedgerOnboardControllerDeps = {
  * {@link createLedgerOnboardController}.
  */
 export type LedgerOnboardController = {
+  readonly addSelected: () => void;
   readonly cancel: () => void;
+  readonly choose: (kind: LedgerOnboardAddKind) => void;
   readonly connect: () => void;
-  readonly select: (accountIndex: number) => void;
+  readonly loadMore: () => void;
+  readonly showChooser: () => void;
   readonly start: () => void;
+  readonly toggle: (accountIndex: number) => void;
 };
 
+const EMPTY_STATE: LedgerCandidateState = { balance: null, deployed: null };
+
 /**
- * Creates the Ledger onboarding controller. `start` shows the connect gesture;
- * `connect` runs the picker, enumerating the device, deriving addresses through
- * the background, and fetching each candidate's on-chain state in parallel (a
- * degraded RPC yields "unavailable" rather than blocking); `select` creates the
- * chosen keyless account and refreshes. Every device/transport failure maps to
- * the typed rejection catalog and shows an actionable retry — no partial state.
+ * Creates the Ledger onboarding controller. `showChooser` opens the add-account
+ * chooser; `choose` routes it (HD derive, import, or the device subflow);
+ * `start` shows the connect gesture; `connect` reads the first page, enumerating
+ * the device, deriving addresses through the background, and fetching each
+ * candidate's on-chain state in parallel (a degraded RPC yields "unavailable"
+ * rather than blocking); `loadMore` appends the next page silently; `toggle`
+ * selects/deselects a non-duplicate index; `addSelected` creates every selected
+ * account and refreshes. Every device/transport failure maps to the typed
+ * rejection catalog and shows an actionable retry — no partial state.
  */
 export const createLedgerOnboardController = (
   deps: LedgerOnboardControllerDeps,
 ): LedgerOnboardController => {
   let candidates: readonly LedgerCandidate[] = [];
+  const selected = new Set<number>();
+  let nextIndex = 0;
   let busy = false;
+
+  const resetState = (): void => {
+    candidates = [];
+    selected.clear();
+    nextIndex = 0;
+  };
 
   const toCandidate = (account: LedgerAccountRef): LedgerCandidate => ({
     account,
@@ -138,32 +187,61 @@ export const createLedgerOnboardController = (
     deployed: state.deployed,
   });
 
-  const runConnect = async (): Promise<void> => {
+  const renderPicker = (): void => {
+    deps.render({ candidates, kind: "picker", selected: [...selected] });
+  };
+
+  // Append a freshly derived page as pending (Checking…) rows and advance the
+  // page cursor, then paint so new indices appear before their on-chain state.
+  const appendPage = (accounts: readonly LedgerAccountRef[], startIndex: number): void => {
+    candidates = [...candidates, ...accounts.map(toCandidate)];
+    nextIndex = startIndex + accounts.length;
+    renderPicker();
+  };
+
+  // Fold resolved on-chain state back into the accumulated list by account id,
+  // leaving other pages untouched, then repaint.
+  const applyDescribed = (described: readonly LedgerCandidate[]): void => {
+    const byId = new Map(described.map((item) => [item.account.id, item] as const));
+    candidates = candidates.map((item) => byId.get(item.account.id) ?? item);
+    renderPicker();
+  };
+
+  const describePage = async (
+    accounts: readonly LedgerAccountRef[],
+  ): Promise<readonly LedgerCandidate[]> =>
+    Promise.all(
+      accounts.map(async (account) =>
+        withState(account, await deps.describe(account).catch(() => EMPTY_STATE)),
+      ),
+    );
+
+  // Reads one page end to end: obtain a session, enumerate the page SILENTLY,
+  // release the transport (account state + creation are background ops, no
+  // device), derive addresses, append them pending, then fold in on-chain state.
+  // The session owns the WebHID transport so it is closed on every outcome — the
+  // device is never left claimed — and any failure maps to a typed error state.
+  const loadPage = async (
+    obtain: () => Promise<LedgerDeviceSession>,
+    startIndex: number,
+    initial: boolean,
+  ): Promise<void> => {
     if (busy) {
       return;
     }
     busy = true;
-    deps.render({ kind: "reading" });
-    // The session owns the WebHID transport; the device is only needed for the
-    // silent enumeration (account creation is a background op), so it is closed
-    // in the `finally` on every outcome — read, error, or nothing granted.
+    if (initial) {
+      deps.render({ kind: "reading" });
+    }
     let session: LedgerDeviceSession | null = null;
     try {
-      session = await deps.connector.request();
-      const entries = await deps.enumerate(session.client);
+      session = await obtain();
+      const entries = await deps.enumerate(session.client, startIndex);
+      await closeLedgerSessionQuietly(session);
+      session = null;
       const accounts = await deps.derive(entries);
-      candidates = accounts.map(toCandidate);
-      deps.render({ candidates, kind: "picker" });
-      const described = await Promise.all(
-        accounts.map(async (account) =>
-          withState(
-            account,
-            await deps.describe(account).catch(() => ({ balance: null, deployed: null })),
-          ),
-        ),
-      );
-      candidates = described;
-      deps.render({ candidates, kind: "picker" });
+      appendPage(accounts, startIndex);
+      applyDescribed(await describePage(accounts));
     } catch (error) {
       deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
     } finally {
@@ -174,16 +252,45 @@ export const createLedgerOnboardController = (
     }
   };
 
-  const runSelect = async (accountIndex: number): Promise<void> => {
+  // The first page runs the gesture-gated picker; further pages reconnect the
+  // already-granted device SILENTLY, falling back to the picker only if the
+  // device is no longer connected (the "Show more" click supplies the gesture).
+  const obtainMore = async (): Promise<LedgerDeviceSession> =>
+    (await deps.connector.openConnected()) ?? deps.connector.request();
+
+  const startConnect = (): void => {
+    resetState();
+    void loadPage(() => deps.connector.request(), 0, true);
+  };
+
+  const runToggle = (accountIndex: number): void => {
     const candidate = candidates.find(
       (item) => item.account.derivation.accountIndex === accountIndex,
     );
-    if (!candidate || candidate.duplicate || busy) {
+    if (!candidate || candidate.duplicate) {
+      return;
+    }
+    if (selected.has(accountIndex)) {
+      selected.delete(accountIndex);
+    } else {
+      selected.add(accountIndex);
+    }
+    renderPicker();
+  };
+
+  const runAddSelected = async (): Promise<void> => {
+    const chosen = candidates.filter(
+      (item) => !item.duplicate && selected.has(item.account.derivation.accountIndex),
+    );
+    if (busy || chosen.length === 0) {
       return;
     }
     busy = true;
     try {
-      await deps.create(accountIndex, candidate.account.publicKeyX);
+      for (const candidate of chosen) {
+        await deps.create(candidate.account);
+      }
+      resetState();
       deps.render(null);
       await deps.refresh();
     } catch (error) {
@@ -197,21 +304,62 @@ export const createLedgerOnboardController = (
     }
   };
 
+  const runChooseHd = async (): Promise<void> => {
+    if (busy) {
+      return;
+    }
+    busy = true;
+    try {
+      await deps.addHd();
+      resetState();
+      deps.render(null);
+      await deps.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not add the account.";
+      deps.render({ kind: "error", message });
+    } finally {
+      busy = false;
+    }
+  };
+
+  const choose = (kind: LedgerOnboardAddKind): void => {
+    if (kind === "ledger") {
+      resetState();
+      deps.render({ kind: "connect" });
+    } else if (kind === "hd") {
+      void runChooseHd();
+    } else {
+      deps.render(null);
+      deps.openImport();
+    }
+  };
+
   return {
+    addSelected() {
+      void runAddSelected();
+    },
     cancel() {
-      candidates = [];
+      resetState();
       deps.onCancel();
       deps.render(null);
     },
+    choose,
     connect() {
-      void runConnect();
+      startConnect();
     },
-    select(accountIndex) {
-      void runSelect(accountIndex);
+    loadMore() {
+      void loadPage(obtainMore, nextIndex, false);
+    },
+    showChooser() {
+      resetState();
+      deps.render({ kind: "chooser" });
     },
     start() {
-      candidates = [];
+      resetState();
       deps.render({ kind: "connect" });
+    },
+    toggle(accountIndex) {
+      runToggle(accountIndex);
     },
   };
 };

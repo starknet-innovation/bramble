@@ -1,13 +1,18 @@
 /**
  * Behavioural coverage for the DOM-bound Ledger onboarding runtime under
  * happy-dom, driven with an injected fake connector and wallet: the in-shell
- * trigger opens the connect prompt, connect enumerates and renders the picker,
- * and selecting a candidate creates the keyless account and dismisses the
- * overlay. No WebHID or background is touched.
+ * trigger opens the connect prompt, connect enumerates and renders the
+ * multi-select picker, "Show more" appends the next page of indices, selecting
+ * candidates and "Add selected" creates exactly those keyless accounts and
+ * dismisses the overlay, and the add-account chooser routes each option to its
+ * flow. No WebHID or background is touched.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "../src/sidepanel/ledger/client";
-import { createLedgerOnboardRuntime } from "../src/sidepanel/ledger/onboard-runtime";
+import {
+  createLedgerOnboardRuntime,
+  type LedgerOnboardRuntimeDeps,
+} from "../src/sidepanel/ledger/onboard-runtime";
 import type { LedgerConnector } from "../src/sidepanel/ledger/sign-session";
 import { ledgerAccountPath } from "../src/starknet/ledger-path";
 import type { LedgerAccountRef } from "../src/storage/vault-schema";
@@ -18,6 +23,8 @@ afterAll(unregisterDom);
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+// A device whose pubkey per index is deterministic, so distinct indices produce
+// distinct entries and a page reads exactly its slice of indices.
 const enumerateClient: LedgerDeviceClient = {
   getAppVersion: () =>
     Promise.resolve({
@@ -27,12 +34,14 @@ const enumerateClient: LedgerDeviceClient = {
       patch: 0,
       returnCode: 0x9000,
     }),
-  getPubKey: () =>
-    Promise.resolve({
+  getPubKey: (path: string) => {
+    const index = Number(path.split("/").at(-1)?.replace(/'.*$/, "") ?? "0");
+    return Promise.resolve({
       errorMessage: "No errors",
-      publicKey: new Uint8Array([4, ...new Array(31).fill(0), 7, ...new Array(32).fill(0)]),
+      publicKey: new Uint8Array([4, ...new Array(31).fill(0), index + 1, ...new Array(32).fill(0)]),
       returnCode: 0x9000,
-    }),
+    });
+  },
   signHash: () => Promise.reject(new Error("unused")),
 };
 
@@ -50,7 +59,7 @@ const candidate = (index: number): LedgerAccountRef => ({
   publicKeyX: `0x${index + 1}`,
 });
 
-const mountRuntime = () => {
+const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
   document.body.replaceChildren();
   const mount = document.createElement("div");
   mount.hidden = true;
@@ -63,34 +72,53 @@ const mountRuntime = () => {
   const added: Array<readonly [string, number, string]> = [];
   let refreshed = 0;
   let cancels = 0;
+  let hdAdds = 0;
+  let imports = 0;
   const connector: LedgerConnector = {
     openConnected: () => Promise.resolve(null),
     request: () => Promise.resolve({ client: enumerateClient, close: () => Promise.resolve() }),
   };
-  const networkId = () => "SN_MAIN";
   const runtime = createLedgerOnboardRuntime({
+    addHd: () => {
+      hdAdds += 1;
+      return Promise.resolve();
+    },
     connector,
-    create: (accountIndex, publicKeyX) => {
-      added.push([networkId(), accountIndex, publicKeyX]);
+    create: (account) => {
+      added.push([account.networkId, account.derivation.accountIndex, account.publicKeyX]);
       return Promise.resolve();
     },
     describe: () => Promise.resolve({ balance: null, deployed: null }),
     existingIds: () => new Set<string>(),
     mount,
-    networkId,
+    networkId: () => "SN_MAIN",
     onCancel: () => {
       cancels += 1;
+    },
+    openImport: () => {
+      imports += 1;
     },
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
     },
     wallet: {
-      deriveLedgerAccounts: () => Promise.resolve([candidate(0), candidate(1)]),
+      deriveLedgerAccounts: (_networkId, entries) =>
+        Promise.resolve(entries.map((entry) => candidate(entry.accountIndex))),
     },
+    ...overrides,
   });
   runtime.bindTriggers(app);
-  return { added, app, cancels: () => cancels, mount, refreshed: () => refreshed, runtime };
+  return {
+    added,
+    app,
+    cancels: () => cancels,
+    hdAdds: () => hdAdds,
+    imports: () => imports,
+    mount,
+    refreshed: () => refreshed,
+    runtime,
+  };
 };
 
 const click = (root: ParentNode, selector: string): void => {
@@ -101,12 +129,25 @@ const click = (root: ParentNode, selector: string): void => {
   button.dispatchEvent(new window.Event("click", { bubbles: true }));
 };
 
+// Toggles a picker checkbox and fires the change event the runtime listens for.
+const check = (root: ParentNode, selector: string): void => {
+  const input = root.querySelector<HTMLInputElement>(selector);
+  if (!input) {
+    throw new Error(`missing ${selector}`);
+  }
+  input.checked = !input.checked;
+  input.dispatchEvent(new window.Event("change", { bubbles: true }));
+};
+
+const toggleCount = (root: ParentNode): number =>
+  root.querySelectorAll("[data-ledger-toggle]").length;
+
 describe("Ledger onboarding runtime (DOM)", () => {
   beforeEach(() => {
     document.body.replaceChildren();
   });
 
-  test("the trigger opens connect, connect renders the picker, select creates", async () => {
+  test("the trigger opens connect, connect renders a page, add-selected creates", async () => {
     const h = mountRuntime();
     click(h.app, "[data-connect-ledger]");
     expect(h.mount.hidden).toBe(false);
@@ -114,14 +155,66 @@ describe("Ledger onboarding runtime (DOM)", () => {
 
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    // Picker rendered with both enumerated candidates.
-    expect(h.mount.querySelectorAll("[data-ledger-select]").length).toBe(2);
+    // One page (5) of selectable candidates rendered.
+    expect(toggleCount(h.mount)).toBe(5);
 
-    click(h.mount, '[data-ledger-select="1"]');
+    check(h.mount, '[data-ledger-toggle="1"]');
+    click(h.mount, "[data-ledger-add-selected]");
     await tick();
     expect(h.added).toEqual([["SN_MAIN", 1, candidate(1).publicKeyX]]);
     expect(h.mount.hidden).toBe(true);
     expect(h.refreshed()).toBe(1);
+  });
+
+  test('"Show more" appends the next page of indexes (5-9) without refetching', async () => {
+    let requests = 0;
+    let reconnects = 0;
+    const connector: LedgerConnector = {
+      openConnected: () => {
+        reconnects += 1;
+        return Promise.resolve({ client: enumerateClient, close: () => Promise.resolve() });
+      },
+      request: () => {
+        requests += 1;
+        return Promise.resolve({ client: enumerateClient, close: () => Promise.resolve() });
+      },
+    };
+    const h = mountRuntime({ connector });
+    click(h.app, "[data-connect-ledger]");
+    click(h.mount, "[data-ledger-onboard-connect]");
+    await tick();
+    expect(toggleCount(h.mount)).toBe(5);
+    expect(h.mount.querySelector('[data-ledger-toggle="4"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-ledger-toggle="5"]')).toBeNull();
+
+    click(h.mount, "[data-ledger-load-more]");
+    await tick();
+    // Page 2 (indexes 5-9) is appended to the existing page (indexes 0-4).
+    expect(toggleCount(h.mount)).toBe(10);
+    for (let index = 5; index <= 9; index += 1) {
+      expect(h.mount.querySelector(`[data-ledger-toggle="${index}"]`)).not.toBeNull();
+    }
+    // The first page used the gesture-gated picker; "Show more" reconnected the
+    // already-granted device silently rather than prompting again.
+    expect(requests).toBe(1);
+    expect(reconnects).toBe(1);
+  });
+
+  test("Add selected adds exactly the checked accounts, in order", async () => {
+    const h = mountRuntime();
+    click(h.app, "[data-connect-ledger]");
+    click(h.mount, "[data-ledger-onboard-connect]");
+    await tick();
+
+    check(h.mount, '[data-ledger-toggle="2"]');
+    check(h.mount, '[data-ledger-toggle="0"]');
+    click(h.mount, "[data-ledger-add-selected]");
+    await tick();
+    expect(h.added).toEqual([
+      ["SN_MAIN", 0, candidate(0).publicKeyX],
+      ["SN_MAIN", 2, candidate(2).publicKeyX],
+    ]);
+    expect(h.mount.hidden).toBe(true);
   });
 
   test("start() opens the connect overlay directly", () => {
@@ -138,8 +231,6 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(cancel).not.toBeNull();
 
     click(h.mount, "[data-ledger-onboard-cancel]");
-    // The overlay is dismissed (returning to the screen behind it) and the
-    // onCancel hook fired.
     expect(h.mount.hidden).toBe(true);
     expect(h.mount.children.length).toBe(0);
     expect(h.cancels()).toBe(1);
@@ -150,13 +241,39 @@ describe("Ledger onboarding runtime (DOM)", () => {
     click(h.app, "[data-connect-ledger]");
     click(h.mount, "[data-ledger-onboard-connect]");
     await tick();
-    // Picker is showing with a reachable cancel control alongside the candidates.
-    expect(h.mount.querySelectorAll("[data-ledger-select]").length).toBe(2);
+    expect(toggleCount(h.mount)).toBe(5);
     expect(h.mount.querySelector("[data-ledger-onboard-cancel]")).not.toBeNull();
 
     click(h.mount, "[data-ledger-onboard-cancel]");
     expect(h.mount.hidden).toBe(true);
     expect(h.added).toEqual([]);
     expect(h.cancels()).toBe(1);
+  });
+
+  test("startAddAccount shows the chooser and routes each option", async () => {
+    const h = mountRuntime();
+    h.runtime.startAddAccount();
+    expect(h.mount.hidden).toBe(false);
+    expect(h.mount.querySelector('[data-add-kind="hd"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
+
+    // "Connect a Ledger" transitions the same overlay to the connect prompt.
+    click(h.mount, '[data-add-kind="ledger"]');
+    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
+
+    // "Import a private key" dismisses the overlay and routes to the import form.
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="import"]');
+    expect(h.mount.hidden).toBe(true);
+    expect(h.imports()).toBe(1);
+
+    // "New account" derives an HD account, then dismisses on success.
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="hd"]');
+    await tick();
+    expect(h.hdAdds()).toBe(1);
+    expect(h.mount.hidden).toBe(true);
+    expect(h.refreshed()).toBe(1);
   });
 });
