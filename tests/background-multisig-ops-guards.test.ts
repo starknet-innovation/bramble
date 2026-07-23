@@ -117,6 +117,27 @@ describe("multisig helper guards", () => {
     };
     expect(await isProposalSubmitPending(deps, proposal)).toBe(false);
   });
+
+  test("isProposalSubmitPending fails closed when activity cannot be read", async () => {
+    const deps = {
+      activity: {
+        async list() {
+          throw new Error("storage unavailable");
+        },
+      },
+    } as unknown as MultisigOpsDeps;
+    const proposal: MultisigProposalRecord = {
+      call: null,
+      confirmations: 0,
+      id: "SN_MAIN:0x1:0x2",
+      multisigId: "SN_MAIN:0x1",
+      state: "pending",
+      submitTransactionHash: "0x3",
+      summary: "pending submit",
+      txId: "0x2",
+    };
+    expect(await isProposalSubmitPending(deps, proposal)).toBe(true);
+  });
 });
 
 describe("multisig proposal builders", () => {

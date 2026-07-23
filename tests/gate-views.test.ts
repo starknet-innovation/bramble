@@ -37,4 +37,26 @@ describe("onboarding gate view", () => {
 
     expect(textarea).not.toContain("is-masked");
   });
+
+  test("offers a first-run Ledger setup card as a primary choice", () => {
+    const html = onboarding(status);
+
+    expect(html).toContain("Set up with a Ledger");
+    expect(html).toContain("data-ledger-first-run");
+    expect(html).toContain('name="ledgerVaultPassphrase"');
+    expect(html).toContain('name="ledgerNetworkId"');
+    // No recovery phrase is generated on the Ledger path.
+    expect(html).toContain("No recovery phrase is generated");
+  });
+
+  test("hides the Ledger mainnet acknowledgement off Mainnet", () => {
+    const sepolia: WalletStatus = {
+      ...status,
+      network: "Starknet Sepolia",
+      networkId: "SN_SEPOLIA",
+      networks: [{ id: "SN_SEPOLIA", name: "Starknet Sepolia" }],
+    };
+    const ackRow = onboarding(sepolia).match(/id="ledger-mainnet-ack"[^>]*/)?.[0] ?? "";
+    expect(ackRow).toContain("hidden");
+  });
 });

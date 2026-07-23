@@ -13,11 +13,14 @@ import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
-import type { AccountRef, Vault } from "../storage/vault-schema";
+import type { AccountRef, LedgerAccountRef, Vault } from "../storage/vault-schema";
 import type {
   AddDerivedAccountInput,
+  AddLedgerAccountInput,
   ConnectedSite,
+  CreateLedgerVaultInput,
   CreateVaultAccountInput,
+  DeriveLedgerAccountsInput,
   EnsureNetworkAccountInput,
   ImportRawKeyAccountInput,
   OriginGrantInput,
@@ -27,6 +30,7 @@ import type {
   WalletStatus as VaultStatus,
 } from "../wallet/vault-service";
 import type { PendingApproval } from "./approvals";
+import type { PendingLedgerSign } from "./ledger-sign-queue";
 import type { SwapPreparationReview } from "./swap-preparations";
 
 /**
@@ -391,9 +395,19 @@ export type MultisigDeployResponse = {
 };
 
 /**
- * Acknowledgement response for operations with no payload.
+ * Pending device-sign requests returned to the side panel Ledger transport.
  */
-export type OkResponse = {
+export type LedgerSignPendingResponse = {
+  readonly ok: true;
+  readonly pending: readonly PendingLedgerSign[];
+};
+
+/**
+ * One Ledger candidate's on-chain state; fields are null when degraded.
+ */
+export type LedgerAccountStatusResponse = {
+  readonly balance: string | null;
+  readonly deployed: boolean | null;
   readonly ok: true;
 };
 
@@ -418,12 +432,14 @@ export type RuntimeResponse =
   | SupportedVersionsResponse
   | TransferReviewResponse
   | GenerateMnemonicResponse
+  | LedgerAccountStatusResponse
+  | LedgerSignPendingResponse
   | MultisigClassStatusResponse
   | MultisigDeployResponse
   | MultisigProposalResponse
   | MultisigResponse
   | MultisigsResponse
-  | OkResponse
+  | { readonly ok: true }
   | PendingApprovalResponse
   | PermissionsResponse
   | PreferencesResponse
@@ -447,7 +463,17 @@ export type RuntimeResponse =
  */
 export type WalletStatusReader = {
   readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
+  /** Stores a keyless Ledger account; optional only for partial test stubs. */
+  readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  /**
+   * Creates a mnemonic-less Ledger vault; fails closed over an existing vault.
+   */
+  readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
+  /** Derives Ledger picker candidates; optional only for partial test stubs. */
+  readonly deriveLedgerAccounts?: (
+    input: DeriveLedgerAccountsInput,
+  ) => Promise<readonly LedgerAccountRef[]>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
   /**

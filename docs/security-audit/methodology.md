@@ -14,8 +14,10 @@ artifacts, local developer files, external RPC implementations, browser internal
 Krusty KMS implementation are out of source-review scope. Their integration boundaries remain in
 scope.
 
-Pending pull requests are reviewed after the baseline. Each PR will be assessed against both its
-base branch and any trust-boundary assumptions established here.
+Follow-on pull requests are reviewed after the baseline. Each PR is assessed against both its base
+branch and the trust-boundary assumptions established here. The v0.6 Ledger and multisig review
+uses runtime commit `cf1b174a8297264141b0449b129c11c7ad1d44d0`; release-only metadata changes do
+not alter that reviewed runtime boundary.
 
 ## Approach
 

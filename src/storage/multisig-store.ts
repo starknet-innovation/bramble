@@ -25,6 +25,7 @@ import { serializeStoreMutations } from "./mutation-queue";
 export const MULTISIG_STORE_KEY = "mc-wallet:multisigs";
 
 const MAX_MULTISIGS = 20;
+const MAX_OPERATIONS = 100;
 const MAX_PROPOSALS = 100;
 const MAX_NAME_LENGTH = MULTISIG_LIMITS.nameLength;
 const MAX_SUMMARY_LENGTH = MULTISIG_LIMITS.summaryLength;
@@ -63,6 +64,8 @@ export type MultisigProposalCall = {
 export type MultisigProposalRecord = {
   readonly call: MultisigProposalCall | null;
   readonly confirmations: number;
+  readonly confirmedBySigner?: boolean;
+  readonly confirmedBySignerAddress?: string;
   readonly id: string;
   readonly multisigId: string;
   readonly state: "confirmed" | "executed" | "not-found" | "pending";
@@ -72,12 +75,34 @@ export type MultisigProposalRecord = {
 };
 
 /**
+ * Durable claim for a declare or deploy submission. Claims are public
+ * bookkeeping only: they contain no signing material and never authorize a
+ * transaction. A claim is written before broadcast so two extension surfaces
+ * cannot submit the same fee-paying operation concurrently.
+ */
+export type MultisigOperationRecord = {
+  readonly accountId: string;
+  readonly id: string;
+  readonly kind: "declare" | "deploy";
+  readonly networkId: StarknetNetworkId;
+  readonly target: string;
+  readonly transactionHash?: string;
+};
+
+/**
  * Multisig registry surface used by background message handling.
  */
 export type MultisigStore = {
+  readonly claimOperation: (
+    record: MultisigOperationRecord,
+  ) => Promise<"claimed" | "exists" | "full">;
+  readonly getOperation: (id: string) => Promise<MultisigOperationRecord | null>;
   readonly listMultisigs: () => Promise<readonly MultisigRecord[]>;
+  readonly listOperations: () => Promise<readonly MultisigOperationRecord[]>;
   readonly listProposals: () => Promise<readonly MultisigProposalRecord[]>;
+  readonly releaseOperation: (id: string) => Promise<void>;
   readonly removeMultisig: (id: string) => Promise<void>;
+  readonly setOperationHash: (id: string, transactionHash: string) => Promise<void>;
   readonly upsertMultisig: (record: MultisigRecord) => Promise<void>;
   readonly upsertProposal: (record: MultisigProposalRecord) => Promise<void>;
 };
@@ -97,6 +122,22 @@ export const multisigId = (networkId: StarknetNetworkId, address: string): strin
 export const multisigProposalId = (ownerId: string, txId: string): string | null => {
   const canonical = canonicalFelt(txId);
   return canonical ? `${ownerId}:${canonical}` : null;
+};
+
+/**
+ * Builds the deterministic key used to serialize one declare or deploy
+ * configuration. Returns null for malformed account ids or targets.
+ */
+export const multisigOperationId = (
+  kind: MultisigOperationRecord["kind"],
+  networkId: StarknetNetworkId,
+  accountId: string,
+  target: string,
+): string | null => {
+  const canonical = canonicalFelt(target);
+  return canonical && accountId.length > 0 && accountId.length <= 200
+    ? `${kind}:${networkId}:${accountId}:${canonical}`
+    : null;
 };
 
 const isName = (value: unknown): value is string =>
@@ -150,6 +191,8 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
   hasOnlyKnownKeys(value, [
     "call",
     "confirmations",
+    "confirmedBySigner",
+    "confirmedBySignerAddress",
     "id",
     "multisigId",
     "state",
@@ -161,6 +204,12 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
   typeof value["confirmations"] === "number" &&
   Number.isSafeInteger(value["confirmations"]) &&
   value["confirmations"] >= 0 &&
+  (value["confirmedBySigner"] === undefined || typeof value["confirmedBySigner"] === "boolean") &&
+  (value["confirmedBySignerAddress"] === undefined ||
+    (typeof value["confirmedBySignerAddress"] === "string" &&
+      isNonZeroStarkFieldElement(value["confirmedBySignerAddress"]))) &&
+  (value["confirmedBySigner"] === undefined) ===
+    (value["confirmedBySignerAddress"] === undefined) &&
   typeof value["multisigId"] === "string" &&
   (value["state"] === "confirmed" ||
     value["state"] === "executed" ||
@@ -174,18 +223,41 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
   isStarkFieldElement(value["txId"]) &&
   value["id"] === multisigProposalId(value["multisigId"], value["txId"]);
 
+/**
+ * Checks a stored in-flight operation before using it as a deduplication
+ * claim. Unknown fields and malformed hashes are rejected at the storage
+ * boundary.
+ */
+export const isMultisigOperationRecord = (value: unknown): value is MultisigOperationRecord =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "id", "kind", "networkId", "target", "transactionHash"]) &&
+  typeof value["accountId"] === "string" &&
+  (value["kind"] === "declare" || value["kind"] === "deploy") &&
+  isStarknetNetworkId(value["networkId"]) &&
+  typeof value["target"] === "string" &&
+  isStarkFieldElement(value["target"]) &&
+  (value["transactionHash"] === undefined ||
+    (typeof value["transactionHash"] === "string" &&
+      isStarkFieldElement(value["transactionHash"]))) &&
+  value["id"] ===
+    multisigOperationId(value["kind"], value["networkId"], value["accountId"], value["target"]);
+
 type StoredShape = {
   readonly multisigs: readonly MultisigRecord[];
+  readonly operations: readonly MultisigOperationRecord[];
   readonly proposals: readonly MultisigProposalRecord[];
 };
 
 const readShape = async (store: KeyValueStore): Promise<StoredShape> => {
   const stored = await store.get(MULTISIG_STORE_KEY);
   if (!isRecord(stored)) {
-    return { multisigs: [], proposals: [] };
+    return { multisigs: [], operations: [], proposals: [] };
   }
   const multisigs = Array.isArray(stored["multisigs"])
     ? stored["multisigs"].filter(isMultisigRecord)
+    : [];
+  const operations = Array.isArray(stored["operations"])
+    ? stored["operations"].filter(isMultisigOperationRecord)
     : [];
   const ids = new Set(multisigs.map((record) => record.id));
   const proposals = Array.isArray(stored["proposals"])
@@ -193,12 +265,13 @@ const readShape = async (store: KeyValueStore): Promise<StoredShape> => {
         .filter(isMultisigProposalRecord)
         .filter((proposal) => ids.has(proposal.multisigId))
     : [];
-  return { multisigs, proposals };
+  return { multisigs, operations, proposals };
 };
 
 const writeShape = async (store: KeyValueStore, shape: StoredShape): Promise<void> => {
   await store.set(MULTISIG_STORE_KEY, {
     multisigs: [...shape.multisigs],
+    operations: [...shape.operations],
     proposals: [...shape.proposals],
   });
 };
@@ -262,6 +335,7 @@ const upsertProposalIn = (
 
 const removeMultisigIn = (shape: StoredShape, id: string): StoredShape => ({
   multisigs: shape.multisigs.filter((stored) => stored.id !== id),
+  operations: shape.operations,
   proposals: shape.proposals.filter((stored) => stored.multisigId !== id),
 });
 
@@ -271,14 +345,53 @@ const removeMultisigIn = (shape: StoredShape, id: string): StoredShape => ({
 export const createMultisigStore = ({ store }: { readonly store: KeyValueStore }): MultisigStore =>
   serializeStoreMutations<MultisigStore>(
     {
+      async claimOperation(record) {
+        if (!isMultisigOperationRecord(record)) {
+          return "exists";
+        }
+        const shape = await readShape(store);
+        if (shape.operations.some((stored) => stored.id === record.id)) {
+          return "exists";
+        }
+        if (shape.operations.length >= MAX_OPERATIONS) {
+          return "full";
+        }
+        await writeShape(store, { ...shape, operations: [...shape.operations, record] });
+        return "claimed";
+      },
+      async getOperation(id) {
+        return (await readShape(store)).operations.find((record) => record.id === id) ?? null;
+      },
       async listMultisigs() {
         return [...(await readShape(store)).multisigs].reverse();
+      },
+      async listOperations() {
+        return [...(await readShape(store)).operations];
       },
       async listProposals() {
         return [...(await readShape(store)).proposals].reverse();
       },
+      async releaseOperation(id) {
+        const shape = await readShape(store);
+        await writeShape(store, {
+          ...shape,
+          operations: shape.operations.filter((record) => record.id !== id),
+        });
+      },
       async removeMultisig(id) {
         await writeShape(store, removeMultisigIn(await readShape(store), id));
+      },
+      async setOperationHash(id, transactionHash) {
+        if (!isStarkFieldElement(transactionHash)) {
+          return;
+        }
+        const shape = await readShape(store);
+        await writeShape(store, {
+          ...shape,
+          operations: shape.operations.map((record) =>
+            record.id === id ? { ...record, transactionHash } : record,
+          ),
+        });
       },
       async upsertMultisig(record) {
         const next = upsertMultisigIn(await readShape(store), record);
@@ -293,23 +406,59 @@ export const createMultisigStore = ({ store }: { readonly store: KeyValueStore }
         }
       },
     },
-    ["listMultisigs", "listProposals"],
+    ["getOperation", "listMultisigs", "listOperations", "listProposals"],
   );
 
 /**
  * In-memory multisig registry used as the test and fallback default.
  */
 export const memoryMultisigStore = (): MultisigStore => {
-  let shape: StoredShape = { multisigs: [], proposals: [] };
+  let shape: StoredShape = { multisigs: [], operations: [], proposals: [] };
   return {
+    async claimOperation(record) {
+      if (
+        !isMultisigOperationRecord(record) ||
+        shape.operations.some((stored) => stored.id === record.id)
+      ) {
+        return "exists";
+      }
+      if (shape.operations.length >= MAX_OPERATIONS) {
+        return "full";
+      }
+      shape = { ...shape, operations: [...shape.operations, record] };
+      return "claimed";
+    },
+    async getOperation(id) {
+      return shape.operations.find((record) => record.id === id) ?? null;
+    },
     async listMultisigs() {
       return [...shape.multisigs].reverse();
+    },
+    async listOperations() {
+      return [...shape.operations];
     },
     async listProposals() {
       return [...shape.proposals].reverse();
     },
+    async releaseOperation(id) {
+      shape = {
+        ...shape,
+        operations: shape.operations.filter((record) => record.id !== id),
+      };
+    },
     async removeMultisig(id) {
       shape = removeMultisigIn(shape, id);
+    },
+    async setOperationHash(id, transactionHash) {
+      if (!isStarkFieldElement(transactionHash)) {
+        return;
+      }
+      shape = {
+        ...shape,
+        operations: shape.operations.map((record) =>
+          record.id === id ? { ...record, transactionHash } : record,
+        ),
+      };
     },
     async upsertMultisig(record) {
       shape = upsertMultisigIn(shape, record) ?? shape;

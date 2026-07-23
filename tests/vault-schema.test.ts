@@ -2,12 +2,15 @@
  * Vault schema checks reject ambiguous decrypted wallet state.
  */
 import { describe, expect, test } from "bun:test";
+import { ledgerAccountPath } from "../src/starknet/ledger-path";
 import {
+  type AccountRef,
   CURRENT_SCHEMA_VERSION,
   emptyVault,
   isAccountId,
+  isKeylessAccount,
   isVaultV1,
-  isVaultV2,
+  isVaultV3,
 } from "../src/storage/vault-schema";
 
 const account = {
@@ -32,19 +35,19 @@ const vault = {
   signingKeys: [{ accountId: account.id, privateKey: "0x456" }],
 };
 
-const currentVault = { ...vault, mnemonic: null, schemaVersion: 2 as const };
+const currentVault = { ...vault, mnemonic: null, schemaVersion: 3 as const };
 
-describe("isVaultV2", () => {
+describe("isVaultV3 (current schema)", () => {
   test("accepts current vaults with or without a stored phrase", () => {
-    expect(isVaultV2(currentVault)).toBe(true);
-    expect(isVaultV2({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
+    expect(isVaultV3(currentVault)).toBe(true);
+    expect(isVaultV3({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
     expect(emptyVault().schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(isVaultV2(emptyVault())).toBe(true);
+    expect(isVaultV3(emptyVault())).toBe(true);
   });
 
   test("rejects legacy v1 vaults and version mismatches", () => {
-    expect(isVaultV2(vault)).toBe(false);
-    expect(isVaultV2({ ...currentVault, schemaVersion: 1 })).toBe(false);
+    expect(isVaultV3(vault)).toBe(false);
+    expect(isVaultV3({ ...currentVault, schemaVersion: 1 })).toBe(false);
     expect(isVaultV1(currentVault)).toBe(false);
   });
 
@@ -53,17 +56,57 @@ describe("isVaultV2", () => {
       accounts: currentVault.accounts,
       activeAccountId: currentVault.activeAccountId,
       originGrants: currentVault.originGrants,
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       signingKeys: currentVault.signingKeys,
     };
 
-    expect(isVaultV2(withoutMnemonic)).toBe(false);
-    expect(isVaultV2({ ...currentVault, mnemonic: "" })).toBe(false);
-    expect(isVaultV2({ ...currentVault, mnemonic: 42 })).toBe(false);
+    expect(isVaultV3(withoutMnemonic)).toBe(false);
+    expect(isVaultV3({ ...currentVault, mnemonic: "" })).toBe(false);
+    expect(isVaultV3({ ...currentVault, mnemonic: 42 })).toBe(false);
   });
 
   test("rejects unexpected keys", () => {
-    expect(isVaultV2({ ...currentVault, label: "unexpected" })).toBe(false);
+    expect(isVaultV3({ ...currentVault, label: "unexpected" })).toBe(false);
+  });
+});
+
+const ledgerAccount = {
+  address: "0xdef123",
+  classHash: "0x111111",
+  derivation: {
+    accountIndex: 0,
+    eip2645application: "LedgerW" as const,
+    kind: "ledger" as const,
+    path: ledgerAccountPath(0),
+  },
+  id: "SN_MAIN:0xdef123",
+  networkId: "SN_MAIN",
+  publicKeyX: "0xabc",
+};
+
+const ledgerOnlyVault = {
+  accounts: [ledgerAccount],
+  activeAccountId: ledgerAccount.id,
+  mnemonic: null,
+  originGrants: [],
+  schemaVersion: 3 as const,
+  signingKeys: [],
+};
+
+describe("mnemonic-less Ledger-only vault", () => {
+  test("validates a keyless Ledger vault that stores no recovery phrase", () => {
+    // The mnemonic-less Ledger-only wallet needs no schema bump beyond v3: a null
+    // mnemonic with an all-keyless account set and empty signing keys is already
+    // a valid v3 vault under the relaxed account↔signingKey bijection.
+    expect(isVaultV3(ledgerOnlyVault)).toBe(true);
+    expect(isKeylessAccount(ledgerAccount as AccountRef)).toBe(true);
+  });
+
+  test("still accepts the grandfathered legacy null-phrase seed vault", () => {
+    // A v1-migrated wallet carries seed accounts with a null mnemonic; that shape
+    // stays valid so those wallets never fail closed.
+    expect(isVaultV3(currentVault)).toBe(true);
+    expect(currentVault.mnemonic).toBeNull();
   });
 });
 

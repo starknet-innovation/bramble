@@ -1,12 +1,33 @@
 /**
  * Builds the MV3 extension with Bun and copies static extension assets into dist.
  */
-import { cp, mkdir, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 const outdir = "dist";
 const krustyModule = "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 const vendorOutdir = join(outdir, "vendor/krusty-kms/pkg");
+const LEDGER_BUFFER_MODULES =
+  /[\\/]node_modules[\\/]@ledgerhq[\\/](?:hw-app-starknet|hw-transport|hw-transport-webhid)[\\/].*\.js$/;
+
+// Ledger's browser packages still reference the Node `Buffer` identifier
+// without importing it. Inject a MODULE-LOCAL import only into those pinned
+// package files while building the side panel; this avoids installing Buffer
+// on `globalThis`, where unrelated panel code could observe or replace it.
+const ledgerBufferBoundary: Bun.BunPlugin = {
+  name: "ledger-buffer-boundary",
+  setup(builder) {
+    builder.onLoad({ filter: LEDGER_BUFFER_MODULES }, async ({ path }) => {
+      const source = await readFile(path, "utf8");
+      return {
+        contents: source.includes("Buffer")
+          ? `import { Buffer } from "buffer";\n${source}`
+          : source,
+        loader: "js",
+      };
+    });
+  },
+};
 
 const requireBuild = (result: Bun.BuildOutput): void => {
   if (!result.success) {
@@ -49,6 +70,17 @@ requireBuild(
     format: "esm",
     minify: true,
     outdir: join(outdir, "sidepanel"),
+    plugins: [ledgerBufferBoundary],
+    target: "browser",
+  }),
+);
+
+requireBuild(
+  await Bun.build({
+    entrypoints: ["src/ledger-grant/index.ts"],
+    format: "esm",
+    minify: true,
+    outdir: join(outdir, "ledger-grant"),
     target: "browser",
   }),
 );
@@ -75,6 +107,7 @@ requireBuild(
 
 await cp("public/manifest.json", join(outdir, "manifest.json"));
 await cp("public/sidepanel.html", join(outdir, "sidepanel.html"));
+await cp("public/ledger-grant.html", join(outdir, "ledger-grant.html"));
 await mkdir(vendorOutdir, { recursive: true });
 await cp(
   "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js",

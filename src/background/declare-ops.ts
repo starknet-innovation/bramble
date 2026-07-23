@@ -9,13 +9,16 @@
  */
 import { isProviderDeclare, type ProviderDeclare } from "../provider/declare-params";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
+import { walletErrorMessage } from "../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { accountHashSigner } from "./account-hash-signer";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
@@ -40,6 +43,11 @@ export type DeclareOpsDeps = {
  * Dependencies needed to execute a held declare approval once the user signs off.
  */
 export type DeclareExecuteDeps = {
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
+   * stubs stay valid; a Ledger declare with no queue wired fails closed.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -149,14 +157,24 @@ export const executeDeclareApproval = async (
   if (!account) {
     return { error: "origin not connected" };
   }
-  const result = await runtimeRpc.submitDeclareTransaction({
-    account,
-    compiledClassHash: input.declare.compiledClassHash,
-    contractClass: input.declare.contractClass,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: (messageHash) =>
-      wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase: passphrase }),
-    ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
-  });
-  return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
+  // A keyless Ledger account signs on the device (verified against publicKeyX),
+  // every other account through the vault — the same seam wallet-initiated txns
+  // use. A device rejection/timeout/verify-failure, or a Ledger account with no
+  // queue wired, throws a WalletError from the sign path: catch it and return
+  // `{ error }` (mirroring executeStrk20InvokeApproval) so the applier settles
+  // the held dapp request with the real reason instead of leaving it to hang on
+  // an unhandled throw. Fails closed — nothing is submitted on error.
+  try {
+    const result = await runtimeRpc.submitDeclareTransaction({
+      account,
+      compiledClassHash: input.declare.compiledClassHash,
+      contractClass: input.declare.contractClass,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+      signHash: accountHashSigner(deps, account, passphrase),
+      ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
+    });
+    return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
+  } catch (error) {
+    return { error: walletErrorMessage(error, "declare request failed") };
+  }
 };

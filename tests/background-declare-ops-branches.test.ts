@@ -5,6 +5,7 @@
  * on the happy path drives the injected signHash through the RPC submission.
  */
 import { describe, expect, test } from "bun:test";
+import { ec } from "starknet";
 import { createApprovalQueue } from "../src/background/approvals";
 import {
   type DeclareExecuteDeps,
@@ -12,6 +13,7 @@ import {
   executeDeclareApproval,
   handleDeclareOps,
 } from "../src/background/declare-ops";
+import type { LedgerSignQueue } from "../src/background/ledger-sign-queue";
 import type { RuntimeRpc } from "../src/background/runtime-rpc";
 import { unavailablePreferencesStore } from "../src/background/runtime-state";
 import type { RuntimeSender } from "../src/background/senders";
@@ -32,6 +34,38 @@ const account: AccountRef = {
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
+
+const { starkCurve } = ec;
+// The fake device's private key; the Ledger account's stored publicKeyX is its
+// real Stark public x-coordinate so a good device signature verifies.
+const LEDGER_KEY = "0x1234567890abcdef";
+
+const ledgerAccount: AccountRef = {
+  address: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  derivation: {
+    accountIndex: 0,
+    eip2645application: "LedgerW",
+    kind: "ledger",
+    path: "m/2645'/1195502025'/1470455285'/0'/0'/0",
+  },
+  id: "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  networkId: "SN_MAIN",
+  publicKeyX: starkCurve.getStarkKey(LEDGER_KEY),
+};
+
+// A fake device: signs whatever hash it is handed with a chosen private key — no
+// hardware or WebHID. LEDGER_KEY verifies against publicKeyX; any other fails.
+const deviceQueue = (privateKey: string): LedgerSignQueue => ({
+  pending: () => [],
+  reject: () => false,
+  rejectAll: () => 0,
+  settle: () => false,
+  async request(request) {
+    const sig = starkCurve.sign(request.messageHash, privateKey);
+    return { r: `0x${sig.r.toString(16)}`, s: `0x${sig.s.toString(16)}` };
+  },
+});
 
 const declare = {
   classHash: "0x5abc",
@@ -161,6 +195,64 @@ describe("executeDeclareApproval", () => {
     await expect(executeDeclareApproval(deps, { declare, origin })).resolves.toEqual({
       error: "origin not connected",
     });
+  });
+
+  // Builds declare-execute deps for the keyless Ledger account: signing routes
+  // through the injected device queue (never the vault). `onSubmit` fires only
+  // after the signer verifies, so a failed sign leaves it false.
+  const ledgerDeps = (
+    queue: LedgerSignQueue | undefined,
+    onSubmit: () => void,
+  ): DeclareExecuteDeps => {
+    const session = createUnlockSession();
+    session.unlock(passphrase);
+    const signed: string[] = [];
+    return {
+      ...(queue ? { ledgerSignQueue: queue } : {}),
+      preferencesStore: unavailablePreferencesStore,
+      runtimeRpc: {
+        async submitDeclareTransaction(input: {
+          readonly signHash: (hash: string) => Promise<unknown>;
+        }) {
+          // Drive the signer so the device round-trip and verify gate run before
+          // "broadcast"; a verification failure throws here, before onSubmit.
+          await input.signHash("0xfeed");
+          onSubmit();
+          return { classHash: "0x7ce", transactionHash: "0x7cd" };
+        },
+      } as unknown as RuntimeRpc,
+      session,
+      // signHash must never run for a Ledger account (it has no vault key).
+      wallet: walletStub([ledgerAccount], signed),
+    };
+  };
+
+  test("routes a keyless Ledger account to the device and submits on a good signature", async () => {
+    let submitted = false;
+    const result = await executeDeclareApproval(
+      ledgerDeps(deviceQueue(LEDGER_KEY), () => {
+        submitted = true;
+      }),
+      { declare, origin },
+    );
+    expect(result).toEqual({ classHash: "0x7ce", ok: true, transactionHash: "0x7cd" });
+    expect(submitted).toBe(true);
+  });
+
+  test("returns the verify-failure error with nothing submitted when the device signature does not verify", async () => {
+    // The signer throws a WalletError on a bad device signature; the executor
+    // catches it and returns `{ error }` (rather than throwing) so the approval
+    // applier settles the held dapp request instead of leaving it to hang.
+    let submitted = false;
+    await expect(
+      executeDeclareApproval(
+        ledgerDeps(deviceQueue("0xdeadbeef"), () => {
+          submitted = true;
+        }),
+        { declare, origin },
+      ),
+    ).resolves.toEqual({ error: "Ledger signature verification failed" });
+    expect(submitted).toBe(false);
   });
 
   test("signs and submits the declare, returning the node hashes", async () => {

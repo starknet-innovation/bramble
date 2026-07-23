@@ -16,6 +16,8 @@ boundaries, release controls, and security posture.
   released baseline.
 - [Source package audit](security-audit/src-package-audit/) aggregates the completed review of all
   12 immediate packages under `src/`.
+- [v0.6 release audit](security-audit/releases/v0.6/) records the Ledger and multisig PR reviews,
+  remediations, validation evidence, and residual third-party boundaries.
 - [Security policy](https://github.com/starknet-innovation/mc-wallet/blob/main/SECURITY.md) explains
   how to report a vulnerability privately.
 - [Contributing](https://github.com/starknet-innovation/mc-wallet/blob/main/CONTRIBUTING.md) contains

@@ -336,6 +336,18 @@ ${SIGN_REQUEST_STYLES}
     padding: 3px ${SPACE.md};
     text-wrap: nowrap;
   }
+  /* Hardware-wallet badge: a compact accent-tinted pill marking a Ledger
+     account in lists so a keyless device account is never mistaken for a
+     software one. Sits inline after the account name. */
+  .pill-hardware {
+    background: var(--mc-accent-soft);
+    color: var(--mc-accent);
+    margin-left: 6px;
+    min-height: 20px;
+    padding: 1px ${SPACE.sm};
+    vertical-align: middle;
+  }
+  .pill-hardware .icon { height: 12px; width: 12px; }
   .dot { background: var(--mc-positive); border-radius: ${RADIUS.full}; height: 7px; width: 7px; }
   /* Badge ink is the page ground so the count stays legible on the danger fill
      in both schemes (dark ink on the soft dark-theme red, light ink on the

@@ -19,6 +19,8 @@ type LoadedPrices = Awaited<ReturnType<SidepanelWallet["loadPrices"]>>;
 // fields derive from this so they cannot drift from loadActivity.
 type LoadedActivity = Awaited<ReturnType<SidepanelWallet["loadActivity"]>>;
 
+type LoadedMultisigs = Exclude<Awaited<ReturnType<MultisigClient["loadMultisigs"]>>, "error">;
+
 /**
  * Everything a paint reads. Each field mirrors the resolved result of one
  * permissioned runtime call; view-scoped fields stay in their empty state until
@@ -27,7 +29,9 @@ type LoadedActivity = Awaited<ReturnType<SidepanelWallet["loadActivity"]>>;
  */
 export type RenderData = {
   allowances: Awaited<ReturnType<SidepanelWallet["loadAllowances"]>>;
-  multisigs: Awaited<ReturnType<MultisigClient["loadMultisigs"]>>;
+  multisigs: LoadedMultisigs;
+  multisigsError: boolean;
+  multisigSync: "current" | "error" | null;
   multisigClassDeclared: boolean | "error" | null;
   balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
   chart: readonly number[];
@@ -55,6 +59,8 @@ export type RenderData = {
 export const emptyRenderCache = (): RenderData => ({
   allowances: [],
   multisigs: { multisigs: [], proposals: [] },
+  multisigsError: false,
+  multisigSync: null,
   multisigClassDeclared: null,
   balances: { error: "wallet locked" },
   chart: [],

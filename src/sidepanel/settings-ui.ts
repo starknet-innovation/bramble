@@ -20,6 +20,7 @@ export type SettingsUiDeps = {
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly setExpandedGroup: (id: string | null) => void;
   readonly setOpenAssign: (id: string | null) => void;
+  readonly startAddAccount: () => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -60,29 +61,14 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
 };
 
 /**
- * Binds the "Add account" button on the account flow. Derives the next account
- * on the current network from the wallet's stored recovery phrase.
+ * Binds the "Add account" button on the account flow. Opens the account-type
+ * chooser (New HD account / Import a private key / Connect a Ledger) rather than
+ * deriving directly, so every add path — including a hardware account — is
+ * reachable from one entry. The chooser routes each option to its existing flow.
  */
 export const bindAddAccount = (deps: SettingsUiDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#new-account");
-  const result = deps.app?.querySelector<HTMLElement>("#new-account-result");
-
-  button?.addEventListener("click", () => {
-    buttonBusy(button, true);
-    void deps.wallet.addAccount(deps.networkId()).then(
-      async () => {
-        showToast("Account added", "success");
-        await rerender(deps);
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Add account failed"), "error");
-        if (result) {
-          result.textContent = errorMessage(error, "Add account failed");
-        }
-        buttonBusy(button, false);
-      },
-    );
-  });
+  button?.addEventListener("click", () => deps.startAddAccount());
 };
 
 /**

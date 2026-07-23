@@ -117,6 +117,34 @@ describe("bindReveal", () => {
     expect(container.querySelector("#reveal-key")?.textContent).toBe(PRIVATE_KEY);
   });
 
+  test("a Ledger active account shows the device-recovery note, not a reveal form", () => {
+    const ledgerAccount = {
+      address: account.address,
+      classHash: account.classHash,
+      derivation: {
+        accountIndex: 0,
+        eip2645application: "LedgerW" as const,
+        kind: "ledger" as const,
+        path: "m/2645'/1195502025'/734980059'/0'/0'/0",
+      },
+      id: account.id,
+      networkId: account.networkId,
+      publicKeyX: account.publicKeyX,
+    };
+    const ledgerStatus: WalletStatus = {
+      ...status,
+      accounts: [ledgerAccount],
+      activeAccountId: ledgerAccount.id,
+    };
+    const html = revealFlow(ledgerStatus);
+
+    expect(html).toContain("lives on your Ledger");
+    expect(html).toContain("Recover this account from your Ledger device");
+    // No reveal form or secret output region is emitted for a hardware account.
+    expect(html).not.toContain('id="reveal-form"');
+    expect(html).not.toContain('id="reveal-output"');
+  });
+
   test("a rejected reveal reports the error and leaves the output hidden", async () => {
     const { container } = mount({ reject: new Error("Wrong passphrase") });
 

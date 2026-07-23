@@ -54,7 +54,35 @@ export const onboarding = (status: WalletStatus): string => `
         <button type="submit" ${status.ready ? "" : "disabled"}>Create wallet</button>
       </div>
     </form>
+    ${ledgerSetupCard(status)}
   </main>`;
+
+/**
+ * First-run Ledger card: set up a brand-new wallet backed by a Ledger with no
+ * recovery phrase generated. The user still sets an unlock passphrase (it
+ * encrypts the account registry); connecting the device and picking accounts
+ * happens in the onboarding overlay after this passphrase is captured.
+ */
+const ledgerSetupCard = (status: WalletStatus): string => `
+    <div class="gate-alt">
+      <p class="eyebrow">Or set up with a Ledger</p>
+      <p class="lede">Back this wallet with a Ledger hardware device. No recovery phrase is generated — your keys stay on the device.</p>
+      <form id="ledger-setup-form" class="gate-form">
+        <label><span>Network</span><select name="ledgerNetworkId">${networkOptions(status)}</select></label>
+        <label><span>Vault passphrase</span>
+          <input name="ledgerVaultPassphrase" type="password" minlength="12" required autocomplete="new-password" placeholder="At least 12 characters" />
+          <span class="hint">Unlocks the wallet on this device. It protects the account list — no key material is stored.</span>
+        </label>
+        <p id="ledger-passphrase-result" role="status"></p>
+        <label id="ledger-mainnet-ack" class="hint"${requiresMainnetAck(status.networkId) ? "" : " hidden"}>
+          <input name="ledgerMainnetAck" type="checkbox" />
+          <span>You are setting up a wallet on Starknet Mainnet with real funds.</span>
+        </label>
+        <div class="gate-cta">
+          <button id="ledger-setup-button" class="secondary" data-ledger-first-run type="button" ${status.ready ? "" : "disabled"}>${icon("shield")}Set up with a Ledger</button>
+        </div>
+      </form>
+    </div>`;
 
 /**
  * Unlock screen for an existing but locked vault.

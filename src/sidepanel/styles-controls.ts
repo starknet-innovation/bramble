@@ -199,4 +199,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   .gate-form { display: flex; flex: 1; flex-direction: column; gap: ${SPACE.md}; text-align: left; width: 100%; }
   .gate-cta { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.lg}; }
   .gate-cta button { width: 100%; }
+  .gate-alt { border-top: 1px solid var(--mc-hairline); display: grid; gap: ${SPACE.sm}; padding-top: ${SPACE.lg}; text-align: left; width: 100%; }
+  .gate-alt .gate-form { flex: none; }
+  .gate-alt .gate-cta { margin-top: ${SPACE.sm}; padding-top: 0; }
 `;

@@ -325,7 +325,7 @@ describe("multisig propose compose/store envelopes", () => {
     });
   });
 
-  test("reports a storage failure when the proposal does not persist", async () => {
+  test("returns the broadcast hash when proposal persistence fails", async () => {
     const base = memoryMultisigStore();
     // A store that accepts the multisig but silently drops proposals.
     const droppingStore: MultisigStore = { ...base, async upsertProposal() {} };
@@ -333,8 +333,10 @@ describe("multisig propose compose/store envelopes", () => {
       computeTransactionId: async () => `0x7${"a".repeat(62)}`,
       multisigStore: droppingStore,
     });
-    await expect(localWatchAndPropose(handler)).resolves.toEqual({
-      error: "could not store proposal — the multisig may have been removed",
+    const response = await localWatchAndPropose(handler);
+    expect(response).toMatchObject({
+      ok: true,
+      transactionHash: "0x7cd",
     });
   });
 });

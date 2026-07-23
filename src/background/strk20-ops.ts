@@ -27,9 +27,11 @@ import {
 import type { ActivityLog } from "../storage/activity-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { accountHashSigner } from "./account-hash-signer";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
@@ -57,6 +59,11 @@ export type Strk20OpsDeps = {
  */
 export type Strk20ExecuteDeps = {
   readonly activity: ActivityLog;
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
+   * stubs stay valid; a Ledger private transfer with no queue wired fails closed.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -321,16 +328,15 @@ export const executeStrk20InvokeApproval = async (
     return resolved;
   }
   try {
+    // A keyless Ledger account signs on the device (verified against publicKeyX),
+    // every other account through the vault — the same seam wallet-initiated txns
+    // use. A Ledger account with no queue wired throws and is caught below, so
+    // the exact pre-review call fails closed with nothing submitted.
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: resolved.account,
       calls: approval.calls,
       rpcUrls: resolved.rpcUrls,
-      signHash: (messageHash) =>
-        deps.wallet.signHash({
-          accountId: resolved.account.id,
-          messageHash,
-          vaultPassphrase: resolved.passphrase,
-        }),
+      signHash: accountHashSigner(deps, resolved.account, resolved.passphrase),
     });
     const actionCount = approval.actions.length;
     await deps.activity.record({

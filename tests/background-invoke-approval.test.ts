@@ -11,6 +11,7 @@ import type { RuntimeRpc } from "../src/background/runtime-rpc";
 import { unavailablePreferencesStore } from "../src/background/runtime-state";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
+import { WalletError } from "../src/shared/errors";
 import type { InvokeInput } from "../src/starknet/rpc";
 import { verifyCalls } from "../src/starknet/verify";
 import { memoryActivityLog } from "../src/storage/activity-store";
@@ -65,7 +66,7 @@ const walletStub = (connected: readonly AccountRef[]) => ({
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
@@ -204,6 +205,60 @@ describe("per-transaction invoke approval (A-H1)", () => {
       }),
     ).resolves.toEqual({ error: "origin blocked" });
     expect(invoked).toHaveLength(0);
+  });
+});
+
+// A harness whose submit drives the injected signer before broadcasting, and
+// whose signer throws — standing in for a Ledger device rejection/timeout/
+// verify-failure. Exercises the end-to-end path: executor catches the throw,
+// returns `{ error }`, and the applier settles the held dapp request.
+const makeThrowingSignHarness = () => {
+  const session = createUnlockSession();
+  session.unlock(vaultPassphrase);
+  const approvals = createApprovalQueue();
+  const activity = memoryActivityLog();
+  const invoked: InvokeInput[] = [];
+  const rpc = {
+    async submitInvokeTransaction(input: InvokeInput) {
+      // Drive the signer first: a device rejection surfaces here, before any
+      // broadcast, so `invoked` stays empty on a sign failure (fail-closed).
+      await input.signHash("0x1");
+      invoked.push(input);
+      return { calls: input.calls, transactionHash: "0x7cd" };
+    },
+  } as unknown as RuntimeRpc;
+  const wallet = {
+    ...walletStub([account]),
+    async signHash(): Promise<never> {
+      throw new WalletError("device rejected the transaction");
+    },
+  };
+  const handler = createMessageHandler(wallet, "extension-id", {
+    activity,
+    approvals,
+    preferencesStore: unavailablePreferencesStore,
+    runtimeRpc: rpc,
+    session,
+  });
+  return { activity, handler, invoked };
+};
+
+describe("invoke approval settles the held request when signing throws (A-H1)", () => {
+  test("returns { error } and submits nothing instead of hanging the dapp promise", async () => {
+    const { activity, handler, invoked } = makeThrowingSignHarness();
+
+    const held = handler(invokeMessage(), contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+
+    // Approve: the executor's sign step throws, but the applier still settles the
+    // held request with the real error rather than leaving the dapp promise open.
+    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
+      error: "device rejected the transaction",
+    });
+    await expect(held).resolves.toEqual({ error: "device rejected the transaction" });
+    expect(invoked).toHaveLength(0);
+    expect(await activity.list()).toHaveLength(0);
   });
 });
 

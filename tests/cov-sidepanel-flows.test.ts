@@ -6,7 +6,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../src/popup/responses";
-import { accountFlow, sendFlow } from "../src/sidepanel/flows";
+import { accountFlow, backupFlow, sendFlow } from "../src/sidepanel/flows";
 import type { WalletPreferences } from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
 import { account, preferences } from "./support/sidepanel-fixtures";
@@ -90,5 +90,34 @@ describe("sendFlow list callbacks", () => {
     const html = sendFlow(status, account, preferences);
     expect(html).toContain("No tokens are tracked on this network yet");
     expect(html).toMatch(/name="tokenId"[^>]*disabled/);
+  });
+});
+
+describe("backupFlow Ledger recovery warning", () => {
+  test("warns a mixed wallet that its recovery phrase does not restore Ledger accounts", () => {
+    const ledgerAccount: AccountRef = {
+      ...account,
+      derivation: {
+        accountIndex: 0,
+        eip2645application: "LedgerW",
+        kind: "ledger",
+        path: "m/2645'/1195502025'/734980059'/0'/0'/0",
+      },
+      id: "SN_MAIN:0x987",
+      address: "0x987",
+    };
+
+    const html = backupFlow({
+      ...status,
+      accountCount: 2,
+      accounts: [account, ledgerAccount],
+    });
+
+    expect(html).toContain("Ledger accounts are not restored");
+    expect(html).toContain("Ledger recovery phrase");
+  });
+
+  test("does not show the hardware warning in a software-only wallet", () => {
+    expect(backupFlow(status)).not.toContain("Ledger accounts are not restored");
   });
 });

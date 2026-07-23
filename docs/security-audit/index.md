@@ -6,9 +6,9 @@ permalink: /security-audit/
 
 # MC Wallet security audit
 
-This is the living, directory-by-directory security review of MC Wallet. The current baseline is
-the released `main` commit below; pending pull requests are intentionally excluded until the
-baseline review is complete.
+This is the living, directory-by-directory security review of MC Wallet. The source baseline is
+the released `main` commit below. The Ledger and multisig changes added for v0.6 were reviewed
+separately against that baseline and are recorded in the release follow-up.
 
 | Field | Value |
 | --- | --- |
@@ -16,9 +16,10 @@ baseline review is complete.
 | Release | `v0.5.0` |
 | Baseline date | 2026-07-16 |
 | Audit started | 2026-07-23 |
-| Current phase | Repository root, manifest, and all `src/` packages complete |
+| v0.6 runtime follow-up | `cf1b174a8297264141b0449b129c11c7ad1d44d0` |
+| Current phase | Repository root, manifest, all `src/` packages, and v0.6 PR follow-up complete |
 | Open product security findings | 0 |
-| Open defense-in-depth and audit-assurance findings | 1 low |
+| Open defense-in-depth and audit-assurance findings | 0 |
 | Open documentation findings | 0 |
 
 ## Audit documents
@@ -27,6 +28,7 @@ baseline review is complete.
 - [Threat model and trust boundaries](threat-model/)
 - [Sanitized findings ledger](findings/)
 - [Consolidated source package audit](src-package-audit/)
+- [v0.6 Ledger and multisig release audit](releases/v0.6/)
 - [Directory review log](reviews/)
 
 ## Review sequence
@@ -53,5 +55,5 @@ baseline review is complete.
 
 The `src/` rows are aggregated into the
 [source package audit](src-package-audit/). Each completed review links evidence to the exact
-baseline commit. Pull-request review starts only after this table reaches the intended baseline
-boundary.
+baseline commit. Follow-on release changes are assessed in release-specific reports rather than
+silently changing the historical baseline.

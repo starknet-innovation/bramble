@@ -298,6 +298,11 @@ export const accountFlow = (
           <p id="import-key-result" role="status"></p>
         </form>
       </section>
+      <section class="section">
+        <h2>Connect a Ledger</h2>
+        <p class="hint">Add a hardware account on ${escapeHtml(status.network)} from a Ledger device. Its private key never leaves the device; this reads only public keys to build the account list. The account is counterfactual until its first transaction — fund its address with STRK before sending.</p>
+        <button id="connect-ledger" class="secondary" data-connect-ledger type="button">${icon("shield")}Connect a Ledger</button>
+      </section>
       ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}
       ${
         account
@@ -328,13 +333,20 @@ export const accountFlow = (
  * Backup flow: export or restore non-secret wallet data. Never includes the
  * vault or any key material.
  */
-export const backupFlow = (status: WalletStatus): string =>
-  flowHeader("Backup & restore", status, "Preferences, labels, and contacts") +
-  flowScreen(
-    "backup",
-    `<section class="section">
+export const backupFlow = (status: WalletStatus): string => {
+  const hasLedgerAccount = status.accounts.some((account) => account.derivation.kind === "ledger");
+  return (
+    flowHeader("Backup & restore", status, "Preferences, labels, and contacts") +
+    flowScreen(
+      "backup",
+      `<section class="section">
       <p class="eyebrow">Export</p>
       <p class="hint">Downloads tokens, contacts, labels, and settings as JSON. Your recovery phrase and keys are never included.</p>
+      ${
+        hasLedgerAccount
+          ? '<p class="review-flag" role="note">Ledger accounts are not restored by this JSON backup or by MC Wallet’s recovery phrase. Recover them with your Ledger device and its Ledger recovery phrase.</p>'
+          : ""
+      }
       <button id="backup-export" class="secondary" type="button">${icon("receive")}Download backup</button>
       <p id="backup-result" role="status"></p>
     </section>
@@ -344,7 +356,9 @@ export const backupFlow = (status: WalletStatus): string =>
       <label><span>Backup file</span><input id="backup-file" type="file" accept="application/json" /></label>
       <button id="backup-import" class="secondary" type="button">${icon("check")}Restore backup</button>
     </section>`,
+    )
   );
+};
 
 /**
  * Connected sites flow: list origins with active grants and revoke access.

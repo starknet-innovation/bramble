@@ -4,6 +4,8 @@
 export const EXPECTED_RUNTIME_FILES = [
   "background/index.js",
   "content/index.js",
+  "ledger-grant.html",
+  "ledger-grant/index.js",
   "manifest.json",
   "provider/inpage.js",
   "sidepanel.html",

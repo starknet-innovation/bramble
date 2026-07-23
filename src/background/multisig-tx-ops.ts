@@ -16,21 +16,9 @@ import {
   type MultisigCallInput,
   type MultisigProposalStatus,
 } from "../starknet/multisig";
-import {
-  buildMultisigDeployCall,
-  MULTISIG_CLASS_HASH,
-  MULTISIG_COMPILED_CLASS_HASH,
-  predictMultisigAddress,
-  requireMultisigContractClass,
-} from "../starknet/multisig-deploy";
-import { STARKNET_NETWORKS } from "../starknet/networks";
 import { type MultisigProposalRecord, multisigProposalId } from "../storage/multisig-store";
-import { readTypeOnlyInput } from "./message-inputs";
-import {
-  readDeployMultisigInput,
-  readMultisigProposalActionInput,
-  readProposeMultisigInput,
-} from "./multisig-inputs";
+import { handleMultisigDeployOps } from "./multisig-deploy-ops";
+import { readMultisigProposalActionInput, readProposeMultisigInput } from "./multisig-inputs";
 import {
   buildMultisigProposalRecord,
   defaultSummary,
@@ -41,7 +29,7 @@ import {
   multisigRpc,
   refreshSignerMembership,
 } from "./multisig-ops";
-import { activeAccountContext, networkRpcUrls } from "./runtime-state";
+import { recordSubmittedActivity } from "./multisig-submission";
 import type { RuntimeResponse } from "./runtime-types";
 import { signerForContext } from "./wallet-ops";
 
@@ -88,7 +76,7 @@ const submitAndRecord = async (
     rpcUrls: resolved.rpcUrls,
     signHash: signerForContext(deps, resolved.account),
   });
-  await deps.activity.record({
+  await recordSubmittedActivity(deps.activity, {
     accountId: resolved.account.account.id,
     hash: result.transactionHash,
     kind: "invoke",
@@ -130,6 +118,7 @@ const persistFreshStatus = async (
   deps: MultisigOpsDeps,
   proposal: MultisigProposalRecord,
   status: MultisigProposalStatus,
+  signer: string,
 ): Promise<void> => {
   if (status.state === "not-found" && (await isProposalSubmitPending(deps, proposal))) {
     return;
@@ -137,6 +126,8 @@ const persistFreshStatus = async (
   await deps.multisigStore.upsertProposal({
     ...proposal,
     confirmations: status.confirmations,
+    confirmedBySigner: status.confirmedBySigner,
+    confirmedBySignerAddress: signer,
     state: status.state,
   });
 };
@@ -154,7 +145,7 @@ const refreshAfterAction = async (
     })
     .catch(() => null);
   if (status) {
-    await persistFreshStatus(deps, found.proposal, status);
+    await persistFreshStatus(deps, found.proposal, status, found.resolved.account.account.address);
   }
 };
 
@@ -173,7 +164,7 @@ const freshProposalStatus = async (
   } catch {
     return { error: "could not refresh proposal status — try again" };
   }
-  await persistFreshStatus(deps, found.proposal, status);
+  await persistFreshStatus(deps, found.proposal, status, found.resolved.account.account.address);
   return status;
 };
 
@@ -216,11 +207,7 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
     summary,
     txId,
   });
-  await deps.multisigStore.upsertProposal(proposal);
-  const stored = (await deps.multisigStore.listProposals()).find((p) => p.id === proposal.id);
-  if (!stored) {
-    return { error: "could not store proposal — the multisig may have been removed" };
-  }
+  await deps.multisigStore.upsertProposal(proposal).catch(() => undefined);
   // No post-broadcast status refresh here: the submit transaction cannot be
   // mined yet, so the chain would answer not-found for a proposal that was
   // just optimistically stored as pending.
@@ -264,7 +251,7 @@ const runProposalAction = async (
     build(found.resolved.record.address, found.proposal.txId),
     `${summaryPrefix}: ${found.proposal.summary}`,
   );
-  await refreshAfterAction(deps, found);
+  await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };
 };
 
@@ -344,141 +331,15 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
     ),
     `Execute: ${found.proposal.summary}`,
   );
-  await refreshAfterAction(deps, found);
+  await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };
-};
-
-const multisigClassStatus: MultisigTxHandler = async (deps, message) => {
-  if (!readTypeOnlyInput(message, "wallet.multisigClassStatus")) {
-    return { error: "invalid class status request" };
-  }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) {
-    return { error: context.error };
-  }
-  const preferences = await deps.preferencesStore.read();
-  const declared = await multisigRpc(deps).isClassDeclared({
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
-  });
-  return { declared, ok: true };
-};
-
-const declareMultisigClass: MultisigTxHandler = async (deps, message) => {
-  if (!readTypeOnlyInput(message, "wallet.declareMultisigClass")) {
-    return { error: "invalid declare request" };
-  }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) {
-    return { error: context.error };
-  }
-  if (!deps.loadMultisigClass) {
-    return { error: "multisig class artifact unavailable" };
-  }
-  const preferences = await deps.preferencesStore.read();
-  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
-  if (await multisigRpc(deps).isClassDeclared({ rpcUrls })) {
-    return { error: "multisig class is already declared on this network" };
-  }
-  const activities = await deps.activity.list();
-  const hasPendingDeclare = activities.some(
-    (entry) =>
-      entry.accountId === context.account.id &&
-      entry.networkId === context.networkId &&
-      entry.summary === "Declare multisig class" &&
-      entry.status === "pending",
-  );
-  if (hasPendingDeclare) {
-    return { error: "a declare transaction is already pending — wait for it to complete" };
-  }
-  const contractClass = requireMultisigContractClass(await deps.loadMultisigClass());
-  const result = await deps.runtimeRpc.submitDeclareTransaction({
-    account: context.account,
-    classHash: MULTISIG_CLASS_HASH,
-    compiledClassHash: MULTISIG_COMPILED_CLASS_HASH,
-    contractClass,
-    rpcUrls,
-    signHash: signerForContext(deps, context),
-  });
-  await deps.activity.record({
-    accountId: context.account.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: context.networkId,
-    summary: "Declare multisig class",
-  });
-  return { ok: true, transactionHash: result.transactionHash };
-};
-
-const deployMultisig: MultisigTxHandler = async (deps, message) => {
-  const input = readDeployMultisigInput(message);
-  if (!input) {
-    return { error: "invalid deploy multisig request" };
-  }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) {
-    return { error: context.error };
-  }
-  const preferences = await deps.preferencesStore.read();
-  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
-  if (!(await multisigRpc(deps).isClassDeclared({ rpcUrls }))) {
-    return { error: "multisig class not declared on this network — declare it first" };
-  }
-  const config = { quorum: input.quorum, salt: input.salt, signers: input.signers };
-  const address = predictMultisigAddress(config);
-  let occupied: boolean;
-  try {
-    occupied = await deps.runtimeRpc.getDeploymentStatus({ accountAddress: address, rpcUrls });
-  } catch {
-    return {
-      error: "could not verify whether this multisig address is free — try again",
-    };
-  }
-  if (occupied) {
-    return { error: "a multisig with these signers and salt already exists — watch it instead" };
-  }
-  // The recorded summary embeds the full predicted address and this guard
-  // matches on the same marker — the two must stay in lockstep or the dedup
-  // silently dies (it once matched a suffix the summary never contained).
-  const deployMarker = ` at ${address}`;
-  const activities = await deps.activity.list();
-  const hasPendingDeploy = activities.some(
-    (entry) =>
-      entry.accountId === context.account.id &&
-      entry.networkId === context.networkId &&
-      entry.summary.includes(deployMarker) &&
-      entry.status === "pending",
-  );
-  if (hasPendingDeploy) {
-    return {
-      error:
-        "a deploy transaction for this multisig configuration is already pending — wait for it to complete",
-    };
-  }
-  const call = buildMultisigDeployCall(config);
-  const result = await deps.runtimeRpc.submitInvokeTransaction({
-    account: context.account,
-    calls: [call],
-    rpcUrls,
-    signHash: signerForContext(deps, context),
-  });
-  await deps.activity.record({
-    accountId: context.account.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: context.networkId,
-    summary: `Deploy multisig (${input.quorum} of ${input.signers.length})${deployMarker}`,
-  });
-  return { address, ok: true, transactionHash: result.transactionHash };
 };
 
 // One handler per transaction-submitting multisig message type; the router
 // below is a single map lookup and unknown types fall through to null.
 const TX_HANDLERS: Record<string, MultisigTxHandler> = {
   "wallet.confirmMultisigProposal": confirmMultisigProposal,
-  "wallet.declareMultisigClass": declareMultisigClass,
-  "wallet.deployMultisig": deployMultisig,
   "wallet.executeMultisigProposal": executeMultisigProposal,
-  "wallet.multisigClassStatus": multisigClassStatus,
   "wallet.proposeMultisigTx": proposeMultisigTx,
   "wallet.revokeMultisigConfirmation": revokeMultisigConfirmation,
 };
@@ -493,5 +354,5 @@ export const handleMultisigTxOps = async (
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
   const handler = TX_HANDLERS[messageType];
-  return handler ? handler(deps, message) : null;
+  return handler ? handler(deps, message) : handleMultisigDeployOps(deps, messageType, message);
 };

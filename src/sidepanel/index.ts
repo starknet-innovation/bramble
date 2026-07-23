@@ -14,7 +14,7 @@ import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { createDeploymentCache } from "./deployment-cache";
 import { bindDisclosures } from "./disclosures";
-import { bindCopyButtons, captureRepaintFocus, restoreRepaintFocus } from "./dom";
+import { bindCopyButtons, captureRepaintFocus, restoreRepaintFocus, showToast } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
@@ -22,6 +22,10 @@ import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
 import { hydrateView } from "./hydrate";
 import { bindImportKey } from "./import-key-ui";
+import { bindLedgerFirstRun } from "./ledger/first-run";
+import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
+import { webHidConnector } from "./ledger/sign-connector";
+import { createLedgerSignRuntime } from "./ledger/sign-runtime";
 import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
@@ -143,11 +147,51 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
 
+// Ledger sign takeover lives outside #app so a dashboard repaint (which replaces
+// the shell markup) never resets an in-flight device prompt. Polled from the
+// render cycle; when the background parks a keyless-Ledger signature it fires a
+// wallet event, the panel re-renders, and poll() surfaces the request here.
+const ledgerSignMount = document.createElement("div");
+ledgerSignMount.className = "ledger-sign-overlay";
+ledgerSignMount.hidden = true;
+document.body.append(ledgerSignMount);
+const ledgerSign = createLedgerSignRuntime({
+  connector: webHidConnector,
+  mount: ledgerSignMount,
+  status: () => cache.status,
+  wallet,
+});
+
+// Ledger onboarding overlay, shared by the first-run "Set up with a Ledger" card
+// and the add-to-existing-wallet chooser. Its own overlay outside #app for the
+// same repaint-survival reason as the sign takeover; the first-run stash and the
+// create/add branch live in ./ledger/onboard-entry so this file stays in budget.
+const ledgerOnboardMount = document.createElement("div");
+ledgerOnboardMount.className = "ledger-onboard-overlay";
+ledgerOnboardMount.hidden = true;
+document.body.append(ledgerOnboardMount);
+// The chooser's non-Ledger routes: HD-derive, and import (via the account flow).
+const ledgerOnboard = createLedgerOnboardEntry({
+  addHd: async () => {
+    await wallet.addAccount(lastNetworkId);
+    showToast("Account added", "success");
+  },
+  cache,
+  connector: webHidConnector,
+  mount: ledgerOnboardMount,
+  openImport: () => navigate("account"),
+  refresh: async () => {
+    await render(await wallet.loadStatus());
+  },
+  wallet,
+});
+
 const bindAll = (): void => {
   bindNavigation();
   bindBack();
   bindCopyButtons(app);
   bindOnboarding({ app, render, wallet });
+  bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });
   bindUnlock({ app, render, wallet }, () => {
     activeView = "home";
   });
@@ -202,6 +246,8 @@ const bindAll = (): void => {
     setOpenAssign: (id: string | null) => {
       openAssignId = id;
     },
+    // "Add account" opens the type chooser (New HD / Import / Connect a Ledger).
+    startAddAccount: ledgerOnboard.startAddAccount,
     wallet,
   };
   bindAccountLabel(settingsDeps);
@@ -222,6 +268,7 @@ const bindAll = (): void => {
     wallet,
   });
   bindDisclosures(app);
+  ledgerOnboard.bindTriggers(app);
   bindSwap({
     app,
     balances: () => cache.balances,
@@ -270,11 +317,8 @@ const bindAll = (): void => {
 };
 
 // Applies the skin and CSS `color-scheme` for the current theme choice, but
-// only when the resolved skin actually changed — cheap enough to call on every
-// paint. Swapping skin tokens on the root re-themes the whole panel through CSS
-// custom properties without re-rendering any markup. Both themes are pinned
-// palettes; `color-scheme` is pinned alongside so native form controls render
-// on the same ground and a browser scheme flip can never re-theme the panel.
+// Apply only when the resolved skin changes. Both palettes and the matching
+// native-control color scheme are pinned.
 // A legacy stored "system" choice resolves to the default dark skin.
 const applyTheme = (): void => {
   const choice = cache.preferences?.theme ?? "dark";
@@ -355,6 +399,8 @@ const paint = (): void => {
           classHashVerification,
           cache.historyUnavailable,
           snoozedApprovalIds,
+          cache.multisigsError,
+          cache.multisigSync,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -363,21 +409,21 @@ const paint = (): void => {
   lastContent = content;
   renderScene(content, animate, direction);
 };
-
-// Refreshes cache from the background, painting once from fast local data and
-// again after view-scoped network data (balances, prices, activity) resolves
-// in parallel — so the screen is never blocked on RPC or price round-trips.
 const render = async (status: WalletStatus): Promise<void> => {
+  const multisigScopeChanged =
+    cache.status.activeAccountId !== status.activeAccountId ||
+    cache.status.networkId !== status.networkId;
   cache.status = status;
+  if (multisigScopeChanged) {
+    cache.multisigSync = null;
+    cache.multisigsError = false;
+  }
   cache.pending = await wallet.loadPendingApprovals();
   cache.preferences =
     status.hasVault && !status.locked ? await wallet.loadPreferences().catch(() => null) : null;
   if (!status.hasVault || status.locked) {
-    // Reset every view-scoped field to its locked/empty state from the single
-    // source (emptyRenderCache) rather than a hand-maintained field list here,
-    // so no field — present or future — can be forgotten and leak stale state
-    // (e.g. multisig proposals) across a lock. The status/pending/preferences
-    // just refreshed above are preserved.
+    // Reset every view-scoped field from one source so stale state cannot leak
+    // across a lock; preserve the status/pending/preferences just refreshed.
     Object.assign(cache, emptyRenderCache(), {
       pending: cache.pending,
       preferences: cache.preferences,
@@ -387,9 +433,13 @@ const render = async (status: WalletStatus): Promise<void> => {
     return;
   }
   paint();
+  // Surface any parked keyless-Ledger signature for this now-unlocked panel; the
+  // takeover renders itself over the dashboard and drives the device.
+  void ledgerSign.poll();
   await hydrateView({
     status,
     activeView,
+    selectedMultisigId,
     selectedTokenId,
     cache,
     wallet,

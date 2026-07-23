@@ -10,9 +10,9 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-1.3.3-fbf0df?style=for-the-badge&logo=bun&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Biome](https://img.shields.io/badge/Biome-2.5.3-60A5FA?style=for-the-badge&logo=biome&logoColor=white)
+![Biome](https://img.shields.io/badge/Biome-2.5.5-60A5FA?style=for-the-badge&logo=biome&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-0.3.0-3ba55d?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.6.0-3ba55d?style=for-the-badge)
 
 </div>
 
@@ -20,7 +20,8 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 
 ## Features
 
-- **Accounts & transfers** — OpenZeppelin accounts, seed-phrase backup with on-screen verification, derive more accounts, reveal keys behind re-auth.
+- **Accounts & transfers** — OpenZeppelin accounts backed by either the encrypted software vault or a Ledger hardware wallet, with deploy/send/receive and network switching.
+- **Recovery** — seed-phrase backup with on-screen verification for software accounts; Ledger accounts stay keyless and are recovered from the Ledger device's own recovery phrase.
 - **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
 - **NFT gallery** — watch collectibles with on-chain ownership proof before they're stored.
@@ -50,9 +51,24 @@ bun run format    # Biome autofix
 bun run test:e2e  # Playwright end-to-end (run test:e2e:install once first)
 ```
 
+### Offline checks
+
+After `bun install --frozen-lockfile`, the fast PR gates below need only Bun and the checked-out
+repository. They do not clone Krusty, invoke Rust/wasm-pack or Scarb, build the extension, or
+launch Chromium:
+
+```bash
+bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun test ./tests && bun run check:coverage
+```
+
+The full `bun run check` additionally verifies the vendored Krusty and multisig outputs. Generate
+those first with `bun run vendor:krusty` (network, Rust, and `wasm-pack 0.13.1`) and
+`bun run vendor:multisig` (`scarb 2.18.0`). `build`, packaging, and browser E2E also require those
+vendored outputs; Playwright needs its Chromium install once per machine.
+
 ## Built with
 
-Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · Biome · Krusty KMS (WASM) · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
+Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · Biome · Krusty KMS (WASM) · Ledger WebHID · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
 
 ## Architecture
 
@@ -65,11 +81,11 @@ src/storage                encrypted persistence, permissions, schema migrations
 src/crypto                 Krusty KMS boundary (validates every WASM input/output)
 src/starknet               RPC, networks, token registry, prices
 src/security               phishing blocklist and lookalike heuristics
-src/sidepanel + src/ui      the side-panel app and its design system
+src/sidepanel + src/ui      the side-panel app, Ledger WebHID boundary, and design system
 contracts/multisig         the pinned OpenZeppelin multisig shell (Cairo)
 ```
 
-`src/background` owns privileged state, approvals, unlock sessions, and vault wiring; `src/content` and `src/provider` bridge page requests to the background without exposing signing or the vault; `src/storage` owns encrypted persistence, permission checks, schema validation, and migrations; `src/crypto` adapts Krusty KMS and rejects invalid inputs or WASM outputs at the boundary. The full tour — provider API, pinned account/multisig class hashes, and internals — lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+`src/background` owns privileged state, approvals, unlock sessions, Ledger signature verification, and vault wiring; `src/content` and `src/provider` bridge page requests to the background without exposing signing or the vault; `src/storage` owns encrypted persistence, permission checks, schema validation, and migrations; `src/crypto` adapts Krusty KMS and rejects invalid inputs or WASM outputs at the boundary. The full tour — provider API, Ledger trust boundary, pinned account/multisig class hashes, and internals — lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Krusty KMS
 
@@ -94,14 +110,14 @@ Screen changes run through the View Transitions API and collapse to an instant c
 
 ## Migration Workflow
 
-The vault schema is versioned (`CURRENT_SCHEMA_VERSION` in `src/storage/vault-schema.ts`) and currently at **v2** — v2 adds a `mnemonic: string | null` field so the wallet can derive more accounts and reveal the recovery phrase after re-auth. To change the stored shape:
+The vault schema is versioned (`CURRENT_SCHEMA_VERSION` in `src/storage/vault-schema.ts`) and currently at **v3**. v2 added a `mnemonic: string | null`; v3 admits keyless Ledger account records while preserving the existing v2 shape for software-only wallets. To change the stored shape:
 
 1. Bump `CURRENT_SCHEMA_VERSION` in `src/storage/vault-schema.ts`.
 2. Add exactly one adjacent step to `VAULT_MIGRATIONS` in `src/storage/migrations.ts`.
 3. Update the schema validators and add tests for old, current, and invalid vault data.
 4. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-Each step advances exactly one version (`v0 → v1 → v2`) and must be deterministic; `mnemonic` only ever exists inside the encrypted vault envelope.
+Each step advances exactly one version (`v0 → v1 → v2 → v3`) and must be deterministic; `mnemonic` only ever exists inside the encrypted vault envelope. A Ledger-only vault stores public account metadata and no mnemonic or signing key. Backing up MC Wallet does not back up Ledger accounts: recover those from the Ledger device and its Ledger recovery phrase.
 
 ## Extension
 
@@ -116,7 +132,7 @@ CI uploads those same files as the `mc-wallet-extension` workflow artifact. Cutt
 ## Docs
 
 - **[Documentation portal](docs/index.md)** — host-ready project and security-audit documentation.
-- **[Architecture & internals](docs/ARCHITECTURE.md)** — the provider API, pinned class hashes, storage migrations, design system, and full tour.
+- **[Architecture & internals](docs/ARCHITECTURE.md)** — the provider API, Ledger trust boundary, pinned class hashes, storage migrations, design system, and full tour.
 - **[Security audit](docs/security-audit/index.md)** — baseline, threat model, review sequence, and sanitized findings ledger.
 - **[Source package audit](docs/security-audit/src-package-audit.md)** — package-by-package controls, resolved findings, and validation evidence.
 - **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**

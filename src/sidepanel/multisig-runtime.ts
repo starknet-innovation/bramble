@@ -95,11 +95,15 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         return "error";
       }
     },
-    async loadMultisigs(): Promise<Pick<MultisigsResponse, "multisigs" | "proposals">> {
-      const response = await sendMessage({ type: "wallet.multisigs" });
-      return isMultisigsResponse(response)
-        ? { multisigs: response.multisigs, proposals: response.proposals }
-        : { multisigs: [], proposals: [] };
+    async loadMultisigs(): Promise<Pick<MultisigsResponse, "multisigs" | "proposals"> | "error"> {
+      try {
+        const response = await sendMessage({ type: "wallet.multisigs" });
+        return isMultisigsResponse(response)
+          ? { multisigs: response.multisigs, proposals: response.proposals }
+          : "error";
+      } catch {
+        return "error";
+      }
     },
     async proposeTransaction(input: {
       readonly calldata: readonly string[];

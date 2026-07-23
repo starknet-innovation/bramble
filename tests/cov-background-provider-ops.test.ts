@@ -5,7 +5,9 @@
  * the payload has no calls, the wallet is locked, or the origin lost its grant.
  */
 import { describe, expect, test } from "bun:test";
+import { ec } from "starknet";
 import { createApprovalQueue } from "../src/background/approvals";
+import type { LedgerSignQueue } from "../src/background/ledger-sign-queue";
 import {
   executeInvokeApproval,
   handleProviderOps,
@@ -166,6 +168,130 @@ const executeDeps = (locked: boolean): InvokeExecuteDeps => {
     wallet,
   };
 };
+
+const { starkCurve } = ec;
+// The fake device's private key; the Ledger account's stored publicKeyX is its
+// real Stark public x-coordinate so a good device signature verifies.
+const LEDGER_KEY = "0x1234567890abcdef";
+const LEDGER_SIGN_HASH = "0x1e240";
+
+const ledgerAccount: AccountRef = {
+  address: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  derivation: {
+    accountIndex: 0,
+    eip2645application: "LedgerW",
+    kind: "ledger",
+    path: "m/2645'/1195502025'/1470455285'/0'/0'/0",
+  },
+  id: "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  networkId: "SN_MAIN",
+  publicKeyX: starkCurve.getStarkKey(LEDGER_KEY),
+};
+
+// A fake device: signs whatever hash it is handed with a chosen private key —
+// no hardware or WebHID. Signing with LEDGER_KEY produces a signature that
+// verifies against the account's publicKeyX; any other key fails the gate.
+const deviceQueue = (privateKey: string): LedgerSignQueue => ({
+  pending: () => [],
+  reject: () => false,
+  rejectAll: () => 0,
+  settle: () => false,
+  async request(request) {
+    const sig = starkCurve.sign(request.messageHash, privateKey);
+    return { r: `0x${sig.r.toString(16)}`, s: `0x${sig.s.toString(16)}` };
+  },
+});
+
+// A wallet whose granted account for the origin is the keyless Ledger account.
+// signHash MUST NEVER run for it (a Ledger account has no vault key); its device
+// signs through the injected queue instead. `onSubmit` fires only if the RPC
+// layer is reached after the signer verifies, so a failed sign leaves it false.
+const ledgerExecuteDeps = (
+  queue: LedgerSignQueue | undefined,
+  onSubmit: () => void,
+): InvokeExecuteDeps => {
+  const session = createUnlockSession();
+  session.unlock(vaultPassphrase);
+  return {
+    activity: memoryActivityLog(),
+    allowanceStore: memoryAllowanceStore(),
+    ...(queue ? { ledgerSignQueue: queue } : {}),
+    preferencesStore: {
+      async read() {
+        return { activeNetworkId: "SN_MAIN" };
+      },
+    } as unknown as InvokeExecuteDeps["preferencesStore"],
+    runtimeRpc: {
+      async submitInvokeTransaction(input: {
+        readonly signHash: (hash: string) => Promise<unknown>;
+      }) {
+        // Drive the signer so the device round-trip and verify gate run before
+        // "broadcast"; a verification failure throws here, before onSubmit.
+        await input.signHash(LEDGER_SIGN_HASH);
+        onSubmit();
+        return { transactionHash: "0xledgertx" };
+      },
+    } as unknown as RuntimeRpc,
+    session,
+    wallet: {
+      ...(wallet as object),
+      async getGrantedAccounts() {
+        return [ledgerAccount];
+      },
+      async signHash(): Promise<never> {
+        throw new Error("vault signHash must not be reached for a Ledger account");
+      },
+    } as unknown as ProviderOpsDeps["wallet"],
+  };
+};
+
+describe("executeInvokeApproval Ledger device routing", () => {
+  test("routes a keyless Ledger account to the device and broadcasts on a good signature", async () => {
+    let submitted = false;
+    const result = await executeInvokeApproval(
+      ledgerExecuteDeps(deviceQueue(LEDGER_KEY), () => {
+        submitted = true;
+      }),
+      { origin: ORIGIN, payload: invoke },
+    );
+    expect(result).toEqual({ ok: true, transactionHash: "0xledgertx" });
+    expect(submitted).toBe(true);
+  });
+
+  test("returns the verify-failure error with nothing submitted when the device signature does not verify", async () => {
+    // The signer throws a WalletError on a bad device signature; the executor
+    // catches it and returns `{ error }` (rather than throwing) so the approval
+    // applier settles the held dapp request with the real reason instead of
+    // leaving it to hang. Nothing is broadcast.
+    let submitted = false;
+    await expect(
+      executeInvokeApproval(
+        ledgerExecuteDeps(deviceQueue("0xdeadbeef"), () => {
+          submitted = true;
+        }),
+        { origin: ORIGIN, payload: invoke },
+      ),
+    ).resolves.toEqual({ error: "Ledger signature verification failed" });
+    expect(submitted).toBe(false);
+  });
+
+  test("fails closed with an error response and nothing submitted when no device queue is wired", async () => {
+    // A keyless Ledger account with no queue throws "Ledger signing unavailable"
+    // from the signer seam; the executor returns it as `{ error }` so the held
+    // request settles fail-closed rather than hanging on an unhandled throw.
+    let submitted = false;
+    await expect(
+      executeInvokeApproval(
+        ledgerExecuteDeps(undefined, () => {
+          submitted = true;
+        }),
+        { origin: ORIGIN, payload: invoke },
+      ),
+    ).resolves.toEqual({ error: "Ledger signing unavailable" });
+    expect(submitted).toBe(false);
+  });
+});
 
 describe("executeInvokeApproval failure branches", () => {
   test("reports approval-not-found when the held payload has no calls", async () => {

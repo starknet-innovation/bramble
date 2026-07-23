@@ -16,3 +16,13 @@ export const invariant = (condition: boolean, message: string): void => {
     throw new WalletError(message);
   }
 };
+
+/**
+ * Extracts a stable, user-facing message from a caught error. A `WalletError`
+ * carries a curated message safe to surface across the dapp boundary (a device
+ * rejection, a locked wallet); anything else collapses to the caller's generic
+ * fallback so internal detail never leaks. Used by the held-approval executors
+ * to turn a thrown sign/submit failure into a returned `{ error }` response.
+ */
+export const walletErrorMessage = (error: unknown, fallback: string): string =>
+  error instanceof WalletError ? error.message : fallback;
