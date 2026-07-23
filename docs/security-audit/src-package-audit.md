@@ -484,14 +484,14 @@ This was a source, unit-assurance, build, and browser-E2E review. It did not re-
 Krusty KMS implementation, external RPC nodes, AVNU, user-configured STRK20 provers, browser
 internals, or generated artifacts. Their wallet-facing inputs and failure behavior were in scope.
 
-CI/release authority, build and packaging scripts, contracts, the terminal app, and pending pull
-requests remain separate review stages.
+CI/release authority, build and packaging scripts, contracts, and the terminal app remain separate
+review stages. The v0.6 Ledger and multisig changes are covered by the
+[release follow-up](../releases/v0.6/).
 
 ## Residual risk and release guidance
 
 All nine findings are resolved. External services remain untrusted: the new controls constrain
 their output but cannot establish that a remote service is honest or available.
 
-This main-branch remediation is not a published extension release until it passes CI and the
-packaging/release gates. Pending pull requests should be rebased onto this security baseline and
-re-audited for changes to the affected trust boundaries before merge.
+This remediation is not a published extension release until it passes CI and packaging gates.
+Follow-on changes must be re-audited against the affected trust boundaries before merge.

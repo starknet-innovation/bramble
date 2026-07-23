@@ -12,8 +12,9 @@ After this documentation branch is merged:
 
 The site root will serve `docs/index.md`. The audit index has the stable route
 `/security-audit/`, and the consolidated source review is available at
-`/security-audit/src-package-audit/`. Relative links keep the same tree usable in GitHub's
-Markdown renderer and in other Jekyll-compatible hosts.
+`/security-audit/src-package-audit/`. The v0.6 follow-up is available at
+`/security-audit/releases/v0.6/`. Relative links keep the same tree usable in GitHub's Markdown
+renderer and in other Jekyll-compatible hosts.
 
 Do not publish an unremediated vulnerability's exploit details. Put sensitive evidence in a
 private GitHub Security Advisory and add only a sanitized placeholder to the public findings
