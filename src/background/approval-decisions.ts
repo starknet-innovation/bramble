@@ -5,12 +5,14 @@
  * `wallet.denyOrigin` rejects the held request with a spec USER_REFUSED_OP so
  * the dapp promise settles rather than hanging. Only extension pages reach here.
  */
-import { walletErrorMessage } from "../shared/errors";
+import type { OriginGuard } from "../security/blocklist";
+import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { executeAddChainApproval } from "./add-chain-ops";
-import type { ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
+import { approvalPayloadMatchesContext } from "./approval-context";
+import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
 import { executeSignApproval, executeSwitchChainApproval } from "./chain-ops";
 import { executeDeclareApproval } from "./declare-ops";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
@@ -29,6 +31,7 @@ export type ApprovalDecisionDeps = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
+  readonly guard: OriginGuard;
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
@@ -40,12 +43,9 @@ export type ApprovalDecisionDeps = {
 const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
 
 /**
- * Outcome of applying an approve decision for one approval kind. `reject`
- * returns its response verbatim without settling or clearing the approval (a
- * failed guard, or a locked wallet on connect). `settle` delivers `settle`
- * through the dapp's held request channel, clears the approval, then builds the
- * page response from the post-clear pending list — so `listPending` is only
- * evaluated for kinds that surface it (never for connect).
+ * Outcome of applying an already-claimed approve decision. `reject` settles
+ * the held request with the failure; `settle` delivers its execution result.
+ * The id has already been removed atomically before either branch runs.
  */
 type ApplyResult =
   | { readonly status: "reject"; readonly response: RuntimeResponse }
@@ -55,10 +55,7 @@ type ApplyResult =
       readonly respond: (listPending: () => readonly PendingApproval[]) => RuntimeResponse;
     };
 
-type ApproveApplier = (
-  deps: ApprovalDecisionDeps,
-  approval: PendingApproval,
-) => Promise<ApplyResult>;
+type ApproveApplier = (deps: ApprovalDecisionDeps, claim: ApprovalClaim) => Promise<ApplyResult>;
 
 const reject = (response: RuntimeResponse): ApplyResult => ({ response, status: "reject" });
 
@@ -72,7 +69,7 @@ const settleExecutor = (result: RuntimeResponse): ApplyResult => ({
   status: "settle",
 });
 
-const applyWatchAsset: ApproveApplier = async (deps, approval) => {
+const applyWatchAsset: ApproveApplier = async (deps, { approval }) => {
   if (!approval.token) {
     return reject(NOT_FOUND);
   }
@@ -84,8 +81,7 @@ const applyWatchAsset: ApproveApplier = async (deps, approval) => {
   };
 };
 
-const applyInvoke: ApproveApplier = async (deps, approval) => {
-  const payload = deps.approvals.payload(approval.id);
+const applyInvoke: ApproveApplier = async (deps, { approval, payload }) => {
   if (!payload) {
     return reject(NOT_FOUND);
   }
@@ -99,14 +95,17 @@ const applyInvoke: ApproveApplier = async (deps, approval) => {
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
-    { origin: approval.origin, payload },
+    {
+      ...(approval.context === undefined ? {} : { context: approval.context }),
+      origin: approval.origin,
+      payload,
+    },
   );
   return settleExecutor(result);
 };
 
-const applyStrk20Invoke: ApproveApplier = async (deps, approval) => {
-  const payload = deps.approvals.payload(approval.id);
-  if (!payload?.actions) {
+const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) => {
+  if (!payload?.actions || !payload.calls) {
     return reject(NOT_FOUND);
   }
   const result = await executeStrk20InvokeApproval(
@@ -118,13 +117,17 @@ const applyStrk20Invoke: ApproveApplier = async (deps, approval) => {
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
-    { actions: payload.actions, origin: approval.origin },
+    {
+      actions: payload.actions,
+      calls: payload.calls,
+      ...(approval.context === undefined ? {} : { context: approval.context }),
+      origin: approval.origin,
+    },
   );
   return settleExecutor(result);
 };
 
-const applySignTypedData: ApproveApplier = async (deps, approval) => {
-  const payload = deps.approvals.payload(approval.id);
+const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) => {
   if (payload?.typedData === undefined) {
     return reject(NOT_FOUND);
   }
@@ -135,13 +138,16 @@ const applySignTypedData: ApproveApplier = async (deps, approval) => {
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
-    { origin: approval.origin, typedData: payload.typedData },
+    {
+      ...(approval.context === undefined ? {} : { context: approval.context }),
+      origin: approval.origin,
+      typedData: payload.typedData,
+    },
   );
   return settleExecutor(result);
 };
 
-const applySwitchChain: ApproveApplier = async (deps, approval) => {
-  const payload = deps.approvals.payload(approval.id);
+const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => {
   if (payload?.networkId === undefined || payload.chainId === undefined) {
     return reject(NOT_FOUND);
   }
@@ -158,8 +164,7 @@ const applySwitchChain: ApproveApplier = async (deps, approval) => {
   };
 };
 
-const applyAddChain: ApproveApplier = async (deps, approval) => {
-  const payload = deps.approvals.payload(approval.id);
+const applyAddChain: ApproveApplier = async (deps, { payload }) => {
   if (payload?.chain === undefined) {
     return reject(NOT_FOUND);
   }
@@ -170,8 +175,7 @@ const applyAddChain: ApproveApplier = async (deps, approval) => {
   return settleExecutor(result);
 };
 
-const applyDeclare: ApproveApplier = async (deps, approval) => {
-  const payload = deps.approvals.payload(approval.id);
+const applyDeclare: ApproveApplier = async (deps, { approval, payload }) => {
   if (payload?.declare === undefined) {
     return reject(NOT_FOUND);
   }
@@ -183,12 +187,16 @@ const applyDeclare: ApproveApplier = async (deps, approval) => {
       wallet: deps.wallet,
       ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
-    { declare: payload.declare, origin: approval.origin },
+    {
+      ...(approval.context === undefined ? {} : { context: approval.context }),
+      declare: payload.declare,
+      origin: approval.origin,
+    },
   );
   return settleExecutor(result);
 };
 
-const applyConnect: ApproveApplier = async (deps, approval) => {
+const applyConnect: ApproveApplier = async (deps, { approval }) => {
   const passphrase = deps.session.getPassphrase();
   if (!passphrase) {
     return reject({ error: "wallet locked" });
@@ -222,6 +230,47 @@ const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
   "watch-asset": applyWatchAsset,
 };
 
+const validateClaimContext = async (
+  deps: ApprovalDecisionDeps,
+  claim: ApprovalClaim,
+): Promise<RuntimeResponse | null> => {
+  const { context } = claim.approval;
+  if (!context) {
+    return null;
+  }
+  const passphrase = deps.session.getPassphrase();
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const preferences = await deps.preferencesStore.read();
+  if (
+    preferences.activeNetworkId !== context.networkId ||
+    STARKNET_NETWORKS[context.networkId].chainId !== context.chainId
+  ) {
+    return { error: "approval context changed" };
+  }
+  const granted = await deps.wallet.getGrantedAccounts(claim.approval.origin, passphrase);
+  if (
+    !granted.some(
+      (account) => account.id === context.accountId && account.networkId === context.networkId,
+    )
+  ) {
+    return { error: "approval context changed" };
+  }
+  return claim.payload && (await approvalPayloadMatchesContext(context, claim.payload))
+    ? null
+    : { error: "approval payload changed" };
+};
+
+const settleClaimError = (
+  deps: ApprovalDecisionDeps,
+  id: string,
+  response: RuntimeResponse,
+): RuntimeResponse => {
+  deps.waiters.settle(id, response);
+  return response;
+};
+
 const applyApproveDecision = async (
   deps: ApprovalDecisionDeps,
   message: unknown,
@@ -230,34 +279,34 @@ const applyApproveDecision = async (
   if (!input) {
     return { error: "invalid approval request" };
   }
-  const approval = deps.approvals.get(input.id);
-  if (!approval) {
+  // Claim synchronously before any awaited work. A concurrent approve/deny for
+  // the same id now sees not-found and can never execute the payload twice.
+  const claim = deps.approvals.claim(input.id);
+  if (!claim) {
     return NOT_FOUND;
+  }
+  if (deps.guard.isBlocked(claim.approval.origin)) {
+    return settleClaimError(deps, input.id, { error: "origin blocked" });
+  }
+  let contextError: RuntimeResponse | null;
+  try {
+    contextError = await validateClaimContext(deps, claim);
+  } catch {
+    return settleClaimError(deps, input.id, { error: "approval execution failed" });
+  }
+  if (contextError) {
+    return settleClaimError(deps, input.id, contextError);
   }
   let result: ApplyResult;
   try {
-    result = await APPROVE_APPLIERS[approval.kind](deps, approval);
-  } catch (error) {
-    // Shared fail-closed settlement boundary. The executor-backed appliers
-    // return `{ error }` on a handled failure (which flows through the normal
-    // settle path below), but any *thrown* error — a signer/executor that
-    // throws from deeper than its own catch, a store read that rejects before
-    // the executor's try, or a future applier with no catch — would otherwise
-    // skip settlement and removal, hanging the held dapp waiter and stranding
-    // the approval. Settle the waiter with the same error-envelope shape the
-    // success path uses and remove the approval exactly as normal completion
-    // does. This runs ONLY on a throw (the try returned nothing), so it can
-    // never double-settle a result that already took the path below.
-    const settled: RuntimeResponse = { error: walletErrorMessage(error, "wallet request failed") };
-    deps.waiters.settle(input.id, settled);
-    deps.approvals.approve(input.id);
-    return settled;
+    result = await APPROVE_APPLIERS[claim.approval.kind](deps, claim);
+  } catch {
+    return settleClaimError(deps, input.id, { error: "approval execution failed" });
   }
   if (result.status === "reject") {
-    return result.response;
+    return settleClaimError(deps, input.id, result.response);
   }
   deps.waiters.settle(input.id, result.settle);
-  deps.approvals.approve(input.id);
   return result.respond(() => deps.approvals.list());
 };
 
@@ -266,8 +315,7 @@ const applyDenyDecision = (deps: ApprovalDecisionDeps, message: unknown): Runtim
   if (!input) {
     return { error: "invalid approval request" };
   }
-  const denied = deps.approvals.get(input.id);
-  deps.approvals.deny(input.id);
+  const denied = deps.approvals.claim(input.id)?.approval ?? null;
   // Reject the dapp's held request (if any) so it does not hang after a deny.
   if (denied) {
     deps.waiters.settle(input.id, {

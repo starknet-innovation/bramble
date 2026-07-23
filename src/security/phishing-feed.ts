@@ -19,7 +19,7 @@
  * (MetaMask's eth-phishing-detect), a `blacklist` key is accepted as an alias
  * and any additional fields (fuzzylist, whitelist, tolerance) are ignored.
  */
-import { isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { systemClock } from "../storage/activity-store";
 import type { KeyValueStore } from "../storage/kv";
 
@@ -27,6 +27,7 @@ import type { KeyValueStore } from "../storage/kv";
  * Browser-storage key for the cached phishing feed. Plain (non-secret) data.
  */
 export const PHISHING_FEED_STORE_KEY = "mc-wallet:phishing-feed";
+const PHISHING_CACHE_VERSION = 1;
 
 /**
  * Default maintained source: MetaMask's eth-phishing-detect config, the
@@ -70,6 +71,7 @@ export type PhishingFeed = {
 type PhishingCache = {
   readonly domains: readonly string[];
   readonly fetchedAt: number;
+  readonly schemaVersion: typeof PHISHING_CACHE_VERSION;
   readonly source: string;
 };
 
@@ -111,15 +113,45 @@ export const parsePhishingFeed = (body: unknown): readonly string[] | null => {
   return domains;
 };
 
-const isStringArray = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) && value.every((entry) => typeof entry === "string");
-
-const isPhishingCache = (value: unknown): value is PhishingCache =>
-  isRecord(value) &&
-  isStringArray(value["domains"]) &&
-  typeof value["fetchedAt"] === "number" &&
-  Number.isFinite(value["fetchedAt"]) &&
-  typeof value["source"] === "string";
+const readPhishingCache = (
+  value: unknown,
+  expectedSource: string,
+  currentTime: number,
+): PhishingCache | null => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["domains", "fetchedAt", "schemaVersion", "source"]) ||
+    !Array.isArray(value["domains"]) ||
+    value["domains"].length > MAX_DOMAINS ||
+    typeof value["fetchedAt"] !== "number" ||
+    !Number.isFinite(value["fetchedAt"]) ||
+    value["fetchedAt"] < 0 ||
+    value["fetchedAt"] > currentTime ||
+    value["schemaVersion"] !== PHISHING_CACHE_VERSION ||
+    value["source"] !== expectedSource
+  ) {
+    return null;
+  }
+  const domains: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value["domains"]) {
+    if (typeof entry !== "string") {
+      return null;
+    }
+    const domain = normalizeDomain(entry);
+    if (domain === null || seen.has(domain)) {
+      return null;
+    }
+    seen.add(domain);
+    domains.push(domain);
+  }
+  return {
+    domains,
+    fetchedAt: value["fetchedAt"],
+    schemaVersion: PHISHING_CACHE_VERSION,
+    source: expectedSource,
+  };
+};
 
 /**
  * Creates the storage-backed phishing feed. On {@link PhishingFeed.refresh} it
@@ -148,9 +180,9 @@ export const createPhishingFeed = ({
     return snapshot;
   };
 
-  const readCache = async (): Promise<PhishingCache | null> => {
+  const readCache = async (currentTime: number): Promise<PhishingCache | null> => {
     const stored = await store.get(PHISHING_FEED_STORE_KEY).catch(() => undefined);
-    return isPhishingCache(stored) ? stored : null;
+    return readPhishingCache(stored, source, currentTime);
   };
 
   const fetchDomains = async (): Promise<readonly string[] | null> => {
@@ -168,13 +200,14 @@ export const createPhishingFeed = ({
   return {
     blockedDomains: () => snapshot,
     async refresh() {
-      const cache = await readCache();
+      const currentTime = now();
+      const cache = await readCache(currentTime);
       if (cache) {
         // Promote the last good list into memory before any network work, so a
         // slow or failing fetch still leaves the cached protection in place.
         setSnapshot(cache.domains);
       }
-      if (cache && now() - cache.fetchedAt < ttlMs) {
+      if (cache && currentTime - cache.fetchedAt < ttlMs) {
         return snapshot;
       }
       const fetched = await fetchDomains();
@@ -184,7 +217,12 @@ export const createPhishingFeed = ({
         return snapshot;
       }
       await store
-        .set(PHISHING_FEED_STORE_KEY, { domains: fetched, fetchedAt: now(), source })
+        .set(PHISHING_FEED_STORE_KEY, {
+          domains: fetched,
+          fetchedAt: now(),
+          schemaVersion: PHISHING_CACHE_VERSION,
+          source,
+        })
         .catch(() => undefined);
       return setSnapshot(fetched);
     },

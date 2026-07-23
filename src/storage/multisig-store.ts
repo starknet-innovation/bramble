@@ -17,6 +17,7 @@ import {
   type StarknetNetworkId,
 } from "../starknet/networks";
 import type { KeyValueStore } from "./kv";
+import { serializeStoreMutations } from "./mutation-queue";
 
 /**
  * Browser storage key for the multisig registry.
@@ -267,33 +268,33 @@ const removeMultisigIn = (shape: StoredShape, id: string): StoredShape => ({
 /**
  * Creates the persistent multisig registry.
  */
-export const createMultisigStore = ({
-  store,
-}: {
-  readonly store: KeyValueStore;
-}): MultisigStore => ({
-  async listMultisigs() {
-    return [...(await readShape(store)).multisigs].reverse();
-  },
-  async listProposals() {
-    return [...(await readShape(store)).proposals].reverse();
-  },
-  async removeMultisig(id) {
-    await writeShape(store, removeMultisigIn(await readShape(store), id));
-  },
-  async upsertMultisig(record) {
-    const next = upsertMultisigIn(await readShape(store), record);
-    if (next) {
-      await writeShape(store, next);
-    }
-  },
-  async upsertProposal(record) {
-    const next = upsertProposalIn(await readShape(store), record);
-    if (next) {
-      await writeShape(store, next);
-    }
-  },
-});
+export const createMultisigStore = ({ store }: { readonly store: KeyValueStore }): MultisigStore =>
+  serializeStoreMutations<MultisigStore>(
+    {
+      async listMultisigs() {
+        return [...(await readShape(store)).multisigs].reverse();
+      },
+      async listProposals() {
+        return [...(await readShape(store)).proposals].reverse();
+      },
+      async removeMultisig(id) {
+        await writeShape(store, removeMultisigIn(await readShape(store), id));
+      },
+      async upsertMultisig(record) {
+        const next = upsertMultisigIn(await readShape(store), record);
+        if (next) {
+          await writeShape(store, next);
+        }
+      },
+      async upsertProposal(record) {
+        const next = upsertProposalIn(await readShape(store), record);
+        if (next) {
+          await writeShape(store, next);
+        }
+      },
+    },
+    ["listMultisigs", "listProposals"],
+  );
 
 /**
  * In-memory multisig registry used as the test and fallback default.

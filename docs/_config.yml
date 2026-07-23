@@ -1,0 +1,13 @@
+title: MC Wallet Documentation
+description: Architecture, operations, and security-audit records for MC Wallet.
+theme: minima
+markdown: kramdown
+permalink: pretty
+
+header_pages:
+  - index.md
+  - ARCHITECTURE.md
+  - security-audit/index.md
+
+exclude:
+  - HOSTING.md

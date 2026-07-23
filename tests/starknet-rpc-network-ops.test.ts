@@ -279,6 +279,9 @@ const accountProvider = (): RpcProvider => {
   );
   return {
     channel,
+    async getChainId() {
+      return "0x534e5f4d41494e";
+    },
     async getClassHashAt() {
       return "0xclass";
     },

@@ -4,11 +4,8 @@
  * missing-params branch.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  providerInvokeCalls,
-  readApiVersionParam,
-  readTypedDataParam,
-} from "../src/provider/bridge-results";
+import { readApiVersionParam, readTypedDataParam } from "../src/provider/bridge-results";
+import { providerInvokeCalls } from "../src/provider/invoke-params";
 import type { Json } from "../src/shared/json";
 
 const asJson = (value: unknown): Json => value as Json;
@@ -39,6 +36,28 @@ describe("providerInvokeCalls calldata arms", () => {
     expect(calls).toEqual([{ calldata: ["0x5"], contractAddress: "0x1", entrypoint: "t" }]);
   });
 
+  test("canonicalizes decimal calldata accepted by Starknet providers", () => {
+    expect(
+      providerInvokeCalls(
+        asJson({
+          calls: [
+            {
+              calldata: ["1000", "0"],
+              contractAddress: "0x123",
+              entrypoint: "transfer",
+            },
+          ],
+        }),
+      ),
+    ).toEqual([
+      {
+        calldata: ["0x3e8", "0x0"],
+        contractAddress: "0x123",
+        entrypoint: "transfer",
+      },
+    ]);
+  });
+
   test("rejects a call that is not a record", () => {
     expect(providerInvokeCalls(asJson({ calls: [42] }))).toBeNull();
   });
@@ -47,6 +66,25 @@ describe("providerInvokeCalls calldata arms", () => {
     expect(
       providerInvokeCalls(
         asJson({ calls: [{ calldata: [{}], contractAddress: "0x1", entrypoint: "t" }] }),
+      ),
+    ).toBeNull();
+  });
+
+  test("rejects call-count and calldata fan-out above the shared limits", () => {
+    const call = { calldata: [], contractAddress: "0x1", entrypoint: "t" };
+    expect(
+      providerInvokeCalls(asJson({ calls: Array.from({ length: 17 }, () => call) })),
+    ).toBeNull();
+    expect(
+      providerInvokeCalls(
+        asJson({
+          calls: [
+            {
+              ...call,
+              calldata: Array.from({ length: 4_097 }, () => "0x1"),
+            },
+          ],
+        }),
       ),
     ).toBeNull();
   });

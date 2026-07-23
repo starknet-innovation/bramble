@@ -14,7 +14,7 @@ import { accountHashSigner } from "./account-hash-signer";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readReviewTransferInput, readTransferInput, readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
-import { activeAccountContext, networkRpcUrls } from "./runtime-state";
+import { activeAccountContext, networkRpcUrls, statusResponse } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import type { UnlockSession } from "./session";
 
@@ -264,6 +264,16 @@ const handleActivity: WalletOpsHandler = async (deps, message) => {
   };
 };
 
+const handleLock: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.lock")) {
+    return { error: "invalid lock request" };
+  }
+  // Revoke parked device signs before clearing the session.
+  deps.ledgerSignQueue?.rejectAll("wallet locked");
+  deps.session.lock();
+  return statusResponse(deps.wallet, deps.session, deps.preferencesStore);
+};
+
 /**
  * Dispatch table for wallet operation messages, keyed by message type. Keeping
  * each branch a self-contained handler leaves the router a pure lookup.
@@ -273,6 +283,7 @@ const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.deployAccount": handleDeployAccount,
   "wallet.deploymentStatus": handleDeploymentStatus,
   "wallet.getBalances": handleGetBalances,
+  "wallet.lock": handleLock,
   "wallet.reviewTransfer": handleReviewTransfer,
   "wallet.transfer": handleTransfer,
   "wallet.verifyClassHash": handleVerifyClassHash,

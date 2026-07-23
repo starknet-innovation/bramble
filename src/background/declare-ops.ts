@@ -15,6 +15,7 @@ import { normalizeWalletOrigin } from "../shared/origin";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { accountHashSigner } from "./account-hash-signer";
+import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
@@ -112,6 +113,7 @@ export const handleDeclareOps = async (
     return { error: "origin not connected" };
   }
   const approval = approvals.requestDeclare({
+    context: await createApprovalContext(account, { declare: input.declare }),
     declare: input.declare,
     origin: input.origin,
     summaries: declareSummaries(input.declare),
@@ -128,7 +130,11 @@ export const handleDeclareOps = async (
  */
 export const executeDeclareApproval = async (
   deps: DeclareExecuteDeps,
-  input: { readonly declare: ProviderDeclare; readonly origin: string },
+  input: {
+    readonly context?: ApprovalContext;
+    readonly declare: ProviderDeclare;
+    readonly origin: string;
+  },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, runtimeRpc, session, wallet } = deps;
   const passphrase = session.getPassphrase();
@@ -136,8 +142,18 @@ export const executeDeclareApproval = async (
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
+  if (input.context && preferences.activeNetworkId !== input.context.networkId) {
+    return { error: "approval context changed" };
+  }
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  const account = input.context
+    ? granted.find(
+        (stored) =>
+          stored.id === input.context?.accountId &&
+          stored.networkId === input.context.networkId &&
+          stored.networkId === preferences.activeNetworkId,
+      )
+    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
   }

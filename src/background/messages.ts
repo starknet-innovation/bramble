@@ -60,12 +60,12 @@ import { createUnlockSession, type UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
 import { handleStrk20Ops } from "./strk20-ops";
 import { handleSwapOps } from "./swap-ops";
+import { createSwapPreparationStore, type SwapPreparationStore } from "./swap-preparations";
 import { handleTokenOps } from "./token-ops";
 import { unlockFailureError } from "./unlock-errors";
 import { handleWalletOps, type WalletOpsDeps } from "./wallet-ops";
 
-// Everything the runtime router hands to a sub-handler. One bag keeps the
-// router body free of per-handler argument plumbing.
+// Everything the runtime router hands to a sub-handler.
 type RouterContext = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
@@ -81,6 +81,7 @@ type RouterContext = {
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly swap: SwapService;
+  readonly swapPreparations: SwapPreparationStore;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
 };
@@ -309,20 +310,6 @@ const handleSignHash: RouterHandler = async (ctx, messageType, message) => {
   return { ok: true, signature: await ctx.wallet.signHash(input) };
 };
 
-const handleLock: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.lock") {
-    return null;
-  }
-  if (!readTypeOnlyInput(message, "wallet.lock")) {
-    return { error: "invalid lock request" };
-  }
-  // Revoke in-flight device signs before clearing the session so a parked Ledger
-  // sign can't be completed and broadcast after the lock (see LedgerSignQueue).
-  ctx.ledgerSignQueue.rejectAll("wallet locked");
-  ctx.session.lock();
-  return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
-};
-
 const handleStatus: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.status") {
     return null;
@@ -350,14 +337,20 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
 };
 
-// Ordered dispatch table: each entry returns a response for the message types
-// it owns and null otherwise, and the router returns the first non-null result.
-// Types are partitioned across handlers, so order is readability, not behavior.
+// Ordered handlers own disjoint message types and return null otherwise.
 const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleWalletOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleLedgerOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) =>
-    handleSwapOps({ ...buildOpsDeps(ctx), swap: ctx.swap }, messageType, message),
+    handleSwapOps(
+      {
+        ...buildOpsDeps(ctx),
+        swap: ctx.swap,
+        swapPreparations: ctx.swapPreparations,
+      },
+      messageType,
+      message,
+    ),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleMultisigOps(buildMultisigDeps(ctx), messageType, message),
@@ -384,7 +377,6 @@ const HANDLERS: readonly RouterHandler[] = [
   handleSetActiveAccount,
   handleSetActiveNetwork,
   handleSignHash,
-  handleLock,
   handleStatus,
   handleUnlock,
 ];
@@ -426,10 +418,7 @@ const runtimeErrorResponse = (
 });
 
 /**
- * Optional collaborators for {@link createMessageHandler}. Every field falls
- * back to an in-memory or unavailable default, so tests wire only what they
- * exercise — by name, never by position, so a transposed argument cannot
- * silently rewire an unrelated dependency.
+ * Named optional collaborators for {@link createMessageHandler}.
  */
 export type MessageHandlerOptions = {
   readonly activity?: ActivityLog;
@@ -445,10 +434,10 @@ export type MessageHandlerOptions = {
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
+  readonly swapPreparations?: SwapPreparationStore;
 };
 
-// Abandon a parked Ledger sign after a generous injected window, so a missing
-// panel cannot hang the dapp promise and the queue itself needs no `setTimeout`.
+// Abandon a parked sign after a generous timeout interval.
 const LEDGER_SIGN_TIMEOUT: LedgerSignQueueTimeout = {
   ms: 300_000,
   schedule: (onElapsed, ms) => {
@@ -456,6 +445,15 @@ const LEDGER_SIGN_TIMEOUT: LedgerSignQueueTimeout = {
     return () => clearTimeout(handle);
   },
 };
+
+const runtimeLedgerSignQueue = (
+  provided: LedgerSignQueue | undefined,
+  session: UnlockSession,
+): LedgerSignQueue =>
+  provided ??
+  createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, () =>
+    session.isUnlocked() ? session.generation() : null,
+  );
 
 /**
  * Creates the trusted background runtime message dispatcher.
@@ -473,11 +471,7 @@ export const createMessageHandler = (
     approvals: options.approvals ?? createApprovalQueue(),
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
-    ledgerSignQueue:
-      options.ledgerSignQueue ??
-      createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, () =>
-        session.isUnlocked() ? session.generation() : null,
-      ),
+    ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     loadMultisigClass: options.loadMultisigClass,
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     originHistory: options.originHistory ?? memoryOriginHistory(),
@@ -486,6 +480,7 @@ export const createMessageHandler = (
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session,
     swap: options.swap ?? unavailableSwapService,
+    swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     waiters: createSignatureWaiters(),
     wallet,
   };

@@ -15,7 +15,7 @@ import { createUnlockSession } from "../src/background/session";
 import { WalletError } from "../src/shared/errors";
 import type { DeclareInput } from "../src/starknet/rpc";
 import type { AccountRef } from "../src/storage/vault-schema";
-import { flushHeld, latestApprovalId } from "./support/held";
+import { flushHeld, latestApprovalId, waitForPendingApprovals } from "./support/held";
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -117,18 +117,15 @@ describe("wallet_addDeclareTransaction held approval", () => {
     const { declared, handler } = makeHarness();
 
     const held = handler(declareMessage(), contentSender);
-    await flushHeld();
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
     const pending = (
-      listed as {
-        pending: readonly {
-          kind?: string;
-          origin?: string;
-          summaries?: readonly string[];
-          declare?: unknown;
-        }[];
-      }
-    ).pending.at(-1);
+      await waitForPendingApprovals<{
+        declare?: unknown;
+        id: string;
+        kind?: string;
+        origin?: string;
+        summaries?: readonly string[];
+      }>(handler, extensionSender)
+    ).at(-1);
     expect(pending).toMatchObject({ kind: "declare", origin });
     // The CONTRACT_CLASS must never reach the UI snapshot.
     expect(JSON.stringify(pending)).not.toContain("sierra_program");

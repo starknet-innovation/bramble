@@ -22,6 +22,7 @@ import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import { ledgerAccountPath } from "../src/starknet/ledger-path";
 import type { LedgerAccountRef, Vault } from "../src/storage/vault-schema";
+import { waitForPendingApprovals } from "./support/held";
 import { makeRuntimeRpc } from "./support/runtime-rpc-stub";
 
 const { starkCurve } = ec;
@@ -144,9 +145,8 @@ const waitForParkedSign = async (
 // device), and waits until the device sign is parked. Returns the held promises.
 const parkInvokeSign = async (handler: ReturnType<typeof createMessageHandler>) => {
   const held = handler(invokeMessage, content);
-  await flush();
-  const listed = await handler({ type: "wallet.pendingApprovals" }, page);
-  const approvalId = isPendingList(listed) ? (listed.pending[0]?.id ?? "") : "";
+  const listed = await waitForPendingApprovals<{ id: string }>(handler, page);
+  const approvalId = listed[0]?.id ?? "";
   const approvePromise = handler({ id: approvalId, type: "wallet.approveOrigin" }, page);
   const signId = await waitForParkedSign(handler);
   return { approvePromise, held, signId };

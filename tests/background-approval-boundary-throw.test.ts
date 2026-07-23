@@ -1,11 +1,11 @@
 /**
  * Shared fail-closed settlement boundary in applyApproveDecision. The per-kind
  * executors already turn a handled failure into a returned `{ error }`, but a
- * *thrown* error from an applier/executor (here: a vault read that throws from
- * deeper than the executor's own try/catch, on the approve path only) must not
- * escape settlement. For invoke, declare, and sign-typed-data this asserts,
- * end-to-end through the dispatcher, that a throw:
- *   - settles the held dapp waiter with the thrown reason (no hang),
+ * *thrown* error from approval validation or an applier/executor (here: a vault
+ * read on the approve path only) must not escape settlement. For invoke,
+ * declare, and sign-typed-data this asserts, end-to-end through the dispatcher,
+ * that a throw:
+ *   - settles the held dapp waiter with a curated error (no hang or leak),
  *   - removes the stranded approval (mirrors normal completion),
  *   - submits nothing / returns no signature,
  *   - surfaces no unhandled rejection (the approve response is the same error).
@@ -20,6 +20,7 @@ import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import { WalletError } from "../src/shared/errors";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { waitForPendingApprovals } from "./support/held";
 import { makeRuntimeRpc } from "./support/runtime-rpc-stub";
 
 const PASSPHRASE = "correct horse battery staple";
@@ -147,8 +148,7 @@ const driveThrow = async (dappMessage: Record<string, unknown>) => {
     settled = true;
     return response;
   });
-  await Promise.resolve();
-  const before = await pendingIds(handler);
+  const before = await waitForPendingApprovals<{ id: string }>(handler, page);
   const id = before[0]?.id ?? "";
   const heldBeforeApprove = settled;
 
@@ -160,8 +160,8 @@ const driveThrow = async (dappMessage: Record<string, unknown>) => {
   return { after, before, decision, heldBeforeApprove, result, submitted };
 };
 
-describe("shared approval-decision settlement boundary on a thrown executor", () => {
-  test("invoke: a thrown executor settles the held waiter and removes the approval", async () => {
+describe("shared approval-decision settlement boundary on a thrown dependency", () => {
+  test("invoke: a thrown dependency settles the held waiter and removes the approval", async () => {
     const outcome = await driveThrow({
       calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "transfer" }],
       origin: ORIGIN,
@@ -170,17 +170,17 @@ describe("shared approval-decision settlement boundary on a thrown executor", ()
 
     expect(outcome.heldBeforeApprove).toBe(false);
     expect(outcome.before).toHaveLength(1);
-    // Held dapp waiter settled to the thrown reason — no hang, no unhandled throw.
-    expect(outcome.result).toEqual({ error: "vault read failed" });
+    // Held dapp waiter settles to a curated error — no hang or detail leak.
+    expect(outcome.result).toEqual({ error: "approval execution failed" });
     // The approve response surfaces the same error rather than a stale ok.
-    expect(outcome.decision).toEqual({ error: "vault read failed" });
+    expect(outcome.decision).toEqual({ error: "approval execution failed" });
     // Approval removed exactly as a normal completion removes it.
     expect(outcome.after).toHaveLength(0);
     // Nothing submitted on the failing path.
     expect(outcome.submitted).toBe(false);
   });
 
-  test("declare: a thrown executor settles the held waiter and removes the approval", async () => {
+  test("declare: a thrown dependency settles the held waiter and removes the approval", async () => {
     const outcome = await driveThrow({
       declare: {
         classHash: "0x5abc",
@@ -192,13 +192,13 @@ describe("shared approval-decision settlement boundary on a thrown executor", ()
     });
 
     expect(outcome.before).toHaveLength(1);
-    expect(outcome.result).toEqual({ error: "vault read failed" });
-    expect(outcome.decision).toEqual({ error: "vault read failed" });
+    expect(outcome.result).toEqual({ error: "approval execution failed" });
+    expect(outcome.decision).toEqual({ error: "approval execution failed" });
     expect(outcome.after).toHaveLength(0);
     expect(outcome.submitted).toBe(false);
   });
 
-  test("sign-typed-data: a thrown executor settles the held waiter and removes the approval", async () => {
+  test("sign-typed-data: a thrown dependency settles the held waiter and removes the approval", async () => {
     const outcome = await driveThrow({
       origin: ORIGIN,
       type: "wallet.signTypedData",
@@ -206,10 +206,10 @@ describe("shared approval-decision settlement boundary on a thrown executor", ()
     });
 
     expect(outcome.before).toHaveLength(1);
-    expect(outcome.result).toEqual({ error: "vault read failed" });
+    expect(outcome.result).toEqual({ error: "approval execution failed" });
     // No signature is returned to the dapp on the failing path.
     expect("signature" in (outcome.result as object)).toBe(false);
-    expect(outcome.decision).toEqual({ error: "vault read failed" });
+    expect(outcome.decision).toEqual({ error: "approval execution failed" });
     expect(outcome.after).toHaveLength(0);
   });
 });

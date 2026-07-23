@@ -14,7 +14,7 @@ import type { Strk20Service } from "../src/starknet/strk20/service";
 import { defaultWalletPreferences } from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
 import type { WalletStatus } from "../src/wallet/vault-service";
-import { flushHeld, latestApprovalId } from "./support/held";
+import { flushHeld, latestApprovalId, waitForPendingApprovals } from "./support/held";
 
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const recipient = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -129,16 +129,21 @@ const buildHandler = (options?: {
   readonly registered?: boolean;
   readonly balance?: string;
   readonly invoked?: InvokeInput[];
+  readonly proveCalls?: { value: number };
 }) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const preferences = { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
+  const proveCalls = options?.proveCalls;
   const strk20: Strk20Service = {
     async privateBalances({ tokens }) {
       return tokens.map((entry) => ({ balance: options?.balance ?? "0x64", token: entry }));
     },
     proving: {
       async prove() {
+        if (proveCalls) {
+          proveCalls.value += 1;
+        }
         return callAndProof;
       },
     },
@@ -291,7 +296,8 @@ describe("background strk20 messages", () => {
 
   test("holds the invoke until approval, then submits a padded hash", async () => {
     const invoked: InvokeInput[] = [];
-    const handler = buildHandler({ invoked });
+    const proveCalls = { value: 0 };
+    const handler = buildHandler({ invoked, proveCalls });
     const held = handler(
       {
         actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
@@ -301,11 +307,20 @@ describe("background strk20 messages", () => {
       contentSender,
     );
     await flushHeld();
-    const listed = (await handler({ type: "wallet.pendingApprovals" }, sender)) as {
-      readonly pending: readonly { readonly kind?: string }[];
-    };
-    expect(listed.pending.at(-1)).toMatchObject({ kind: "strk20-invoke", origin });
+    const listed = await waitForPendingApprovals<{
+      readonly context?: { readonly payloadDigest?: string };
+      readonly id: string;
+      readonly kind?: string;
+      readonly summaries?: readonly string[];
+    }>(handler, sender);
+    expect(listed.at(-1)).toMatchObject({
+      context: { payloadDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/) },
+      kind: "strk20-invoke",
+      origin,
+      summaries: expect.arrayContaining([expect.stringContaining("shielded_execute")]),
+    });
     expect(invoked).toHaveLength(0);
+    expect(proveCalls.value).toBe(1);
 
     const id = await latestApprovalId(handler, sender);
     await expect(handler({ id, type: "wallet.approveOrigin" }, sender)).resolves.toMatchObject({
@@ -318,6 +333,7 @@ describe("background strk20 messages", () => {
       result: { transaction_hash: `0x${"123".padStart(64, "0")}` },
     });
     expect(invoked).toHaveLength(1);
+    expect(proveCalls.value).toBe(1);
     expect(invoked[0]?.calls[0]).toEqual({
       calldata: ["0x1"],
       contractAddress: token,

@@ -4,7 +4,7 @@
 
 import { isUuid } from "../shared/ids";
 import type { Json } from "../shared/json";
-import { hasOnlyKnownKeys, isJson, isRecord, normalizeFeltBigints } from "../shared/json";
+import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import { unknownError, type WalletRpcError } from "../shared/rpc-errors";
 import { type ProviderChain, readProviderChain } from "./add-chain-params";
@@ -13,12 +13,10 @@ import {
   type ProviderAccountsResult,
   type ProviderDeclareResult,
   type ProviderDeploymentData,
-  type ProviderInvokeCall,
   type ProviderInvokeResult,
   type ProviderPayload,
   providerAccountsResult,
   providerDeclareResult,
-  providerInvokeCalls,
   providerInvokeResult,
   providerStringArrayResult,
   providerSwitchChainId,
@@ -28,6 +26,8 @@ import {
 } from "./bridge-results";
 import { type ProviderDeclare, readProviderDeclare } from "./declare-params";
 import { providerDeploymentResult } from "./deployment-bridge";
+import { type ProviderInvokeCall, providerInvokeCalls } from "./invoke-params";
+import { readProviderParams } from "./request-params";
 import {
   providerStrk20Balances,
   providerStrk20CallAndProof,
@@ -259,19 +259,6 @@ const isProviderMethod = (value: unknown): value is ProviderMethod =>
   value === "wallet_strk20PrepareInvoke" ||
   value === "wallet_switchStarknetChain" ||
   value === "wallet_watchAsset";
-
-const readProviderParams = (method: ProviderMethod, params: unknown): Json | null | undefined => {
-  if (params === undefined) {
-    return undefined;
-  }
-  // Every wallet_* method may carry params; the legacy mc_ aliases take none.
-  if (method === "mc_accounts" || method === "mc_requestAccounts") {
-    return null;
-  }
-  // Normalize felt bigints so a request carrying one survives the isJson gate.
-  const normalized = normalizeFeltBigints(params);
-  return isJson(normalized) ? normalized : null;
-};
 
 /**
  * Checks whether the in-page provider can queue another unresolved request.

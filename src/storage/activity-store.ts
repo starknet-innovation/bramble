@@ -9,6 +9,7 @@ import {
   type StarknetNetworkId,
 } from "../starknet/networks";
 import type { KeyValueStore } from "./kv";
+import { serializeStoreMutations } from "./mutation-queue";
 
 /**
  * Browser storage key for the activity log.
@@ -116,32 +117,38 @@ export const createActivityLog = ({
 }: {
   readonly now?: () => number;
   readonly store: KeyValueStore;
-}): ActivityLog => ({
-  async list() {
-    const entries = await readEntries(store);
-    return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
-  },
-  async record(entry) {
-    const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
-    if (!isActivityEntry(next)) {
-      return;
-    }
-    const entries = await readEntries(store);
-    const kept = entries.filter((stored) => stored.hash !== next.hash).slice(-(MAX_ENTRIES - 1));
-    await store.set(ACTIVITY_STORE_KEY, [...kept, next]);
-  },
-  async updateStatuses(statuses) {
-    const entries = await readEntries(store);
-    const updated = entries.map((entry) => {
-      const status = statuses[entry.hash];
-      return status && isActivityStatus(status) && status !== entry.status
-        ? { ...entry, status }
-        : entry;
-    });
-    await store.set(ACTIVITY_STORE_KEY, updated);
-    return [...updated].sort((a, b) => b.submittedAt - a.submittedAt);
-  },
-});
+}): ActivityLog =>
+  serializeStoreMutations<ActivityLog>(
+    {
+      async list() {
+        const entries = await readEntries(store);
+        return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
+      },
+      async record(entry) {
+        const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
+        if (!isActivityEntry(next)) {
+          return;
+        }
+        const entries = await readEntries(store);
+        const kept = entries
+          .filter((stored) => stored.hash !== next.hash)
+          .slice(-(MAX_ENTRIES - 1));
+        await store.set(ACTIVITY_STORE_KEY, [...kept, next]);
+      },
+      async updateStatuses(statuses) {
+        const entries = await readEntries(store);
+        const updated = entries.map((entry) => {
+          const status = statuses[entry.hash];
+          return status && isActivityStatus(status) && status !== entry.status
+            ? { ...entry, status }
+            : entry;
+        });
+        await store.set(ACTIVITY_STORE_KEY, updated);
+        return [...updated].sort((a, b) => b.submittedAt - a.submittedAt);
+      },
+    },
+    ["list"],
+  );
 
 /**
  * In-memory activity log used as the test default.

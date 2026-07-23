@@ -25,8 +25,14 @@
  */
 import { WalletError } from "../../shared/errors";
 import { isRecord } from "../../shared/json";
+import { sameFelt } from "../networks";
 import { STRK20_PROVING_UNAVAILABLE } from "./proving-backend";
-import { isStrk20BalanceEntry, isStrk20CallAndProof, type Strk20BalanceEntry } from "./schemas";
+import {
+  isStrk20BalanceEntry,
+  isStrk20CallAndProof,
+  STRK20_LIMITS,
+  type Strk20BalanceEntry,
+} from "./schemas";
 import {
   STRK20_NOT_REGISTERED,
   type Strk20AccountContext,
@@ -105,7 +111,13 @@ export const createHttpStrk20Service = (http: Strk20Http): Strk20Service => ({
       { address: input.account.address, rpcUrls: input.rpcUrls, tokens: input.tokens },
       STRK20_NOT_REGISTERED,
     );
-    if (!Array.isArray(payload) || !payload.every(isStrk20BalanceEntry)) {
+    if (
+      !Array.isArray(payload) ||
+      payload.length > Math.min(input.tokens.length, STRK20_LIMITS.balances) ||
+      !payload.every(isStrk20BalanceEntry) ||
+      payload.some((entry) => !input.tokens.some((token) => sameFelt(token, entry.token))) ||
+      new Set(payload.map((entry) => BigInt(entry.token).toString(16))).size !== payload.length
+    ) {
       throw new WalletError(STRK20_NOT_REGISTERED);
     }
     return payload;

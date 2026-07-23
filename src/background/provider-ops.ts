@@ -15,6 +15,7 @@ import type { WalletPreferences, WalletPreferencesStore } from "../storage/prefe
 import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
 import { recordApproveAllowances } from "./allowance-ops";
+import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalPayload, ApprovalQueue } from "./approvals";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
@@ -87,14 +88,25 @@ type GrantResolverDeps = {
 const resolveOriginAccount = async (
   deps: GrantResolverDeps,
   origin: string,
+  expected?: ApprovalContext,
 ): Promise<ResolvedOriginAccount | { readonly error: string }> => {
   const passphrase = deps.session.getPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await deps.preferencesStore.read();
+  if (expected && preferences.activeNetworkId !== expected.networkId) {
+    return { error: "approval context changed" };
+  }
   const granted = await deps.wallet.getGrantedAccounts(origin, passphrase);
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  const account = expected
+    ? granted.find(
+        (stored) =>
+          stored.id === expected.accountId &&
+          stored.networkId === expected.networkId &&
+          stored.networkId === preferences.activeNetworkId,
+      )
+    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
   }
@@ -193,6 +205,7 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   );
   const approval = deps.approvals.requestInvoke({
     calls: input.calls,
+    context: await createApprovalContext(resolved.account, { calls: input.calls }),
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     origin: input.origin,
     summaries: report.calls.map((call) => call.summary),
@@ -234,14 +247,18 @@ export const handleProviderOps = async (
  */
 export const executeInvokeApproval = async (
   deps: InvokeExecuteDeps,
-  approval: { readonly origin: string; readonly payload: ApprovalPayload },
+  approval: {
+    readonly context?: ApprovalContext;
+    readonly origin: string;
+    readonly payload: ApprovalPayload;
+  },
 ): Promise<RuntimeResponse> => {
   const { activity, allowanceStore, runtimeRpc } = deps;
   const calls = approval.payload.calls;
   if (!calls) {
     return { error: "approval not found" };
   }
-  const resolved = await resolveOriginAccount(deps, approval.origin);
+  const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
   if ("error" in resolved) {
     return resolved;
   }

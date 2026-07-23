@@ -3,7 +3,13 @@
  * shared by the provider bridge and the background handler. The CONTRACT_CLASS
  * is large and carried opaquely; only the hashes are pattern-checked here.
  */
-import { hasOnlyKnownKeys, isRecord, type Json } from "../shared/json";
+import {
+  hasOnlyKnownKeys,
+  isJsonWithinBudget,
+  isRecord,
+  JSON_BUDGETS,
+  type Json,
+} from "../shared/json";
 
 /**
  * A declare transaction a dapp asks the wallet to submit, after bridge
@@ -37,6 +43,7 @@ export const readProviderDeclare = (params: Json | undefined): ProviderDeclare |
     !isFelt(declare["compiled_class_hash"]) ||
     (declare["class_hash"] !== undefined && !isFelt(declare["class_hash"])) ||
     !isRecord(declare["contract_class"]) ||
+    !isJsonWithinBudget(declare["contract_class"], JSON_BUDGETS.contractClass) ||
     Object.keys(declare["contract_class"]).length === 0
   ) {
     return null;
@@ -59,4 +66,5 @@ export const isProviderDeclare = (value: unknown): value is ProviderDeclare =>
   isFelt(value["compiledClassHash"]) &&
   (value["classHash"] === undefined || isFelt(value["classHash"])) &&
   isRecord(value["contractClass"]) &&
+  isJsonWithinBudget(value["contractClass"], JSON_BUDGETS.contractClass) &&
   Object.keys(value["contractClass"]).length > 0;

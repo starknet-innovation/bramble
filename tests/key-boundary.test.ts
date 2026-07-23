@@ -162,20 +162,27 @@ describe("key boundary", () => {
       sender: RuntimeSender,
     ): Promise<unknown> => {
       const held = handler(message, sender);
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        await flush();
+      const outcome = held.then(
+        (value) => ({ ok: true as const, value }),
+        (cause: unknown) => ({ cause, ok: false as const }),
+      );
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const settled = await Promise.race([outcome, flush().then(() => null)]);
+        if (settled !== null) {
+          if (!settled.ok) {
+            throw settled.cause;
+          }
+          return settled.value;
+        }
         const listed = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
           readonly pending?: readonly { readonly id: string }[];
         };
         const pending = listed.pending ?? [];
-        if (pending.length === 0) {
-          break;
-        }
         for (const approval of pending) {
           await handler({ id: approval.id, type: "wallet.approveOrigin" }, extensionSender);
         }
       }
-      return held;
+      throw new Error(`wallet message did not settle: ${String(message["type"] ?? "unknown")}`);
     };
 
     for (const { message, sender } of KEY_BOUNDARY_MESSAGES) {

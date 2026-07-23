@@ -116,7 +116,10 @@ CI uploads those same files as the `mc-wallet-extension` workflow artifact. Cutt
 
 ## Docs
 
+- **[Documentation portal](docs/index.md)** — host-ready project and security-audit documentation.
 - **[Architecture & internals](docs/ARCHITECTURE.md)** — the provider API, Ledger trust boundary, pinned class hashes, storage migrations, design system, and full tour.
+- **[Security audit](docs/security-audit/index.md)** — baseline, threat model, review sequence, and sanitized findings ledger.
+- **[Source package audit](docs/security-audit/src-package-audit.md)** — package-by-package controls, resolved findings, and validation evidence.
 - **[Contributing](CONTRIBUTING.md)** · **[Security](SECURITY.md)** · **[Releasing](RELEASING.md)** · **[Code of Conduct](CODE_OF_CONDUCT.md)**
 
 ## License

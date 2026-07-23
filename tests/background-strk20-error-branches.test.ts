@@ -7,7 +7,7 @@
  * background-strk20-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { ec } from "starknet";
+import { type Call, ec } from "starknet";
 import type { LedgerSignQueue } from "../src/background/ledger-sign-queue";
 import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeRpc } from "../src/background/runtime-rpc";
@@ -26,6 +26,9 @@ import type { SignHashInput, WalletStatus } from "../src/wallet/vault-service";
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const origin = "https://example.com";
 const vaultPassphrase = "correct horse battery staple";
+const heldCalls: readonly Call[] = [
+  { calldata: ["0x1"], contractAddress: token, entrypoint: "shielded_execute" },
+];
 
 const account: AccountRef = {
   address: "0xabcabcdef",
@@ -314,6 +317,7 @@ describe("executeStrk20InvokeApproval", () => {
     await expect(
       executeStrk20InvokeApproval(deps, {
         actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+        calls: heldCalls,
         origin,
       }),
     ).resolves.toEqual({ error: "wallet locked" });
@@ -354,7 +358,11 @@ describe("executeStrk20InvokeApproval", () => {
       ledgerDeps(deviceQueue(LEDGER_KEY), () => {
         submitted = true;
       }),
-      { actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }], origin },
+      {
+        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+        calls: heldCalls,
+        origin,
+      },
     );
     expect(result).toEqual({ ok: true, transactionHash: "0x123" });
     expect(submitted).toBe(true);
@@ -366,7 +374,11 @@ describe("executeStrk20InvokeApproval", () => {
       ledgerDeps(deviceQueue("0xdeadbeef"), () => {
         submitted = true;
       }),
-      { actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }], origin },
+      {
+        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+        calls: heldCalls,
+        origin,
+      },
     );
     expect(result).toEqual({ error: "Ledger signature verification failed" });
     expect(submitted).toBe(false);
@@ -378,7 +390,11 @@ describe("executeStrk20InvokeApproval", () => {
       ledgerDeps(undefined, () => {
         submitted = true;
       }),
-      { actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }], origin },
+      {
+        actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+        calls: heldCalls,
+        origin,
+      },
     );
     expect(result).toEqual({ error: "Ledger signing unavailable" });
     expect(submitted).toBe(false);
@@ -411,6 +427,7 @@ describe("executeStrk20InvokeApproval", () => {
 
     const result = await executeStrk20InvokeApproval(deps, {
       actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+      calls: [{ calldata: ["0x1"], contractAddress: token, entrypoint: "shielded_execute" }],
       origin,
     });
 

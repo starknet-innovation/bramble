@@ -11,7 +11,7 @@ import type { InvokeInput } from "../src/starknet/rpc";
 import { defaultWalletPreferences, type WalletPreferences } from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
 import type { EnsureNetworkAccountInput, WalletStatus } from "../src/wallet/vault-service";
-import { flushHeld, latestApprovalId } from "./support/held";
+import { flushHeld, latestApprovalId, waitForPendingApprovals } from "./support/held";
 
 const account: AccountRef = {
   address: "0xabcabcdef",
@@ -288,9 +288,11 @@ describe("background network messages", () => {
       },
       contentSender,
     );
-    await flushHeld();
-    const listed = await handler({ type: "wallet.pendingApprovals" }, sender);
-    expect((listed as { pending: readonly unknown[] }).pending.at(-1)).toMatchObject({
+    const pending = await waitForPendingApprovals<{ id: string; kind: string; origin: string }>(
+      handler,
+      sender,
+    );
+    expect(pending.at(-1)).toMatchObject({
       kind: "invoke",
       origin: "https://example.com",
     });
