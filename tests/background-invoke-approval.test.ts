@@ -20,7 +20,7 @@ import {
   type WalletPreferencesStore,
 } from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
-import { flushHeld, latestApprovalId } from "./support/held";
+import { flushHeld, latestApprovalId, waitForPendingApprovals } from "./support/held";
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -130,14 +130,14 @@ describe("per-transaction invoke approval (A-H1)", () => {
     // The invoke holds until a decision; inspect the queued approval, then deny
     // so the held request settles and nothing dangles.
     const held = handler(invokeMessage(), contentSender);
-    await flushHeld();
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-
     const pending = (
-      listed as {
-        pending: readonly { kind?: string; summaries?: readonly string[]; origin?: string }[];
-      }
-    ).pending.at(-1);
+      await waitForPendingApprovals<{
+        id: string;
+        kind?: string;
+        origin?: string;
+        summaries?: readonly string[];
+      }>(handler, extensionSender)
+    ).at(-1);
     expect(pending).toMatchObject({ kind: "invoke", origin });
     expect(pending?.summaries?.length).toBe(1);
     expect(invoked).toHaveLength(0);
@@ -151,10 +151,11 @@ describe("per-transaction invoke approval (A-H1)", () => {
     const { activity, handler, invoked } = makeHarness();
 
     const held = handler(invokeMessage(), contentSender);
-    await flushHeld();
-
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-    expect((listed as { pending: readonly { kind?: string }[] }).pending[0]?.kind).toBe("invoke");
+    const pending = await waitForPendingApprovals<{ id: string; kind?: string }>(
+      handler,
+      extensionSender,
+    );
+    expect(pending[0]?.kind).toBe("invoke");
 
     const id = await latestApprovalId(handler, extensionSender);
     await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
