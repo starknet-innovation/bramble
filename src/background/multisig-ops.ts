@@ -130,8 +130,12 @@ export const isProposalSubmitPending = async (
   if (!hash) {
     return false;
   }
-  const entries = await deps.activity.list().catch(() => []);
-  return entries.some((entry) => entry.hash === hash && entry.status === "pending");
+  try {
+    const entries = await deps.activity.list();
+    return entries.some((entry) => entry.hash === hash && entry.status === "pending");
+  } catch {
+    return true;
+  }
 };
 
 const shortAddress = (address: string): string => `${address.slice(0, 8)}…${address.slice(-4)}`;
@@ -209,6 +213,8 @@ const refreshProposal = async (
   const next: MultisigProposalRecord = {
     ...proposal,
     confirmations: status.confirmations,
+    confirmedBySigner: status.confirmedBySigner,
+    confirmedBySignerAddress: signer,
     state: status.state,
   };
   await deps.multisigStore.upsertProposal(next);
@@ -345,6 +351,8 @@ const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
   const proposal: MultisigProposalRecord = {
     call: existing?.call ?? null,
     confirmations: status.confirmations,
+    confirmedBySigner: status.confirmedBySigner,
+    confirmedBySignerAddress: resolved.account.account.address,
     id,
     multisigId: resolved.record.id,
     state: status.state,

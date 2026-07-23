@@ -76,6 +76,11 @@ const bindAddForm = (deps: MultisigUiDeps): void => {
 };
 
 const bindListActions = (deps: MultisigUiDeps): void => {
+  deps.app
+    ?.querySelector<HTMLButtonElement>("#multisig-list-retry")
+    ?.addEventListener("click", () => {
+      void rerender(deps);
+    });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-multisig-open]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["multisigOpen"];
@@ -123,7 +128,10 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
   const syncAcknowledgment = (row: Element, checked: boolean): void => {
     row.querySelectorAll<HTMLButtonElement>("[data-ms-requires-ack]").forEach((button) => {
       const target = button;
-      target.disabled = target.hasAttribute("data-busy") || !checked;
+      target.disabled =
+        target.hasAttribute("data-busy") ||
+        target.dataset["msActionAllowed"] !== "true" ||
+        !checked;
     });
   };
 

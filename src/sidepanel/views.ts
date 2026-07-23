@@ -366,6 +366,8 @@ export const dashboard = (
   classHashVerification: ClassHashVerification | null = null,
   historyUnavailable = false,
   snoozedApprovalIds: readonly string[] = [],
+  multisigsError = false,
+  multisigSync: "current" | "error" | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -383,14 +385,28 @@ export const dashboard = (
     return simpleFlow;
   }
   if (activeView === "multisigs") {
-    return multisigsFlow(status, account, multisigs, multisigProposals);
+    return multisigsFlow(
+      status,
+      account,
+      multisigs,
+      multisigProposals,
+      multisigsError,
+      multisigSync,
+    );
   }
   if (activeView === "multisig-detail" || activeView === "multisig-propose") {
     const selected = multisigs.find(
       (record) => record.id === selectedMultisigId && record.networkId === status.networkId,
     );
     return activeView === "multisig-detail"
-      ? multisigDetailFlow(status, account, selected ?? null, multisigProposals)
+      ? multisigDetailFlow(
+          status,
+          account,
+          selected ?? null,
+          multisigProposals,
+          multisigsError,
+          multisigSync,
+        )
       : multisigProposeFlow(status, selected ?? null);
   }
   if (activeView === "multisig-deploy") {

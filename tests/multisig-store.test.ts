@@ -5,12 +5,15 @@
 import { describe, expect, test } from "bun:test";
 import {
   createMultisigStore,
+  isMultisigOperationRecord,
   isMultisigProposalRecord,
   isMultisigRecord,
   MULTISIG_STORE_KEY,
+  type MultisigOperationRecord,
   type MultisigProposalRecord,
   type MultisigRecord,
   multisigId,
+  multisigOperationId,
   multisigProposalId,
 } from "../src/storage/multisig-store";
 
@@ -41,6 +44,14 @@ const proposal: MultisigProposalRecord = {
   txId: "0xabc",
 };
 
+const operation: MultisigOperationRecord = {
+  accountId: "account-1",
+  id: multisigOperationId("deploy", "SN_MAIN", "account-1", ADDRESS) ?? "",
+  kind: "deploy",
+  networkId: "SN_MAIN",
+  target: ADDRESS,
+};
+
 const memoryKv = () => {
   const data = new Map<string, unknown>();
   return {
@@ -66,12 +77,37 @@ describe("multisig store", () => {
     expect(isMultisigRecord({ ...record, quorum: 3 })).toBe(false);
     expect(isMultisigRecord({ ...record, extra: true })).toBe(false);
     expect(isMultisigProposalRecord(proposal)).toBe(true);
+    expect(isMultisigProposalRecord({ ...proposal, confirmedBySigner: true })).toBe(false);
+    expect(
+      isMultisigProposalRecord({
+        ...proposal,
+        confirmedBySigner: true,
+        confirmedBySignerAddress: SIGNER_A,
+      }),
+    ).toBe(true);
     expect(isMultisigProposalRecord({ ...proposal, submitTransactionHash: "0x1234" })).toBe(true);
     expect(isMultisigProposalRecord({ ...proposal, submitTransactionHash: "not-a-hash" })).toBe(
       false,
     );
     expect(isMultisigProposalRecord({ ...proposal, state: "unknown" })).toBe(false);
     expect(isMultisigProposalRecord({ ...proposal, id: "other" })).toBe(false);
+    expect(isMultisigOperationRecord(operation)).toBe(true);
+    expect(isMultisigOperationRecord({ ...operation, id: "other" })).toBe(false);
+  });
+
+  test("claims operations atomically and persists their broadcast hash", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    expect(await registry.claimOperation(operation)).toBe("claimed");
+    expect(await registry.claimOperation(operation)).toBe("exists");
+    expect(await registry.listOperations()).toEqual([operation]);
+    await registry.setOperationHash(operation.id, "0xabc");
+    expect(await createMultisigStore({ store }).getOperation(operation.id)).toEqual({
+      ...operation,
+      transactionHash: "0xabc",
+    });
+    await registry.releaseOperation(operation.id);
+    expect(await registry.getOperation(operation.id)).toBeNull();
   });
 
   test("persists multisigs and proposals and reads them back newest-first", async () => {

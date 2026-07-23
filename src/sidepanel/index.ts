@@ -317,11 +317,8 @@ const bindAll = (): void => {
 };
 
 // Applies the skin and CSS `color-scheme` for the current theme choice, but
-// only when the resolved skin actually changed — cheap enough to call on every
-// paint. Swapping skin tokens on the root re-themes the whole panel through CSS
-// custom properties without re-rendering any markup. Both themes are pinned
-// palettes; `color-scheme` is pinned alongside so native form controls render
-// on the same ground and a browser scheme flip can never re-theme the panel.
+// Apply only when the resolved skin changes. Both palettes and the matching
+// native-control color scheme are pinned.
 // A legacy stored "system" choice resolves to the default dark skin.
 const applyTheme = (): void => {
   const choice = cache.preferences?.theme ?? "dark";
@@ -402,6 +399,8 @@ const paint = (): void => {
           classHashVerification,
           cache.historyUnavailable,
           snoozedApprovalIds,
+          cache.multisigsError,
+          cache.multisigSync,
         );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -410,21 +409,21 @@ const paint = (): void => {
   lastContent = content;
   renderScene(content, animate, direction);
 };
-
-// Refreshes cache from the background, painting once from fast local data and
-// again after view-scoped network data (balances, prices, activity) resolves
-// in parallel — so the screen is never blocked on RPC or price round-trips.
 const render = async (status: WalletStatus): Promise<void> => {
+  const multisigScopeChanged =
+    cache.status.activeAccountId !== status.activeAccountId ||
+    cache.status.networkId !== status.networkId;
   cache.status = status;
+  if (multisigScopeChanged) {
+    cache.multisigSync = null;
+    cache.multisigsError = false;
+  }
   cache.pending = await wallet.loadPendingApprovals();
   cache.preferences =
     status.hasVault && !status.locked ? await wallet.loadPreferences().catch(() => null) : null;
   if (!status.hasVault || status.locked) {
-    // Reset every view-scoped field to its locked/empty state from the single
-    // source (emptyRenderCache) rather than a hand-maintained field list here,
-    // so no field — present or future — can be forgotten and leak stale state
-    // (e.g. multisig proposals) across a lock. The status/pending/preferences
-    // just refreshed above are preserved.
+    // Reset every view-scoped field from one source so stale state cannot leak
+    // across a lock; preserve the status/pending/preferences just refreshed.
     Object.assign(cache, emptyRenderCache(), {
       pending: cache.pending,
       preferences: cache.preferences,
@@ -440,6 +439,7 @@ const render = async (status: WalletStatus): Promise<void> => {
   await hydrateView({
     status,
     activeView,
+    selectedMultisigId,
     selectedTokenId,
     cache,
     wallet,
