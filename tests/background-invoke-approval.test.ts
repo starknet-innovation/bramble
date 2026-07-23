@@ -252,13 +252,13 @@ describe("dApp invoke decode/risk parity with Send review (#19)", () => {
       { calls: [poisonedTransferCall], origin, type: "wallet.addInvokeTransaction" as const },
       contentSender,
     );
-    await flushHeld();
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
     const pending = (
-      listed as {
-        pending: readonly { flags?: readonly { code: string }[]; kind?: string }[];
-      }
-    ).pending.at(-1);
+      await waitForPendingApprovals<{
+        id: string;
+        flags?: readonly { code: string }[];
+        kind?: string;
+      }>(handler, extensionSender)
+    ).at(-1);
 
     expect(pending?.kind).toBe("invoke");
     // Network-scoped: the SN_SEPOLIA contact is filtered out, so no poisoning

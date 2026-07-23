@@ -55,10 +55,15 @@ jobs:
             // interpolated into a shell), so there is no injection surface.
             const text = `${pr.title || ""}\n${pr.body || ""}`;
 
-            // Automation branches are exempt: the target guard downgrades to a
-            // warning and the branch-name guard is skipped entirely.
-            const BOT_PREFIXES = ["cursor/", "codex/", "ai-findings-autofix/", "qa/", "dependabot/"];
-            const isBot = BOT_PREFIXES.some((p) => head.startsWith(p));
+            // Prefixes classify automation branches for the advisory naming
+            // check only; a contributor-controlled branch name is not proof of
+            // bot identity and must never grant a blocking-guard exemption.
+            const AUTOMATION_PREFIXES = ["cursor/", "codex/", "ai-findings-autofix/", "qa/", "dependabot/"];
+            const isAutomationBranch = AUTOMATION_PREFIXES.some((p) => head.startsWith(p));
+            const isTrustedDependabot =
+              head.startsWith("dependabot/") &&
+              pr.user?.login === "dependabot[bot]" &&
+              pr.user?.type === "Bot";
 
             let blocked = false;
             const problems = [];
@@ -66,20 +71,29 @@ jobs:
             const fail = (m) => { blocked = true; problems.push(m); core.error(m); };
             const warn = (m) => { notes.push(m); core.warning(m); };
 
-            // 1. PR-target guard (BLOCKING). feature/* and fix/* are release
-            //    work and must never target main — they belong on the active
-            //    release/vX.Y branch. chore/* and docs/* are exempt: repo
-            //    plumbing and docs are not part of a release slice and may go
-            //    straight to main (this bootstrap PR is one such chore/*).
-            //    release/** and hotfix/** into main are the normal promotion
-            //    and hotfix paths.
-            const isBlockedIntoMain = /^(feature|fix)\//.test(head);
+            // 1. PR-target guard (BLOCKING, FAIL-CLOSED). Only an explicit
+            //    allowlist of head-branch categories may target `main`:
+            //      release/**, hotfix/**  — promotion and hotfix paths
+            //      chore/**,   docs/**    — repo plumbing and docs, not part of
+            //                               a release slice (this PR is one)
+            //    plus an authenticated Dependabot PR. Prefix matching alone
+            //    never grants an exception because head names are untrusted.
+            //    EVERYTHING ELSE is treated as feature-like release work and
+            //    must go through the active `release/vX.Y` branch, so a PR into
+            //    `main` FAILS. This is deliberately fail-closed: we allowlist
+            //    what may reach main rather than blocklisting a couple of known
+            //    feature prefixes. That closes the gap where a prefix we didn't
+            //    explicitly recognize — `feat/`, `feature/`, `fix/`, or any
+            //    unknown/typo prefix — slipped straight to main and skipped
+            //    release-validation. Adding a new legit direct-to-main category
+            //    now requires editing ALLOWED_INTO_MAIN below, on purpose.
+            const ALLOWED_INTO_MAIN = /^(release|hotfix|chore|docs)\//;
+            const isAllowedIntoMain = ALLOWED_INTO_MAIN.test(head) || isTrustedDependabot;
             if (base === "main") {
-              if (isBlockedIntoMain) {
-                const m = `PR-target guard: head \`${head}\` is a feature/fix working branch but targets \`main\`. Retarget this PR to the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Only \`release/**\`, \`hotfix/**\`, \`chore/**\`, and \`docs/**\` may target main.`;
-                if (isBot) { warn(`(advisory — automation branch) ${m}`); } else { fail(m); }
+              if (isAllowedIntoMain) {
+                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (${isTrustedDependabot ? "authenticated Dependabot PR" : "release/hotfix promotion or chore/docs plumbing"}).`);
               } else {
-                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (release/hotfix promotion or chore/docs plumbing).`);
+                fail(`PR-target guard: head \`${head}\` is not an allowed \`main\` target — it is treated as feature-like release work and must target the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Retarget this PR to that release branch. Only \`release/**\`, \`hotfix/**\`, \`chore/**\`, \`docs/**\`, and authenticated Dependabot PRs may target main directly.`);
               }
             }
 
@@ -115,7 +129,7 @@ jobs:
             }
 
             // 3. Branch-name guard (ADVISORY). Skipped for automation branches.
-            if (!isBot) {
+            if (!isAutomationBranch) {
               const ok =
                 /^(feature|fix|chore)\/\d+-.+/.test(head) ||
                 /^release\/v\d+\.\d+$/.test(head) ||
@@ -128,7 +142,7 @@ jobs:
 
             // Summary.
             const s = core.summary.addHeading("PR scope & naming guards", 3);
-            s.addRaw(`Base: \`${base}\` - Head: \`${head}\`${isBot ? " - automation branch" : ""}`, true);
+            s.addRaw(`Base: \`${base}\` - Head: \`${head}\`${isAutomationBranch ? " - automation branch" : ""}`, true);
             if (problems.length) {
               s.addHeading("Blocking failures", 4).addList(problems);
             }
@@ -154,7 +168,7 @@ jobs:
   fast-checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.3
@@ -191,7 +205,7 @@ jobs:
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.3
