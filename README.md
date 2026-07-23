@@ -10,9 +10,9 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-1.3.3-fbf0df?style=for-the-badge&logo=bun&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0.3-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Biome](https://img.shields.io/badge/Biome-2.5.3-60A5FA?style=for-the-badge&logo=biome&logoColor=white)
+![Biome](https://img.shields.io/badge/Biome-2.5.5-60A5FA?style=for-the-badge&logo=biome&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-0.3.0-3ba55d?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-0.6.0-3ba55d?style=for-the-badge)
 
 </div>
 
@@ -50,6 +50,21 @@ bun run check     # types, lint, standards, unit tests
 bun run format    # Biome autofix
 bun run test:e2e  # Playwright end-to-end (run test:e2e:install once first)
 ```
+
+### Offline checks
+
+After `bun install --frozen-lockfile`, the fast PR gates below need only Bun and the checked-out
+repository. They do not clone Krusty, invoke Rust/wasm-pack or Scarb, build the extension, or
+launch Chromium:
+
+```bash
+bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun test ./tests && bun run check:coverage
+```
+
+The full `bun run check` additionally verifies the vendored Krusty and multisig outputs. Generate
+those first with `bun run vendor:krusty` (network, Rust, and `wasm-pack 0.13.1`) and
+`bun run vendor:multisig` (`scarb 2.18.0`). `build`, packaging, and browser E2E also require those
+vendored outputs; Playwright needs its Chromium install once per machine.
 
 ## Built with
 

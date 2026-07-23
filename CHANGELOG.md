@@ -8,7 +8,46 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
-## [0.5.0] - Unreleased
+## [0.6.0] - 2026-07-23
+
+Phase 6 security work plus release-hygiene and audit closeout.
+
+### Added
+- First-class Ledger hardware-wallet accounts, including Ledger-only onboarding,
+  adding multiple derived accounts, device-confirmed deploy/send/dapp/typed-data
+  and multisig signing, and a keyless v3 vault migration that never stores a
+  Ledger mnemonic or signing key (#134, #135).
+- Origin-scoped WebHID permission grant through a short-lived extension popup,
+  with timeout/closed-window recovery and explicit selection when more than one
+  granted Ledger is available (#134).
+- A host-ready v0.6 security-audit route recording the reviewed Ledger and
+  multisig boundaries, resolved findings, validation evidence, and residual
+  third-party risk.
+
+### Changed
+- Ledger signing now verifies the expected device and returned signature before
+  every broadcast, fails closed on lock or disconnect, scopes the Buffer
+  compatibility layer to the Ledger boundary, and makes partial multi-account
+  onboarding safely retryable (#134).
+- Multisig declare/deploy operations now use durable atomic claims, preserve an
+  accepted transaction hash across local persistence failures, and do not
+  downgrade pending state when local activity reads fail (#126, #127, #131).
+- Multisig list/detail views refresh on entry, distinguish RPC/storage failures
+  from a real empty result, scope signer confirmation state to the active
+  account, and reject locally impossible actions before a round trip
+  (#128–#130).
+- PR guards fail closed for unknown or feature-like branch prefixes, GitHub
+  Actions are pinned to their current majors, and the Bun/TypeScript/Biome test
+  toolchain and lockfile are refreshed (#136, #143–#145).
+
+### Fixed
+- Added focused side-panel multisig client, response-guard, hydration, and UI
+  regression coverage; corrected the stale multisig artifact comment
+  (#132, #133).
+- The terminal-app lockfile and Vite toolchain now remain reproducible under the
+  repository dependency updates (#125).
+
+## [0.5.0] - 2026-07-16
 
 Phase 5 (hardening, audit & public release — roadmap #83).
 
