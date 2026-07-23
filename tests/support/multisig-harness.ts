@@ -8,7 +8,7 @@ import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
 import type { MultisigProposalStatus } from "../../src/starknet/multisig";
 import { MULTISIG_CLASS_HASH } from "../../src/starknet/multisig-deploy";
-import type { ActivityStatus } from "../../src/storage/activity-store";
+import type { ActivityLog, ActivityStatus } from "../../src/storage/activity-store";
 import { memoryMultisigStore } from "../../src/storage/multisig-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
 
@@ -122,12 +122,16 @@ const walletStub = {
  * for the declare flow.
  */
 export type MultisigHarnessOptions = {
+  readonly activity?: ActivityLog;
   readonly classDeclared?: boolean;
   readonly contractAt?: boolean;
   readonly deploymentStatus?: () => boolean;
   readonly loadClass?: () => Promise<unknown>;
   readonly proposalStatus?: () => MultisigProposalStatus;
   readonly signers?: readonly string[];
+  readonly submitInvoke?: (
+    calls: readonly unknown[],
+  ) => Promise<{ readonly transactionHash: string }>;
   readonly transactionStatuses?: () => Readonly<Record<string, ActivityStatus>>;
 };
 
@@ -142,6 +146,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
   const invokeCalls: (readonly unknown[])[] = [];
   const declared: unknown[] = [];
   const handler = createMessageHandler(walletStub, "extension-id", {
+    ...(options.activity ? { activity: options.activity } : {}),
     ...(options.loadClass ? { loadMultisigClass: options.loadClass } : {}),
     multisigStore,
     runtimeRpc: {
@@ -206,6 +211,10 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
       },
       async submitInvokeTransaction(input) {
         invokeCalls.push(input.calls);
+        if (options.submitInvoke) {
+          const result = await options.submitInvoke(input.calls);
+          return { calls: input.calls, transactionHash: result.transactionHash };
+        }
         return { calls: input.calls, transactionHash: HARNESS_SUBMIT_HASH };
       },
     },

@@ -20,6 +20,7 @@ import type { WalletView } from "./views";
 export type HydrateDeps = {
   readonly status: WalletStatus;
   readonly activeView: WalletView;
+  readonly selectedMultisigId: string | null;
   readonly selectedTokenId: string | null;
   readonly cache: RenderData;
   readonly wallet: SidepanelWallet;
@@ -28,13 +29,61 @@ export type HydrateDeps = {
   readonly paint: () => void;
 };
 
+const hydrateMultisigs = async (
+  activeView: WalletView,
+  selectedMultisigId: string | null,
+  cached: RenderData["multisigs"],
+  multisig: MultisigClient,
+): Promise<Pick<RenderData, "multisigs" | "multisigsError" | "multisigSync">> => {
+  const loaded = await multisig.loadMultisigs();
+  if (loaded === "error") {
+    return { multisigs: cached, multisigsError: true, multisigSync: "error" };
+  }
+  const ids =
+    activeView === "multisigs"
+      ? loaded.multisigs.map((record) => record.id)
+      : activeView === "multisig-detail" && selectedMultisigId
+        ? [selectedMultisigId]
+        : [];
+  if (activeView !== "multisigs" && activeView !== "multisig-detail") {
+    return { multisigs: loaded, multisigsError: false, multisigSync: null };
+  }
+  const refreshed = await Promise.all(
+    ids.map((id) =>
+      multisig.refreshMultisig(id).then(
+        () => true,
+        () => false,
+      ),
+    ),
+  );
+  const reloaded = await multisig.loadMultisigs();
+  if (reloaded === "error") {
+    return { multisigs: loaded, multisigsError: true, multisigSync: "error" };
+  }
+  return {
+    multisigs: reloaded,
+    multisigsError: false,
+    multisigSync: refreshed.every(Boolean) ? "current" : "error",
+  };
+};
+
 /**
  * Loads the view-scoped network data in parallel and repaints once it lands.
  * Each loader is best-effort: a rejected fetch leaves the cached value intact
  * rather than blanking the screen.
  */
 export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
-  const { status, activeView, selectedTokenId, cache, wallet, multisig, deployment, paint } = deps;
+  const {
+    status,
+    activeView,
+    selectedMultisigId,
+    selectedTokenId,
+    cache,
+    wallet,
+    multisig,
+    deployment,
+    paint,
+  } = deps;
   const jobs: Promise<unknown>[] = [];
   const fill = <T>(load: Promise<T>, assign: (value: T) => void): void => {
     jobs.push(load.then(assign).catch(() => undefined));
@@ -92,9 +141,11 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     activeView === "multisig-propose" ||
     activeView === "multisig-deploy"
   ) {
-    fill(multisig.loadMultisigs(), (value) => {
-      cache.multisigs = value;
-    });
+    jobs.push(
+      hydrateMultisigs(activeView, selectedMultisigId, cache.multisigs, multisig).then((value) => {
+        Object.assign(cache, value);
+      }),
+    );
   }
   if (activeView === "multisig-deploy") {
     fill(multisig.loadClassStatus(), (value) => {

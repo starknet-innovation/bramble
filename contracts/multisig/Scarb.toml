@@ -3,7 +3,7 @@ name = "mc_multisig"
 version = "0.1.0"
 edition = "2024_07"
 
-# Pinned exactly: the class hash pinned in src/starknet/multisig-class.ts is
+# Pinned exactly: the class hash pinned in src/starknet/multisig-deploy.ts is
 # reproducible only with these versions plus the scarb release recorded in
 # scripts/vendor-multisig.ts.
 [dependencies]

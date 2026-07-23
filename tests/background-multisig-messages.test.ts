@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { hash } from "starknet";
 import type { MultisigProposalState } from "../src/starknet/multisig";
 import { predictMultisigAddress } from "../src/starknet/multisig-deploy";
+import { type ActivityLog, memoryActivityLog } from "../src/storage/activity-store";
 import type { MultisigProposalRecord } from "../src/storage/multisig-store";
 import {
   HARNESS_MULTISIG,
@@ -101,6 +102,22 @@ describe("multisig messages", () => {
       "0x0",
       "0x0",
     ]);
+  });
+
+  test("returns a submitted proposal hash when activity storage fails", async () => {
+    const base = memoryActivityLog();
+    const activity: ActivityLog = {
+      ...base,
+      async record() {
+        throw new Error("storage unavailable");
+      },
+    };
+    const { handler } = makeMultisigHarness({ activity });
+    const watched = (await watch(handler)) as { multisig: { id: string } };
+    await expect(propose(handler, watched.multisig.id)).resolves.toMatchObject({
+      ok: true,
+      transactionHash: "0x7cd",
+    });
   });
   test("confirms a pending proposal", async () => {
     const { handler, invokeCalls } = makeMultisigHarness({
@@ -258,6 +275,51 @@ describe("multisig messages", () => {
     ).resolves.toEqual({
       error: "multisig class not declared on this network — declare it first",
     });
+  });
+
+  test("serializes concurrent deploys before either can broadcast twice", async () => {
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let submits = 0;
+    const { handler } = makeMultisigHarness({
+      async submitInvoke() {
+        submits += 1;
+        started.resolve();
+        await release.promise;
+        return { transactionHash: "0x7cd" };
+      },
+    });
+    const request = {
+      quorum: 1,
+      signers: [harnessAccount.address],
+      type: "wallet.deployMultisig",
+    };
+    const first = handler(request, harnessExtensionSender);
+    await started.promise;
+    await expect(handler(request, harnessExtensionSender)).resolves.toEqual({
+      error:
+        "a deploy transaction for this multisig configuration is already unresolved — wait for it to settle",
+    });
+    expect(submits).toBe(1);
+    release.resolve();
+    await expect(first).resolves.toMatchObject({ ok: true, transactionHash: "0x7cd" });
+  });
+
+  test("returns a submitted deploy hash when activity storage fails", async () => {
+    const base = memoryActivityLog();
+    const activity: ActivityLog = {
+      ...base,
+      async record() {
+        throw new Error("storage unavailable");
+      },
+    };
+    const { handler } = makeMultisigHarness({ activity });
+    await expect(
+      handler(
+        { quorum: 1, signers: [harnessAccount.address], type: "wallet.deployMultisig" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ ok: true, transactionHash: "0x7cd" });
   });
   test("refuses to deploy over an existing contract", async () => {
     const { handler } = makeMultisigHarness({ contractAt: true });

@@ -66,6 +66,22 @@ const multisigRow = (record: MultisigRecord, pendingCount: number): string => `
     </button>
   </li>`;
 
+const multisigSyncNotice = (
+  loadError: boolean,
+  sync: "current" | "error" | null,
+  retryId: string,
+): string => {
+  if (loadError || sync === "error") {
+    return `<div class="review-panel" role="alert">
+      <p class="review-flag">Could not refresh multisig state from the background or chain. Cached data may be stale.</p>
+      <button id="${retryId}" class="secondary small" type="button">${icon("refresh")}Retry</button>
+    </div>`;
+  }
+  return sync === "current"
+    ? '<p class="hint" role="status">Synced from chain when this screen opened.</p>'
+    : "";
+};
+
 /**
  * Renders the Multisigs flow: watched contracts, the watch-by-address form,
  * and the entry into the deploy flow.
@@ -75,6 +91,8 @@ export const multisigsFlow = (
   account: AccountRef | null,
   multisigs: readonly MultisigRecord[],
   proposals: readonly MultisigProposalRecord[],
+  loadError = false,
+  sync: "current" | "error" | null = null,
 ): string => {
   const scoped = multisigs.filter((record) => record.networkId === status.networkId);
   const openCount = (record: MultisigRecord): number =>
@@ -85,7 +103,8 @@ export const multisigsFlow = (
     flowHeader("Multisigs", status, `${scoped.length} watched`) +
     flowScreen(
       "multisigs",
-      `<section class="section">
+      `${multisigSyncNotice(loadError, sync, "multisig-list-retry")}
+      <section class="section">
         <div class="row"><h2>Watched multisigs</h2>
           <button class="secondary small" data-view="multisig-deploy" type="button" ${account ? "" : "disabled"}>${icon("plus")}Deploy new</button>
         </div>
@@ -112,7 +131,14 @@ export const multisigsFlow = (
   );
 };
 
-const proposalActions = (proposal: MultisigProposalRecord): string => {
+const actionAttributes = (allowed: boolean, requiresAck: boolean): string =>
+  ` data-ms-action-allowed="${allowed}"${requiresAck ? ' data-ms-requires-ack="true"' : ""}${allowed && !requiresAck ? "" : " disabled"}`;
+
+const proposalActions = (
+  proposal: MultisigProposalRecord,
+  canSign: boolean,
+  signerAddress: string | null,
+): string => {
   if (proposal.state === "executed" || proposal.state === "not-found") {
     return "";
   }
@@ -122,19 +148,30 @@ const proposalActions = (proposal: MultisigProposalRecord): string => {
         ? `<button class="secondary small" data-ms-execute="${escapeHtml(proposal.id)}" type="button">${icon("send")}Execute</button>`
         : '<span class="hint">Execute from the wallet that proposed it (call details are not shared with a pasted id).</span>'
       : "";
-  const confirmDisabled = proposal.call === null ? " disabled" : "";
-  const confirmAttr =
-    proposal.call === null ? ` data-ms-requires-ack="true"${confirmDisabled}` : "";
-  const revokeDisabled = proposal.call === null ? " disabled" : "";
-  const revokeAttr = proposal.call === null ? ` data-ms-requires-ack="true"${revokeDisabled}` : "";
+  const signerSnapshotIsCurrent =
+    signerAddress !== null &&
+    proposal.confirmedBySignerAddress !== undefined &&
+    sameFelt(signerAddress, proposal.confirmedBySignerAddress);
+  const confirmAllowed =
+    canSign &&
+    signerSnapshotIsCurrent &&
+    proposal.state !== "confirmed" &&
+    proposal.confirmedBySigner === false;
+  const revokeAllowed = canSign && signerSnapshotIsCurrent && proposal.confirmedBySigner === true;
+  const requiresAck = proposal.call === null;
   return `<div class="row">
-    <button class="secondary small" data-ms-confirm="${escapeHtml(proposal.id)}" type="button"${confirmAttr}>${icon("check")}Confirm</button>
-    <button class="secondary small" data-ms-revoke="${escapeHtml(proposal.id)}" type="button"${revokeAttr}>${icon("x")}Revoke</button>
+    <button class="secondary small" data-ms-confirm="${escapeHtml(proposal.id)}" type="button"${actionAttributes(confirmAllowed, requiresAck)}>${icon("check")}Confirm</button>
+    <button class="secondary small" data-ms-revoke="${escapeHtml(proposal.id)}" type="button"${actionAttributes(revokeAllowed, requiresAck)}>${icon("x")}Revoke</button>
     ${execute}
   </div>`;
 };
 
-const proposalRow = (proposal: MultisigProposalRecord, quorum: number): string => `
+const proposalRow = (
+  proposal: MultisigProposalRecord,
+  quorum: number,
+  canSign: boolean,
+  signerAddress: string | null,
+): string => `
   <li class="allowance-row">
     <div class="allowance-copy">
       <strong>${escapeHtml(proposal.summary)}</strong>
@@ -143,7 +180,7 @@ const proposalRow = (proposal: MultisigProposalRecord, quorum: number): string =
       ${proposal.call ? proposalCallDetails(proposal.call) : untrackedProposalWarning()}
     </div>
     ${copyButton(proposal.txId, "Copy proposal id")}
-    ${proposalActions(proposal)}
+    ${proposalActions(proposal, canSign, signerAddress)}
   </li>`;
 
 const signerRow = (
@@ -172,14 +209,23 @@ export const multisigDetailFlow = (
   account: AccountRef | null,
   record: MultisigRecord | null,
   proposals: readonly MultisigProposalRecord[],
+  loadError = false,
+  sync: "current" | "error" | null = null,
 ): string => {
   if (!record) {
     return (
       flowHeader("Multisig", status) +
-      flowScreen("multisig-detail", '<p class="empty">This multisig is no longer watched.</p>')
+      flowScreen(
+        "multisig-detail",
+        loadError
+          ? multisigSyncNotice(true, "error", "multisig-list-retry")
+          : '<p class="empty">This multisig is no longer watched.</p>',
+      )
     );
   }
   const tracked = proposals.filter((proposal) => proposal.multisigId === record.id);
+  const canSign =
+    account !== null && record.signers.some((signer) => sameFelt(signer, account.address));
   return (
     flowHeader(
       multisigDisplayName(record),
@@ -188,7 +234,8 @@ export const multisigDetailFlow = (
     ) +
     flowScreen(
       "multisig-detail",
-      `<section class="section">
+      `${multisigSyncNotice(loadError, sync, "multisig-list-retry")}
+      <section class="section">
         <div class="row"><h2>Contract</h2>
           <div class="header-actions">
             <button id="multisig-refresh" class="icon-button" data-multisig-id="${escapeHtml(record.id)}" type="button" aria-label="Refresh from chain" title="Refresh from chain">${icon("refresh")}</button>
@@ -203,12 +250,12 @@ export const multisigDetailFlow = (
       </section>
       <section class="section">
         <div class="row"><h2>Proposals</h2>
-          <button class="secondary small" data-view="multisig-propose" type="button">${icon("plus")}New proposal</button>
+          <button class="secondary small" data-view="multisig-propose" type="button" ${canSign ? "" : "disabled"}>${icon("plus")}New proposal</button>
         </div>
         ${
           tracked.length === 0
             ? '<p class="empty">No proposals tracked yet. Propose one, or paste an id shared by another signer.</p>'
-            : `<ul class="allowance-list">${tracked.map((proposal) => proposalRow(proposal, record.quorum)).join("")}</ul>`
+            : `<ul class="allowance-list">${tracked.map((proposal) => proposalRow(proposal, record.quorum, canSign, account?.address ?? null)).join("")}</ul>`
         }
         <p id="multisig-proposal-result" role="status"></p>
       </section>
@@ -288,11 +335,17 @@ export const multisigDeployFlow = (
   status: WalletStatus,
   account: AccountRef | null,
   declared: boolean | "error" | null,
-): string =>
-  flowHeader("Deploy multisig", status) +
-  flowScreen(
-    "multisig-deploy",
-    `<section class="section">
+): string => {
+  if (!account) {
+    return (
+      flowHeader("Deploy multisig", status) + flowScreen("multisig-deploy", noAccountEmpty(status))
+    );
+  }
+  return (
+    flowHeader("Deploy multisig", status) +
+    flowScreen(
+      "multisig-deploy",
+      `<section class="section">
       ${
         declared === false
           ? `<div class="row"><span class="pill">Class not declared</span></div>
@@ -308,13 +361,15 @@ export const multisigDeployFlow = (
               : ""
       }
       <form id="multisig-deploy-form">
-        <label><span>Signer addresses (one per line)</span><textarea class="mono" name="signers" rows="4" required autocomplete="off" spellcheck="false">${account ? escapeHtml(account.address) : ""}</textarea></label>
+        <label><span>Signer addresses (one per line)</span><textarea class="mono" name="signers" rows="4" required autocomplete="off" spellcheck="false">${escapeHtml(account.address)}</textarea></label>
         ${signerPicker(status)}
         <label><span>Quorum (confirmations required)</span><input name="quorum" inputmode="numeric" value="1" required autocomplete="off" /></label>
         <label><span>Salt</span><input class="mono" name="salt" value="0x0" autocomplete="off" spellcheck="false" /></label>
         <span class="hint">The contract address is derived from the class, signers, quorum, and salt — the same inputs always produce the same address on every network. Name it after it finalizes, when you add it to your watched multisigs.</span>
-        <button class="secondary" type="submit" ${account && declared === true ? "" : "disabled"}>${icon("send")}Deploy multisig</button>
+        <button class="secondary" type="submit" ${declared === true ? "" : "disabled"}>${icon("send")}Deploy multisig</button>
         <p id="multisig-deploy-result" role="status"></p>
       </form>
     </section>`,
+    )
   );
+};

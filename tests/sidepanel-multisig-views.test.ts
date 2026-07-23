@@ -4,6 +4,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../src/popup/responses";
+import {
+  multisigDeployFlow,
+  multisigDetailFlow,
+  multisigsFlow,
+} from "../src/sidepanel/multisig-views";
 import { dashboard } from "../src/sidepanel/views";
 import type { MultisigProposalRecord, MultisigRecord } from "../src/storage/multisig-store";
 import type { AccountRef } from "../src/storage/vault-schema";
@@ -47,6 +52,8 @@ const proposal: MultisigProposalRecord = {
     salt: "0x0",
   },
   confirmations: 2,
+  confirmedBySigner: true,
+  confirmedBySignerAddress: account.address,
   id: `${multisig.id}:0xabc`,
   multisigId: multisig.id,
   state: "confirmed",
@@ -103,10 +110,37 @@ describe("multisig views", () => {
     expect(html).toContain("On-chain effect when executed");
     expect(html).toContain(`data-ms-confirm="${proposal.id}"`);
     expect(html).toContain(`data-ms-execute="${proposal.id}"`);
+    expect(html).toMatch(/data-ms-confirm="[^"]+"[^>]*data-ms-action-allowed="false"[^>]*disabled/);
+    expect(html).toMatch(/data-ms-revoke="[^"]+"[^>]*data-ms-action-allowed="true"/);
     expect(html).not.toContain("data-ms-requires-ack");
     expect(html).toContain('id="multisig-track-form"');
     expect(html).toContain('data-view="multisig-propose"');
     expect(html).toContain(`data-multisig-remove="${multisig.id}"`);
+  });
+
+  test("gates confirmation actions from fresh signer-specific chain state", () => {
+    const pending = {
+      ...proposal,
+      confirmations: 0,
+      confirmedBySigner: false,
+      state: "pending" as const,
+    };
+    const allowed = render("multisig-detail", [multisig], [pending]);
+    expect(allowed).toMatch(/data-ms-confirm="[^"]+"[^>]*data-ms-action-allowed="true"/);
+    expect(allowed).toMatch(
+      /data-ms-revoke="[^"]+"[^>]*data-ms-action-allowed="false"[^>]*disabled/,
+    );
+
+    const foreign = { ...multisig, signers: [multisig.signers[1] ?? "0x4"] };
+    const blocked = render("multisig-detail", [foreign], [{ ...pending, multisigId: foreign.id }]);
+    expect(blocked.match(/data-ms-action-allowed="false"/g)).toHaveLength(2);
+
+    const staleSignerSnapshot = render(
+      "multisig-detail",
+      [multisig],
+      [{ ...pending, confirmedBySignerAddress: multisig.signers[1] ?? "0x4" }],
+    );
+    expect(staleSignerSnapshot.match(/data-ms-action-allowed="false"/g)).toHaveLength(2);
   });
 
   test("detail hides execute for proposals tracked by id only", () => {
@@ -159,5 +193,21 @@ describe("multisig views", () => {
 
   test("deploy form no longer collects a name", () => {
     expect(render("multisig-deploy", [], [], true)).not.toContain('name="name"');
+  });
+
+  test("deploy explains the missing-account state instead of showing a silent disabled form", () => {
+    const noAccount = { ...status, accountCount: 0, accounts: [], activeAccountId: null };
+    const html = multisigDeployFlow(noAccount, null, true);
+    expect(html).toContain("No account on Starknet");
+    expect(html).not.toContain('id="multisig-deploy-form"');
+  });
+
+  test("list and detail render an explicit retry instead of false empty state on load errors", () => {
+    const list = multisigsFlow(status, account, [], [], true, "error");
+    expect(list).toContain("Cached data may be stale");
+    expect(list).toContain('id="multisig-list-retry"');
+    const detail = multisigDetailFlow(status, account, null, [], true, "error");
+    expect(detail).toContain("Could not refresh multisig state");
+    expect(detail).not.toContain("no longer watched");
   });
 });
