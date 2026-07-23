@@ -19,6 +19,7 @@ const KNOWN_DIRS = [
   "background",
   "content",
   "crypto",
+  "ledger-grant",
   "popup",
   "provider",
   "security",
@@ -45,6 +46,7 @@ const FORBIDDEN_TARGETS: Readonly<Record<string, readonly SrcDir[]>> = {
     "background",
     "content",
     "crypto",
+    "ledger-grant",
     "popup",
     "provider",
     "security",
@@ -54,13 +56,14 @@ const FORBIDDEN_TARGETS: Readonly<Record<string, readonly SrcDir[]>> = {
     "ui",
     "wallet",
   ],
-  crypto: ["background", "content", "popup", "provider", "sidepanel", "ui"],
-  security: ["background", "content", "popup", "provider", "sidepanel", "ui"],
+  crypto: ["background", "content", "ledger-grant", "popup", "provider", "sidepanel", "ui"],
+  security: ["background", "content", "ledger-grant", "popup", "provider", "sidepanel", "ui"],
   ui: ["background"],
   popup: ["background"],
   sidepanel: ["background"],
   provider: ["background"],
   content: ["background"],
+  "ledger-grant": ["background"],
 };
 
 const walk = async (dir: string): Promise<string[]> => {

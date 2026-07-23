@@ -18,9 +18,11 @@ const EXCLUDED = new Set([
 const BROWSER_GLOBAL_FILES = new Set([
   "src/background/index.ts",
   "src/content/index.ts",
+  "src/ledger-grant/index.ts",
   "src/provider/inpage.ts",
   "src/sidepanel/dom.ts",
   "src/sidepanel/index.ts",
+  "src/sidepanel/ledger/grant-window.ts",
   "src/sidepanel/settings-ui.ts",
   "src/sidepanel/transfer-ui.ts",
   "src/storage/browser-storage.ts",

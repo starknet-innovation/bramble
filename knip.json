@@ -5,6 +5,7 @@
     "src/content/index.ts",
     "src/sidepanel/index.ts",
     "src/provider/inpage.ts",
+    "src/ledger-grant/index.ts",
     "scripts/*.ts",
     "tests/**/*.test.ts"
   ],

@@ -1,10 +1,16 @@
 /**
  * WebHID transport boundary for the side panel — the ONE place a live Ledger
- * device is opened. It must run in a Window context (the side panel), never the
- * service worker, and `requestTransport` must be called from a user gesture.
- * Construction wraps the transport in the `@ledgerhq/hw-app-starknet`
- * `StarknetClient`, exposed through the structural {@link LedgerDeviceClient} so
- * the rest of the flow stays hardware-agnostic and testable.
+ * device is opened. It must run in a Window context (the side panel), never
+ * the service worker. Only a SILENT reconnect of an already-granted device
+ * lives here: Chrome cannot render the WebHID device chooser inside an
+ * extension side panel (the picker resolves with an empty list there, even
+ * though the device shows in `chrome://device-log`), so the one-time grant
+ * itself is obtained in a separate popup window (`./grant-window`, driven by
+ * `./sign-connector.ts`) and this module only ever reopens what that popup
+ * already granted. Construction wraps the transport in the
+ * `@ledgerhq/hw-app-starknet` `StarknetClient`, exposed through the structural
+ * {@link LedgerDeviceClient} so the rest of the flow stays hardware-agnostic
+ * and testable.
  *
  * The concrete Ledger libraries are imported only from the runtime-only
  * `webhid-impl.js` shim (their vendored `.d.ts` does not compile under the
@@ -15,12 +21,7 @@
  */
 import type { LedgerDeviceClient } from "./client";
 import { LedgerRejection } from "./errors";
-import {
-  type LedgerTransport,
-  newStarknetClient,
-  openConnectedTransportRaw,
-  requestTransportRaw,
-} from "./webhid-impl";
+import { type LedgerTransport, newStarknetClient, openConnectedTransportRaw } from "./webhid-impl";
 
 type NavigatorWithHid = { readonly hid?: unknown };
 
@@ -41,25 +42,15 @@ const mapOpenError = (error: unknown): LedgerRejection => {
 
 /**
  * Silently reopens an already-granted device (no permission prompt). Returns
- * null when no granted device is connected, so the caller can fall back to a
- * gesture-gated {@link requestTransport}. The WebHID grant survives restarts, so
- * this is the normal reconnect path.
+ * null when no granted device is connected, so the caller can fall back to the
+ * grant-window popup (`./grant-window`'s `requestDeviceGrant`, driven by
+ * `./sign-connector.ts`) and retry. The WebHID grant is origin-wide and
+ * survives restarts, so this is the normal reconnect path — used on every
+ * connect, not only the first one after a grant.
  */
 export const openConnectedTransport = async (): Promise<LedgerTransport | null> => {
   try {
     return await openConnectedTransportRaw();
-  } catch (error) {
-    throw mapOpenError(error);
-  }
-};
-
-/**
- * Shows the native device picker and opens the chosen device. MUST be called
- * from a user gesture (a click) in the side panel, or WebHID throws.
- */
-export const requestTransport = async (): Promise<LedgerTransport> => {
-  try {
-    return await requestTransportRaw();
   } catch (error) {
     throw mapOpenError(error);
   }
@@ -75,7 +66,7 @@ export const deviceClientFrom = (transport: LedgerTransport): LedgerDeviceClient
  * Closes an open transport, releasing the WebHID device so it is not left
  * claimed. Propagates any close error to the caller, which closes in a `finally`
  * and must not let a close failure mask the operation's real result (fail
- * closed). This is the counterpart to {@link openConnectedTransport} /
- * {@link requestTransport}; the device is opened and closed only here.
+ * closed). This is the counterpart to {@link openConnectedTransport}; the
+ * device is opened and closed only here.
  */
 export const closeTransport = (transport: LedgerTransport): Promise<void> => transport.close();

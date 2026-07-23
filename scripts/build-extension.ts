@@ -55,6 +55,16 @@ requireBuild(
 
 requireBuild(
   await Bun.build({
+    entrypoints: ["src/ledger-grant/index.ts"],
+    format: "esm",
+    minify: true,
+    outdir: join(outdir, "ledger-grant"),
+    target: "browser",
+  }),
+);
+
+requireBuild(
+  await Bun.build({
     entrypoints: ["src/content/index.ts"],
     format: "iife",
     minify: true,
@@ -75,6 +85,7 @@ requireBuild(
 
 await cp("public/manifest.json", join(outdir, "manifest.json"));
 await cp("public/sidepanel.html", join(outdir, "sidepanel.html"));
+await cp("public/ledger-grant.html", join(outdir, "ledger-grant.html"));
 await mkdir(vendorOutdir, { recursive: true });
 await cp(
   "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js",
