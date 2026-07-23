@@ -252,8 +252,11 @@ model. Two guards are **blocking** (they fail the check); one is **advisory**
 - **PR-target guard — BLOCKING (fail-closed).** Only an explicit allowlist of
   head-branch categories may target `main`: `release/**` and `hotfix/**`
   (promotion / hotfix paths), `chore/**` / `docs/**` (repo plumbing and docs
-  that aren't part of a release slice), and the known automation prefixes
-  (`cursor/`, `codex/`, `ai-findings-autofix/`, `qa/`, `dependabot/`).
+  that aren't part of a release slice), and authenticated Dependabot PRs whose
+  head starts with `dependabot/`. A branch prefix alone never grants an
+  exception: head names are contributor-controlled, so `cursor/`, `codex/`,
+  `ai-findings-autofix/`, and `qa/` branches must still use one of the allowed
+  target categories.
   **Everything else** — `feat/`, `feature/`, `fix/`, or any unknown/typo prefix
   — is treated as feature-like release work: if it targets `main` the check
   **fails** and tells you to retarget to the active `release/vX.Y` branch.
@@ -268,7 +271,9 @@ model. Two guards are **blocking** (they fail the check); one is **advisory**
   (it does not fail — to avoid false blocks).
 - **Branch-name guard — ADVISORY.** The head should match `feature/<n>-*`,
   `fix/<n>-*`, `chore/<n>-*`, `release/vX.Y`, `hotfix/*`, or `docs/*`; otherwise
-  a non-blocking annotation is added. Automation branches are skipped entirely.
+  a non-blocking annotation is added. Known automation prefixes are skipped
+  here only; except for authenticated Dependabot, they do not bypass the
+  blocking target guard.
 
 > **Blocking in CI ≠ merge-blocked.** A failed guard shows a red check, but it
 > only *prevents a merge* once it is a **required status check** in branch

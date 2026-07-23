@@ -55,10 +55,15 @@ jobs:
             // interpolated into a shell), so there is no injection surface.
             const text = `${pr.title || ""}\n${pr.body || ""}`;
 
-            // Automation branches are exempt: the target guard downgrades to a
-            // warning and the branch-name guard is skipped entirely.
-            const BOT_PREFIXES = ["cursor/", "codex/", "ai-findings-autofix/", "qa/", "dependabot/"];
-            const isBot = BOT_PREFIXES.some((p) => head.startsWith(p));
+            // Prefixes classify automation branches for the advisory naming
+            // check only; a contributor-controlled branch name is not proof of
+            // bot identity and must never grant a blocking-guard exemption.
+            const AUTOMATION_PREFIXES = ["cursor/", "codex/", "ai-findings-autofix/", "qa/", "dependabot/"];
+            const isAutomationBranch = AUTOMATION_PREFIXES.some((p) => head.startsWith(p));
+            const isTrustedDependabot =
+              head.startsWith("dependabot/") &&
+              pr.user?.login === "dependabot[bot]" &&
+              pr.user?.type === "Bot";
 
             let blocked = false;
             const problems = [];
@@ -71,7 +76,8 @@ jobs:
             //      release/**, hotfix/**  — promotion and hotfix paths
             //      chore/**,   docs/**    — repo plumbing and docs, not part of
             //                               a release slice (this PR is one)
-            //    plus the automation prefixes in BOT_PREFIXES.
+            //    plus an authenticated Dependabot PR. Prefix matching alone
+            //    never grants an exception because head names are untrusted.
             //    EVERYTHING ELSE is treated as feature-like release work and
             //    must go through the active `release/vX.Y` branch, so a PR into
             //    `main` FAILS. This is deliberately fail-closed: we allowlist
@@ -82,12 +88,12 @@ jobs:
             //    release-validation. Adding a new legit direct-to-main category
             //    now requires editing ALLOWED_INTO_MAIN below, on purpose.
             const ALLOWED_INTO_MAIN = /^(release|hotfix|chore|docs)\//;
-            const isAllowedIntoMain = ALLOWED_INTO_MAIN.test(head) || isBot;
+            const isAllowedIntoMain = ALLOWED_INTO_MAIN.test(head) || isTrustedDependabot;
             if (base === "main") {
               if (isAllowedIntoMain) {
-                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (${isBot ? "automation branch" : "release/hotfix promotion or chore/docs plumbing"}).`);
+                notes.push(`PR-target guard: \`${head}\` -> \`main\` is allowed (${isTrustedDependabot ? "authenticated Dependabot PR" : "release/hotfix promotion or chore/docs plumbing"}).`);
               } else {
-                fail(`PR-target guard: head \`${head}\` is not an allowed \`main\` target — it is treated as feature-like release work and must target the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Retarget this PR to that release branch. Only \`release/**\`, \`hotfix/**\`, \`chore/**\`, \`docs/**\`, and automation branches may target main directly.`);
+                fail(`PR-target guard: head \`${head}\` is not an allowed \`main\` target — it is treated as feature-like release work and must target the active \`release/vX.Y\` branch (see DEVELOPMENT.md). Retarget this PR to that release branch. Only \`release/**\`, \`hotfix/**\`, \`chore/**\`, \`docs/**\`, and authenticated Dependabot PRs may target main directly.`);
               }
             }
 
@@ -123,7 +129,7 @@ jobs:
             }
 
             // 3. Branch-name guard (ADVISORY). Skipped for automation branches.
-            if (!isBot) {
+            if (!isAutomationBranch) {
               const ok =
                 /^(feature|fix|chore)\/\d+-.+/.test(head) ||
                 /^release\/v\d+\.\d+$/.test(head) ||
@@ -136,7 +142,7 @@ jobs:
 
             // Summary.
             const s = core.summary.addHeading("PR scope & naming guards", 3);
-            s.addRaw(`Base: \`${base}\` - Head: \`${head}\`${isBot ? " - automation branch" : ""}`, true);
+            s.addRaw(`Base: \`${base}\` - Head: \`${head}\`${isAutomationBranch ? " - automation branch" : ""}`, true);
             if (problems.length) {
               s.addHeading("Blocking failures", 4).addList(problems);
             }
