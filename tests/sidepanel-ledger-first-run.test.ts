@@ -161,7 +161,7 @@ const enumerateClient: LedgerDeviceClient = {
   getPubKey: () =>
     Promise.resolve({
       errorMessage: "No errors",
-      publicKey: new Uint8Array([4, ...new Array(31).fill(0), 7, ...new Array(32).fill(0)]),
+      publicKey: new Uint8Array([...new Array(31).fill(0), 7, ...new Array(32).fill(0)]),
       returnCode: 0x9000,
     }),
   signHash: () => Promise.reject(new Error("unused")),

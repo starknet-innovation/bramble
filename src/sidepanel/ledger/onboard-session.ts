@@ -20,10 +20,11 @@ import { ledgerAccountPath } from "../../starknet/ledger-path";
 import type { LedgerAccountRef } from "../../storage/vault-schema";
 import type { LedgerPubKeyEntry } from "../../wallet/accounts";
 import { assertLedgerAppReady, type LedgerDeviceClient, ledgerPublicKeyX } from "./client";
-import { asLedgerRejection, ledgerMessage } from "./errors";
+import { asLedgerRejection, LedgerRejection, ledgerMessage } from "./errors";
 import {
   closeLedgerSessionQuietly,
   type LedgerConnector,
+  type LedgerDeviceChoice,
   type LedgerDeviceSession,
 } from "./sign-session";
 
@@ -85,10 +86,12 @@ export type LedgerOnboardAddKind = "hd" | "import" | "ledger";
 export type LedgerOnboardView =
   | { readonly kind: "chooser" }
   | { readonly kind: "connect" }
+  | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "reading" }
   | {
       readonly kind: "picker";
       readonly candidates: readonly LedgerCandidate[];
+      readonly message?: string;
       readonly selected: readonly number[];
     }
   | { readonly kind: "error"; readonly message: string };
@@ -140,6 +143,7 @@ export type LedgerOnboardController = {
   readonly addSelected: () => void;
   readonly cancel: () => void;
   readonly choose: (kind: LedgerOnboardAddKind) => void;
+  readonly chooseDevice: (deviceId: string) => void;
   readonly connect: () => void;
   readonly loadMore: () => void;
   readonly showChooser: () => void;
@@ -157,19 +161,30 @@ const EMPTY_STATE: LedgerCandidateState = { balance: null, deployed: null };
  * candidate's on-chain state in parallel (a degraded RPC yields "unavailable"
  * rather than blocking); `loadMore` appends the next page silently; `toggle`
  * selects/deselects a non-duplicate index; `addSelected` creates every selected
- * account and refreshes. Every device/transport failure maps to the typed
- * rejection catalog and shows an actionable retry — no partial state.
+ * account and refreshes. Successful items are marked duplicate immediately, so
+ * a later batch failure leaves only the uncreated selection retryable instead
+ * of wedging duplicate detection. Cancellation invalidates late async results.
+ * Every device/transport failure maps to the typed rejection catalog and shows
+ * an actionable retry.
  */
 export const createLedgerOnboardController = (
   deps: LedgerOnboardControllerDeps,
 ): LedgerOnboardController => {
   let candidates: readonly LedgerCandidate[] = [];
+  const createdIds = new Set<string>();
+  let devices: readonly LedgerDeviceChoice[] = [];
+  let selectedDeviceId: string | null = null;
   const selected = new Set<number>();
   let nextIndex = 0;
   let busy = false;
+  let flowEpoch = 0;
 
   const resetState = (): void => {
+    flowEpoch += 1;
     candidates = [];
+    createdIds.clear();
+    devices = [];
+    selectedDeviceId = null;
     selected.clear();
     nextIndex = 0;
   };
@@ -178,7 +193,7 @@ export const createLedgerOnboardController = (
     account,
     balance: null,
     deployed: null,
-    duplicate: deps.existingIds().has(account.id),
+    duplicate: createdIds.has(account.id) || deps.existingIds().has(account.id),
   });
 
   const withState = (account: LedgerAccountRef, state: LedgerCandidateState): LedgerCandidate => ({
@@ -187,8 +202,13 @@ export const createLedgerOnboardController = (
     deployed: state.deployed,
   });
 
-  const renderPicker = (): void => {
-    deps.render({ candidates, kind: "picker", selected: [...selected] });
+  const renderPicker = (message?: string): void => {
+    deps.render({
+      candidates,
+      kind: "picker",
+      ...(message ? { message } : {}),
+      selected: [...selected],
+    });
   };
 
   // Append a freshly derived page as pending (Checking…) rows and advance the
@@ -229,6 +249,7 @@ export const createLedgerOnboardController = (
     if (busy) {
       return;
     }
+    const epoch = flowEpoch;
     busy = true;
     if (initial) {
       deps.render({ kind: "reading" });
@@ -240,10 +261,18 @@ export const createLedgerOnboardController = (
       await closeLedgerSessionQuietly(session);
       session = null;
       const accounts = await deps.derive(entries);
+      if (epoch !== flowEpoch) {
+        return;
+      }
       appendPage(accounts, startIndex);
-      applyDescribed(await describePage(accounts));
+      const described = await describePage(accounts);
+      if (epoch === flowEpoch) {
+        applyDescribed(described);
+      }
     } catch (error) {
-      deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
+      if (epoch === flowEpoch) {
+        deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
+      }
     } finally {
       if (session) {
         await closeLedgerSessionQuietly(session);
@@ -255,12 +284,65 @@ export const createLedgerOnboardController = (
   // The first page runs the gesture-gated picker; further pages reconnect the
   // already-granted device SILENTLY, falling back to the picker only if the
   // device is no longer connected (the "Show more" click supplies the gesture).
+  const obtainConnected = async (deviceId?: string): Promise<LedgerDeviceSession> =>
+    (await deps.connector.openConnected(deviceId)) ?? deps.connector.request();
+
   const obtainMore = async (): Promise<LedgerDeviceSession> =>
-    (await deps.connector.openConnected()) ?? deps.connector.request();
+    obtainConnected(selectedDeviceId ?? undefined);
 
   const startConnect = (): void => {
     resetState();
-    void loadPage(() => deps.connector.request(), 0, true);
+    const epoch = flowEpoch;
+    const list = deps.connector.listConnected;
+    if (!list) {
+      void loadPage(() => deps.connector.request(), 0, true);
+      return;
+    }
+    busy = true;
+    deps.render({ kind: "reading" });
+    void list().then(
+      (connected) => {
+        busy = false;
+        if (epoch !== flowEpoch) {
+          return;
+        }
+        devices = connected;
+        if (connected.length > 1) {
+          deps.render({ devices: connected, kind: "devices" });
+          return;
+        }
+        selectedDeviceId = connected[0]?.id ?? null;
+        void loadPage(
+          () => (selectedDeviceId ? obtainConnected(selectedDeviceId) : deps.connector.request()),
+          0,
+          true,
+        );
+      },
+      (error) => {
+        busy = false;
+        if (epoch === flowEpoch) {
+          deps.render({ kind: "error", message: ledgerMessage(asLedgerRejection(error).code) });
+        }
+      },
+    );
+  };
+
+  const chooseDevice = (deviceId: string): void => {
+    if (busy || !devices.some((device) => device.id === deviceId)) {
+      return;
+    }
+    selectedDeviceId = deviceId;
+    void loadPage(
+      async () => {
+        const session = await deps.connector.openConnected(deviceId);
+        if (!session) {
+          throw new LedgerRejection("disconnected-mid-sign");
+        }
+        return session;
+      },
+      0,
+      true,
+    );
   };
 
   const runToggle = (accountIndex: number): void => {
@@ -285,10 +367,21 @@ export const createLedgerOnboardController = (
     if (busy || chosen.length === 0) {
       return;
     }
+    const epoch = flowEpoch;
     busy = true;
     try {
       for (const candidate of chosen) {
         await deps.create(candidate.account);
+        createdIds.add(candidate.account.id);
+        selected.delete(candidate.account.derivation.accountIndex);
+        candidates = candidates.map((item) =>
+          item.account.id === candidate.account.id ? { ...item, duplicate: true } : item,
+        );
+        if (epoch !== flowEpoch) {
+          await deps.refresh();
+          return;
+        }
+        renderPicker();
       }
       resetState();
       deps.render(null);
@@ -298,7 +391,10 @@ export const createLedgerOnboardController = (
       // here is a wallet error (duplicate, locked) — surface its message, not a
       // device-catalog message.
       const message = error instanceof Error ? error.message : "Could not add the account.";
-      deps.render({ kind: "error", message });
+      await deps.refresh().catch(() => undefined);
+      if (epoch === flowEpoch) {
+        renderPicker(message);
+      }
     } finally {
       busy = false;
     }
@@ -308,9 +404,14 @@ export const createLedgerOnboardController = (
     if (busy) {
       return;
     }
+    const epoch = flowEpoch;
     busy = true;
     try {
       await deps.addHd();
+      if (epoch !== flowEpoch) {
+        await deps.refresh();
+        return;
+      }
       resetState();
       deps.render(null);
       await deps.refresh();
@@ -344,6 +445,7 @@ export const createLedgerOnboardController = (
       deps.render(null);
     },
     choose,
+    chooseDevice,
     connect() {
       startConnect();
     },

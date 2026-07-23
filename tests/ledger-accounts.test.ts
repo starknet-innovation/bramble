@@ -164,4 +164,19 @@ describe("keyless account in the vault schema", () => {
       }),
     ).toBe(false);
   });
+
+  test("rejects Ledger metadata whose path, index, or application disagree", () => {
+    expect(
+      isAccountRef({
+        ...ledgerAccount,
+        derivation: { ...ledgerAccount.derivation, accountIndex: 1 },
+      }),
+    ).toBe(false);
+    expect(
+      isAccountRef({
+        ...ledgerAccount,
+        derivation: { ...ledgerAccount.derivation, eip2645application: "Other" },
+      }),
+    ).toBe(false);
+  });
 });

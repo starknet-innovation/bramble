@@ -32,13 +32,18 @@ type WindowsCreateOptions = Parameters<GrantBrowser["windows"]["create"]>[0];
 
 const createFakeBrowser = (
   createdWindow: FakeWindow,
+  missingOnGet = false,
 ): {
   readonly browser: GrantBrowser;
   readonly createCalls: WindowsCreateOptions[];
+  readonly getCalls: number[];
   readonly listeners: Set<(windowId: number) => void>;
+  readonly removeCalls: number[];
 } => {
   const createCalls: WindowsCreateOptions[] = [];
+  const getCalls: number[] = [];
   const listeners = new Set<(windowId: number) => void>();
+  const removeCalls: number[] = [];
 
   const browser: GrantBrowser = {
     runtime: {
@@ -49,6 +54,13 @@ const createFakeBrowser = (
         createCalls.push(options);
         return createdWindow;
       },
+      get: async (windowId) => {
+        getCalls.push(windowId);
+        if (missingOnGet) {
+          throw new Error(`No window with id: ${windowId}`);
+        }
+        return { id: windowId };
+      },
       onRemoved: {
         addListener: (callback) => {
           listeners.add(callback);
@@ -57,10 +69,13 @@ const createFakeBrowser = (
           listeners.delete(callback);
         },
       },
+      remove: async (windowId) => {
+        removeCalls.push(windowId);
+      },
     },
   };
 
-  return { browser, createCalls, listeners };
+  return { browser, createCalls, getCalls, listeners, removeCalls };
 };
 
 describe("requestDeviceGrant", () => {
@@ -118,6 +133,34 @@ describe("requestDeviceGrant", () => {
 
     await requestDeviceGrant(browser);
 
+    expect(listeners.size).toBe(0);
+  });
+
+  test("bounds a popup that never closes and removes it without leaking the listener", async () => {
+    const { browser, listeners, removeCalls } = createFakeBrowser({ id: 13 });
+    const timers: Array<() => void> = [];
+    const pending = requestDeviceGrant(browser, {
+      ms: 1_000,
+      schedule: (onElapsed) => {
+        timers.push(onElapsed);
+        return () => undefined;
+      },
+    });
+    await tick();
+
+    expect(listeners.size).toBe(1);
+    timers[0]?.();
+    await pending;
+    expect(listeners.size).toBe(0);
+    expect(removeCalls).toEqual([13]);
+  });
+
+  test("detects a popup that closed before its listener was registered", async () => {
+    const { browser, getCalls, listeners } = createFakeBrowser({ id: 17 }, true);
+
+    await requestDeviceGrant(browser);
+
+    expect(getCalls).toEqual([17]);
     expect(listeners.size).toBe(0);
   });
 });

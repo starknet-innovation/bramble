@@ -20,6 +20,9 @@ local signing fallback.
   or vault operations to dapps.
 - `src/storage` owns encrypted persistence, permission checks, schema validation, and migrations.
 - `src/crypto` adapts Krusty KMS and rejects invalid inputs or WASM outputs at the boundary.
+- `src/sidepanel/ledger` owns the Window-only WebHID transport and hardware interaction. The
+  service worker never opens a device, and the side panel never decides what transaction may be
+  broadcast.
 - `src/ui` defines the design system: the replaceable color skin contract plus the shared scale
   tokens (spacing, radius, type, motion, control metrics) consumed by side panel styling.
 
@@ -89,6 +92,48 @@ A non-empty `result` (not a `Class hash not found` error) confirms the class is
 declared. If the RPC endpoint is unreachable from a sandbox, run the command from
 a networked host and expect the same result.
 
+## Ledger Hardware Accounts
+
+Ledger accounts use the same pinned OpenZeppelin account class, but the vault stores only public
+account metadata: the account address, public-key x-coordinate, account index, and canonical
+EIP-2645 path `m/2645'/579218131'/0'/<index>'`. No Ledger mnemonic or signing key enters MC
+Wallet. A Ledger-only vault therefore has `mnemonic: null` and no `signingKeys` entry for its
+accounts; a mixed vault may contain both software and Ledger account records.
+
+The hardware signing path is split across two mutually checking contexts:
+
+1. The privileged background creates the exact Starknet message hash, parks a bounded signing
+   request, and records the active unlock-session generation.
+2. The side panel opens the selected origin-granted device, checks the app version and public key
+   at the stored path, then asks the device to blind-sign that exact hash.
+3. The background receives only `(r, s)`, verifies it against the parked hash and stored public
+   key, re-checks the unlock generation, and only then allows the existing submit path to
+   broadcast. A missing queue, timeout, lock/expiry, wrong device, malformed response, rejected
+   prompt, or bad signature fails closed.
+
+Chrome does not reliably display its native WebHID chooser from an extension side panel. The first
+grant therefore happens in the small `ledger-grant.html` extension popup. It carries no wallet
+secret and sends no `postMessage` or runtime message; the only result is Chrome's origin-scoped
+WebHID permission. The side panel then reconnects silently. Its wait is bounded, detects a popup
+that closed before listener registration, and best-effort closes a stuck popup. When several
+granted devices are connected, the UI lists non-secret labels with side-panel-local opaque ids and
+opens only the device the user selects; ids are neither persisted nor sent across an extension
+message boundary.
+
+MC Wallet supports the Starknet Ledger app 2.x compatibility line and rejects legacy 1.x before
+enumeration or signing. The floor is a product compatibility boundary, not a substitute for the
+host-side signature verification gate. Blind signing must be enabled in the Starknet app. Device
+transport errors are collapsed into the typed rejection catalog and never used to authorize a
+fallback signer.
+
+Recovery boundaries are deliberately explicit:
+
+- MC Wallet's recovery phrase restores software accounts only.
+- MC Wallet's JSON backup contains preferences, labels, contacts, and other non-secret settings;
+  it does not restore Ledger accounts.
+- Restore Ledger accounts with the Ledger device and its Ledger recovery phrase, then enumerate
+  and add the same account indices again.
+
 ## Migration Workflow
 
 1. Bump `CURRENT_SCHEMA_VERSION` in `src/storage/vault-schema.ts`.
@@ -96,12 +141,14 @@ a networked host and expect the same result.
 3. Update schema validators and tests for old, current, and invalid vault data.
 4. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is currently at **v2**. v2 adds a `mnemonic: string | null` field so the
-wallet can derive more accounts and reveal the recovery phrase after re-authentication. Vaults
-migrated from v1 (which never stored the phrase) carry `mnemonic: null` and cannot add accounts or
-reveal a phrase until re-created; each migration step advances exactly one version
-(`v0 → v1 → v2`) so a v1 vault produces a v1-shaped value before the v1→v2 step attaches the null
-phrase. `mnemonic` only ever exists inside the encrypted vault envelope.
+The vault schema is currently at **v3**. v2 added a `mnemonic: string | null` field so the wallet
+can derive more software accounts and reveal the recovery phrase after re-authentication. v3 keeps
+that shape and admits a `"ledger"` derivation whose path, index, and `LedgerW` application marker
+must agree; the account must not have a `signingKeys` entry. Vaults migrated from v1 (which never
+stored the phrase) carry `mnemonic: null` and cannot add software accounts or reveal a phrase until
+re-created, but may add a keyless Ledger account. Each migration step advances exactly one version
+(`v0 → v1 → v2 → v3`) and is deterministic. `mnemonic` and software signing keys only ever exist
+inside the encrypted vault envelope; Ledger secrets never enter it.
 
 ## Account Lifecycle and Secret Reveal
 
@@ -114,6 +161,9 @@ phrase. `mnemonic` only ever exists inside the encrypted vault envelope.
 - **Add account.** `wallet.addAccount { networkId }` (privileged, session-authenticated) delegates
   to `WalletVaultService.addDerivedAccount`, which derives the next unused `accountIndex` for that
   network from the stored phrase, appends the account plus its signing key, and selects it.
+  Ledger onboarding instead enumerates public keys from the selected device, derives keyless
+  account records in the background, and adds each successful selection independently so a partial
+  batch failure leaves only the uncreated accounts retryable.
 - **Reveal seed / export key.** `wallet.revealSecrets { vaultPassphrase }` is privileged, requires
   the passphrase re-entered in the message (never the cached session), verifies it via `readVault`,
   and returns `{ mnemonic, privateKey }` for the active account. The settings-reachable reveal

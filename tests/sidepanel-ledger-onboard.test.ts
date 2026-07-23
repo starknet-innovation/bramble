@@ -1,12 +1,10 @@
 /**
  * Coverage for Ledger onboarding: the silent PAGINATED multi-index enumeration
  * (version gate + serial getPubKey per page) against an injected fake device
- * client, the pure onboarding view templates — the add-account chooser,
- * connect/reading/error device states, and the multi-select account picker with
- * deployed status, balance, duplicate handling and a selected-count — and the
- * controller: connect reads the first page, "Show more" appends the next,
- * toggling selects indexes, "Add selected" adds exactly those, and the chooser
- * routes HD/import/ledger.
+ * client and the controller: connect reads the first page, "Show more" appends
+ * the next, toggling selects indexes, "Add selected" adds exactly those, and
+ * the chooser routes HD/import/ledger. Pure template coverage lives in
+ * `sidepanel-ledger-onboard-views.test.ts`.
  */
 import { describe, expect, test } from "bun:test";
 import type { LedgerDeviceClient } from "../src/sidepanel/ledger/client";
@@ -14,17 +12,9 @@ import { LedgerRejection } from "../src/sidepanel/ledger/errors";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
-  type LedgerCandidate,
   type LedgerOnboardControllerDeps,
   type LedgerOnboardView,
 } from "../src/sidepanel/ledger/onboard-session";
-import {
-  addAccountChooser,
-  ledgerAccountPicker,
-  ledgerConnectPrompt,
-  ledgerOnboardError,
-  ledgerReadingPrompt,
-} from "../src/sidepanel/ledger/onboard-views";
 import type { LedgerConnector } from "../src/sidepanel/ledger/sign-session";
 import { ledgerAccountPath } from "../src/starknet/ledger-path";
 import type { LedgerAccountRef } from "../src/storage/vault-schema";
@@ -45,7 +35,7 @@ const enumerateClient = (appMajor: number): LedgerDeviceClient => ({
     const index = Number(path.split("/").at(-1)?.replace(/'.*$/, "") ?? "0");
     return Promise.resolve({
       errorMessage: "No errors",
-      publicKey: new Uint8Array([4, ...new Array(31).fill(0), index + 1, ...new Array(32).fill(0)]),
+      publicKey: new Uint8Array([...new Array(31).fill(0), index + 1, ...new Array(32).fill(0)]),
       returnCode: 0x9000,
     });
   },
@@ -94,91 +84,6 @@ const candidateAccount = (index: number): LedgerAccountRef => ({
   id: `SN_MAIN:0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
   networkId: "SN_MAIN",
   publicKeyX: `0x${index + 1}`,
-});
-
-describe("onboarding views", () => {
-  test("the chooser offers HD, import, and Ledger routes", () => {
-    const html = addAccountChooser();
-    expect(html).toContain('data-add-kind="hd"');
-    expect(html).toContain('data-add-kind="import"');
-    expect(html).toContain('data-add-kind="ledger"');
-    expect(html).toContain("Connect a Ledger");
-  });
-
-  test("connect, reading, and error device states render their controls", () => {
-    expect(ledgerConnectPrompt()).toContain("data-ledger-onboard-connect");
-    expect(ledgerReadingPrompt()).toContain("Reading accounts");
-    expect(ledgerOnboardError("Unlock your Ledger, then try again.")).toContain(
-      "Unlock your Ledger",
-    );
-  });
-
-  test("the chooser and short states share the centred overlay shell", () => {
-    // CHANGE 1: the chooser and the connect/reading/error states render the
-    // vertically-centred `onboard-hero` container with its actions block, so
-    // they are laid out with the design-system rhythm rather than bunched up.
-    for (const html of [
-      addAccountChooser(),
-      ledgerConnectPrompt(),
-      ledgerReadingPrompt(),
-      ledgerOnboardError("nope"),
-    ]) {
-      expect(html).toContain('class="onboard-hero"');
-      expect(html).toContain("onboard-actions");
-    }
-    // The picker uses the top-aligned, scrollable picker container instead.
-    expect(ledgerAccountPicker([])).toContain('class="onboard-picker"');
-  });
-
-  test("the picker shows address, deployed status, balance, and a selectable row", () => {
-    const candidates: LedgerCandidate[] = [
-      { account: candidateAccount(0), balance: "1.5 STRK", deployed: true, duplicate: false },
-    ];
-    const html = ledgerAccountPicker(candidates, [0]);
-    expect(html).toContain("Account 0");
-    expect(html).toContain("Deployed");
-    expect(html).toContain("1.5 STRK");
-    expect(html).toContain('data-ledger-toggle="0"');
-    // A running selected-count and the pagination + batch-add controls.
-    expect(html).toContain("Add selected (1)");
-    expect(html).toContain("data-ledger-load-more");
-    expect(html).toContain("data-ledger-add-selected");
-  });
-
-  test('"Add selected" is disabled until at least one index is picked', () => {
-    const html = ledgerAccountPicker(
-      [{ account: candidateAccount(0), balance: null, deployed: null, duplicate: false }],
-      [],
-    );
-    expect(html).toContain("data-ledger-add-selected");
-    expect(/data-ledger-add-selected[^>]*disabled/.test(html)).toBe(true);
-  });
-
-  test("an undeployed candidate reflects needs-funding, distinct from an error", () => {
-    const html = ledgerAccountPicker([
-      { account: candidateAccount(1), balance: null, deployed: false, duplicate: false },
-    ]);
-    expect(html).toContain("needs funding");
-    expect(html).toContain("balance unavailable");
-  });
-
-  test("a checking candidate and a duplicate render distinctly", () => {
-    const checking = ledgerAccountPicker([
-      { account: candidateAccount(2), balance: null, deployed: null, duplicate: false },
-    ]);
-    expect(checking).toContain("Checking…");
-
-    const duplicate = ledgerAccountPicker([
-      { account: candidateAccount(3), balance: "0 STRK", deployed: true, duplicate: true },
-    ]);
-    expect(duplicate).toContain("Already in this wallet");
-    // A duplicate row is non-selectable — it carries no toggle control.
-    expect(duplicate).not.toContain("data-ledger-toggle");
-  });
-
-  test("an empty candidate list renders the empty state", () => {
-    expect(ledgerAccountPicker([])).toContain("No accounts read");
-  });
 });
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -318,6 +223,35 @@ describe("Ledger onboard controller", () => {
     }
   });
 
+  test("multiple granted devices require an explicit choice before enumeration", async () => {
+    let openedId: string | undefined;
+    const h = onboardHarness({
+      connector: {
+        listConnected: () =>
+          Promise.resolve([
+            { id: "first", label: "Ledger Nano X 1" },
+            { id: "second", label: "Ledger Nano X 2" },
+          ]),
+        openConnected: (deviceId) => {
+          openedId = deviceId;
+          return Promise.resolve({ client: enumerateClient(2), close: () => Promise.resolve() });
+        },
+        request: () => Promise.reject(new Error("no picker expected")),
+      },
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    controller.connect();
+    await tick();
+
+    expect(h.views.at(-1)?.kind).toBe("devices");
+    expect(openedId).toBeUndefined();
+
+    controller.chooseDevice("second");
+    await tick();
+    expect(openedId).toBe("second");
+    expect(h.views.at(-1)?.kind).toBe("picker");
+  });
+
   test("loadMore appends the next page of indexes (5-9) without refetching", async () => {
     let reconnects = 0;
     const connector: LedgerConnector = {
@@ -399,7 +333,7 @@ describe("Ledger onboard controller", () => {
     expect(final?.kind === "picker" && final.selected).toEqual([]);
   });
 
-  test("a create failure surfaces the wallet error message", async () => {
+  test("a create failure stays on the picker with the wallet error message", async () => {
     const h = onboardHarness({ create: () => Promise.reject(new Error("Account already exists")) });
     const controller = createLedgerOnboardController(h.deps);
     controller.connect();
@@ -408,7 +342,64 @@ describe("Ledger onboard controller", () => {
     controller.addSelected();
     await tick();
     const final = h.views.at(-1);
-    expect(final?.kind === "error" && final.message).toBe("Account already exists");
+    expect(final?.kind).toBe("picker");
+    expect(final?.kind === "picker" && final.message).toBe("Account already exists");
+    expect(h.refreshed()).toBe(1);
+  });
+
+  test("a partial batch marks completed accounts and leaves only the failed remainder retryable", async () => {
+    let attempts = 0;
+    const h = onboardHarness({
+      create: (account) => {
+        attempts += 1;
+        if (attempts === 2) {
+          return Promise.reject(new Error("temporary write failure"));
+        }
+        h.created.push(account.derivation.accountIndex);
+        return Promise.resolve();
+      },
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    controller.connect();
+    await tick();
+    controller.toggle(0);
+    controller.toggle(1);
+    controller.addSelected();
+    await tick();
+
+    const final = h.views.at(-1);
+    expect(h.created).toEqual([0]);
+    expect(final?.kind).toBe("picker");
+    if (final?.kind === "picker") {
+      expect(final.message).toBe("temporary write failure");
+      expect(final.selected).toEqual([1]);
+      expect(final.candidates[0]?.duplicate).toBe(true);
+      expect(final.candidates[1]?.duplicate).toBe(false);
+    }
+
+    controller.addSelected();
+    await tick();
+    expect(h.created).toEqual([0, 1]);
+    expect(h.views.at(-1)).toBeNull();
+  });
+
+  test("cancel ignores a late enumeration result and never resurrects the overlay", async () => {
+    let resolveEntries: (entries: readonly { accountIndex: number; publicKeyX: string }[]) => void =
+      () => undefined;
+    const h = onboardHarness({
+      enumerate: () =>
+        new Promise((resolve) => {
+          resolveEntries = resolve;
+        }),
+    });
+    const controller = createLedgerOnboardController(h.deps);
+    controller.connect();
+    await tick();
+    controller.cancel();
+    resolveEntries([{ accountIndex: 0, publicKeyX: "0x1" }]);
+    await tick();
+
+    expect(h.views.at(-1)).toBeNull();
   });
 
   test("cancel dismisses the overlay and runs the onCancel hook", () => {

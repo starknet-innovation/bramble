@@ -7,6 +7,7 @@
  * hardware library; the runtime `.js` is what actually executes.
  */
 import type { LedgerDeviceClient } from "./client";
+import type { LedgerDeviceChoice } from "./sign-session";
 
 /**
  * An open WebHID transport handle. Opaque to the flow: the only method callers
@@ -16,17 +17,17 @@ import type { LedgerDeviceClient } from "./client";
 export type LedgerTransport = { close(): Promise<void> };
 
 /**
- * Shows the native WebHID device picker and opens the chosen device. MUST be
- * called from a user gesture; rejects (never resolves null) if none is chosen.
+ * Reopens an already-granted device without a prompt. Resolves null when no
+ * granted device is connected, so the caller can open the dedicated
+ * grant-window popup and retry.
  */
-export function requestTransportRaw(): Promise<LedgerTransport>;
+export function openConnectedTransportRaw(deviceId?: string): Promise<LedgerTransport | null>;
 
 /**
- * Reopens an already-granted device without a prompt. Resolves null when no
- * granted device is connected, so the caller can fall back to a gesture-gated
- * {@link requestTransportRaw}.
+ * Lists already-granted connected Ledger devices without opening one. Device
+ * ids are opaque and valid only within the current side-panel context.
  */
-export function openConnectedTransportRaw(): Promise<LedgerTransport | null>;
+export function listConnectedDevicesRaw(): Promise<readonly LedgerDeviceChoice[]>;
 
 /**
  * Wraps an open transport in the Starknet APDU client, exposed through the

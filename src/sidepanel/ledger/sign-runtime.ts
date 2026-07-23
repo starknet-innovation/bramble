@@ -64,6 +64,14 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-cancel]")
       ?.addEventListener("click", () => void controller.cancel());
+    for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-ledger-device]")) {
+      button.addEventListener("click", () => {
+        const deviceId = button.dataset["ledgerDevice"];
+        if (deviceId) {
+          controller.chooseDevice(deviceId);
+        }
+      });
+    }
   };
 
   const renderOverlay = (view: LedgerSignView | null): void => {

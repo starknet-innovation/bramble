@@ -38,7 +38,7 @@ const enumerateClient: LedgerDeviceClient = {
     const index = Number(path.split("/").at(-1)?.replace(/'.*$/, "") ?? "0");
     return Promise.resolve({
       errorMessage: "No errors",
-      publicKey: new Uint8Array([4, ...new Array(31).fill(0), index + 1, ...new Array(32).fill(0)]),
+      publicKey: new Uint8Array([...new Array(31).fill(0), index + 1, ...new Array(32).fill(0)]),
       returnCode: 0x9000,
     });
   },
@@ -198,6 +198,36 @@ describe("Ledger onboarding runtime (DOM)", () => {
     // already-granted device silently rather than prompting again.
     expect(requests).toBe(1);
     expect(reconnects).toBe(1);
+  });
+
+  test("multiple connected devices render a chooser and open the selected device", async () => {
+    let openedId: string | undefined;
+    const h = mountRuntime({
+      connector: {
+        listConnected: () =>
+          Promise.resolve([
+            { id: "first", label: "Ledger Nano X 1" },
+            { id: "second", label: "Ledger Nano X 2" },
+          ]),
+        openConnected: (deviceId) => {
+          openedId = deviceId;
+          return Promise.resolve({ client: enumerateClient, close: () => Promise.resolve() });
+        },
+        request: () => Promise.reject(new Error("no picker expected")),
+      },
+    });
+    click(h.app, "[data-connect-ledger]");
+    click(h.mount, "[data-ledger-onboard-connect]");
+    await tick();
+
+    expect(h.mount.textContent).toContain("Choose your Ledger");
+    expect(h.mount.querySelector('[data-ledger-device="second"]')).not.toBeNull();
+    expect(openedId).toBeUndefined();
+
+    click(h.mount, '[data-ledger-device="second"]');
+    await tick();
+    expect(openedId).toBe("second");
+    expect(toggleCount(h.mount)).toBe(5);
   });
 
   test("Add selected adds exactly the checked accounts, in order", async () => {

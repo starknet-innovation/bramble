@@ -5,9 +5,10 @@
  * signature as a pending request and waits for the panel — the one context that
  * owns the transport — to blind-sign it on the device and hand back the raw
  * `(r, s)`. This controller is that consumer: given one pending request it
- * resolves a live device client (silent reconnect, else a gesture-gated connect),
- * drives `signHash(path, hash)` on the device, and reports the outcome to the
- * background queue.
+ * resolves a live device client (explicit choice when several granted devices
+ * are connected, otherwise silent reconnect or a gesture-gated connect), drives
+ * `signHash(path, hash)` on the device, and reports the outcome to the background
+ * queue.
  *
  * Fail-closed and abortive by construction: nothing is submitted until the panel
  * reports a signature (`settle`), and it only ever reports the raw device
@@ -50,15 +51,28 @@ export type LedgerDeviceSession = {
 };
 
 /**
- * A source of a live device session. `openConnected` attempts a SILENT reconnect
- * of an already-granted device (resolving `null` when none is connected, so the
- * caller falls back to a gesture); `request` runs the gesture-gated native
- * picker and MUST be called from a user click. Both may reject with a
+ * Public, non-secret descriptor for one connected, origin-granted Ledger.
+ * `id` is an opaque side-panel-local handle; `label` is only for choosing among
+ * simultaneously connected devices and carries no account or key material.
+ */
+export type LedgerDeviceChoice = {
+  readonly id: string;
+  readonly label: string;
+};
+
+/**
+ * A source of a live device session. `listConnected`, when provided, supplies
+ * non-secret choices before any device opens. `openConnected` attempts a SILENT
+ * reconnect of an already-granted device (optionally the exact opaque id the
+ * user selected), resolving `null` when none is connected so the caller falls
+ * back to a gesture. `request` runs the gesture-gated grant flow and MUST be
+ * called from a user click. All methods may reject with a
  * {@link LedgerRejection}. Every resolved session OWNS a transport the caller
  * must close (see {@link LedgerDeviceSession}).
  */
 export type LedgerConnector = {
-  readonly openConnected: () => Promise<LedgerDeviceSession | null>;
+  readonly listConnected?: () => Promise<readonly LedgerDeviceChoice[]>;
+  readonly openConnected: (deviceId?: string) => Promise<LedgerDeviceSession | null>;
   readonly request: () => Promise<LedgerDeviceSession>;
 };
 
@@ -73,13 +87,15 @@ export const closeLedgerSessionQuietly = async (session: LedgerDeviceSession): P
 };
 
 /**
- * The device-prompt phase the panel renders for the active request.
- * `connect` needs a user gesture (no granted device); `confirming` is the
- * on-device wait; `error` carries a catalog code and its user-facing copy.
+ * The device-prompt phase the panel renders for the active request. `connect`
+ * needs a user gesture (no granted device); `devices` asks the user to select
+ * one of several granted devices; `confirming` is the on-device wait; `error`
+ * carries a catalog code and its user-facing copy.
  */
 export type LedgerSignPhase =
   | { readonly kind: "connect" }
   | { readonly kind: "confirming" }
+  | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "error"; readonly code: LedgerRejectionCode; readonly message: string };
 
 /**
@@ -110,6 +126,7 @@ export type LedgerSignControllerDeps = {
 export type LedgerSignController = {
   readonly activeId: () => string | null;
   readonly cancel: () => Promise<void>;
+  readonly chooseDevice: (deviceId: string) => void;
   readonly connect: () => void;
   readonly present: (request: LedgerSignRequestSummary) => void;
   readonly retry: () => void;
@@ -124,15 +141,18 @@ const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
 /**
  * Creates a controller for the side-panel Ledger signing runtime. Single-flight
  * by design: it fulfils one request at a time (WebHID is a serial pipe) and
- * ignores a second `present` while one is active. `present` starts a silent
- * reconnect; `connect` runs the gesture-gated picker for the connect state;
- * `retry` re-drives the device after a recoverable error (unlock, enable blind
- * signing) against the SAME parked request; `cancel` reports a clean rejection.
+ * ignores a second `present` while one is active. `present` discovers granted
+ * devices, asks for an explicit choice when necessary, and otherwise starts a
+ * silent reconnect. `connect` runs the gesture-gated grant flow for the connect
+ * state; `retry` repeats discovery after a recoverable error (unlock, enable
+ * blind signing) against the SAME parked request; `cancel` reports a clean
+ * rejection.
  */
 export const createLedgerSignController = (
   deps: LedgerSignControllerDeps,
 ): LedgerSignController => {
   let current: LedgerSignRequestSummary | null = null;
+  let devices: readonly LedgerDeviceChoice[] = [];
   let busy = false;
 
   const show = (phase: LedgerSignPhase): void => {
@@ -193,6 +213,31 @@ export const createLedgerSignController = (
     }
   };
 
+  const discover = async (): Promise<void> => {
+    const list = deps.connector.listConnected;
+    if (!list) {
+      await drive(() => deps.connector.openConnected());
+      return;
+    }
+    if (!current || busy) {
+      return;
+    }
+    busy = true;
+    try {
+      devices = await list();
+      if (devices.length > 1) {
+        show({ devices, kind: "devices" });
+        return;
+      }
+    } catch (error) {
+      show(errorPhase(asLedgerRejection(error).code));
+      return;
+    } finally {
+      busy = false;
+    }
+    await drive(() => deps.connector.openConnected(devices[0]?.id));
+  };
+
   return {
     activeId: () => current?.id ?? null,
     async cancel() {
@@ -201,8 +246,15 @@ export const createLedgerSignController = (
         return;
       }
       current = null;
+      devices = [];
       deps.render(null);
       await deps.report({ error: "rejected-on-device", id: request.id });
+    },
+    chooseDevice(deviceId) {
+      if (!devices.some((device) => device.id === deviceId)) {
+        return;
+      }
+      void drive(() => deps.connector.openConnected(deviceId));
     },
     connect() {
       void drive(deps.connector.request);
@@ -212,10 +264,10 @@ export const createLedgerSignController = (
         return;
       }
       current = request;
-      void drive(deps.connector.openConnected);
+      void discover();
     },
     retry() {
-      void drive(deps.connector.openConnected);
+      void discover();
     },
   };
 };

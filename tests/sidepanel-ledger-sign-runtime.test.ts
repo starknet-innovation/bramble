@@ -68,9 +68,9 @@ const okClient = (): LedgerDeviceClient =>
   fakeClient(() =>
     Promise.resolve({
       errorMessage: "No errors",
-      r: new Uint8Array([1]),
+      r: new Uint8Array([...Array(31).fill(0), 1]),
       returnCode: 0x9000,
-      s: new Uint8Array([2]),
+      s: new Uint8Array([...Array(31).fill(0), 2]),
     }),
   );
 
@@ -78,7 +78,8 @@ const okClient = (): LedgerDeviceClient =>
 // resolved client in an OWNED session whose `close` bumps a counter, so the
 // runtime tests confirm the transport is released without a real WebHID handle.
 type ClientConnector = {
-  readonly openConnected: () => Promise<LedgerDeviceClient | null>;
+  readonly listConnected?: LedgerConnector["listConnected"];
+  readonly openConnected: (deviceId?: string) => Promise<LedgerDeviceClient | null>;
   readonly request: () => Promise<LedgerDeviceClient>;
 };
 
@@ -107,7 +108,9 @@ const mountRuntime = (
     },
   });
   const connector: LedgerConnector = {
-    openConnected: () => source.openConnected().then((client) => (client ? wrap(client) : null)),
+    ...(source.listConnected ? { listConnected: source.listConnected } : {}),
+    openConnected: (deviceId) =>
+      source.openConnected(deviceId).then((client) => (client ? wrap(client) : null)),
     request: () => source.request().then(wrap),
   };
   const runtime = createLedgerSignRuntime({
@@ -197,6 +200,36 @@ describe("Ledger sign runtime (DOM)", () => {
     expect(h.mount.hidden).toBe(true);
   });
 
+  test("multiple connected devices render a chooser and the selected id is opened", async () => {
+    let openedId: string | undefined;
+    const h = mountRuntime(
+      {
+        listConnected: () =>
+          Promise.resolve([
+            { id: "first", label: "Ledger Nano X 1" },
+            { id: "second", label: "Ledger Nano X 2" },
+          ]),
+        openConnected: (deviceId) => {
+          openedId = deviceId;
+          return Promise.resolve(okClient());
+        },
+        request: () => Promise.reject(new Error("no picker expected")),
+      },
+      [PENDING],
+    );
+    await h.poll();
+    await tick();
+
+    expect(h.mount.textContent).toContain("Choose your Ledger");
+    expect(h.mount.querySelector('[data-ledger-device="second"]')).not.toBeNull();
+    expect(openedId).toBeUndefined();
+
+    click(h.mount, '[data-ledger-device="second"]');
+    await tick();
+    expect(openedId).toBe("second");
+    expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
+  });
+
   test("the cancel button reports a clean rejection", async () => {
     const h = mountRuntime(
       { openConnected: () => Promise.resolve(null), request: () => Promise.reject(new Error("x")) },
@@ -217,9 +250,9 @@ describe("Ledger sign runtime (DOM)", () => {
       () =>
         Promise.resolve({
           errorMessage: "No errors",
-          r: new Uint8Array([1]),
+          r: new Uint8Array([...Array(31).fill(0), 1]),
           returnCode: 0x9000,
-          s: new Uint8Array([2]),
+          s: new Uint8Array([...Array(31).fill(0), 2]),
         }),
       {
         // A locked device surfaces on the pre-check's version read (signHash would

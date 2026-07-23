@@ -81,13 +81,15 @@ const SIGN_TIMEOUT_REASON = "sign-timeout";
  * `currentGeneration` reads the live unlock-session generation (see
  * {@link UnlockSession.generation}); the queue captures it when a request is
  * parked and re-checks it at settle so a device signature that returns after a
- * lock/expiry is rejected rather than broadcast. It defaults to a constant, so
- * a queue wired without a session simply never observes a generation change.
+ * lock/expiry is rejected rather than broadcast. It returns `null` when the
+ * session is no longer unlocked, which also forces lazy TTL expiry before a
+ * request is parked or settled. It defaults to a constant, so a queue wired
+ * without a session simply never observes a generation change.
  */
 export const createLedgerSignQueue = (
   onRequest: () => void = () => undefined,
   timeout?: LedgerSignQueueTimeout,
-  currentGeneration: () => number = () => 0,
+  currentGeneration: () => number | null = () => 0,
 ): LedgerSignQueue => {
   const waiters = new Map<string, Waiter>();
   let counter = 0;
@@ -124,6 +126,9 @@ export const createLedgerSignQueue = (
       counter += 1;
       const id = `ledger-sign-${counter}`;
       const generation = currentGeneration();
+      if (generation === null) {
+        return Promise.reject(new WalletError("wallet locked"));
+      }
       return new Promise<DeviceSignature>((resolve, reject) => {
         const cancelTimeout = timeout
           ? timeout.schedule(() => {
@@ -145,7 +150,8 @@ export const createLedgerSignQueue = (
       // signature is no longer authorized under the current session — reject the
       // parked promise instead of resolving it, so nothing is verified or
       // broadcast across the lock.
-      if (currentGeneration() !== waiter.generation) {
+      const generation = currentGeneration();
+      if (generation === null || generation !== waiter.generation) {
         waiter.reject(new WalletError("wallet locked"));
         return false;
       }

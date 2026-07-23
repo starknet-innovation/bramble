@@ -61,11 +61,11 @@ export type LedgerAppVersion = {
 };
 
 /**
- * Pinned MINIMUM Starknet app version mc-wallet has verified signs correctly.
- * "Current" means at or above this floor, never "exactly the latest" (an
- * extension cannot see Ledger's release catalog). Bump only after verifying a
- * newer app. NOTE: the exact floor still needs hardware verification and the
- * owner's sign-off (v4 open decision) — this is a conservative placeholder.
+ * Pinned MINIMUM Starknet app compatibility line accepted by mc-wallet.
+ * "Current" means at or above this 2.x floor, never "exactly the latest" (an
+ * extension cannot see Ledger's release catalog). Legacy 1.x apps are outside
+ * the supported product boundary. This is a compatibility gate, not a signing
+ * trust decision: the background still verifies every returned signature.
  */
 export const MC_LEDGER_STARKNET_APP_MIN: LedgerAppVersion = { major: 2, minor: 0, patch: 0 };
 
@@ -77,6 +77,8 @@ const STATUS_USER_REJECTED = 0x6e04;
 // The catch-all the library reports for every thrown transport error and for any
 // status word its `sendApdu` does not explicitly accept (see the module header).
 const STATUS_EXECUTION_ERROR = 0x6f00;
+const PUBLIC_KEY_BYTES = 64;
+const FELT_BYTES = 32;
 
 const toHex = (bytes: Uint8Array): string => {
   let hex = "";
@@ -158,6 +160,16 @@ const requireOk = (response: { readonly returnCode: number }): void => {
   }
 };
 
+const requireDeviceBytes = (value: unknown, length: number): Uint8Array => {
+  if (!(value instanceof Uint8Array) || value.length !== length) {
+    throw new LedgerRejection("unexpected-device-error");
+  }
+  return value;
+};
+
+const isVersionPart = (value: unknown): value is number =>
+  Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 0xff;
+
 const meetsMinimum = (version: LedgerAppVersion, min: LedgerAppVersion): boolean =>
   version.major !== min.major
     ? version.major > min.major
@@ -171,6 +183,13 @@ const meetsMinimum = (version: LedgerAppVersion, min: LedgerAppVersion): boolean
 export const ledgerAppVersion = async (client: LedgerDeviceClient): Promise<LedgerAppVersion> => {
   const response = await runDevice(() => client.getAppVersion());
   requireOk(response);
+  if (
+    !isVersionPart(response.major) ||
+    !isVersionPart(response.minor) ||
+    !isVersionPart(response.patch)
+  ) {
+    throw new LedgerRejection("unexpected-device-error");
+  }
   return { major: response.major, minor: response.minor, patch: response.patch };
 };
 
@@ -198,7 +217,7 @@ export const ledgerPublicKeyX = async (
 ): Promise<string> => {
   const response = await runDevice(() => client.getPubKey(path, false));
   requireOk(response);
-  return publicKeyXOf(response.publicKey);
+  return publicKeyXOf(requireDeviceBytes(response.publicKey, PUBLIC_KEY_BYTES));
 };
 
 /**
@@ -215,5 +234,8 @@ export const ledgerSignHashOnDevice = async (
   if (response.returnCode !== STATUS_OK) {
     throw classifySignStatus(response.returnCode);
   }
-  return { r: feltFromBytes(response.r), s: feltFromBytes(response.s) };
+  return {
+    r: feltFromBytes(requireDeviceBytes(response.r, FELT_BYTES)),
+    s: feltFromBytes(requireDeviceBytes(response.s, FELT_BYTES)),
+  };
 };

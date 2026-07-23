@@ -447,10 +447,8 @@ export type MessageHandlerOptions = {
   readonly swap?: SwapService;
 };
 
-// A parked Ledger sign is abandoned if no side panel fulfils it within this
-// window: generous enough never to cut off an active on-device confirmation,
-// but bounded so a sign whose panel never opens cannot hang the dapp promise
-// forever. Injected so the queue module itself holds no `setTimeout`.
+// Abandon a parked Ledger sign after a generous injected window, so a missing
+// panel cannot hang the dapp promise and the queue itself needs no `setTimeout`.
 const LEDGER_SIGN_TIMEOUT: LedgerSignQueueTimeout = {
   ms: 300_000,
   schedule: (onElapsed, ms) => {
@@ -477,7 +475,9 @@ export const createMessageHandler = (
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue:
       options.ledgerSignQueue ??
-      createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, session.generation),
+      createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, () =>
+        session.isUnlocked() ? session.generation() : null,
+      ),
     loadMultisigClass: options.loadMultisigClass,
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     originHistory: options.originHistory ?? memoryOriginHistory(),

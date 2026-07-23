@@ -62,6 +62,19 @@ describe("ledgerSignScreen", () => {
     expect(html).toContain("data-ledger-cancel");
   });
 
+  test("device phase renders escaped device choices", () => {
+    const html = render({
+      devices: [
+        { id: "first", label: "Ledger Nano X 1" },
+        { id: "second", label: "Ledger <2>" },
+      ],
+      kind: "devices",
+    });
+    expect(html).toContain("Choose your Ledger");
+    expect(html).toContain('data-ledger-device="second"');
+    expect(html).toContain("Ledger &lt;2&gt;");
+  });
+
   test("a path with no recoverable index omits the index suffix", () => {
     const html = ledgerSignScreen(
       { phase: { kind: "confirming" }, request: { ...request, path: "m/not-a-path" } },

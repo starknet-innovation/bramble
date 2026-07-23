@@ -59,9 +59,9 @@ const fakeClient = (
 const okSign = (): ReturnType<LedgerDeviceClient["signHash"]> =>
   Promise.resolve({
     errorMessage: "No errors",
-    r: new Uint8Array([1]),
+    r: new Uint8Array([...Array(31).fill(0), 1]),
     returnCode: 0x9000,
-    s: new Uint8Array([2]),
+    s: new Uint8Array([...Array(31).fill(0), 2]),
   });
 
 // A connector expressed in terms of the device CLIENT (no transport). The
@@ -69,7 +69,8 @@ const okSign = (): ReturnType<LedgerDeviceClient["signHash"]> =>
 // counter, so tests assert the transport is released on every outcome without a
 // real WebHID handle.
 type ClientConnector = {
-  readonly openConnected: () => Promise<LedgerDeviceClient | null>;
+  readonly listConnected?: LedgerConnector["listConnected"];
+  readonly openConnected: (deviceId?: string) => Promise<LedgerDeviceClient | null>;
   readonly request: () => Promise<LedgerDeviceClient>;
 };
 
@@ -92,7 +93,9 @@ const harness = (source: ClientConnector): Harness => {
     },
   });
   const connector: LedgerConnector = {
-    openConnected: () => source.openConnected().then((client) => (client ? wrap(client) : null)),
+    ...(source.listConnected ? { listConnected: source.listConnected } : {}),
+    openConnected: (deviceId) =>
+      source.openConnected(deviceId).then((client) => (client ? wrap(client) : null)),
     request: () => source.request().then(wrap),
   };
   return { closed: () => closed, connector, reports, views };
@@ -148,6 +151,34 @@ describe("Ledger sign controller", () => {
     controller.connect();
     await tick();
     expect(phases(h.views)).toEqual(["connect", "confirming", null]);
+    expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
+  });
+
+  test("lists multiple devices and opens only the one the user selects", async () => {
+    let openedId: string | undefined;
+    const h = harness({
+      listConnected: () =>
+        Promise.resolve([
+          { id: "first", label: "Ledger Nano X 1" },
+          { id: "second", label: "Ledger Nano X 2" },
+        ]),
+      openConnected: (deviceId) => {
+        openedId = deviceId;
+        return Promise.resolve(fakeClient(okSign));
+      },
+      request: () => Promise.reject(new Error("no picker expected")),
+    });
+    const controller = controllerFor(h);
+    controller.present(REQUEST);
+    await tick();
+
+    expect(h.views.at(-1)?.phase.kind).toBe("devices");
+    expect(openedId).toBeUndefined();
+    expect(h.reports).toEqual([]);
+
+    controller.chooseDevice("second");
+    await tick();
+    expect(openedId).toBe("second");
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
   });
 

@@ -21,7 +21,13 @@
  */
 import type { LedgerDeviceClient } from "./client";
 import { LedgerRejection } from "./errors";
-import { type LedgerTransport, newStarknetClient, openConnectedTransportRaw } from "./webhid-impl";
+import type { LedgerDeviceChoice } from "./sign-session";
+import {
+  type LedgerTransport,
+  listConnectedDevicesRaw,
+  newStarknetClient,
+  openConnectedTransportRaw,
+} from "./webhid-impl";
 
 type NavigatorWithHid = { readonly hid?: unknown };
 
@@ -48,9 +54,24 @@ const mapOpenError = (error: unknown): LedgerRejection => {
  * survives restarts, so this is the normal reconnect path — used on every
  * connect, not only the first one after a grant.
  */
-export const openConnectedTransport = async (): Promise<LedgerTransport | null> => {
+export const openConnectedTransport = async (
+  deviceId?: string,
+): Promise<LedgerTransport | null> => {
   try {
-    return await openConnectedTransportRaw();
+    return await openConnectedTransportRaw(deviceId);
+  } catch (error) {
+    throw mapOpenError(error);
+  }
+};
+
+/**
+ * Lists every already-granted connected Ledger without opening it. Opaque ids
+ * let the UI select one exact device when several are connected; no key,
+ * address, or other wallet material is included in the descriptor.
+ */
+export const listConnectedDevices = async (): Promise<readonly LedgerDeviceChoice[]> => {
+  try {
+    return await listConnectedDevicesRaw();
   } catch (error) {
     throw mapOpenError(error);
   }

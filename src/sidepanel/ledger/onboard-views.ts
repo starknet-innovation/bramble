@@ -16,6 +16,7 @@ import { escapeHtml } from "../../shared/html";
 import { icon } from "../icons";
 import { accountLabel } from "../parts";
 import type { LedgerCandidate } from "./onboard-session";
+import type { LedgerDeviceChoice } from "./sign-session";
 
 // The dismiss control rendered in every onboarding state so the full-screen
 // overlay can always be exited (chooser / connect / reading / picker / error) —
@@ -92,6 +93,31 @@ export const ledgerReadingPrompt = (): string =>
   );
 
 /**
+ * Device chooser shown only when more than one origin-granted Ledger is
+ * connected. Each button carries an opaque side-panel-local id; labels contain
+ * device model/order only, never account or key material.
+ */
+export const ledgerDevicePicker = (devices: readonly LedgerDeviceChoice[]): string =>
+  onboardHero(
+    icon("shield"),
+    `<h1>Choose your Ledger</h1>
+      <p class="lede">More than one Ledger is connected. Select the device to read.</p>`,
+    `<div class="add-account-chooser" role="group" aria-label="Connected Ledger devices">
+      ${devices
+        .map(
+          (device) =>
+            `<button class="menu-row" data-ledger-device="${escapeHtml(device.id)}" type="button">
+              <span class="menu-icon">${icon("shield")}</span>
+              <span class="menu-copy"><strong>${escapeHtml(device.label)}</strong></span>
+              <span class="menu-chevron">${icon("chevronRight")}</span>
+            </button>`,
+        )
+        .join("")}
+    </div>
+    ${ledgerOnboardCancel()}`,
+  );
+
+/**
  * A device error during onboarding, with the catalog message and a retry,
  * centred in the overlay shell.
  */
@@ -155,6 +181,7 @@ const candidateRow = (candidate: LedgerCandidate, selected: readonly number[]): 
 export const ledgerAccountPicker = (
   candidates: readonly LedgerCandidate[],
   selected: readonly number[] = [],
+  message?: string,
 ): string => {
   const list =
     candidates.length === 0
@@ -168,6 +195,7 @@ export const ledgerAccountPicker = (
       <h1>Select accounts</h1>
       <p class="lede">Pick the accounts to add. Each address is read straight from your device.</p>
     </div>
+    ${message ? `<p class="review-flag" role="alert">${escapeHtml(message)}</p>` : ""}
     ${list}
     <button class="ghost small" data-ledger-load-more type="button">${icon("plus")}Show more</button>
     <div class="onboard-actions">

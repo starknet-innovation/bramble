@@ -24,6 +24,7 @@ import {
   addAccountChooser,
   ledgerAccountPicker,
   ledgerConnectPrompt,
+  ledgerDevicePicker,
   ledgerOnboardError,
   ledgerReadingPrompt,
 } from "./onboard-views";
@@ -107,6 +108,17 @@ export const createLedgerOnboardRuntime = (
     }
   };
 
+  const bindDevices = (): void => {
+    for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-ledger-device]")) {
+      button.addEventListener("click", () => {
+        const deviceId = button.dataset["ledgerDevice"];
+        if (deviceId) {
+          controller.chooseDevice(deviceId);
+        }
+      });
+    }
+  };
+
   const bindControls = (): void => {
     mount
       .querySelector<HTMLButtonElement>("[data-ledger-onboard-connect]")
@@ -122,6 +134,7 @@ export const createLedgerOnboardRuntime = (
       ?.addEventListener("click", () => controller.addSelected());
     bindSelection();
     bindChooser();
+    bindDevices();
   };
 
   const bodyFor = (view: LedgerOnboardView): string => {
@@ -134,8 +147,11 @@ export const createLedgerOnboardRuntime = (
     if (view.kind === "reading") {
       return ledgerReadingPrompt();
     }
+    if (view.kind === "devices") {
+      return ledgerDevicePicker(view.devices);
+    }
     if (view.kind === "picker") {
-      return ledgerAccountPicker(view.candidates, view.selected);
+      return ledgerAccountPicker(view.candidates, view.selected, view.message);
     }
     return ledgerOnboardError(view.message);
   };

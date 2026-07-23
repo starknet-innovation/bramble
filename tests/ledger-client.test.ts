@@ -34,7 +34,12 @@ const fakeClient = (overrides: Partial<LedgerDeviceClient> = {}): LedgerDeviceCl
     return { ...OK, publicKey };
   },
   async signHash() {
-    return { ...OK, r: bytes([0x0a]), s: bytes([0x0b]), v: 0 };
+    return {
+      ...OK,
+      r: bytes([...Array(31).fill(0), 0x0a]),
+      s: bytes([...Array(31).fill(0), 0x0b]),
+      v: 0,
+    };
   },
   ...overrides,
 });
@@ -65,6 +70,17 @@ describe("ledgerAppVersion / assertLedgerAppReady", () => {
       code: "unexpected-device-error",
     });
   });
+
+  test("rejects malformed version bytes on an otherwise successful response", async () => {
+    const client = fakeClient({
+      async getAppVersion() {
+        return { ...OK, major: -1, minor: 1, patch: 0 };
+      },
+    });
+    await expect(ledgerAppVersion(client)).rejects.toMatchObject({
+      code: "unexpected-device-error",
+    });
+  });
 });
 
 describe("ledgerPublicKeyX", () => {
@@ -79,6 +95,19 @@ describe("ledgerPublicKeyX", () => {
     const x = await ledgerPublicKeyX(client, "m/2645'/0'/0'/0'/0'/0");
     expect(seen).toEqual([{ path: "m/2645'/0'/0'/0'/0'/0", show: false }]);
     expect(x).toBe("0x2");
+  });
+
+  test("rejects a truncated or oversized public key", async () => {
+    for (const malformed of [publicKey.slice(0, 63), bytes([...publicKey, 0])]) {
+      const client = fakeClient({
+        async getPubKey() {
+          return { ...OK, publicKey: malformed };
+        },
+      });
+      await expect(ledgerPublicKeyX(client, "m")).rejects.toMatchObject({
+        code: "unexpected-device-error",
+      });
+    }
   });
 });
 
@@ -123,6 +152,17 @@ describe("ledgerSignHashOnDevice", () => {
     const client = fakeClient({
       async signHash() {
         return { errorMessage: "Bad INS", r: bytes([]), s: bytes([]), returnCode: 0x6e01, v: 0 };
+      },
+    });
+    await expect(ledgerSignHashOnDevice(client, "m", "0x1")).rejects.toMatchObject({
+      code: "unexpected-device-error",
+    });
+  });
+
+  test("rejects malformed signature component lengths before verification", async () => {
+    const client = fakeClient({
+      async signHash() {
+        return { ...OK, r: bytes([1]), s: bytes(Array(32).fill(2)), v: 0 };
       },
     });
     await expect(ledgerSignHashOnDevice(client, "m", "0x1")).rejects.toMatchObject({

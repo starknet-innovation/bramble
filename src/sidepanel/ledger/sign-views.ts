@@ -35,6 +35,22 @@ const phaseBody = (view: LedgerSignView): string => {
     return `<p class="hint">Review the request on your Ledger, then approve it on the device.</p>
       <button class="ghost small" data-ledger-cancel type="button">Cancel</button>`;
   }
+  if (phase.kind === "devices") {
+    return `<p class="hint">More than one Ledger is connected. Choose the device for this account.</p>
+      <div class="add-account-chooser" role="group" aria-label="Connected Ledger devices">
+        ${phase.devices
+          .map(
+            (device) =>
+              `<button class="menu-row" data-ledger-device="${escapeHtml(device.id)}" type="button">
+                <span class="menu-icon">${icon("shield")}</span>
+                <span class="menu-copy"><strong>${escapeHtml(device.label)}</strong></span>
+                <span class="menu-chevron">${icon("chevronRight")}</span>
+              </button>`,
+          )
+          .join("")}
+      </div>
+      <button class="ghost small" data-ledger-cancel type="button">Cancel</button>`;
+  }
   return `<p class="review-flag">${escapeHtml(phase.message)}</p>
     <div class="row">
       <button class="secondary" data-ledger-retry type="button">${icon("refresh")}Try again</button>
@@ -45,6 +61,7 @@ const phaseBody = (view: LedgerSignView): string => {
 const phaseTitle: Readonly<Record<LedgerSignView["phase"]["kind"], string>> = {
   confirming: "Confirm on your Ledger",
   connect: "Connect your Ledger",
+  devices: "Choose your Ledger",
   error: "Ledger could not sign",
 };
 

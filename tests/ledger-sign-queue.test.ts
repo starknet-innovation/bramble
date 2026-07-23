@@ -110,6 +110,27 @@ describe("createLedgerSignQueue", () => {
     await expect(pendingSignature).resolves.toEqual({ r: "0x9", s: "0xa" });
   });
 
+  test("rejects requests and settlements after the session expires", async () => {
+    let generation: number | null = null;
+    const queue = createLedgerSignQueue(
+      () => undefined,
+      undefined,
+      () => generation,
+    );
+
+    await expect(queue.request(request)).rejects.toThrow("wallet locked");
+    expect(queue.pending()).toHaveLength(0);
+
+    generation = 1;
+    const pendingSignature = queue.request(request);
+    const id = queue.pending()[0]?.id ?? "";
+    generation = null;
+
+    expect(queue.settle(id, { r: "0x9", s: "0xa" })).toBe(false);
+    await expect(pendingSignature).rejects.toThrow("wallet locked");
+    expect(queue.pending()).toHaveLength(0);
+  });
+
   test("settling before the timeout cancels the timer", async () => {
     let cancelled = false;
     const queue = createLedgerSignQueue(() => undefined, {

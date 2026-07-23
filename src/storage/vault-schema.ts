@@ -3,7 +3,12 @@
  */
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
-import { isLedgerAccountIndex, isLedgerAccountPath } from "../starknet/ledger-path";
+import {
+  isLedgerAccountIndex,
+  isLedgerAccountPath,
+  LEDGER_EIP2645_APPLICATION,
+  ledgerAccountIndexOfPath,
+} from "../starknet/ledger-path";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
@@ -198,9 +203,9 @@ const isLedgerDerivation = (value: unknown): value is LedgerDerivation =>
   hasOnlyKnownKeys(value, ["accountIndex", "eip2645application", "kind", "path"]) &&
   value["kind"] === "ledger" &&
   isLedgerAccountIndex(value["accountIndex"]) &&
-  typeof value["eip2645application"] === "string" &&
-  value["eip2645application"].length > 0 &&
-  isLedgerAccountPath(value["path"]);
+  value["eip2645application"] === LEDGER_EIP2645_APPLICATION &&
+  isLedgerAccountPath(value["path"]) &&
+  ledgerAccountIndexOfPath(value["path"]) === value["accountIndex"];
 
 /**
  * Validates account ids used in public metadata and references.
