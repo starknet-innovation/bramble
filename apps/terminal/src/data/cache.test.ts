@@ -22,7 +22,7 @@ describe("getJson", () => {
     const second = getJson<{ readonly ok: boolean }>("https://example.test/data");
     release?.();
 
-    expect(await first).toBeInstanceOf(DOMException);
+    expect(await first).toMatchObject({ name: "AbortError" });
     await expect(second).resolves.toEqual({ ok: true });
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
