@@ -27,6 +27,7 @@ import type {
   WalletStatus as VaultStatus,
 } from "../wallet/vault-service";
 import type { PendingApproval } from "./approvals";
+import type { SwapPreparationReview } from "./swap-preparations";
 
 /**
  * Network selector option returned to extension pages.
@@ -224,6 +225,14 @@ export type SwapQuoteResponse = {
     readonly sellAmount: string;
     readonly sellAmountInUsd: number;
   };
+};
+
+/**
+ * Frozen executable swap review returned before the final one-time confirm.
+ */
+export type SwapPreparationResponse = {
+  readonly ok: true;
+  readonly swapPreparation: SwapPreparationReview;
 };
 
 /**
@@ -425,6 +434,7 @@ export type RuntimeResponse =
   | Strk20BalancesResponse
   | Strk20PrepareResponse
   | SwapQuoteResponse
+  | SwapPreparationResponse
   | SwapTokensResponse
   | TokenChartResponse
   | TransferResponse

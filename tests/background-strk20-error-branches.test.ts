@@ -282,6 +282,7 @@ describe("executeStrk20InvokeApproval", () => {
     await expect(
       executeStrk20InvokeApproval(deps, {
         actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+        calls: [{ calldata: ["0x1"], contractAddress: token, entrypoint: "shielded_execute" }],
         origin,
       }),
     ).resolves.toEqual({ error: "wallet locked" });
@@ -314,6 +315,7 @@ describe("executeStrk20InvokeApproval", () => {
 
     const result = await executeStrk20InvokeApproval(deps, {
       actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
+      calls: [{ calldata: ["0x1"], contractAddress: token, entrypoint: "shielded_execute" }],
       origin,
     });
 

@@ -16,17 +16,22 @@ import { STARKNET_NETWORKS, sameFelt } from "../starknet/networks";
 import { formatTokenAmount, parseTokenAmount } from "../starknet/rpc";
 import { verifyCalls } from "../starknet/verify";
 import type { TokenConfig } from "../storage/preferences-store";
+import { approvalPayloadMatchesContext, createApprovalContext } from "./approval-context";
 import { readTypeOnlyInput } from "./message-inputs";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
-import { readSwapExecuteInput, readSwapQuoteInput } from "./swap-inputs";
+import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
+import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "./wallet-ops";
 
 /**
  * Dependencies for the swap handler: the shared wallet-ops set plus the AVNU
  * swap service (injected fetch; unavailable default fails closed).
  */
-export type SwapOpsDeps = WalletOpsDeps & { readonly swap: SwapService };
+export type SwapOpsDeps = WalletOpsDeps & {
+  readonly swap: SwapService;
+  readonly swapPreparations: SwapPreparationStore;
+};
 
 // Entrypoints that grant spend on a token. A built swap may only carry them
 // against the sell token — any other target is rejected before verification.
@@ -114,33 +119,70 @@ const swapQuoteResponse = async (
 
 // The build-output policy gate: bounded call count and approvals only ever on
 // the sell token. Returns the rejection, or null when the build is acceptable.
+const approvalCallPolicyError = (
+  call: {
+    readonly calldata: readonly string[];
+    readonly contractAddress: string;
+    readonly entrypoint: string;
+  },
+  sellAmount: string,
+  sellTokenAddress: string,
+): string | null => {
+  if (!APPROVE_ENTRYPOINTS.has(call.entrypoint)) {
+    return null;
+  }
+  if (!sameFelt(call.contractAddress, sellTokenAddress)) {
+    return "swap build touched an unexpected token approval";
+  }
+  const allowance = BigInt(call.calldata[1] ?? "0") + (BigInt(call.calldata[2] ?? "0") << 128n);
+  if (
+    call.calldata.length !== 3 ||
+    BigInt(call.calldata[0] ?? "0") === 0n ||
+    allowance !== BigInt(sellAmount)
+  ) {
+    return "swap build requested an unexpected token allowance";
+  }
+  return null;
+};
+
 const buildPolicyError = (
-  built: readonly { readonly contractAddress: string; readonly entrypoint: string }[],
+  built: readonly {
+    readonly calldata: readonly string[];
+    readonly contractAddress: string;
+    readonly entrypoint: string;
+  }[],
+  sellAmount: string,
   sellTokenAddress: string,
 ): string | null => {
   if (built.length > 4) {
     return "swap build returned too many calls";
   }
+  let approvals = 0;
   for (const call of built) {
-    if (
-      APPROVE_ENTRYPOINTS.has(call.entrypoint) &&
-      !sameFelt(call.contractAddress, sellTokenAddress)
-    ) {
-      return "swap build touched an unexpected token approval";
+    if (APPROVE_ENTRYPOINTS.has(call.entrypoint)) {
+      approvals += 1;
+    }
+    const error = approvalCallPolicyError(call, sellAmount, sellTokenAddress);
+    if (error) {
+      return error;
     }
   }
-  return null;
+  return approvals > 1 ? "swap build returned multiple token approvals" : null;
 };
 
-const swapExecuteResponse = async (
+const swapPrepareResponse = async (
   deps: SwapOpsDeps,
-  input: NonNullable<ReturnType<typeof readSwapExecuteInput>>,
+  input: NonNullable<ReturnType<typeof readSwapPrepareInput>>,
 ): Promise<RuntimeResponse> => {
   const context = await swapPair(deps, input);
   if ("error" in context) {
     return { error: context.error };
   }
   const { account, buyToken, networkId, preferences, sellToken } = context;
+  const sellAmount = sellAmountHex(input.amount, sellToken.decimals);
+  if (!sellAmount) {
+    return { error: "enter an amount to swap" };
+  }
   try {
     const built = await deps.swap.buildCalls({
       networkId,
@@ -148,30 +190,75 @@ const swapExecuteResponse = async (
       slippage: input.slippage,
       takerAddress: account.address,
     });
-    const policyError = buildPolicyError(built, sellToken.address);
+    const policyError = buildPolicyError(built.calls, sellAmount, sellToken.address);
     if (policyError) {
       return { error: policyError };
     }
-    const calls = built.map((call) => ({
+    const calls = built.calls.map((call) => ({
       calldata: [...call.calldata],
       contractAddress: call.contractAddress,
       entrypoint: call.entrypoint,
     }));
-    verifyCalls(calls, verificationContext(account, preferences));
-    const result = await deps.runtimeRpc.submitInvokeTransaction({
-      account,
+    const report = verifyCalls(calls, verificationContext(account, preferences));
+    const unsigned = {
+      amount: input.amount,
+      buyAmount: input.buyAmount,
+      buySymbol: buyToken.symbol,
       calls,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
+      flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+      sellSymbol: sellToken.symbol,
+      summaries: report.calls.map((call) => call.summary),
+    };
+    const approvalContext = await createApprovalContext(account, swapPreparationPayload(unsigned));
+    const swapPreparation = deps.swapPreparations.put({
+      ...unsigned,
+      context: approvalContext,
+      id: approvalContext.payloadDigest,
+    });
+    return { ok: true, swapPreparation };
+  } catch (error) {
+    return { error: errorText(error, "swap preparation failed") };
+  }
+};
+
+const swapExecuteResponse = async (
+  deps: SwapOpsDeps,
+  input: NonNullable<ReturnType<typeof readSwapExecuteInput>>,
+): Promise<RuntimeResponse> => {
+  const preparation = deps.swapPreparations.claim(input.preparationId);
+  if (!preparation) {
+    return { error: "swap preparation not found" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const preferences = await deps.preferencesStore.read();
+  if (
+    context.account.id !== preparation.context.accountId ||
+    context.networkId !== preparation.context.networkId ||
+    preferences.activeNetworkId !== preparation.context.networkId ||
+    STARKNET_NETWORKS[context.networkId].chainId !== preparation.context.chainId ||
+    !(await approvalPayloadMatchesContext(preparation.context, swapPreparationPayload(preparation)))
+  ) {
+    return { error: "swap preparation changed" };
+  }
+  try {
+    verifyCalls(preparation.calls, verificationContext(context.account, preferences));
+    const result = await deps.runtimeRpc.submitInvokeTransaction({
+      account: context.account,
+      calls: preparation.calls,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
       signHash: signerForContext(deps, context),
     });
     await deps.activity.record({
-      accountId: account.id,
-      amount: input.amount,
+      accountId: context.account.id,
+      amount: preparation.amount,
       hash: result.transactionHash,
       kind: "invoke",
-      networkId,
-      summary: `Swap ${input.amount} ${sellToken.symbol} for ~${input.buyAmount} ${buyToken.symbol} via AVNU`,
-      token: sellToken.symbol,
+      networkId: context.networkId,
+      summary: `Swap ${preparation.amount} ${preparation.sellSymbol} for ~${preparation.buyAmount} ${preparation.buySymbol} via AVNU`,
+      token: preparation.sellSymbol,
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
@@ -199,6 +286,10 @@ export const handleSwapOps = async (
   if (messageType === "wallet.swapExecute") {
     const input = readSwapExecuteInput(message);
     return input ? swapExecuteResponse(deps, input) : { error: "invalid swap request" };
+  }
+  if (messageType === "wallet.swapPrepare") {
+    const input = readSwapPrepareInput(message);
+    return input ? swapPrepareResponse(deps, input) : { error: "invalid swap preparation request" };
   }
   return null;
 };

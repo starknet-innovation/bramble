@@ -164,6 +164,13 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
       buyTokenId: "SN_MAIN:STRK:0x2",
       quoteId: "dae4e180-e2cb-49f4-bd91-6f3de3a0c3ca",
       sellTokenId: "SN_MAIN:ETH:0x1",
+      type: "wallet.swapPrepare",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      preparationId: `sha256:${"a".repeat(64)}`,
       type: "wallet.swapExecute",
     },
     sender: extensionSender,

@@ -7,7 +7,7 @@
  * discovery source; a dedicated indexer can replace {@link scanExternalAllowances}
  * without touching callers.
  */
-import { type Call, CallData } from "starknet";
+import { type Call, CallData, type RpcProvider } from "starknet";
 import {
   APPROVAL_EVENT_KEY,
   decodeApprovalEvent,
@@ -202,29 +202,31 @@ export const collectExternalAllowances = async (
  * no tokens are tracked; a caller treats a thrown transport error as
  * "discovery unavailable" and falls back to the locally tracked allowances.
  */
-export const scanExternalAllowances = async ({
-  owner,
-  rpcUrls,
-  tokens,
-}: ExternalAllowanceScan): Promise<readonly ExternalAllowance[]> => {
+export const scanExternalAllowances = async (
+  { owner, rpcUrls, tokens }: ExternalAllowanceScan,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<readonly ExternalAllowance[]> => {
   if (tokens.length === 0) {
     return [];
   }
-  return withRpcFallback(rpcUrls, (provider) =>
-    collectExternalAllowances(
-      {
-        callContract: (call) => provider.callContract(call, "latest"),
-        getEvents: (filter) =>
-          provider.getEvents({
-            address: filter.address,
-            chunk_size: filter.chunk_size,
-            keys: filter.keys.map((group) => [...group]),
-            ...(filter.continuation_token === undefined
-              ? {}
-              : { continuation_token: filter.continuation_token }),
-          }),
-      },
-      { owner, tokens },
-    ),
+  return withRpcFallback(
+    rpcUrls,
+    (provider) =>
+      collectExternalAllowances(
+        {
+          callContract: (call) => provider.callContract(call, "latest"),
+          getEvents: (filter) =>
+            provider.getEvents({
+              address: filter.address,
+              chunk_size: filter.chunk_size,
+              keys: filter.keys.map((group) => [...group]),
+              ...(filter.continuation_token === undefined
+                ? {}
+                : { continuation_token: filter.continuation_token }),
+            }),
+        },
+        { owner, tokens },
+      ),
+    makeProvider,
   );
 };

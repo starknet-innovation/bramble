@@ -9,7 +9,7 @@ import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import type { SwapCall, SwapService } from "../src/starknet/avnu";
-import { DEFAULT_TOKENS } from "../src/starknet/networks";
+import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "../src/starknet/networks";
 import { createActivityLog } from "../src/storage/activity-store";
 
 const mainnetToken = (symbol: string): string =>
@@ -129,7 +129,10 @@ const makeHarness = (options?: {
       if (options?.buildError) {
         throw new Error(options.buildError);
       }
-      return options?.build ?? defaultBuild;
+      return {
+        calls: options?.build ?? defaultBuild,
+        chainId: STARKNET_NETWORKS.SN_MAIN.chainId,
+      };
     },
     async getQuote(input) {
       quoteRequests.push(input);
@@ -161,6 +164,23 @@ const makeHarness = (options?: {
   });
   return { activity, buildRequests, handler, quoteRequests, submitted, swap };
 };
+
+const prepareSwap = (
+  handler: ReturnType<typeof createMessageHandler>,
+  overrides: Readonly<Record<string, unknown>> = {},
+) =>
+  handler(
+    {
+      amount: "0.01",
+      buyAmount: "12.5",
+      buyTokenId,
+      quoteId: QUOTE_ID,
+      sellTokenId,
+      type: "wallet.swapPrepare",
+      ...overrides,
+    },
+    extensionSender,
+  );
 
 describe("swap operations", () => {
   test("swapTokens returns the verified catalog for the active network", async () => {
@@ -232,19 +252,16 @@ describe("swap operations", () => {
     ).toEqual({ error: "no swap route available for this pair" });
   });
 
-  test("execute builds, submits, and records the swap in activity", async () => {
+  test("prepares exact calls, then submits the one-time frozen route and records activity", async () => {
     const { activity, buildRequests, handler, submitted } = makeHarness();
-    const response = await handler(
-      {
-        amount: "0.01",
-        buyAmount: "12.5",
-        buyTokenId,
-        quoteId: QUOTE_ID,
-        sellTokenId,
-        type: "wallet.swapExecute",
-      },
-      extensionSender,
-    );
+    const prepared = await prepareSwap(handler);
+    const preparationId = "swapPreparation" in prepared ? prepared.swapPreparation.id : "";
+    expect(prepared).toMatchObject({ ok: true });
+    expect(preparationId).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(
+      "swapPreparation" in prepared ? prepared.swapPreparation.summaries.join(" ") : "",
+    ).toContain("multi_route_swap");
+    const response = await handler({ preparationId, type: "wallet.swapExecute" }, extensionSender);
     expect(response).toEqual({ ok: true, transactionHash: "0x5aa9" });
     expect(buildRequests[0]).toMatchObject({
       networkId: "SN_MAIN",
@@ -262,6 +279,10 @@ describe("swap operations", () => {
       summary: "Swap 0.01 ETH for ~12.5 STRK via AVNU",
       token: "ETH",
     });
+    expect(await handler({ preparationId, type: "wallet.swapExecute" }, extensionSender)).toEqual({
+      error: "swap preparation not found",
+    });
+    expect(submitted).toHaveLength(1);
   });
 
   test("an approve on any token other than the sell token is rejected unsigned", async () => {
@@ -273,34 +294,31 @@ describe("swap operations", () => {
       },
     ];
     const { handler, submitted } = makeHarness({ build: rogue });
-    const response = await handler(
-      {
-        amount: "0.01",
-        buyAmount: "12.5",
-        buyTokenId,
-        quoteId: QUOTE_ID,
-        sellTokenId,
-        type: "wallet.swapExecute",
-      },
-      extensionSender,
-    );
+    const response = await prepareSwap(handler);
     expect(response).toEqual({ error: "swap build touched an unexpected token approval" });
+    expect(submitted).toHaveLength(0);
+  });
+
+  test("an approval larger than the quoted sell amount is rejected unsigned", async () => {
+    const inflated: readonly SwapCall[] = [
+      {
+        calldata: ["0x1", "0xffffffffffffffffffffffff", "0x0"],
+        contractAddress: ETH_TOKEN_ADDRESS,
+        entrypoint: "approve",
+      },
+      defaultBuild[1] as SwapCall,
+    ];
+    const { handler, submitted } = makeHarness({ build: inflated });
+
+    await expect(prepareSwap(handler)).resolves.toEqual({
+      error: "swap build requested an unexpected token allowance",
+    });
     expect(submitted).toHaveLength(0);
   });
 
   test("build failures surface their message and never reach signing", async () => {
     const { handler, submitted } = makeHarness({ buildError: "swap build failed" });
-    const response = await handler(
-      {
-        amount: "0.01",
-        buyAmount: "12.5",
-        buyTokenId,
-        quoteId: QUOTE_ID,
-        sellTokenId,
-        type: "wallet.swapExecute",
-      },
-      extensionSender,
-    );
+    const response = await prepareSwap(handler);
     expect(response).toEqual({ error: "swap build failed" });
     expect(submitted).toHaveLength(0);
   });
@@ -321,11 +339,11 @@ describe("swap operations", () => {
           buyTokenId,
           quoteId: "../evil",
           sellTokenId,
-          type: "wallet.swapExecute",
+          type: "wallet.swapPrepare",
         },
         extensionSender,
       ),
-    ).toEqual({ error: "invalid swap request" });
+    ).toEqual({ error: "invalid swap preparation request" });
     expect(
       await handler(
         {
@@ -335,11 +353,11 @@ describe("swap operations", () => {
           quoteId: QUOTE_ID,
           sellTokenId,
           slippage: 0.5,
-          type: "wallet.swapExecute",
+          type: "wallet.swapPrepare",
         },
         extensionSender,
       ),
-    ).toEqual({ error: "invalid swap request" });
+    ).toEqual({ error: "invalid swap preparation request" });
     expect(quoteRequests).toHaveLength(0);
   });
 });

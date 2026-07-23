@@ -7,7 +7,7 @@ import type { StarkSignature } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
 import type { AccountRef } from "../storage/vault-schema";
-import { isStarkFieldElement } from "./networks";
+import { isStarkFieldElement, sameFelt } from "./networks";
 
 /**
  * Function that signs a Stark transaction hash through the vault service.
@@ -101,4 +101,47 @@ export const withRpcFallback = async <T>(
     }
   }
   throw lastError;
+};
+
+/**
+ * Selects a chain-matching endpoint with read-only probes, then runs a
+ * state-changing operation exactly once. After execution begins no transport
+ * failure is retried: the node may already have accepted the transaction, so
+ * replaying through a fallback could submit a second write.
+ */
+export const withRpcWrite = async <T>(
+  rpcUrls: readonly string[],
+  expectedChainId: string,
+  run: (provider: RpcProvider) => Promise<T>,
+  makeProvider: (nodeUrl: string) => RpcProvider = (nodeUrl) => new RpcProvider({ nodeUrl }),
+): Promise<T> => {
+  let selected: RpcProvider | null = null;
+  let lastError: unknown = new WalletError("No RPC endpoints configured");
+  for (const nodeUrl of rpcUrls) {
+    try {
+      const provider = makeProvider(nodeUrl);
+      const chainId = await provider.getChainId();
+      if (!sameFelt(chainId, expectedChainId)) {
+        lastError = new WalletError("RPC endpoint returned the wrong Starknet chain");
+        continue;
+      }
+      selected = provider;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (!selected) {
+    throw lastError;
+  }
+  try {
+    return await run(selected);
+  } catch (error) {
+    if (isTransportRpcError(error)) {
+      throw new WalletError(
+        "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+      );
+    }
+    throw error;
+  }
 };

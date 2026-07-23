@@ -40,11 +40,11 @@ export const readSwapQuoteInput = (
     : null;
 
 /**
- * Parses a swap execute request: the quote to build against plus the display
- * amounts recorded into the activity feed. Slippage is optional (default
- * 0.5%) and hard-capped at 5% — see ../starknet/avnu.ts.
+ * Parses a swap preparation request: the quote to build against plus the
+ * display amounts recorded into the activity feed. Preparation performs every
+ * remote build and validation step before the user confirms.
  */
-export const readSwapExecuteInput = (
+export const readSwapPrepareInput = (
   message: unknown,
 ): {
   readonly amount: string;
@@ -64,7 +64,7 @@ export const readSwapExecuteInput = (
     "slippage",
     "type",
   ]) &&
-  message["type"] === "wallet.swapExecute" &&
+  message["type"] === "wallet.swapPrepare" &&
   isTransferAmount(message["amount"]) &&
   isTransferAmount(message["buyAmount"]) &&
   isQuoteIdText(message["quoteId"]) &&
@@ -79,4 +79,20 @@ export const readSwapExecuteInput = (
         sellTokenId: message["sellTokenId"],
         slippage: message["slippage"] === undefined ? 0.005 : message["slippage"],
       }
+    : null;
+
+/**
+ * Parses the final one-time execution claim. No quote, amount, token, or call
+ * data is accepted here; all execution material comes from the frozen
+ * background preparation the id names.
+ */
+export const readSwapExecuteInput = (
+  message: unknown,
+): { readonly preparationId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["preparationId", "type"]) &&
+  message["type"] === "wallet.swapExecute" &&
+  typeof message["preparationId"] === "string" &&
+  /^sha256:[0-9a-f]{64}$/.test(message["preparationId"])
+    ? { preparationId: message["preparationId"] }
     : null;

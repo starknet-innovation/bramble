@@ -19,6 +19,7 @@ import {
   SWAP_LOSS_HIGH_RISK_PERCENT,
   SWAP_LOSS_WARN_PERCENT,
   type SwapClient,
+  type SwapPreparationView,
   type SwapQuoteView,
   swapValueDeltaPercent,
 } from "./swap-client";
@@ -47,6 +48,7 @@ let sellTokenId: string | null = null;
 let buyTokenId: string | null = null;
 let amountText = "";
 let quote: SwapQuoteView | null = null;
+let preparation: SwapPreparationView | null = null;
 let quoteSeq = 0;
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 let stage: "confirm" | "edit" | "success" = "edit";
@@ -221,7 +223,7 @@ const paintSwapStages = (root: Element, figures: SwapFigures): void => {
   root.querySelector("#swap-success")?.toggleAttribute("hidden", stage !== "success");
   setText(root, "swap-success-summary", successSummary);
   const { buyToken, sellToken, valueDelta } = figures;
-  if (stage !== "confirm" || !quote || !sellToken || !buyToken) {
+  if (stage !== "confirm" || !quote || !preparation || !sellToken || !buyToken) {
     return;
   }
   const receipt = root.querySelector("#swap-confirm-receipt");
@@ -241,6 +243,18 @@ const paintSwapStages = (root: Element, figures: SwapFigures): void => {
         <div class="receipt-row"><dt>Network fee</dt><dd>≈ ${escapeHtml(formatFiat(quote.gasFeesInUsd, "usd"))}</dd></div>
         <div class="receipt-row"><dt>Slippage cap</dt><dd>0.5%</dd></div>
         <div class="receipt-row"><dt>Route</dt><dd>AVNU aggregator</dd></div>`;
+  const calls = root.querySelector("#swap-call-review");
+  if (calls) {
+    const warnings = preparation.flags.map(
+      (flag) => `<li class="swap-delta-bad">${escapeHtml(flag.message)}</li>`,
+    );
+    calls.innerHTML = `<p class="eyebrow">Frozen executable calls</p><ul>${[
+      ...preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`),
+      ...warnings,
+    ].join(
+      "",
+    )}</ul><p class="hint">Review digest <code>${escapeHtml(preparation.payloadDigest.slice(0, 23))}…</code></p>`;
+  }
 };
 
 // Renders every dynamic region from module state. Called after each repaint
@@ -256,6 +270,7 @@ const setResult = (root: Element, text: string): void => setText(root, "swap-res
 
 const requestQuote = (deps: SwapUiDeps, root: Element): void => {
   quote = null;
+  preparation = null;
   const seq = ++quoteSeq;
   if (amountNumber() <= 0 || !sellTokenId || !buyTokenId) {
     setResult(root, "");
@@ -317,6 +332,7 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     stage = "edit";
     setPickerSide(null);
     quote = null;
+    preparation = null;
     amountText = "";
     successSummary = "";
     if (successTimer !== null) {
@@ -356,20 +372,48 @@ export const bindSwap = (deps: SwapUiDeps): void => {
   });
   bindSwapPicker(deps, root, applySelection(deps, root));
   root.querySelector("#swap-review")?.addEventListener("click", () => {
-    if (quote) {
-      stage = "confirm";
-      applySwapUi(deps, root);
+    const sellToken = tokenById(deps, sellTokenId);
+    const buyToken = tokenById(deps, buyTokenId);
+    const reviewButton = root.querySelector<HTMLButtonElement>("#swap-review");
+    if (!quote || !sellToken || !buyToken || !sellTokenId || !buyTokenId || !reviewButton) {
+      return;
     }
+    buttonBusy(reviewButton, true);
+    setResult(root, "Building and validating the executable route…");
+    const quoted = quote;
+    deps.swap
+      .prepare({
+        amount: quoted.sellAmount,
+        buyAmount: compactAmount(quoted.buyAmount),
+        buyTokenId,
+        quoteId: quoted.quoteId,
+        sellTokenId,
+      })
+      .then(
+        (prepared) => {
+          preparation = prepared;
+          stage = "confirm";
+          setResult(root, "");
+          buttonBusy(reviewButton, false);
+          applySwapUi(deps, root);
+        },
+        (error: unknown) => {
+          setResult(root, errorMessage(error, "Could not prepare a safe swap route."));
+          buttonBusy(reviewButton, false);
+          applySwapUi(deps, root);
+        },
+      );
   });
   root.querySelector("#swap-back-button")?.addEventListener("click", () => {
     stage = "edit";
+    preparation = null;
     requestQuote(deps, root);
   });
   const confirmButton = root.querySelector<HTMLButtonElement>("#swap-confirm-button");
   confirmButton?.addEventListener("click", () => {
     const sellToken = tokenById(deps, sellTokenId);
     const buyToken = tokenById(deps, buyTokenId);
-    if (!quote || !sellToken || !buyToken || !sellTokenId || !buyTokenId) {
+    if (!quote || !preparation || !sellToken || !buyToken || !sellTokenId || !buyTokenId) {
       return;
     }
     // Pending state: the action itself reports progress — spinner + label —
@@ -378,54 +422,49 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     const restingContent = confirmButton.innerHTML;
     confirmButton.innerHTML = `${icon("refresh")}Submitting swap…`;
     const executed = quote;
-    deps.swap
-      .execute({
-        amount: executed.sellAmount,
-        buyAmount: compactAmount(executed.buyAmount),
-        buyTokenId,
-        quoteId: executed.quoteId,
-        sellTokenId,
-      })
-      .then(
-        async () => {
-          // Success choreography: hold on the drawn-check moment, then return
-          // home on our own and land the summary toast there — the user never
-          // has to dismiss anything, and the outcome is stated twice (once
-          // felt, once read). The submitted swap (and its hash) is already in
-          // Activity.
-          const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
-          const buyText = `${compactAmount(executed.buyAmount)} ${buyToken.symbol}`;
-          successSummary = `${sellText} → ~${buyText}`;
-          stage = "success";
-          quote = null;
-          amountText = "";
-          setResult(root, "");
-          applySwapUi(deps, root);
-          if (successTimer !== null) {
-            clearTimeout(successTimer);
-          }
-          successTimer = setTimeout(() => {
-            successTimer = null;
-            stage = "edit";
-            successSummary = "";
-            deps.navigateHome();
-            // Honest state on landing: the transaction is sent and pending,
-            // not yet final — Activity carries it until it settles.
-            showToast(`Transaction sent — ${sellText} → ~${buyText} pending`, "success");
-          }, SUCCESS_HOLD_MS);
-          await deps.render(await deps.wallet.loadStatus());
-        },
-        (error: unknown) => {
-          // Failure: say WHY, in the toast and inline, restore the resting
-          // action, and hand the quote back for another attempt — never a
-          // dead end.
-          showToast(errorMessage(error, "Swap failed"), "error");
-          setResult(root, errorMessage(error, "Swap failed"));
-          confirmButton.innerHTML = restingContent;
-          buttonBusy(confirmButton, false);
+    const claimedPreparation = preparation;
+    deps.swap.execute(claimedPreparation.id).then(
+      async () => {
+        // Success choreography: hold on the drawn-check moment, then return
+        // home on our own and land the summary toast there — the user never
+        // has to dismiss anything, and the outcome is stated twice (once
+        // felt, once read). The submitted swap (and its hash) is already in
+        // Activity.
+        const sellText = `${compactAmount(executed.sellAmount)} ${sellToken.symbol}`;
+        const buyText = `${compactAmount(executed.buyAmount)} ${buyToken.symbol}`;
+        successSummary = `${sellText} → ~${buyText}`;
+        stage = "success";
+        quote = null;
+        preparation = null;
+        amountText = "";
+        setResult(root, "");
+        applySwapUi(deps, root);
+        if (successTimer !== null) {
+          clearTimeout(successTimer);
+        }
+        successTimer = setTimeout(() => {
+          successTimer = null;
           stage = "edit";
-          requestQuote(deps, root);
-        },
-      );
+          successSummary = "";
+          deps.navigateHome();
+          // Honest state on landing: the transaction is sent and pending,
+          // not yet final — Activity carries it until it settles.
+          showToast(`Transaction sent — ${sellText} → ~${buyText} pending`, "success");
+        }, SUCCESS_HOLD_MS);
+        await deps.render(await deps.wallet.loadStatus());
+      },
+      (error: unknown) => {
+        // Failure: say WHY, in the toast and inline, restore the resting
+        // action, and hand the quote back for another attempt — never a
+        // dead end.
+        showToast(errorMessage(error, "Swap failed"), "error");
+        setResult(root, errorMessage(error, "Swap failed"));
+        confirmButton.innerHTML = restingContent;
+        buttonBusy(confirmButton, false);
+        stage = "edit";
+        preparation = null;
+        requestQuote(deps, root);
+      },
+    );
   });
 };

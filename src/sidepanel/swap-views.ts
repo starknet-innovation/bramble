@@ -70,7 +70,8 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
       <section class="swap-stage" id="swap-confirm" hidden>
         <p class="eyebrow">Confirm swap</p>
         <dl class="receipt" id="swap-confirm-receipt"></dl>
-        <p class="hint">Quotes refresh with the market; the swap executes at the best route found, never below the minimum shown.</p>
+        <div id="swap-call-review"></div>
+        <p class="hint">These exact calls were built and frozen before this screen. Confirm submits them once; the route cannot change after review.</p>
         <div class="swap-actions">
           <button id="swap-confirm-button" type="button">${icon("check")}Confirm swap</button>
           <button id="swap-back-button" class="secondary" type="button">Back</button>

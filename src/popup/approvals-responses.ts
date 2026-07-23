@@ -6,7 +6,8 @@
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
-import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
+import { isStarkFieldElement, isStarknetNetworkId, STARKNET_NETWORKS } from "../starknet/networks";
+import { isAccountId } from "../storage/vault-schema";
 
 /**
  * ERC20 token metadata carried by a watch-asset approval.
@@ -28,6 +29,17 @@ export type ApprovalRiskFlag = {
 };
 
 /**
+ * Exact account, network, chain, and private-payload digest reviewed by the
+ * user for a security-sensitive approval.
+ */
+export type ApprovalContext = {
+  readonly accountId: string;
+  readonly chainId: string;
+  readonly networkId: string;
+  readonly payloadDigest: string;
+};
+
+/**
  * Pending dapp approval item shown in the popup. `kind` defaults to a
  * connection prompt when absent; watch-asset prompts also carry `token`; invoke
  * prompts carry decoded call `summaries` and risk `flags`; `blocked`/`insights`
@@ -35,6 +47,7 @@ export type ApprovalRiskFlag = {
  */
 export type PendingApproval = {
   readonly blocked?: boolean;
+  readonly context?: ApprovalContext;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
@@ -42,9 +55,6 @@ export type PendingApproval = {
     | "add-chain"
     | "connect"
     | "declare"
-    | "invoke"
-    | "sign-typed-data"
-    | "connect"
     | "invoke"
     | "sign-typed-data"
     | "strk20-invoke"
@@ -112,11 +122,22 @@ const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
   value["message"].length > 0 &&
   value["message"].length <= 300;
 
+const isApprovalContext = (value: unknown): value is ApprovalContext =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountId", "chainId", "networkId", "payloadDigest"]) &&
+  typeof value["accountId"] === "string" &&
+  isAccountId(value["accountId"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  value["chainId"] === STARKNET_NETWORKS[value["networkId"]].chainId &&
+  typeof value["payloadDigest"] === "string" &&
+  /^sha256:[0-9a-f]{64}$/.test(value["payloadDigest"]);
+
 const isPendingApproval = (value: unknown): value is PendingApproval => {
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, [
       "blocked",
+      "context",
       "flags",
       "id",
       "insights",
@@ -150,9 +171,19 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   ) {
     return false;
   }
-  return value["kind"] === "watch-asset"
-    ? isWatchAssetToken(value["token"])
-    : value["token"] === undefined;
+  const tokenValid =
+    value["kind"] === "watch-asset"
+      ? isWatchAssetToken(value["token"])
+      : value["token"] === undefined;
+  const needsContext =
+    value["kind"] === "declare" ||
+    value["kind"] === "invoke" ||
+    value["kind"] === "sign-typed-data" ||
+    value["kind"] === "strk20-invoke";
+  return (
+    tokenValid &&
+    (needsContext ? isApprovalContext(value["context"]) : value["context"] === undefined)
+  );
 };
 
 const isConnectedSite = (value: unknown): value is ConnectedSite =>

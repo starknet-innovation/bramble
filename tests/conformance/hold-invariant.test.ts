@@ -10,7 +10,7 @@ import { describe, expect, test } from "bun:test";
 import type { RuntimeSender } from "../../src/background/senders";
 import type { ProviderMethod, RuntimeMessage } from "../../src/provider/bridge";
 import { toProviderPayload } from "../../src/provider/bridge";
-import { flushHeld, latestApprovalId } from "../support/held";
+import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
 import {
   buildHarness,
   CONNECT_ORIGIN,
@@ -55,15 +55,6 @@ const driveFor = (
       }
     : { message: entry.expectedRuntime, sender: CONTENT_SENDER };
 
-const pendingCount = async (
-  handler: (message: unknown, sender?: RuntimeSender) => Promise<unknown>,
-): Promise<number> => {
-  const response = (await handler({ type: "wallet.pendingApprovals" }, EXTENSION_SENDER)) as {
-    readonly pending: readonly unknown[];
-  };
-  return response.pending.length;
-};
-
 const stateChanging: readonly SpecMethod[] = SPEC_METHODS.filter((entry) => entry.stateChanging);
 
 describe("state-change hold invariant", () => {
@@ -80,7 +71,7 @@ describe("state-change hold invariant", () => {
 
         // Nothing has changed and the request is parked as an approval.
         expect(totalMutations(spy)).toBe(0);
-        expect(await pendingCount(handler)).toBeGreaterThan(0);
+        expect(await waitForPendingApprovals(handler, EXTENSION_SENDER)).toHaveLength(1);
 
         const id = await latestApprovalId(handler, EXTENSION_SENDER);
         await handler({ id, type: "wallet.approveOrigin" }, EXTENSION_SENDER);

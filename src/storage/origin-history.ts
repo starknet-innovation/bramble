@@ -7,6 +7,7 @@
 import { isRecord } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import type { KeyValueStore } from "./kv";
+import { serializeStoreMutations } from "./mutation-queue";
 
 /**
  * Browser storage key for the origin first-seen history.
@@ -64,26 +65,30 @@ export const createOriginHistoryStore = ({
 }: {
   readonly now: () => number;
   readonly store: KeyValueStore;
-}): OriginHistoryStore => ({
-  async firstSeen(origin) {
-    const map = await readMap(store);
-    return map[origin] ?? null;
-  },
-  now,
-  async record(origin) {
-    if (!isWalletOrigin(origin)) {
-      return now();
-    }
-    const map = await readMap(store);
-    const existing = map[origin];
-    if (existing !== undefined) {
-      return existing;
-    }
-    const at = now();
-    await store.set(ORIGIN_HISTORY_STORE_KEY, pruneOldest({ ...map, [origin]: at }));
-    return at;
-  },
-});
+}): OriginHistoryStore =>
+  serializeStoreMutations<OriginHistoryStore>(
+    {
+      async firstSeen(origin) {
+        const map = await readMap(store);
+        return map[origin] ?? null;
+      },
+      now,
+      async record(origin) {
+        if (!isWalletOrigin(origin)) {
+          return now();
+        }
+        const map = await readMap(store);
+        const existing = map[origin];
+        if (existing !== undefined) {
+          return existing;
+        }
+        const at = now();
+        await store.set(ORIGIN_HISTORY_STORE_KEY, pruneOldest({ ...map, [origin]: at }));
+        return at;
+      },
+    },
+    ["firstSeen", "now"],
+  );
 
 /**
  * In-memory origin history used as the test and fallback default.

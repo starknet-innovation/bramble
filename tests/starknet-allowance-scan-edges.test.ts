@@ -5,7 +5,8 @@
  * RpcProvider against a local JSON-RPC stub. Complements
  * starknet-allowance-scan.test.ts.
  */
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import type { RpcProvider } from "starknet";
 import { APPROVAL_EVENT_KEY } from "../src/starknet/allowance-discovery";
 import type { AllowanceEvent, AllowanceRpc } from "../src/starknet/allowance-scan";
 import { collectExternalAllowances, scanExternalAllowances } from "../src/starknet/allowance-scan";
@@ -81,35 +82,14 @@ describe("collectExternalAllowances edges", () => {
   });
 });
 
-// Local JSON-RPC stub so scanExternalAllowances runs its real RpcProvider
-// adapter (getEvents + callContract) without a network.
-const startRpc = () => {
-  const server = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      const body = (await req.json()) as { id: number; method: string };
-      const reply = (result: unknown) => Response.json({ id: body.id, jsonrpc: "2.0", result });
-      if (body.method === "starknet_getEvents") {
-        return reply({ events: [ozEvent(canonical(OWNER), canonical(SPENDER))] });
-      }
-      if (body.method === "starknet_call") {
-        return reply(["0x3e8", "0x0"]);
-      }
-      if (body.method === "starknet_specVersion") {
-        return reply("0.8.1");
-      }
-      return reply("0x0");
-    },
-  });
-  return { server, url: `http://127.0.0.1:${server.port}` };
-};
-
-const servers: { stop: (force?: boolean) => void }[] = [];
-afterAll(() => {
-  for (const server of servers) {
-    server.stop(true);
-  }
-});
+const rpcProvider = {
+  async callContract() {
+    return ["0x3e8", "0x0"];
+  },
+  async getEvents() {
+    return { events: [ozEvent(canonical(OWNER), canonical(SPENDER))] };
+  },
+} as unknown as RpcProvider;
 
 describe("scanExternalAllowances", () => {
   test("returns an empty list without touching RPC when no tokens are tracked", async () => {
@@ -119,10 +99,10 @@ describe("scanExternalAllowances", () => {
   });
 
   test("discovers a live allowance through the real provider adapter", async () => {
-    const { server, url } = startRpc();
-    servers.push(server);
-
-    const found = await scanExternalAllowances({ owner: OWNER, rpcUrls: [url], tokens: [TOKEN] });
+    const found = await scanExternalAllowances(
+      { owner: OWNER, rpcUrls: ["https://rpc.example"], tokens: [TOKEN] },
+      () => rpcProvider,
+    );
     expect(found).toEqual([
       { amount: "1000", spender: canonical(SPENDER), token: canonical(TOKEN) },
     ]);

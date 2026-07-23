@@ -9,10 +9,16 @@ import { isPendingApprovalsResponse } from "../src/popup/approvals-responses";
 
 const ID = "123e4567-e89b-42d3-a456-426614174000";
 const ORIGIN = "https://dapp.example";
+const CONTEXT = {
+  accountId: "SN_MAIN:0x1",
+  chainId: "0x534e5f4d41494e",
+  networkId: "SN_MAIN",
+  payloadDigest: `sha256:${"a".repeat(64)}`,
+};
 
 const invoke = (extra: Record<string, unknown>) => ({
   ok: true,
-  pending: [{ id: ID, kind: "invoke", origin: ORIGIN, ...extra }],
+  pending: [{ context: CONTEXT, id: ID, kind: "invoke", origin: ORIGIN, ...extra }],
 });
 
 describe("pending-approval summary guard (isSummaryText)", () => {
