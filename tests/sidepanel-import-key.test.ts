@@ -76,6 +76,7 @@ const mount = (importAccount: (networkId: string, key: string) => Promise<string
       },
       setExpandedGroup: () => undefined,
       setOpenAssign: () => undefined,
+      startAddAccount: () => undefined,
       wallet: wallet as unknown as SettingsUiDeps["wallet"],
     };
     bindImportKey(deps);

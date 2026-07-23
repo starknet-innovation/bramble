@@ -63,7 +63,7 @@ const walletStub = () => ({
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

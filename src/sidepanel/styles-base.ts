@@ -89,6 +89,7 @@ export const BASE_STYLES = `
     min-width: 0;
   }
   .row, .address-line { justify-content: space-between; }
+  .row.wrap { flex-wrap: wrap; justify-content: flex-start; }
   .stack { display: grid; gap: ${SPACE.sm}; }
   .stack-tight { display: grid; gap: 3px; min-width: 0; }
   .button-row {

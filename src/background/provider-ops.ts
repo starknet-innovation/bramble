@@ -6,16 +6,19 @@
  * origin gets nothing back even if it still holds an old connection grant.
  */
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
+import { walletErrorMessage } from "../shared/errors";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { accountHashSigner } from "./account-hash-signer";
 import { recordApproveAllowances } from "./allowance-ops";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalPayload, ApprovalQueue } from "./approvals";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readAddInvokeTransactionInput } from "./message-inputs";
 import { readGetPermissionsInput, readWatchAssetInput } from "./provider-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -47,6 +50,11 @@ export type ProviderOpsDeps = {
 export type InvokeExecuteDeps = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
+   * stubs stay valid; a Ledger invoke with no queue wired fails closed.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -245,7 +253,7 @@ export const executeInvokeApproval = async (
     readonly payload: ApprovalPayload;
   },
 ): Promise<RuntimeResponse> => {
-  const { activity, allowanceStore, runtimeRpc, wallet } = deps;
+  const { activity, allowanceStore, runtimeRpc } = deps;
   const calls = approval.payload.calls;
   if (!calls) {
     return { error: "approval not found" };
@@ -255,20 +263,30 @@ export const executeInvokeApproval = async (
     return resolved;
   }
   const { account, passphrase, preferences } = resolved;
-  const result = await runtimeRpc.submitInvokeTransaction({
-    account,
-    calls,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: (messageHash) =>
-      wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase: passphrase }),
-  });
-  await activity.record({
-    accountId: account.id,
-    hash: result.transactionHash,
-    kind: "invoke",
-    networkId: account.networkId,
-    summary: `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
-  });
-  await recordApproveAllowances(allowanceStore, calls, account);
-  return { ok: true, transactionHash: result.transactionHash };
+  // A keyless Ledger account signs on the device (verified against publicKeyX),
+  // every other account through the vault — the same seam the wallet-initiated
+  // paths use. A device rejection/timeout/verify-failure, or a Ledger account
+  // with no queue wired, throws a WalletError from the sign path: catch it and
+  // return `{ error }` (mirroring executeStrk20InvokeApproval) so the applier
+  // settles the held dapp request with the real reason instead of leaving it to
+  // hang on an unhandled throw. Fails closed — nothing is submitted on error.
+  try {
+    const result = await runtimeRpc.submitInvokeTransaction({
+      account,
+      calls,
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
+      signHash: accountHashSigner(deps, account, passphrase),
+    });
+    await activity.record({
+      accountId: account.id,
+      hash: result.transactionHash,
+      kind: "invoke",
+      networkId: account.networkId,
+      summary: `${approval.origin} submitted ${calls.length} call${calls.length === 1 ? "" : "s"}`,
+    });
+    await recordApproveAllowances(allowanceStore, calls, account);
+    return { ok: true, transactionHash: result.transactionHash };
+  } catch (error) {
+    return { error: walletErrorMessage(error, "invoke request failed") };
+  }
 };

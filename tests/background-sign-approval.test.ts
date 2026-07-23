@@ -4,11 +4,14 @@
  * the signature returns through the request's own channel. Deny rejects it.
  */
 import { describe, expect, test } from "bun:test";
+import { ec } from "starknet";
 import { setApprovalNotifier } from "../src/background/approval-notifier";
+import type { LedgerSignQueue } from "../src/background/ledger-sign-queue";
 import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
-import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { ledgerAccountPath } from "../src/starknet/ledger-path";
+import type { AccountRef, LedgerAccountRef, Vault } from "../src/storage/vault-schema";
 import { flushHeld, waitForPendingApprovals } from "./support/held";
 
 const PASSPHRASE = "correct horse battery staple";
@@ -26,7 +29,7 @@ const vault = {
   activeAccountId: account.id,
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 2,
+  schemaVersion: 3,
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 
@@ -147,5 +150,74 @@ describe("signTypedData approval gate", () => {
     session.unlock(PASSPHRASE);
     const handler = createMessageHandler(lonely, "ext", { session });
     expect(await handler(signMessage, content)).toEqual({ error: "origin not connected" });
+  });
+
+  test("a failed Ledger device sign settles the held dapp request with { error }", async () => {
+    // A keyless Ledger account whose device returns a signature that does not
+    // verify. executeSignApproval must RETURN `{ error }` (not throw) so the
+    // applier settles the held dapp request instead of leaving it to hang — the
+    // same latent bug fixed on the invoke/declare paths. Nothing is leaked.
+    const { starkCurve } = ec;
+    const ledgerPublicKeyX = starkCurve.getStarkKey("0x1234567890abcdef");
+    const ledgerAccount: LedgerAccountRef = {
+      address: "0xabc111111",
+      classHash: "0x111111",
+      derivation: {
+        accountIndex: 2,
+        eip2645application: "LedgerW",
+        kind: "ledger",
+        path: ledgerAccountPath(2),
+      },
+      id: "SN_MAIN:0xabc111111",
+      networkId: "SN_MAIN",
+      publicKeyX: ledgerPublicKeyX,
+    };
+    // Device signs with the WRONG key, so the verify-before-broadcast gate throws
+    // a WalletError inside executeSignApproval's sign path.
+    const wrongKeyQueue: LedgerSignQueue = {
+      pending: () => [],
+      reject: () => false,
+      rejectAll: () => 0,
+      settle: () => false,
+      async request(request) {
+        const sig = starkCurve.sign(request.messageHash, "0xdeadbeef");
+        return { r: `0x${sig.r.toString(16)}`, s: `0x${sig.s.toString(16)}` };
+      },
+    };
+    const ledgerWallet = {
+      ...wallet,
+      async getGrantedAccounts() {
+        return [ledgerAccount];
+      },
+      async signHash(): Promise<never> {
+        throw new Error("vault signHash must not be reached for a Ledger account");
+      },
+    };
+    setApprovalNotifier(() => undefined);
+    const session = createUnlockSession();
+    session.unlock(PASSPHRASE);
+    const handler = createMessageHandler(ledgerWallet, "ext", {
+      ledgerSignQueue: wrongKeyQueue,
+      session,
+    });
+
+    let settled = false;
+    const held = handler(signMessage, content).then((r) => {
+      settled = true;
+      return r;
+    });
+    const pending = await waitForPendingApprovals<{ id: string }>(handler, page);
+    // The held dapp request has not settled before approval.
+    expect(settled).toBe(false);
+
+    const decision = await handler({ id: pending[0]?.id, type: "wallet.approveOrigin" }, page);
+
+    // The dapp waiter settles to the real reason (no hang, no unhandled throw),
+    // and no signature is leaked to the dapp.
+    const result = await held;
+    expect(result).toEqual({ error: "Ledger signature verification failed" });
+    expect("signature" in (result as object)).toBe(false);
+    // The approve response also surfaces the error rather than a stale ok.
+    expect(decision).toEqual({ error: "Ledger signature verification failed" });
   });
 });

@@ -3,7 +3,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { CURRENT_SCHEMA_VERSION, migrateVault, VAULT_MIGRATIONS } from "../src/storage/migrations";
-import { isVaultV1, isVaultV2 } from "../src/storage/vault-schema";
+import { isVaultV1, isVaultV3 } from "../src/storage/vault-schema";
 
 const legacyVault = {
   accounts: [
@@ -37,7 +37,7 @@ const legacyVault = {
   ],
 };
 
-const currentVault = { ...legacyVault, mnemonic: null, schemaVersion: 2 as const };
+const currentVault = { ...legacyVault, mnemonic: null, schemaVersion: 3 as const };
 
 describe("migrateVault", () => {
   test("declares contiguous migration steps to the current schema", () => {
@@ -63,19 +63,23 @@ describe("migrateVault", () => {
     expect(migrateVault(currentVault)).toBe(currentVault);
   });
 
-  test("upgrades schema-v1 vaults by adding a null recovery phrase", () => {
+  test("upgrades schema-v1 vaults through the chain to the current schema", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV2(migrated)).toBe(true);
-    expect(migrated).toEqual({ ...legacyVault, mnemonic: null, schemaVersion: 2 });
+    expect(isVaultV3(migrated)).toBe(true);
+    expect(migrated).toEqual({
+      ...legacyVault,
+      mnemonic: null,
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
     expect(migrated).not.toBe(legacyVault);
   });
 
   test("returns valid current vaults for every supported source shape", () => {
     for (const source of [undefined, null, {}, legacyVault, currentVault]) {
       const migrated = migrateVault(source);
-      expect(isVaultV2(migrated)).toBe(true);
+      expect(isVaultV3(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });

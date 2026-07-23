@@ -10,9 +10,11 @@ import type { ActivityEntry, ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { accountHashSigner } from "./account-hash-signer";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readReviewTransferInput, readTransferInput, readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
-import { activeAccountContext, networkRpcUrls } from "./runtime-state";
+import { activeAccountContext, networkRpcUrls, statusResponse } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import type { UnlockSession } from "./session";
 
@@ -22,6 +24,11 @@ import type { UnlockSession } from "./session";
 export type WalletOpsDeps = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
+   * stubs stay valid; a Ledger signing request with no queue wired fails closed.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -45,7 +52,7 @@ export const verificationContext = (account: AccountRef, preferences: WalletPref
 export const signerForContext = (
   deps: WalletOpsDeps,
   context: { readonly account: AccountRef; readonly vaultPassphrase: string },
-) => signerFor(deps, context.account, context.vaultPassphrase);
+) => accountHashSigner(deps, context.account, context.vaultPassphrase);
 
 const transferContext = async (
   deps: WalletOpsDeps,
@@ -67,10 +74,6 @@ const transferContext = async (
   }
   return { account, preferences, token, vaultPassphrase } as const;
 };
-
-const signerFor =
-  (deps: WalletOpsDeps, account: AccountRef, vaultPassphrase: string) => (messageHash: string) =>
-    deps.wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase });
 
 /**
  * Classifies a transfer review's fee outcome so callers can tell an intentional
@@ -160,7 +163,7 @@ const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
   const result = await deps.runtimeRpc.submitAccountDeployment({
     account,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], await deps.preferencesStore.read()),
-    signHash: signerFor(deps, account, vaultPassphrase),
+    signHash: accountHashSigner(deps, account, vaultPassphrase),
   });
   await deps.activity.record({
     accountId: account.id,
@@ -198,7 +201,7 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
           account,
           calls: [call],
           rpcUrls,
-          signHash: signerFor(deps, account, vaultPassphrase),
+          signHash: accountHashSigner(deps, account, vaultPassphrase),
         })
         .catch(() => null)
     : null;
@@ -230,7 +233,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     amount: input.amount,
     recipient: input.recipient,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: signerFor(deps, account, vaultPassphrase),
+    signHash: accountHashSigner(deps, account, vaultPassphrase),
     speed: input.speed,
     token,
   });
@@ -261,6 +264,16 @@ const handleActivity: WalletOpsHandler = async (deps, message) => {
   };
 };
 
+const handleLock: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.lock")) {
+    return { error: "invalid lock request" };
+  }
+  // Revoke parked device signs before clearing the session.
+  deps.ledgerSignQueue?.rejectAll("wallet locked");
+  deps.session.lock();
+  return statusResponse(deps.wallet, deps.session, deps.preferencesStore);
+};
+
 /**
  * Dispatch table for wallet operation messages, keyed by message type. Keeping
  * each branch a self-contained handler leaves the router a pure lookup.
@@ -270,6 +283,7 @@ const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.deployAccount": handleDeployAccount,
   "wallet.deploymentStatus": handleDeploymentStatus,
   "wallet.getBalances": handleGetBalances,
+  "wallet.lock": handleLock,
   "wallet.reviewTransfer": handleReviewTransfer,
   "wallet.transfer": handleTransfer,
   "wallet.verifyClassHash": handleVerifyClassHash,

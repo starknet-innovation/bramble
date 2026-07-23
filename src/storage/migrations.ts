@@ -3,7 +3,13 @@
  */
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
-import { CURRENT_SCHEMA_VERSION, isVaultV1, isVaultV2, type Vault } from "./vault-schema";
+import {
+  CURRENT_SCHEMA_VERSION,
+  isVaultV1,
+  isVaultV2,
+  isVaultV3,
+  type Vault,
+} from "./vault-schema";
 
 /**
  * Current schema version re-exported for migration tests and callers.
@@ -52,6 +58,19 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 2,
   },
+  {
+    fromVersion: 2,
+    // The Ledger account variant is additive: a stored v2 vault cannot contain a
+    // keyless account, so this rewrites nothing but the version stamp. It stays
+    // deterministic and validates the source shape before bumping.
+    migrate(value) {
+      if (!isVaultV2(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, schemaVersion: 3 };
+    },
+    toVersion: 3,
+  },
 ];
 
 const schemaVersionOf = (value: unknown): number | null => {
@@ -81,7 +100,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV2(value)) {
+  if (isVaultV3(value)) {
     return value;
   }
 
@@ -99,7 +118,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV2(migrated)) {
+  if (!isVaultV3(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

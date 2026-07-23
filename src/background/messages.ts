@@ -22,6 +22,12 @@ import { handleChainOps } from "./chain-ops";
 import { handleDeclareOps } from "./declare-ops";
 import { handleDiscoveryOps } from "./discovery-ops";
 import { readImportAccountInput } from "./import-inputs";
+import { handleLedgerOps } from "./ledger-ops";
+import {
+  createLedgerSignQueue,
+  type LedgerSignQueue,
+  type LedgerSignQueueTimeout,
+} from "./ledger-sign-queue";
 import {
   readAddAccountInput,
   readCreateAccountInput,
@@ -59,14 +65,14 @@ import { handleTokenOps } from "./token-ops";
 import { unlockFailureError } from "./unlock-errors";
 import { handleWalletOps, type WalletOpsDeps } from "./wallet-ops";
 
-// Everything the runtime router hands to a sub-handler. One bag keeps the
-// router body free of per-handler argument plumbing.
+// Everything the runtime router hands to a sub-handler.
 type RouterContext = {
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
   readonly guard: OriginGuard;
+  readonly ledgerSignQueue: LedgerSignQueue;
   readonly loadMultisigClass: (() => Promise<unknown>) | undefined;
   readonly multisigStore: MultisigStore;
   readonly originHistory: OriginHistoryStore;
@@ -90,6 +96,7 @@ type RouterHandler = (
 const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   activity: ctx.activity,
   allowanceStore: ctx.allowanceStore,
+  ledgerSignQueue: ctx.ledgerSignQueue,
   preferencesStore: ctx.preferencesStore,
   runtimeRpc: ctx.runtimeRpc,
   session: ctx.session,
@@ -303,17 +310,6 @@ const handleSignHash: RouterHandler = async (ctx, messageType, message) => {
   return { ok: true, signature: await ctx.wallet.signHash(input) };
 };
 
-const handleLock: RouterHandler = async (ctx, messageType, message) => {
-  if (messageType !== "wallet.lock") {
-    return null;
-  }
-  if (!readTypeOnlyInput(message, "wallet.lock")) {
-    return { error: "invalid lock request" };
-  }
-  ctx.session.lock();
-  return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
-};
-
 const handleStatus: RouterHandler = async (ctx, messageType, message) => {
   if (messageType !== "wallet.status") {
     return null;
@@ -341,11 +337,10 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   return statusResponse(ctx.wallet, ctx.session, ctx.preferencesStore);
 };
 
-// Ordered dispatch table: each entry returns a response for the message types
-// it owns and null otherwise, and the router returns the first non-null result.
-// Types are partitioned across handlers, so order is readability, not behavior.
+// Ordered handlers own disjoint message types and return null otherwise.
 const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleWalletOps(buildOpsDeps(ctx), messageType, message),
+  (ctx, messageType, message) => handleLedgerOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) =>
     handleSwapOps(
       {
@@ -382,7 +377,6 @@ const HANDLERS: readonly RouterHandler[] = [
   handleSetActiveAccount,
   handleSetActiveNetwork,
   handleSignHash,
-  handleLock,
   handleStatus,
   handleUnlock,
 ];
@@ -424,15 +418,13 @@ const runtimeErrorResponse = (
 });
 
 /**
- * Optional collaborators for {@link createMessageHandler}. Every field falls
- * back to an in-memory or unavailable default, so tests wire only what they
- * exercise — by name, never by position, so a transposed argument cannot
- * silently rewire an unrelated dependency.
+ * Named optional collaborators for {@link createMessageHandler}.
  */
 export type MessageHandlerOptions = {
   readonly activity?: ActivityLog;
   readonly allowanceStore?: AllowanceStore;
   readonly approvals?: ApprovalQueue;
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly loadMultisigClass?: () => Promise<unknown>;
   readonly multisigStore?: MultisigStore;
   readonly originGuard?: OriginGuard;
@@ -445,6 +437,24 @@ export type MessageHandlerOptions = {
   readonly swapPreparations?: SwapPreparationStore;
 };
 
+// Abandon a parked sign after a generous timeout interval.
+const LEDGER_SIGN_TIMEOUT: LedgerSignQueueTimeout = {
+  ms: 300_000,
+  schedule: (onElapsed, ms) => {
+    const handle = setTimeout(onElapsed, ms);
+    return () => clearTimeout(handle);
+  },
+};
+
+const runtimeLedgerSignQueue = (
+  provided: LedgerSignQueue | undefined,
+  session: UnlockSession,
+): LedgerSignQueue =>
+  provided ??
+  createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, () =>
+    session.isUnlocked() ? session.generation() : null,
+  );
+
 /**
  * Creates the trusted background runtime message dispatcher.
  */
@@ -453,19 +463,22 @@ export const createMessageHandler = (
   extensionId: string,
   options: MessageHandlerOptions = {},
 ) => {
+  // Resolve the session before the queue so the queue can read its generation.
+  const session = options.session ?? createUnlockSession();
   const ctx: RouterContext = {
     activity: options.activity ?? memoryActivityLog(),
     allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
     approvals: options.approvals ?? createApprovalQueue(),
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
+    ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
     loadMultisigClass: options.loadMultisigClass,
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     originHistory: options.originHistory ?? memoryOriginHistory(),
     preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
     prices: options.prices ?? unavailablePriceService,
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
-    session: options.session ?? createUnlockSession(),
+    session,
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     waiters: createSignatureWaiters(),

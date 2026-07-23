@@ -178,6 +178,42 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   { message: { networkId: "SN_MAIN", type: "wallet.addAccount" }, sender: extensionSender },
   {
     message: {
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: account.publicKeyX,
+      type: "wallet.addLedgerAccount",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: account.publicKeyX,
+      type: "wallet.createLedgerVault",
+      vaultPassphrase: SECRET_PASSPHRASE,
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      entries: [{ accountIndex: 0, publicKeyX: account.publicKeyX }],
+      networkId: "SN_MAIN",
+      type: "wallet.deriveLedgerAccounts",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: { address: account.address, networkId: "SN_MAIN", type: "wallet.ledgerAccountStatus" },
+    sender: extensionSender,
+  },
+  { message: { type: "wallet.ledgerSignPending" }, sender: extensionSender },
+  {
+    message: { id: "ledger-sign-1", r: "0x1", s: "0x2", type: "wallet.completeLedgerSign" },
+    sender: extensionSender,
+  },
+  {
+    message: {
       networkId: "SN_MAIN",
       privateKey: SECRET_PRIVATE_KEY,
       type: "wallet.importAccount",

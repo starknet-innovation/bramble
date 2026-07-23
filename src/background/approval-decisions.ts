@@ -5,7 +5,6 @@
  * `wallet.denyOrigin` rejects the held request with a spec USER_REFUSED_OP so
  * the dapp promise settles rather than hanging. Only extension pages reach here.
  */
-
 import type { OriginGuard } from "../security/blocklist";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { ActivityLog } from "../storage/activity-store";
@@ -16,6 +15,7 @@ import { approvalPayloadMatchesContext } from "./approval-context";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
 import { executeSignApproval, executeSwitchChainApproval } from "./chain-ops";
 import { executeDeclareApproval } from "./declare-ops";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readApprovalIdInput } from "./message-inputs";
 import { executeInvokeApproval } from "./provider-ops";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -32,6 +32,7 @@ export type ApprovalDecisionDeps = {
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
   readonly guard: OriginGuard;
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -92,6 +93,7 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }) => {
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
@@ -113,6 +115,7 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
     {
       actions: payload.actions,
@@ -129,7 +132,12 @@ const applySignTypedData: ApproveApplier = async (deps, { approval, payload }) =
     return reject(NOT_FOUND);
   }
   const result = await executeSignApproval(
-    { preferencesStore: deps.preferencesStore, session: deps.session, wallet: deps.wallet },
+    {
+      preferencesStore: deps.preferencesStore,
+      session: deps.session,
+      wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+    },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),
       origin: approval.origin,
@@ -177,6 +185,7 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }) => {
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
       wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
     },
     {
       ...(approval.context === undefined ? {} : { context: approval.context }),

@@ -7,6 +7,7 @@ import type { WalletStatus } from "../popup/responses";
 import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { MultisigClient } from "./multisig-runtime";
+import { bindSignerInsertButtons } from "./multisig-signers-field";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -259,6 +260,8 @@ const bindDeployScreen = (deps: MultisigUiDeps): void => {
   });
 
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-deploy-form");
+  const signersField = form?.querySelector<HTMLTextAreaElement>('textarea[name="signers"]');
+  bindSignerInsertButtons(deps.app, signersField);
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   form?.addEventListener("submit", (event) => {
     event.preventDefault();

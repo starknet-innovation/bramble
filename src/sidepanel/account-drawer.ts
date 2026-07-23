@@ -18,7 +18,7 @@ import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { accountGroupsLine, groupFilterChips, groupPickerPanel } from "./group-controls";
 import { icon } from "./icons";
-import { accountAvatar, accountDisplayName, accountLabel } from "./parts";
+import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "./parts";
 
 const drawerAccountRow = (
   stored: AccountRef,
@@ -40,7 +40,7 @@ const drawerAccountRow = (
       <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === activeId}">
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
-          <strong>${escapeHtml(name)}</strong>
+          <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
           <code>${accountLabel(stored.address)}</code>
           ${accountGroupsLine(folder ? [folder] : [])}
         </span>

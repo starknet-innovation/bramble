@@ -64,7 +64,7 @@ const createWallet = (captureAdd?: (input: AddDerivedAccountInput) => void) => (
       activeAccountId: account.id,
       mnemonic,
       originGrants: [],
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x1234" }],
     };
   },

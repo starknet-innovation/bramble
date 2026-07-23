@@ -3,7 +3,9 @@
  * background message handler: SNIP-12 signing, chain-id reads, and dapp chain
  * switches. Split from messages.ts to keep it within the size budget.
  */
+
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
+import { walletErrorMessage } from "../shared/errors";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
@@ -11,9 +13,11 @@ import {
 } from "../starknet/networks";
 import { typedDataHash } from "../starknet/typed-data";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { accountHashSigner } from "./account-hash-signer";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import {
   readOriginRequestInput,
   readSignTypedDataInput,
@@ -32,6 +36,11 @@ export type ChainOpsDeps = {
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
   readonly guard?: OriginGuard;
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial
+   * test stubs stay valid; a Ledger typed-data sign with no queue fails closed.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
@@ -62,7 +71,7 @@ const describeTypedData = (typedData: unknown): string => {
  * signature, or an error response the caller can deliver back to the dapp.
  */
 export const executeSignApproval = async (
-  deps: Pick<ChainOpsDeps, "preferencesStore" | "session" | "wallet">,
+  deps: Pick<ChainOpsDeps, "ledgerSignQueue" | "preferencesStore" | "session" | "wallet">,
   input: {
     readonly context?: ApprovalContext;
     readonly origin: string;
@@ -96,12 +105,19 @@ export const executeSignApproval = async (
   } catch {
     return { error: "invalid typed data" };
   }
-  const signature = await wallet.signHash({
-    accountId: account.id,
-    messageHash,
-    vaultPassphrase: passphrase,
-  });
-  return { ok: true, signature };
+  // A keyless Ledger account signs typed data on the device (verified against
+  // publicKeyX) instead of the vault; accountHashSigner makes the same choice as
+  // every other submitting path. A device rejection/timeout/verify-failure, or a
+  // Ledger account with no queue wired, throws a WalletError from the sign path:
+  // catch it and return `{ error }` (mirroring invoke/declare) so the applier
+  // settles the held dapp request with the real reason instead of leaving it to
+  // hang on an unhandled throw. Fails closed — no signature returned on error.
+  try {
+    const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
+    return { ok: true, signature };
+  } catch (error) {
+    return { error: walletErrorMessage(error, "sign typed data request failed") };
+  }
 };
 
 type ChainOpsHandler = (
