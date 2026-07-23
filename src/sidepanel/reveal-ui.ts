@@ -22,12 +22,20 @@ export type RevealUiDeps = {
 /**
  * Reveal flow screen: strong warning, a re-auth form, and a blurred output
  * region filled in only after the passphrase is confirmed.
+ *
+ * When the active account was imported from a raw key it is not derived from
+ * the wallet recovery phrase, so the phrase does not restore it. The screen
+ * makes that explicit — the imported key below is its only backup — using the
+ * account provenance already present in `status`; no secret is consulted here.
  */
-export const revealFlow = (status: WalletStatus): string =>
-  flowHeader("Reveal secrets", status, "Recovery phrase and active key") +
-  flowScreen(
-    "reveal",
-    `<section class="section reveal-warning" role="note">
+export const revealFlow = (status: WalletStatus): string => {
+  const activeAccount = status.accounts.find((stored) => stored.id === status.activeAccountId);
+  const activeIsImported = activeAccount?.derivation.kind === "imported-raw-key";
+  return (
+    flowHeader("Reveal secrets", status, "Recovery phrase and active key") +
+    flowScreen(
+      "reveal",
+      `<section class="section reveal-warning" role="note">
       <p class="reveal-danger">${icon("alert")}Anyone who sees these can take your funds.</p>
       <p class="hint">Reveal only in private. MC Wallet will never ask you for them. They are shown once here and never leave this screen.</p>
     </section>
@@ -43,13 +51,20 @@ export const revealFlow = (status: WalletStatus): string =>
       <div id="reveal-output" class="reveal-output" hidden>
         <p class="eyebrow">Recovery phrase</p>
         <div class="reveal-value is-masked" id="reveal-phrase"></div>
-        <p class="eyebrow">Active account private key</p>
+        <p class="eyebrow">Active account private key${activeIsImported ? " (imported)" : ""}</p>
         <code class="reveal-value is-masked" id="reveal-key"></code>
+        ${
+          activeIsImported
+            ? '<p class="hint" id="reveal-imported-note">This account was imported from a raw key, so the wallet recovery phrase above does not restore it — its private key shown here is its only backup.</p>'
+            : ""
+        }
         <button id="reveal-toggle" class="secondary" type="button">${icon("check")}Tap to show</button>
         <p class="hint">Write them down offline. Leaving this screen hides them again.</p>
       </div>
     </section>`,
+    )
   );
+};
 
 /**
  * Binds the reveal form: confirm the passphrase, then show blurred secrets with

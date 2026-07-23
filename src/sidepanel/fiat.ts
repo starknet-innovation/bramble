@@ -44,20 +44,26 @@ export const formatFiat = (amount: number, currency: DisplayCurrency): string =>
  * UTC is deliberate: it keeps the label deterministic and avoids the implicit
  * clock and date-construction sources the file-standards gate forbids outside
  * the approved boundary modules — the epoch number is formatted directly.
+ * Date and time are formatted separately and joined with an explicit ", ":
+ * a combined format leaves the joiner to the ICU version (", " vs " at "),
+ * so the label would vary across Chrome builds and test environments.
  */
 export const formatPriceTimestamp = (asOf: number | null): string | null => {
   if (asOf === null || !Number.isFinite(asOf) || asOf <= 0) {
     return null;
   }
-  const formatted = new Intl.DateTimeFormat("en-GB", {
+  const date = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-    minute: "2-digit",
     month: "short",
     timeZone: "UTC",
   }).format(asOf);
-  return `${formatted} UTC`;
+  const time = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    timeZone: "UTC",
+  }).format(asOf);
+  return `${date}, ${time} UTC`;
 };
 
 /**
@@ -98,7 +104,7 @@ export const portfolioTotal = (
 
 /**
  * A portfolio's 24h movement, split into an always-positive magnitude and its
- * direction, so callers can colour the sign (emerald up / red down) without
+ * direction, so callers can colour the sign (green up / red down) without
  * re-deriving it. `percent` is the magnitude of the percentage move.
  */
 export type PortfolioDelta = {

@@ -3,7 +3,15 @@
  */
 import { expect, test } from "bun:test";
 
-import { hasOnlyKnownKeys, isJson, isRecord, isStringArray } from "../src/shared/json";
+import {
+  hasOnlyKnownKeys,
+  isJson,
+  isJsonWithinBudget,
+  isRecord,
+  isStringArray,
+  type JsonBudget,
+  normalizeFeltBigints,
+} from "../src/shared/json";
 
 test("isRecord accepts only plain JSON records", () => {
   const inherited = Object.assign(Object.create({ target: "mc-wallet:content" }), {
@@ -68,4 +76,42 @@ test("isStringArray rejects sparse string arrays", () => {
   expect(isStringArray(["one"])).toBe(true);
   expect(isStringArray(sparseStrings)).toBe(false);
   expect(isStringArray(["one", 2])).toBe(false);
+});
+
+test("hostile JSON resource budgets fail closed before expensive consumers", () => {
+  const tiny: JsonBudget = {
+    maxArrayLength: 2,
+    maxBytes: 200,
+    maxDepth: 2,
+    maxNodes: 5,
+    maxObjectKeys: 2,
+    maxStringLength: 8,
+  };
+  const deep = { one: { two: { three: true } } };
+  const wide = { one: 1, three: 3, two: 2 };
+
+  expect(isJsonWithinBudget(["one", "two"], tiny)).toBe(true);
+  expect(isJsonWithinBudget(["one", "two", "three"], tiny)).toBe(false);
+  expect(isJsonWithinBudget({ value: "x".repeat(9) }, tiny)).toBe(false);
+  expect(isJsonWithinBudget(deep, tiny)).toBe(false);
+  expect(isJsonWithinBudget(wide, tiny)).toBe(false);
+});
+
+test("bounded normalization never executes accessors and rejects cycles", () => {
+  let getterCalls = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, "value", {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return 1n;
+    },
+  });
+  const cyclic: Record<string, unknown> = {};
+  cyclic["self"] = cyclic;
+
+  expect(normalizeFeltBigints({ value: 15n })).toEqual({ value: "0xf" });
+  expect(normalizeFeltBigints(accessor)).toBeUndefined();
+  expect(normalizeFeltBigints(cyclic)).toBeUndefined();
+  expect(getterCalls).toBe(0);
 });

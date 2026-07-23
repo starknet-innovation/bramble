@@ -11,6 +11,7 @@ import {
   readGrantOriginInput,
   readRequestAccountsInput,
   readRevealSecretsInput,
+  readRevokeOriginInput,
   readSaveAddressInput,
   readSetActiveAccountInput,
   readSetActiveNetworkInput,
@@ -288,6 +289,55 @@ describe("background message parsers", () => {
     expect(
       readAddAccountInput({ networkId: "SN_MAIN", type: "wallet.addAccount", vaultPassphrase }),
     ).toBeNull();
+  });
+
+  test("rejects create-account messages with an out-of-range derivation index", () => {
+    // A negative or non-safe-integer index is normalized to null and rejected
+    // before the input reaches the vault service.
+    expect(
+      readCreateAccountInput({
+        accountIndex: -1,
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
+      readCreateAccountInput({
+        addressIndex: 1.5,
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects create-account messages with a non-string mnemonic passphrase", () => {
+    expect(
+      readCreateAccountInput({
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        mnemonicPassphrase: 1234,
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+  });
+
+  test("reads and rejects origin-revocation messages", () => {
+    expect(
+      readRevokeOriginInput({ origin: "https://example.com", type: "wallet.revokeOrigin" }),
+    ).toEqual({ origin: "https://example.com" });
+    expect(
+      readRevokeOriginInput({ origin: "https://example.com", type: "wallet.unlock" }),
+    ).toBeNull();
+    expect(
+      readRevokeOriginInput({
+        debug: true,
+        origin: "https://example.com",
+        type: "wallet.revokeOrigin",
+      }),
+    ).toBeNull();
+    expect(readRevokeOriginInput({ origin: "not-a-url", type: "wallet.revokeOrigin" })).toBeNull();
   });
 
   test("reads reveal-secrets messages requiring a re-entered passphrase", () => {

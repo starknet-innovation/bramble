@@ -41,6 +41,14 @@ describe("walletEventBroadcasts", () => {
     );
   });
 
+  test("also announces the network when an approval switches chains", () => {
+    // A switch-chain approval resolves with the new chain id, so approveOrigin
+    // broadcasts networkChanged alongside the accounts and approvals refresh.
+    expect(
+      walletEventBroadcasts({ type: "wallet.approveOrigin" }, { chainId: MAIN_CHAIN_ID, ok: true }),
+    ).toEqual([accountsChanged, approvalsChanged, networkChanged(MAIN_CHAIN_ID)]);
+  });
+
   test("stays silent on a held connection request — the queue notifier signals it", () => {
     // A held requestAccounts resolves to granted accounts only after approval;
     // the approvals-changed signal is pushed at enqueue time by the notifier,
@@ -60,6 +68,24 @@ describe("walletEventBroadcasts", () => {
     expect(
       walletEventBroadcasts({ type: "wallet.switchChain" }, { chainId: MAIN_CHAIN_ID, ok: true }),
     ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
+  });
+
+  test("stays silent after importing a raw key, so the pasted key never rides a broadcast", () => {
+    // Importing a raw key adds an account and makes it active, but grants it to
+    // no origin — dapps' visible sets are unchanged, so (like wallet.addAccount)
+    // it broadcasts nothing. Critically, the raw import message carries the
+    // private key, and background/index.ts feeds that message into this decision
+    // before dispatching to every tab; returning [] keeps the key off the wire.
+    const events = walletEventBroadcasts(
+      {
+        networkId: "SN_MAIN",
+        privateKey: "0x7e57ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8",
+        type: "wallet.importAccount",
+      },
+      { account: { networkId: "SN_MAIN" }, ok: true },
+    );
+    expect(events).toEqual([]);
+    expect(JSON.stringify(events)).not.toContain("7e57ab1e");
   });
 
   test("announces lock and unlock so pages drop or regain accounts", () => {

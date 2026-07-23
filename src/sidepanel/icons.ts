@@ -6,6 +6,7 @@ const ICONS = {
   activity: '<circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" />',
   alert:
     '<path d="M12 4 2.7 19.3a1 1 0 0 0 .9 1.7h16.8a1 1 0 0 0 .9-1.7z" /><path d="M12 10v4" /><path d="M12 17.5h.01" />',
+  arrowDown: '<path d="M12 5v14" /><path d="m6 13 6 6 6-6" />',
   book: '<path d="M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3z" /><path d="M4 17a3 3 0 0 1 3-3h11" /><path d="M8 8h6" />',
   briefcase:
     '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /><rect width="20" height="14" x="2" y="6" rx="2" />',

@@ -1,0 +1,183 @@
+name: Auto release on merge
+
+# Automatic release-on-merge (issue #58/#59/#60). When a `release/*` or
+# `hotfix/*` branch is promoted into `main`, this cuts the release WITHOUT a
+# manual tag push: it derives the version from the merged branch, creates the
+# `vX.Y.Z` tag on the merge commit, and calls the reusable `release-build.yml`
+# to build/package the correctly-versioned artifact, generate the changelog
+# notes, and create the GitHub Release.
+#
+# TRIGGER + GUARD. It runs on every push to `main`, but only cuts a release when
+# BOTH conditions hold, so ordinary chore/docs merges never trigger one:
+#   1. the merged head branch is `release/vX.Y` or `hotfix/*` (resolved from the
+#      PR associated with the merge commit, with a merge-message fallback); and
+#   2. the single-source gate (scripts/release-version.ts) resolves a version and
+#      the GitHub Release does not already exist (idempotent — a re-run never
+#      double-cuts, but DOES finish a prior run that tagged then failed to build).
+# For a `release/vX.Y` promotion the gate ALSO asserts the branch-implied version
+# (X.Y.0) equals package.json/manifest, so a promotion that forgot the version
+# bump FAILS here instead of shipping a mislabeled artifact (the v0.4.0-as-0.3.0
+# defect). Nothing pushes to `main`; the changelog is maintained on the release
+# branch during prep and consumed as notes here.
+on:
+  push:
+    branches: [main]
+
+# Serialize release cuts. A re-run (or a second push landing while a cut is in
+# flight) must never race another run on tag creation or the Release. Never
+# cancel an in-progress run — cancelling mid-build is exactly what would leave a
+# tag without its Release (a half-cut state).
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  compute:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create + push the release tag on the merge commit
+      pull-requests: read # resolve the merged head branch
+    outputs:
+      should_release: ${{ steps.tag.outputs.should_release }}
+      tag: ${{ steps.gate.outputs.tag }}
+      version: ${{ steps.gate.outputs.version }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      # Resolve the merged head branch for this merge commit. Read entirely in JS
+      # from the API / event payload — no untrusted value is interpolated into a
+      # shell — so there is no injection surface.
+      - name: Resolve merged head branch
+        id: pr
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = context.sha;
+            let head = "";
+            try {
+              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner, repo, commit_sha: sha,
+              });
+              const merged = prs.find((p) => p.merged_at) ?? prs[0];
+              if (merged) head = merged.head.ref;
+            } catch (e) {
+              core.warning(`Could not list PRs for ${sha}: ${e.status || e.message}`);
+            }
+            if (!head) {
+              // Fallback: parse the standard merge-commit subject.
+              const msg = context.payload.head_commit?.message ?? "";
+              const m = msg.match(/^Merge pull request #\d+ from [^/\s]+\/(\S+)/);
+              if (m) head = m[1];
+            }
+            core.info(`Resolved merged head branch: ${head || "(none)"}`);
+            core.setOutput("head_ref", head);
+      # List the release tags that already exist so the gate can fail a hotfix
+      # promotion closed when it resolves to an already-cut tag (a forgotten
+      # version bump). ls-remote is the same authoritative source the tag step
+      # below uses for its idempotency check.
+      - name: List existing release tags
+        id: tags
+        run: |
+          set -euo pipefail
+          existing="$(git ls-remote --tags origin 'refs/tags/v*' \
+            | sed -E 's#.*refs/tags/##; /\^\{\}$/d' \
+            | tr '\n' ' ')"
+          echo "Existing release tags: ${existing:-(none)}"
+          {
+            echo "existing<<TAGS_EOF"
+            echo "$existing"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+      # Single-source release gate. Emits release/version/tag/kind to the step
+      # output; FAILS the job on any drift (e.g. release/vX.Y promoted without the
+      # matching version bump, or a hotfix/* promotion whose tag already exists
+      # because it forgot to bump the version).
+      - name: Release-version gate
+        id: gate
+        env:
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          EXISTING_TAGS: ${{ steps.tags.outputs.existing }}
+        run: bun run check:release-version
+      # Decide whether to cut, and create the tag on the merge commit if needed.
+      #
+      # Idempotency is keyed on the GitHub RELEASE, not the tag: the Release is
+      # the last thing produced, so "Release exists" is the only reliable signal
+      # that a cut fully completed. Keying on the tag instead would wedge the
+      # pipeline — a prior run that pushed the tag but then failed in the build
+      # (network flake, runner loss) leaves the tag WITHOUT a Release, and a
+      # tag-keyed guard would skip forever, never finishing that release.
+      #
+      #   - Release exists AND the tag points at THIS merge commit -> a genuine
+      #     re-run of an already-finished cut; skip (idempotent).
+      #   - Release exists BUT the tag points at a DIFFERENT commit -> the version
+      #     was already released from another commit, yet a new promotion is
+      #     reusing it (a hotfix or re-promotion that forgot to bump). FAIL LOUDLY
+      #     instead of silently skipping — otherwise the hotfix ships no release
+      #     and the operator sees a green no-op.
+      #   - Tag exists but no Release -> a prior run half-cut; reuse the tag and
+      #     proceed so the reusable build (create-or-upload) completes the cut.
+      #   - Neither exists -> create + push the tag, then proceed.
+      - name: Decide release and ensure tag
+        id: tag
+        env:
+          RELEASE: ${{ steps.gate.outputs.release }}
+          TAG: ${{ steps.gate.outputs.tag }}
+          SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$RELEASE" != "true" ]; then
+            echo "Not a release/hotfix promotion — nothing to release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Release exists. Only a re-run of the SAME cut may skip; a new
+            # promotion reusing an already-released version (a forgotten bump)
+            # must fail loudly rather than silently ship nothing.
+            tagged_sha="$(git rev-list -n1 "$TAG" 2>/dev/null || true)"
+            if [ -z "$tagged_sha" ]; then
+              git fetch --no-tags origin "refs/tags/${TAG}:refs/tags/${TAG}" >/dev/null 2>&1 || true
+              tagged_sha="$(git rev-list -n1 "$TAG" 2>/dev/null || true)"
+            fi
+            if [ "$tagged_sha" = "$SHA" ]; then
+              echo "Release ${TAG} already exists on this commit — already cut; skipping (idempotent)."
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::Release ${TAG} already exists on ${tagged_sha:-a different commit}, but this promotion (${SHA}) is a different commit. Version ${TAG#v} was already released; bump package.json and public/manifest.json before promoting (a hotfix or re-promotion must raise the version)."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} exists but no Release — a prior run half-cut; reusing the tag."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Release $TAG" "$SHA"
+            git push origin "refs/tags/${TAG}"
+            echo "Created and pushed ${TAG} on ${SHA}."
+          fi
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
+  # Build/package/notes/release via the SAME reusable workflow the tag-push path
+  # uses. The tag pushed above (by GITHUB_TOKEN) does not itself trigger
+  # release.yml — GitHub suppresses workflow-triggered token pushes — so calling
+  # the reusable build directly is what actually cuts the release.
+  release:
+    needs: compute
+    if: needs.compute.outputs.should_release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-build.yml
+    with:
+      tag: ${{ needs.compute.outputs.tag }}
+      ref: ${{ needs.compute.outputs.tag }}
+      create_release: true

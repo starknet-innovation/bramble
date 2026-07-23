@@ -103,6 +103,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   { message: { type: "wallet.getBalances" }, sender: extensionSender },
   { message: { type: "wallet.deploymentStatus" }, sender: extensionSender },
+  { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
   { message: { type: "wallet.deployAccount" }, sender: extensionSender },
   { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
   { message: { type: "wallet.preferences" }, sender: extensionSender },
@@ -146,7 +147,43 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     },
     sender: extensionSender,
   },
+  { message: { type: "wallet.swapTokens" }, sender: extensionSender },
+  {
+    message: {
+      amount: "0.1",
+      buyTokenId: "SN_MAIN:STRK:0x2",
+      sellTokenId: "SN_MAIN:ETH:0x1",
+      type: "wallet.swapQuote",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      amount: "0.1",
+      buyAmount: "1283.4",
+      buyTokenId: "SN_MAIN:STRK:0x2",
+      quoteId: "dae4e180-e2cb-49f4-bd91-6f3de3a0c3ca",
+      sellTokenId: "SN_MAIN:ETH:0x1",
+      type: "wallet.swapPrepare",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      preparationId: `sha256:${"a".repeat(64)}`,
+      type: "wallet.swapExecute",
+    },
+    sender: extensionSender,
+  },
   { message: { networkId: "SN_MAIN", type: "wallet.addAccount" }, sender: extensionSender },
+  {
+    message: {
+      networkId: "SN_MAIN",
+      privateKey: SECRET_PRIVATE_KEY,
+      type: "wallet.importAccount",
+    },
+    sender: extensionSender,
+  },
   {
     message: {
       mnemonic: SECRET_MNEMONIC,

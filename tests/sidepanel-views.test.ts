@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance, WalletStatus } from "../src/popup/responses";
+import { activityEmptyCopy, homeTabs, visibleHomeBalances } from "../src/sidepanel/home-tabs";
 import { dashboard, WALLET_VIEWS } from "../src/sidepanel/views";
 import { account, preferences, secondAccount } from "./support/sidepanel-fixtures";
 
@@ -43,11 +44,13 @@ describe("sidepanel views", () => {
     expect(html).toContain('aria-selected="true"');
   });
 
-  test("home keeps send and receive as quick actions, not settings or activity", () => {
+  test("home keeps send, swap, and receive as quick actions, not settings or activity", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const hero = html.slice(html.indexOf("hero"), html.indexOf("wallet-dock"));
 
     expect(hero).toContain('data-view="send"');
+    // Swap sits between Send and Receive on the action row.
+    expect(hero).toMatch(/data-view="send"[\s\S]*data-view="swap"[\s\S]*data-view="receive"/);
     expect(hero).toContain('data-view="receive"');
     expect(hero).not.toContain('data-view="settings"');
     expect(html).not.toContain('id="wallet-screen-receive"');
@@ -77,12 +80,13 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-view="backup"');
     expect(html).not.toContain('id="active-network"');
     expect(html).not.toContain('id="active-account"');
+    // Theme is a two-way pin (Dark default / Light); the follow-the-browser
+    // "system" option was removed.
     expect(html).toContain('data-theme-id="dark"');
     expect(html).toContain('data-theme-id="light"');
-    expect(html).toContain('data-theme-id="system"');
-    expect(html).toContain("Match the browser");
+    expect(html).not.toContain('data-theme-id="system"');
     expect(html).toContain('id="currency-select"');
-    // The dock is a solid flat nav card (Clean Mono — no glass material).
+    // The dock is a solid anchored bottom bar (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');
   });
 
@@ -107,20 +111,6 @@ describe("sidepanel views", () => {
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("surfaces pending connection requests as a badge and a home callout", () => {
-    const pending = [
-      { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },
-    ];
-    const home = dashboard("home", status, pending, preferences, { balances: [] });
-    const quiet = dashboard("home", status, [], preferences, { balances: [] });
-
-    expect(home).toContain('class="badge"');
-    expect(home).toContain("connection request waiting");
-    expect(home).toMatch(/callout[^>]*>[\s\S]*data-view="activity"/);
-    expect(quiet).not.toContain('class="badge"');
-    expect(quiet).not.toContain("connection request waiting");
-  });
-
   test("lets the activity screen approve or deny each request by id", () => {
     const pending = [
       { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },
@@ -131,6 +121,26 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-approval-action="approve"');
     expect(html).toContain('data-approval-action="deny"');
     expect(html).toContain(`data-approval-id="${pending[0]?.id}"`);
+  });
+
+  test("swap flow renders the AVNU screen skeleton with staged sections", () => {
+    const html = dashboard("swap", status, [], preferences, { balances: [] });
+
+    expect(html).toContain("Best route via AVNU");
+    expect(html).toContain('id="swap-sell-amount"');
+    expect(html).toContain('id="swap-flip"');
+    expect(html).toContain('id="swap-review"');
+    // Confirm and success stages ship hidden; the bindings stage them. The
+    // success moment carries the drawn ring + check marks.
+    expect(html).toMatch(/id="swap-confirm" hidden/);
+    // The quote-sanity warning slot ships hidden; the bindings surface it when
+    // a route returns materially less value than it costs.
+    expect(html).toMatch(/id="swap-warning"[^>]*hidden/);
+    expect(html).toMatch(/id="swap-success"[^>]*hidden/);
+    expect(html).toContain('class="swap-success-ring"');
+    expect(html).toContain('class="swap-success-check"');
+    expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
+    expect(html).not.toContain("wallet-dock");
   });
 
   test("explains why sending is unavailable instead of failing silently", () => {
@@ -178,7 +188,84 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="activity-refresh"');
 
     const empty = dashboard("activity", status, [], preferences, { balances: [] });
-    expect(empty).toContain("Transactions you submit from this wallet appear here.");
+    expect(empty).toContain(
+      "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.",
+    );
+    expect(empty).not.toContain("Couldn't load on-chain history");
+
+    // historyUnavailable is the final positional arg: the full-screen degraded
+    // notice must render so an empty feed never reads as the account's full
+    // history when the chain source could not be reached. The penultimate arg is
+    // classHashVerification (unrelated here, so null).
+    const degraded = dashboard(
+      "activity",
+      status,
+      [],
+      preferences,
+      { balances: [] },
+      null,
+      [],
+      [],
+      {},
+      [],
+      null,
+      [],
+      null,
+      {},
+      [],
+      [],
+      null,
+      null,
+      null,
+      null,
+      false,
+      null,
+      [],
+      null,
+      null,
+      true,
+    );
+    expect(degraded).toContain(
+      "load on-chain history. Showing transactions recorded on this device only",
+    );
+    expect(degraded).toContain("No transactions recorded on this device yet.");
+  });
+
+  test("home activity tab shows a degraded hint when on-chain history is unreachable", () => {
+    const reachable = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, false);
+    expect(reachable).not.toContain("On-chain history unavailable");
+
+    const degraded = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, true);
+    expect(degraded).toContain("On-chain history unavailable");
+    expect(degraded).toContain("No transactions recorded on this device yet.");
+  });
+
+  test("home Tokens tab renders a retryable error panel when the balance load failed", () => {
+    // A failed balance load has no balances to hide, so visibleHomeBalances
+    // collapses to an empty list and the panel shows the friendly error plus an
+    // in-panel retry button wired to reload balances.
+    expect(visibleHomeBalances({ error: "fetch failed" }, preferences)).toEqual([]);
+
+    const html = homeTabs({ error: "fetch failed" }, preferences, {}, {}, "usd", [], status, false);
+    expect(html).toContain("panel-error");
+    expect(html).toContain("data-reload-balances");
+    expect(html).toContain("Try again");
+    expect(html).not.toContain("No tracked balances yet");
+  });
+
+  test("home tab and activity dock draw empty-state copy from one shared source", () => {
+    // Both surfaces must render byte-identical empty-state copy so a future
+    // reword of one can never drift from the other.
+    expect(activityEmptyCopy(true)).toBe("No transactions recorded on this device yet.");
+    expect(activityEmptyCopy(false)).toContain("No activity yet.");
+
+    const homeReachable = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, false);
+    const dockReachable = dashboard("activity", status, [], preferences, { balances: [] });
+    expect(homeReachable).toContain(activityEmptyCopy(false));
+    expect(dockReachable).toContain(activityEmptyCopy(false));
+
+    const homeDegraded = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, true);
+    expect(homeDegraded).toContain(activityEmptyCopy(true));
   });
 
   test("shows account labels and identicons across header and account flow", () => {
@@ -288,6 +375,37 @@ describe("sidepanel views", () => {
     expect(html).toContain("is-masked");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain("wallet-dock");
+    // An HD-derived active account is restorable from the recovery phrase, so no
+    // imported-account caveat and no "(imported)" key label appear.
+    expect(html).not.toContain('id="reveal-imported-note"');
+    expect(html).not.toContain("(imported)");
+  });
+
+  test("reveal flow warns that the recovery phrase does not restore an imported active account", () => {
+    // A raw-key-imported account is not derived from the wallet phrase; the
+    // screen must say so, using only the provenance already in status (never a
+    // secret), so a user does not wrongly trust the phrase as its backup.
+    const imported = {
+      address: "0xa11ceded",
+      classHash: account.classHash,
+      derivation: { kind: "imported-raw-key" as const },
+      id: "SN_MAIN:0xa11ceded",
+      networkId: "SN_MAIN" as const,
+      publicKeyX: account.publicKeyX,
+    };
+    const importedStatus: WalletStatus = {
+      ...status,
+      accountCount: 1,
+      accounts: [imported],
+      activeAccountId: imported.id,
+    };
+    const html = dashboard("reveal", importedStatus, [], preferences, { balances: [] });
+
+    expect(html).toContain('id="reveal-imported-note"');
+    expect(html).toContain("does not restore it");
+    expect(html).toContain("Active account private key (imported)");
+    // The caveat is drawn from account provenance, never from key material.
+    expect(html).not.toContain(imported.publicKeyX);
   });
 
   test("contacts can be removed from the address book flow", () => {

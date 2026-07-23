@@ -20,16 +20,36 @@ import type { RuntimeSender } from "../../src/background/senders";
 type Handler = (message: unknown, sender?: RuntimeSender) => Promise<unknown>;
 
 /**
+ * Waits for asynchronous approval preparation (for example WebCrypto payload
+ * commitments) and returns the first non-empty queue snapshot.
+ */
+export const waitForPendingApprovals = async <
+  T extends { readonly id: string } = { readonly id: string },
+>(
+  handler: Handler,
+  extensionSender: RuntimeSender,
+): Promise<readonly T[]> => {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const response = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
+      readonly pending: readonly T[];
+    };
+    if (response.pending.length > 0) {
+      return response.pending;
+    }
+    await flushHeld();
+  }
+  throw new Error("no pending approval");
+};
+
+/**
  * Reads the id of the most recently queued approval from the extension page.
  */
 export const latestApprovalId = async (
   handler: Handler,
   extensionSender: RuntimeSender,
 ): Promise<string> => {
-  const response = (await handler({ type: "wallet.pendingApprovals" }, extensionSender)) as {
-    readonly pending: readonly { readonly id: string }[];
-  };
-  const id = response.pending.at(-1)?.id;
+  const pending = await waitForPendingApprovals(handler, extensionSender);
+  const id = pending.at(-1)?.id;
   if (!id) {
     throw new Error("no pending approval");
   }

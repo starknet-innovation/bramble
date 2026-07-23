@@ -81,6 +81,7 @@ describe("createPhishingFeed refresh + cache", () => {
     expect(await store.get(PHISHING_FEED_STORE_KEY)).toEqual({
       domains: ["feed-bad.com"],
       fetchedAt: 1_000,
+      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
   });
@@ -90,7 +91,8 @@ describe("createPhishingFeed refresh + cache", () => {
     await store.set(PHISHING_FEED_STORE_KEY, {
       domains: ["cached-bad.com"],
       fetchedAt: 10_000,
-      source: "https://example.test/feed.json",
+      schemaVersion: 1,
+      source: DEFAULT_PHISHING_FEED_URL,
     });
     const { calls, fetch } = scriptedFetch([new Error("network must not be used")]);
     // now is 1min after fetchedAt, well inside the 6h TTL.
@@ -105,6 +107,7 @@ describe("createPhishingFeed refresh + cache", () => {
     await store.set(PHISHING_FEED_STORE_KEY, {
       domains: ["stale.com"],
       fetchedAt: 0,
+      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
     const { calls, fetch } = scriptedFetch([okResponse({ blocklist: ["fresh.com"] })]);
@@ -114,6 +117,30 @@ describe("createPhishingFeed refresh + cache", () => {
     expect([...(await feed.refresh())]).toEqual(["fresh.com"]);
     expect(calls.length).toBe(1);
   });
+
+  test.each([
+    ["unknown field", { extra: true }],
+    ["wrong schema version", { schemaVersion: 2 }],
+    ["wrong source", { source: "https://attacker.example/list.json" }],
+    ["future timestamp", { fetchedAt: 20_001 }],
+    ["malformed domain", { domains: ["good.example", "com"] }],
+    ["duplicate domain", { domains: ["bad.example", "BAD.EXAMPLE"] }],
+  ])("rejects a cache with %s and refreshes from the authenticated source", async (_, override) => {
+    const store = createMemoryStore();
+    await store.set(PHISHING_FEED_STORE_KEY, {
+      domains: ["cached-bad.com"],
+      fetchedAt: 10_000,
+      schemaVersion: 1,
+      source: DEFAULT_PHISHING_FEED_URL,
+      ...override,
+    });
+    const { calls, fetch } = scriptedFetch([okResponse({ blocklist: ["fresh-safe.example"] })]);
+    const feed = createPhishingFeed({ fetch, now: () => 20_000, store });
+
+    expect([...(await feed.refresh())]).toEqual(["fresh-safe.example"]);
+    expect(calls).toEqual([DEFAULT_PHISHING_FEED_URL]);
+    expect([...feed.blockedDomains()]).not.toContain("cached-bad.com");
+  });
 });
 
 describe("createPhishingFeed fallback chain (fail-safe)", () => {
@@ -122,6 +149,7 @@ describe("createPhishingFeed fallback chain (fail-safe)", () => {
     await store.set(PHISHING_FEED_STORE_KEY, {
       domains: ["cached-bad.com"],
       fetchedAt: 0,
+      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
     const sevenHours = 7 * 60 * 60 * 1000;
@@ -136,6 +164,7 @@ describe("createPhishingFeed fallback chain (fail-safe)", () => {
     await store.set(PHISHING_FEED_STORE_KEY, {
       domains: ["cached-bad.com"],
       fetchedAt: 0,
+      schemaVersion: 1,
       source: DEFAULT_PHISHING_FEED_URL,
     });
     const sevenHours = 7 * 60 * 60 * 1000;

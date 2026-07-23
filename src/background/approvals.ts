@@ -9,6 +9,7 @@ import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { Strk20Action } from "../starknet/strk20/schemas";
+import type { ApprovalContext } from "./approval-context";
 
 /**
  * Maximum queued dapp connection approvals kept in background memory.
@@ -57,6 +58,7 @@ export type ApprovalRiskFlag = {
  */
 export type PendingApproval = {
   readonly blocked?: boolean;
+  readonly context?: ApprovalContext;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
@@ -85,10 +87,20 @@ export type ApprovalPayload = {
 type ApprovalEntry = PendingApproval & ApprovalPayload;
 
 /**
+ * Atomically claimed approval snapshot and its private execution payload. Once
+ * returned, the id is no longer pending and cannot be claimed a second time.
+ */
+export type ApprovalClaim = {
+  readonly approval: PendingApproval;
+  readonly payload: ApprovalPayload | null;
+};
+
+/**
  * In-memory dapp approval queue for connection, watch-asset, and invoke prompts.
  */
 export type ApprovalQueue = {
   readonly approve: (id: string) => PendingApproval | null;
+  readonly claim: (id: string) => ApprovalClaim | null;
   readonly deny: (id: string) => PendingApproval | null;
   readonly get: (id: string) => PendingApproval | null;
   readonly list: () => readonly PendingApproval[];
@@ -100,23 +112,28 @@ export type ApprovalQueue = {
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestDeclare: (input: {
+    readonly context: ApprovalContext;
     readonly declare: ProviderDeclare;
     readonly origin: string;
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestInvoke: (input: {
     readonly calls: readonly Call[];
+    readonly context: ApprovalContext;
     readonly flags: readonly ApprovalRiskFlag[];
     readonly origin: string;
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestSignTypedData: (input: {
+    readonly context: ApprovalContext;
     readonly origin: string;
     readonly summary: string;
     readonly typedData: unknown;
   }) => PendingApproval;
   readonly requestStrk20Invoke: (input: {
     readonly actions: readonly Strk20Action[];
+    readonly calls: readonly Call[];
+    readonly context: ApprovalContext;
     readonly origin: string;
     readonly summaries: readonly string[];
   }) => PendingApproval;
@@ -135,14 +152,62 @@ export type ApprovalQueue = {
 const cloneCall = (call: Call): Call =>
   Array.isArray(call.calldata) ? { ...call, calldata: [...call.calldata] } : { ...call };
 
+const cloneValue = <T>(value: T): T => structuredClone(value);
+
+const readSwitchPayload = (approval: ApprovalEntry): ApprovalPayload | null => {
+  if (approval.chainId === undefined || approval.networkId === undefined) {
+    return null;
+  }
+  return { chainId: approval.chainId, networkId: approval.networkId };
+};
+
+const readStrk20Payload = (approval: ApprovalEntry): ApprovalPayload | null => {
+  if (approval.actions === undefined || approval.calls === undefined) {
+    return null;
+  }
+  return {
+    actions: cloneValue(approval.actions),
+    calls: approval.calls.map(cloneCall),
+  };
+};
+
+/**
+ * Reconstructs the execution payload held on an entry, discriminating on which
+ * private field is set. Typed data, a switch-chain target, a new chain, a
+ * declare, and strk20 actions each map to their own payload shape; a plain
+ * invoke falls through to its cloned calls. Returns null when no payload was
+ * stored (a connection prompt, or an invoke with no calls).
+ */
+const readApprovalPayload = (approval: ApprovalEntry): ApprovalPayload | null => {
+  switch (approval.kind) {
+    case "sign-typed-data":
+      return approval.typedData === undefined
+        ? null
+        : { typedData: cloneValue(approval.typedData) };
+    case "switch-chain":
+      return readSwitchPayload(approval);
+    case "add-chain":
+      return approval.chain === undefined ? null : { chain: cloneValue(approval.chain) };
+    case "declare":
+      return approval.declare === undefined ? null : { declare: cloneValue(approval.declare) };
+    case "strk20-invoke":
+      return readStrk20Payload(approval);
+    case "invoke":
+      return approval.calls === undefined ? null : { calls: approval.calls.map(cloneCall) };
+    default:
+      return null;
+  }
+};
+
 const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
+  ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
   id: approval.id,
   kind: approval.kind,
   origin: approval.origin,
   ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
-  ...(approval.typedData === undefined ? {} : { typedData: approval.typedData }),
+  ...(approval.typedData === undefined ? {} : { typedData: cloneValue(approval.typedData) }),
 });
 
 /**
@@ -172,6 +237,18 @@ export const createApprovalQueue = (): ApprovalQueue => {
     return approval;
   };
 
+  const claim = (id: string): ApprovalClaim | null => {
+    const approval = entry(id);
+    if (!approval) {
+      return null;
+    }
+    pending.delete(id);
+    return {
+      approval: approvalSnapshot(approval),
+      payload: readApprovalPayload(approval),
+    };
+  };
+
   const enqueue = (approval: ApprovalEntry): PendingApproval => {
     if (pending.size >= MAX_PENDING_APPROVALS) {
       throw new WalletError("Too many pending approvals");
@@ -182,6 +259,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
 
   return {
     approve: remove,
+    claim,
     deny: remove,
     get,
     list() {
@@ -189,28 +267,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
     },
     payload(id) {
       const approval = entry(id);
-      if (!approval) {
-        return null;
-      }
-      if (approval.typedData !== undefined) {
-        return { typedData: approval.typedData };
-      }
-      if (approval.chainId !== undefined && approval.networkId !== undefined) {
-        return { chainId: approval.chainId, networkId: approval.networkId };
-      }
-      if (approval.chain !== undefined) {
-        return { chain: approval.chain };
-      }
-      if (approval.declare !== undefined) {
-        return { declare: approval.declare };
-      }
-      if (approval.actions !== undefined) {
-        return { actions: approval.actions };
-      }
-      if (approval.calls === undefined) {
-        return null;
-      }
-      return { calls: approval.calls.map(cloneCall) };
+      return approval ? readApprovalPayload(approval) : null;
     },
     request(origin) {
       if (!isWalletOrigin(origin)) {
@@ -247,26 +304,28 @@ export const createApprovalQueue = (): ApprovalQueue => {
         summaries: [...summaries],
       });
     },
-    requestDeclare({ declare, origin, summaries }) {
+    requestDeclare({ context, declare, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
       return enqueue({
-        declare,
+        context: { ...context },
+        declare: cloneValue(declare),
         id: crypto.randomUUID(),
         kind: "declare",
         origin,
         summaries: [...summaries],
       });
     },
-    requestInvoke({ calls, flags, origin, summaries }) {
+    requestInvoke({ calls, context, flags, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
       return enqueue({
         calls: calls.map(cloneCall),
+        context: { ...context },
         flags: flags.map((flag) => ({ ...flag })),
         id: crypto.randomUUID(),
         kind: "invoke",
@@ -274,26 +333,29 @@ export const createApprovalQueue = (): ApprovalQueue => {
         summaries: [...summaries],
       });
     },
-    requestSignTypedData({ origin, summary, typedData }) {
+    requestSignTypedData({ context, origin, summary, typedData }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
       return enqueue({
+        context: { ...context },
         id: crypto.randomUUID(),
         kind: "sign-typed-data",
         origin,
         summaries: [summary],
-        typedData,
+        typedData: cloneValue(typedData),
       });
     },
-    requestStrk20Invoke({ actions, origin, summaries }) {
+    requestStrk20Invoke({ actions, calls, context, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
       return enqueue({
-        actions: actions.map((action) => ({ ...action })),
+        actions: cloneValue(actions),
+        calls: calls.map(cloneCall),
+        context: { ...context },
         id: crypto.randomUUID(),
         kind: "strk20-invoke",
         origin,

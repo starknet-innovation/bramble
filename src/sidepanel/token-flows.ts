@@ -10,7 +10,7 @@ import { isLikelySpam } from "../starknet/token-registry";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { formatFiat, tokenFiatValue } from "./fiat";
 import { icon } from "./icons";
-import { copyButton, flowHeader, flowScreen } from "./parts";
+import { accountLabel, copyButton, flowHeader, flowScreen } from "./parts";
 import { sparklinePath, sparklineTrend } from "./sparkline";
 import { compactAmount, tokenGlyph } from "./token-row";
 
@@ -74,7 +74,7 @@ export const tokensFlow = (
     flowScreen(
       "tokens",
       `<section class="section">
-        <h2>Add a token</h2>
+        <p class="eyebrow">Add a token</p>
         <form id="token-add-form">
           <label><span>Contract address</span>
             <input class="mono" name="address" placeholder="0x…" required autocomplete="off" spellcheck="false" />
@@ -85,14 +85,14 @@ export const tokensFlow = (
         </form>
       </section>
       <section class="section">
-        <h2>Auto-detect</h2>
+        <p class="eyebrow">Auto-detect</p>
         <p class="hint">Scans a curated list of well-known Starknet tokens for balances you already hold.</p>
         <button id="detect-tokens" class="secondary" type="button">${icon("refresh")}Scan for tokens</button>
         <div id="detect-results"></div>
         <p id="detect-result" role="status"></p>
       </section>
       <section class="section">
-        <h2>Tracked tokens</h2>
+        <p class="eyebrow">Tracked tokens</p>
         ${
           tracked.length === 0
             ? '<p class="empty">No tokens tracked on this network yet.</p>'
@@ -147,20 +147,20 @@ export const tokenDetailFlow = (
         <p class="hint">7-day price from CoinGecko. Shown for information only.</p>
       </section>
       <section class="section">
-        <h2>Your balance</h2>
+        <p class="eyebrow">Your balance</p>
         <div class="token-side">
-          <span class="token-amount">${escapeHtml(balance ? `${balance.formatted} ${token.symbol}` : `0 ${token.symbol}`)}</span>
+          <span class="token-amount">${escapeHtml(balance ? `${compactAmount(balance.formatted)} ${token.symbol}` : `0 ${token.symbol}`)}</span>
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
       </section>
       <section class="section">
-        <h2>Contract</h2>
-        <p class="eyebrow">Address</p>
-        <div class="address-line"><code>${escapeHtml(token.address)}</code>${copyButton(token.address, "Copy token address")}</div>
-        <div class="detail-grid">
-          <div class="detail"><p>Decimals</p><p class="value">${token.decimals}</p></div>
-          <div class="detail"><p>Symbol</p><p class="value">${escapeHtml(token.symbol)}</p></div>
-        </div>
+        <p class="eyebrow">Contract</p>
+        <dl class="receipt">
+          <div class="receipt-row"><dt>Address</dt><dd><code>${escapeHtml(accountLabel(token.address))}</code>${copyButton(token.address, "Copy token address")}</dd></div>
+          <div class="receipt-row"><dt>Symbol</dt><dd>${escapeHtml(token.symbol)}</dd></div>
+          <div class="receipt-row"><dt>Decimals</dt><dd>${token.decimals}</dd></div>
+          <div class="receipt-row"><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div>
+        </dl>
       </section>`,
     )
   );

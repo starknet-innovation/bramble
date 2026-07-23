@@ -235,14 +235,15 @@ describe("createMessageHandler", () => {
     await handler({ type: "wallet.unlock", vaultPassphrase }, sender);
     await expect(
       failingHandler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
-    ).resolves.toEqual({ error: "grant failed" });
+    ).resolves.toEqual({ error: "approval execution failed" });
     await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toMatchObject({
       ok: true,
-      pending: [{ id: pending.id, origin: pending.origin }],
+      pending: [],
     });
-    await expect(
-      handler({ id: pending.id, type: "wallet.approveOrigin" }, sender),
-    ).resolves.toEqual({
+    // A failed claimed approval is terminal and cannot be replayed. The dapp
+    // must issue a fresh request, which can then be approved normally.
+    const retry = approvals.request("https://example.com");
+    await expect(handler({ id: retry.id, type: "wallet.approveOrigin" }, sender)).resolves.toEqual({
       accounts: [account],
       ok: true,
     });

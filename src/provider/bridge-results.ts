@@ -9,21 +9,15 @@ import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { errorForMessage, unknownError, type WalletRpcError } from "../shared/rpc-errors";
 import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
 import { isAccountRef } from "../storage/vault-schema";
+
+export { type ProviderInvokeCall, providerInvokeCalls } from "./invoke-params";
+
 import { providerStrk20Balances, providerStrk20CallAndProof } from "./strk20-bridge";
 
 /**
  * Page-facing account view: only the already-public address and network id.
  */
 export type PublicAccount = { readonly address: string; readonly networkId: StarknetNetworkId };
-
-/**
- * Internal camelCase call shape the background consumes for an invoke.
- */
-export type ProviderInvokeCall = {
-  readonly calldata: readonly string[];
-  readonly contractAddress: string;
-  readonly entrypoint: string;
-};
 
 /**
  * Spec accounts result carried to the page (`{ accounts, ok: true }`).
@@ -250,77 +244,6 @@ export const providerStringArrayResult = (result: unknown): readonly string[] | 
     ? result
     : null;
 
-const toCalldataFelt = (value: unknown): string | null => {
-  if (typeof value === "bigint" && value >= 0n) {
-    return `0x${value.toString(16)}`;
-  }
-  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
-    return `0x${BigInt(value).toString(16)}`;
-  }
-  return typeof value === "string" ? value : null;
-};
-
-const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
-  if (
-    !isRecord(call) ||
-    !hasOnlyKnownKeys(call, [
-      "calldata",
-      "contractAddress",
-      "contract_address",
-      "entry_point",
-      "entrypoint",
-    ])
-  ) {
-    return null;
-  }
-  const contractAddress =
-    typeof call["contract_address"] === "string"
-      ? call["contract_address"]
-      : typeof call["contractAddress"] === "string"
-        ? call["contractAddress"]
-        : null;
-  const entrypoint =
-    typeof call["entry_point"] === "string"
-      ? call["entry_point"]
-      : typeof call["entrypoint"] === "string"
-        ? call["entrypoint"]
-        : null;
-  const calldata = call["calldata"] ?? [];
-  if (contractAddress === null || entrypoint === null || !Array.isArray(calldata)) {
-    return null;
-  }
-  const felts = calldata.map(toCalldataFelt);
-  if (!felts.every((item): item is string => item !== null)) {
-    return null;
-  }
-  return { calldata: felts, contractAddress, entrypoint };
-};
-
-/**
- * Parses invoke params, accepting the spec `{ invoke_transaction: [...] }` and
- * the legacy `{ calls: [...] }` shapes, and rejecting a request that carries
- * both. The spec-defined optional `proof` key is accepted so a conforming
- * invoke carrying it is not rejected; the proof itself is not acted on here.
- * Returns the internal camelCase call list.
- */
-export const providerInvokeCalls = (
-  params: Json | undefined,
-): readonly ProviderInvokeCall[] | null => {
-  if (
-    !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["calls", "invoke_transaction", "proof"]) ||
-    (Object.hasOwn(params, "calls") && Object.hasOwn(params, "invoke_transaction"))
-  ) {
-    return null;
-  }
-  const source = params["invoke_transaction"] ?? params["calls"];
-  if (!Array.isArray(source) || source.length === 0) {
-    return null;
-  }
-  const calls = source.map(readInvokeCall);
-  return calls.every((call): call is ProviderInvokeCall => call !== null) ? calls : null;
-};
-
 /**
  * Reads a spec switch-chain param (`{ chainId }`) matching the CHAIN_ID pattern.
  * The spec-defined optional `silent_mode` (boolean) is accepted so a conforming
@@ -388,6 +311,106 @@ const deploymentPayload = (result: unknown): ProviderPayload => {
     },
   };
 };
+type ResultMapper = (result: unknown) => ProviderPayload;
+const failed = (): ProviderPayload => ({ error: unknownError() });
+// The method-agnostic failures checked before per-method mapping: an `{ error }`
+// string and a rejected `{ ok: false, pending }` envelope.
+const readRuntimeFailure = (result: unknown): ProviderPayload | null => {
+  if (!isRecord(result)) return null;
+  if (typeof result["error"] === "string") return { error: errorForMessage(result["error"]) };
+  return result["ok"] === false && isRecord(result["pending"]) ? failed() : null;
+};
+// `{ ok: true, [field]: T }` → `{ result: T }` (permissions, versions, balances…).
+const okFieldPayload = <T>(
+  result: unknown,
+  field: string,
+  parse: (value: unknown) => T | null,
+): ProviderPayload => {
+  const value = isRecord(result) && result["ok"] === true ? parse(result[field]) : null;
+  return value ? { result: value } : failed();
+};
+// `{ ok: true, [flag]: true }` → `{ result: true }` (watchAsset, addStarknetChain).
+const okFlagPayload = (result: unknown, flag: string): ProviderPayload =>
+  isRecord(result) && result["ok"] === true && result[flag] === true ? { result: true } : failed();
+// `{ ok: true, signature: { r, s } }` → the spec `[r, s]` felt pair.
+const signaturePayload: ResultMapper = (result) => {
+  const signature = isRecord(result) && result["ok"] === true ? result["signature"] : null;
+  return isRecord(signature) &&
+    typeof signature["r"] === "string" &&
+    typeof signature["s"] === "string" &&
+    /^0x[0-9a-f]+$/.test(signature["r"]) &&
+    /^0x[0-9a-f]+$/.test(signature["s"])
+    ? { result: [signature["r"], signature["s"]] }
+    : failed();
+};
+// Validates the trusted account list (dapps never see indices or public keys).
+const readAccountRefs = (result: unknown) =>
+  parseAccountsResult(result, isAccountRef, (account) => account.id);
+const accountsViewPayload: ResultMapper = (result) => {
+  const accounts = readAccountRefs(result);
+  return accounts ? { result: { accounts: accounts.map(toPublicAccount), ok: true } } : failed();
+};
+const accountsAddressesPayload: ResultMapper = (result) => {
+  const accounts = readAccountRefs(result);
+  return accounts ? { result: accounts.map((account) => account.address) } : failed();
+};
+// Methods after the chain-id branch yield the chain id for a chain-id envelope
+// (original fall-through), else defer to their own tail.
+const chainIdOr =
+  (rest: ResultMapper): ResultMapper =>
+  (result) => {
+    const chainId = providerChainIdResult(result);
+    return chainId ? { result: chainId.chainId } : rest(result);
+  };
+// A wallet hash that will not pad is UNKNOWN_ERROR; a non-invoke shape defers to
+// the accounts tail (original fall-through). Same idea for declareTxPayload.
+const invokeTxPayload: ResultMapper = (result) => {
+  if (!isRecord(result) || typeof result["transactionHash"] !== "string") {
+    return accountsViewPayload(result);
+  }
+  const hash = padFelt(result["transactionHash"]);
+  return hash ? { result: { transaction_hash: hash } } : failed();
+};
+const declareTxPayload: ResultMapper = (result) => {
+  if (
+    !isRecord(result) ||
+    typeof result["transactionHash"] !== "string" ||
+    typeof result["classHash"] !== "string"
+  ) {
+    return accountsViewPayload(result);
+  }
+  const transactionHash = padFelt(result["transactionHash"]);
+  const classHash = padFelt(result["classHash"]);
+  return transactionHash && classHash
+    ? { result: { class_hash: classHash, transaction_hash: transactionHash } }
+    : failed();
+};
+// switch reports success (not the id) for a chain-id envelope, else the tail.
+const switchChainPayload: ResultMapper = (result) =>
+  providerChainIdResult(result) ? { result: true } : accountsViewPayload(result);
+// One mapper per method, in the original if-chain's precedence; exhaustive.
+const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
+  mc_accounts: chainIdOr(accountsViewPayload),
+  mc_requestAccounts: chainIdOr(accountsViewPayload),
+  wallet_requestAccounts: chainIdOr(accountsAddressesPayload),
+  wallet_requestChainId: chainIdOr(accountsViewPayload),
+  wallet_switchStarknetChain: switchChainPayload,
+  wallet_addInvokeTransaction: chainIdOr(invokeTxPayload),
+  wallet_strk20InvokeTransaction: chainIdOr(invokeTxPayload),
+  wallet_addDeclareTransaction: chainIdOr(declareTxPayload),
+  wallet_addStarknetChain: chainIdOr((result) => okFlagPayload(result, "added")),
+  wallet_deploymentData: deploymentPayload,
+  wallet_watchAsset: (result) => okFlagPayload(result, "watched"),
+  wallet_signTypedData: signaturePayload,
+  wallet_getPermissions: (result) =>
+    okFieldPayload(result, "permissions", providerStringArrayResult),
+  wallet_supportedSpecs: (result) => okFieldPayload(result, "versions", providerStringArrayResult),
+  wallet_supportedWalletApi: (result) =>
+    okFieldPayload(result, "versions", providerStringArrayResult),
+  wallet_strk20Balances: (result) => okFieldPayload(result, "balances", providerStrk20Balances),
+  wallet_strk20PrepareInvoke: (result) =>
+    okFieldPayload(result, "callAndProof", providerStrk20CallAndProof),
+};
 
 /**
  * Converts background runtime results into provider success or rejection
@@ -396,101 +419,4 @@ const deploymentPayload = (result: unknown): ProviderPayload => {
 export const toProviderPayload = (
   result: unknown,
   method: ProviderResultMethod = "mc_accounts",
-): ProviderPayload => {
-  if (isRecord(result) && typeof result["error"] === "string") {
-    return { error: errorForMessage(result["error"]) };
-  }
-  if (isRecord(result) && result["ok"] === false && isRecord(result["pending"])) {
-    return { error: unknownError() };
-  }
-  if (method === "wallet_getPermissions") {
-    const permissions =
-      isRecord(result) && result["ok"] === true
-        ? providerStringArrayResult(result["permissions"])
-        : null;
-    return permissions ? { result: permissions } : { error: unknownError() };
-  }
-  if (method === "wallet_supportedSpecs" || method === "wallet_supportedWalletApi") {
-    const versions =
-      isRecord(result) && result["ok"] === true
-        ? providerStringArrayResult(result["versions"])
-        : null;
-    return versions ? { result: versions } : { error: unknownError() };
-  }
-  if (method === "wallet_deploymentData") {
-    return deploymentPayload(result);
-  }
-  if (method === "wallet_watchAsset") {
-    return isRecord(result) && result["ok"] === true && result["watched"] === true
-      ? { result: true }
-      : { error: unknownError() };
-  }
-  if (method === "wallet_signTypedData") {
-    const signature = isRecord(result) && result["ok"] === true ? result["signature"] : null;
-    return isRecord(signature) &&
-      typeof signature["r"] === "string" &&
-      typeof signature["s"] === "string" &&
-      /^0x[0-9a-f]+$/.test(signature["r"]) &&
-      /^0x[0-9a-f]+$/.test(signature["s"])
-      ? { result: [signature["r"], signature["s"]] }
-      : { error: unknownError() };
-  }
-  if (method === "wallet_strk20Balances") {
-    const balances =
-      isRecord(result) && result["ok"] === true ? providerStrk20Balances(result["balances"]) : null;
-    return balances ? { result: balances } : { error: unknownError() };
-  }
-  if (method === "wallet_strk20PrepareInvoke") {
-    const callAndProof =
-      isRecord(result) && result["ok"] === true
-        ? providerStrk20CallAndProof(result["callAndProof"])
-        : null;
-    return callAndProof ? { result: callAndProof } : { error: unknownError() };
-  }
-  const chainId = providerChainIdResult(result);
-  if (method === "wallet_switchStarknetChain" && chainId) {
-    return { result: true };
-  }
-  if (chainId) {
-    return { result: chainId.chainId };
-  }
-  if (
-    (method === "wallet_addInvokeTransaction" || method === "wallet_strk20InvokeTransaction") &&
-    isRecord(result) &&
-    typeof result["transactionHash"] === "string"
-  ) {
-    const padded = padFelt(result["transactionHash"]);
-    // A hash the wallet itself produced that will not pad is an internal
-    // failure, not a dapp payload problem, so it maps to UNKNOWN_ERROR.
-    return padded ? { result: { transaction_hash: padded } } : { error: unknownError() };
-  }
-  if (method === "wallet_addStarknetChain") {
-    return isRecord(result) && result["ok"] === true && result["added"] === true
-      ? { result: true }
-      : { error: unknownError() };
-  }
-  if (
-    method === "wallet_addDeclareTransaction" &&
-    isRecord(result) &&
-    typeof result["transactionHash"] === "string" &&
-    typeof result["classHash"] === "string"
-  ) {
-    const transactionHash = padFelt(result["transactionHash"]);
-    const classHash = padFelt(result["classHash"]);
-    // Hashes the wallet itself produced that will not pad are an internal
-    // failure, not a dapp payload problem, so they map to UNKNOWN_ERROR.
-    return transactionHash && classHash
-      ? { result: { class_hash: classHash, transaction_hash: transactionHash } }
-      : { error: unknownError() };
-  }
-  // Validate the full list here (trusted context), then reduce to the page view
-  // so dapps never receive derivation indices, class hashes, or public keys.
-  const accounts = parseAccountsResult(result, isAccountRef, (account) => account.id);
-  if (!accounts) {
-    return { error: unknownError() };
-  }
-  if (method === "wallet_requestAccounts") {
-    return { result: accounts.map((account) => account.address) };
-  }
-  return { result: { accounts: accounts.map(toPublicAccount), ok: true } };
-};
+): ProviderPayload => readRuntimeFailure(result) ?? RESULT_MAPPERS[method](result);

@@ -52,9 +52,12 @@ export type AccountLabels = Readonly<Partial<Record<string, string>>>;
 export type DisplayCurrency = "eur" | "gbp" | "usd";
 
 /**
- * UI theme choice applied through the skin contract. `"system"` follows the
- * browser/OS color-scheme preference (light or dark) live; `"dark"` and
- * `"light"` pin a specific skin regardless of the browser.
+ * UI theme choice applied through the skin contract. `"dark"` and `"light"`
+ * pin the two designed skins. `"system"` is a LEGACY stored value only — the
+ * follow-the-browser theme was removed (its system-color neutrals broke the
+ * designed surface tiers and failed contrast) — kept valid here so existing
+ * vault backups and stored preferences never fail validation; the UI resolves
+ * it to the default dark skin and no new writes produce it.
  */
 export type ThemeChoice = "dark" | "light" | "system";
 
@@ -138,7 +141,8 @@ export const isDisplayCurrency = (value: unknown): value is DisplayCurrency =>
   value === "eur" || value === "gbp" || value === "usd";
 
 /**
- * Checks a UI theme choice.
+ * Checks a UI theme choice. Accepts the legacy `"system"` value so stored
+ * preferences and backups from before its removal keep validating.
  */
 export const isThemeChoice = (value: unknown): value is ThemeChoice =>
   value === "dark" || value === "light" || value === "system";

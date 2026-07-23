@@ -3,6 +3,8 @@
  */
 import type { StarkSignature } from "../crypto/krusty";
 import type { AllowanceView } from "../starknet/allowance-discovery";
+import type { SwapCatalogToken } from "../starknet/avnu";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { DiscoveredNft } from "../starknet/nft-metadata";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
@@ -17,6 +19,7 @@ import type {
   ConnectedSite,
   CreateVaultAccountInput,
   EnsureNetworkAccountInput,
+  ImportRawKeyAccountInput,
   OriginGrantInput,
   RevokeOriginInput,
   SetActiveAccountInput,
@@ -24,6 +27,7 @@ import type {
   WalletStatus as VaultStatus,
 } from "../wallet/vault-service";
 import type { PendingApproval } from "./approvals";
+import type { SwapPreparationReview } from "./swap-preparations";
 
 /**
  * Network selector option returned to extension pages.
@@ -198,6 +202,40 @@ export type TokenChartResponse = {
 };
 
 /**
+ * Verified AVNU token catalog returned to extension pages for the swap
+ * picker. Directory data only — a selected untracked token is re-validated
+ * on-chain by the add-token flow before the wallet trusts it.
+ */
+export type SwapTokensResponse = {
+  readonly ok: true;
+  readonly swapTokens: readonly SwapCatalogToken[];
+};
+
+/**
+ * Validated AVNU swap quote view returned to extension pages: display-ready
+ * decimal amounts plus the USD figures for the confirmation receipt.
+ */
+export type SwapQuoteResponse = {
+  readonly ok: true;
+  readonly swapQuote: {
+    readonly buyAmount: string;
+    readonly buyAmountInUsd: number;
+    readonly gasFeesInUsd: number;
+    readonly quoteId: string;
+    readonly sellAmount: string;
+    readonly sellAmountInUsd: number;
+  };
+};
+
+/**
+ * Frozen executable swap review returned before the final one-time confirm.
+ */
+export type SwapPreparationResponse = {
+  readonly ok: true;
+  readonly swapPreparation: SwapPreparationReview;
+};
+
+/**
  * Transfer submission response returned to extension pages.
  */
 export type TransferResponse = {
@@ -242,6 +280,18 @@ export type DeploymentStatusResponse = {
   readonly accountId: string;
   readonly deployed: boolean;
   readonly ok: true;
+};
+
+/**
+ * On-chain class-hash verification returned to extension pages. `verification`
+ * carries the discriminated {@link ClassHashVerification} outcome so the UI can
+ * distinguish verified / mismatch / undeployed / unreachable without re-reading
+ * the chain.
+ */
+export type ClassHashVerificationResponse = {
+  readonly accountId: string;
+  readonly ok: true;
+  readonly verification: ClassHashVerification;
 };
 
 /**
@@ -358,6 +408,7 @@ export type RuntimeResponse =
   | BalancesResponse
   | DeclareResponse
   | ChainIdResponse
+  | ClassHashVerificationResponse
   | ConnectedSitesResponse
   | CreateAccountResponse
   | DeploymentDataResponse
@@ -382,6 +433,9 @@ export type RuntimeResponse =
   | SignHashResponse
   | Strk20BalancesResponse
   | Strk20PrepareResponse
+  | SwapQuoteResponse
+  | SwapPreparationResponse
+  | SwapTokensResponse
   | TokenChartResponse
   | TransferResponse
   | WalletStatus
@@ -396,6 +450,12 @@ export type WalletStatusReader = {
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
+  /**
+   * Imports an account from a raw private key. Optional on this narrow dispatch
+   * type so partial test stubs stay valid; the wired vault service always
+   * provides it.
+   */
+  readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,

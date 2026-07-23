@@ -83,6 +83,9 @@ const walletStub = {
   async ensureNetworkAccount() {
     return harnessAccount;
   },
+  async importRawKeyAccount() {
+    return harnessAccount;
+  },
   async getGrantedAccounts() {
     return [harnessAccount];
   },

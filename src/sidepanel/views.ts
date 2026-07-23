@@ -16,24 +16,17 @@ import type {
 } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { AllowanceView } from "../starknet/allowance-discovery";
+import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { accountDrawer } from "./account-drawer";
-import { allowancesFlow } from "./allowance-views";
 import { approvalCard } from "./approval-cards";
+import { actionableApprovals, approvalTakeover } from "./approval-screen";
 import { formatFiat, formatPriceTimestamp, portfolioDelta, portfolioTotal } from "./fiat";
-import {
-  accountFlow,
-  addressBookFlow,
-  backupFlow,
-  connectedSitesFlow,
-  networkFlow,
-  receiveFlow,
-  sendFlow,
-} from "./flows";
-import { homeTabs, transactionRow, visibleHomeBalances } from "./home-tabs";
+import { backupFlow, simpleFlowScreen } from "./flows";
+import { activityEmptyCopy, homeTabs, transactionRow, visibleHomeBalances } from "./home-tabs";
 import { type IconName, icon } from "./icons";
 import {
   multisigDeployFlow,
@@ -96,6 +89,7 @@ const dockItem = (
 ): string =>
   `<button class="nav-item" data-view="${view}" type="button" role="tab" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" aria-controls="wallet-screen-${view}" aria-selected="${activeView === view}">
     <span class="tab-icon">${icon(name)}${pendingCount > 0 && view === "activity" ? `<span class="badge">${pendingCount}</span>` : ""}</span>
+    <span class="tab-label">${escapeHtml(label)}</span>
   </button>`;
 
 const walletDock = (activeView: WalletView, pendingCount: number): string => `
@@ -139,7 +133,7 @@ const deployNotice = (account: AccountRef | null, deployment: boolean | null): s
         <p id="deploy-result" role="status"></p>
       </div>`;
 
-// The portfolio 24h delta line under the balance: an emerald/red arrow and
+// The portfolio 24h delta line under the balance: a green/red arrow and
 // magnitude beside a muted "percent · 24h" trailing label. Empty when nothing
 // is priced yet (no baseline), so it never renders a misleading zero-change.
 const heroDelta = (
@@ -193,6 +187,7 @@ const homeScreen = (
   transactions: readonly ActivityEntry[],
   priceStale: boolean,
   priceAsOf: number | null,
+  historyUnavailable: boolean,
 ): string => {
   const showTotal = account !== null && Object.keys(prices).length > 0;
   const total = showTotal ? portfolioTotal(visibleHomeBalances(balances, preferences), prices) : 0;
@@ -213,16 +208,24 @@ const homeScreen = (
     </section>
     <div class="action-row">
       ${actionTile("send", "Send", "send", true, account !== null)}
+      ${actionTile("swap", "Swap", "swap", false, account !== null)}
       ${actionTile("receive", "Receive", "receive", false, account !== null)}
     </div>
-    ${homeTabs(balances, preferences, prices, changes, currency, transactions, status)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, transactions, status, historyUnavailable)}`,
   );
 };
+
+// The degraded indicator shown when on-chain history could not be reached, so an
+// empty or short local-only feed never reads as the account's full history.
+// Mirrors the offline-fiat "stale" notice: state the limitation and the action.
+const HISTORY_UNAVAILABLE_NOTICE =
+  "Couldn't load on-chain history. Showing transactions recorded on this device only — check your connection or RPC endpoint and refresh.";
 
 const activityScreen = (
   pending: readonly PendingApproval[],
   status: WalletStatus,
   transactions: readonly ActivityEntry[],
+  historyUnavailable: boolean,
 ): string =>
   dockScreen(
     "activity",
@@ -243,72 +246,90 @@ const activityScreen = (
           <button id="activity-refresh" class="icon-button" type="button" aria-label="Refresh transactions" title="Refresh transactions">${icon("refresh")}</button>
         </div>
       </div>
+      ${historyUnavailable ? `<p class="empty" role="status">${escapeHtml(HISTORY_UNAVAILABLE_NOTICE)}</p>` : ""}
       ${
         transactions.length === 0
-          ? '<p class="empty">Transactions you submit from this wallet appear here.</p>'
+          ? `<p class="empty">${escapeHtml(activityEmptyCopy(historyUnavailable))}</p>`
           : `<ul class="tx-list">${transactions.map(transactionRow).join("")}</ul>`
       }
       <p id="activity-result" role="status"></p>
     </section>`,
   );
 
-const menuRow = (view: WalletView, label: string, name: IconName): string =>
+const menuRow = (view: WalletView, label: string, name: IconName, value?: string): string =>
   `<button class="menu-row" data-view="${view}" type="button">
     <span class="menu-icon">${icon(name)}</span>
     <span class="menu-copy"><strong>${escapeHtml(label)}</strong></span>
+    ${value ? `<span class="menu-value">${escapeHtml(value)}</span>` : ""}
     <span class="menu-chevron">${icon("chevronRight")}</span>
   </button>`;
 
-const settingsScreen = (_status: WalletStatus, preferences: WalletPreferences | null): string =>
+// The settings hub is a scannable map of the wallet, not a pile of buttons:
+// personal preferences lead as compact controls (theme segments, currency),
+// then destinations grouped by intent — Wallet (what you hold and where),
+// Connections (what the outside world can touch), Security (what protects
+// you) — each an inset grouped list with one-line rows. Rows carry their
+// current value where one exists (network) so the screen answers questions
+// before it is tapped. Theme is a two-way pin: Dark (default) or Light; a
+// legacy stored "system" value reads as Dark, matching the entrypoint.
+const settingsScreen = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   dockScreen(
     "settings",
-    // Preferences (theme + display currency) lead the screen, ahead of the tall
-    // navigation menu. Settings content overflows the panel, so the sticky dock
-    // pins over whatever sits at the viewport fold; keeping the compact inline
-    // controls up top means the Appearance Dark/Light toggle is fully visible on
-    // open instead of clipped under the dock, while the deeper flow links below
-    // simply scroll into view (matching the Activity screen's behaviour).
     `<h2>Settings</h2>
-    <p class="eyebrow">Appearance</p>
-    <div class="option-list" role="group" aria-label="Theme">
-      ${(["system", "dark", "light"] as const)
-        .map((theme) => {
-          const active = (preferences?.theme ?? "system") === theme;
-          const label = theme === "system" ? "System" : theme === "light" ? "Light" : "Dark";
-          const hint =
-            theme === "system" ? `<span class="option-sub">Match the browser</span>` : "";
-          return `<button class="option-row" data-theme-id="${theme}" type="button" aria-pressed="${active}">
-            <span class="option-copy"><strong>${label}</strong>${hint}</span>
-            ${active ? `<span class="option-mark">${icon("check")}</span>` : ""}
-          </button>`;
-        })
-        .join("")}
-    </div>
-    <label><span>Display currency</span>
-      <select id="currency-select">
-        ${(["usd", "eur", "gbp"] as const)
-          .map(
-            (currency) =>
-              `<option value="${currency}" ${(preferences?.displayCurrency ?? "usd") === currency ? "selected" : ""}>${currency.toUpperCase()}</option>`,
-          )
+    <section class="section">
+      <p class="eyebrow">Preferences</p>
+      <div class="seg" role="group" aria-label="Theme">
+        ${(["dark", "light"] as const)
+          .map((theme) => {
+            const active = (preferences?.theme === "light" ? "light" : "dark") === theme;
+            const label = theme === "light" ? "Light" : "Dark";
+            return `<button class="seg-option" data-theme-id="${theme}" type="button" aria-pressed="${active}">${label}</button>`;
+          })
           .join("")}
-      </select>
-    </label>
-    <div class="menu-list" role="group" aria-label="Wallet settings">
-      ${menuRow("network", "Network", "globe")}
-      ${menuRow("account", "Manage accounts & groups", "wallet")}
-      ${menuRow("address-book", "Address book", "book")}
-      ${menuRow("connected-sites", "Connected sites", "link")}
-      ${menuRow("allowances", "Allowances", "lock")}
-      ${menuRow("multisigs", "Multisigs", "wallet")}
-      ${menuRow("backup", "Backup & restore", "receive")}
-      ${menuRow("reveal", "Reveal secrets", "lock")}
-    </div>
-    <a class="menu-row" href="https://github.com/mc-wallet/mc-wallet#readme" target="_blank" rel="noreferrer">
-      <span class="menu-icon">${icon("book")}</span>
-      <span class="menu-copy"><strong>Help &amp; docs</strong></span>
-      <span class="menu-chevron">${icon("chevronRight")}</span>
-    </a>
+      </div>
+      <label><span>Display currency</span>
+        <select id="currency-select">
+          ${(["usd", "eur", "gbp"] as const)
+            .map(
+              (currency) =>
+                `<option value="${currency}" ${(preferences?.displayCurrency ?? "usd") === currency ? "selected" : ""}>${currency.toUpperCase()}</option>`,
+            )
+            .join("")}
+        </select>
+      </label>
+    </section>
+    <section class="section">
+      <p class="eyebrow">Wallet</p>
+      <div class="menu-list" role="group" aria-label="Wallet">
+        ${menuRow("network", "Network", "globe", status.network)}
+        ${menuRow("account", "Accounts & groups", "wallet")}
+        ${menuRow("address-book", "Address book", "book")}
+      </div>
+    </section>
+    <section class="section">
+      <p class="eyebrow">Connections</p>
+      <div class="menu-list" role="group" aria-label="Connections">
+        ${menuRow("connected-sites", "Connected sites", "link")}
+        ${menuRow("allowances", "Allowances", "coins")}
+        ${menuRow("multisigs", "Multisigs", "users")}
+      </div>
+    </section>
+    <section class="section">
+      <p class="eyebrow">Security</p>
+      <div class="menu-list" role="group" aria-label="Security">
+        ${menuRow("backup", "Backup & restore", "shield")}
+        ${menuRow("reveal", "Reveal secrets", "lock")}
+      </div>
+    </section>
+    <section class="section">
+      <div class="menu-list">
+        <a class="menu-row" href="https://github.com/mc-wallet/mc-wallet#readme" target="_blank" rel="noreferrer">
+          <span class="menu-icon">${icon("book")}</span>
+          <span class="menu-copy"><strong>Help &amp; docs</strong></span>
+          <span class="menu-chevron">${icon("chevronRight")}</span>
+        </a>
+      </div>
+    </section>
     <p id="display-result" role="status"></p>`,
   );
 
@@ -342,30 +363,24 @@ export const dashboard = (
   priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
   openAssignId: string | null = null,
+  classHashVerification: ClassHashVerification | null = null,
+  historyUnavailable = false,
+  snoozedApprovalIds: readonly string[] = [],
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
   const trackedBalances = "balances" in balances ? balances.balances : [];
-  if (activeView === "send") {
-    return sendFlow(status, account, preferences);
-  }
-  if (activeView === "receive") {
-    return receiveFlow(status, account);
-  }
-  if (activeView === "network") {
-    return networkFlow(status, preferences);
-  }
-  if (activeView === "account") {
-    return accountFlow(status, account, preferences, expandedGroupId);
-  }
-  if (activeView === "address-book") {
-    return addressBookFlow(status, preferences);
-  }
-  if (activeView === "connected-sites") {
-    return connectedSitesFlow(status, connectedSites);
-  }
-  if (activeView === "allowances") {
-    return allowancesFlow(status, account, allowances);
+  const simpleFlow = simpleFlowScreen(activeView, {
+    account,
+    allowances,
+    classHashVerification,
+    connectedSites,
+    expandedGroupId,
+    preferences,
+    status,
+  });
+  if (simpleFlow !== null) {
+    return simpleFlow;
   }
   if (activeView === "multisigs") {
     return multisigsFlow(status, account, multisigs, multisigProposals);
@@ -413,9 +428,18 @@ export const dashboard = (
   if (activeView === "reveal") {
     return revealFlow(status);
   }
+  // Proactive request surfacing: while an unsnoozed dapp request is pending,
+  // every dock view yields to the full-screen takeover — the request IS the
+  // screen, decision-first, the moment the panel opens or is glanced at. Flow
+  // screens above are deliberately exempt so a mid-task form is never torn
+  // down under the user; the takeover waits at the next dock view.
+  const actionable = actionableApprovals(pending, snoozedApprovalIds);
+  if (actionable.length > 0) {
+    return approvalTakeover(actionable, status);
+  }
   const screen =
     activeView === "activity"
-      ? activityScreen(pending, status, transactions)
+      ? activityScreen(pending, status, transactions, historyUnavailable)
       : activeView === "settings"
         ? settingsScreen(status, preferences)
         : homeScreen(
@@ -431,6 +455,7 @@ export const dashboard = (
             transactions,
             priceStale,
             priceAsOf,
+            historyUnavailable,
           );
   return `
     ${walletHeader(status, account, preferences)}

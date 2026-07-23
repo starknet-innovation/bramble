@@ -5,12 +5,14 @@
 import { type Account, CallData, hash, type RpcProvider } from "starknet";
 import { WalletError } from "../shared/errors";
 import type { AccountRef } from "../storage/vault-schema";
-import { isNonZeroStarkFieldElement } from "./networks";
+import { isNonZeroStarkFieldElement, STARKNET_NETWORKS } from "./networks";
 import {
   isContractNotFoundError,
+  isTransportRpcError,
   krustyAccount,
   type StarkHashSigner,
   withRpcFallback,
+  withRpcWrite,
 } from "./provider";
 
 /**
@@ -94,6 +96,11 @@ export const ensureAccountDeployed = async (
     if (error instanceof WalletError) {
       throw error;
     }
+    if (isTransportRpcError(error)) {
+      throw new WalletError(
+        "Account deployment status is unknown. Check the account on-chain before retrying.",
+      );
+    }
     throw new WalletError(
       "This account is not deployed on-chain yet and automatic deployment failed. Fund the account address with STRK to cover fees, then retry.",
     );
@@ -127,28 +134,37 @@ export type DeploySubmission = {
 /**
  * Reads whether an account contract exists on-chain.
  */
-export const getDeploymentStatus = async ({
-  accountAddress,
-  rpcUrls,
-}: DeploymentStatusInput): Promise<boolean> => {
+export const getDeploymentStatus = async (
+  { accountAddress, rpcUrls }: DeploymentStatusInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+): Promise<boolean> => {
   if (!isNonZeroStarkFieldElement(accountAddress)) {
     throw new WalletError("Invalid account address");
   }
-  return withRpcFallback(rpcUrls, (provider) => isAccountDeployed(provider, accountAddress));
+  return withRpcFallback(
+    rpcUrls,
+    (provider) => isAccountDeployed(provider, accountAddress),
+    makeProvider,
+  );
 };
 
 /**
  * Signs and submits the DEPLOY_ACCOUNT transaction for a counterfactual
  * account the user explicitly asked to deploy.
  */
-export const submitAccountDeployment = async ({
-  account,
-  rpcUrls,
-  signHash,
-}: DeployAccountInput): Promise<DeploySubmission> =>
-  withRpcFallback(rpcUrls, async (provider) => {
-    if (await isAccountDeployed(provider, account.address)) {
-      throw new WalletError("Account is already deployed");
-    }
-    return deployAccountContract(krustyAccount(provider, account, signHash), account);
-  });
+export const submitAccountDeployment = async (
+  { account, rpcUrls, signHash }: DeployAccountInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+  makeAccount: typeof krustyAccount = krustyAccount,
+): Promise<DeploySubmission> =>
+  withRpcWrite(
+    rpcUrls,
+    STARKNET_NETWORKS[account.networkId].chainId,
+    async (provider) => {
+      if (await isAccountDeployed(provider, account.address)) {
+        throw new WalletError("Account is already deployed");
+      }
+      return deployAccountContract(makeAccount(provider, account, signHash), account);
+    },
+    makeProvider,
+  );

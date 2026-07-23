@@ -6,6 +6,7 @@ import type { Call } from "starknet";
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
+import { INVOKE_LIMITS } from "../starknet/call-limits";
 import type { StarknetNetworkId } from "../starknet/networks";
 import {
   isHexChainId,
@@ -31,18 +32,28 @@ const readOptionalIndex = (value: unknown): number | null | undefined => {
 const isMnemonicText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
-const isTransferAmount = (value: unknown): value is string =>
+/**
+ * Checks a human-entered decimal token amount string (shared by the transfer
+ * and swap input readers; parsing/scaling happens later via parseTokenAmount).
+ */
+export const isTransferAmount = (value: unknown): value is string =>
   typeof value === "string" && /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value.trim());
 
 const isFeltLikeString = (value: unknown): value is string => {
-  if (typeof value !== "string" || !/^(?:0x[0-9a-fA-F]+|0|[1-9][0-9]*)$/.test(value)) {
+  if (
+    typeof value !== "string" ||
+    value.length > INVOKE_LIMITS.feltCharacters ||
+    !/^(?:0x[0-9a-fA-F]+|0|[1-9][0-9]*)$/.test(value)
+  ) {
     return false;
   }
   return BigInt(value) < STARK_FIELD_PRIME;
 };
 
 const isEntrypoint = (value: unknown): value is string =>
-  typeof value === "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
+  typeof value === "string" &&
+  value.length <= INVOKE_LIMITS.entrypointCharacters &&
+  /^[A-Za-z_][A-Za-z0-9_]*$/.test(value);
 
 const readInvokeCall = (value: unknown): Call | null => {
   if (
@@ -52,6 +63,7 @@ const readInvokeCall = (value: unknown): Call | null => {
     BigInt(value["contractAddress"]) <= 0n ||
     !isEntrypoint(value["entrypoint"]) ||
     !Array.isArray(value["calldata"]) ||
+    value["calldata"].length > INVOKE_LIMITS.calldataFelts ||
     !value["calldata"].every(isFeltLikeString)
   ) {
     return null;
@@ -244,7 +256,7 @@ export const readAddInvokeTransactionInput = (
     message["type"] !== "wallet.addInvokeTransaction" ||
     !Array.isArray(message["calls"]) ||
     message["calls"].length === 0 ||
-    message["calls"].length > 16
+    message["calls"].length > INVOKE_LIMITS.calls
   ) {
     return null;
   }

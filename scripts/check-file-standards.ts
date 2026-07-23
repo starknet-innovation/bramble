@@ -37,6 +37,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/chain-ops.ts",
   "src/background/discovery-ops.ts",
   "src/background/declare-ops.ts",
+  "src/background/import-inputs.ts",
   "src/background/signature-waiters.ts",
   "src/background/index.ts",
   "src/background/message-inputs.ts",
@@ -55,6 +56,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/provider/bridge.ts",
   "src/sidepanel/dom.ts",
   "src/sidepanel/gate-views.ts",
+  "src/sidepanel/import-key-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/onboarding-ui.ts",
   "src/sidepanel/reveal-ui.ts",
@@ -75,6 +77,21 @@ const SUPPRESSION_MARKERS = [
   "biome-" + "ignore",
   "eslint-" + "disable",
 ];
+// C0 control bytes are illegal in TypeScript source: a raw NUL or other stray
+// control byte reclassifies the file as binary, so grep/ripgrep and every
+// grep-based guard silently skip it and the bytes are invisible in editors and
+// review. Tab (9), newline (10) and carriage return (13) are the only permitted
+// controls. Scanned by code point rather than a regex so this rule does not
+// itself embed the control characters it forbids.
+const hasControlByte = (text: string): boolean => {
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    if (code < 0x20 && code !== 9 && code !== 10 && code !== 13) {
+      return true;
+    }
+  }
+  return false;
+};
 const DYNAMIC_CODE_PATTERN =
   /\b(?:eval|importScripts)\s*\(|\bnew Function\b|\b(?:setTimeout|setInterval)\s*\(\s*["']|import\s*\(\s*["']https?:\/\//;
 const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
@@ -83,6 +100,10 @@ const HTML_SINK_FILES = new Set([
   "src/sidepanel/index.ts",
   "src/sidepanel/tokens-ui.ts",
   "src/sidepanel/transfer-ui.ts",
+  // Swap screen dynamic regions (chips, picker rows, receipts): every
+  // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
+  "src/sidepanel/swap-ui.ts",
+  "src/sidepanel/swap-picker.ts",
 ]);
 const HTML_SINK_PATTERN =
   /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML)\b/;
@@ -135,6 +156,10 @@ for (const file of await walk(".")) {
 
   if (file.endsWith(".ts") && !text.trimStart().startsWith("/**")) {
     failures.push(`${file} must start with a doc comment`);
+  }
+
+  if (file.endsWith(".ts") && hasControlByte(text)) {
+    failures.push(`${file} must not contain raw control bytes (use a \\u escape)`);
   }
 
   if (file.startsWith("src/") && file.endsWith(".ts")) {

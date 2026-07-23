@@ -26,6 +26,21 @@ const ENTRY_POINT_PATTERN = /^(?:0x[0-9a-fA-F]{1,64}|[A-Za-z_][A-Za-z0-9_]*)$/;
 // transfer.
 const OPEN_AMOUNT = "OPEN";
 
+/**
+ * Cross-layer STRK20 container limits shared by dapp params, prover responses,
+ * and provider result validation.
+ */
+export const STRK20_LIMITS = {
+  actionCalldataItems: 4_096,
+  actions: 32,
+  balances: 64,
+  invokeCalldataFelts: 4_096,
+  proofDataCharacters: 512 * 1024,
+  proofFacts: 4_096,
+  proofOutputFelts: 4_096,
+  tokens: 64,
+} as const;
+
 const withinField = (value: string): boolean => {
   try {
     return BigInt(value) < STARK_FIELD_PRIME;
@@ -92,6 +107,7 @@ export const readStrk20InvokeCall = (value: unknown): Strk20InvokeCall | null =>
     !isStrk20Address(value["contract_address"]) ||
     !isEntryPoint(value["entry_point"]) ||
     !Array.isArray(value["calldata"]) ||
+    value["calldata"].length > STRK20_LIMITS.invokeCalldataFelts ||
     !value["calldata"].every(isStrk20Felt)
   ) {
     return null;
@@ -193,6 +209,7 @@ const readInvokeAction = (value: Record<string, unknown>): Strk20InvokeAction | 
   hasOnlyKnownKeys(value, ["calldata", "contract", "type"]) &&
   isStrk20Address(value["contract"]) &&
   Array.isArray(value["calldata"]) &&
+  value["calldata"].length <= STRK20_LIMITS.actionCalldataItems &&
   value["calldata"].every(isStrk20CalldataItem)
     ? { calldata: [...value["calldata"]], contract: value["contract"], type: "invoke" }
     : null;
@@ -225,7 +242,7 @@ export const readStrk20Action = (value: unknown): Strk20Action | null => {
  * if any member is malformed.
  */
 export const readStrk20Actions = (value: unknown): readonly Strk20Action[] | null => {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 32) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > STRK20_LIMITS.actions) {
     return null;
   }
   const actions = value.map(readStrk20Action);
@@ -236,7 +253,7 @@ export const readStrk20Actions = (value: unknown): readonly Strk20Action[] | nul
  * Parses a non-empty ADDRESS list used by the balances query.
  */
 export const readStrk20Tokens = (value: unknown): readonly string[] | null => {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 64) {
+  if (!Array.isArray(value) || value.length === 0 || value.length > STRK20_LIMITS.tokens) {
     return null;
   }
   return value.every(isStrk20Address) ? [...value] : null;
@@ -259,9 +276,12 @@ export const isStrk20Proof = (value: unknown): value is Strk20Proof =>
   hasOnlyKnownKeys(value, ["data", "output", "proof_facts"]) &&
   typeof value["data"] === "string" &&
   value["data"].length > 0 &&
+  value["data"].length <= STRK20_LIMITS.proofDataCharacters &&
   Array.isArray(value["output"]) &&
+  value["output"].length <= STRK20_LIMITS.proofOutputFelts &&
   value["output"].every(isStrk20Felt) &&
   Array.isArray(value["proof_facts"]) &&
+  value["proof_facts"].length <= STRK20_LIMITS.proofFacts &&
   value["proof_facts"].every(isStrk20Felt);
 
 /**

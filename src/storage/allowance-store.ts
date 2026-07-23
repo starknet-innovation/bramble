@@ -14,6 +14,7 @@ import {
   type StarknetNetworkId,
 } from "../starknet/networks";
 import type { KeyValueStore } from "./kv";
+import { serializeStoreMutations } from "./mutation-queue";
 import { isAccountId } from "./vault-schema";
 
 /**
@@ -154,24 +155,28 @@ export const createAllowanceStore = ({
   store,
 }: {
   readonly store: KeyValueStore;
-}): AllowanceStore => ({
-  async list() {
-    return [...(await readEntries(store))].reverse();
-  },
-  async record(entry) {
-    const next = toRecord(entry);
-    if (!next) {
-      return;
-    }
-    const kept = (await readEntries(store)).filter((stored) => stored.id !== next.id);
-    const entries = next.amount === "0" ? kept : [...kept.slice(-(MAX_ENTRIES - 1)), next];
-    await store.set(ALLOWANCE_STORE_KEY, [...entries]);
-  },
-  async remove(id) {
-    const kept = (await readEntries(store)).filter((stored) => stored.id !== id);
-    await store.set(ALLOWANCE_STORE_KEY, [...kept]);
-  },
-});
+}): AllowanceStore =>
+  serializeStoreMutations<AllowanceStore>(
+    {
+      async list() {
+        return [...(await readEntries(store))].reverse();
+      },
+      async record(entry) {
+        const next = toRecord(entry);
+        if (!next) {
+          return;
+        }
+        const kept = (await readEntries(store)).filter((stored) => stored.id !== next.id);
+        const entries = next.amount === "0" ? kept : [...kept.slice(-(MAX_ENTRIES - 1)), next];
+        await store.set(ALLOWANCE_STORE_KEY, [...entries]);
+      },
+      async remove(id) {
+        const kept = (await readEntries(store)).filter((stored) => stored.id !== id);
+        await store.set(ALLOWANCE_STORE_KEY, [...kept]);
+      },
+    },
+    ["list"],
+  );
 
 /**
  * In-memory allowance log used as the test and fallback default.

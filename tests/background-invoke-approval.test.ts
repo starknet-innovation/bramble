@@ -12,9 +12,15 @@ import { unavailablePreferencesStore } from "../src/background/runtime-state";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import type { InvokeInput } from "../src/starknet/rpc";
+import { verifyCalls } from "../src/starknet/verify";
 import { memoryActivityLog } from "../src/storage/activity-store";
+import {
+  defaultWalletPreferences,
+  type WalletPreferences,
+  type WalletPreferencesStore,
+} from "../src/storage/preferences-store";
 import type { AccountRef } from "../src/storage/vault-schema";
-import { flushHeld, latestApprovalId } from "./support/held";
+import { flushHeld, latestApprovalId, waitForPendingApprovals } from "./support/held";
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -80,7 +86,16 @@ const walletStub = (connected: readonly AccountRef[]) => ({
   },
 });
 
-const makeHarness = (connected: readonly AccountRef[] = [account]) => {
+// A read-only preferences store returning fixed preferences, so an invoke can
+// be decoded against a populated address book/token list. Only `read` is
+// exercised on the queueing path; the rest stay unavailable.
+const fixedPreferencesStore = (preferences: WalletPreferences): WalletPreferencesStore =>
+  ({ read: async () => preferences }) as unknown as WalletPreferencesStore;
+
+const makeHarness = (
+  connected: readonly AccountRef[] = [account],
+  preferencesStore = unavailablePreferencesStore,
+) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const approvals = createApprovalQueue();
@@ -95,7 +110,7 @@ const makeHarness = (connected: readonly AccountRef[] = [account]) => {
   const handler = createMessageHandler(walletStub(connected), "extension-id", {
     activity,
     approvals,
-    preferencesStore: unavailablePreferencesStore,
+    preferencesStore,
     runtimeRpc: rpc,
     session,
   });
@@ -115,14 +130,14 @@ describe("per-transaction invoke approval (A-H1)", () => {
     // The invoke holds until a decision; inspect the queued approval, then deny
     // so the held request settles and nothing dangles.
     const held = handler(invokeMessage(), contentSender);
-    await flushHeld();
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-
     const pending = (
-      listed as {
-        pending: readonly { kind?: string; summaries?: readonly string[]; origin?: string }[];
-      }
-    ).pending.at(-1);
+      await waitForPendingApprovals<{
+        id: string;
+        kind?: string;
+        origin?: string;
+        summaries?: readonly string[];
+      }>(handler, extensionSender)
+    ).at(-1);
     expect(pending).toMatchObject({ kind: "invoke", origin });
     expect(pending?.summaries?.length).toBe(1);
     expect(invoked).toHaveLength(0);
@@ -136,10 +151,11 @@ describe("per-transaction invoke approval (A-H1)", () => {
     const { activity, handler, invoked } = makeHarness();
 
     const held = handler(invokeMessage(), contentSender);
-    await flushHeld();
-
-    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
-    expect((listed as { pending: readonly { kind?: string }[] }).pending[0]?.kind).toBe("invoke");
+    const pending = await waitForPendingApprovals<{ id: string; kind?: string }>(
+      handler,
+      extensionSender,
+    );
+    expect(pending[0]?.kind).toBe("invoke");
 
     const id = await latestApprovalId(handler, extensionSender);
     await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
@@ -188,5 +204,70 @@ describe("per-transaction invoke approval (A-H1)", () => {
       }),
     ).resolves.toEqual({ error: "origin blocked" });
     expect(invoked).toHaveLength(0);
+  });
+});
+
+// A SN_SEPOLIA contact the SN_MAIN recipient mimics (same leading 6 + trailing
+// 4). It must not influence a SN_MAIN transfer's risk flags — the dApp invoke
+// path scopes its verify context to the active account's network, exactly like
+// the in-wallet Send review (#19 decode/risk parity). Without that scoping the
+// dApp card would raise an address-poisoning flag the Send review never would.
+const CROSS_NETWORK_CONTACT = "0x55555500000000000000000000000000000000000000000000000000000abcd";
+const POISONED_RECIPIENT = "0x555555fffffffffffffffffffffffffffffffffffffffffffffffffffffabcd";
+
+const poisonAcrossNetworks = (): WalletPreferences => ({
+  ...defaultWalletPreferences(),
+  activeNetworkId: "SN_MAIN",
+  addressBook: [
+    {
+      address: CROSS_NETWORK_CONTACT,
+      id: "SN_SEPOLIA:contact",
+      label: "Sepolia savings",
+      networkId: "SN_SEPOLIA",
+    },
+  ],
+});
+
+const poisonedTransferCall = {
+  calldata: [POISONED_RECIPIENT, "1000", "0"],
+  contractAddress: "0x123",
+  entrypoint: "transfer",
+};
+
+describe("dApp invoke decode/risk parity with Send review (#19)", () => {
+  test("scopes the verify context to the account's network, so a cross-network lookalike does not flag", async () => {
+    const preferences = poisonAcrossNetworks();
+
+    // Positive control: unscoped context (the old dApp behaviour) WOULD raise
+    // address-poisoning, proving the divergence the network-scoping fix closes.
+    const unscoped = verifyCalls([poisonedTransferCall], {
+      account,
+      addressBook: preferences.addressBook,
+      tokens: preferences.tokens,
+    });
+    expect(unscoped.flags.some((flag) => flag.code === "address-poisoning")).toBe(true);
+
+    const { handler, invoked } = makeHarness([account], fixedPreferencesStore(preferences));
+    const held = handler(
+      { calls: [poisonedTransferCall], origin, type: "wallet.addInvokeTransaction" as const },
+      contentSender,
+    );
+    await flushHeld();
+    const listed = await handler({ type: "wallet.pendingApprovals" }, extensionSender);
+    const pending = (
+      listed as {
+        pending: readonly { flags?: readonly { code: string }[]; kind?: string }[];
+      }
+    ).pending.at(-1);
+
+    expect(pending?.kind).toBe("invoke");
+    // Network-scoped: the SN_SEPOLIA contact is filtered out, so no poisoning
+    // flag — the dApp card and the Send review agree for this transfer.
+    expect((pending?.flags ?? []).some((flag) => flag.code === "address-poisoning")).toBe(false);
+    expect(invoked).toHaveLength(0);
+
+    const id = await latestApprovalId(handler, extensionSender);
+    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "request rejected" });
   });
 });

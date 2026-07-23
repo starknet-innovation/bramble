@@ -11,6 +11,7 @@ import {
 } from "../starknet/networks";
 import { typedDataHash } from "../starknet/typed-data";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
 import {
@@ -62,7 +63,11 @@ const describeTypedData = (typedData: unknown): string => {
  */
 export const executeSignApproval = async (
   deps: Pick<ChainOpsDeps, "preferencesStore" | "session" | "wallet">,
-  input: { readonly origin: string; readonly typedData: unknown },
+  input: {
+    readonly context?: ApprovalContext;
+    readonly origin: string;
+    readonly typedData: unknown;
+  },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, session, wallet } = deps;
   const passphrase = session.getPassphrase();
@@ -70,8 +75,18 @@ export const executeSignApproval = async (
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
+  if (input.context && preferences.activeNetworkId !== input.context.networkId) {
+    return { error: "approval context changed" };
+  }
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  const account = input.context
+    ? granted.find(
+        (stored) =>
+          stored.id === input.context?.accountId &&
+          stored.networkId === input.context.networkId &&
+          stored.networkId === preferences.activeNetworkId,
+      )
+    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
   }
@@ -89,6 +104,112 @@ export const executeSignApproval = async (
   return { ok: true, signature };
 };
 
+type ChainOpsHandler = (
+  deps: ChainOpsDeps,
+  message: unknown,
+  sender: RuntimeSender | undefined,
+) => Promise<RuntimeResponse>;
+
+const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
+  const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
+  const input = readSignTypedDataInput(message);
+  const passphrase = session.getPassphrase();
+  if (!input) {
+    return { error: "invalid sign typed data request" };
+  }
+  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  // A blocklisted origin gets no signing prompt even if it still holds an old
+  // connection grant — the phishing feed is the defense for the post-grant
+  // case. Mirror the sibling dapp surfaces (provider-ops, declare, strk20).
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
+  }
+  if (!passphrase) {
+    return { error: "wallet locked" };
+  }
+  const preferences = await preferencesStore.read();
+  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  if (!account) {
+    return { error: "origin not connected" };
+  }
+  try {
+    typedDataHash(input.typedData, account.address);
+  } catch {
+    return { error: "invalid typed data" };
+  }
+  // Never auto-sign: queue a per-request approval and hold this response until
+  // the user decides in the side panel. The signature is computed and returned
+  // through this same channel on approval, so it reaches only the requesting
+  // origin and tab.
+  const approval = approvals.requestSignTypedData({
+    context: await createApprovalContext(account, { typedData: input.typedData }),
+    origin: input.origin,
+    summary: describeTypedData(input.typedData),
+    typedData: input.typedData,
+  });
+  notifyApprovalsChanged();
+  return waiters.register(approval.id);
+};
+
+const handleGetChainId: ChainOpsHandler = async (deps, message) => {
+  // The content bridge sends { origin, type }; chain id is public data so the
+  // origin is not gated, but the message must still be well-formed.
+  if (!readOriginRequestInput(message, "wallet.getChainId")) {
+    return { error: "invalid chain id request" };
+  }
+  const preferences = await deps.preferencesStore.read();
+  return { chainId: STARKNET_NETWORKS[preferences.activeNetworkId].chainId, ok: true };
+};
+
+const handleSwitchChain: ChainOpsHandler = async (deps, message, sender) => {
+  const { approvals, extensionId, session, waiters, wallet } = deps;
+  const input = readSwitchChainInput(message);
+  if (!input) {
+    return { error: "invalid switch chain request" };
+  }
+  if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
+    return { error: "sender origin mismatch" };
+  }
+  // Fail closed on a blocklisted origin before surfacing a switch prompt, even
+  // with an existing grant — same perimeter as the other dapp surfaces.
+  if ((deps.guard ?? DEFAULT_ORIGIN_GUARD).isBlocked(input.origin)) {
+    return { error: "origin blocked" };
+  }
+  const networkId = networkIdForChainId(input.chainId);
+  if (!networkId) {
+    return { error: "unsupported chain" };
+  }
+  const passphrase = session.getPassphrase();
+  const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
+  // Only an origin that already holds a connection grant may ask to switch the
+  // network — and even then it may only ask: the switch never happens without
+  // an explicit user approval. A locked or unconnected site is refused.
+  if (granted.length === 0) {
+    return { error: "origin not connected" };
+  }
+  const approval = approvals.requestSwitchChain({
+    chainId: STARKNET_NETWORKS[networkId].chainId,
+    networkId,
+    origin: input.origin,
+    summary: `Switch network to ${STARKNET_NETWORKS[networkId].name}`,
+  });
+  notifyApprovalsChanged();
+  return waiters.register(approval.id);
+};
+
+/**
+ * Dispatch table for provider chain and signing messages, keyed by message
+ * type. Each branch is a self-contained handler, leaving the router a lookup.
+ */
+const CHAIN_OPS_HANDLERS: Readonly<Record<string, ChainOpsHandler>> = {
+  "wallet.getChainId": handleGetChainId,
+  "wallet.signTypedData": handleSignTypedData,
+  "wallet.switchChain": handleSwitchChain,
+};
+
 /**
  * Handles provider chain and typed-data signing messages; returns null for
  * other message types.
@@ -99,97 +220,8 @@ export const handleChainOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const { approvals, extensionId, preferencesStore, session, waiters, wallet } = deps;
-  const guard = deps.guard ?? DEFAULT_ORIGIN_GUARD;
-
-  if (messageType === "wallet.signTypedData") {
-    const input = readSignTypedDataInput(message);
-    const passphrase = session.getPassphrase();
-    if (!input) {
-      return { error: "invalid sign typed data request" };
-    }
-    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
-      return { error: "sender origin mismatch" };
-    }
-    // A blocklisted origin gets no signing prompt even if it still holds an old
-    // connection grant — the phishing feed is the defense for the post-grant
-    // case. Mirror the sibling dapp surfaces (provider-ops, declare, strk20).
-    if (guard.isBlocked(input.origin)) {
-      return { error: "origin blocked" };
-    }
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    const preferences = await preferencesStore.read();
-    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-    const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
-    if (!account) {
-      return { error: "origin not connected" };
-    }
-    try {
-      typedDataHash(input.typedData, account.address);
-    } catch {
-      return { error: "invalid typed data" };
-    }
-    // Never auto-sign: queue a per-request approval and hold this response until
-    // the user decides in the side panel. The signature is computed and returned
-    // through this same channel on approval, so it reaches only the requesting
-    // origin and tab.
-    const approval = approvals.requestSignTypedData({
-      origin: input.origin,
-      summary: describeTypedData(input.typedData),
-      typedData: input.typedData,
-    });
-    notifyApprovalsChanged();
-    return waiters.register(approval.id);
-  }
-
-  if (messageType === "wallet.getChainId") {
-    // The content bridge sends { origin, type }; chain id is public data so the
-    // origin is not gated, but the message must still be well-formed.
-    if (!readOriginRequestInput(message, "wallet.getChainId")) {
-      return { error: "invalid chain id request" };
-    }
-    const preferences = await preferencesStore.read();
-    return { chainId: STARKNET_NETWORKS[preferences.activeNetworkId].chainId, ok: true };
-  }
-
-  if (messageType === "wallet.switchChain") {
-    const input = readSwitchChainInput(message);
-    if (!input) {
-      return { error: "invalid switch chain request" };
-    }
-    if (!isClaimedSenderOrigin(sender, extensionId, input.origin)) {
-      return { error: "sender origin mismatch" };
-    }
-    // Fail closed on a blocklisted origin before surfacing a switch prompt, even
-    // with an existing grant — same perimeter as the other dapp surfaces.
-    if (guard.isBlocked(input.origin)) {
-      return { error: "origin blocked" };
-    }
-    const networkId = networkIdForChainId(input.chainId);
-    if (!networkId) {
-      return { error: "unsupported chain" };
-    }
-    const passphrase = session.getPassphrase();
-    const granted = passphrase ? await wallet.getGrantedAccounts(input.origin, passphrase) : [];
-    // Only an origin that already holds a connection grant may ask to switch the
-    // network — and even then it may only ask: the switch never happens without
-    // an explicit user approval. A locked or unconnected site is refused.
-    if (granted.length === 0) {
-      return { error: "origin not connected" };
-    }
-    const approval = approvals.requestSwitchChain({
-      chainId: STARKNET_NETWORKS[networkId].chainId,
-      networkId,
-      origin: input.origin,
-      summary: `Switch network to ${STARKNET_NETWORKS[networkId].name}`,
-    });
-    notifyApprovalsChanged();
-    return waiters.register(approval.id);
-  }
-
-  return null;
+  const handler = CHAIN_OPS_HANDLERS[messageType];
+  return handler ? handler(deps, message, sender) : null;
 };
 
 /**

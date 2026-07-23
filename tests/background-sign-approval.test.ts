@@ -9,6 +9,7 @@ import { createMessageHandler } from "../src/background/messages";
 import type { RuntimeSender } from "../src/background/senders";
 import { createUnlockSession } from "../src/background/session";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { flushHeld, waitForPendingApprovals } from "./support/held";
 
 const PASSPHRASE = "correct horse battery staple";
 const account: AccountRef = {
@@ -110,16 +111,15 @@ describe("signTypedData approval gate", () => {
     // The request stays pending (no signature yet).
     await Promise.resolve();
     expect(settled).toBe(false);
+    await flushHeld();
 
     // The queued approval is visible to the side panel.
-    const pending = (await handler({ type: "wallet.pendingApprovals" }, page)) as unknown as {
-      pending: { id: string; kind: string }[];
-    };
-    expect(pending.pending).toHaveLength(1);
-    expect(pending.pending[0]?.kind).toBe("sign-typed-data");
+    const pending = await waitForPendingApprovals<{ id: string; kind: string }>(handler, page);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.kind).toBe("sign-typed-data");
 
     // Approving from the side panel delivers the signature back to the dapp.
-    await handler({ id: pending.pending[0]?.id, type: "wallet.approveOrigin" }, page);
+    await handler({ id: pending[0]?.id, type: "wallet.approveOrigin" }, page);
     const result = await held;
     expect(result).toEqual({
       ok: true,
@@ -130,10 +130,9 @@ describe("signTypedData approval gate", () => {
   test("deny rejects the held request with an error", async () => {
     const handler = makeHandler();
     const held = handler(signMessage, content);
-    const pending = (await handler({ type: "wallet.pendingApprovals" }, page)) as unknown as {
-      pending: { id: string }[];
-    };
-    await handler({ id: pending.pending[0]?.id, type: "wallet.denyOrigin" }, page);
+    await flushHeld();
+    const pending = await waitForPendingApprovals(handler, page);
+    await handler({ id: pending[0]?.id, type: "wallet.denyOrigin" }, page);
     expect(await held).toEqual({ error: "request rejected" });
   });
 

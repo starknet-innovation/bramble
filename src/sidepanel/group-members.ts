@@ -135,8 +135,8 @@ export const groupsSection = (
   const createOpen = expandedGroupId === CREATE_GROUP_PANEL || groups.length === 0;
   return `
   <section class="section">
-    <h2>Groups</h2>
-    <p class="hint">Organise accounts into named folders. Open a group to file accounts into it in one pass; each account belongs to a single folder, so filing it here moves it out of any other. Opening one panel closes the last, so only one stays expanded.</p>
+    <p class="eyebrow">Groups</p>
+    <p class="hint">Folders for your accounts. Open one to file accounts into it; an account lives in one folder at a time.</p>
     <ul class="group-manage-list">
       ${createGroupRow(createOpen)}
       ${groups
@@ -151,6 +151,5 @@ export const groupsSection = (
         )
         .join("")}
     </ul>
-    ${groups.length === 0 ? '<p class="hint">No groups yet — create your first above.</p>' : ""}
   </section>`;
 };

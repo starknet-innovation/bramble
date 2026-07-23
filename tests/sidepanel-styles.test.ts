@@ -56,20 +56,63 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/aurora-drift/);
   });
 
-  test("surfaces are lifted by hairline edges plus a gentle low elevation scale", () => {
-    // The elevation scale reaches CSS as custom properties, and floating chrome
-    // (dock, drawer) plus cards (request card) use a hairline edge — a 1px inset
-    // ring — as their primary structure, with a soft shadow only for lift.
+  test("hairlines are dividers between rows, never rings around surfaces", () => {
+    // The de-bordered language: structure comes from grouped fills, inset
+    // hairline DIVIDERS, and gentle shadows. The old --mc-edge inset ring is
+    // gone from the vocabulary entirely — no surface may draw a border box.
     expect(SIDEPANEL_STYLES).toContain(`--mc-elev-sm: ${SHADOW.sm}`);
     expect(SIDEPANEL_STYLES).toContain(`--mc-elev-md: ${SHADOW.md}`);
-    expect(SIDEPANEL_STYLES).toContain("--mc-edge: inset 0 0 0 1px var(--mc-hairline)");
-    // The dock and drawer are solid panels lifted by the edge + a low shadow.
-    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*background: var\(--mc-panel\)/s);
-    expect(SIDEPANEL_STYLES).toMatch(
-      /\.wallet-dock \{[^}]*box-shadow: var\(--mc-edge\), var\(--mc-elev-md\)/s,
-    );
+    expect(SIDEPANEL_STYLES).not.toContain("--mc-edge");
+    expect(SIDEPANEL_STYLES).not.toMatch(/inset 0 0 0 1px/);
     expect(SIDEPANEL_STYLES).toMatch(/\.account-drawer \{[^}]*background: var\(--mc-panel\)/s);
-    expect(SIDEPANEL_STYLES).toMatch(/\.request-card \{[^}]*box-shadow: var\(--mc-edge\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.request-card \{[^}]*box-shadow: var\(--mc-elev-sm\)/s);
+  });
+
+  test("settings and picker rows live in grouped lists with inset dividers", () => {
+    // Grouped lists are the structural backbone: one soft container per group
+    // of rows (menu, option, address book, group manage), flat transparent
+    // rows inside, separation carried by inset hairline dividers.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.menu-list, \.option-list \{[^}]*background: var\(--mc-panel\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.menu-row, button\.option-row, a\.menu-row \{[^}]*background: transparent/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(/\.address-book \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.menu-list > \* \+ \*::before[^{]*\{[^}]*var\(--mc-hairline\)/s,
+    );
+  });
+
+  test("receipts, disclosures, and the segmented control carry structured content", () => {
+    // Facts read as receipt rows (label left, value right, divider between),
+    // advanced forms collapse behind native details disclosures, and either/or
+    // preferences ride the segmented control — not bordered boxes.
+    expect(SIDEPANEL_STYLES).toMatch(/\.receipt \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.receipt-row \+ \.receipt-row::before \{[^}]*var\(--mc-hairline\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(/details\.disclosure \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.seg-option\[aria-pressed="true"\] \{[^}]*background: var\(--mc-panel\)/s,
+    );
+  });
+
+  test("the dock is an anchored full-bleed bottom bar, not a floating card", () => {
+    // Navigation reads as structural chrome: a solid panel drawn to the panel
+    // edges (fixed, no rounded floating card, no bottom offset), separated from
+    // scrolling content by a top hairline plus the softest upward shadow. Its
+    // footprint is single-sourced as --mc-dock-h, which the dock-screen scroll
+    // clearance and the toast stack both derive from.
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*background: var\(--mc-panel\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*position: fixed/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.wallet-dock \{[^}]*bottom: 0/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.wallet-dock \{[^}]*box-shadow: inset 0 1px 0 var\(--mc-hairline\), var\(--mc-elev-up\)/s,
+    );
+    expect(SIDEPANEL_STYLES).not.toMatch(/\.wallet-dock \{[^}]*border-radius/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.screen:not\(\.flow\) \{[^}]*var\(--mc-dock-h\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(/\.toast-stack \{[^}]*var\(--mc-dock-h\)/s);
   });
 
   test("reduced motion collapses every lift and press scale", () => {
@@ -113,10 +156,10 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/:\s*ease-in\b/);
   });
 
-  test("the single emerald accent is reserved for signal, not every surface", () => {
+  test("the single cobalt accent is reserved for signal, not every surface", () => {
     // Restraint check: the accent drives the active dock item, the portfolio tab
-    // indicator, and positive deltas — but resting neutral rows/tiles carry a
-    // neutral fill, so the accent stays a rare highlight.
+    // indicator, and focus — but resting neutral rows/tiles carry a neutral
+    // fill, so the accent stays a rare highlight.
     expect(SIDEPANEL_STYLES).toMatch(/\.tab-indicator \{[^}]*background: var\(--mc-accent\)/s);
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
@@ -131,9 +174,70 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(
       /button\.home-tab\[aria-selected="true"\][^}]*background:(?! transparent)/,
     );
-    expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
     // The token glyph chip is neutral, not accent-filled.
     expect(SIDEPANEL_STYLES).toMatch(/\.token-mark \{[^}]*background: var\(--mc-sunken\)/s);
+  });
+
+  test("market and status semantics ride --mc-positive/--mc-danger, never the brand accent", () => {
+    // Gains, success, and sparkline direction are meaning, not brand: they read
+    // green/red from the semantic tokens so the accent can change hue without
+    // ever recoloring a market signal.
+    expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
+    expect(SIDEPANEL_STYLES).toContain(".tx-status.accepted { color: var(--mc-positive); }");
+    expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
+    // Toast tone is a leading icon chip — green check on positive-soft for
+    // success, red alert on danger-soft for error — a fixed heuristic the eye
+    // reads before any text, while the surface stays a neutral panel.
+    expect(SIDEPANEL_STYLES).toContain(
+      ".toast.success .toast-icon { background: var(--mc-positive-soft); color: var(--mc-positive); }",
+    );
+    expect(SIDEPANEL_STYLES).toContain(
+      ".toast.error .toast-icon { background: var(--mc-danger-soft); color: var(--mc-danger); }",
+    );
+    // The swap success moment draws its ring and check in the semantic green
+    // and collapses to static marks under reduced motion.
+    expect(SIDEPANEL_STYLES).toMatch(/\.swap-success-ring \{[^}]*animation: swap-draw/s);
+    const reducedBlock = SIDEPANEL_STYLES.slice(SIDEPANEL_STYLES.indexOf("prefers-reduced-motion"));
+    expect(reducedBlock).toContain(".swap-success-ring, .swap-success-check");
+    // The pending-count badge ink is the page ground, never the accent's paired
+    // text colour (which tracks the accent, not the danger fill).
+    expect(SIDEPANEL_STYLES).toMatch(/\.badge \{[^}]*color: var\(--mc-bg\)/s);
+  });
+
+  test("focus is one consistent accent ring declared once", () => {
+    // A single focus system: one generic ring (offset halo) plus a hugging
+    // inner ring on filled fields. No other layer may redeclare the outline.
+    const rings = [...SIDEPANEL_STYLES.matchAll(/outline: 2px solid var\(--mc-accent\)/g)];
+    expect(rings.length).toBe(1);
+    expect(SIDEPANEL_STYLES).toContain(
+      ":focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }",
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /input:focus-visible, select:focus-visible, textarea:focus-visible \{[^}]*outline-offset: -2px/s,
+    );
+  });
+
+  test("hover feedback is gated to fine pointers", () => {
+    // Touch fires a phantom :hover on tap; surface-fill hovers must live inside
+    // (hover: hover) media blocks so a tap never strands a highlighted row.
+    const gates = [...SIDEPANEL_STYLES.matchAll(/@media \(hover: hover\) and \(pointer: fine\)/g)];
+    expect(gates.length).toBeGreaterThanOrEqual(8);
+    // Selected controls keep their accent-soft fill under the pointer — the
+    // pressed-state hover rules exist so hovering never visually deselects.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.group-chip\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--mc-accent-soft\)/,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.account-check\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--mc-accent-soft\)/,
+    );
+    // Same guarantee for accent-ink selection: hovering the active dock item
+    // or portfolio tab must never strip its accent back to plain text.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-accent\)/,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-accent\)/,
+    );
   });
 
   test("home action tiles are borderless icons, not boxes", () => {

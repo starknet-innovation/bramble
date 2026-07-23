@@ -4,6 +4,7 @@
  */
 
 import { type ExternalAllowanceScan, scanExternalAllowances } from "../starknet/allowance-scan";
+import { type VerifyClassHashInput, verifyAccountClassHash } from "../starknet/class-hash-verify";
 import {
   computeMultisigTransactionId,
   getMultisigConfig,
@@ -44,6 +45,7 @@ import {
 } from "../starknet/rpc";
 import { createHttpStrk20Service, type Strk20Http } from "../starknet/strk20/http-service";
 import type { Strk20Service } from "../starknet/strk20/service";
+import { scanTransactionHistory, type TransactionHistoryScan } from "../starknet/tx-history-scan";
 
 /**
  * Injectable multisig read operations used by the multisig message handlers.
@@ -80,6 +82,15 @@ export type RuntimeRpc = {
   readonly getNftOwner: (input: NftOwnerInput) => ReturnType<typeof getNftOwner>;
   readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
+  /**
+   * Reads the account's recent on-chain transaction history for the activity
+   * feed. Optional so existing RPC stubs stay valid; when absent the feed shows
+   * only locally recorded transactions. A thrown transport error is treated by
+   * the handler as "history unavailable" and degrades to the local log.
+   */
+  readonly getTransactionHistory?: (
+    input: TransactionHistoryScan,
+  ) => ReturnType<typeof scanTransactionHistory>;
   readonly getTransactionStatuses: (
     input: TransactionStatusInput,
   ) => ReturnType<typeof getTransactionStatuses>;
@@ -93,6 +104,14 @@ export type RuntimeRpc = {
   readonly submitInvokeTransaction: (
     input: InvokeInput,
   ) => ReturnType<typeof submitInvokeTransaction>;
+  /**
+   * On-chain class-hash verification. Optional so existing RPC stubs stay
+   * valid; when absent the account screen reports verification as unavailable
+   * (fail closed — never a silent "verified").
+   */
+  readonly verifyAccountClassHash?: (
+    input: VerifyClassHashInput,
+  ) => ReturnType<typeof verifyAccountClassHash>;
   /**
    * Multisig read surface. Optional so existing RPC stubs stay valid; when
    * absent the multisig handlers report the feature as unavailable.
@@ -129,6 +148,7 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   getNftOwner,
   getTokenBalances,
   getTokenMetadata,
+  getTransactionHistory: scanTransactionHistory,
   getTransactionStatuses,
   multisig: {
     computeTransactionId: computeMultisigTransactionId,
@@ -142,4 +162,5 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   submitErc20Transfer,
   submitInvokeTransaction,
   strk20: createHttpStrk20Service(strk20Http),
+  verifyAccountClassHash,
 };

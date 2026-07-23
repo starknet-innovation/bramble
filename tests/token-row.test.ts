@@ -44,7 +44,8 @@ describe("balanceRow", () => {
 
   test("falls back to a letter badge for an unknown token", () => {
     const glyph = tokenGlyph("0x1234", "FOO");
-    expect(glyph).toBe('<span class="token-mark">FOO</span>');
+    // Letter badges carry a deterministic per-token tint (data-tone).
+    expect(glyph).toMatch(/^<span class="token-mark" data-tone="[0-3]">FOO<\/span>$/);
   });
 
   test("compactAmount groups thousands and trims trailing zeros", () => {
