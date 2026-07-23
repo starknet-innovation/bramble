@@ -14,6 +14,7 @@ import {
 import { unknownError } from "../src/shared/rpc-errors";
 import { isTypedDataShape, typedDataHash } from "../src/starknet/typed-data";
 import type { AccountRef, Vault } from "../src/storage/vault-schema";
+import { flushHeld, waitForPendingApprovals } from "./support/held";
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -45,6 +46,12 @@ describe("typed data hashing", () => {
     expect(isTypedDataShape({ ...typedData, extra: 1 })).toBe(false);
     expect(isTypedDataShape({ primaryType: "Message" })).toBe(false);
     expect(isTypedDataShape("hello")).toBe(false);
+    expect(
+      isTypedDataShape({
+        ...typedData,
+        message: { body: "x".repeat(64 * 1024 + 1) },
+      }),
+    ).toBe(false);
   });
 
   test("hashes valid typed data deterministically", () => {
@@ -165,13 +172,12 @@ describe("wallet.signTypedData handler", () => {
     await Promise.resolve();
     expect(settled).toBe(false);
     expect(signedHashes).toHaveLength(0);
+    await flushHeld();
 
-    const queued = (await handler({ type: "wallet.pendingApprovals" }, pageSender)) as {
-      readonly pending: readonly { readonly id: string; readonly kind: string }[];
-    };
-    expect(queued.pending[0]?.kind).toBe("sign-typed-data");
+    const queued = await waitForPendingApprovals<{ id: string; kind: string }>(handler, pageSender);
+    expect(queued[0]?.kind).toBe("sign-typed-data");
 
-    await handler({ id: queued.pending[0]?.id, type: "wallet.approveOrigin" }, pageSender);
+    await handler({ id: queued[0]?.id, type: "wallet.approveOrigin" }, pageSender);
     expect(await held).toEqual({
       ok: true,
       signature: { publicKey: account.publicKeyX, r: "0x1a", s: "0x2b" },

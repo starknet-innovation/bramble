@@ -9,6 +9,7 @@
  * boundary, so the specific privacy codes reach the dapp intact.
  */
 
+import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { WalletError } from "../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
@@ -26,6 +27,7 @@ import {
 import type { ActivityLog } from "../storage/activity-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -81,14 +83,25 @@ const strk20ErrorMessage = (error: unknown): string =>
 const resolveAccount = async (
   deps: Pick<Strk20OpsDeps, "preferencesStore" | "session" | "wallet">,
   origin: string,
+  expected?: ApprovalContext,
 ): Promise<ResolvedAccount | { readonly error: string }> => {
   const passphrase = deps.session.getPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
   const preferences = await deps.preferencesStore.read();
+  if (expected && preferences.activeNetworkId !== expected.networkId) {
+    return { error: "approval context changed" };
+  }
   const granted = await deps.wallet.getGrantedAccounts(origin, passphrase);
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  const account = expected
+    ? granted.find(
+        (stored) =>
+          stored.id === expected.accountId &&
+          stored.networkId === expected.networkId &&
+          stored.networkId === preferences.activeNetworkId,
+      )
+    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
   }
@@ -236,13 +249,31 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   if ("error" in resolved) {
     return resolved;
   }
-  const approval = deps.approvals.requestStrk20Invoke({
-    actions: input.actions,
-    origin: input.origin,
-    summaries: input.actions.map(summarizeStrk20Action),
-  });
-  notifyApprovalsChanged();
-  return deps.waiters.register(approval.id);
+  try {
+    const callAndProof = await prepareStrk20CallAndProof(strk20Service(deps.runtimeRpc), {
+      account: resolved.account,
+      actions: input.actions,
+      proverUrl: resolved.proverUrl,
+      rpcUrls: resolved.rpcUrls,
+      simulate: false,
+    });
+    const call = strk20CallToInvoke(callAndProof.call);
+    const payload = { actions: input.actions, calls: [call] };
+    const approval = deps.approvals.requestStrk20Invoke({
+      actions: input.actions,
+      calls: [call],
+      context: await createApprovalContext(resolved.account, payload),
+      origin: input.origin,
+      summaries: [
+        ...input.actions.map(summarizeStrk20Action),
+        `Execute ${call.entrypoint} on ${call.contractAddress} (${call.calldata?.length ?? 0} calldata felts)`,
+      ],
+    });
+    notifyApprovalsChanged();
+    return deps.waiters.register(approval.id);
+  } catch (error) {
+    return { error: strk20ErrorMessage(error) };
+  }
 };
 
 /**
@@ -272,29 +303,27 @@ export const handleStrk20Ops = async (
 
 /**
  * Executes a user-approved STRK20 invoke: re-resolves the active account for the
- * origin, rebuilds the call and proof, submits it, and records the transaction.
- * The private action details never reach the activity summary. Returns an error
- * response instead of throwing so the caller can settle the held request.
+ * origin, submits the exact call frozen before review, and records the
+ * transaction. The prover is never contacted after approval, so it cannot
+ * substitute a different executable call after the user's decision.
  */
 export const executeStrk20InvokeApproval = async (
   deps: Strk20ExecuteDeps,
-  approval: { readonly actions: readonly Strk20Action[]; readonly origin: string },
+  approval: {
+    readonly actions: readonly Strk20Action[];
+    readonly calls: readonly Call[];
+    readonly context?: ApprovalContext;
+    readonly origin: string;
+  },
 ): Promise<RuntimeResponse> => {
-  const resolved = await resolveAccount(deps, approval.origin);
+  const resolved = await resolveAccount(deps, approval.origin, approval.context);
   if ("error" in resolved) {
     return resolved;
   }
   try {
-    const callAndProof = await prepareStrk20CallAndProof(strk20Service(deps.runtimeRpc), {
-      account: resolved.account,
-      actions: approval.actions,
-      proverUrl: resolved.proverUrl,
-      rpcUrls: resolved.rpcUrls,
-      simulate: false,
-    });
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: resolved.account,
-      calls: [strk20CallToInvoke(callAndProof.call)],
+      calls: approval.calls,
       rpcUrls: resolved.rpcUrls,
       signHash: (messageHash) =>
         deps.wallet.signHash({

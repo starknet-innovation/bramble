@@ -14,6 +14,7 @@ import {
   ozAccountDeployment,
   parseTokenAmount,
   withRpcFallback,
+  withRpcWrite,
 } from "../src/starknet/rpc";
 import type { AccountRef } from "../src/storage/vault-schema";
 
@@ -109,6 +110,41 @@ describe("starknet RPC helpers", () => {
       ),
     ).rejects.toBe(semantic);
     expect(calls).toEqual(["https://one.example"]);
+  });
+
+  test("preflights write endpoints but never retries after execution begins", async () => {
+    const made: string[] = [];
+    const writes: string[] = [];
+    const provider = (nodeUrl: string) =>
+      ({
+        async getChainId() {
+          if (nodeUrl.includes("offline")) {
+            throw new Error("fetch failed");
+          }
+          return "0x534e5f4d41494e";
+        },
+        toString() {
+          return nodeUrl;
+        },
+      }) as unknown as import("starknet").RpcProvider;
+
+    await expect(
+      withRpcWrite(
+        ["https://offline.example", "https://selected.example", "https://unused.example"],
+        "0x534e5f4d41494e",
+        async (selected) => {
+          writes.push(String(selected));
+          throw new Error("connection reset after submit");
+        },
+        (nodeUrl) => {
+          made.push(nodeUrl);
+          return provider(nodeUrl);
+        },
+      ),
+    ).rejects.toThrow("submission status is unknown");
+
+    expect(made).toEqual(["https://offline.example", "https://selected.example"]);
+    expect(writes).toEqual(["https://selected.example"]);
   });
 
   test("classifies transport versus semantic RPC failures", () => {

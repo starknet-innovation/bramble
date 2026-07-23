@@ -9,21 +9,15 @@ import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
 import { errorForMessage, unknownError, type WalletRpcError } from "../shared/rpc-errors";
 import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
 import { isAccountRef } from "../storage/vault-schema";
+
+export { type ProviderInvokeCall, providerInvokeCalls } from "./invoke-params";
+
 import { providerStrk20Balances, providerStrk20CallAndProof } from "./strk20-bridge";
 
 /**
  * Page-facing account view: only the already-public address and network id.
  */
 export type PublicAccount = { readonly address: string; readonly networkId: StarknetNetworkId };
-
-/**
- * Internal camelCase call shape the background consumes for an invoke.
- */
-export type ProviderInvokeCall = {
-  readonly calldata: readonly string[];
-  readonly contractAddress: string;
-  readonly entrypoint: string;
-};
 
 /**
  * Spec accounts result carried to the page (`{ accounts, ok: true }`).
@@ -249,77 +243,6 @@ export const providerStringArrayResult = (result: unknown): readonly string[] | 
   result.every((item) => typeof item === "string" && item.length > 0)
     ? result
     : null;
-
-const toCalldataFelt = (value: unknown): string | null => {
-  if (typeof value === "bigint" && value >= 0n) {
-    return `0x${value.toString(16)}`;
-  }
-  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
-    return `0x${BigInt(value).toString(16)}`;
-  }
-  return typeof value === "string" ? value : null;
-};
-
-const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
-  if (
-    !isRecord(call) ||
-    !hasOnlyKnownKeys(call, [
-      "calldata",
-      "contractAddress",
-      "contract_address",
-      "entry_point",
-      "entrypoint",
-    ])
-  ) {
-    return null;
-  }
-  const contractAddress =
-    typeof call["contract_address"] === "string"
-      ? call["contract_address"]
-      : typeof call["contractAddress"] === "string"
-        ? call["contractAddress"]
-        : null;
-  const entrypoint =
-    typeof call["entry_point"] === "string"
-      ? call["entry_point"]
-      : typeof call["entrypoint"] === "string"
-        ? call["entrypoint"]
-        : null;
-  const calldata = call["calldata"] ?? [];
-  if (contractAddress === null || entrypoint === null || !Array.isArray(calldata)) {
-    return null;
-  }
-  const felts = calldata.map(toCalldataFelt);
-  if (!felts.every((item): item is string => item !== null)) {
-    return null;
-  }
-  return { calldata: felts, contractAddress, entrypoint };
-};
-
-/**
- * Parses invoke params, accepting the spec `{ invoke_transaction: [...] }` and
- * the legacy `{ calls: [...] }` shapes, and rejecting a request that carries
- * both. The spec-defined optional `proof` key is accepted so a conforming
- * invoke carrying it is not rejected; the proof itself is not acted on here.
- * Returns the internal camelCase call list.
- */
-export const providerInvokeCalls = (
-  params: Json | undefined,
-): readonly ProviderInvokeCall[] | null => {
-  if (
-    !isRecord(params) ||
-    !hasOnlyKnownKeys(params, ["calls", "invoke_transaction", "proof"]) ||
-    (Object.hasOwn(params, "calls") && Object.hasOwn(params, "invoke_transaction"))
-  ) {
-    return null;
-  }
-  const source = params["invoke_transaction"] ?? params["calls"];
-  if (!Array.isArray(source) || source.length === 0) {
-    return null;
-  }
-  const calls = source.map(readInvokeCall);
-  return calls.every((call): call is ProviderInvokeCall => call !== null) ? calls : null;
-};
 
 /**
  * Reads a spec switch-chain param (`{ chainId }`) matching the CHAIN_ID pattern.

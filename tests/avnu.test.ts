@@ -10,6 +10,7 @@ import {
   type SwapHttp,
   unavailableSwapService,
 } from "../src/starknet/avnu";
+import { STARKNET_NETWORKS } from "../src/starknet/networks";
 
 const ETH = "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const STRK = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -99,15 +100,18 @@ describe("avnu swap service", () => {
       { calldata: ["0x1", "0x2"], contractAddress: ETH, entrypoint: "approve" },
       { calldata: ["0x3"], contractAddress: STRK, entrypoint: "multi_route_swap" },
     ];
-    const service = createSwapService({ http: httpReturning({ calls }) });
+    const service = createSwapService({
+      http: httpReturning({ calls, chainId: STARKNET_NETWORKS.SN_MAIN.chainId }),
+    });
     const built = await service.buildCalls({
       networkId: "SN_MAIN",
       quoteId: quotePayload.quoteId,
       slippage: 0.005,
       takerAddress: TAKER,
     });
-    expect(built).toHaveLength(2);
-    expect(built[0]?.entrypoint).toBe("approve");
+    expect(built.calls).toHaveLength(2);
+    expect(built.calls[0]?.entrypoint).toBe("approve");
+    expect(built.chainId).toBe(STARKNET_NETWORKS.SN_MAIN.chainId);
     expect(httpReturning.lastUrl).toBe(`${AVNU_BASE_URLS.SN_MAIN}/swap/v3/build`);
     expect(httpReturning.lastInit?.method).toBe("POST");
     const body = JSON.parse(httpReturning.lastInit?.body ?? "{}") as Record<string, unknown>;
@@ -118,10 +122,23 @@ describe("avnu swap service", () => {
 
   test("rejects malformed calls and out-of-range slippage", async () => {
     for (const bad of [
-      { calls: [] },
-      { calls: [{ calldata: ["nope"], contractAddress: ETH, entrypoint: "approve" }] },
-      { calls: [{ calldata: ["0x1"], contractAddress: ETH, entrypoint: "bad name!" }] },
-      { calls: [{ calldata: ["0x1"], contractAddress: "0xzz", entrypoint: "approve" }] },
+      { calls: [], chainId: STARKNET_NETWORKS.SN_MAIN.chainId },
+      {
+        calls: [{ calldata: ["nope"], contractAddress: ETH, entrypoint: "approve" }],
+        chainId: STARKNET_NETWORKS.SN_MAIN.chainId,
+      },
+      {
+        calls: [{ calldata: ["0x1"], contractAddress: ETH, entrypoint: "bad name!" }],
+        chainId: STARKNET_NETWORKS.SN_MAIN.chainId,
+      },
+      {
+        calls: [{ calldata: ["0x1"], contractAddress: "0xzz", entrypoint: "approve" }],
+        chainId: STARKNET_NETWORKS.SN_MAIN.chainId,
+      },
+      {
+        calls: [{ calldata: ["0x1"], contractAddress: ETH, entrypoint: "approve" }],
+        chainId: "0x1",
+      },
     ]) {
       const service = createSwapService({ http: httpReturning(bad) });
       await expect(

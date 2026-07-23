@@ -1,0 +1,65 @@
+---
+layout: default
+title: Audit findings
+permalink: /security-audit/findings/
+---
+
+# Sanitized findings ledger
+
+This public ledger omits reproduction payloads and exploit mechanics for unremediated
+medium-or-higher findings. The consolidated source report records the affected trust boundary,
+impact, remediation, and retest condition.
+
+| ID | Severity | Status | Area | Summary |
+| --- | --- | --- | --- | --- |
+| MCW-AUD-001 | Low | Open | Root tooling | Biome internal panics do not fail the lint gate |
+| [MCW-SRC-001](../src-package-audit/#mcw-src-001) | High | Resolved | Swap execution | Execution uses a one-time call bundle frozen before confirmation |
+| [MCW-SRC-002](../src-package-audit/#mcw-src-002) | High | Resolved | STRK20 execution | Execution uses the exact prover call frozen before approval |
+| [MCW-SRC-003](../src-package-audit/#mcw-src-003) | Medium | Resolved | RPC submission | Write failover stops before submission begins |
+| [MCW-SRC-004](../src-package-audit/#mcw-src-004) | Medium | Resolved | Approvals | Sensitive approvals carry immutable account, network, chain, and payload context |
+| [MCW-SRC-005](../src-package-audit/#mcw-src-005) | Medium | Resolved | Approvals | Execution atomically claims a pending approval before awaited work |
+| [MCW-SRC-006](../src-package-audit/#mcw-src-006) | Low | Resolved | Phishing enforcement | The live blocklist is rechecked before approved execution |
+| [MCW-SRC-007](../src-package-audit/#mcw-src-007) | Low | Resolved | Plain storage | Concurrent mutations are serialized across each read-modify-write transaction |
+| [MCW-SRC-008](../src-package-audit/#mcw-src-008) | Low | Resolved | Phishing cache | Cached domains receive strict schema, source, time, and normalization checks |
+| [MCW-SRC-009](../src-package-audit/#mcw-src-009) | Low | Resolved | Input validation | Shared structural and protocol-specific resource budgets bound hostile inputs |
+| MCW-DOC-001 | Informational | Resolved | Architecture docs | Raw-key import documentation now matches the shipped boundary |
+
+## MCW-AUD-001 — Biome internal panics do not fail the lint gate
+
+**Evidence.** `bun run check:lint` with pinned Biome `2.5.3` reports
+`internalError/panic` while processing `scripts/check-krusty-adapter.ts` and
+`tests/background-multisig-ops-guards.test.ts`. The command exits successfully, so the subsequent
+`&&` stages in `bun run check` execute.
+
+**Impact.** A security-sensitive file can receive incomplete lint analysis while the required gate
+continues. Type checks and tests still run, and no runtime exploit was demonstrated, so this is an
+audit-assurance weakness rather than a product vulnerability.
+
+**Recommendation.** Pin a Biome release that analyzes the repository without internal errors, or
+wrap the command so any `internalError/panic` diagnostic fails the gate. Add a regression check that
+proves the wrapper fails on an internal diagnostic.
+
+**Retest.** `bun run check:lint` produces no internal error and exits non-zero when an internal
+diagnostic is intentionally simulated.
+
+## MCW-DOC-001 — Raw-key import is shipped but documented as absent
+
+**Evidence.** At the start of the baseline review, `docs/ARCHITECTURE.md` said raw private-key
+import was “not shipped.” The baseline contained the privileged import parser and handler,
+side-panel import UI, vault integration, and dedicated import tests.
+
+**Impact.** Reviewers relying on the architecture document can omit a secret-input and key-storage
+boundary from their threat model.
+
+**Resolution.** The complete import path was audited during the source-package review.
+`docs/ARCHITECTURE.md` now names the privileged message boundary, lock requirement, KMS-only public
+key/address derivation, strict private-key validation, encrypted persistence, duplicate rejection,
+and fail-closed behavior.
+
+**Retest.** Architecture documentation names the shipped import flow, its privilege boundary,
+validation, storage behavior, and failure modes.
+
+## Source findings
+
+See the [consolidated source package audit](../src-package-audit/) for the sanitized evidence,
+impact, resolution, and validation results for MCW-SRC-001 through MCW-SRC-009.

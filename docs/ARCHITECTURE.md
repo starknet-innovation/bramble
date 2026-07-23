@@ -1,3 +1,9 @@
+---
+layout: default
+title: Architecture and internals
+permalink: /architecture/
+---
+
 # MC Wallet — Architecture & Internals
 
 The deep tour: how the extension is wired, the pinned account/multisig class hashes, the dApp provider surface, storage migrations, and the design system. For a quick overview and setup, see the [README](../README.md).
@@ -121,14 +127,20 @@ phrase. `mnemonic` only ever exists inside the encrypted vault envelope.
   they are wiped on the next render. `tests/key-boundary.test.ts` sanctions this reveal only for an
   extension-page sender with the correct passphrase.
 
-### Import private key (not shipped)
+### Import private key
 
-Importing a raw private key is intentionally omitted. Krusty KMS exposes no
-private-key-to-public-key derivation, so the wallet cannot compute an imported key's public key or
-account address without adding local key-derivation crypto — which `CONTRIBUTING.md` forbids
-("Do not add fallback signing, key derivation, or mnemonic validation code"). Shipping it would
-require a new vendored Krusty KMS export and an `"imported"` account-derivation kind across the
-schema, validators, and UI. It is deferred rather than shipped half-tested.
+Raw-key import is shipped as the privileged, extension-page-only `wallet.importAccount` operation.
+The wallet must already be unlocked; the message carries the target network and pasted key but not
+the vault passphrase. `src/background/import-inputs.ts` accepts only an exact request shape and a
+canonical, non-zero Stark private key. Dapps cannot reach this message type.
+
+`deriveImportedAccount` keeps key handling inside the existing Krusty boundary: Krusty recovers the
+public key and derives the pinned OpenZeppelin account address, and the wallet rejects invalid KMS
+outputs. No local key-derivation or signing fallback exists. The account is tagged
+`imported-raw-key`; the private key is written only to the encrypted vault signing-key collection,
+the imported account becomes active, and an existing account is rejected. Invalid input, a locked
+session, unavailable KMS behavior, inconsistent public data, or a vault write failure aborts the
+import without returning a usable account.
 
 ## Design System
 

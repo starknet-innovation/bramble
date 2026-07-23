@@ -110,7 +110,7 @@ describe("approvalCard renders each approval kind", () => {
     const html = approvalCard(approval, status);
 
     expect(html).toContain("Private transaction request");
-    expect(html).toContain("Review each private action.");
+    expect(html).toContain("Review each private action and the frozen execution call.");
     expect(html).toContain("Withdraw 10 to 0x0471…938d");
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${ID}"`);
   });

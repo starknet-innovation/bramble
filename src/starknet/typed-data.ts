@@ -3,7 +3,13 @@
  */
 import { typedData as snip12 } from "starknet";
 import { WalletError } from "../shared/errors";
-import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
+import {
+  hasOnlyKnownKeys,
+  isJsonWithinBudget,
+  isRecord,
+  JSON_BUDGETS,
+  type Json,
+} from "../shared/json";
 import { isStarkFieldElement } from "./networks";
 
 /**
@@ -13,7 +19,7 @@ export const isTypedDataShape = (
   value: unknown,
 ): value is Json & Record<"domain" | "message" | "primaryType" | "types", unknown> =>
   isRecord(value) &&
-  isJson(value) &&
+  isJsonWithinBudget(value, JSON_BUDGETS.typedData) &&
   hasOnlyKnownKeys(value, ["domain", "message", "primaryType", "types"]) &&
   isRecord(value["types"]) &&
   typeof value["primaryType"] === "string" &&

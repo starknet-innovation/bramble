@@ -13,7 +13,12 @@
  * network errors, malformed payloads, and unsupported networks all throw —
  * the wallet fails closed and never signs calldata it could not validate.
  */
-import { isStarkFieldElement, type StarknetNetworkId, sameFelt } from "./networks";
+import {
+  isStarkFieldElement,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "./networks";
 
 /**
  * Minimal HTTP response subset consumed from the injected fetch.
@@ -83,6 +88,15 @@ export type SwapCall = {
 };
 
 /**
+ * Validated AVNU build envelope. The returned chain id must match the network
+ * requested by the wallet before any call can enter review.
+ */
+export type SwapBuild = {
+  readonly calls: readonly SwapCall[];
+  readonly chainId: string;
+};
+
+/**
  * Inputs for fetching the best quote for an exact sell amount.
  */
 export type SwapQuoteInput = {
@@ -108,7 +122,7 @@ export type SwapBuildInput = {
  * throw on any validation or transport failure — fail closed, never guess.
  */
 export type SwapService = {
-  readonly buildCalls: (input: SwapBuildInput) => Promise<readonly SwapCall[]>;
+  readonly buildCalls: (input: SwapBuildInput) => Promise<SwapBuild>;
   readonly getQuote: (input: SwapQuoteInput) => Promise<SwapQuote>;
   readonly listTokens: (networkId: StarknetNetworkId) => Promise<readonly SwapCatalogToken[]>;
 };
@@ -134,6 +148,7 @@ const isEntrypoint = (value: unknown): value is string =>
   typeof value === "string" && /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(value);
 
 const MAX_CALLDATA_LENGTH = 2000;
+const MAX_SWAP_CALLS = 4;
 const MAX_CATALOG_TOKENS = 200;
 
 const isTokenText = (value: unknown, maxLength: number): value is string =>
@@ -244,10 +259,20 @@ export const createSwapService = ({ http }: { readonly http: SwapHttp }): SwapSe
       throw new Error("swap build failed");
     }
     const payload = await response.json();
-    if (!isRecord(payload) || !Array.isArray(payload["calls"]) || payload["calls"].length === 0) {
+    if (
+      !isRecord(payload) ||
+      !isFelt(payload["chainId"]) ||
+      !sameFelt(payload["chainId"], STARKNET_NETWORKS[input.networkId].chainId) ||
+      !Array.isArray(payload["calls"]) ||
+      payload["calls"].length === 0 ||
+      payload["calls"].length > MAX_SWAP_CALLS
+    ) {
       throw new Error("invalid swap build response");
     }
-    return payload["calls"].map(readCall);
+    return {
+      calls: payload["calls"].map(readCall),
+      chainId: payload["chainId"],
+    };
   },
   async listTokens(networkId) {
     const response = await http(
@@ -257,13 +282,16 @@ export const createSwapService = ({ http }: { readonly http: SwapHttp }): SwapSe
       throw new Error("token list failed");
     }
     const payload = await response.json();
-    if (!isRecord(payload) || !Array.isArray(payload["content"])) {
+    if (
+      !isRecord(payload) ||
+      !Array.isArray(payload["content"]) ||
+      payload["content"].length > MAX_CATALOG_TOKENS
+    ) {
       throw new Error("invalid token list response");
     }
     return payload["content"]
       .map(readCatalogToken)
-      .filter((token): token is SwapCatalogToken => token !== null)
-      .slice(0, MAX_CATALOG_TOKENS);
+      .filter((token): token is SwapCatalogToken => token !== null);
   },
   async getQuote(input) {
     const query = new URLSearchParams({

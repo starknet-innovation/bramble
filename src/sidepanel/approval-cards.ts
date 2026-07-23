@@ -15,6 +15,14 @@ import { signRequestDetails } from "./sign-request";
 const decisionRow = (approval: PendingApproval, label: string, locked: boolean): string =>
   `<div class="button-row"><button data-approval-action="approve" data-approval-id="${escapeHtml(approval.id)}" type="button" ${locked || approval.blocked ? "disabled" : ""}>${icon("check")}${label}</button><button class="secondary danger" data-approval-action="deny" data-approval-id="${escapeHtml(approval.id)}" type="button">${icon("x")}Deny</button></div>`;
 
+const contextDetails = (approval: PendingApproval): string => {
+  const context = approval.context;
+  if (!context) {
+    return "";
+  }
+  return `<dl class="request-detail"><div><dt>Account</dt><dd><code>${escapeHtml(accountLabel(context.accountId))}</code></dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
+};
+
 const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -52,6 +60,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       <p class="eyebrow">Transaction request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">${status.locked ? "Unlock the wallet to review and approve this transaction." : "Review each call carefully. Approving signs and submits it from your active account."}</p>
+      ${contextDetails(approval)}
       ${reviewCallsList(approval.summaries ?? [])}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
@@ -64,6 +73,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => `
       <p class="eyebrow">Sign request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Review exactly what this site asks you to sign. Signing does not move funds — only sign messages you understand."}</p>
+      ${contextDetails(approval)}
     </div>
     ${signRequestDetails(approval.typedData)}
     ${reviewPanel(approval.insights ?? [])}
@@ -75,7 +85,8 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
     <div class="request-copy">
       <p class="eyebrow">Private transaction request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
-      <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action. Approving builds the proof and submits it from your active account."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action and the frozen execution call. The prover cannot change it after approval."}</p>
+      ${contextDetails(approval)}
       ${reviewCallsList(approval.summaries ?? [])}
     </div>
     ${reviewPanel(approval.insights ?? [])}
@@ -112,6 +123,7 @@ const declareCard = (approval: PendingApproval, status: WalletStatus): string =>
       <p class="eyebrow">Declare contract request</p>
       <p class="request-origin">${escapeHtml(approval.origin)}</p>
       <p class="hint">${status.locked ? "Unlock the wallet to review and declare this contract class." : "Approving signs and submits a declare transaction from your active account."}</p>
+      ${contextDetails(approval)}
       ${reviewCallsList(approval.summaries ?? [])}
     </div>
     ${reviewPanel(approval.insights ?? [])}

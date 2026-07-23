@@ -11,6 +11,7 @@ import {
 } from "../starknet/networks";
 import { typedDataHash } from "../starknet/typed-data";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
 import {
@@ -62,7 +63,11 @@ const describeTypedData = (typedData: unknown): string => {
  */
 export const executeSignApproval = async (
   deps: Pick<ChainOpsDeps, "preferencesStore" | "session" | "wallet">,
-  input: { readonly origin: string; readonly typedData: unknown },
+  input: {
+    readonly context?: ApprovalContext;
+    readonly origin: string;
+    readonly typedData: unknown;
+  },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, session, wallet } = deps;
   const passphrase = session.getPassphrase();
@@ -70,8 +75,18 @@ export const executeSignApproval = async (
     return { error: "wallet locked" };
   }
   const preferences = await preferencesStore.read();
+  if (input.context && preferences.activeNetworkId !== input.context.networkId) {
+    return { error: "approval context changed" };
+  }
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  const account = granted.find((stored) => stored.networkId === preferences.activeNetworkId);
+  const account = input.context
+    ? granted.find(
+        (stored) =>
+          stored.id === input.context?.accountId &&
+          stored.networkId === input.context.networkId &&
+          stored.networkId === preferences.activeNetworkId,
+      )
+    : granted.find((stored) => stored.networkId === preferences.activeNetworkId);
   if (!account) {
     return { error: "origin not connected" };
   }
@@ -130,6 +145,7 @@ const handleSignTypedData: ChainOpsHandler = async (deps, message, sender) => {
   // through this same channel on approval, so it reaches only the requesting
   // origin and tab.
   const approval = approvals.requestSignTypedData({
+    context: await createApprovalContext(account, { typedData: input.typedData }),
     origin: input.origin,
     summary: describeTypedData(input.typedData),
     typedData: input.typedData,

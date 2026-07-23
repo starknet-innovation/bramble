@@ -6,7 +6,7 @@
  * provider object for ensureAccountDeployed, and a local JSON-RPC stub server
  * for the withRpcFallback-based getDeploymentStatus / submitAccountDeployment.
  */
-import { afterAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { type Account, CallData, hash, type RpcProvider } from "starknet";
 import {
   ensureAccountDeployed,
@@ -105,7 +105,9 @@ describe("ensureAccountDeployed", () => {
           },
         }),
         starknetAccount(async () => {
-          throw new Error("insufficient balance for fees");
+          throw Object.assign(new Error("insufficient balance for fees"), {
+            baseError: { code: 53, message: "insufficient balance for fees" },
+          });
         }),
         account,
       ),
@@ -142,39 +144,18 @@ describe("ensureAccountDeployed", () => {
   });
 });
 
-// A minimal JSON-RPC server answering the getClassHashAt method isAccountDeployed
-// issues, so getDeploymentStatus / submitAccountDeployment can be driven through
-// their real withRpcFallback path without a network. `deployed` chooses between a
-// resolved class hash and a contract-not-found (code 20) error.
-const startRpc = (deployed: boolean) => {
-  const server = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      const body = (await req.json()) as { id: number; method: string };
-      const reply = (payload: object) => Response.json({ id: body.id, jsonrpc: "2.0", ...payload });
-      if (body.method === "starknet_getClassHashAt") {
-        return deployed
-          ? reply({ result: CLASS_HASH })
-          : reply({ error: { code: 20, message: "Contract not found" } });
-      }
-      if (body.method === "starknet_specVersion") {
-        return reply({ result: "0.8.1" });
-      }
-      if (body.method === "starknet_chainId") {
-        return reply({ result: "0x534e5f4d41494e" });
-      }
-      return reply({ result: "0x0" });
+const makeProvider = (deployed: boolean): RpcProvider =>
+  ({
+    async getChainId() {
+      return "0x534e5f4d41494e";
     },
-  });
-  return { server, url: `http://127.0.0.1:${server.port}` };
-};
-
-const servers: { stop: (force?: boolean) => void }[] = [];
-afterAll(() => {
-  for (const server of servers) {
-    server.stop(true);
-  }
-});
+    async getClassHashAt() {
+      if (!deployed) {
+        throw notFoundError();
+      }
+      return CLASS_HASH;
+    },
+  }) as unknown as RpcProvider;
 
 describe("getDeploymentStatus", () => {
   test("rejects a zero/invalid account address before any RPC call", async () => {
@@ -184,32 +165,35 @@ describe("getDeploymentStatus", () => {
   });
 
   test("reports deployed when the class hash resolves", async () => {
-    const { server, url } = startRpc(true);
-    servers.push(server);
-    expect(await getDeploymentStatus({ accountAddress: DEPLOY_ADDRESS, rpcUrls: [url] })).toBe(
-      true,
-    );
+    expect(
+      await getDeploymentStatus(
+        { accountAddress: DEPLOY_ADDRESS, rpcUrls: ["https://rpc.example"] },
+        () => makeProvider(true),
+      ),
+    ).toBe(true);
   });
 
   test("reports not deployed on a contract-not-found (code 20) RPC error", async () => {
-    const { server, url } = startRpc(false);
-    servers.push(server);
-    expect(await getDeploymentStatus({ accountAddress: DEPLOY_ADDRESS, rpcUrls: [url] })).toBe(
-      false,
-    );
+    expect(
+      await getDeploymentStatus(
+        { accountAddress: DEPLOY_ADDRESS, rpcUrls: ["https://rpc.example"] },
+        () => makeProvider(false),
+      ),
+    ).toBe(false);
   });
 });
 
 describe("submitAccountDeployment", () => {
   test("refuses when the account is already deployed", async () => {
-    const { server, url } = startRpc(true);
-    servers.push(server);
     await expect(
-      submitAccountDeployment({
-        account,
-        rpcUrls: [url],
-        signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
-      }),
+      submitAccountDeployment(
+        {
+          account,
+          rpcUrls: ["https://rpc.example"],
+          signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
+        },
+        () => makeProvider(true),
+      ),
     ).rejects.toThrow("Account is already deployed");
   });
 });

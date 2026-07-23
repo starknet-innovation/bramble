@@ -17,10 +17,17 @@ import {
   type PendingApproval,
 } from "../src/background/approvals";
 import { createUnlockSession } from "../src/background/session";
+import { DEFAULT_ORIGIN_GUARD } from "../src/security/blocklist";
 import { memoryAllowanceStore } from "../src/storage/allowance-store";
 
 const ORIGIN = "https://dapp.example";
 const uuid = () => crypto.randomUUID();
+const CONTEXT = {
+  accountId: "SN_MAIN:0x1",
+  chainId: "0x534e5f4d41494e",
+  networkId: "SN_MAIN" as const,
+  payloadDigest: `sha256:${"a".repeat(64)}`,
+};
 
 const throwing = (label: string) =>
   new Proxy(
@@ -54,6 +61,7 @@ const baseDeps = (
     activity: throwing("activity"),
     allowanceStore: memoryAllowanceStore(),
     approvals,
+    guard: DEFAULT_ORIGIN_GUARD,
     preferencesStore: throwing("preferencesStore"),
     runtimeRpc: throwing("runtimeRpc"),
     session: createUnlockSession(),
@@ -67,6 +75,7 @@ const baseDeps = (
 const doubleQueue = (approval: PendingApproval | null, payload: unknown): ApprovalQueue =>
   ({
     approve: () => approval,
+    claim: () => (approval ? { approval, payload: payload as never } : null),
     deny: () => approval,
     get: () => approval,
     list: () => [],
@@ -150,6 +159,7 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
     const approvals = createApprovalQueue();
     const { id } = approvals.requestInvoke({
       calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "transfer" }],
+      context: CONTEXT,
       flags: [],
       origin: ORIGIN,
       summaries: ["Transfer"],
@@ -163,6 +173,8 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
     const approvals = createApprovalQueue();
     const { id } = approvals.requestStrk20Invoke({
       actions: [{ amount: "1", kind: "transfer", to: "0x2", token: "0x3" } as never],
+      calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "execute" }],
+      context: CONTEXT,
       origin: ORIGIN,
       summaries: ["Send"],
     });
@@ -174,6 +186,7 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
   test("sign-typed-data approval passes the executor error through", async () => {
     const approvals = createApprovalQueue();
     const { id } = approvals.requestSignTypedData({
+      context: CONTEXT,
       origin: ORIGIN,
       summary: "Sign message",
       typedData: { domain: {}, message: {}, primaryType: "X", types: {} },
@@ -199,6 +212,7 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
   test("declare approval passes the executor error through", async () => {
     const approvals = createApprovalQueue();
     const { id } = approvals.requestDeclare({
+      context: CONTEXT,
       declare: { compiledClassHash: "0x1", contract: {} } as never,
       origin: ORIGIN,
       summaries: ["Declare"],

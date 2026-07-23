@@ -54,6 +54,7 @@ import { createUnlockSession, type UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
 import { handleStrk20Ops } from "./strk20-ops";
 import { handleSwapOps } from "./swap-ops";
+import { createSwapPreparationStore, type SwapPreparationStore } from "./swap-preparations";
 import { handleTokenOps } from "./token-ops";
 import { unlockFailureError } from "./unlock-errors";
 import { handleWalletOps, type WalletOpsDeps } from "./wallet-ops";
@@ -74,6 +75,7 @@ type RouterContext = {
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly swap: SwapService;
+  readonly swapPreparations: SwapPreparationStore;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
 };
@@ -345,7 +347,15 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
 const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleWalletOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) =>
-    handleSwapOps({ ...buildOpsDeps(ctx), swap: ctx.swap }, messageType, message),
+    handleSwapOps(
+      {
+        ...buildOpsDeps(ctx),
+        swap: ctx.swap,
+        swapPreparations: ctx.swapPreparations,
+      },
+      messageType,
+      message,
+    ),
   (ctx, messageType, message) => handleAllowanceOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleNftOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleMultisigOps(buildMultisigDeps(ctx), messageType, message),
@@ -432,6 +442,7 @@ export type MessageHandlerOptions = {
   readonly runtimeRpc?: RuntimeRpc;
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
+  readonly swapPreparations?: SwapPreparationStore;
 };
 
 /**
@@ -456,6 +467,7 @@ export const createMessageHandler = (
     runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
     session: options.session ?? createUnlockSession(),
     swap: options.swap ?? unavailableSwapService,
+    swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
     waiters: createSignatureWaiters(),
     wallet,
   };

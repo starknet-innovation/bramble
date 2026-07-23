@@ -6,22 +6,22 @@
  * must surface as { classHash, transactionHash }. The optional classHash hint is
  * forwarded when present and omitted when absent.
  *
- * `starknet` is module-mocked only for this file (real exports are spread so the
- * Krusty signer's base class stays intact) and restored in afterAll so sibling
- * suites keep the genuine module.
+ * Provider/account factories are injected directly so this coverage remains
+ * isolated and cannot replace the process-wide `starknet` module for sibling
+ * tests running concurrently.
  */
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-import * as realStarknet from "starknet";
+import { describe, expect, test } from "bun:test";
+import type { Account, RpcProvider } from "starknet";
+import { submitDeclareTransaction } from "../src/starknet/declare";
 import type { AccountRef } from "../src/storage/vault-schema";
-
-// Snapshot the genuine module before any mock replaces it in the registry.
-const realExports = { ...realStarknet };
 
 const declareCalls: Array<Record<string, unknown>> = [];
 const classHashAtCalls: string[] = [];
 
 class FakeRpcProvider {
-  public constructor(_config: unknown) {}
+  public async getChainId(): Promise<string> {
+    return "0x534e5f4d41494e";
+  }
   public async getClassHashAt(address: string): Promise<string> {
     classHashAtCalls.push(address);
     // A resolving getClassHashAt means the contract exists, so deployment is
@@ -44,20 +44,9 @@ class FakeAccount {
   }
 }
 
-let submitDeclareTransaction: typeof import("../src/starknet/declare").submitDeclareTransaction;
-
-beforeAll(async () => {
-  mock.module("starknet", () => ({
-    ...realExports,
-    Account: FakeAccount,
-    RpcProvider: FakeRpcProvider,
-  }));
-  ({ submitDeclareTransaction } = await import("../src/starknet/declare"));
-});
-
-afterAll(() => {
-  mock.module("starknet", () => realExports);
-});
+const makeProvider = (): RpcProvider => new FakeRpcProvider() as unknown as RpcProvider;
+const makeAccount = (_provider: RpcProvider, stored: AccountRef): Account =>
+  new FakeAccount({ address: stored.address }) as unknown as Account;
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
@@ -77,14 +66,18 @@ describe("submitDeclareTransaction", () => {
     declareCalls.length = 0;
     classHashAtCalls.length = 0;
 
-    const result = await submitDeclareTransaction({
-      account,
-      classHash: "0x5abc",
-      compiledClassHash: "0x6def",
-      contractClass,
-      rpcUrls: ["https://rpc.example"],
-      signHash,
-    });
+    const result = await submitDeclareTransaction(
+      {
+        account,
+        classHash: "0x5abc",
+        compiledClassHash: "0x6def",
+        contractClass,
+        rpcUrls: ["https://rpc.example"],
+        signHash,
+      },
+      makeProvider,
+      makeAccount,
+    );
 
     expect(result).toEqual({ classHash: "0xc1a55", transactionHash: "0x7dec1a5e" });
     // Deployment was checked (and found already deployed) before declaring.
@@ -101,13 +94,17 @@ describe("submitDeclareTransaction", () => {
   test("omits the optional classHash from the declare payload when not provided", async () => {
     declareCalls.length = 0;
 
-    const result = await submitDeclareTransaction({
-      account,
-      compiledClassHash: "0x6def",
-      contractClass,
-      rpcUrls: ["https://rpc.example"],
-      signHash,
-    });
+    const result = await submitDeclareTransaction(
+      {
+        account,
+        compiledClassHash: "0x6def",
+        contractClass,
+        rpcUrls: ["https://rpc.example"],
+        signHash,
+      },
+      makeProvider,
+      makeAccount,
+    );
 
     expect(result).toEqual({ classHash: "0xc1a55", transactionHash: "0x7dec1a5e" });
     expect(declareCalls[0]).toMatchObject({ compiledClassHash: "0x6def" });

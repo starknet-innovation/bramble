@@ -4,6 +4,13 @@
 import { describe, expect, test } from "bun:test";
 import { createApprovalQueue, MAX_PENDING_APPROVALS } from "../src/background/approvals";
 
+const CONTEXT = {
+  accountId: "SN_MAIN:0x1",
+  chainId: "0x534e5f4d41494e",
+  networkId: "SN_MAIN" as const,
+  payloadDigest: `sha256:${"a".repeat(64)}`,
+};
+
 describe("createApprovalQueue", () => {
   test("deduplicates requests by origin", () => {
     const queue = createApprovalQueue();
@@ -139,7 +146,12 @@ describe("createApprovalQueue payload discrimination", () => {
   test("reconstructs typed data for a sign-typed-data prompt", () => {
     const queue = createApprovalQueue();
     const typedData = { domain: {}, message: { a: 1 }, primaryType: "X", types: {} };
-    const { id } = queue.requestSignTypedData({ origin: ORIGIN, summary: "Sign", typedData });
+    const { id } = queue.requestSignTypedData({
+      context: CONTEXT,
+      origin: ORIGIN,
+      summary: "Sign",
+      typedData,
+    });
     expect(queue.payload(id)).toEqual({ typedData });
   });
 
@@ -164,21 +176,39 @@ describe("createApprovalQueue payload discrimination", () => {
   test("reconstructs a declare payload", () => {
     const queue = createApprovalQueue();
     const declare = { compiledClassHash: "0x1", contract: {} } as never;
-    const { id } = queue.requestDeclare({ declare, origin: ORIGIN, summaries: ["Declare"] });
+    const { id } = queue.requestDeclare({
+      context: CONTEXT,
+      declare,
+      origin: ORIGIN,
+      summaries: ["Declare"],
+    });
     expect(queue.payload(id)).toEqual({ declare });
   });
 
   test("reconstructs strk20 actions", () => {
     const queue = createApprovalQueue();
     const actions = [{ amount: "1", kind: "transfer", to: "0x2", token: "0x3" }] as never;
-    const { id } = queue.requestStrk20Invoke({ actions, origin: ORIGIN, summaries: ["Send"] });
-    expect(queue.payload(id)).toEqual({ actions });
+    const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "execute" }];
+    const { id } = queue.requestStrk20Invoke({
+      actions,
+      calls,
+      context: CONTEXT,
+      origin: ORIGIN,
+      summaries: ["Send"],
+    });
+    expect(queue.payload(id)).toEqual({ actions, calls });
   });
 
   test("reconstructs deep-cloned invoke calls", () => {
     const queue = createApprovalQueue();
     const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }];
-    const { id } = queue.requestInvoke({ calls, flags: [], origin: ORIGIN, summaries: ["Invoke"] });
+    const { id } = queue.requestInvoke({
+      calls,
+      context: CONTEXT,
+      flags: [],
+      origin: ORIGIN,
+      summaries: ["Invoke"],
+    });
     const payload = queue.payload(id);
 
     expect(payload).toEqual({ calls });
@@ -224,28 +254,50 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
   test("rejects declare requests from an invalid origin", () => {
     const queue = createApprovalQueue();
     expect(() =>
-      queue.requestDeclare({ declare, origin: BAD_ORIGIN, summaries: ["Declare"] }),
+      queue.requestDeclare({
+        context: CONTEXT,
+        declare,
+        origin: BAD_ORIGIN,
+        summaries: ["Declare"],
+      }),
     ).toThrow("Invalid origin");
   });
 
   test("rejects invoke requests from an invalid origin", () => {
     const queue = createApprovalQueue();
     expect(() =>
-      queue.requestInvoke({ calls: [], flags: [], origin: BAD_ORIGIN, summaries: ["Invoke"] }),
+      queue.requestInvoke({
+        calls: [],
+        context: CONTEXT,
+        flags: [],
+        origin: BAD_ORIGIN,
+        summaries: ["Invoke"],
+      }),
     ).toThrow("Invalid origin");
   });
 
   test("rejects sign-typed-data requests from an invalid origin", () => {
     const queue = createApprovalQueue();
     expect(() =>
-      queue.requestSignTypedData({ origin: BAD_ORIGIN, summary: "Sign", typedData: {} }),
+      queue.requestSignTypedData({
+        context: CONTEXT,
+        origin: BAD_ORIGIN,
+        summary: "Sign",
+        typedData: {},
+      }),
     ).toThrow("Invalid origin");
   });
 
   test("rejects strk20 invoke requests from an invalid origin", () => {
     const queue = createApprovalQueue();
     expect(() =>
-      queue.requestStrk20Invoke({ actions, origin: BAD_ORIGIN, summaries: ["Send"] }),
+      queue.requestStrk20Invoke({
+        actions,
+        calls: [],
+        context: CONTEXT,
+        origin: BAD_ORIGIN,
+        summaries: ["Send"],
+      }),
     ).toThrow("Invalid origin");
   });
 
