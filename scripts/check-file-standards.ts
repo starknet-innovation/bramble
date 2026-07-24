@@ -200,6 +200,10 @@ for (const file of await walk(".")) {
     failures.push(`${file} must not commit focused or skipped tests`);
   }
 
+  if (/^tests\/[^/]+\.test\.ts$/.test(file)) {
+    failures.push(`${file} must live under its primary module directory`);
+  }
+
   if (file.startsWith(".github/workflows/")) {
     lines.forEach((line, index) => {
       const actionRef = line.match(/^\s*-\s+uses:\s*(\S+)/)?.[1];

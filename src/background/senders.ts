@@ -78,7 +78,7 @@ export const isClaimedSenderOrigin = (
 /**
  * The only wallet messages a dapp page may reach through the content-script
  * bridge (the provider mapping in src/provider/bridge.ts plus the content
- * script's own grant re-query). tests/privileged-messages.test.ts derives
+ * script's own grant re-query). tests/background/privileged-messages.test.ts derives
  * this set from those sources, so adding a bridge mapping without updating
  * this list — or vice versa — fails the suite.
  */

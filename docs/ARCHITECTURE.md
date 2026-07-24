@@ -174,7 +174,7 @@ inside the encrypted vault envelope; Ledger secrets never enter it.
   the passphrase re-entered in the message (never the cached session), verifies it via `readVault`,
   and returns `{ mnemonic, privateKey }` for the active account. The settings-reachable reveal
   screen re-authenticates, warns strongly, blurs the values until tapped, and never persists them —
-  they are wiped on the next render. `tests/key-boundary.test.ts` sanctions this reveal only for an
+  they are wiped on the next render. `tests/background/key-boundary.test.ts` sanctions this reveal only for an
   extension-page sender with the correct passphrase.
 
 ### Import private key
@@ -227,7 +227,7 @@ feedback transforms stay inside a bounded envelope (press scale 0.92–1.0, hove
 so nothing drifts under the pointer. Screen changes run through the View Transitions API, sliding
 forward/back by navigation depth (cross-fade for same-depth swaps) with an instant-swap fallback;
 `prefers-reduced-motion` collapses all motion to a cut on both the CSS and JS sides.
-`tests/sidepanel-styles.test.ts` and `tests/motion.test.ts` enforce these rules.
+`tests/sidepanel/sidepanel-styles.test.ts` and `tests/sidepanel/motion.test.ts` enforce these rules.
 
 The background broadcasts `wallet.event` messages (`accountsChanged`, `networkChanged`,
 `approvalsChanged`) after mutations. The side panel refreshes live from those events, and content

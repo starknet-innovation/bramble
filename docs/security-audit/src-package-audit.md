@@ -279,8 +279,8 @@ metadata to SHA-256. The side panel displays the decoded final-call summaries, r
 commitment before confirmation. Execute accepts only the preparation id, atomically claims it,
 rechecks account/network/chain/digest, and submits the frozen calls without contacting AVNU again.
 
-**Validation.** `tests/avnu.test.ts` rejects a chain-mismatched build.
-`tests/swap-ops.test.ts` proves the final calls are built before confirmation, execute only once,
+**Validation.** `tests/starknet/avnu.test.ts` rejects a chain-mismatched build.
+`tests/background/swap-ops.test.ts` proves the final calls are built before confirmation, execute only once,
 and reject an unexpected approval token or allowance before signing.
 
 <a id="mcw-src-002"></a>
@@ -305,8 +305,8 @@ entrypoint, and calldata count alongside the action summaries. Execution revalid
 commitment and live context and submits only the frozen call; it never contacts the prover after
 the user decides.
 
-**Validation.** `tests/background-strk20-messages.test.ts` asserts one prover call occurs before
-approval and no second call occurs at execution. `tests/approval-security.test.ts` proves a
+**Validation.** `tests/background/background-strk20-messages.test.ts` asserts one prover call occurs before
+approval and no second call occurs at execution. `tests/background/approval-security.test.ts` proves a
 substituted held payload fails before submission.
 
 <a id="mcw-src-003"></a>
@@ -330,7 +330,7 @@ matching the expected network, and invokes the write callback exactly once. Any 
 after that point is returned as an explicit unknown-submission-status error and is never replayed
 through another endpoint.
 
-**Validation.** `tests/starknet-rpc.test.ts` simulates preflight transport failure followed by a
+**Validation.** `tests/starknet/starknet-rpc.test.ts` simulates preflight transport failure followed by a
 post-begin connection reset and asserts that only the selected endpoint receives the write.
 Declare, invoke, transfer, and deployment operation tests exercise the new write path.
 
@@ -353,7 +353,7 @@ account, network, and review digest. Decision handling rechecks the unlocked ses
 network, chain, origin grant, exact account, and private-payload digest. Each downstream executor
 also selects the recorded account rather than re-resolving an arbitrary active account.
 
-**Validation.** `tests/approval-security.test.ts` proves network drift and payload substitution are
+**Validation.** `tests/background/approval-security.test.ts` proves network drift and payload substitution are
 refused without submission. The invoke, declare, typed-data, and STRK20 approval suites exercise
 the bound context on successful execution.
 
@@ -375,7 +375,7 @@ entry and returns a cloned public snapshot plus its private payload. Approve and
 before any awaited validation or executor work. Every success or failure is terminal and settles
 the held request; a second decision receives `approval not found` and cannot reach an executor.
 
-**Validation.** `tests/approval-security.test.ts` drives two concurrent approve decisions while the
+**Validation.** `tests/background/approval-security.test.ts` drives two concurrent approve decisions while the
 first executor is paused and observes exactly one side effect.
 
 <a id="mcw-src-006"></a>
@@ -395,7 +395,7 @@ impact.
 after the atomic claim and before context checks or executor dispatch, a blocked origin is refused,
 the held dapp request is settled with the error, and the claimed item remains terminal.
 
-**Validation.** `tests/approval-security.test.ts` queues an allowed request, makes its origin
+**Validation.** `tests/background/approval-security.test.ts` queues an allowed request, makes its origin
 blocked before decision, and proves the side effect count remains zero.
 
 <a id="mcw-src-007"></a>
@@ -416,7 +416,7 @@ every mutating public method in a shared per-instance promise queue. Each queued
 complete asynchronous read-modify-write transaction; read-only methods remain concurrent, and a
 failed mutation does not poison later work.
 
-**Validation.** `tests/storage-concurrency.test.ts` uses simultaneous mutations against all five
+**Validation.** `tests/storage/storage-concurrency.test.ts` uses simultaneous mutations against all five
 stores and verifies every non-conflicting update remains in final storage.
 
 <a id="mcw-src-008"></a>
@@ -438,7 +438,7 @@ domains, and a fully normalized unique domain list. One invalid item rejects the
 fresh-source failure still preserves only a previously validated snapshot plus the bundled
 baseline.
 
-**Validation.** `tests/security-phishing-feed.test.ts` rejects unknown keys, schema/source
+**Validation.** `tests/security/security-phishing-feed.test.ts` rejects unknown keys, schema/source
 mismatch, future timestamps, malformed domains, and duplicate domains.
 
 <a id="mcw-src-009"></a>
@@ -461,8 +461,8 @@ non-plain prototypes, and throwing proxies. Method-specific budgets distinguish 
 typed data, and contract classes. Shared invoke call/calldata limits, STRK20 action/proof limits,
 AVNU list/call limits, and HTTP response-size checks bound protocol fan-out before expensive use.
 
-**Validation.** `tests/json.test.ts`, `tests/provider-bridge-results-guards.test.ts`, and
-`tests/typed-data.test.ts` cover structural, call/calldata, cycle/accessor, and oversized typed-data
+**Validation.** `tests/shared/json.test.ts`, `tests/provider/provider-bridge-results-guards.test.ts`, and
+`tests/starknet/typed-data.test.ts` cover structural, call/calldata, cycle/accessor, and oversized typed-data
 rejection. The full boundary suites verify valid maximum-shape behavior remains accepted.
 
 ## Validation evidence
