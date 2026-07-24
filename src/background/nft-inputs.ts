@@ -99,6 +99,25 @@ export const readTransferNftInput = (
   readNftTransferInput(message, "wallet.transferNft");
 
 /**
+ * Parses an NFT discovery request. `includeWatched` defaults to true for the
+ * complete legacy response; the side panel sets it false when its watched-NFT
+ * fast lane is already loading those records independently.
+ */
+export const readDiscoverNftsInput = (
+  message: unknown,
+): { readonly includeWatched: boolean } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["includeWatched", "type"]) ||
+    message["type"] !== "wallet.discoverNfts" ||
+    (message["includeWatched"] !== undefined && typeof message["includeWatched"] !== "boolean")
+  ) {
+    return null;
+  }
+  return { includeWatched: message["includeWatched"] !== false };
+};
+
+/**
  * Parses a remove-NFT request that targets a watched NFT by its id.
  */
 export const readRemoveNftInput = (message: unknown): { readonly id: string } | null =>

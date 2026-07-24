@@ -14,6 +14,7 @@ import { readTypeOnlyInput } from "./message-inputs";
 import {
   type NftTarget,
   readAddNftInput,
+  readDiscoverNftsInput,
   readReviewNftTransferInput,
   readTransferNftInput,
 } from "./nft-inputs";
@@ -183,6 +184,18 @@ const enrichWatchedNfts = async (
   return enriched;
 };
 
+const loadWatchedNfts = async (
+  deps: WalletOpsDeps,
+  preferences: Awaited<ReturnType<WalletOpsDeps["preferencesStore"]["read"]>>,
+  networkId: string,
+  accountAddress: string,
+  rpcUrls: readonly string[],
+): Promise<DiscoveredNft[]> => {
+  const watched = watchedCandidates(preferences, networkId);
+  const owned = await filterOwnedNfts(deps, watched, accountAddress, rpcUrls);
+  return enrichWatchedNfts(deps, owned, new Set(watched.map((nft) => nft.id)), rpcUrls);
+};
+
 const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<RuntimeResponse> => {
   const input = readAddNftInput(message);
   if (!input) {
@@ -332,7 +345,8 @@ const handleDiscoverNfts = async (
   deps: WalletOpsDeps,
   message: unknown,
 ): Promise<RuntimeResponse> => {
-  if (!readTypeOnlyInput(message, "wallet.discoverNfts")) {
+  const input = readDiscoverNftsInput(message);
+  if (!input) {
     return { error: "invalid discover nfts request" };
   }
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
@@ -349,20 +363,45 @@ const handleDiscoverNfts = async (
   });
   const watched = watchedCandidates(preferences, context.networkId);
   const watchedIds = new Set(watched.map((nft) => nft.id));
+  const candidatesToVerify = input.includeWatched
+    ? mergeNftCandidates(candidates, watched)
+    : candidates.filter((nft) => !watchedIds.has(nft.id));
   // Never trust the indexer's ownership claim: re-prove each token through its
   // ERC721 owner or ERC1155 balance surface, dropping any the account no longer
   // owns (or that fail to read) so the gallery only shows verified holdings.
-  const owned = await filterOwnedNfts(
-    deps,
-    mergeNftCandidates(candidates, watched),
-    context.account.address,
-    rpcUrls,
-  );
+  const owned = await filterOwnedNfts(deps, candidatesToVerify, context.account.address, rpcUrls);
   // Only explicitly watched NFTs resolve their token_uri/uri here. This preserves
   // the gallery's anti-tracking boundary: unsolicited airdrops never make the
   // extension contact an attacker-controlled metadata host in the background.
-  const hydrated = await enrichWatchedNfts(deps, owned, watchedIds, rpcUrls);
+  const hydrated = input.includeWatched
+    ? await enrichWatchedNfts(deps, owned, watchedIds, rpcUrls)
+    : owned;
   return { nfts: hydrated, ok: true };
+};
+
+const handleLoadWatchedNfts = async (
+  deps: WalletOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  if (!readTypeOnlyInput(message, "wallet.loadWatchedNfts")) {
+    return { error: "invalid watched nft request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { error: context.error };
+  }
+  const preferences = await deps.preferencesStore.read();
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
+  return {
+    nfts: await loadWatchedNfts(
+      deps,
+      preferences,
+      context.networkId,
+      context.account.address,
+      rpcUrls,
+    ),
+    ok: true,
+  };
 };
 
 /**
@@ -384,6 +423,9 @@ export const handleNftOps = async (
   }
   if (messageType === "wallet.discoverNfts") {
     return handleDiscoverNfts(deps, message);
+  }
+  if (messageType === "wallet.loadWatchedNfts") {
+    return handleLoadWatchedNfts(deps, message);
   }
   return null;
 };

@@ -120,14 +120,16 @@ export const visibleNftItems = (
 /**
  * Renders a resolved NFT image only after the caller has established that the
  * user solicited it. Remote-load failure is handled by the shared NFT binding.
+ * `eager` is reserved for the first visible gallery items and the detail hero
+ * so those requests begin before a hidden Collectibles panel is opened.
  */
-export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean): string =>
+export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
   reveal && item.image
-    ? `<img class="nft-image${item.pixelated ? " nft-image--pixelated" : ""}" src="${escapeHtml(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
+    ? `<img class="nft-image${item.pixelated ? " nft-image--pixelated" : ""}" src="${escapeHtml(item.image)}" alt="" loading="${eager ? "eager" : "lazy"}" referrerpolicy="no-referrer" />`
     : "";
 
-const nftArt = (item: NftGalleryItem, reveal: boolean): string =>
-  `<span class="nft-art">${nftImageMarkup(item, reveal)}${icon("image")}</span>`;
+const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
+  `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}</span>`;
 
 // The Hide control: a watched entry toggles its stored spam flag; a
 // discovered-only entry is persisted-as-spam by nft-ui using the data-* target.
@@ -136,10 +138,10 @@ const hideButton = (item: NftGalleryItem): string =>
     ? `<button class="ghost small" data-nft-spam="${escapeHtml(item.id)}" data-nft-spam-value="true" type="button">Hide</button>`
     : `<button class="ghost small" data-nft-hide="${escapeHtml(item.id)}" data-nft-hide-contract="${escapeHtml(item.contract)}" data-nft-hide-token="${escapeHtml(item.tokenId)}" data-nft-hide-network="${escapeHtml(item.networkId)}" data-nft-hide-name="${escapeHtml(item.title)}" type="button">Hide</button>`;
 
-const nftCard = (item: NftGalleryItem): string => `
+const nftCard = (item: NftGalleryItem, eager: boolean): string => `
   <li class="nft-card">
     <button class="nft-open" data-nft-open="${escapeHtml(item.id)}" type="button">
-      ${nftArt(item, item.watched)}
+      ${nftArt(item, item.watched, eager)}
       <span class="nft-copy">
         <strong>${escapeHtml(item.title)}</strong>
         <code>${escapeHtml(item.collection || accountLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
@@ -187,7 +189,7 @@ export const nftGalleryFlow = (
         ${
           visible.length === 0
             ? '<p class="empty">No collectibles found for this account yet. Watch one you own below, or set an NFT indexer in Network settings to auto-discover them.</p>'
-            : `<ul class="nft-grid">${visible.map(nftCard).join("")}</ul>`
+            : `<ul class="nft-grid">${visible.map((nft, index) => nftCard(nft, index < 4)).join("")}</ul>`
         }
       </section>
       ${
@@ -286,7 +288,7 @@ export const nftDetailFlow = (
       nft === null
         ? '<section class="section"><p class="empty">This NFT is no longer watched.</p></section>'
         : `<section class="section">
-            ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
+            ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft, true, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
             ${nft.description ? `<p class="lede">${escapeHtml(nft.description)}</p>` : ""}
             <dl class="receipt">
               <div class="receipt-row"><dt>Contract</dt><dd><code>${escapeHtml(accountLabel(nft.contract))}</code></dd></div>

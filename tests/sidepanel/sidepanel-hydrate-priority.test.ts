@@ -41,6 +41,7 @@ describe("home hydration priority", () => {
     const activity = deferred<Awaited<ReturnType<SidepanelWallet["loadActivity"]>>>();
     const deployment = deferred<boolean>();
     const nfts = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();
+    const watched = deferred<Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>>();
     const cache = emptyRenderCache();
     let paints = 0;
     const run = hydrateView({
@@ -56,6 +57,7 @@ describe("home hydration priority", () => {
       status,
       wallet: {
         discoverNfts: () => nfts.promise,
+        loadWatchedNfts: () => watched.promise,
         loadActivity: () => activity.promise,
         loadBalances: () => balances.promise,
         loadPrices: () => prices.promise,
@@ -71,12 +73,13 @@ describe("home hydration priority", () => {
     deployment.resolve(true);
     activity.resolve({ entries: [], historyUnavailable: false });
     nfts.resolve([]);
+    watched.resolve([]);
     await run;
-    expect(paints).toBe(2);
+    expect(paints).toBeGreaterThanOrEqual(2);
     expect(cache.deployment).toBe(true);
   });
 
-  test("streams discovered NFT metadata into the home cache", async () => {
+  test("streams watched NFT metadata into the home cache", async () => {
     const cache = emptyRenderCache();
     await hydrateView({
       activeView: "home",
@@ -88,7 +91,8 @@ describe("home hydration priority", () => {
       selectedTokenId: null,
       status,
       wallet: {
-        discoverNfts: async () => [
+        discoverNfts: async () => [],
+        loadWatchedNfts: async () => [
           {
             collection: "MC Punks",
             contract: "0x123",
@@ -106,6 +110,54 @@ describe("home hydration priority", () => {
     } as never);
 
     expect(cache.discoveredNfts).toHaveLength(1);
+  });
+
+  test("paints watched artwork before slow portfolio and indexer jobs finish", async () => {
+    const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
+    const prices = deferred<Awaited<ReturnType<SidepanelWallet["loadPrices"]>>>();
+    const indexed = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();
+    const watched = deferred<Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>>();
+    const cache = emptyRenderCache();
+    let paints = 0;
+    const run = hydrateView({
+      activeView: "home",
+      cache,
+      deployment: { load: async () => true },
+      multisig: {},
+      paint: () => {
+        paints += 1;
+      },
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        discoverNfts: () => indexed.promise,
+        loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+        loadBalances: () => balances.promise,
+        loadPrices: () => prices.promise,
+        loadWatchedNfts: () => watched.promise,
+      },
+    } as never);
+
+    watched.resolve([
+      {
+        collection: "MC Punks",
+        contract: "0x123",
+        id: "SN_MAIN:0x123:0",
+        image: "https://cdn.example/punk.png",
+        name: "Punk #0",
+        networkId: "SN_MAIN",
+        tokenId: "0",
+      },
+    ]);
+    await flush();
+    expect(cache.discoveredNfts).toHaveLength(1);
+    expect(paints).toBe(1);
+
+    balances.resolve({ balances: [] });
+    prices.resolve({ asOf: null, changes: {}, prices: {}, stale: false });
+    indexed.resolve([]);
+    await run;
   });
 
   test("drops stale hydration results and paints", async () => {

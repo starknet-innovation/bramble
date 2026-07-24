@@ -6,7 +6,11 @@
  * (never a fabricated "verified" verdict).
  */
 import { describe, expect, test } from "bun:test";
-import { emptyRenderCache, verificationForAccount } from "../../src/sidepanel/render-cache";
+import {
+  emptyRenderCache,
+  updateRenderScope,
+  verificationForAccount,
+} from "../../src/sidepanel/render-cache";
 import { createSidepanelRuntime } from "../../src/sidepanel/runtime";
 import type { ClassHashVerification } from "../../src/starknet/class-hash-verify";
 
@@ -124,5 +128,34 @@ describe("emptyRenderCache (lock-reset single source)", () => {
     expect(empty.priceStale).toBe(false);
     // The locked shell: balances carries the explicit "wallet locked" marker.
     expect(empty.balances).toEqual({ error: "wallet locked" });
+  });
+});
+
+describe("updateRenderScope", () => {
+  test("retains NFT lanes for same-account resyncs and clears them on account switches", () => {
+    const cache = emptyRenderCache();
+    const nft = {
+      collection: "Punks",
+      contract: "0x123",
+      id: "SN_MAIN:0x123:0",
+      image: "https://cdn.example/punk.png",
+      name: "Punk #0",
+      networkId: "SN_MAIN" as const,
+      tokenId: "0",
+    };
+    Object.assign(cache, {
+      discoveredNfts: [nft],
+      indexedNfts: [nft],
+      status: { ...cache.status, activeAccountId: ACCOUNT_ID, networkId: "SN_MAIN" as const },
+      watchedNfts: [nft],
+    });
+
+    updateRenderScope(cache, { ...cache.status });
+    expect(cache.discoveredNfts).toEqual([nft]);
+
+    updateRenderScope(cache, { ...cache.status, activeAccountId: OTHER_ACCOUNT_ID });
+    expect(cache.discoveredNfts).toEqual([]);
+    expect(cache.indexedNfts).toEqual([]);
+    expect(cache.watchedNfts).toEqual([]);
   });
 });

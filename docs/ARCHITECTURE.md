@@ -419,6 +419,11 @@ and attributes, then sends through a two-phase review → confirm flow. Review
 re-proves ownership, detects ERC-721 versus ERC-1155, decodes the exact call,
 screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
+On unlock and resync, explicitly watched NFTs hydrate through a separate
+ownership-proven metadata lane that does not wait for the optional indexer.
+Concurrent refreshes for the same account share the in-flight request, while
+account switches remain isolated; the first visible watched images are fetched
+eagerly so the hidden Collectibles panel is warm when opened.
 
 ## Reproducible Builds
 

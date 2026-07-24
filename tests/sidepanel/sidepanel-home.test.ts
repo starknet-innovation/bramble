@@ -160,6 +160,7 @@ describe("sidepanel home", () => {
 
     expect(html).toContain('class="nft-image nft-image--pixelated"');
     expect(html).toContain('src="https://cdn.example/punk0000.png"');
+    expect(html).toContain('loading="eager"');
     expect(html).toContain("Starknet Test Punk #0");
   });
 

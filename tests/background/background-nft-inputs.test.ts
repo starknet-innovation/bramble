@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   readAddNftInput,
+  readDiscoverNftsInput,
   readReviewNftTransferInput,
   readTransferNftInput,
 } from "../../src/background/nft-inputs";
@@ -97,5 +98,21 @@ describe("NFT transfer inputs", () => {
       }),
     ).toBeNull();
     expect(readTransferNftInput({ ...fields, debug: true, type: "wallet.transferNft" })).toBeNull();
+  });
+});
+
+describe("readDiscoverNftsInput", () => {
+  test("defaults to a complete response and accepts the indexed-only fast path", () => {
+    expect(readDiscoverNftsInput({ type: "wallet.discoverNfts" })).toEqual({
+      includeWatched: true,
+    });
+    expect(readDiscoverNftsInput({ includeWatched: false, type: "wallet.discoverNfts" })).toEqual({
+      includeWatched: false,
+    });
+  });
+
+  test("rejects unknown keys and non-boolean modes", () => {
+    expect(readDiscoverNftsInput({ extra: true, type: "wallet.discoverNfts" })).toBeNull();
+    expect(readDiscoverNftsInput({ includeWatched: "no", type: "wallet.discoverNfts" })).toBeNull();
   });
 });

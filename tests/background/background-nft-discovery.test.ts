@@ -89,6 +89,7 @@ const makeHandler = (options: {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+  let indexerCalls = 0;
   const handler = createMessageHandler(walletStub, "extension-id", {
     preferencesStore,
     runtimeRpc: makeRuntimeRpc({
@@ -102,13 +103,14 @@ const makeHandler = (options: {
       },
       nftIndexer: {
         async listOwnedNfts() {
+          indexerCalls += 1;
           return options.candidates;
         },
       },
     }),
     session,
   });
-  return { handler, preferencesStore };
+  return { handler, indexerCalls: () => indexerCalls, preferencesStore };
 };
 
 describe("NFT auto-discovery messages", () => {
@@ -182,6 +184,65 @@ describe("NFT auto-discovery messages", () => {
       ok: true,
     });
     expect(metadataCalls).toEqual([contract]);
+  });
+
+  test("loads watched artwork without waiting for or contacting the indexer", async () => {
+    const contract = "0x511a2b3";
+    const metadata: NftTokenMetadata = {
+      attributes: [],
+      collection: "MC Punks",
+      description: "",
+      externalUrl: "",
+      image: "https://cdn.example/punk0000.png",
+      name: "Starknet Test Punk #0",
+    };
+    const { handler, indexerCalls, preferencesStore } = makeHandler({
+      candidates: [],
+      async getNftMetadata() {
+        return metadata;
+      },
+      owners: { [contract]: account.address },
+    });
+    await preferencesStore.addNft({
+      contract,
+      networkId: "SN_MAIN",
+      tokenId: "0",
+    });
+
+    const response = await handler({ type: "wallet.loadWatchedNfts" }, sender);
+
+    expect(response).toMatchObject({
+      nfts: [{ contract, image: metadata.image, tokenId: "0" }],
+      ok: true,
+    });
+    expect(indexerCalls()).toBe(0);
+  });
+
+  test("indexed-only discovery excludes watched NFTs and their metadata work", async () => {
+    const watched = candidate("0", "0x511a2b3");
+    const unsolicited = candidate("5", "0x6220000");
+    let metadataCalls = 0;
+    const { handler, preferencesStore } = makeHandler({
+      candidates: [watched, unsolicited],
+      async getNftMetadata() {
+        metadataCalls += 1;
+        return null;
+      },
+      owners: {
+        [unsolicited.contract]: account.address,
+        [watched.contract]: account.address,
+      },
+    });
+    await preferencesStore.addNft({
+      contract: watched.contract,
+      networkId: "SN_MAIN",
+      tokenId: watched.tokenId,
+    });
+
+    await expect(
+      handler({ includeWatched: false, type: "wallet.discoverNfts" }, sender),
+    ).resolves.toEqual({ nfts: [unsolicited], ok: true });
+    expect(metadataCalls).toBe(0);
   });
 
   test("does not fetch metadata for unsolicited indexer candidates", async () => {

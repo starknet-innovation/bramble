@@ -34,7 +34,12 @@ import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
 import { bindOnboarding, bindUnlock } from "./onboarding-ui";
 import { createRefreshScheduler } from "./refresh-scheduler";
-import { emptyRenderCache, type RenderData, verificationForAccount } from "./render-cache";
+import {
+  emptyRenderCache,
+  type RenderData,
+  updateRenderScope,
+  verificationForAccount,
+} from "./render-cache";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { createMutationRuntime } from "./runtime-refresh";
@@ -402,14 +407,7 @@ let renderGeneration = 0;
 const render = async (status: WalletStatus): Promise<void> => {
   const generation = ++renderGeneration;
   const isCurrent = (): boolean => generation === renderGeneration;
-  const multisigScopeChanged =
-    cache.status.activeAccountId !== status.activeAccountId ||
-    cache.status.networkId !== status.networkId;
-  cache.status = status;
-  if (multisigScopeChanged) {
-    cache.multisigSync = null;
-    cache.multisigsError = false;
-  }
+  updateRenderScope(cache, status);
   const [pending, nextPreferences] = await Promise.all([
     wallet.loadPendingApprovals(),
     status.hasVault && !status.locked

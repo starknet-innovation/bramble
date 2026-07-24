@@ -39,6 +39,7 @@ export type RenderData = {
   connectedSites: Awaited<ReturnType<SidepanelWallet["connectedSites"]>>;
   deployment: boolean | null;
   discoveredNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
+  indexedNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
   pending: Awaited<ReturnType<SidepanelWallet["loadPendingApprovals"]>>;
   preferences: WalletPreferences | null;
   changes: LoadedPrices["changes"];
@@ -47,7 +48,35 @@ export type RenderData = {
   priceStale: LoadedPrices["stale"];
   status: WalletStatus;
   transactions: LoadedActivity["entries"];
+  watchedNfts: Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>;
   historyUnavailable: LoadedActivity["historyUnavailable"];
+};
+
+/**
+ * Empty account-scoped NFT lanes used on account/network switches so an old
+ * gallery never flashes while fresh ownership proofs are in flight.
+ */
+export const emptyNftCache = (): Pick<
+  RenderData,
+  "discoveredNfts" | "indexedNfts" | "watchedNfts"
+> => ({
+  discoveredNfts: [],
+  indexedNfts: [],
+  watchedNfts: [],
+});
+
+/**
+ * Applies a freshly loaded status and clears account-scoped render data when
+ * the active account or network changed.
+ */
+export const updateRenderScope = (cache: RenderData, status: WalletStatus): void => {
+  const changed =
+    cache.status.activeAccountId !== status.activeAccountId ||
+    cache.status.networkId !== status.networkId;
+  Object.assign(cache, {
+    status,
+    ...(changed ? { ...emptyNftCache(), multisigSync: null, multisigsError: false } : {}),
+  });
 };
 
 /**
@@ -67,7 +96,7 @@ export const emptyRenderCache = (): RenderData => ({
   classHashVerification: null,
   connectedSites: [],
   deployment: null,
-  discoveredNfts: [],
+  ...emptyNftCache(),
   pending: [],
   changes: {},
   preferences: null,

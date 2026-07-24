@@ -68,6 +68,19 @@ const hydrateMultisigs = async (
   };
 };
 
+const nftSnapshot = (
+  indexed: RenderData["indexedNfts"],
+  watched: RenderData["watchedNfts"],
+): RenderData["discoveredNfts"] => {
+  const combined = new Map(indexed.map((nft) => [nft.id, nft]));
+  // Explicitly watched metadata wins a same-id indexer record: it comes from
+  // the wallet's privacy-gated on-chain metadata path rather than the directory.
+  for (const nft of watched) {
+    combined.set(nft.id, nft);
+  }
+  return [...combined.values()];
+};
+
 /**
  * Loads the view-scoped network data in parallel and repaints once it lands.
  * Each loader is best-effort: a rejected fetch leaves the cached value intact
@@ -88,12 +101,25 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   } = deps;
   const primaryJobs: Promise<unknown>[] = [];
   const deferredJobs: Promise<unknown>[] = [];
+  const streamingJobs: Promise<unknown>[] = [];
   const fill = <T>(load: Promise<T>, assign: (value: T) => void, deferred = false): void => {
     (deferred ? deferredJobs : primaryJobs).push(
       load
         .then((value) => {
           if (isCurrent()) {
             assign(value);
+          }
+        })
+        .catch(() => undefined),
+    );
+  };
+  const stream = <T>(load: Promise<T>, assign: (value: T) => void): void => {
+    streamingJobs.push(
+      load
+        .then((value) => {
+          if (isCurrent()) {
+            assign(value);
+            paint();
           }
         })
         .catch(() => undefined),
@@ -150,10 +176,19 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     });
   }
   if (activeView === "home" || activeView === "nfts" || activeView === "nft-detail") {
+    const nftScope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
+    // Explicitly watched NFTs take the fast lane: no indexer wait, immediate
+    // repaint when their verified metadata lands, and no wait for balances,
+    // prices, activity, or auto-discovery.
+    stream(wallet.loadWatchedNfts(nftScope), (value) => {
+      cache.watchedNfts = value;
+      cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
+    });
     fill(
-      wallet.discoverNfts(),
+      wallet.discoverNfts(false, nftScope),
       (value) => {
-        cache.discoveredNfts = value;
+        cache.indexedNfts = value;
+        cache.discoveredNfts = nftSnapshot(cache.indexedNfts, cache.watchedNfts);
       },
       activeView === "home",
     );
@@ -195,4 +230,5 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   };
   await flush(primaryJobs);
   await flush(deferredJobs);
+  await Promise.all(streamingJobs);
 };

@@ -116,10 +116,10 @@ const tokensPanel = (
     <p id="panel-result" role="status"></p>`;
 };
 
-const collectibleCard = (nft: NftGalleryItem): string => `
+const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
   <li>
     <button class="collectible-card" data-nft-open="${escapeHtml(nft.id)}" type="button">
-      <span class="collectible-art">${nftImageMarkup(nft, true)}${icon("image")}</span>
+      <span class="collectible-art">${nftImageMarkup(nft, true, eager)}${icon("image")}</span>
       <span class="collectible-copy">
         <strong>${escapeHtml(nft.title)}</strong>
         <code>#${escapeHtml(nft.tokenId)}</code>
@@ -138,7 +138,7 @@ const collectiblesPanel = (
   return `${
     nfts.length === 0
       ? '<p class="empty">No collectibles watched on this network yet. Add one you own from the gallery.</p>'
-      : `<ul class="collectible-grid">${nfts.map(collectibleCard).join("")}</ul>`
+      : `<ul class="collectible-grid">${nfts.map((nft, index) => collectibleCard(nft, index < 4)).join("")}</ul>`
   }
     <button class="ghost small tab-more" data-view="nfts" type="button">Open gallery${icon("chevronRight")}</button>`;
 };

@@ -291,6 +291,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   { message: { address: account.classHash, type: "wallet.addToken" }, sender: extensionSender },
   { message: { type: "wallet.detectTokens" }, sender: extensionSender },
   { message: { type: "wallet.discoverNfts" }, sender: extensionSender },
+  { message: { type: "wallet.loadWatchedNfts" }, sender: extensionSender },
   {
     message: { type: "wallet.setNftIndexerUrl", url: "https://indexer.example" },
     sender: extensionSender,

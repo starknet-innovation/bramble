@@ -239,13 +239,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "token detection failed");
     },
-    async setNftIndexerUrl(url: string): Promise<void> {
-      const response = await sendMessage({ type: "wallet.setNftIndexerUrl", url });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "indexer endpoint update failed");
-    },
     async loadPrices(): Promise<{
       readonly asOf: number | null;
       readonly changes: Readonly<Record<string, number>>;

@@ -10,7 +10,7 @@
  * sidepanel-runtime-client.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { emptyStatus } from "../../src/sidepanel/runtime";
+import { createSidepanelRuntime, emptyStatus } from "../../src/sidepanel/runtime";
 import {
   account,
   allowanceView,
@@ -129,11 +129,78 @@ describe("NFT wrappers", () => {
     ).rejects.toThrow("NFT transfer review failed");
   });
 
-  test("discoverNfts returns the discovered list or []", async () => {
+  test("NFT loaders select full, indexed-only, and watched lanes", async () => {
     expect(await runtimeReturning({ nfts: [discoveredNft], ok: true }).discoverNfts()).toEqual([
       discoveredNft,
     ]);
     expect(await runtimeReturning(errorEnvelope).discoverNfts()).toEqual([]);
+
+    const indexed = captureRuntime({ nfts: [discoveredNft], ok: true });
+    await indexed.wallet.discoverNfts(false);
+    expect(indexed.sent[0]).toEqual({ includeWatched: false, type: "wallet.discoverNfts" });
+
+    const watched = captureRuntime({ nfts: [discoveredNft], ok: true });
+    await watched.wallet.loadWatchedNfts();
+    expect(watched.sent[0]).toEqual({ type: "wallet.loadWatchedNfts" });
+  });
+
+  test("coalesces concurrent NFT resync requests", async () => {
+    let settle!: (value: unknown) => void;
+    const sent: unknown[] = [];
+    const wallet = createSidepanelRuntime({
+      sendMessage(message) {
+        sent.push(message);
+        return new Promise((resolve) => {
+          settle = resolve;
+        });
+      },
+    });
+
+    const first = wallet.loadWatchedNfts();
+    const second = wallet.loadWatchedNfts();
+    expect(sent).toHaveLength(1);
+    settle({ nfts: [discoveredNft], ok: true });
+    await expect(Promise.all([first, second])).resolves.toEqual([[discoveredNft], [discoveredNft]]);
+  });
+
+  test("does not coalesce NFT loads across account scopes", () => {
+    const sent: unknown[] = [];
+    const wallet = createSidepanelRuntime({
+      sendMessage(message) {
+        sent.push(message);
+        return new Promise(() => undefined);
+      },
+    });
+
+    void wallet.loadWatchedNfts("SN_MAIN:0x1");
+    void wallet.loadWatchedNfts("SN_MAIN:0x2");
+    expect(sent).toHaveLength(2);
+  });
+
+  test("invalidates coalesced loads after an NFT mutation", async () => {
+    let settleFirst!: (value: unknown) => void;
+    let loadCalls = 0;
+    const wallet = createSidepanelRuntime({
+      sendMessage(message) {
+        const type = (message as { type?: string }).type;
+        if (type === "wallet.loadWatchedNfts") {
+          loadCalls += 1;
+          return loadCalls === 1
+            ? new Promise((resolve) => {
+                settleFirst = resolve;
+              })
+            : Promise.resolve({ nfts: [], ok: true });
+        }
+        return Promise.resolve(preferencesResponse);
+      },
+    });
+
+    const stale = wallet.loadWatchedNfts();
+    await wallet.addNft("0x511a2b3", "5", "SN_MAIN", "Punk");
+    await wallet.loadWatchedNfts();
+    expect(loadCalls).toBe(2);
+    settleFirst({ nfts: [], ok: true });
+    await stale;
   });
 });
 

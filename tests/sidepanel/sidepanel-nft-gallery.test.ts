@@ -83,6 +83,7 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain(
       '<img class="nft-image nft-image--pixelated" src="https://cdn.example/everai/5.png"',
     );
+    expect(html).toContain('loading="eager"');
   });
 
   test("shows the indexer-aware empty state when nothing is discovered or watched", () => {
@@ -118,6 +119,7 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain("Everai #5");
     expect(html).toContain("0x511a2b3");
     expect(html).toContain('<img class="nft-image nft-image--pixelated"');
+    expect(html).toContain('loading="eager"');
     expect(html).toContain("A test collectible");
     expect(html).toContain("<h2>Attributes</h2>");
     expect(html).toContain("CryptoPunks");
