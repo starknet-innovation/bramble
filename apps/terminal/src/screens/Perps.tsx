@@ -19,6 +19,8 @@ import {
   ChartCandlestick,
   Check,
   LineChart,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Receipt,
   Star,
@@ -44,9 +46,11 @@ import {
   usePerpsMarketStats,
   usePerpsMarkets,
   usePerpsTrades,
+  useFollowedAssets,
   type ExtendedMarketStats,
   type ExtendedPublicTrade,
 } from "../data";
+import { extendedTokenLogo } from "../assets/extended-token-assets";
 import { useWallet } from "../wallet/WalletProvider";
 import {
   buildOrderBookView,
@@ -63,10 +67,10 @@ import {
 type Side = "long" | "short";
 type OrderType = "market" | "limit" | "stop";
 type TradeTab = "positions" | "trades" | "funding" | "orders";
-type BookTab = "book" | "trades";
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
 type Timeframe = (typeof TIMEFRAMES)[number];
+const ORDER_BOOK_ROWS = 14;
 
 // Order placement is stubbed (no signer) and region-locked; surfaced verbatim.
 const ORDER_DISABLED_REASON =
@@ -142,10 +146,14 @@ export default function Perps(): ReactNode {
   const markets = usePerpsMarkets();
   const [selected, setSelected] = useState<string>("");
   const [marketTab, setMarketTab] = useState<"markets" | "follows">("markets");
-  const [followed, setFollowed] = useState<ReadonlySet<string>>(() => new Set());
+  const follows = useFollowedAssets();
+  const followed = useMemo(
+    () => new Set(follows.items.filter((item) => item.kind === "perp").map((item) => item.id)),
+    [follows.items],
+  );
   const [timeframe, setTimeframe] = useState<Timeframe>("15m");
   const [tradeTab, setTradeTab] = useState<TradeTab>("trades");
-  const [bookTab, setBookTab] = useState<BookTab>("book");
+  const [isMarketRailOpen, setIsMarketRailOpen] = useState(true);
 
   // Ticket state (visual only — placement is gated below).
   const [side, setSide] = useState<Side>("long");
@@ -202,25 +210,27 @@ export default function Perps(): ReactNode {
     return market?.marketStats ?? null;
   }, [statsResource.data, markets.data, activeSymbol]);
 
-  const book = useMemo(() => buildOrderBookView(orderBook.data), [orderBook.data]);
+  const book = useMemo(
+    () => buildOrderBookView(orderBook.data, ORDER_BOOK_ROWS),
+    [orderBook.data],
+  );
   const isFollowed = activeSymbol !== null && followed.has(activeSymbol);
 
   const toggleFollow = (): void => {
-    if (activeSymbol === null) {
+    if (activeSymbol === null || selectedRow === undefined) {
       return;
     }
-    setFollowed((current) => {
-      const next = new Set(current);
-      if (next.has(activeSymbol)) {
-        next.delete(activeSymbol);
-      } else {
-        next.add(activeSymbol);
-      }
-      return next;
+    follows.toggle({
+      id: activeSymbol,
+      kind: "perp",
+      logoUri: extendedTokenLogo(selectedRow.base),
+      name: activeSymbol,
+      symbol: selectedRow.base,
     });
   };
 
-  const markValue = stats !== null ? stats.markPrice || stats.lastPrice : (selectedRow?.markValue ?? 0);
+  const markValue =
+    stats !== null ? stats.markPrice || stats.lastPrice : (selectedRow?.markValue ?? 0);
 
   // Derived ticket figures (display only).
   const maxLev = Math.max(1, selectedRow?.maxLeverage ?? 1);
@@ -276,7 +286,12 @@ export default function Perps(): ReactNode {
         className={m.symbol === selected ? "tokrow sel" : "tokrow"}
         onClick={() => setSelected(m.symbol)}
       >
-        <TokenIcon symbol={m.base} colorIndex={m.colorIndex} />
+        <TokenIcon
+          symbol={m.base}
+          logoUri={extendedTokenLogo(m.base)}
+          name={m.base}
+          colorIndex={m.colorIndex}
+        />
         <div>
           <div className="n1">{m.symbol}</div>
           <div className="n2">
@@ -376,19 +391,35 @@ export default function Perps(): ReactNode {
           </span>
         </div>
 
-        <div className="perpscols">
+        <div className={isMarketRailOpen ? "perpscols" : "perpscols rail-collapsed"}>
           {/* LEFT — markets list */}
-          <div className="leftlist">
-            <TabStrip
-              style={{ padding: "0 4px" }}
-              items={[
-                { value: "markets", label: "Markets" },
-                { value: "follows", label: "Follows" },
-              ]}
-              value={marketTab}
-              onChange={setMarketTab}
-            />
-            <div className="listscroll">{marketsBody()}</div>
+          <div className={isMarketRailOpen ? "leftlist perps-market-rail" : "leftlist perps-market-rail collapsed"}>
+            <div className="perps-market-rail-head">
+              {isMarketRailOpen ? (
+                <TabStrip
+                  items={[
+                    { value: "markets", label: "Markets" },
+                    { value: "follows", label: "Follows" },
+                  ]}
+                  value={marketTab}
+                  onChange={setMarketTab}
+                />
+              ) : null}
+              <button
+                aria-label={isMarketRailOpen ? "Collapse markets" : "Expand markets"}
+                className="perps-rail-toggle"
+                onClick={() => setIsMarketRailOpen((current) => !current)}
+                title={isMarketRailOpen ? "Collapse markets" : "Expand markets"}
+                type="button"
+              >
+                {isMarketRailOpen ? (
+                  <PanelLeftClose size={15} aria-hidden />
+                ) : (
+                  <PanelLeftOpen size={15} aria-hidden />
+                )}
+              </button>
+            </div>
+            {isMarketRailOpen ? <div className="listscroll">{marketsBody()}</div> : null}
           </div>
 
           {/* CENTER — head + chart + trade tabs */}
@@ -397,6 +428,8 @@ export default function Perps(): ReactNode {
               <div className="top">
                 <TokenIcon
                   symbol={selectedRow?.base ?? "?"}
+                  logoUri={extendedTokenLogo(selectedRow?.base ?? "")}
+                  name={selectedRow?.base}
                   size={40}
                   colorIndex={selectedRow?.colorIndex ?? 0}
                 />
@@ -410,15 +443,17 @@ export default function Perps(): ReactNode {
                   <div className="tiny">Perpetual · Extended</div>
                 </div>
                 <button
-                  type="button"
+                  aria-label={isFollowed ? "Following" : "Follow"}
+                  aria-pressed={isFollowed}
                   className="followbtn"
-                  style={{ marginLeft: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
                   onClick={toggleFollow}
+                  title={isFollowed ? "Unfollow market" : "Follow market"}
+                  type="button"
                 >
                   {isFollowed ? (
-                    <><Check size={14} strokeWidth={2} /> Following</>
+                    <Check size={14} strokeWidth={2} aria-hidden />
                   ) : (
-                    <><Plus size={14} strokeWidth={2} /> Follow</>
+                    <Plus size={14} strokeWidth={2} aria-hidden />
                   )}
                 </button>
               </div>
@@ -429,10 +464,6 @@ export default function Perps(): ReactNode {
                   label="24h Change"
                   value={<PctChange value={changePct} />}
                   tone={changePct < 0 ? "neg" : "pos"}
-                />
-                <StatPair
-                  label="24h Volume"
-                  value={stats !== null ? fmtCompactUsd(stats.dailyVolume) : "—"}
                 />
                 <StatPair
                   label="Funding"
@@ -447,6 +478,7 @@ export default function Perps(): ReactNode {
             </div>
 
             <div className="chartwrap">
+              {chartBody()}
               <div className="tfbar">
                 {TIMEFRAMES.map((tf) => (
                   <button
@@ -459,79 +491,56 @@ export default function Perps(): ReactNode {
                   </button>
                 ))}
               </div>
-              {chartBody()}
-            </div>
-
-            <div className="tradetabs">
-              <TabStrip
-                style={{ padding: "0 16px" }}
-                items={[
-                  { value: "positions", label: "Positions" },
-                  { value: "trades", label: "Trades" },
-                  { value: "funding", label: "Funding" },
-                  { value: "orders", label: "Order History" },
-                ]}
-                value={tradeTab}
-                onChange={setTradeTab}
-              />
-              {tradeTabBody()}
             </div>
           </div>
 
           {/* ORDER BOOK */}
           <div className="obook">
-            <div className="togg">
-              <button
-                type="button"
-                className={bookTab === "book" ? "active" : undefined}
-                onClick={() => setBookTab("book")}
-              >
-                Order Book
-              </button>
-              <button
-                type="button"
-                className={bookTab === "trades" ? "active" : undefined}
-                onClick={() => setBookTab("trades")}
-              >
-                Trades
-              </button>
-            </div>
-            {bookTab === "book" ? (
-              book !== null ? (
-                <>
-                  <div className="obcols">
-                    <span>Price (USD)</span>
-                    <span>Size ({selectedRow?.base ?? ""})</span>
-                    <span>Total</span>
-                  </div>
-                  <div className="obscroll">
+            <header className="obook-title">
+              <strong>Order book</strong>
+              <span><i aria-hidden /> Live</span>
+            </header>
+            {book !== null ? (
+              <>
+                <div className="obcols">
+                  <span>Price (USD)</span>
+                  <span>Size ({selectedRow?.base ?? ""})</span>
+                  <span>Total</span>
+                </div>
+                <div className="obscroll orderbook-scroll">
+                  <div className="obside asks">
                     {book.asks.map((level) => (
                       <BookRow key={`ask-${level.price}`} level={level} side="short" />
                     ))}
-                    <div className="obspread">
+                  </div>
+                  <div className="obspread">
+                    <span className="obspread-price mono">{fmtPrice(book.midPrice)}</span>
+                    <span className="obspread-meta">
                       <span>Spread</span>
                       <span className="mono">
-                        {fmtPrice(book.spread)} ({book.spreadPct.toFixed(2)}%)
+                        {fmtPrice(book.spread)} · {book.spreadPct.toFixed(2)}%
                       </span>
-                    </div>
+                    </span>
+                  </div>
+                  <div className="obside bids">
                     {book.bids.map((level) => (
                       <BookRow key={`bid-${level.price}`} level={level} side="long" />
                     ))}
                   </div>
-                </>
-              ) : orderBook.error !== null ? (
-                <ErrorBanner message={`Couldn't load order book: ${orderBook.error}`} />
-              ) : orderBook.isLoading ? (
+                </div>
+              </>
+            ) : orderBook.error !== null ? (
+              <ErrorBanner message={`Couldn't load order book: ${orderBook.error}`} />
+            ) : orderBook.isLoading ? (
+              <div className="orderbook-loading">
                 <SkeletonRows rows={10} />
-              ) : (
-                <EmptyState
-                  icon={<BookOpen size={22} strokeWidth={1.75} />}
-                  title="No order book"
-                  style={{ minHeight: 180 }}
-                />
-              )
+              </div>
             ) : (
-              <TradeTape trades={tradesData} isLoading={trades.isLoading} error={trades.error} />
+              <EmptyState
+                icon={<BookOpen size={22} strokeWidth={1.75} />}
+                title="No order book"
+                style={{ minHeight: 180 }}
+              />
             )}
           </div>
 
@@ -693,6 +702,20 @@ export default function Perps(): ReactNode {
               </div>
             </div>
           </div>
+
+          <section className="tradetabs" aria-label="Perpetual account activity">
+            <TabStrip
+              items={[
+                { value: "positions", label: "Positions" },
+                { value: "trades", label: "Trades" },
+                { value: "funding", label: "Funding" },
+                { value: "orders", label: "Order History" },
+              ]}
+              value={tradeTab}
+              onChange={setTradeTab}
+            />
+            {tradeTabBody()}
+          </section>
         </div>
       </div>
     </div>

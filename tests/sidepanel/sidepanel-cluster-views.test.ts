@@ -62,18 +62,19 @@ const pendingTx = {
 };
 
 describe("cluster views", () => {
-  test("pending transactions explain they cannot be sped up or cancelled", () => {
+  test("pending transactions explain immediate refresh and protocol limits", () => {
     const html = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       pendingTx,
     ]);
-    expect(html).toContain("sped up, replaced, or cancelled");
-    expect(html).toContain("protocol limitation");
+    expect(html).toContain("normally confirms quickly");
+    expect(html).toContain("checks immediately");
+    expect(html).toContain("fee-bumped, replaced, or cancelled");
     expect(html).toMatch(/tx-status pending"[^>]*title="/);
 
     const settled = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       { ...pendingTx, status: "accepted" as const },
     ]);
-    expect(settled).not.toContain("protocol limitation");
+    expect(settled).not.toContain("fee-bumped, replaced, or cancelled");
   });
 
   test("home links to the NFT gallery and settings links to allowances", () => {

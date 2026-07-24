@@ -1,0 +1,416 @@
+/* Vesu professional lending desk — dense scanner, risk rail, and execution ticket. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.lending-screen {
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+.lending-command {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 14px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+.lending-command-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 290px;
+}
+.lending-protocol-mark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 3px var(--bg-2);
+  font-size: 18px;
+  font-weight: 900;
+}
+.lending-command-title > div:last-child > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lending-command h1 {
+  font-size: 15px;
+  line-height: 20px;
+  letter-spacing: -0.02em;
+}
+.lending-command p {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.lending-views {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  align-self: stretch;
+}
+.lending-views button {
+  min-width: 88px;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-3);
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  font-weight: 650;
+}
+.lending-views button:hover,
+.lending-views button.active {
+  color: var(--text);
+}
+.lending-views button.active {
+  border-bottom-color: var(--green);
+}
+.lending-views button span {
+  min-width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  background: var(--surface-3);
+  border-radius: 5px;
+  font-size: 9px;
+}
+.lending-refresh {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 0 10px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.lending-refresh:hover {
+  color: var(--text);
+  border-color: var(--border-2);
+}
+.lending-ledger {
+  min-height: 47px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr)) minmax(150px, 0.8fr);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+.lending-ledger > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 5px 13px;
+  border-right: 1px solid var(--border);
+}
+.lending-ledger span {
+  color: var(--text-3);
+  font-size: 10px;
+}
+.lending-ledger strong {
+  margin-top: 1px;
+  font-size: 13px;
+}
+.lending-ledger-status {
+  position: relative;
+  padding-left: 27px !important;
+}
+.lending-ledger-status::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  width: 6px;
+  height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--green) 12%, transparent);
+}
+.lending-ledger-status span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.lending-ledger-status small {
+  color: var(--text-3);
+  font-size: 9px;
+}
+.lending-workspace {
+  display: grid;
+  grid-template-columns: minmax(520px, 0.9fr) minmax(640px, 1.1fr);
+  flex: 1;
+  min-height: 0;
+  background: var(--bg);
+}
+.lending-market-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-2);
+}
+.lending-market-panel > .lending-detail-title {
+  min-height: 56px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.lending-market-body {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.08fr) minmax(300px, 0.92fr);
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.lending-scanner,
+.lending-market-panel,
+.lending-market-body,
+.lending-risk,
+.lending-ticket {
+  min-width: 0;
+  min-height: 0;
+}
+.lending-scanner {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+}
+.lending-scanner-head {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 11px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+.lending-scanner-head > div {
+  display: flex;
+  flex-direction: column;
+}
+.lending-scanner-head span {
+  color: var(--text-3);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lending-scanner-head strong {
+  margin-top: 2px;
+  font-size: 12px;
+}
+.lending-market-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  color: var(--text-2) !important;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+.lending-market-count i,
+.lending-verified-state i,
+.lending-ticket-context i,
+.lending-oracle-anchor small i,
+.lending-oracle-source i {
+  width: 5px;
+  height: 5px;
+  display: inline-block;
+  background: var(--green);
+  border-radius: 50%;
+}
+.lending-scanner-tools {
+  min-height: 43px;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(130px, 0.8fr) minmax(130px, 0.75fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+}
+.lending-search {
+  height: 29px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--text-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.lending-search:focus-within {
+  color: var(--text);
+  border-color: var(--border-2);
+}
+.lending-search input {
+  width: 100%;
+  min-width: 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-size: 11px;
+}
+.lending-select,
+.lending-field select {
+  height: 29px;
+  min-width: 0;
+  padding: 0 7px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 10.5px;
+}
+.lending-check {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.lending-check input {
+  accent-color: var(--text);
+}
+.lending-table-head,
+.lending-market-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.5fr) minmax(75px, 0.7fr) minmax(75px, 0.7fr) minmax(90px, 0.85fr) minmax(105px, 0.9fr);
+  align-items: center;
+  column-gap: 8px;
+}
+.lending-table-head {
+  min-height: 30px;
+  padding: 0 11px;
+  color: var(--text-3);
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 9.5px;
+}
+.lending-table-head span:not(:first-child) {
+  text-align: right;
+}
+.lending-market-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.lending-market-row {
+  width: 100%;
+  min-height: 61px;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  transition: background 130ms ease-out, box-shadow 130ms ease-out;
+}
+.lending-market-row:hover {
+  background: var(--surface);
+}
+.lending-market-row.selected {
+  background: color-mix(in srgb, var(--green) 6%, var(--surface-2));
+  box-shadow: inset 2px 0 var(--green);
+}
+.lending-market-row > span:not(:first-child) {
+  text-align: right;
+  font-size: 11px;
+}
+.lending-asset-cell {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.lending-asset-cell > span {
+  min-width: 0;
+}
+.lending-asset-cell strong {
+  display: block;
+  font-size: 12px;
+}
+.lending-asset-cell small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 155px;
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lending-util-cell {
+  display: grid;
+  grid-template-columns: 1fr 40px;
+  align-items: center;
+  gap: 6px;
+}
+.lending-util-track,
+.lending-ltv-line {
+  height: 4px;
+  overflow: hidden;
+  background: var(--surface-3);
+  border-radius: 4px;
+}
+.lending-util-track > span,
+.lending-ltv-line > span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.lending-util-track.warn > span,
+.lending-ltv-preview.warn .lending-ltv-line > span {
+  background: var(--yellow);
+}
+.lending-util-track.danger > span,
+.lending-ltv-preview.danger .lending-ltv-line > span {
+  background: var(--red);
+}
+.lending-scanner-foot {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--text-3);
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
+  font-size: 9px;
+}
+.lending-scanner-foot span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.lending-empty {
+  padding: 30px;
+  color: var(--text-3);
+  text-align: center;
+}

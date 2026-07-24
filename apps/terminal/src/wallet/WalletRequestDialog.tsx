@@ -16,7 +16,7 @@ type WalletRequestDialogProps = {
 
 const requestEyebrow = (request: WalletRequestView): string => {
   if (request.phase === "review") return "Review request";
-  if (request.phase === "awaiting") return "Waiting for wallet";
+  if (request.phase === "awaiting") return "Secure wallet handoff";
   if (request.phase === "failed") return "Not submitted";
   return "Request submitted";
 };
@@ -164,8 +164,8 @@ export const WalletRequestDialog = ({
           <div className="wallet-request-state" role="status">
             <span className="wallet-request-spinner" aria-hidden />
             <div>
-              <strong>Open {walletName ?? "your wallet"}</strong>
-              <span>Check the final calldata and fee, then approve or reject there.</span>
+              <strong>Request sent to {walletName ?? "your wallet"}</strong>
+              <span>Review once, then approve or reject. Broadcast starts immediately.</span>
             </div>
           </div>
         ) : null}

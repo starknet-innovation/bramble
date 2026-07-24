@@ -24,7 +24,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { accountDrawer } from "./account-drawer";
 import { approvalCard } from "./approval-cards";
 import { actionableApprovals, approvalTakeover } from "./approval-screen";
-import { formatFiat, formatPriceTimestamp, portfolioDelta, portfolioTotal } from "./fiat";
+import { formatFiat, portfolioDelta, portfolioTotal } from "./fiat";
 import { backupFlow, simpleFlowScreen } from "./flows";
 import { activityEmptyCopy, homeTabs, transactionRow, visibleHomeBalances } from "./home-tabs";
 import { type IconName, icon } from "./icons";
@@ -156,24 +156,14 @@ const heroDelta = (
     </p>`;
 };
 
-// A degraded-mode notice under the hero total. When the price host is
-// unreachable we serve the last saved prices (or nothing, when the cache is
-// empty), always labelled so a stale value never masquerades as a live one:
-// cached prices read as "last saved · <time>", an empty cache reads as an
-// explicit "unavailable" hint. Empty when prices are current.
-const heroPriceNotice = (
-  priceStale: boolean,
-  hasPrices: boolean,
-  priceAsOf: number | null,
-): string => {
-  if (!priceStale) {
+// A degraded-mode notice under the hero total. Saved prices continue to render
+// without an error-like caveat; only a genuinely empty cache needs an explicit
+// unavailable hint.
+const heroPriceNotice = (priceStale: boolean, hasPrices: boolean): string => {
+  if (!priceStale || hasPrices) {
     return "";
   }
-  const savedAt = formatPriceTimestamp(priceAsOf);
-  const copy = hasPrices
-    ? `Showing last saved prices${savedAt ? ` · ${savedAt}` : ""}`
-    : "Live prices unavailable right now";
-  return `<p class="hero-stale" role="status">${icon("alert")}<span>${escapeHtml(copy)}</span></p>`;
+  return `<p class="hero-stale" role="status">${icon("alert")}<span>Live prices unavailable right now</span></p>`;
 };
 
 const homeScreen = (
@@ -188,7 +178,6 @@ const homeScreen = (
   currency: DisplayCurrency,
   transactions: readonly ActivityEntry[],
   priceStale: boolean,
-  priceAsOf: number | null,
   historyUnavailable: boolean,
   discoveredNfts: readonly DiscoveredNft[],
 ): string => {
@@ -202,7 +191,7 @@ const homeScreen = (
       <p class="hero-eyebrow">Total balance</p>
       <p class="hero-total" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(balances, preferences, prices, changes, currency) : ""}
-      ${account !== null ? heroPriceNotice(priceStale, showTotal, priceAsOf) : ""}
+      ${account !== null ? heroPriceNotice(priceStale, showTotal) : ""}
       ${
         account
           ? `<button class="hero-chip" data-copy="${escapeHtml(account.address)}" type="button" title="Copy address">${escapeHtml(accountLabel(account.address))}${icon("copy")}</button>`
@@ -376,7 +365,7 @@ export const dashboard = (
   drawerGroupFilter: string | null = null,
   expandedGroupId: string | null = null,
   priceStale = false,
-  priceAsOf: number | null = null,
+  _priceAsOf: number | null = null,
   discoveredNfts: readonly DiscoveredNft[] = [],
   openAssignId: string | null = null,
   classHashVerification: ClassHashVerification | null = null,
@@ -388,6 +377,13 @@ export const dashboard = (
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
   const trackedBalances = "balances" in balances ? balances.balances : [];
+  // A fresh external request always becomes the wallet's foreground task,
+  // regardless of which dock or flow screen was previously open. The user may
+  // explicitly snooze it back to Activity after seeing it.
+  const actionable = actionableApprovals(pending, snoozedApprovalIds);
+  if (actionable.length > 0) {
+    return approvalTakeover(actionable, status);
+  }
   const simpleFlow = simpleFlowScreen(activeView, {
     account,
     allowances,
@@ -460,15 +456,6 @@ export const dashboard = (
   if (activeView === "reveal") {
     return revealFlow(status);
   }
-  // Proactive request surfacing: while an unsnoozed dapp request is pending,
-  // every dock view yields to the full-screen takeover — the request IS the
-  // screen, decision-first, the moment the panel opens or is glanced at. Flow
-  // screens above are deliberately exempt so a mid-task form is never torn
-  // down under the user; the takeover waits at the next dock view.
-  const actionable = actionableApprovals(pending, snoozedApprovalIds);
-  if (actionable.length > 0) {
-    return approvalTakeover(actionable, status);
-  }
   const screen =
     activeView === "activity"
       ? activityScreen(pending, status, transactions, historyUnavailable)
@@ -486,7 +473,6 @@ export const dashboard = (
             currency,
             transactions,
             priceStale,
-            priceAsOf,
             historyUnavailable,
             discoveredNfts,
           );

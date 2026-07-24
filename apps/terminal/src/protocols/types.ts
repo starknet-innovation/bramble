@@ -48,6 +48,8 @@ export type SwapQuote = {
   readonly sellAmount: string;
   readonly buyAmount: string;
   readonly minBuyAmount: string;
+  /** AVNU's estimated network fee in STRK smallest units, when supplied. */
+  readonly gasFeesInStrk?: string | null;
   /** AVNU's estimated network fee in USD, when supplied by the route. */
   readonly gasFeesInUsd?: number | null;
   /** Route price impact in basis points, when supplied by the venue. */

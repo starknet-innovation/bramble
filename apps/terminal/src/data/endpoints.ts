@@ -49,6 +49,9 @@ export const EXTENDED_REST_DIRECT_BASE = `${EXTENDED_API_BASE.replace(/\/+$/, ""
 /** Extended public WebSocket stream base, host-consistent with the REST base. */
 export const EXTENDED_WS_DIRECT_BASE = `wss://${new URL(EXTENDED_API_BASE).host}/stream.extended.exchange/v1`;
 
+/** Starkscan's read-only mainnet explorer lane. Browser builds use a same-origin proxy. */
+export const STARKSCAN_DIRECT_BASE = "https://starkscan.co/v1/SN_MAIN";
+
 // -----------------------------------------------------------------------------
 // Environment resolution.
 // -----------------------------------------------------------------------------
@@ -115,6 +118,11 @@ export const EXTENDED_REST_BASE = USE_DEV_PROXY
 export const EXTENDED_WS_BASE = USE_DEV_PROXY
   ? `${currentWsOrigin()}/proxy/extended-ws${new URL(EXTENDED_WS_DIRECT_BASE).pathname}`
   : (override("EXTENDED_WS") ?? EXTENDED_WS_DIRECT_BASE);
+
+/** Indexed mainnet holdings, blocks, and transfers used by portfolio and Discover. */
+export const STARKSCAN_BASE = USE_DEV_PROXY
+  ? "/proxy/starkscan/v1/SN_MAIN"
+  : (override("STARKSCAN") ?? STARKSCAN_DIRECT_BASE);
 
 /**
  * RPC failover list. Cartridge permits browser origins, so no proxy is needed.

@@ -39,7 +39,7 @@ import {
   getNftOwner,
   getNftOwnership,
   getNftTokenUri,
-  getTokenBalances,
+  type getTokenBalances,
   getTokenMetadata,
   getTransactionStatuses,
   type InvokeInput,
@@ -54,9 +54,14 @@ import {
   type TransactionStatusInput,
   type TransferInput,
 } from "../starknet/rpc";
+import { createStarkscanClient, type StarkscanHttp } from "../starknet/starkscan";
+import {
+  createStarkscanPreferredBalances,
+  createStarkscanPreferredHistory,
+} from "../starknet/starkscan-wallet";
 import { createHttpStrk20Service, type Strk20Http } from "../starknet/strk20/http-service";
 import type { Strk20Service } from "../starknet/strk20/service";
-import { scanTransactionHistory, type TransactionHistoryScan } from "../starknet/tx-history-scan";
+import type { scanTransactionHistory, TransactionHistoryScan } from "../starknet/tx-history-scan";
 
 /**
  * Injectable multisig read operations used by the multisig message handlers.
@@ -173,6 +178,17 @@ const nftIndexerHttp: NftIndexerHttp = (url) => fetch(url);
 const NFT_METADATA_TIMEOUT_MS = 10_000;
 const nftMetadataHttp: NftMetadataHttp = (url, init) =>
   fetch(url, { ...init, signal: AbortSignal.timeout(NFT_METADATA_TIMEOUT_MS) });
+const starkscanHttp: StarkscanHttp = (url, init) => fetch(url, init);
+// The public explorer read lane is used because an extension cannot safely
+// embed an external API key. The client keeps its base injectable so a
+// deployment-owned authenticated relay can replace this without changing
+// wallet consumers.
+const starkscanClient = createStarkscanClient({
+  baseUrl: "https://starkscan.co/v1",
+  http: starkscanHttp,
+});
+const getPreferredBalances = createStarkscanPreferredBalances(starkscanClient);
+const getPreferredHistory = createStarkscanPreferredHistory(starkscanClient);
 
 const getNftMetadata = async (input: NftTokenUriInput): Promise<NftTokenMetadata | null> =>
   resolveNftMetadataUri(await getNftTokenUri(input), nftMetadataHttp);
@@ -189,9 +205,9 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   getNftMetadata,
   getNftOwner,
   getNftOwnership,
-  getTokenBalances,
+  getTokenBalances: getPreferredBalances,
   getTokenMetadata,
-  getTransactionHistory: scanTransactionHistory,
+  getTransactionHistory: getPreferredHistory,
   getTransactionStatuses,
   multisig: {
     computeTransactionId: computeMultisigTransactionId,

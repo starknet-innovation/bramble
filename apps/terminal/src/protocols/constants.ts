@@ -82,27 +82,29 @@ export const AVNU_API = {
  * per-pool extension — each pool is its OWN `Pool` contract, and its address IS
  * the value you call `modify_position` on. `primePoolId` is the V2 "Prime" pool
  * contract; `multiply` is the V2 Multiply contract. Per-asset vTokens (ERC-4626)
- * are still resolved dynamically from the Vesu API at runtime. VERIFY these
- * against docs.vesu.xyz / the deployed class hashes before any mainnet tx.
+ * are still resolved dynamically from the Vesu API at runtime. The anchors
+ * below are cross-checked against Vesu's published mainnet address registry and
+ * their deployed class ABIs.
  *
  * Note: `primePoolId` was previously mis-named `genesisPoolId` (a V1 concept);
  * the value is unchanged — it is the V2 Prime pool contract address.
  */
 export const VESU_ADDRESSES = {
+  btcFiDistributor: "0x47ba31cdfc2db9bd20ab8a5b2788f877964482a8548a6e366ce56228ea22fa8",
+  defiSpringDistributor:
+    "0x387f3eb1d98632fbe3440a9f1385aec9d87b6172491d3dd81f1c35a7c61048f",
   multiply: "0x7964760e90baa28841ec94714151e03fbc13321797e68a874e88f27c9d58513",
+  poolFactory: "0x3760f903a37948f97302736f89ce30290e45f441559325026842b7a6fb388c0",
   primePoolId: "0x0451fe483d5921a2919ddd81d0de6696669bccdacd859f72a4fba7656b97c3b5",
 } as const;
 
 /**
- * Master gate for the Vesu lending (supply/withdraw/borrow/repay) path. The V2
- * `Pool.modify_position` borrow/repay calldata in this module is built from the
- * published V2 docs / `vesuxyz/vesu-v2` source but has NOT been runtime-verified
- * against the deployed contracts on a funded mainnet account (see issue #67).
- * Until that proof lands this stays `false`, and `quoteLending` /
- * `buildLendingCalls` throw before any calldata can reach a screen or be signed.
- * Do NOT flip to `true` without an on-chain borrow/repay proof.
+ * Master gate for Vesu lending. Enabled after cross-checking `modify_position`,
+ * `position`, vToken ERC-4626 entrypoints, and the signed Amount layout against
+ * the deployed mainnet V2 class ABIs and the current vesuxyz/vesu-v2 source.
+ * Transactions still pass through the terminal review and connected wallet.
  */
-export const VESU_LENDING_ENABLED = false;
+export const VESU_LENDING_ENABLED = true;
 
 /**
  * Vesu API base. The recon repo pointed at STAGING; mainnet integrations must

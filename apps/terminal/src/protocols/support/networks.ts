@@ -1,6 +1,8 @@
 /**
  * Starknet network constants kept separate from UI and storage code.
  */
+import { validateAndParseAddress } from "starknet";
+
 export type StarknetNetworkId = "SN_MAIN" | "SN_SEPOLIA" | "SN_DEVNET";
 
 /**
@@ -150,3 +152,23 @@ export const isNonZeroStarkFieldElement = (value: string): boolean =>
  * Default network for newly imported accounts.
  */
 export const DEFAULT_NETWORK = STARKNET_NETWORKS.SN_MAIN;
+
+/**
+ * Canonicalizes a Starknet address through starknet.js validation and padding.
+ * Invalid inputs return null so untrusted API metadata fails closed.
+ */
+export const canonicalAddress = (value: string): string | null => {
+  try {
+    return validateAndParseAddress(value).toLowerCase();
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Compares two Starknet addresses after library-backed validation.
+ */
+export const sameAddress = (left: string, right: string): boolean => {
+  const canonicalLeft = canonicalAddress(left);
+  return canonicalLeft !== null && canonicalLeft === canonicalAddress(right);
+};

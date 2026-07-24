@@ -2,9 +2,12 @@ artifacts/
 dist/
 node_modules/
 playwright-report/
+.playwright-cli/
+.impeccable/
 .snfoundry_cache/
 target/
 test-results/
+output/
 vendor/krusty-kms/
 vendor/multisig/
 contracts/multisig/target/

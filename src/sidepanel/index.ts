@@ -493,5 +493,7 @@ window.addEventListener("focus", () => {
 window.addEventListener("pagehide", refreshScheduler.stop, { once: true });
 
 applyTheme();
-void render(await wallet.loadStatus());
+// Start before the initial status read so an approval queued while Chrome is
+// opening the panel cannot fall into the ambient-poll interval.
 refreshScheduler.start();
+void render(await wallet.loadStatus());

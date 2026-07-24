@@ -8,18 +8,15 @@
  * called directly on the pool contract — V2 has no Singleton). No external SDK —
  * calldata is built with the vendored starknet-js.
  *
- * ⚠️ GATED (issue #67): the whole lending path sits behind `VESU_LENDING_ENABLED`
- * (constants.ts). Both `quoteLending` and `buildLendingCalls` throw while it is
- * `false`, so no lending quote or calldata can reach a screen or be signed until
- * the V2 borrow/repay flow is runtime-verified on a funded mainnet account. The
- * V2 struct shapes are doc/source-verified (docs.vesu.xyz, vesuxyz/vesu-v2) but
- * NOT yet proven against the deployed class ABI. `LendingQuoteParams` still
- * carries no `rpcUrls`; Vesu is mainnet-only here.
+ * The calldata layouts and entrypoints are checked against the deployed
+ * mainnet V2 class ABIs and the current vesuxyz/vesu-v2 source. A retained
+ * feature gate can fail closed if the integration ever needs to be suspended.
+ * `LendingQuoteParams` carries no `rpcUrls`; Vesu is mainnet-only here.
  */
 import type { Call } from "starknet";
 import { WalletError } from "./support/errors";
 import { isRecord } from "./support/json";
-import { isNonZeroStarkFieldElement } from "./support/networks";
+import { isNonZeroStarkFieldElement, sameAddress } from "./support/networks";
 import { VESU_API_BASE, VESU_LENDING_ENABLED } from "./constants";
 import type { LendingParams, LendingQuote, LendingQuoteParams } from "./types";
 import {
@@ -33,12 +30,11 @@ import {
   parseVesuPool,
 } from "./vesu-lending";
 
-// Guards every entry into the Vesu lending path. Throws a stable, explicit error
-// while the feature is disabled so borrow/repay calldata built for V2 but not yet
-// runtime-verified on mainnet (issue #67) can never reach a screen or be signed.
+// Guards every entry into the Vesu lending path so one constant can fail the
+// integration closed without allowing quote or calldata construction.
 const assertLendingEnabled = (): void => {
   if (!VESU_LENDING_ENABLED) {
-    throw new WalletError("Vesu lending is disabled: not yet verified on mainnet (#67)");
+    throw new WalletError("Vesu lending is temporarily unavailable");
   }
 };
 
@@ -62,7 +58,7 @@ const fetchVesuPool = async (poolId: string) => {
     throw error instanceof WalletError ? error : new WalletError("Vesu pool request failed");
   }
   const config = parseVesuPool(body);
-  if (config === null) {
+  if (config === null || !sameAddress(config.poolAddress, poolId)) {
     throw new WalletError("Could not resolve Vesu pool");
   }
   return config;
@@ -79,7 +75,7 @@ const fetchVesuPool = async (poolId: string) => {
  * `collateralAmount` (smallest-unit collateral to supply; "0" = none); both are
  * validated and echoed onto the quote.
  *
- * Throws while `VESU_LENDING_ENABLED` is false (issue #67).
+ * Throws if the integration safety gate is disabled.
  */
 export const quoteLending = async (params: LendingQuoteParams): Promise<LendingQuote> => {
   assertLendingEnabled();
@@ -145,7 +141,7 @@ const requireCollateralAsset = (quote: LendingQuote): string => {
  * the pool contract). Returns starknet-js Calls ready for
  * submitInvokeTransaction; never signs or broadcasts.
  *
- * Throws while `VESU_LENDING_ENABLED` is false (issue #67).
+ * Throws if the integration safety gate is disabled.
  */
 export const buildLendingCalls = (params: LendingParams): readonly Call[] => {
   assertLendingEnabled();

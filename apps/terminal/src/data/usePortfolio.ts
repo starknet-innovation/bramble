@@ -6,6 +6,7 @@
  * real market movement of the real balances (not a made-up cost basis).
  */
 import { useMemo } from "react";
+import { canonicalAddress } from "../protocols/support/networks";
 import { useBalances } from "./useBalances";
 import { usePrices } from "./usePrices";
 import { useTokens } from "./useTokens";
@@ -36,6 +37,12 @@ export const usePortfolio = (address: string | null): UsePortfolioResult => {
   const data = useMemo<PortfolioData>(() => {
     const rows = balances.data ?? [];
     const byAddress = prices.data?.byAddress ?? {};
+    const logosByAddress = Object.fromEntries(
+      (tokens.data ?? []).map((token) => [
+        canonicalAddress(token.address) ?? token.address.toLowerCase(),
+        token.logoUri,
+      ]),
+    );
     const logosBySymbol = Object.fromEntries(
       (tokens.data ?? []).map((token) => [token.symbol.toUpperCase(), token.logoUri]),
     );
@@ -43,7 +50,9 @@ export const usePortfolio = (address: string | null): UsePortfolioResult => {
     const holdings: Holding[] = rows
       .filter((balance) => balance.raw > 0n)
       .map((balance) => {
-        const price = byAddress[balance.address.toLowerCase()];
+        const addressKey = canonicalAddress(balance.address) ?? balance.address.toLowerCase();
+        const price =
+          byAddress[addressKey] ?? prices.data?.bySymbol[balance.symbol.toUpperCase()];
         const priceUsd = price?.usd ?? null;
         const change24h = price?.change24h ?? null;
         const usdValue = priceUsd === null ? 0 : balance.amount * priceUsd;
@@ -51,7 +60,10 @@ export const usePortfolio = (address: string | null): UsePortfolioResult => {
           address: balance.address,
           symbol: balance.symbol,
           name: balance.name,
-          logoUri: logosBySymbol[balance.symbol.toUpperCase()] ?? null,
+          logoUri:
+            logosByAddress[addressKey] ??
+            logosBySymbol[balance.symbol.toUpperCase()] ??
+            null,
           decimals: balance.decimals,
           display: balance.display,
           amount: balance.amount,
@@ -83,8 +95,8 @@ export const usePortfolio = (address: string | null): UsePortfolioResult => {
 
   return {
     data,
-    isLoading: balances.isLoading || prices.isLoading || tokens.isLoading,
-    error: balances.error ?? prices.error ?? tokens.error,
+    isLoading: balances.isLoading || prices.isLoading,
+    error: balances.error ?? prices.error,
     refresh: balances.refresh,
   };
 };

@@ -27,9 +27,17 @@ import {
   EXTENDED_REST_DIRECT_BASE,
   EXTENDED_WS_DIRECT_BASE,
   RPC_DIRECT_URLS,
+  STARKSCAN_DIRECT_BASE,
 } from "../src/data/endpoints";
+import {
+  parseChainPulse,
+  parseStarkscanBalances,
+  parseWalletActivity,
+} from "../src/data/starkscan";
 import { toAvnuRows, toEkuboRows } from "../src/data/useTokens";
 import { toAvnuCandles } from "../src/data/useCandles";
+import { parseEkuboTokenTrades } from "../src/data/useTokenTrades";
+import { parseVesuMarkets, parseVesuPositions } from "../src/data/vesu/parse";
 import {
   parseCandles,
   parseFundingHistory,
@@ -44,11 +52,18 @@ import {
   parseBuildResponse,
   parseQuoteResponse,
 } from "../src/protocols/avnu-swap";
-import { MAINNET_TOKEN_ADDRESSES } from "../src/protocols/constants";
+import {
+  MAINNET_TOKEN_ADDRESSES,
+  VESU_ADDRESSES,
+  VESU_API_BASE,
+} from "../src/protocols/constants";
 import { STARKNET_NETWORKS } from "../src/protocols/support/networks";
+import { parseVesuMultiplyExactOutQuote } from "../src/protocols/vesu-multiply";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const SAMPLE_MARKET = "BTC-USD";
+const SAMPLE_STARKSCAN_ADDRESS =
+  "0x6c16710431efd3962d3c6f55faf00d8c855188029acb42781b9ac77c438ade5";
 const EXTENDED_USER_AGENT = "MC-Wallet-Terminal/0.1";
 
 type Outcome = {
@@ -195,7 +210,7 @@ const main = async (): Promise<void> => {
     return { status, detail: `${keysOf(body)} -> ${rows.length} TokenRows (first symbol=${rows[0]?.symbol ?? "n/a"})` };
   });
 
-  await check("AVNU token candles", true, async () => {
+  await check("AVNU multi-token price history", true, async () => {
     const end = new Date();
     const start = new Date(end.getTime() - 86_400_000);
     const params = new URLSearchParams({
@@ -204,10 +219,13 @@ const main = async (): Promise<void> => {
       resolution: "1H",
     });
     const { status, body } = await fetchJsonDirect(
-      `${AVNU_MARKETS_DIRECT_BASE}/v3/tokens/${ETH}/prices/candle?${params}`,
+      `${AVNU_MARKETS_DIRECT_BASE}/v3/tokens/${MAINNET_TOKEN_ADDRESSES.STRK}/prices/line?${params}`,
     );
     const rows = toAvnuCandles(body as never);
-    return { status, detail: `${rows.length} candles (last close=${rows.at(-1)?.close ?? "n/a"})` };
+    return {
+      status,
+      detail: `${rows.length} STRK price intervals (last=${rows.at(-1)?.close ?? "n/a"})`,
+    };
   });
 
   await check("AVNU v3 swap quote/build", true, async () => {
@@ -238,6 +256,63 @@ const main = async (): Promise<void> => {
     };
   });
 
+  // ---- Starkscan (indexed portfolio + chain pulse) -----------------------
+  await check("Starkscan token holdings", true, async () => {
+    const { status, body } = await fetchJsonDirect(
+      `${STARKSCAN_DIRECT_BASE}/address/${SAMPLE_STARKSCAN_ADDRESS}/token-holdings`,
+    );
+    const balances = parseStarkscanBalances(body, SAMPLE_STARKSCAN_ADDRESS);
+    return {
+      status,
+      detail: `${balances.length} exact holdings (first=${balances[0]?.symbol ?? "n/a"})`,
+    };
+  });
+
+  await check("Starkscan live chain pulse", true, async () => {
+    const [blocks, events, messages] = await Promise.all([
+      fetchJsonDirect(`${STARKSCAN_DIRECT_BASE}/blocks?limit=3`),
+      fetchJsonDirect(`${STARKSCAN_DIRECT_BASE}/events?limit=20`),
+      fetchJsonDirect(`${STARKSCAN_DIRECT_BASE}/messages?limit=3`),
+    ]);
+    const blockItems =
+      blocks.body !== null &&
+      typeof blocks.body === "object" &&
+      Array.isArray((blocks.body as { readonly items?: unknown }).items)
+        ? (blocks.body as { readonly items: readonly unknown[] }).items
+        : [];
+    const head =
+      blockItems[0] !== null && typeof blockItems[0] === "object"
+        ? (blockItems[0] as { readonly blockNumber?: unknown }).blockNumber
+        : null;
+    if (!Number.isSafeInteger(head)) {
+      throw new Error("Starkscan returned no indexed head block");
+    }
+    const transactions = await fetchJsonDirect(
+      `${STARKSCAN_DIRECT_BASE}/block/${String(head)}/txs?limit=12`,
+    );
+    const pulse = parseChainPulse(
+      blocks.body,
+      transactions.body,
+      events.body,
+      messages.body,
+    );
+    return {
+      status: `${blocks.status}/${transactions.status}/${events.status}/${messages.status}`,
+      detail: `${pulse.blocks.length} blocks, ${pulse.transactions.length} txs, ${pulse.events.length} non-fee events, ${pulse.messages.length} messages`,
+    };
+  });
+
+  await check("Starkscan wallet activity", true, async () => {
+    const { status, body } = await fetchJsonDirect(
+      `${STARKSCAN_DIRECT_BASE}/address/${SAMPLE_STARKSCAN_ADDRESS}/transactions?limit=30`,
+    );
+    const activity = parseWalletActivity(body);
+    return {
+      status,
+      detail: `${activity.length} wallet transactions (latest=${activity[0]?.title ?? "none"})`,
+    };
+  });
+
   // ---- Ekubo (token universe, fallback) ----------------------------------
   await check("Ekubo /tokens", false, async () => {
     const chainId = BigInt(STARKNET_NETWORKS.SN_MAIN.chainId).toString();
@@ -246,6 +321,66 @@ const main = async (): Promise<void> => {
     );
     const rows = toEkuboRows(tokens.body as never);
     return { status: tokens.status, detail: `${keysOf(tokens.body)} -> ${rows.length} TokenRows` };
+  });
+
+  await check("Ekubo live spot trade tape", true, async () => {
+    const chainId = BigInt(STARKNET_NETWORKS.SN_MAIN.chainId).toString();
+    const marketResponse = await fetchJsonDirect(`${AVNU_MARKETS_DIRECT_BASE}/v3/tokens`);
+    const tokens = toAvnuRows(marketResponse.body as never);
+    const selected = tokens.find((token) => token.symbol === "STRK");
+    const quote = tokens.find(
+      (token) => token.symbol === "USDC" && !token.name.toLowerCase().includes("bridged"),
+    );
+    if (selected === undefined || quote === undefined) {
+      throw new Error("AVNU market list did not include STRK/native USDC");
+    }
+    const { status, body } = await fetchJsonDirect(
+      `${EKUBO_DIRECT_BASE}/tokens/${chainId}/${selected.address}/${quote.address}/events`,
+    );
+    const trades = parseEkuboTokenTrades(body, selected, quote);
+    return {
+      status,
+      detail: `${trades.length} verified fills (latest=${trades[0]?.side ?? "none"})`,
+    };
+  });
+
+  // ---- Vesu V2 (lending + atomic Multiply routing) -----------------------
+  await check("Vesu verified V2 pools", true, async () => {
+    const { status, body } = await fetchJsonDirect(
+      `${VESU_API_BASE}/pools?protocolVersion=v2&onlyVerified=true&onlyEnabledAssets=true`,
+    );
+    const parsed = parseVesuMarkets(body, new Date().toISOString());
+    if (parsed.poolCount === 0 || parsed.markets.length === 0 || parsed.pairs.length === 0) {
+      throw new Error("Vesu returned no verified V2 market inventory");
+    }
+    return {
+      status,
+      detail: `${parsed.poolCount} pools / ${parsed.markets.length} assets / ${parsed.pairs.length} pairs`,
+    };
+  });
+
+  await check("Vesu connected positions", true, async () => {
+    const { status, body } = await fetchJsonDirect(
+      `${VESU_API_BASE}/users/${SAMPLE_STARKSCAN_ADDRESS}/positions`,
+    );
+    const positions = parseVesuPositions(body);
+    return {
+      status,
+      detail: `${positions.length} open positions`,
+    };
+  });
+
+  await check("Vesu Multiply unwind quote", true, async () => {
+    const chainId = BigInt(STARKNET_NETWORKS.SN_MAIN.chainId).toString();
+    const debtAmount = 1_000_000n;
+    const { status, body } = await fetchJsonDirect(
+      `https://prod-api-quoter.ekubo.org/${chainId}/-${debtAmount}/${MAINNET_TOKEN_ADDRESSES.USDC}/${MAINNET_TOKEN_ADDRESSES.USDT}`,
+    );
+    const quote = parseVesuMultiplyExactOutQuote(body, debtAmount, 100);
+    return {
+      status,
+      detail: `max collateral=${quote.maxInputAmount} splits=${quote.splits.length}`,
+    };
   });
 
   // ---- Extended (perps) ---------------------------------------------------
@@ -310,6 +445,37 @@ const main = async (): Promise<void> => {
     const low = res[0] !== undefined ? BigInt(res[0]) : 0n;
     const high = res[1] !== undefined ? BigInt(res[1]) : 0n;
     return { status: "rpc", detail: `u256 felts=[${res.slice(0, 2).join(", ")}] -> ${low + (high << 128n)}` };
+  });
+
+  await check("Vesu V2 deployed ABIs", true, async () => {
+    const [poolClass, multiplyClass] = await Promise.all([
+      provider.getClassAt(VESU_ADDRESSES.primePoolId),
+      provider.getClassAt(VESU_ADDRESSES.multiply),
+    ]);
+    const names = (abi: unknown): readonly string[] =>
+      Array.isArray(abi)
+        ? abi.flatMap((entry) => {
+            if (typeof entry !== "object" || entry === null) return [];
+            const value = entry as { readonly name?: unknown; readonly items?: unknown };
+            const own = typeof value.name === "string" ? [value.name] : [];
+            const nested = Array.isArray(value.items)
+              ? value.items.flatMap((item) =>
+                  typeof item === "object" &&
+                  item !== null &&
+                  typeof (item as { readonly name?: unknown }).name === "string"
+                    ? [(item as { readonly name: string }).name]
+                    : [],
+                )
+              : [];
+            return [...own, ...nested];
+          })
+        : [];
+    const poolNames = names(poolClass.abi);
+    const multiplyNames = names(multiplyClass.abi);
+    if (!poolNames.includes("modify_position") || !multiplyNames.includes("modify_lever")) {
+      throw new Error("Vesu deployed ABI no longer exposes expected entrypoints");
+    }
+    return { status: "rpc", detail: "modify_position + modify_lever present" };
   });
 
   // ---- Summary ------------------------------------------------------------

@@ -27,6 +27,7 @@
   "host_permissions": [
     "https://api.cartridge.gg/*",
     "https://api.coingecko.com/*",
+    "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
     "https://metamask.github.io/*",

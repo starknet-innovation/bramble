@@ -14,6 +14,13 @@ export type WalletRequest = (call: {
   readonly type: string;
 }) => Promise<unknown>;
 
+export type WatchAssetInput = {
+  readonly address: string;
+  readonly decimals?: number;
+  readonly name?: string;
+  readonly symbol?: string;
+};
+
 const isUserRejection = (cause: unknown): boolean => {
   if (cause instanceof Error && /reject|denied|refus/i.test(cause.message)) {
     return true;
@@ -84,6 +91,27 @@ export const requestChainId = async (
     }
   }
   return typeof wallet.chainId === "string" ? wallet.chainId : null;
+};
+
+/**
+ * Requests ERC20 tracking through the standards provider. The wallet treats
+ * every field as untrusted, re-reads metadata, and requires user approval.
+ */
+export const requestWatchAsset = async (
+  wallet: StarknetWindowObject | null,
+  input: WatchAssetInput,
+): Promise<void> => {
+  if (wallet === null || typeof wallet.request !== "function") {
+    throw new Error("Connect a wallet that supports token tracking.");
+  }
+  const raw = wallet.request as unknown as WalletRequest;
+  const result = await raw({
+    params: { options: input, type: "ERC20" },
+    type: "wallet_watchAsset",
+  });
+  if (result !== true) {
+    throw new Error("Wallet did not add the token.");
+  }
 };
 
 /** Maps a wallet chain identifier to terminal network metadata for display and RPC binding. */

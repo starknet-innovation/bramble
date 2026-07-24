@@ -10,4 +10,4 @@
 export const QUICK_AMOUNTS: readonly string[] = ["0.1", "0.25", "0.5", "1", "5", "10"];
 
 /** Timeframe buttons for the chart bar. Must be keys `useCandles` understands. */
-export const TIMEFRAMES: readonly string[] = ["5y", "1y", "6m", "3m", "1m", "5d", "1d"];
+export const TIMEFRAMES: readonly string[] = ["1y", "6m", "3m", "1m", "5d", "1d"];

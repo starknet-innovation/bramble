@@ -63,7 +63,7 @@ export const visibleHomeBalances = (
  * screen.
  */
 const PENDING_TX_HINT =
-  "Starknet has no fee-bump or replace-by-fee: a pending transaction can't be sped up, replaced, or cancelled. This is a protocol limitation, not a wallet one, and it usually settles within a few minutes.";
+  "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.";
 
 /**
  * Renders one recorded transaction row, shared by the home Activity tab and

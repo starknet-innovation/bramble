@@ -1,0 +1,239 @@
+/* Token picker, quote disclosure, CTA, and responsive finishing for the swap ticket. */
+.swap-token-picker {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  min-height: 460px;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.swap-token-search {
+  gap: 8px;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  color: var(--text-3);
+  background: var(--surface);
+}
+
+.swap-token-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: 12px;
+}
+
+.swap-token-search button {
+  padding: 5px;
+  color: var(--text-2);
+  font-size: 10.5px;
+}
+
+.swap-token-results {
+  max-height: 390px;
+  margin-top: 8px;
+  overflow-y: auto;
+}
+
+.swap-token-results > button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 54px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  text-align: left;
+}
+
+.swap-token-results > button:hover,
+.swap-token-results > button[aria-selected="true"] {
+  background: var(--surface);
+}
+
+.swap-token-results > button > span {
+  display: grid;
+  min-width: 0;
+}
+
+.swap-token-results strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+}
+
+.swap-token-results small {
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swap-error,
+.swap-exec-message {
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.swap-error {
+  color: var(--red);
+}
+
+.swap-exec-message {
+  color: var(--text-2);
+}
+
+.swap-quote-details {
+  margin-top: 10px;
+}
+
+.swap-quote-details summary {
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  color: var(--text-2);
+  font-size: 11px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.swap-quote-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.swap-quote-details[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.swap-quote-details dl {
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.swap-quote-details dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 10.5px;
+}
+
+.swap-quote-details dt {
+  color: var(--text-3);
+}
+
+.swap-quote-details dd {
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+  text-align: right;
+}
+
+.swap-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 14px;
+  border-radius: 11px;
+  color: var(--bg);
+  background: var(--accent);
+  font-size: 13px;
+  font-weight: 750;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.swap-cta:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.swap-cta:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.swap-disclosure {
+  margin: 9px 10px 0;
+  color: var(--text-3);
+  font-size: 9.5px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.token-facts {
+  padding: 17px 18px 22px;
+}
+
+@keyframes swap-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 901px) {
+  #tokens .rightpanel {
+    flex-basis: 350px;
+  }
+
+  .swap-shell {
+    padding-inline: 14px;
+  }
+}
+
+@media (max-width: 900px) {
+  #tokens .rightpanel {
+    width: 100%;
+    min-height: 0;
+  }
+
+  .swap-shell {
+    width: min(100%, 520px);
+    margin-inline: auto;
+  }
+
+  .token-facts {
+    width: min(100%, 520px);
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .swap-header > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .swap-asset-main input {
+    font-size: 23px;
+  }
+
+  .swap-percentages button {
+    min-width: 27px;
+    padding-inline: 3px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swap-asset-card,
+  .swap-direction svg,
+  .swap-cta {
+    transition: none;
+  }
+
+  .swap-live-status svg,
+  .swap-cta svg {
+    animation: none;
+  }
+}

@@ -82,7 +82,8 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
           }
         });
       if (result) {
-        result.textContent = action === "approve" ? "Submitting request…" : "Rejecting request…";
+        result.textContent =
+          action === "approve" ? "Approved. Signing and broadcasting…" : "Rejecting request…";
       }
       void wallet.decideApproval(id, action === "approve").then(
         async () => {

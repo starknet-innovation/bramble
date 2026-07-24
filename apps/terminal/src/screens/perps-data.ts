@@ -37,7 +37,16 @@ export const fmtUsdPrice = (value: number): string =>
 
 /** Formats an order-book size with magnitude-aware precision. */
 export const fmtSize = (value: number): string => {
-  const digits = value >= 1000 ? 0 : value >= 1 ? 2 : 3;
+  const digits =
+    value >= 1000
+      ? 0
+      : value >= 1
+        ? 2
+        : value >= 0.01
+          ? 3
+          : value >= 0.001
+            ? 4
+            : 5;
   return value.toLocaleString("en-US", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -122,6 +131,7 @@ export type OrderBookLevel = {
 export type OrderBookView = {
   readonly asks: readonly OrderBookLevel[];
   readonly bids: readonly OrderBookLevel[];
+  readonly midPrice: number;
   readonly spread: number;
   readonly spreadPct: number;
 };
@@ -168,6 +178,7 @@ export const buildOrderBookView = (
   return {
     asks: [...asksAscLevels].reverse(),
     bids: bidLevels,
+    midPrice: mid,
     spread,
     spreadPct: mid > 0 ? (spread / mid) * 100 : 0,
   };

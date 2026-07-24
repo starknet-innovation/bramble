@@ -221,13 +221,13 @@ describe("sidepanel home", () => {
       priceAsOf,
     );
 
-  test("stale cached prices surface a last-saved notice on the hero", () => {
+  test("stale cached prices render without an error-like notice", () => {
     const html = homeWithPrices({ "0x00aa": 5 }, true, 1752501900000);
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
 
-    expect(hero).toContain('class="hero-stale"');
-    expect(hero).toContain("Showing last saved prices");
-    expect(hero).toContain("14 Jul, 14:05 UTC");
+    expect(hero).not.toContain('class="hero-stale"');
+    expect(hero).not.toContain("Showing last saved prices");
+    expect(hero).not.toContain("14 Jul, 14:05 UTC");
     // Cached fiat still renders — the total is not blanked to "—".
     expect(hero).not.toMatch(/class="hero-total">—/);
   });

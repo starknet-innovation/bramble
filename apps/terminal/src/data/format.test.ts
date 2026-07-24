@@ -34,18 +34,18 @@ describe("formatCompactUsd", () => {
 });
 
 describe("toAvnuCandles", () => {
-  it("normalizes and sorts dated OHLC rows", () => {
+  it("sorts dated price observations into honest interval candles", () => {
     const candles = toAvnuCandles([
-      { date: "2026-07-10T01:00:00Z", open: 105, high: 120, low: 104, close: 120 },
-      { date: "2026-07-10T00:00:00Z", open: 100, high: 110, low: 100, close: 110 },
+      { date: "2026-07-10T01:00:00Z", value: 120 },
+      { date: "2026-07-10T00:00:00Z", value: 110 },
     ]);
     expect(candles.length).toBe(2);
-    expect(candles[0]).toMatchObject({ open: 100, high: 110, low: 100, close: 110 });
+    expect(candles[0]).toMatchObject({ open: 110, high: 110, low: 110, close: 110 });
     expect(candles[0]!.time).toBeLessThan(candles[1]!.time);
-    expect(candles[1]).toMatchObject({ open: 105, high: 120, low: 104, close: 120 });
+    expect(candles[1]).toMatchObject({ open: 110, high: 120, low: 110, close: 120 });
   });
 
   it("drops malformed rows", () => {
-    expect(toAvnuCandles([{ date: "not-a-date", open: 1, high: 1, low: 1, close: 1 }])).toEqual([]);
+    expect(toAvnuCandles([{ date: "not-a-date", value: 1 }])).toEqual([]);
   });
 });

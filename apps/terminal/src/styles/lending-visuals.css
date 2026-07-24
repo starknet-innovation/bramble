@@ -1,0 +1,331 @@
+/* Vesu rate-model visualization, oracle anchor, and vault action states. */
+.rate-curve {
+  padding: 0;
+}
+.rate-curve svg {
+  display: block;
+  width: 100%;
+  height: 118px;
+  touch-action: none;
+  cursor: crosshair;
+}
+.rate-curve svg:focus-visible {
+  outline: 1px solid var(--text-2);
+  outline-offset: 3px;
+}
+.rate-curve svg text {
+  fill: var(--text-3);
+  font-family: inherit;
+  font-size: 7px;
+}
+.rate-curve-axis,
+.rate-curve-grid {
+  stroke: var(--border-2);
+  stroke-width: 0.7;
+}
+.rate-curve-grid {
+  stroke-dasharray: 2 3;
+  opacity: 0.65;
+}
+.rate-curve-target-band {
+  fill: color-mix(in srgb, var(--green) 8%, transparent);
+}
+.rate-curve-line {
+  fill: none;
+  stroke: color-mix(in srgb, var(--green) 75%, var(--text));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+.rate-curve-current {
+  stroke: var(--green);
+  stroke-dasharray: 2 2;
+  stroke-width: 1;
+}
+.rate-curve-current-dot {
+  fill: var(--green);
+  stroke: var(--bg-2);
+  stroke-width: 1.5;
+}
+.rate-curve-max {
+  stroke: var(--red);
+  stroke-dasharray: 2 2;
+  stroke-width: 0.8;
+}
+.rate-curve-inspect {
+  stroke: var(--text-2);
+  stroke-width: 0.7;
+  opacity: 0.7;
+}
+.rate-curve-inspect-dot {
+  fill: var(--text);
+  stroke: var(--bg-2);
+  stroke-width: 1;
+}
+.rate-curve-tooltip {
+  pointer-events: none;
+}
+.rate-curve-tooltip rect {
+  fill: var(--surface-3);
+  stroke: var(--border-2);
+  stroke-width: 0.6;
+}
+.rate-curve-tooltip text {
+  fill: var(--text-2);
+  font-size: 7px;
+}
+.rate-curve-tooltip .rate-curve-tooltip-rate {
+  fill: var(--green);
+  font-weight: 700;
+}
+.rate-curve-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  margin-top: 6px;
+  padding: 2px 0 0;
+  color: var(--text-3);
+  font-size: 7.5px;
+}
+.rate-curve-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rate-curve-legend i {
+  width: 8px;
+  height: 2px;
+  display: block;
+  background: var(--text);
+}
+.rate-curve-legend i.current {
+  background: var(--green);
+}
+.rate-curve-legend i.target {
+  background: color-mix(in srgb, var(--green) 35%, var(--surface-3));
+}
+.rate-curve-legend i.maximum {
+  background: var(--red);
+}
+.lending-oracle-anchor {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--green) 4%, var(--bg-2));
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+.lending-oracle-anchor span {
+  color: var(--text-3);
+  font-size: 8.5px;
+}
+.lending-oracle-anchor strong {
+  grid-row: 2;
+  font-size: 12px;
+}
+.lending-oracle-anchor small {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--text-2);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.lending-oracle-anchor small i {
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.lending-oracle-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 7px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.lending-oracle-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.lending-oracle-grid > div {
+  min-width: 0;
+  padding: 7px 8px;
+  background: var(--surface);
+}
+.lending-oracle-grid dt {
+  color: var(--text-3);
+  font-size: 8px;
+}
+.lending-oracle-grid dd {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lending-oracle-note {
+  margin-top: 9px;
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.lending-secondary-submit {
+  width: 100%;
+  min-height: 32px;
+  margin-top: 8px;
+  color: var(--text);
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 650;
+}
+.lending-secondary-submit:hover {
+  background: var(--border);
+}
+.lending-secondary-submit:disabled {
+  color: var(--text-3);
+  background: var(--surface);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+.lending-vault-divider {
+  height: 1px;
+  margin: 16px 0 12px;
+  background: var(--border);
+}
+.lending-vault-balance {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-3);
+  font-size: 8.5px;
+}
+.lending-redeem-queue {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  border: 1px solid var(--border);
+}
+.lending-redeem-queue h3 {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 10.5px;
+}
+.lending-redeem-queue > div {
+  min-height: 43px;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 11px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+}
+.lending-redeem-queue > div:last-child {
+  border-bottom: 0;
+}
+.lending-redeem-queue small {
+  display: block;
+  color: var(--text-3);
+  font-size: 8px;
+}
+.lending-redeem-status {
+  padding: 2px 6px;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border-radius: 4px;
+  font-size: 8px;
+  text-transform: capitalize;
+}
+.lending-redeem-status.claimable {
+  color: var(--green);
+}
+.lending-redeem-queue button {
+  min-height: 26px;
+  padding: 0 10px;
+  color: var(--bg);
+  background: var(--text);
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+}
+.lending-position-head,
+.lending-position-row {
+  grid-template-columns: 1.2fr 1fr 0.9fr 0.65fr 0.9fr minmax(100px, 0.8fr);
+}
+.lending-position-head > span:last-child {
+  text-align: right;
+}
+.lending-position-message {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  color: var(--text-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 9.5px;
+}
+.lending-position-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.lending-position-actions button {
+  min-height: 25px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--surface-3);
+  border: 1px solid var(--border-2);
+  border-radius: 4px;
+  font-size: 8.5px;
+  font-weight: 650;
+}
+.lending-position-actions button:hover {
+  background: var(--border);
+}
+.lending-position-actions button.unwind {
+  color: var(--red);
+}
+.lending-position-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.lending-market-row {
+  min-height: 59px;
+}
+.lending-asset-cell small.lending-row-oracle {
+  color: var(--text-2);
+}
+.lending-row-oracle svg {
+  flex: 0 0 auto;
+  color: var(--green);
+}
+@media (max-width: 560px) {
+  .rate-curve svg {
+    height: 130px;
+  }
+  .lending-redeem-queue > div {
+    grid-template-columns: 1fr auto;
+  }
+  .lending-redeem-queue button {
+    grid-column: 1 / -1;
+  }
+  .lending-position-head,
+  .lending-position-row {
+    grid-template-columns: 1.2fr 0.9fr minmax(90px, 0.8fr);
+  }
+  .lending-position-head span:nth-child(4),
+  .lending-position-row > span:nth-child(4) {
+    display: none;
+  }
+  .lending-position-actions {
+    display: flex !important;
+  }
+}

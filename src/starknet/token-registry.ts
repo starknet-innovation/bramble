@@ -44,11 +44,18 @@ const MAINNET_TOKENS: readonly RegistryToken[] = [
     symbol: "STRK",
   },
   {
-    address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+    address: "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
     decimals: 6,
     name: "USD Coin",
     networkId: "SN_MAIN",
     symbol: "USDC",
+  },
+  {
+    address: "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
+    decimals: 6,
+    name: "Bridged USDC",
+    networkId: "SN_MAIN",
+    symbol: "USDC.e",
   },
   {
     // VERIFY: Bridged Tether USD on Starknet mainnet.
@@ -87,8 +94,9 @@ const REGISTRY: Readonly<Record<StarknetNetworkId, readonly RegistryToken[]>> = 
 // genuine and never flagged as symbol-spoofs. Keyed by registry symbol.
 // VERIFY each address against a public Starknet token list before trusting it.
 const LEGITIMATE_ALIASES: Readonly<Record<string, readonly string[]>> = {
-  // Native (Circle-issued) USDC alongside the bridged deployment in the registry.
-  USDC: ["0x0409e46a52c3c31a8c1c8b8d0a1e4c5f0b8f2b9dfd8b6f0c2c2f4a2d6e8c0a2b4"],
+  // Some legacy metadata still reports the StarkGate token as "USDC" rather
+  // than "USDC.e"; accept that exact deployment without trusting lookalikes.
+  USDC: ["0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8"],
 };
 
 // Multi-character homoglyph sequences collapsed before single-glyph folding so

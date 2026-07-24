@@ -33,6 +33,19 @@ export type TokenRow = {
   readonly change24h: number | null;
 };
 
+/** One verified Ekubo spot fill for the selected token against a priced quote token. */
+export type TokenTrade = {
+  readonly id: string;
+  readonly timestampMs: number;
+  readonly txHash: string;
+  readonly trader: string;
+  readonly side: "buy" | "sell";
+  readonly amount: number;
+  readonly priceUsd: number;
+  readonly valueUsd: number;
+  readonly quoteSymbol: string;
+};
+
 /** An on-chain ERC20 balance for one known token. */
 export type TokenBalance = {
   readonly address: string;

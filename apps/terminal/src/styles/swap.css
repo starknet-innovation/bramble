@@ -1,0 +1,325 @@
+/*
+ * Swap ticket — a focused Web3 exchange surface inspired by AVNU's hierarchy:
+ * paired assets first, execution controls second, route disclosure before the
+ * wallet handoff. It deliberately inherits the terminal's neutral skin.
+ */
+#tokens .rightpanel {
+  flex-basis: 390px;
+  background: var(--bg-2);
+}
+
+.swap-shell {
+  position: relative;
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.swap-header,
+.swap-header > div,
+.swap-provider,
+.swap-asset-label,
+.swap-asset-main,
+.swap-asset-foot,
+.swap-token-button,
+.swap-live-status,
+.swap-quote-details summary,
+.swap-token-search {
+  display: flex;
+  align-items: center;
+}
+
+.swap-header {
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.swap-header > div {
+  gap: 9px;
+  min-width: 0;
+}
+
+.swap-header h2 {
+  font-size: 17px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.swap-provider {
+  gap: 4px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.swap-settings {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.swap-settings > summary {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+  place-items: center;
+}
+
+.swap-settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.swap-settings > summary:hover,
+.swap-settings[open] > summary {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--surface);
+}
+
+.swap-settings-popover {
+  position: absolute;
+  z-index: 15;
+  top: 38px;
+  right: 0;
+  width: 270px;
+  padding: 13px;
+  border: 1px solid var(--border-2);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 14px 38px rgb(0 0 0 / 45%);
+}
+
+.swap-settings-popover fieldset {
+  display: grid;
+  gap: 5px;
+  border: 0;
+}
+
+.swap-settings-popover fieldset + fieldset {
+  margin-top: 14px;
+}
+
+.swap-settings-popover legend {
+  margin-bottom: 7px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.swap-settings-popover fieldset > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: left;
+}
+
+.swap-settings-popover fieldset > button span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swap-settings-popover fieldset > button:hover {
+  background: var(--surface-2);
+}
+
+.swap-settings-popover fieldset > button.selected {
+  border-color: var(--border-2);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.swap-slippage-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.swap-slippage-options button {
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.swap-slippage-options button:hover,
+.swap-slippage-options button.selected {
+  border-color: var(--border-2);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.swap-assets {
+  position: relative;
+  display: grid;
+  gap: 4px;
+}
+
+.swap-asset-card {
+  min-height: 128px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 13px 13px 8px 8px;
+  background: var(--surface);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.swap-asset-card.receive {
+  border-radius: 8px 8px 13px 13px;
+}
+
+.swap-asset-card:focus-within {
+  border-color: var(--border-2);
+  background: var(--surface-2);
+}
+
+.swap-asset-label,
+.swap-asset-foot {
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-3);
+  font-size: 10.5px;
+}
+
+.swap-asset-label span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swap-asset-main {
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  margin: 12px 0 10px;
+}
+
+.swap-asset-main input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+  font-size: 27px;
+  font-weight: 580;
+  line-height: 34px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+}
+
+.swap-asset-main input::placeholder {
+  color: var(--text-3);
+}
+
+.swap-token-button {
+  flex: 0 0 auto;
+  gap: 7px;
+  min-height: 42px;
+  padding: 5px 9px 5px 6px;
+  border: 1px solid var(--border-2);
+  border-radius: 22px;
+  color: var(--text);
+  background: var(--surface-2);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.swap-token-button:hover {
+  background: var(--surface-3);
+}
+
+.swap-asset-foot {
+  min-height: 20px;
+}
+
+.swap-percentages {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.swap-percentages button {
+  min-width: 31px;
+  height: 21px;
+  padding: 0 5px;
+  border-radius: 5px;
+  color: var(--text-3);
+  font-size: 9.5px;
+  font-weight: 650;
+}
+
+.swap-percentages button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.swap-percentages button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.swap-direction {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  border: 4px solid var(--bg-2);
+  border-radius: 12px;
+  color: var(--text-2);
+  background: var(--surface-2);
+  transform: translate(-50%, -50%);
+  transition: color 140ms ease, background 140ms ease;
+  place-items: center;
+}
+
+.swap-direction:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.swap-direction svg {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.swap-direction.reversed svg {
+  transform: rotate(180deg);
+}
+
+.swap-live-status {
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.swap-live-status svg,
+.swap-cta svg {
+  animation: swap-spin 900ms linear infinite;
+}
+
+.swap-live-status.ready {
+  color: var(--green);
+}
+
+.swap-live-status.ready > span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}

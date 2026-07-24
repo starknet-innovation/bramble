@@ -1,0 +1,119 @@
+@media (max-width: 1180px) {
+  .lending-workspace {
+    grid-template-columns: minmax(430px, 0.85fr) minmax(520px, 1.15fr);
+  }
+  .lending-market-body {
+    grid-template-columns: 1fr;
+  }
+  .lending-risk {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .lending-ledger {
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+  }
+}
+@media (max-width: 860px) {
+  .lending-screen {
+    overflow: auto;
+  }
+  .lending-command {
+    flex-wrap: wrap;
+  }
+  .lending-command-title {
+    min-width: 0;
+  }
+  .lending-views {
+    width: 100%;
+    order: 3;
+    height: 36px;
+  }
+  .lending-views button {
+    flex: 1;
+    min-width: 0;
+  }
+  .lending-ledger {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .lending-ledger > div:last-child {
+    grid-column: 1 / -1;
+  }
+  .lending-workspace {
+    display: block;
+  }
+  .lending-market-body {
+    display: block;
+    overflow: visible;
+  }
+  .lending-scanner {
+    height: min(540px, 65vh);
+    min-height: 420px;
+    border-right: 0;
+  }
+  .lending-ticket {
+    border-top: 1px solid var(--border);
+  }
+  .lending-vault-layout,
+  .lending-rewards {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .lending-command p,
+  .lending-refresh,
+  .lending-ledger > div:nth-child(2),
+  .lending-ledger > div:nth-child(3) {
+    display: none;
+  }
+  .lending-command {
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  .lending-views button {
+    font-size: 10px;
+  }
+  .lending-scanner-tools {
+    grid-template-columns: 1fr 1fr;
+  }
+  .lending-table-head,
+  .lending-market-row {
+    grid-template-columns: minmax(140px, 1.4fr) 0.7fr 0.8fr;
+  }
+  .lending-table-head span:nth-child(3),
+  .lending-table-head span:nth-child(5),
+  .lending-market-row > span:nth-child(3),
+  .lending-market-row > span:nth-child(5) {
+    display: none;
+  }
+  .lending-scanner-foot span:last-child {
+    display: none;
+  }
+  .lending-account-body {
+    padding: 10px;
+  }
+  .lending-position-head,
+  .lending-position-row,
+  .lending-vault-row {
+    grid-template-columns: 1.3fr 1fr 0.8fr;
+  }
+  .lending-position-head span:nth-child(3),
+  .lending-position-head span:nth-child(5),
+  .lending-position-row > span:nth-child(3),
+  .lending-position-row > span:nth-child(5),
+  .lending-vault-row > span:nth-child(4),
+  .lending-vault-row > span:nth-child(5) {
+    display: none;
+  }
+  .vault-head {
+    grid-template-columns: 1.3fr 1fr 0.8fr;
+  }
+  .vault-head span:nth-child(4),
+  .vault-head span:nth-child(5) {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lending-market-row {
+    transition: none;
+  }
+}

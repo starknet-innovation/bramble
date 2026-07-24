@@ -31,12 +31,13 @@ import { useBalances } from "./useBalances";
 import { useCandles } from "./useCandles";
 import { usePortfolio } from "./usePortfolio";
 import { usePrices } from "./usePrices";
-import { useTokens } from "./useTokens";
+import { toAvnuRows, useTokens } from "./useTokens";
 import { useAsyncResource } from "./useAsyncResource";
 
 const ETH = MAINNET_TOKEN_ADDRESSES.ETH;
 const USDC = MAINNET_TOKEN_ADDRESSES.USDC;
 const STRK = MAINNET_TOKEN_ADDRESSES.STRK;
+const unpadded = (address: string): string => `0x${BigInt(address).toString(16)}`;
 
 type FakeResponse = {
   ok: boolean;
@@ -68,15 +69,23 @@ const AVNU_TOKENS = [
     },
   },
   {
-    address: ETH,
+    address: unpadded(ETH),
     name: "Ether",
     symbol: "ETH",
     decimals: 18,
-    starknet: { usd: 3000, usdPriceChangePercentage24h: 2, usdTvl: 10_000_000 },
-    global: { usd: 3000, usdMarketCap: 300_000_000_000 },
+    starknet: { usd: 2900, usdPriceChangePercentage24h: -8, usdTvl: 10_000_000 },
+    global: {
+      usd: 3000,
+      usdMarketCap: 300_000_000_000,
+      usdMarketCapChangePercentage24h: -2.1,
+    },
+    linePriceFeedInUsd: [
+      { date: "2026-07-23T14:00:00Z", value: 2_940 },
+      { date: "2026-07-24T14:00:00Z", value: 3_000 },
+    ],
   },
   {
-    address: USDC,
+    address: unpadded(USDC),
     name: "USD Coin",
     symbol: "USDC",
     decimals: 6,
@@ -84,7 +93,7 @@ const AVNU_TOKENS = [
     global: { usd: 1, usdMarketCap: 50_000_000_000 },
   },
   {
-    address: STRK,
+    address: unpadded(STRK),
     name: "Starknet Token",
     symbol: "STRK",
     decimals: 18,
@@ -94,15 +103,67 @@ const AVNU_TOKENS = [
 ];
 
 const AVNU_CANDLES = [
-  { date: "2026-07-09T00:00:00Z", open: 100, high: 112, low: 98, close: 110 },
-  { date: "2026-07-09T01:00:00Z", open: 110, high: 121, low: 109, close: 120 },
+  { date: "2026-07-09T00:00:00Z", value: 110 },
+  { date: "2026-07-09T01:00:00Z", value: 120 },
 ];
 
 // Routes a fetch by URL substring to the matching sample payload.
 const routeFetch = (avnuStatus = 200): void => {
   globalThis.fetch = vi.fn(async (input: string | URL) => {
     const url = String(input);
-    if (url.includes("/prices/candle")) {
+    if (url.includes("/info/candles/SOL-USD/index-prices")) {
+      return respond({
+        status: "OK",
+        data: [
+          { T: 1_785_000_000_000, o: "74", h: "75", l: "73", c: "73.7", v: null },
+        ],
+      });
+    }
+    if (url.includes("starkscan.co") && url.includes("/token-holdings")) {
+      return respond({
+        chainId: "SN_MAIN",
+        ownerAddress: ETH,
+        items: [
+          {
+            tokenAddress: ETH,
+            normalizedTokenAddress: unpadded(ETH),
+            indexedBalanceRaw: String(rpc.balances.get(ETH.toLowerCase()) ?? 0n),
+            symbol: "ETH",
+            name: "Ether",
+            decimals: 18,
+          },
+          {
+            tokenAddress: USDC,
+            normalizedTokenAddress: unpadded(USDC),
+            indexedBalanceRaw: String(rpc.balances.get(USDC.toLowerCase()) ?? 0n),
+            symbol: "USDC",
+            name: "USD Coin",
+            decimals: 6,
+          },
+          {
+            tokenAddress: STRK,
+            normalizedTokenAddress: unpadded(STRK),
+            indexedBalanceRaw: String(rpc.balances.get(STRK.toLowerCase()) ?? 0n),
+            symbol: "STRK",
+            name: "Starknet Token",
+            decimals: 18,
+          },
+        ],
+        exact: true,
+        truncated: false,
+        completeness: {
+          exact: true,
+          truncated: false,
+          complete: true,
+          reasonCode: "complete",
+          reason: "Complete snapshot.",
+          lagBlocks: 0,
+          capped: false,
+          cap: null,
+        },
+      });
+    }
+    if (url.includes("/prices/line")) {
       return respond(AVNU_CANDLES);
     }
     if (url.includes("avnu.fi")) {
@@ -157,6 +218,22 @@ describe("useTokens", () => {
       volume24hUsd: null,
     });
   });
+
+  it("does not present stablecoin supply changes as price changes", () => {
+    const [ausd] = toAvnuRows([
+      {
+        address: "0xa0",
+        name: "AUSD",
+        symbol: "AUSD0",
+        global: { usd: 1, usdMarketCapChangePercentage24h: 4.3 },
+        linePriceFeedInUsd: [
+          { date: "2026-07-23T14:00:00Z", value: 1 },
+          { date: "2026-07-24T14:00:00Z", value: 1.002 },
+        ],
+      },
+    ]);
+    expect(ausd?.change24h).toBeCloseTo(0.2, 5);
+  });
 });
 
 describe("usePrices", () => {
@@ -164,8 +241,9 @@ describe("usePrices", () => {
     const { result } = renderHook(() => usePrices());
     await waitFor(() => expect(result.current.data).not.toBeNull());
     const data = result.current.data;
-    expect(data?.byAddress[ETH.toLowerCase()]).toEqual({ usd: 3000, change24h: 2 });
-    expect(data?.bySymbol.ETH).toEqual({ usd: 3000, change24h: 2 });
+    expect(data?.byAddress[ETH.toLowerCase()]?.usd).toBe(3000);
+    expect(data?.byAddress[ETH.toLowerCase()]?.change24h).toBe(-2.1);
+    expect(data?.bySymbol.ETH?.usd).toBe(3000);
     expect(data?.bySymbol.STRK?.usd).toBe(0.14);
   });
 });
@@ -203,15 +281,27 @@ describe("usePortfolio", () => {
 });
 
 describe("useCandles", () => {
-  it("normalizes AVNU OHLC candles", async () => {
+  it("normalizes AVNU line history into interval candles", async () => {
     const { result } = renderHook(() => useCandles(ETH, "1d"));
     await waitFor(() => expect(result.current.data).not.toBeNull());
     const candles = result.current.data ?? [];
     expect(candles.length).toBeGreaterThan(0);
-    expect(candles[0]).toMatchObject({ open: 100 });
+    expect(candles[0]).toMatchObject({ open: 110, close: 110 });
+    expect(candles[1]).toMatchObject({ open: 110, close: 120 });
     for (let i = 1; i < candles.length; i += 1) {
       expect(candles[i]!.time).toBeGreaterThan(candles[i - 1]!.time);
     }
+  });
+
+  it("prefers a liquid Extended index market when the token symbol maps", async () => {
+    const { result } = renderHook(() => useCandles("0x123", "1d", "SOL"));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    expect(result.current.data?.[0]).toMatchObject({ open: 74, close: 73.7 });
+    expect(
+      vi.mocked(fetch).mock.calls.some(([input]) =>
+        String(input).includes("/tokens/0x123/prices/line"),
+      ),
+    ).toBe(false);
   });
 });
 

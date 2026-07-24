@@ -27,7 +27,7 @@ export type RefreshSchedulerOptions = {
   readonly visible: () => boolean;
 };
 
-const DEFAULT_BURST_DELAYS_MS = [80, 750, 2_500, 6_000] as const;
+const DEFAULT_BURST_DELAYS_MS = [100, 350, 750, 1_500, 3_000] as const;
 const DEFAULT_POLL_INTERVAL_MS = 15_000;
 
 /**

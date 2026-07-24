@@ -40,14 +40,13 @@ export const TokenIcon = ({
     width: size,
     height: size,
     fontSize: Math.round(size * 0.36),
-    background: color ?? iconColor(colorIndex),
+    ...(showLogo ? {} : { background: color ?? iconColor(colorIndex) }),
   };
+  const appearance = showLogo ? "has-artwork" : "has-fallback";
+  const classes =
+    className === undefined ? `ticon ${appearance}` : `ticon ${appearance} ${className}`;
   return (
-    <div
-      className={className === undefined ? "ticon" : `ticon ${className}`}
-      style={style}
-      title={name ?? symbol}
-    >
+    <div className={classes} style={style} title={name ?? symbol}>
       {showLogo ? (
         <img
           alt=""

@@ -20,6 +20,9 @@ const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/
 const expectedHostPermissions = [
   "https://api.cartridge.gg/*",
   "https://api.coingecko.com/*",
+  // Read-only indexed activity and complete token-holdings snapshots. This
+  // never participates in signing or transaction submission.
+  "https://starkscan.co/*",
   // AVNU swap aggregator (quotes + build calldata) for the in-wallet swap
   // flow, per network. Responses are validated in src/starknet/avnu.ts and
   // policy-checked in src/background/swap-ops.ts before anything is signed.

@@ -65,7 +65,9 @@ describe("bindApprovals", () => {
     expect(approve?.disabled).toBe(true);
     expect(deny?.disabled).toBe(true);
     expect(later?.disabled).toBe(true);
-    expect(host.querySelector("#approval-result")?.textContent).toBe("Submitting request…");
+    expect(host.querySelector("#approval-result")?.textContent).toBe(
+      "Approved. Signing and broadcasting…",
+    );
 
     rejectDecision(new Error("Starknet rejected the declaration"));
     await flush();

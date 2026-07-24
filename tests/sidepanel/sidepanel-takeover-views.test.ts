@@ -50,6 +50,18 @@ describe("approval takeover views", () => {
     expect(quiet).toContain("wallet-dock");
   });
 
+  test("a pending request supersedes an in-progress wallet flow", () => {
+    const pending = [
+      { id: "d03e7ff3-75bb-4d9d-83d4-2b2c20f2bb36", origin: "https://swap.example" },
+    ];
+
+    const tokens = dashboard("tokens", status, pending, preferences, { balances: [] });
+
+    expect(tokens).toContain("Review request");
+    expect(tokens).toContain("https://swap.example");
+    expect(tokens).not.toContain("Add a token");
+  });
+
   test("snoozed requests release the takeover and stay in Activity", () => {
     const pending = [
       { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },

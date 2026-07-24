@@ -89,6 +89,7 @@ export type AvnuQuoteResult = {
   readonly quoteId: string;
   readonly sellAmount: string;
   readonly buyAmount: string;
+  readonly gasFeesInStrk: string | null;
   readonly gasFeesInUsd: number | null;
   readonly priceImpactBps: number | null;
   readonly routeLabels: readonly string[];
@@ -198,6 +199,7 @@ export const parseQuoteResponse = (payload: unknown): AvnuQuoteResult => {
     typeof quote.gasFeesInUsd === "number" && Number.isFinite(quote.gasFeesInUsd)
       ? quote.gasFeesInUsd
       : null;
+  const gasFeesInStrk = parseAmount(quote.gasFees);
   const priceImpactBps =
     typeof quote.priceImpact === "number" && Number.isFinite(quote.priceImpact)
       ? quote.priceImpact
@@ -209,13 +211,14 @@ export const parseQuoteResponse = (payload: unknown): AvnuQuoteResult => {
         }
         const percent =
           typeof route.percent === "number" && Number.isFinite(route.percent)
-            ? ` ${Math.round(route.percent)}%`
+            ? ` ${Math.round(route.percent * 1_000) / 10}%`
             : "";
         return [`${route.name.trim()}${percent}`];
       })
     : [];
   return {
     buyAmount,
+    gasFeesInStrk,
     gasFeesInUsd,
     priceImpactBps,
     quoteId: quote.quoteId,

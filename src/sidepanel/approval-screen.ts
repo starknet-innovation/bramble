@@ -4,13 +4,14 @@
  * ../background/approval-surface.ts); this screen makes the panel itself
  * proactive — while an unsnoozed request is pending, every dock view renders
  * the request front and centre with its decision controls, exactly where the
- * user lands, instead of parking it behind an Activity badge.
+ * user lands, instead of parking it behind an Activity badge. This supersedes
+ * both dock and in-progress flow screens so external requests cannot hide
+ * behind stale wallet navigation.
  *
  * The user is never trapped: "Not now" snoozes the shown request for this
  * panel session, parking it in the Activity request list (its badge stays),
  * and the wallet becomes fully usable again. New requests re-take the screen.
- * Flow screens (send, receive, …) are never interrupted mid-task — the
- * takeover waits for the next dock view.
+ * A new request always re-takes the screen.
  */
 import type { PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";

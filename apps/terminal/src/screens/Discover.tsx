@@ -10,7 +10,7 @@
  */
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
-import { ChartCandlestick, Coins, Rocket, Wallet } from "lucide-react";
+import { Activity, Box, ChartCandlestick, Coins } from "lucide-react";
 import {
   Card,
   EmptyState,
@@ -19,21 +19,25 @@ import {
   RankRow,
   SegmentedTabs,
   SkeletonRows,
-  TabStrip,
 } from "../components";
 import {
   formatCompactUsd,
   formatSignedUsd,
   formatUsd,
+  useChainPulse,
   usePerpsMarkets,
   usePortfolio,
   useTokens,
 } from "../data";
+import { extendedTokenLogo } from "../assets/extended-token-assets";
+import type { ScreenId } from "../shell/screens";
 import { useWallet } from "../wallet/WalletProvider";
+import { ChainActivityFeed } from "./ChainActivityFeed";
+import { DiscoverWalletPanel } from "./DiscoverWalletPanel";
+import { collapseDiscoverTokenRepresentations } from "./discover-data";
 import { dailyChangePct, fmtUsdPrice } from "./perps-data";
 
 type TotalView = "total" | "tokens" | "perps";
-type LeftTab = "positions" | "activities" | "follows";
 type TokenSort = "marketCap" | "volume" | "change";
 type PerpSort = "volume" | "change";
 
@@ -43,25 +47,22 @@ const TOTAL_OPTIONS: readonly { value: TotalView; label: string }[] = [
   { value: "perps", label: "Perps" },
 ];
 
-const LEFT_TABS: readonly { value: LeftTab; label: string }[] = [
-  { value: "positions", label: "Positions" },
-  { value: "activities", label: "Activities" },
-  { value: "follows", label: "Follows" },
-];
+type DiscoverProps = { readonly onNavigate: (screen: ScreenId) => void };
 
-export default function Discover(): ReactNode {
+export default function Discover({ onNavigate }: DiscoverProps): ReactNode {
   const { address, isConnected, isConnecting, connect } = useWallet();
   const [totalView, setTotalView] = useState<TotalView>("total");
-  const [leftTab, setLeftTab] = useState<LeftTab>("positions");
   const [tokenSort, setTokenSort] = useState<TokenSort>("marketCap");
   const [perpSort, setPerpSort] = useState<PerpSort>("volume");
 
   const { data: portfolio } = usePortfolio(address);
   const tokens = useTokens();
   const perps = usePerpsMarkets();
+  const chain = useChainPulse();
+  const headBlock = chain.data?.blocks[0] ?? null;
 
   const rankedTokens = useMemo(() => {
-    const rows = [...(tokens.data ?? [])];
+    const rows = [...collapseDiscoverTokenRepresentations(tokens.data ?? [])];
     return rows.sort((a, b) => {
       if (tokenSort === "volume") {
         return (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0);
@@ -93,27 +94,6 @@ export default function Discover(): ReactNode {
   const balance = !isConnected || totalView === "perps" ? 0 : portfolio.totalValueUsd;
   const pnl = !isConnected || totalView === "perps" ? 0 : portfolio.pnl24hUsd;
 
-  const emptyForTab = (): ReactNode => {
-    if (!isConnected) {
-      return (
-        <EmptyState
-          icon={<Wallet size={22} strokeWidth={1.75} />}
-          title="Connect your wallet"
-          subtitle="Connect your wallet to see your positions and activity."
-          ctaLabel="Connect Wallet"
-          onCta={onConnect}
-          ctaDisabled={isConnecting}
-        />
-      );
-    }
-    const labels: Record<LeftTab, { title: string; subtitle: string }> = {
-      positions: { title: "No positions yet", subtitle: "Your open positions will appear here." },
-      activities: { title: "No activity yet", subtitle: "Your recent trades and transfers will appear here." },
-      follows: { title: "No follows yet", subtitle: "Wallets and tokens you follow will appear here." },
-    };
-    return <EmptyState icon={"\u{1F4B3}"} title={labels[leftTab].title} subtitle={labels[leftTab].subtitle} />;
-  };
-
   return (
     <div className="screen" id="discover">
       {/* ===== LEFT ===== */}
@@ -143,22 +123,53 @@ export default function Discover(): ReactNode {
         </Card>
 
         <Card style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <TabStrip<LeftTab> items={LEFT_TABS} value={leftTab} onChange={setLeftTab} />
-          {emptyForTab()}
+          <DiscoverWalletPanel
+            address={address}
+            isConnected={isConnected}
+            isConnecting={isConnecting}
+            onConnect={onConnect}
+            onNavigate={onNavigate}
+          />
         </Card>
       </div>
 
-      {/* ===== MID — Launches feed has no confirmed source: explicit empty state. ===== */}
+      {/* ===== MID — live, indexed Starknet activity. ===== */}
       <Card
         className="dcol mid"
-        title="Launches"
+        title="Starknet live"
+        headerExtra={
+          headBlock === null ? undefined : (
+            <span className="chain-head mono">
+              <Box size={12} aria-hidden="true" />
+              {headBlock.blockNumber.toLocaleString("en-US")}
+            </span>
+          )
+        }
+        headerRight={
+          <span className={`chain-status ${chain.error === null ? "online" : ""}`}>
+            <span className="chain-status-dot" aria-hidden="true" />
+            {chain.error === null ? "Live" : "Reconnecting"}
+          </span>
+        }
       >
-        <EmptyState
-          icon={<Rocket size={22} strokeWidth={1.75} />}
-          title="Launches — coming soon"
-          subtitle="A verified meme-token launch feed isn't wired to a data source yet. No launches are shown rather than placeholder tokens."
-          style={{ flex: 1 }}
-        />
+        {chain.error !== null && chain.data === null ? (
+          <ErrorBanner message="Starknet activity is reconnecting. The feed will resume automatically." />
+        ) : chain.isLoading && chain.data === null ? (
+          <SkeletonRows rows={8} />
+        ) : chain.data === null ||
+          (chain.data.blocks.length === 0 &&
+            chain.data.transactions.length === 0 &&
+            chain.data.events.length === 0 &&
+            chain.data.messages.length === 0) ? (
+          <EmptyState
+            icon={<Activity size={22} strokeWidth={1.75} />}
+            title="Waiting for chain activity"
+            subtitle="Blocks, transactions, events, and bridge messages will stream in as Starknet indexes them."
+            style={{ flex: 1 }}
+          />
+        ) : (
+          <ChainActivityFeed pulse={chain.data} />
+        )}
       </Card>
 
       {/* ===== RIGHT ===== */}
@@ -272,6 +283,7 @@ export default function Discover(): ReactNode {
                         key={perp.name}
                         rank={index + 1}
                         symbol={perp.assetName}
+                        logoUri={extendedTokenLogo(perp.assetName)}
                         name={perp.name}
                         subLabel={
                           <span className="lev">{Math.max(1, Math.trunc(perp.maxLeverage))}x</span>
