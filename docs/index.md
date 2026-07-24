@@ -11,6 +11,11 @@ boundaries, release controls, and security posture.
 
 ## Start here
 
+- [User guide](user-guide/) is for people using the wallet: install, first run,
+  creating/backing up/restoring a wallet, the main features, and a safety FAQ.
+- [Start here for engineers](engineering/) is the contributor onboarding entry: a
+  reading order plus the import-layer module map and the untrusted-message
+  data-flow diagram.
 - [Architecture and internals](architecture/) explains the runtime and data model.
 - [Security audit](security-audit/) tracks the directory-by-directory review of the current
   released baseline.
