@@ -52,6 +52,38 @@ describe("resolveNftMetadataUri", () => {
     expect(resolved?.name).toBe("Starknet Test Punk #0");
   });
 
+  test("preserves a fully on-chain SVG image (Game of Life token_uri)", async () => {
+    // Mirrors gol_metadata.cairo::token_uri — a base64 JSON document whose image
+    // is itself an on-chain base64 SVG data URI, with numeric trait values.
+    const image = `data:image/svg+xml;base64,${btoa(
+      "<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'/>",
+    )}`;
+    const golJson = {
+      attributes: [
+        { trait_type: "Status", value: "Alive" },
+        { trait_type: "Kind", value: "Loop" },
+        { trait_type: "Sequence Length", value: 3 },
+        { trait_type: "Age", value: 7 },
+      ],
+      description: "An autonomous Conway's Game of Life lifeform living forever on Starknet.",
+      image,
+      name: "Lifeform #1",
+    };
+    const resolved = await resolveNftMetadataUri(
+      `data:application/json;base64,${btoa(JSON.stringify(golJson))}`,
+      unexpectedHttp,
+    );
+
+    expect(resolved?.name).toBe("Lifeform #1");
+    expect(resolved?.image).toBe(image);
+    expect(resolved?.attributes).toEqual([
+      { traitType: "Status", value: "Alive" },
+      { traitType: "Kind", value: "Loop" },
+      { traitType: "Sequence Length", value: "3" },
+      { traitType: "Age", value: "7" },
+    ]);
+  });
+
   test("fetches IPFS metadata through the fixed gateway without credentials", async () => {
     let requestedUrl = "";
     let requestedInit: RequestInit | undefined;
