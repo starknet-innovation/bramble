@@ -309,8 +309,9 @@ export const nftDetailFlow = (
               <input name="tokenId" type="hidden" value="${escapeHtml(nft.tokenId)}" />
               <input name="networkId" type="hidden" value="${escapeHtml(nft.networkId)}" />
               <label><span>Recipient</span><input class="mono" name="recipient" placeholder="0x…" required autocomplete="off" spellcheck="false" ${account ? "" : "disabled"} /></label>
-              <span class="hint">Ownership and token standard are re-checked on-chain, then the recipient is screened for address-poisoning before signing.</span>
-              <button type="submit" ${account ? "" : "disabled"}>${icon("send")}Send NFT</button>
+              <span class="hint">Ownership and token standard are re-checked on-chain. You will review the exact transfer, recipient, warnings, and fee before confirming.</span>
+              <div id="nft-review-panel" aria-live="polite"></div>
+              <button type="submit" ${account ? "" : "disabled"}>${icon("send")}Review transfer</button>
               <p id="nft-send-result" role="status"></p>
             </form>
           </section>`,

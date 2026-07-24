@@ -410,15 +410,15 @@ tracked today.
 
 ## NFT gallery
 
-Home → NFTs is a gallery of watched collectibles, kept as an optional `nfts` list
-in preferences (contract, token id, network, optional label, spam flag). Adding
-an NFT proves ownership on-chain (`owner_of`/`ownerOf`) against the active account
-before it is stored; each NFT has a spam-hide toggle, and the detail screen sends
-with `transfer_from` through the same verification + invoke path as transfers.
-Limitations (follow-ups): metadata images are not fetched — the extension ships a
-tight `host_permissions`/CSP allowlist, so remote image and `token_uri` loading
-is out of scope for v1 — and sends use snake_case `transfer_from` only
-(`safe_transfer_from` and camelCase entrypoints are not yet probed from the ABI).
+Home → NFTs merges auto-discovered collectibles with an optional watched `nfts`
+list in preferences (contract, token id, network, optional label, spam flag).
+Indexer claims are re-proved on-chain against the active account before display;
+explicitly watched NFTs also resolve ERC-721/1155 metadata without auto-fetching
+attacker-controlled airdrop URLs. The detail screen shows the resolved artwork
+and attributes, then sends through a two-phase review → confirm flow. Review
+re-proves ownership, detects ERC-721 versus ERC-1155, decodes the exact call,
+screens the recipient, and estimates the fee without broadcasting. Confirmation
+repeats those checks immediately before the verified invoke submission.
 
 ## Reproducible Builds
 

@@ -5,8 +5,10 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { normalizeFeltInput } from "../starknet/networks";
-import { buttonBusy, errorMessage, showToast } from "./dom";
+import { buttonBusy, errorMessage, renderFragment, showToast } from "./dom";
 import type { SidepanelWallet } from "./runtime";
+import { watchDeployment } from "./shell-bindings";
+import { friendlyReviewError, recipientFieldError, reviewPanelHtml } from "./transfer-ui";
 
 /**
  * Dependencies the NFT bindings close over. `openDetail` navigates to the NFT
@@ -60,28 +62,105 @@ const bindAddForm = (deps: NftUiDeps): void => {
 
 const bindSendForm = (deps: NftUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#nft-send-form");
+  if (!form) {
+    return;
+  }
   const result = deps.app?.querySelector<HTMLElement>("#nft-send-result");
+  const reviewPanel = deps.app?.querySelector<HTMLElement>("#nft-review-panel");
+  const recipientInput = form.querySelector<HTMLInputElement>('input[name="recipient"]');
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  let reviewedKey: string | null = null;
+  let requiresDeployment = false;
 
-  form?.addEventListener("submit", (event) => {
+  const resetReview = (): void => {
+    reviewedKey = null;
+    requiresDeployment = false;
+    recipientInput?.setCustomValidity("");
+    if (reviewPanel) {
+      renderFragment(reviewPanel, "");
+    }
+    submitButton?.lastChild?.replaceWith("Review transfer");
+    buttonBusy(submitButton, false);
+  };
+
+  form.addEventListener("input", resetReview);
+
+  form.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(form);
+    const fields = {
+      contract: normalizeFeltInput(String(data.get("contract") ?? "")),
+      networkId: String(data.get("networkId") ?? ""),
+      recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
+      tokenId: String(data.get("tokenId") ?? ""),
+    };
+    const recipientError = recipientFieldError(fields.recipient);
+    if (recipientError) {
+      recipientInput?.setCustomValidity(recipientError);
+      recipientInput?.reportValidity();
+      if (result) {
+        result.textContent = recipientError;
+      }
+      return;
+    }
+
+    const key = JSON.stringify(fields);
     buttonBusy(submitButton, true);
+
+    if (reviewedKey !== key) {
+      void deps.wallet
+        .reviewNftTransfer(fields.contract, fields.tokenId, fields.networkId, fields.recipient)
+        .then(
+          (review) => {
+            const feeFailed = review.feeEstimateFailed;
+            const recipientBlocked = review.flags.some((flag) => flag.code === "address-poisoning");
+            reviewedKey = feeFailed || recipientBlocked ? null : key;
+            requiresDeployment = review.requiresDeployment;
+            if (reviewPanel) {
+              renderFragment(reviewPanel, reviewPanelHtml(review));
+            }
+            submitButton?.lastChild?.replaceWith(
+              feeFailed || recipientBlocked ? "Review transfer" : "Confirm transfer",
+            );
+            if (result) {
+              result.textContent = recipientBlocked
+                ? "This transfer is blocked. Change the recipient and review it again."
+                : feeFailed
+                  ? "Fee estimate failed. Retry the fee estimate before sending."
+                  : "Review the details above, then confirm.";
+            }
+            reviewPanel
+              ?.querySelector<HTMLButtonElement>("#review-retry-fee")
+              ?.addEventListener("click", () => {
+                form.requestSubmit();
+              });
+            buttonBusy(submitButton, feeFailed);
+          },
+          (error: unknown) => {
+            const message = friendlyReviewError(error);
+            showToast(message, "error");
+            if (result) {
+              result.textContent = message;
+            }
+            buttonBusy(submitButton, false);
+          },
+        );
+      return;
+    }
+
     void deps.wallet
-      .transferNft(
-        normalizeFeltInput(String(data.get("contract") ?? "")),
-        String(data.get("tokenId") ?? ""),
-        String(data.get("networkId") ?? ""),
-        normalizeFeltInput(String(data.get("recipient") ?? "")),
-      )
+      .transferNft(fields.contract, fields.tokenId, fields.networkId, fields.recipient)
       .then(
         (transactionHash) => {
           showToast("NFT transfer submitted", "success");
           if (result) {
             result.textContent = `Submitted ${transactionHash}`;
           }
+          if (requiresDeployment) {
+            void watchDeployment({ render: deps.render, wallet: deps.wallet });
+          }
           form.reset();
-          buttonBusy(submitButton, false);
+          resetReview();
         },
         (error: unknown) => {
           showToast(errorMessage(error, "NFT transfer failed"), "error");

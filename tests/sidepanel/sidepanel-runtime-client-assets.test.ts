@@ -112,6 +112,23 @@ describe("NFT wrappers", () => {
     );
   });
 
+  test("reviewNftTransfer returns a review and sends a read-only review envelope", async () => {
+    const { sent, wallet } = captureRuntime(transferReviewResponse);
+    await expect(
+      wallet.reviewNftTransfer("0x511a2b3", "5", "SN_MAIN", "0xrecipient"),
+    ).resolves.toEqual(transferReviewResponse.review);
+    expect(sent[0]).toEqual({
+      contract: "0x511a2b3",
+      networkId: "SN_MAIN",
+      recipient: "0xrecipient",
+      tokenId: "5",
+      type: "wallet.reviewNftTransfer",
+    });
+    await expect(
+      runtimeReturning({}).reviewNftTransfer("0x1", "5", "SN_MAIN", "0x2"),
+    ).rejects.toThrow("NFT transfer review failed");
+  });
+
   test("discoverNfts returns the discovered list or []", async () => {
     expect(await runtimeReturning({ nfts: [discoveredNft], ok: true }).discoverNfts()).toEqual([
       discoveredNft,

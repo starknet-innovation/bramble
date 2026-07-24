@@ -3,7 +3,11 @@
  * labels before an add-NFT request reaches ownership verification.
  */
 import { describe, expect, test } from "bun:test";
-import { readAddNftInput } from "../../src/background/nft-inputs";
+import {
+  readAddNftInput,
+  readReviewNftTransferInput,
+  readTransferNftInput,
+} from "../../src/background/nft-inputs";
 
 const contract = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 
@@ -64,5 +68,34 @@ describe("readAddNftInput", () => {
         type: "wallet.addNft",
       }),
     ).toBeNull();
+  });
+});
+
+describe("NFT transfer inputs", () => {
+  const fields = {
+    contract,
+    networkId: "SN_MAIN" as const,
+    recipient: "0x123",
+    tokenId: "42",
+  };
+
+  test("keeps review and submit envelopes distinct while parsing the same fields", () => {
+    expect(readReviewNftTransferInput({ ...fields, type: "wallet.reviewNftTransfer" })).toEqual(
+      fields,
+    );
+    expect(readTransferNftInput({ ...fields, type: "wallet.transferNft" })).toEqual(fields);
+    expect(readReviewNftTransferInput({ ...fields, type: "wallet.transferNft" })).toBeNull();
+    expect(readTransferNftInput({ ...fields, type: "wallet.reviewNftTransfer" })).toBeNull();
+  });
+
+  test("rejects malformed recipients and unexpected fields in both phases", () => {
+    expect(
+      readReviewNftTransferInput({
+        ...fields,
+        recipient: "not-an-address",
+        type: "wallet.reviewNftTransfer",
+      }),
+    ).toBeNull();
+    expect(readTransferNftInput({ ...fields, debug: true, type: "wallet.transferNft" })).toBeNull();
   });
 });

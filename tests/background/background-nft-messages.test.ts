@@ -152,6 +152,34 @@ describe("NFT gallery messages", () => {
     expect(call.calldata.slice(2)).toEqual(["5", "0"]);
   });
 
+  test("reviews the exact NFT call and fee without broadcasting it", async () => {
+    const { handler, invokeCalls } = makeHarness();
+    const response = await handler(
+      {
+        contract: CONTRACT,
+        networkId: "SN_MAIN",
+        recipient: "0x777",
+        tokenId: "5",
+        type: "wallet.reviewNftTransfer",
+      },
+      sender,
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      review: {
+        fee: { overallFee: "1", unit: "FRI" },
+        feeEstimateFailed: false,
+        flags: [],
+        requiresDeployment: false,
+      },
+    });
+    const summaries = (response as { review: { summaries: readonly string[] } }).review.summaries;
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toContain("Send NFT #5");
+    expect(invokeCalls).toHaveLength(0);
+  });
+
   test("watches and sends an ERC1155 edition through safe_transfer_from", async () => {
     const { handler, invokeCalls } = makeHarness({
       ownership: { balance: "1", standard: "ERC1155" },

@@ -8,7 +8,6 @@ import {
   type ClassHashVerificationResponse,
   type ConnectedSitesResponse,
   type DeploymentStatusResponse,
-  type DiscoveredNft,
   isActivityResponse,
   isAllowancesResponse,
   isApprovalDecisionResponse,
@@ -18,7 +17,6 @@ import {
   isCreateAccountResponse,
   isDeploymentStatusResponse,
   isDetectTokensResponse,
-  isDiscoverNftsResponse,
   isErrorResponse,
   isGenerateMnemonicResponse,
   isPendingApprovalsResponse,
@@ -37,6 +35,7 @@ import {
 } from "../popup/responses";
 import type { AccountGroupIcon } from "../storage/account-groups";
 import { createLedgerRuntimeClient } from "./ledger/runtime-client";
+import { createNftRuntimeClient } from "./nft-runtime";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -87,6 +86,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
 
   return {
     ...createLedgerRuntimeClient(sendMessage),
+    ...createNftRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {
@@ -196,34 +196,9 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         historyUnavailable: response.historyUnavailable ?? false,
       };
     },
-    async addNft(
-      contract: string,
-      tokenId: string,
-      networkId: string,
-      label: string,
-    ): Promise<void> {
-      const response = await sendMessage({
-        contract,
-        ...(label ? { label } : {}),
-        networkId,
-        tokenId,
-        type: "wallet.addNft",
-      });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "add NFT failed");
-    },
     async loadAllowances(): Promise<AllowancesResponse["allowances"]> {
       const response = await sendMessage({ type: "wallet.allowances" });
       return isAllowancesResponse(response) ? response.allowances : [];
-    },
-    async removeNft(id: string): Promise<void> {
-      const response = await sendMessage({ id, type: "wallet.removeNft" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "remove NFT failed");
     },
     async revokeAllowance(id: string): Promise<string> {
       const response = await sendMessage({ id, type: "wallet.revokeAllowance" });
@@ -231,31 +206,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return response.transactionHash;
       }
       throw responseError(response, "revoke failed");
-    },
-    async setNftSpam(id: string, spam: boolean): Promise<void> {
-      const response = await sendMessage({ id, spam, type: "wallet.setNftSpam" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "NFT update failed");
-    },
-    async transferNft(
-      contract: string,
-      tokenId: string,
-      networkId: string,
-      recipient: string,
-    ): Promise<string> {
-      const response = await sendMessage({
-        contract,
-        networkId,
-        recipient,
-        tokenId,
-        type: "wallet.transferNft",
-      });
-      if (isTransferResponse(response)) {
-        return response.transactionHash;
-      }
-      throw responseError(response, "NFT transfer failed");
     },
     async reviewTransfer(
       accountId: string,
@@ -288,10 +238,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return response.suggestions;
       }
       throw responseError(response, "token detection failed");
-    },
-    async discoverNfts(): Promise<readonly DiscoveredNft[]> {
-      const response = await sendMessage({ type: "wallet.discoverNfts" });
-      return isDiscoverNftsResponse(response) ? response.nfts : [];
     },
     async setNftIndexerUrl(url: string): Promise<void> {
       const response = await sendMessage({ type: "wallet.setNftIndexerUrl", url });

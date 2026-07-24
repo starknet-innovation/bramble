@@ -15,8 +15,11 @@ import { watchDeployment } from "./shell-bindings";
 
 const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
 
-/** Background error string returned when the recipient fails validation. */
-const INVALID_REVIEW_ERROR = "invalid transfer review request";
+/** Background error strings returned when a review recipient fails validation. */
+const INVALID_REVIEW_ERRORS = new Set([
+  "invalid nft transfer review request",
+  "invalid transfer review request",
+]);
 
 /**
  * Returns an inline error message when the recipient is not a well-formed
@@ -35,7 +38,7 @@ export const recipientFieldError = (recipient: string): string | null =>
  */
 export const friendlyReviewError = (error: unknown): string => {
   const message = errorMessage(error, "Transfer review failed");
-  return message === INVALID_REVIEW_ERROR ? INVALID_RECIPIENT_MESSAGE : message;
+  return INVALID_REVIEW_ERRORS.has(message) ? INVALID_RECIPIENT_MESSAGE : message;
 };
 
 /**

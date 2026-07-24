@@ -62,16 +62,16 @@ export const readAddNftInput = (
   return target;
 };
 
-/**
- * Parses a send-NFT request through the verified invoke path.
- */
-export const readTransferNftInput = (
+type NftTransferMessageType = "wallet.reviewNftTransfer" | "wallet.transferNft";
+
+const readNftTransferInput = (
   message: unknown,
+  messageType: NftTransferMessageType,
 ): (NftTarget & { readonly recipient: string }) | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["contract", "networkId", "recipient", "tokenId", "type"]) ||
-    message["type"] !== "wallet.transferNft" ||
+    message["type"] !== messageType ||
     typeof message["recipient"] !== "string" ||
     !isNonZeroStarkFieldElement(message["recipient"])
   ) {
@@ -80,6 +80,23 @@ export const readTransferNftInput = (
   const target = readNftTarget(message);
   return target ? { ...target, recipient: message["recipient"] } : null;
 };
+
+/**
+ * Parses an NFT transfer-review request. Review is read-only; the background
+ * still re-parses and re-proves the same fields on the later submit request.
+ */
+export const readReviewNftTransferInput = (
+  message: unknown,
+): (NftTarget & { readonly recipient: string }) | null =>
+  readNftTransferInput(message, "wallet.reviewNftTransfer");
+
+/**
+ * Parses a send-NFT request through the verified invoke path.
+ */
+export const readTransferNftInput = (
+  message: unknown,
+): (NftTarget & { readonly recipient: string }) | null =>
+  readNftTransferInput(message, "wallet.transferNft");
 
 /**
  * Parses a remove-NFT request that targets a watched NFT by its id.

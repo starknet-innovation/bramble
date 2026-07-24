@@ -11,10 +11,20 @@ import type { DiscoveredNft } from "../starknet/nft-metadata";
 import type { NftStandard } from "../starknet/rpc";
 import { verifyCalls } from "../starknet/verify";
 import { readTypeOnlyInput } from "./message-inputs";
-import { type NftTarget, readAddNftInput, readTransferNftInput } from "./nft-inputs";
+import {
+  type NftTarget,
+  readAddNftInput,
+  readReviewNftTransferInput,
+  readTransferNftInput,
+} from "./nft-inputs";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
-import { signerForContext, verificationContext, type WalletOpsDeps } from "./wallet-ops";
+import {
+  resolveReviewFee,
+  signerForContext,
+  verificationContext,
+  type WalletOpsDeps,
+} from "./wallet-ops";
 
 // Bounds how many on-chain ERC721 owner / ERC1155 balance re-proofs run at once
 // during discovery.
@@ -202,29 +212,26 @@ const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<Runt
   };
 };
 
-const handleTransferNft = async (
-  deps: WalletOpsDeps,
-  message: unknown,
-): Promise<RuntimeResponse> => {
-  const input = readTransferNftInput(message);
-  if (!input) {
-    return { error: "invalid transfer nft request" };
-  }
+type NftTransferInput = NonNullable<ReturnType<typeof readTransferNftInput>>;
+
+// Resolves the active account, re-proves ownership, detects the transfer
+// standard, builds the exact call, and verifies it. Both review and submission
+// use this boundary so the confirmed request cannot drift from review logic.
+const prepareNftTransfer = async (deps: WalletOpsDeps, input: NftTransferInput) => {
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
-    return { error: context.error };
+    return { error: context.error } as const;
   }
   if (input.networkId !== context.networkId) {
-    return { error: "switch to the NFT's network first" };
+    return { error: "switch to the NFT's network first" } as const;
   }
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
-  // Watched NFTs are not scoped to an account, so re-prove ownership for the
-  // active account before signing rather than letting the ERC721/ERC1155
-  // transfer revert on-chain (or, worse, submitting for the wrong account).
+  // Watched NFTs are not scoped to an account, so both review and confirmation
+  // prove ownership for the active account instead of trusting gallery state.
   const standard = await ownedNftStandard(deps, input, context.account.address, rpcUrls);
   if (standard === null) {
-    return { error: "this account does not own that NFT" };
+    return { error: "this account does not own that NFT" } as const;
   }
   const call =
     standard === "ERC1155"
@@ -241,6 +248,64 @@ const handleTransferNft = async (
           BigInt(input.tokenId),
         );
   const report = verifyCalls([call], verificationContext(context.account, preferences));
+  return { call, context, preferences, report, rpcUrls } as const;
+};
+
+const handleReviewNftTransfer = async (
+  deps: WalletOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readReviewNftTransferInput(message);
+  if (!input) {
+    return { error: "invalid nft transfer review request" };
+  }
+  const prepared = await prepareNftTransfer(deps, input);
+  if ("error" in prepared) {
+    return { error: prepared.error };
+  }
+  const { call, context, report, rpcUrls } = prepared;
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: context.account.address, rpcUrls })
+    .catch(() => true);
+  const estimated = deployed
+    ? await deps.runtimeRpc
+        .estimateInvokeFee({
+          account: context.account,
+          calls: [call],
+          rpcUrls,
+          signHash: signerForContext(deps, context),
+        })
+        .catch(() => null)
+    : null;
+  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  return {
+    ok: true,
+    review: {
+      fee,
+      feeEstimateFailed,
+      // The target is an on-chain ownership-proven NFT contract, so the generic
+      // "unknown token contract" warning is inapplicable. Recipient warnings
+      // remain intact, including the submission-blocking poisoning check.
+      flags: report.flags.filter((flag) => flag.code !== "unknown-contract"),
+      requiresDeployment: !deployed,
+      summaries: report.calls.map((decoded) => decoded.summary),
+    },
+  };
+};
+
+const handleTransferNft = async (
+  deps: WalletOpsDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
+  const input = readTransferNftInput(message);
+  if (!input) {
+    return { error: "invalid transfer nft request" };
+  }
+  const prepared = await prepareNftTransfer(deps, input);
+  if ("error" in prepared) {
+    return { error: prepared.error };
+  }
+  const { call, context, report, rpcUrls } = prepared;
   // NFT sends now run through pre-sign verification: block a recipient that
   // mimics one of the wallet's saved addresses before anything is signed.
   const poisoning = report.flags.find((flag) => flag.code === "address-poisoning");
@@ -310,6 +375,9 @@ export const handleNftOps = async (
 ): Promise<RuntimeResponse | null> => {
   if (messageType === "wallet.addNft") {
     return handleAddNft(deps, message);
+  }
+  if (messageType === "wallet.reviewNftTransfer") {
+    return handleReviewNftTransfer(deps, message);
   }
   if (messageType === "wallet.transferNft") {
     return handleTransferNft(deps, message);

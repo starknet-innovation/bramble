@@ -121,6 +121,8 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain("A test collectible");
     expect(html).toContain("<h2>Attributes</h2>");
     expect(html).toContain("CryptoPunks");
+    expect(html).toContain('id="nft-review-panel"');
+    expect(html).toContain("Review transfer");
   });
 
   test("keeps rich metadata when the selected NFT is also watched", () => {

@@ -256,7 +256,18 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   {
     message: {
-      contractAddress: account.classHash,
+      contract: account.classHash,
+      networkId: "SN_MAIN",
+      recipient: account.address,
+      tokenId: "1",
+      type: "wallet.reviewNftTransfer",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      contract: account.classHash,
+      networkId: "SN_MAIN",
       recipient: account.address,
       tokenId: "1",
       type: "wallet.transferNft",

@@ -98,6 +98,10 @@ describe("sidepanel styles", () => {
     );
   });
 
+  test("the NFT detail hero keeps a gallery-scale square instead of shrink-wrapping", () => {
+    expect(SIDEPANEL_STYLES).toMatch(/\.nft-hero \{[^}]*max-width: 240px;[^}]*width: 100%;/s);
+  });
+
   test("the dock is an anchored full-bleed bottom bar, not a floating card", () => {
     // Navigation reads as structural chrome: a solid panel drawn to the panel
     // edges (fixed, no rounded floating card, no bottom offset), separated from
