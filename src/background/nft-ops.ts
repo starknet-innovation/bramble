@@ -155,6 +155,7 @@ const enrichWatchedNft = async (
       ? nft
       : {
           ...nft,
+          ...(metadata.animationUrl ? { animationUrl: metadata.animationUrl } : {}),
           attributes: metadata.attributes,
           collection: metadata.collection || nft.collection,
           description: metadata.description,

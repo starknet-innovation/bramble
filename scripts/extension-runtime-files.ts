@@ -9,6 +9,8 @@ export const EXPECTED_RUNTIME_FILES = [
   "manifest.json",
   "popup.html",
   "provider/inpage.js",
+  "sandbox/render.html",
+  "sandbox/render.js",
   "sidepanel.html",
   "sidepanel/index.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",

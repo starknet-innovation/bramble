@@ -292,6 +292,8 @@ ${SIGN_REQUEST_STYLES}
   /* The detail hero owns an explicit width. Without it, the inline-flex art
      square shrink-wrapped to the image's intrinsic thumbnail dimensions. */
   .nft-hero { display: grid; gap: ${SPACE.sm}; margin: 0 auto ${SPACE.sm}; max-width: 240px; width: 100%; }
+  .nft-animation { aspect-ratio: 1 / 1; border: 0; border-radius: ${RADIUS.md}; margin-top: ${SPACE.sm}; width: 100%; }
+  .nft-animation[hidden] { display: none; }
   button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--mc-shadow-sm); }
   .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }

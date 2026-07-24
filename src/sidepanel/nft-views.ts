@@ -24,6 +24,7 @@ import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "./parts";
  * images that wallet surfaces may load without weakening the privacy boundary.
  */
 export type NftGalleryItem = {
+  readonly animationUrl: string;
   readonly attributes: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
@@ -76,6 +77,7 @@ export const visibleNftItems = (
     }
     const attributes = nft.attributes ?? [];
     items.push({
+      animationUrl: nft.animationUrl ?? "",
       attributes,
       collection: nft.collection,
       contract: nft.contract,
@@ -94,6 +96,7 @@ export const visibleNftItems = (
       continue;
     }
     items.push({
+      animationUrl: "",
       attributes: [],
       collection: "",
       contract: nft.contract,
@@ -230,6 +233,7 @@ const selectedDetail = (
   const discovered = discoveredNfts.find((nft) => nft.id === selectedNftId);
   if (discovered) {
     return {
+      animationUrl: discovered.animationUrl ?? "",
       attributes: discovered.attributes ?? [],
       collection: discovered.collection,
       contract: discovered.contract,
@@ -245,6 +249,7 @@ const selectedDetail = (
   }
   return watched
     ? {
+        animationUrl: "",
         attributes: [],
         collection: "",
         contract: watched.contract,
@@ -267,6 +272,22 @@ const attributeRows = (attributes: readonly NftAttribute[]): string =>
         `<div class="receipt-row"><dt>${escapeHtml(attribute.traitType)}</dt><dd>${escapeHtml(attribute.value)}</dd></div>`,
     )
     .join("");
+
+// The on-chain animation section: shown only when the resolved metadata carries a
+// self-contained data:text/html animation. Nothing renders until the user presses
+// play (preserving the anti-phone-home reveal boundary); on click, nft-ui points
+// the iframe at the manifest-sandboxed sandbox/render.html page (opaque origin, no
+// chrome.*, egress-blocking CSP) which renders the untrusted HTML in isolation.
+// The URI is carried on the button's data-* and escaped into it here.
+const nftAnimationSection = (item: NftGalleryItem): string =>
+  item.animationUrl
+    ? `<section class="section">
+        <h2>Animation</h2>
+        <span class="hint">This collectible renders its own animation on-chain. It runs isolated in a sandbox with no network access — nothing loads until you press play.</span>
+        <button class="secondary small" data-nft-play="${escapeHtml(item.animationUrl)}" type="button">${icon("gamepad")}Play animation</button>
+        <iframe class="nft-animation" title="Collectible animation" hidden></iframe>
+      </section>`
+    : "";
 
 /**
  * NFT detail flow: image and identifiers plus a send form through the verified
@@ -303,6 +324,7 @@ export const nftDetailFlow = (
                   <dl class="receipt">${attributeRows(nft.attributes)}</dl>
                 </section>`
           }
+          ${nftAnimationSection(nft)}
           <section class="section">
             <h2>Send</h2>
             ${account ? "" : noAccountEmpty(status)}

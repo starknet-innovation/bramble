@@ -8,6 +8,7 @@ import {
   type DiscoveredNft,
   isDiscoveredNft,
   nftId,
+  normalizeAnimationUri,
   normalizeImageUrl,
   normalizeIndexerNft,
 } from "../../src/starknet/nft-metadata";
@@ -52,6 +53,30 @@ describe("normalizeImageUrl", () => {
     expect(normalizeImageUrl("data:image/svg+xml;base64,")).toBe("");
     expect(normalizeImageUrl("data:image/svg+xml")).toBe("");
     expect(normalizeImageUrl(`data:image/svg+xml;base64,${"A".repeat(33_000)}`)).toBe("");
+  });
+});
+
+describe("normalizeAnimationUri", () => {
+  const htmlUri = `data:text/html;base64,${btoa("<html><body><canvas></canvas></body></html>")}`;
+
+  test("passes safe data:text/html URIs through verbatim (idempotent)", () => {
+    expect(normalizeAnimationUri(htmlUri)).toBe(htmlUri);
+    expect(normalizeAnimationUri(normalizeAnimationUri(htmlUri))).toBe(htmlUri);
+    const rawHtml = "data:text/html,<html><body>hi</body></html>";
+    expect(normalizeAnimationUri(rawHtml)).toBe(rawHtml);
+    const charsetHtml = `data:text/html;charset=utf-8;base64,${btoa("<html></html>")}`;
+    expect(normalizeAnimationUri(charsetHtml)).toBe(charsetHtml);
+  });
+
+  test("rejects non-html, non-data, malformed, and oversized URIs", () => {
+    expect(normalizeAnimationUri(`data:image/svg+xml;base64,${btoa("<svg/>")}`)).toBe("");
+    expect(normalizeAnimationUri("https://example.com/a.html")).toBe("");
+    expect(normalizeAnimationUri("data:text/html;base64,")).toBe("");
+    expect(normalizeAnimationUri("data:text/html;base64,not valid!!")).toBe("");
+    expect(normalizeAnimationUri("data:text/html")).toBe("");
+    expect(normalizeAnimationUri(`data:text/html;base64,${"A".repeat(33_000)}`)).toBe("");
+    expect(normalizeAnimationUri(undefined)).toBe("");
+    expect(normalizeAnimationUri(42)).toBe("");
   });
 });
 
@@ -116,6 +141,12 @@ describe("isDiscoveredNft", () => {
   test("accepts an on-chain SVG data-URI image", () => {
     const image = `data:image/svg+xml;base64,${btoa("<svg xmlns='http://www.w3.org/2000/svg'/>")}`;
     expect(isDiscoveredNft({ ...valid, image })).toBe(true);
+  });
+
+  test("accepts a self-contained data:text/html animationUrl, rejects a remote one", () => {
+    const animationUrl = `data:text/html;base64,${btoa("<html><body></body></html>")}`;
+    expect(isDiscoveredNft({ ...valid, animationUrl })).toBe(true);
+    expect(isDiscoveredNft({ ...valid, animationUrl: "https://example.com/a.html" })).toBe(false);
   });
 
   test("rejects a mismatched id, bad network, or non-https image", () => {

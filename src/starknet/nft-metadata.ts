@@ -45,11 +45,13 @@ const IPFS_GATEWAY = "https://ipfs.io/ipfs/";
 /**
  * A collectible the wallet auto-discovered for the active account. `image` is
  * always either an empty string (render the placeholder) or an https URL safe to
- * drop into an <img src>; `id` is the deterministic
- * `${networkId}:${contract}:${tokenId}` key shared with watched NFTs so the two
- * lists dedupe cleanly.
+ * drop into an <img src>; `animationUrl`, when present, is a self-contained
+ * `data:text/html` renderer shown only inside the sandboxed iframe on explicit
+ * user action; `id` is the deterministic `${networkId}:${contract}:${tokenId}`
+ * key shared with watched NFTs so the two lists dedupe cleanly.
  */
 export type DiscoveredNft = {
+  readonly animationUrl?: string;
   readonly attributes?: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
@@ -214,11 +216,44 @@ export const normalizeImageUrl = (value: unknown): string => {
 };
 
 /**
+ * Normalizes an untrusted NFT `animation_url` into a self-contained
+ * `data:text/html` URI the wallet may render inside the sandboxed iframe, or ""
+ * when it is unusable. Only `data:text/html` (base64 or raw/percent-encoded
+ * utf8) within the size cap is accepted — remote (`https`/`ipfs`) animations are
+ * rejected so an opened collectible can never make a network request. The value
+ * is returned verbatim (idempotent, so it round-trips through isDiscoveredNft),
+ * and its inertness is guaranteed downstream by the sandbox's opaque origin and
+ * egress-blocking CSP, never by inspecting the HTML here.
+ */
+export const normalizeAnimationUri = (value: unknown): string => {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("data:") || trimmed.length > MAX_IMAGE_DATA_URI_LENGTH) {
+    return "";
+  }
+  const comma = trimmed.indexOf(",");
+  if (comma < 0 || comma + 1 >= trimmed.length) {
+    return "";
+  }
+  const params = trimmed.slice("data:".length, comma).toLowerCase().split(";");
+  if (params[0] !== "text/html") {
+    return "";
+  }
+  if (params.includes("base64") && !/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed.slice(comma + 1))) {
+    return "";
+  }
+  return trimmed;
+};
+
+/**
  * Checks a discovered-NFT record before it is trusted at the runtime boundary.
  */
 export const isDiscoveredNft = (value: unknown): value is DiscoveredNft =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
+    "animationUrl",
     "attributes",
     "collection",
     "contract",
@@ -230,6 +265,9 @@ export const isDiscoveredNft = (value: unknown): value is DiscoveredNft =>
     "name",
     "tokenId",
   ]) &&
+  (value["animationUrl"] === undefined ||
+    (typeof value["animationUrl"] === "string" &&
+      normalizeAnimationUri(value["animationUrl"]) === value["animationUrl"])) &&
   (value["attributes"] === undefined ||
     (Array.isArray(value["attributes"]) &&
       value["attributes"].length <= 32 &&

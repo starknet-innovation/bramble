@@ -105,10 +105,22 @@ requireBuild(
   }),
 );
 
+requireBuild(
+  await Bun.build({
+    entrypoints: ["src/sandbox/render.ts"],
+    format: "esm",
+    minify: true,
+    outdir: join(outdir, "sandbox"),
+    target: "browser",
+  }),
+);
+
 await cp("public/manifest.json", join(outdir, "manifest.json"));
 await cp("public/popup.html", join(outdir, "popup.html"));
 await cp("public/sidepanel.html", join(outdir, "sidepanel.html"));
 await cp("public/ledger-grant.html", join(outdir, "ledger-grant.html"));
+await mkdir(join(outdir, "sandbox"), { recursive: true });
+await cp("public/sandbox/render.html", join(outdir, "sandbox/render.html"));
 await mkdir(vendorOutdir, { recursive: true });
 await cp(
   "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js",
