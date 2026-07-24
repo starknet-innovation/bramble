@@ -172,9 +172,10 @@ Trigger: **`pull_request` targeting `main` or `release/**`** (plus `push` to
   `vendor:krusty`, `vendor:multisig`, `bun run check`, coverage floor, `build`,
   `test:e2e`, `package:extension`, the `apps/terminal` typecheck+build, and the
   `bun audit` dependency gate (`check:audit`), on the self-hosted CodeBuild
-  runner. It is **gated by a job-level `if:`** so it runs **only on `release/**`
-  and `hotfix/**` PRs into `main`** — the complete release-validation suite
-  before code reaches the stable branch.
+  runner. It is **gated by a job-level `if:`** so it runs **only on same-repository
+  `release/**` and `hotfix/**` PRs into `main`** — the complete
+  release-validation suite before code reaches the stable branch. A fork branch
+  cannot opt into the self-hosted runner by choosing a trusted-looking name.
 
 So an everyday `feature/`/`fix/`/`chore/` PR into a release branch — and a
 `chore/`/`docs/` PR into `main` — runs **only `pr-guards` + `fast-checks`** and
@@ -183,8 +184,8 @@ promoted (`release/vX.Y` → `main`) or a hotfix lands (`hotfix/*` → `main`), 
 again post-merge and nightly (below).
 
 > Note: because the `apps/terminal` build now lives in `release-validation`, the
-> terminal app is validated on release/hotfix→main promotion (and post-merge via
-> release-integration + nightly), not on every release-branch PR. If per-PR
+> terminal app is validated on release/hotfix→main promotion, not on every
+> release-branch PR or the extension-only post-merge/nightly jobs. If per-PR
 > terminal coverage is wanted, add a lightweight terminal typecheck to
 > `fast-checks`.
 
@@ -198,6 +199,8 @@ checksum. These need the private Krusty repo and a Rust/Scarb toolchain, so they
 run on the same self-hosted CodeBuild runner CI uses. If a vendor step can't
 complete (missing private-repo access or toolchain drift) it writes a clear
 explanation to the run summary and **fails honestly** — it never fakes success.
+The self-hosted job has read-only repository permission, and Rust is pinned to
+`1.96.1` rather than the moving `stable` channel.
 
 ### 3. Nightly — full suite (`nightly.yml`)
 
@@ -206,7 +209,9 @@ the **active release branch**.
 
 Active-branch resolution: use repo variable **`vars.ACTIVE_RELEASE_BRANCH`** if
 set; otherwise the highest-semver `release/vX.Y` branch; if none exists, exit
-cleanly with a note.
+cleanly with a note. Manual runs must be dispatched from `main`. Any configured
+branch must match `release/vX.Y` exactly and must already exist in this
+repository before a self-hosted runner is allocated.
 
 Runs the full **E2E (Playwright)** suite, the **dependency audit** (`bun audit`,
 via `bun run check:audit` — also run in the PR CI `release-validation` job;
@@ -225,7 +230,9 @@ auto-classified.
 
 On failure it creates-or-updates **one** tracking issue titled
 `Nightly: release/vX.Y — failing checks`, labeled `ci-cd` + `release`, assigned
-to the matching milestone when one exists.
+to the matching milestone when one exists. Source and dependencies execute in a
+read-only self-hosted job; a separate hosted job receives the narrow
+`issues: write` capability and never checks out release-branch code.
 
 ### What runs where
 
@@ -348,28 +355,23 @@ For an urgent production issue that can't wait for the normal release cadence:
 
 ---
 
-## Branch protection & repo settings to apply by hand
+## Branch protection & repository security settings
 
-The rules above are enforced **in-repo** by CI guards, CODEOWNERS, and templates,
-but CI can only *report*. To make the model **actually merge-enforcing**, a
-repository admin must turn on the settings below. (The automated attempt to set
-these from this change was rejected — no admin scope — so they are listed here
-for a human to apply. See the PR description for the same checklist.)
-
-Until these are on, a red CI guard is **visible but not merge-blocking**.
+The rules above are enforced in-repo by CI guards, CODEOWNERS, templates, and the
+workflow-security policy in `bun run check:files`. The GitHub rulesets must keep
+the following server-side baseline so a red guard is actually merge-blocking.
 
 ### `main` — branch protection / ruleset
 
 - **Require a pull request before merging.**
 - **Require status checks to pass** and **require branches to be up to date**.
-  Required checks: **`fast-checks`** and **`pr-guards`** only. Do **not** make
-  `release-validation` a required check: it is skipped on `chore/`/`docs/` PRs
-  (by its `if:` gate), and a required-but-skipped check silently blocks those
-  PRs from merging (a well-known GitHub behavior). The full heavy suite still
-  runs on a `release/**`/`hotfix/**` → `main` promotion; reviewers must confirm
-  `release-validation` is green before merging that promotion — process-enforced,
-  not a required-check.
+  Required checks: **`fast-checks`**, **`pr-guards`**, and
+  **`release-validation`**. GitHub documents that a job skipped by a
+  [job-level conditional reports success and does not block merging][skipped-job],
+  so ordinary `chore/`/`docs/` PRs remain mergeable while a release/hotfix
+  promotion cannot bypass the heavy gate.
 - **Require ≥ 1 approving review** (and "Require review from Code Owners" — see `.github/CODEOWNERS`).
+- **Require all review threads to be resolved.**
 - **Restrict direct pushes** (no pushes that bypass a PR).
 - **Block force-pushes and deletions** of `main`.
 - **Require signed commits** — recommended if it is the org norm (this repo already
@@ -381,14 +383,24 @@ Until these are on, a red CI guard is **visible but not merge-blocking**.
 - **Require status checks to pass:** **`fast-checks`** **and** **`pr-guards`**
   (so the linked-issue guard is enforced). `release-validation` does not run on
   release-branch PRs, so it is not a required check here.
-- **Require ≥ 1 approving review** (team can review each other's feature/fix/chore PRs).
+- **Require ≥ 1 approving review**, Code Owner review, and resolution of every
+  review thread.
 - **Block force-pushes and deletions** by non-maintainers.
 
 ### Repository settings
 
-- **Automatically delete head branches** — turn **ON**. It is currently off,
-  which is why stale merged branches accumulate (~43 at last count). This keeps
-  short-lived working branches from piling up.
+- Keep default workflow token permissions **read-only** and prevent Actions from
+  approving pull requests.
+- Require every third-party action to use a **full commit SHA**. The repository
+  workflow-policy gate also pins the Rust channel to `1.96.1`.
+- Keep **secret scanning** and **push protection** enabled.
+- Keep the `chrome-web-store` environment restricted to protected branches.
+  The current private-repository plan does not support required-reviewer
+  protection; do not add CWS credentials until the plan supports it or a second
+  eligible maintainer can be configured. The release workflow independently
+  rejects publish dispatches not run from `main`.
+- Keep **automatically delete head branches** enabled so short-lived working
+  branches do not accumulate after merge.
 - **Default merge strategy:** set **squash** for day-to-day working-branch PRs
   (one tidy commit per change on the release branch). **Exception:** promoting
   `release/vX.Y` → `main` should be a **merge commit**, done explicitly, to
@@ -403,4 +415,7 @@ Until these are on, a red CI guard is **visible but not merge-blocking**.
 > templates live in the repo and take effect immediately. Required-check
 > enforcement, required reviews, push restrictions, signed-commit requirements,
 > auto-delete, and merge-strategy defaults are **admin-only repo settings** — the
-> model is not fully enforced until they are turned on.
+> repository security model depends on administrators keeping them aligned with
+> this baseline.
+
+[skipped-job]: https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks

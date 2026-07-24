@@ -23,6 +23,7 @@ import {
   SEMVER,
 } from "./config-standards-policy";
 import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
+import { workflowSecurityFailures } from "./workflow-security-policy";
 
 const failures: string[] = [];
 
@@ -52,6 +53,8 @@ const buildScript = await readFile("scripts/build-extension.ts", "utf8");
 const ciWorkflow = await readFile(".github/workflows/ci.yml", "utf8");
 const packageScript = await readFile("scripts/package-extension.ts", "utf8");
 const vendorKrustyScript = await readFile("scripts/vendor-krusty.ts", "utf8");
+
+failures.push(...(await workflowSecurityFailures()));
 
 if (
   !hasOnlyKeys(packageJson, [

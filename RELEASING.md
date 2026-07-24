@@ -19,8 +19,11 @@ listing. Two paths exist and share the same packaged bytes:
 Both automated paths share one heavy pipeline (`release-build.yml`) and one
 **single-source version gate**: the tag must equal the `package.json` /
 `public/manifest.json` version, or the release fails before any artifact is
-built (`bun run check:release-version`). An **optional, currently disabled** job
-can publish to the Chrome Web Store (see [Chrome Web Store publish](#6-triggering-the-optional-chrome-web-store-publish)).
+built (`bun run check:release-version`). Source and dependencies execute on the
+self-hosted builder with read-only repository permission; a fresh hosted job
+receives the narrow write permission needed to publish inert release artifacts.
+An **optional, currently disabled** job can publish to the Chrome Web Store (see
+[Chrome Web Store publish](#6-triggering-the-optional-chrome-web-store-publish)).
 
 > Scope note: automation is issue #58; this document is issue #61. The Chrome
 > Web Store publish is **wired but disabled** because there is no store account
@@ -144,10 +147,12 @@ branch) is merged into `main`, `.github/workflows/auto-release.yml`:
 3. creates the `vX.Y.0` tag on the merge commit (skipped if it already exists —
    idempotent, so a re-run never double-cuts);
 4. calls the reusable `release-build.yml`, which installs the toolchain exactly
-   as CI does, runs `vendor:krusty`/`vendor:multisig`/`build`/`package:extension`,
-   re-asserts the tag ↔ version gate, verifies the `.zip` matches its `.sha256`,
-   uploads the `mc-wallet-release` artifact, and creates the **GitHub Release**
-   with the zip + `.sha256` attached.
+   as CI does (including Rust `1.96.1`), runs
+   `vendor:krusty`/`vendor:multisig`/`build`/`package:extension`, re-asserts the
+   tag ↔ version gate, verifies the `.zip` matches its `.sha256`, and uploads the
+   `mc-wallet-release` artifact. A separate hosted job that never checks out
+   wallet source creates the **GitHub Release** with the zip + `.sha256`
+   attached.
 
 Release notes come from the matching `CHANGELOG.md` section (issue #60) — kept
 current on the release branch via `bun run changelog` — falling back to a
@@ -238,25 +243,37 @@ values:
 | `CWS_REFRESH_TOKEN` | Long-lived refresh token for the item-owning account |
 | `CWS_EXTENSION_ID` | The Chrome Web Store item/extension ID to update |
 
-The `chrome-web-store` environment scopes these secrets so PR/fork runs can
-never read them. Until all four exist, the publish job **skips cleanly**
+The `chrome-web-store` environment is restricted to protected branches, and the
+workflow independently accepts a publish dispatch from `main` only. Before
+adding credentials, configure a required environment reviewer who is not the
+person initiating the publish. GitHub does not expose required-reviewer
+protection for private repositories on every plan; on a plan without it, leave
+the credentials absent until the plan or access model is upgraded.
+
+Until all four secrets exist, the publish job **skips cleanly**
 (`scripts/publish-chrome-web-store.ts` logs "publish skipped — not configured"
 and exits 0).
 
 ## 6. Triggering the optional Chrome Web Store publish
 
-The store publish **never** runs on a tag push. It runs only via manual
-dispatch:
+The store publish **never** runs on a tag push. It runs only via a manual
+dispatch from protected `main`:
 
 1. Actions → **Release** → *Run workflow*.
-2. Set inputs:
+2. Select **`main`** in “Use workflow from.” Any other selected ref cannot reach
+   the publish job.
+3. The workflow reads the version from trusted `main`, requires the matching
+   `vX.Y.Z` tag to already exist, and rebuilds that immutable tag. It never
+   publishes arbitrary branch bytes.
+4. Set inputs:
    - `publish: true` — required to reach the publish job at all.
    - `publish_target: trustedTesters | default` — see below.
    - `deploy_percentage` — optional staged rollout (see below).
    - `dry_run: true` — validate the package and request plan without publishing.
 
 The job downloads the `mc-wallet-release` artifact built by `build-release`,
-then runs `bun run release:publish`, which:
+verifies its SHA-256 checksum, checks out the reviewed publish client from
+protected `main` on a fresh hosted runner, and invokes it. The client:
 
 1. exchanges `CWS_REFRESH_TOKEN` (+ client id/secret) for a short-lived access
    token;
@@ -320,7 +337,8 @@ window) is a dashboard-only option and is intentionally not automated.
 - `.github/workflows/release.yml` — tag-driven backfill Release + optional CWS
   publish.
 - `.github/workflows/release-build.yml` — the reusable heavy build both paths
-  call (build, package, tag ↔ version gate, notes, Release).
+  call (read-only self-hosted build/package/tag ↔ version gate/notes, followed
+  by hosted Release publication).
 - `scripts/release-version.ts` — the single-source version gate and
   branch → version derivation (#59).
 - `scripts/generate-changelog.ts` — deterministic `CHANGELOG.md` section
