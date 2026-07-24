@@ -8,6 +8,7 @@
 import { useMemo } from "react";
 import { useBalances } from "./useBalances";
 import { usePrices } from "./usePrices";
+import { useTokens } from "./useTokens";
 import type { Holding, PortfolioData } from "./types";
 
 export type UsePortfolioResult = {
@@ -30,10 +31,14 @@ const EMPTY: PortfolioData = {
 export const usePortfolio = (address: string | null): UsePortfolioResult => {
   const balances = useBalances(address);
   const prices = usePrices();
+  const tokens = useTokens();
 
   const data = useMemo<PortfolioData>(() => {
     const rows = balances.data ?? [];
     const byAddress = prices.data?.byAddress ?? {};
+    const logosBySymbol = Object.fromEntries(
+      (tokens.data ?? []).map((token) => [token.symbol.toUpperCase(), token.logoUri]),
+    );
 
     const holdings: Holding[] = rows
       .filter((balance) => balance.raw > 0n)
@@ -46,6 +51,7 @@ export const usePortfolio = (address: string | null): UsePortfolioResult => {
           address: balance.address,
           symbol: balance.symbol,
           name: balance.name,
+          logoUri: logosBySymbol[balance.symbol.toUpperCase()] ?? null,
           decimals: balance.decimals,
           display: balance.display,
           amount: balance.amount,
@@ -73,12 +79,12 @@ export const usePortfolio = (address: string | null): UsePortfolioResult => {
     const pnl24hPct = priorTotal === 0 ? 0 : (pnl24hUsd / priorTotal) * 100;
 
     return { holdings, totalValueUsd, pnl24hUsd, pnl24hPct };
-  }, [balances.data, prices.data]);
+  }, [balances.data, prices.data, tokens.data]);
 
   return {
     data,
-    isLoading: balances.isLoading || prices.isLoading,
-    error: balances.error ?? prices.error,
+    isLoading: balances.isLoading || prices.isLoading || tokens.isLoading,
+    error: balances.error ?? prices.error ?? tokens.error,
     refresh: balances.refresh,
   };
 };

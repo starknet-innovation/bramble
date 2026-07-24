@@ -9,9 +9,10 @@ import {
   createWalletFromGeneratedPhrase,
   IMPORT_MNEMONIC,
   importWalletFromPhrase,
+  openPendingWalletSurface,
   resolveConnectionApproval,
   resolvePendingApproval,
-  unlockWallet,
+  VAULT_PASSPHRASE,
 } from "./wallet-helpers";
 
 test("loads the built extension and renders side panel onboarding", async ({ extension }) => {
@@ -20,6 +21,13 @@ test("loads the built extension and renders side panel onboarding", async ({ ext
   await expect(sidepanel.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
   await expect(sidepanel.getByRole("button", { name: /Generate phrase/ })).toBeEnabled();
   await expect(sidepanel.locator('select[name="networkId"]')).toHaveValue("SN_MAIN");
+});
+
+test("loads the built toolbar popup surface", async ({ extension }) => {
+  const popup = await extension.openExtensionPage("popup.html");
+
+  await expect(popup.locator("body")).toHaveClass("popup-surface");
+  await expect(popup.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
 });
 
 test("imports an existing recovery phrase without backup verification", async ({ extension }) => {
@@ -31,8 +39,14 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await createWalletFromGeneratedPhrase(sidepanel);
 
+  const terminalLink = sidepanel.getByRole("link", { name: "Open trade terminal" });
+  await expect(terminalLink).toBeVisible();
+  await expect(terminalLink).toHaveAttribute("href", "https://mc-wallet-terminal.vercel.app");
+  await expect(terminalLink).toHaveAttribute("target", "_blank");
+  await expect(terminalLink).toHaveAttribute("rel", "noopener noreferrer");
+
   await sidepanel.getByRole("button", { name: "Lock wallet" }).click();
-  await unlockWallet(sidepanel);
+  await expect(sidepanel.getByRole("heading", { name: "Welcome back" })).toBeVisible();
 
   const dappServer = await startTestDapp();
   try {
@@ -42,6 +56,12 @@ test("creates a wallet and approves a dapp connection", async ({ extension }) =>
 
     await dapp.getByTestId("connect").click();
     await expect(dapp.getByTestId("connect-result")).toHaveText("pending");
+    await openPendingWalletSurface(sidepanel);
+    await expect(sidepanel.getByText("Site request waiting")).toBeVisible();
+    await expect(sidepanel.getByText(dappServer.origin)).toBeVisible();
+
+    await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
+    await sidepanel.getByRole("button", { name: "Unlock" }).click();
 
     await resolveConnectionApproval(sidepanel, dappServer.origin, "approve");
 

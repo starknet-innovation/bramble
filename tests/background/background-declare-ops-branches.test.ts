@@ -97,6 +97,7 @@ const opsDeps = (
     approvals: createApprovalQueue(),
     extensionId: "extension-id",
     preferencesStore: unavailablePreferencesStore,
+    runtimeRpc: {} as RuntimeRpc,
     session,
     wallet: walletStub([account]),
     waiters: createSignatureWaiters(),
@@ -262,5 +263,19 @@ describe("executeDeclareApproval", () => {
     expect(result).toEqual({ classHash: "0x7ce", ok: true, transactionHash: "0x7cd" });
     // The signHash closure passed to the RPC layer routed through the wallet.
     expect(signed).toEqual(["0xfeed"]);
+  });
+
+  test("turns RPC failures into actionable declaration guidance", async () => {
+    const deps = executeDeps({
+      runtimeRpc: {
+        async submitDeclareTransaction(): Promise<never> {
+          throw new Error("Class already declared");
+        },
+      } as unknown as RuntimeRpc,
+    });
+
+    await expect(executeDeclareApproval(deps, { declare, origin })).resolves.toEqual({
+      error: "This contract class is already declared on the selected network.",
+    });
   });
 });

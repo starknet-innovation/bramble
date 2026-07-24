@@ -3,8 +3,10 @@
  * screen. Screen switching is simple client-side tab state — no router
  * dependency — matching the mockup's four-screen nav.
  */
+import { X } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
 import Discover from "./screens/Discover";
+import NftStudio from "./screens/NftStudio";
 import Perps from "./screens/Perps";
 import Portfolio from "./screens/Portfolio";
 import Tokens from "./screens/Tokens";
@@ -17,6 +19,7 @@ type ScreenProps = { readonly onNavigate: (screen: ScreenId) => void };
 
 const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
   discover: Discover,
+  nfts: NftStudio,
   tokens: Tokens,
   perps: Perps,
   portfolio: Portfolio,
@@ -24,14 +27,17 @@ const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
 
 export const App = (): ReactNode => {
   const [active, setActive] = useState<ScreenId>("discover");
-  const { error: walletError } = useWallet();
+  const { clearError, error: walletError } = useWallet();
   const Screen = SCREENS[active];
   return (
     <>
       <TopNav active={active} onNavigate={setActive} />
       {walletError ? (
         <div className="wallet-notice" role="alert">
-          {walletError}
+          <span>{walletError}</span>
+          <button aria-label="Dismiss wallet error" onClick={clearError} type="button">
+            <X size={14} aria-hidden />
+          </button>
         </div>
       ) : null}
       <main>

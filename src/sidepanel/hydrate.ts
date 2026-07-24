@@ -23,6 +23,7 @@ export type HydrateDeps = {
   readonly selectedMultisigId: string | null;
   readonly selectedTokenId: string | null;
   readonly cache: RenderData;
+  readonly isCurrent?: () => boolean;
   readonly wallet: SidepanelWallet;
   readonly multisig: MultisigClient;
   readonly deployment: DeploymentCache;
@@ -82,11 +83,21 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     wallet,
     multisig,
     deployment,
+    isCurrent = () => true,
     paint,
   } = deps;
-  const jobs: Promise<unknown>[] = [];
-  const fill = <T>(load: Promise<T>, assign: (value: T) => void): void => {
-    jobs.push(load.then(assign).catch(() => undefined));
+  const primaryJobs: Promise<unknown>[] = [];
+  const deferredJobs: Promise<unknown>[] = [];
+  const fill = <T>(load: Promise<T>, assign: (value: T) => void, deferred = false): void => {
+    (deferred ? deferredJobs : primaryJobs).push(
+      load
+        .then((value) => {
+          if (isCurrent()) {
+            assign(value);
+          }
+        })
+        .catch(() => undefined),
+    );
   };
   if (
     activeView === "home" ||
@@ -105,15 +116,23 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     });
   }
   if (activeView === "home") {
-    fill(deployment.load(status, activeView), (value) => {
-      cache.deployment = value;
-    });
+    fill(
+      deployment.load(status, activeView),
+      (value) => {
+        cache.deployment = value;
+      },
+      true,
+    );
   }
   if (activeView === "activity" || activeView === "home") {
-    fill(wallet.loadActivity(), (value) => {
-      cache.transactions = value.entries;
-      cache.historyUnavailable = value.historyUnavailable;
-    });
+    fill(
+      wallet.loadActivity(),
+      (value) => {
+        cache.transactions = value.entries;
+        cache.historyUnavailable = value.historyUnavailable;
+      },
+      activeView === "home",
+    );
   }
   if (activeView === "account") {
     fill(wallet.loadClassHashVerification(), (value) => {
@@ -130,10 +149,14 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.allowances = value;
     });
   }
-  if (activeView === "nfts" || activeView === "nft-detail") {
-    fill(wallet.discoverNfts(), (value) => {
-      cache.discoveredNfts = value;
-    });
+  if (activeView === "home" || activeView === "nfts" || activeView === "nft-detail") {
+    fill(
+      wallet.discoverNfts(),
+      (value) => {
+        cache.discoveredNfts = value;
+      },
+      activeView === "home",
+    );
   }
   if (
     activeView === "multisigs" ||
@@ -141,9 +164,11 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     activeView === "multisig-propose" ||
     activeView === "multisig-deploy"
   ) {
-    jobs.push(
+    primaryJobs.push(
       hydrateMultisigs(activeView, selectedMultisigId, cache.multisigs, multisig).then((value) => {
-        Object.assign(cache, value);
+        if (isCurrent()) {
+          Object.assign(cache, value);
+        }
       }),
     );
   }
@@ -160,8 +185,14 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       });
     }
   }
-  if (jobs.length > 0) {
-    await Promise.all(jobs);
-    paint();
-  }
+  const flush = async (jobs: readonly Promise<unknown>[]): Promise<void> => {
+    if (jobs.length > 0) {
+      await Promise.all(jobs);
+      if (isCurrent()) {
+        paint();
+      }
+    }
+  };
+  await flush(primaryJobs);
+  await flush(deferredJobs);
 };

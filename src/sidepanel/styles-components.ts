@@ -288,7 +288,7 @@ ${SIGN_REQUEST_STYLES}
     color: var(--mc-muted); display: inline-flex; justify-content: center;
     overflow: hidden; position: relative; transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease}; width: 100%;
   }
-  .nft-art .icon { height: 28px; width: 28px; } .nft-image { border-radius: inherit; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; } .nft-image--broken { display: none; } .nft-hero { margin: 0 auto ${SPACE.sm}; max-width: 180px; }
+  .nft-art .icon { height: 28px; width: 28px; } .nft-image { border-radius: inherit; height: 100%; inset: 0; object-fit: cover; position: absolute; width: 100%; } .nft-image--pixelated { image-rendering: pixelated; } .nft-image--broken { display: none; } .nft-hero { margin: 0 auto ${SPACE.sm}; max-width: 180px; }
   button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--mc-shadow-sm); }
   .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
@@ -309,8 +309,23 @@ ${SIGN_REQUEST_STYLES}
     gap: ${SPACE.md};
     padding: ${SPACE.lg};
   }
-  .request-copy { display: grid; gap: 2px; min-width: 0; }
-  .request-origin { color: var(--mc-text); font-family: var(--mc-font-mono); font-weight: ${WEIGHT.semibold}; overflow-wrap: anywhere; }
+  .request-copy { display: grid; gap: ${SPACE.sm}; min-width: 0; }
+  .request-site { align-items: center; display: flex; gap: ${SPACE.md}; min-width: 0; }
+  .request-site-mark {
+    align-items: center;
+    background: var(--mc-sunken);
+    border-radius: ${RADIUS.md};
+    color: var(--mc-muted);
+    display: inline-flex;
+    flex: none;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
+  }
+  .request-site-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
+  .request-site-copy > span { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
+  .request-site-copy strong { font-size: ${TYPE.body.size}; overflow-wrap: anywhere; }
+  .request-site-copy code { color: var(--mc-muted); font-size: ${TYPE.micro.size}; overflow-wrap: anywhere; word-break: normal; }
   .detail-grid { display: grid; gap: ${SPACE.sm}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail {
     background: var(--mc-soft);

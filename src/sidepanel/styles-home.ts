@@ -218,6 +218,8 @@ export const HOME_STYLES = `
     color: var(--mc-muted);
     display: inline-flex;
     justify-content: center;
+    overflow: hidden;
+    position: relative;
     transition: box-shadow ${MOTION.liftMs}ms ${MOTION.ease};
     width: 100%;
   }

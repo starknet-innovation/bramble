@@ -121,6 +121,7 @@ export default function Portfolio({ onNavigate }: PortfolioProps): ReactNode {
                 key={h.symbol}
                 rank={i + 1}
                 symbol={h.symbol}
+                logoUri={h.logoUri}
                 name={h.symbol}
                 subLabel={h.name}
                 colorIndex={i}
@@ -181,6 +182,7 @@ export default function Portfolio({ onNavigate }: PortfolioProps): ReactNode {
               key={h.symbol}
               rank={i + 1}
               symbol={h.symbol}
+              logoUri={h.logoUri}
               name={h.symbol}
               subLabel={i === 0 ? "Top gainer" : "Top loser"}
               colorIndex={i}

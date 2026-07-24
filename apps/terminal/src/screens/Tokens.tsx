@@ -119,7 +119,13 @@ const compactLabel = (value: number | null): string =>
 type TokensProps = { readonly onNavigate: (screen: ScreenId) => void };
 
 export default function Tokens({ onNavigate }: TokensProps): ReactNode {
-  const { account, address, isConnected, isConnecting, connect } = useWallet();
+  const {
+    address,
+    isConnected,
+    isConnecting,
+    connect,
+    requestTransaction,
+  } = useWallet();
 
   const tokens = useTokens();
   const list = useMemo<readonly TokenRow[]>(() => tokens.data ?? [], [tokens.data]);
@@ -277,21 +283,42 @@ export default function Tokens({ onNavigate }: TokensProps): ReactNode {
   }, [quoteState, address, slippageBps]);
 
   const onConfirm = useCallback(() => {
-    if (reviewCalls === null || account === null) {
+    if (reviewCalls === null) {
       return;
     }
-    setExecMessage("Submitting…");
+    setExecMessage("Opening transaction review…");
     void (async () => {
       try {
-        await account.execute([...reviewCalls]);
-        setExecMessage("Submitted to wallet.");
+        await requestTransaction({
+          calls: reviewCalls,
+          description:
+            "Submit the reviewed swap route. Your wallet will show the final calldata and network fee before approval.",
+          details: [
+            { label: "Action", value: `${side === "buy" ? "Buy" : "Sell"} ${token?.symbol ?? "token"}` },
+            { label: "Input", value: `${amount} ${spend.symbol}` },
+            { label: "Venue", value: swapVenue === "avnu" ? "AVNU Aggregator" : "Ekubo Direct" },
+            { label: "Max slippage", value: `${(slippageBps / 100).toFixed(2)}%` },
+          ],
+          title: `Review ${token?.symbol ?? "token"} swap`,
+          warning: "Swap output can change before execution. Verify the wallet fee and minimum received.",
+        });
+        setExecMessage("Transaction submitted.");
         setReviewCalls(null);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Wallet rejected the swap.";
         setExecMessage(message);
       }
     })();
-  }, [reviewCalls, account]);
+  }, [
+    amount,
+    requestTransaction,
+    reviewCalls,
+    side,
+    slippageBps,
+    spend.symbol,
+    swapVenue,
+    token?.symbol,
+  ]);
 
   // No token available yet: render the pane shell with loading/empty affordances.
   if (token === undefined) {

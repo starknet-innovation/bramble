@@ -3,7 +3,8 @@
  * wallet creation and the unlock screen for locked vaults. Both use a centered
  * brand mark, a large heading, and a primary action pinned to the bottom.
  */
-import type { WalletStatus } from "../popup/responses";
+import type { PendingApproval, WalletStatus } from "../popup/responses";
+import { escapeHtml } from "../shared/html";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 import { icon } from "./icons";
 import { requiresMainnetAck } from "./mainnet-ack";
@@ -87,13 +88,23 @@ const ledgerSetupCard = (status: WalletStatus): string => `
 /**
  * Unlock screen for an existing but locked vault.
  */
-export const locked = (status: WalletStatus): string => `
+export const locked = (status: WalletStatus, pending: readonly PendingApproval[] = []): string => {
+  const request = pending[0];
+  return `
   <main class="screen gate">
     ${gateBrand()}
     <div class="gate-head">
       <h1>Welcome back</h1>
-      <p class="lede">Unlock your wallet to continue.</p>
+      <p class="lede">${request ? "Unlock to review the wallet request waiting for you." : "Unlock your wallet to continue."}</p>
     </div>
+    ${
+      request
+        ? `<div class="callout gate-request" role="status">
+            <span class="callout-icon">${icon("link")}</span>
+            <span class="callout-copy"><strong>Site request waiting</strong><p>${escapeHtml(request.origin)}</p></span>
+          </div>`
+        : ""
+    }
     <form id="unlock-form" class="gate-form">
       <label><span>Vault passphrase</span><input name="vaultPassphrase" type="password" minlength="12" required autocomplete="current-password" placeholder="Enter your passphrase" /></label>
       <p id="form-result" role="status"></p>
@@ -102,3 +113,4 @@ export const locked = (status: WalletStatus): string => `
       </div>
     </form>
   </main>`;
+};

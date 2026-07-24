@@ -2,11 +2,14 @@ artifacts/
 dist/
 node_modules/
 playwright-report/
+.snfoundry_cache/
+target/
 test-results/
 vendor/krusty-kms/
 vendor/multisig/
 contracts/multisig/target/
 *.log
 .DS_Store
+/dist.zip
 .claude/*
 !.claude/skills

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "VITE_AVNU_MARKETS_BASE=/proxy/avnu-markets VITE_EXTENDED_REST_BASE=/proxy/extended/api/v1 bun run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/proxy/avnu-markets/:path*",
+      "destination": "https://starknet.impulse.avnu.fi/:path*"
+    },
+    {
+      "source": "/proxy/extended/:path*",
+      "destination": "https://api.starknet.extended.exchange/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}

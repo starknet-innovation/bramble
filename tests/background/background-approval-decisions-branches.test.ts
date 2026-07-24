@@ -214,6 +214,17 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
     const { id } = approvals.requestDeclare({
       context: CONTEXT,
       declare: { compiledClassHash: "0x1", contract: {} } as never,
+      declaration: {
+        abiEntryCount: 0,
+        accountDeployment: "deployed",
+        compiledClassHash: "0x1",
+        deploymentFee: null,
+        deploymentFeeEstimateFailed: false,
+        entryPointCount: 0,
+        fee: { overallFee: "1000", unit: "FRI" },
+        feeEstimateFailed: false,
+        sierraProgramLength: 1,
+      },
       origin: ORIGIN,
       summaries: ["Declare"],
     });

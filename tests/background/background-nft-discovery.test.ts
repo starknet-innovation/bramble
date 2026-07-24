@@ -1,14 +1,16 @@
 /**
  * NFT auto-discovery message checks: the gallery is populated from the indexer
- * but every candidate is re-proven against the on-chain owner_of, so tokens the
- * account no longer owns (or that fail to read) never surface, and an
- * unconfigured indexer yields an empty gallery.
+ * but every candidate is re-proven through its ERC721 owner or ERC1155 balance,
+ * so tokens the account no longer owns (or that fail to read) never surface,
+ * and an unconfigured indexer yields an empty gallery.
  */
 import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../../src/background/messages";
+import type { RuntimeRpc } from "../../src/background/runtime-rpc";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
 import type { DiscoveredNft } from "../../src/starknet/nft-metadata";
+import type { NftTokenMetadata } from "../../src/starknet/nft-token-metadata";
 import { createMemoryStore } from "../../src/storage/kv";
 import { createPreferencesStore } from "../../src/storage/preferences-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
@@ -81,13 +83,16 @@ const candidate = (tokenId: string, contract: string): DiscoveredNft => ({
 
 const makeHandler = (options: {
   readonly candidates: readonly DiscoveredNft[];
+  readonly getNftMetadata?: NonNullable<RuntimeRpc["getNftMetadata"]>;
   readonly owners: Readonly<Record<string, string>>;
 }) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
-  return createMessageHandler(walletStub, "extension-id", {
-    preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+  const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+  const handler = createMessageHandler(walletStub, "extension-id", {
+    preferencesStore,
     runtimeRpc: makeRuntimeRpc({
+      ...(options.getNftMetadata ? { getNftMetadata: options.getNftMetadata } : {}),
       async getNftOwner({ contractAddress }) {
         const owner = options.owners[contractAddress];
         if (!owner) {
@@ -103,6 +108,7 @@ const makeHandler = (options: {
     }),
     session,
   });
+  return { handler, preferencesStore };
 };
 
 describe("NFT auto-discovery messages", () => {
@@ -110,7 +116,7 @@ describe("NFT auto-discovery messages", () => {
     const owned = candidate("5", "0x511a2b3");
     const stale = candidate("9", "0x6220000");
     const unreadable = candidate("7", "0x7330000");
-    const handler = makeHandler({
+    const { handler } = makeHandler({
       candidates: [owned, stale, unreadable],
       owners: {
         "0x511a2b3": account.address,
@@ -123,15 +129,82 @@ describe("NFT auto-discovery messages", () => {
   });
 
   test("an unconfigured indexer yields an empty gallery", async () => {
-    const handler = makeHandler({ candidates: [], owners: {} });
+    const { handler } = makeHandler({ candidates: [], owners: {} });
     await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual({
       nfts: [],
       ok: true,
     });
   });
 
+  test("discovers and hydrates an owned watch without an indexer", async () => {
+    const contract = "0x511a2b3";
+    const metadata: NftTokenMetadata = {
+      attributes: [{ traitType: "Punk ID", value: "0" }],
+      collection: "MC Punks",
+      description: "A test collectible",
+      externalUrl: "https://example.com/punks/0",
+      image: "https://cdn.example/punk0000.png",
+      name: "Starknet Test Punk #0",
+    };
+    const metadataCalls: string[] = [];
+    const { handler, preferencesStore } = makeHandler({
+      candidates: [],
+      async getNftMetadata(input) {
+        metadataCalls.push(input.contractAddress);
+        return metadata;
+      },
+      owners: { [contract]: account.address },
+    });
+    await preferencesStore.addNft({
+      contract,
+      label: "My first punk",
+      networkId: "SN_MAIN",
+      tokenId: "0",
+    });
+
+    const response = await handler({ type: "wallet.discoverNfts" }, sender);
+
+    expect(response).toEqual({
+      nfts: [
+        {
+          attributes: metadata.attributes,
+          collection: metadata.collection,
+          contract,
+          description: metadata.description,
+          externalUrl: metadata.externalUrl,
+          id: `SN_MAIN:${contract}:0`,
+          image: metadata.image,
+          name: metadata.name,
+          networkId: "SN_MAIN",
+          tokenId: "0",
+        },
+      ],
+      ok: true,
+    });
+    expect(metadataCalls).toEqual([contract]);
+  });
+
+  test("does not fetch metadata for unsolicited indexer candidates", async () => {
+    const owned = candidate("5", "0x511a2b3");
+    let metadataCalls = 0;
+    const { handler } = makeHandler({
+      candidates: [owned],
+      async getNftMetadata() {
+        metadataCalls += 1;
+        return null;
+      },
+      owners: { [owned.contract]: account.address },
+    });
+
+    await expect(handler({ type: "wallet.discoverNfts" }, sender)).resolves.toEqual({
+      nfts: [owned],
+      ok: true,
+    });
+    expect(metadataCalls).toBe(0);
+  });
+
   test("rejects a malformed discover request", async () => {
-    const handler = makeHandler({ candidates: [], owners: {} });
+    const { handler } = makeHandler({ candidates: [], owners: {} });
     await expect(handler({ extra: true, type: "wallet.discoverNfts" }, sender)).resolves.toEqual({
       error: "invalid discover nfts request",
     });

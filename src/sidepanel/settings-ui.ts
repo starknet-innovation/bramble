@@ -118,6 +118,34 @@ export const bindContacts = (deps: SettingsUiDeps): void => {
 export const bindAppearance = (deps: SettingsUiDeps): void => {
   const result = deps.app?.querySelector<HTMLElement>("#display-result");
 
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-approval-surface]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const approvalSurface = button.dataset["approvalSurface"];
+      if (
+        (approvalSurface !== "popup" && approvalSurface !== "side-panel") ||
+        button.getAttribute("aria-pressed") === "true"
+      ) {
+        return;
+      }
+      buttonBusy(button, true);
+      void deps.wallet.setDisplay({ approvalSurface }).then(
+        async () => {
+          showToast(
+            approvalSurface === "popup"
+              ? "Wallet requests open as a popup"
+              : "Wallet requests open in the side panel",
+            "success",
+          );
+          await rerender(deps);
+        },
+        (error: unknown) => {
+          showToast(errorMessage(error, "Wallet request preference failed"), "error");
+          buttonBusy(button, false);
+        },
+      );
+    });
+  });
+
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-theme-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const theme = button.dataset["themeId"];

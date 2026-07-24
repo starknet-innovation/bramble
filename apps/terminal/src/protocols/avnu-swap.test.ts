@@ -5,6 +5,7 @@ import {
   AVNU_QUOTES_PATH,
   buildQuotesUrl,
   parseBuildResponse,
+  parseQuoteResponse,
 } from "./avnu-swap";
 
 describe("AVNU v3 swap boundary", () => {
@@ -39,6 +40,28 @@ describe("AVNU v3 swap boundary", () => {
       calldata: ["0x1", "0x2"],
       contractAddress: AVNU_ADDRESSES.exchange,
       entrypoint: "multi_route_swap",
+    });
+  });
+
+  it("keeps AVNU fee, impact, and liquidity-source details for review", () => {
+    expect(
+      parseQuoteResponse([
+        {
+          buyAmount: "990",
+          gasFeesInUsd: 0.08,
+          priceImpact: 12,
+          quoteId: "quote-1",
+          routes: [{ name: "Ekubo", percent: 70 }, { name: "Hashstack", percent: 30 }],
+          sellAmount: "1000",
+        },
+      ]),
+    ).toEqual({
+      buyAmount: "990",
+      gasFeesInUsd: 0.08,
+      priceImpactBps: 12,
+      quoteId: "quote-1",
+      routeLabels: ["Ekubo 70%", "Hashstack 30%"],
+      sellAmount: "1000",
     });
   });
 

@@ -10,11 +10,12 @@ const manifest = await readJson("public/manifest.json");
 const packageJson = await readJson("package.json");
 
 const expectedBackgroundServiceWorker = "background/index.js";
-// img-src is pinned to self, data: (inline SVG placeholders), and the fixed IPFS
-// gateway only: arbitrary remote hosts cannot load images, so an airdropped NFT
-// with an attacker-hosted image_url cannot deanonymize the wallet (address -> IP).
+// Remote NFT artwork may live on any HTTPS host. The side panel enforces the
+// privacy boundary instead: it creates no remote <img> for an unsolicited NFT
+// until the user explicitly opens it, while watched NFTs are already solicited.
+// Scripts and objects remain packaged-only.
 const expectedExtensionCsp =
-  "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https://ipfs.io;";
+  "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:;";
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
 const expectedHostPermissions = [
   "https://api.cartridge.gg/*",
@@ -99,7 +100,7 @@ const contentSecurityPolicy = hasOnlyKeys(manifest["content_security_policy"], [
   : null;
 if (!contentSecurityPolicy || contentSecurityPolicy["extension_pages"] !== expectedExtensionCsp) {
   failures.push(
-    "manifest CSP must allow only packaged scripts, Krusty WASM, and self/data/IPFS images",
+    "manifest CSP must allow only packaged scripts, Krusty WASM, and self/data/HTTPS images",
   );
 }
 

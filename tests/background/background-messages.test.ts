@@ -211,6 +211,27 @@ describe("createMessageHandler", () => {
     await expect(held).resolves.toEqual({ error: "connection rejected" });
   });
 
+  test("returns no accounts without prompting for silent ungranted requests", async () => {
+    const handler = createMessageHandler(createWallet(), "extension-id", {
+      session: createUnlockSession(),
+    });
+
+    await expect(
+      handler(
+        {
+          origin: "https://example.com",
+          silent: true,
+          type: "wallet.requestAccounts",
+        },
+        contentSender,
+      ),
+    ).resolves.toEqual({ accounts: [], ok: true });
+    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toEqual({
+      ok: true,
+      pending: [],
+    });
+  });
+
   test("approves pending dapp account requests after unlock", async () => {
     const captured: OriginGrantInput[] = [];
     const approvals = createApprovalQueue();

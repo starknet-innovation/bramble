@@ -86,12 +86,25 @@ const walletStub = (connected: readonly AccountRef[]) => ({
   },
 });
 
-const makeHarness = (connected: readonly AccountRef[] = [account]) => {
+const makeHarness = (connected: readonly AccountRef[] = [account], deployed = true) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const approvals = createApprovalQueue();
   const declared: DeclareInput[] = [];
+  const deployEstimated: DeclareInput[] = [];
+  const estimated: DeclareInput[] = [];
   const rpc = {
+    async estimateAccountDeploymentFee(input: DeclareInput) {
+      deployEstimated.push(input);
+      return { overallFee: "1500000000000000", unit: "FRI" };
+    },
+    async estimateDeclareFee(input: DeclareInput) {
+      estimated.push(input);
+      return { overallFee: "2500000000000000", unit: "FRI" };
+    },
+    async getDeploymentStatus() {
+      return deployed;
+    },
     async submitDeclareTransaction(input: DeclareInput) {
       declared.push(input);
       return { classHash: "0x7ce", transactionHash: "0x7cd" };
@@ -103,7 +116,7 @@ const makeHarness = (connected: readonly AccountRef[] = [account]) => {
     runtimeRpc: rpc,
     session,
   });
-  return { declared, handler };
+  return { declared, deployEstimated, estimated, handler };
 };
 
 const declareMessage = (overrides: Record<string, unknown> = {}) => ({
@@ -114,11 +127,23 @@ const declareMessage = (overrides: Record<string, unknown> = {}) => ({
 
 describe("wallet_addDeclareTransaction held approval", () => {
   test("queues a declare approval without submitting or leaking the contract class", async () => {
-    const { declared, handler } = makeHarness();
+    const { declared, estimated, handler } = makeHarness();
 
     const held = handler(declareMessage(), contentSender);
     const pending = (
       await waitForPendingApprovals<{
+        declaration?: {
+          abiEntryCount: number;
+          accountDeployment: string;
+          classHash?: string;
+          compiledClassHash: string;
+          deploymentFee: { overallFee: string; unit: string } | null;
+          deploymentFeeEstimateFailed: boolean;
+          entryPointCount: number;
+          fee: { overallFee: string; unit: string } | null;
+          feeEstimateFailed: boolean;
+          sierraProgramLength: number;
+        };
         declare?: unknown;
         id: string;
         kind?: string;
@@ -127,9 +152,22 @@ describe("wallet_addDeclareTransaction held approval", () => {
       }>(handler, extensionSender)
     ).at(-1);
     expect(pending).toMatchObject({ kind: "declare", origin });
+    expect(pending?.declaration).toEqual({
+      abiEntryCount: 0,
+      accountDeployment: "deployed",
+      classHash: declare.classHash,
+      compiledClassHash: declare.compiledClassHash,
+      deploymentFee: null,
+      deploymentFeeEstimateFailed: false,
+      entryPointCount: 0,
+      fee: { overallFee: "2500000000000000", unit: "FRI" },
+      feeEstimateFailed: false,
+      sierraProgramLength: 1,
+    });
     // The CONTRACT_CLASS must never reach the UI snapshot.
     expect(JSON.stringify(pending)).not.toContain("sierra_program");
     expect(declared).toHaveLength(0);
+    expect(estimated).toHaveLength(1);
 
     const id = await latestApprovalId(handler, extensionSender);
     await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
@@ -155,6 +193,30 @@ describe("wallet_addDeclareTransaction held approval", () => {
     expect(declared).toHaveLength(1);
     expect(declared[0]?.compiledClassHash).toBe(declare.compiledClassHash);
     expect(declared[0]?.classHash).toBe(declare.classHash);
+  });
+
+  test("shows both STRK fee estimates when account deployment is required", async () => {
+    const { deployEstimated, handler } = makeHarness([account], false);
+    const held = handler(declareMessage(), contentSender);
+    const pending = (
+      await waitForPendingApprovals<{
+        declaration?: {
+          accountDeployment: string;
+          deploymentFee: { overallFee: string; unit: string } | null;
+          deploymentFeeEstimateFailed: boolean;
+        };
+        id: string;
+      }>(handler, extensionSender)
+    ).at(-1);
+
+    expect(pending?.declaration).toMatchObject({
+      accountDeployment: "undeployed",
+      deploymentFee: { overallFee: "1500000000000000", unit: "FRI" },
+      deploymentFeeEstimateFailed: false,
+    });
+    expect(deployEstimated).toHaveLength(1);
+    await handler({ id: pending?.id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "request rejected" });
   });
 
   test("drops the declare when the user denies", async () => {

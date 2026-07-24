@@ -45,18 +45,18 @@ export const approvalTakeover = (
       ? `<p class="takeover-queue">${actionable.length - 1} more request${actionable.length === 2 ? "" : "s"} waiting behind this one.</p>`
       : "";
   return `
-  <header class="flow-header">
+  <header class="flow-header approval-header">
     <div class="flow-title">
-      <h1>Review request</h1>
-      <p>${escapeHtml(first.origin)}</p>
+      <p class="eyebrow">Wallet approval</p>
+      <h1 id="approval-title">Review request</h1>
     </div>
-    ${actionable.length > 1 ? `<span class="pill">1 of ${actionable.length}</span>` : `<span class="pill"><span class="dot"></span>${escapeHtml(status.network)}</span>`}
+    <span class="takeover-network"><span class="dot"></span>${escapeHtml(status.network)}</span>
   </header>
-  <main class="screen flow" id="wallet-screen-approval-takeover" tabindex="-1">
+  <main class="screen flow approval-takeover" id="wallet-screen-approval-takeover" aria-labelledby="approval-title" tabindex="-1">
     <ul class="request-list">${approvalCard(first, status)}</ul>
     ${queue}
     <div class="takeover-foot">
-      <button class="ghost small" data-approval-later="${escapeHtml(first.id)}" type="button">Not now — keep it in Activity</button>
+      <button class="ghost small" data-approval-later="${escapeHtml(first.id)}" type="button">Review later in Activity</button>
     </div>
     <p id="approval-result" role="status"></p>
   </main>`;

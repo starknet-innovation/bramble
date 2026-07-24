@@ -65,14 +65,25 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
  */
 export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingContext): void => {
   const result = app?.querySelector<HTMLElement>("#approval-result");
+  const deciding = new Set<string>();
   app?.querySelectorAll<HTMLButtonElement>("[data-approval-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["approvalId"];
       const action = readApprovalAction(button.dataset["approvalAction"]);
-      if (!id || !action) {
+      if (!id || !action || deciding.has(id)) {
         return;
       }
-      buttonBusy(button, true);
+      deciding.add(id);
+      app
+        ?.querySelectorAll<HTMLButtonElement>("[data-approval-id], [data-approval-later]")
+        .forEach((control) => {
+          if (control.dataset["approvalId"] === id || control.dataset["approvalLater"] === id) {
+            buttonBusy(control, true);
+          }
+        });
+      if (result) {
+        result.textContent = action === "approve" ? "Submitting request…" : "Rejecting request…";
+      }
       void wallet.decideApproval(id, action === "approve").then(
         async () => {
           showToast(action === "approve" ? "Request approved" : "Request denied", "success");
@@ -83,7 +94,12 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
           if (result) {
             result.textContent = errorMessage(error, "Approval failed");
           }
-          buttonBusy(button, false);
+          // The background atomically consumes an approval before execution.
+          // Repaint after any executor error so stale controls cannot decide the
+          // already-removed id and surface a misleading "approval not found".
+          void wallet.loadStatus().then(render, () => {
+            deciding.delete(id);
+          });
         },
       );
     });

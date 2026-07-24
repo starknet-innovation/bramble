@@ -206,6 +206,7 @@ export default function Discover(): ReactNode {
                       key={token.address}
                       rank={index + 1}
                       symbol={token.symbol}
+                      logoUri={token.logoUri}
                       name={token.name}
                       subLabel={token.symbol}
                       colorIndex={index}

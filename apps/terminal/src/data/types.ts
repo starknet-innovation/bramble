@@ -52,6 +52,7 @@ export type Holding = {
   readonly address: string;
   readonly symbol: string;
   readonly name: string;
+  readonly logoUri: string | null;
   readonly decimals: number;
   readonly display: string;
   readonly amount: number;

@@ -26,8 +26,14 @@ const status: WalletStatus = {
 };
 
 const discovered: DiscoveredNft = {
+  attributes: [
+    { traitType: "Catalog", value: "CryptoPunks" },
+    { displayType: "number", traitType: "Punk ID", value: "5" },
+  ],
   collection: "Everai",
   contract: "0x511a2b3",
+  description: "A test collectible",
+  externalUrl: "https://example.com/everai/5",
   id: "SN_MAIN:0x511a2b3:5",
   image: "https://cdn.example/everai/5.png",
   name: "Everai #5",
@@ -74,7 +80,9 @@ describe("NFT gallery auto-discovery", () => {
     const html = nftGalleryFlow(status, account, watched, [discovered]);
     // The discovered row wins the merge (keeps the image) and, being watched, is
     // solicited, so its image is loaded immediately.
-    expect(html).toContain('<img class="nft-image" src="https://cdn.example/everai/5.png"');
+    expect(html).toContain(
+      '<img class="nft-image nft-image--pixelated" src="https://cdn.example/everai/5.png"',
+    );
   });
 
   test("shows the indexer-aware empty state when nothing is discovered or watched", () => {
@@ -109,7 +117,30 @@ describe("NFT gallery auto-discovery", () => {
     expect(html).toContain('id="nft-send-form"');
     expect(html).toContain("Everai #5");
     expect(html).toContain("0x511a2b3");
-    expect(html).toContain('<img class="nft-image"');
+    expect(html).toContain('<img class="nft-image nft-image--pixelated"');
+    expect(html).toContain("A test collectible");
+    expect(html).toContain("<h2>Attributes</h2>");
+    expect(html).toContain("CryptoPunks");
+  });
+
+  test("keeps rich metadata when the selected NFT is also watched", () => {
+    const watched: WalletPreferences = {
+      ...preferences,
+      nfts: [
+        {
+          contract: discovered.contract,
+          id: discovered.id,
+          label: "My Everai",
+          networkId: discovered.networkId,
+          tokenId: discovered.tokenId,
+        },
+      ],
+    };
+    const html = nftDetailFlow(status, account, watched, discovered.id, [discovered]);
+
+    expect(html).toContain('<img class="nft-image nft-image--pixelated"');
+    expect(html).toContain("A test collectible");
+    expect(html).toContain("CryptoPunks");
   });
 
   test("detail falls back to an empty state for an unknown selection", () => {

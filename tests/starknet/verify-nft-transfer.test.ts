@@ -95,3 +95,37 @@ describe("verifyCalls for ERC721 transfer_from", () => {
     expect(report.flags.map((flag) => flag.code)).toContain("self-transfer");
   });
 });
+
+describe("verifyCalls for ERC1155 safe_transfer_from", () => {
+  test("decodes the token, amount, and recipient", () => {
+    const report = verifyCalls(
+      [
+        {
+          calldata: [account.address, contact.address, "342", "0", "1", "0", "0"],
+          contractAddress: NFT_CONTRACT,
+          entrypoint: "safe_transfer_from",
+        },
+      ],
+      context,
+    );
+
+    expect(report.calls[0]?.kind).toBe("transfer");
+    expect(report.calls[0]?.summary).toContain("Send 1 of NFT #342 to");
+  });
+
+  test("applies the address-poisoning gate to the ERC1155 recipient", () => {
+    const poisoned = "0x777aa7890abcdef9999999999999999999999999999999999999990aabbcc";
+    const report = verifyCalls(
+      [
+        {
+          calldata: [account.address, poisoned, "342", "0", "1", "0", "0"],
+          contractAddress: NFT_CONTRACT,
+          entrypoint: "safeTransferFrom",
+        },
+      ],
+      context,
+    );
+
+    expect(report.flags.map((flag) => flag.code)).toContain("address-poisoning");
+  });
+});

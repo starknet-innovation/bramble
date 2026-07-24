@@ -19,10 +19,17 @@ import {
 import { createEncryptedStore, type EncryptedStore } from "../storage/encrypted-store";
 import { createMultisigStore } from "../storage/multisig-store";
 import { createOriginHistoryStore } from "../storage/origin-history";
-import { createPreferencesStore } from "../storage/preferences-store";
+import {
+  type ApprovalSurfacePreference,
+  createPreferencesStore,
+} from "../storage/preferences-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { setApprovalNotifier } from "./approval-notifier";
-import { requestApprovalSurface } from "./approval-surface";
+import {
+  type ApprovalSurfaceBrowser,
+  configureApprovalSurface,
+  requestApprovalSurface,
+} from "./approval-surface";
 import { createApprovalQueue } from "./approvals";
 import { walletEventBroadcasts } from "./events";
 import { createMessageHandler } from "./messages";
@@ -57,14 +64,8 @@ type TabsApi = {
 };
 
 type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: {
+  readonly chrome?: ApprovalSurfaceBrowser & {
     readonly runtime?: RuntimeApi;
-    readonly sidePanel?: {
-      readonly open: (options: { readonly tabId: number }) => Promise<void>;
-      readonly setPanelBehavior: (behavior: {
-        readonly openPanelOnActionClick: boolean;
-      }) => Promise<void>;
-    };
     readonly tabs?: TabsApi;
   };
 };
@@ -74,6 +75,11 @@ const SESSION_STORE_KEY = "mc-wallet:session";
 const extensionApi = (globalThis as ExtensionGlobal).chrome;
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
+let approvalSurfacePreference: ApprovalSurfacePreference = "side-panel";
+const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
+  approvalSurfacePreference = preference;
+  void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
+};
 const approvals = createApprovalQueue();
 const sessionStore: UnlockSessionStore | undefined = (() => {
   try {
@@ -124,6 +130,11 @@ const wallet = vaultStore
 const preferences = Promise.resolve()
   .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
   .catch(() => null);
+void preferences
+  .then(async (store) => {
+    updateApprovalSurface((await store?.read())?.approvalSurface ?? "side-panel");
+  })
+  .catch(() => undefined);
 const activityLog = (() => {
   try {
     return createActivityLog({ store: createBrowserLocalStore() });
@@ -227,7 +238,9 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
       if (!store) {
         throw new Error("preferences unavailable");
       }
-      return store.importPreferences(input);
+      const next = await store.importPreferences(input);
+      updateApprovalSurface(next.approvalSurface ?? "side-panel");
+      return next;
     },
     async read() {
       const store = await preferences;
@@ -304,7 +317,11 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
       if (!store) {
         throw new Error("preferences unavailable");
       }
-      return store.setDisplay(input);
+      const next = await store.setDisplay(input);
+      if (input.approvalSurface !== undefined) {
+        updateApprovalSurface(input.approvalSurface);
+      }
+      return next;
     },
     async saveAddress(input) {
       const store = await preferences;
@@ -385,11 +402,8 @@ const broadcastWalletEvents = (message: unknown, response: unknown): void => {
 setApprovalNotifier(() => broadcastEvent({ event: "approvalsChanged", type: "wallet.event" }));
 
 runtime?.onInstalled.addListener(() => undefined);
-void extensionApi?.sidePanel
-  ?.setPanelBehavior({ openPanelOnActionClick: true })
-  .catch(() => undefined);
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
-  requestApprovalSurface(extensionApi?.sidePanel, runtime.id, message, sender);
+  requestApprovalSurface(extensionApi, approvalSurfacePreference, runtime.id, message, sender);
   void sessionReady
     .then(() => handleMessage(message, sender))
     .then(

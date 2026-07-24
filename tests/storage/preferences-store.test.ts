@@ -14,6 +14,7 @@ describe("createPreferencesStore", () => {
     const preferences = await createPreferencesStore({ store: createMemoryStore() }).read();
 
     expect(preferences.activeNetworkId).toBe("SN_MAIN");
+    expect(preferences.approvalSurface).toBe("side-panel");
     expect(preferences.addressBook).toEqual([]);
     expect(preferences.tokens.some((token) => token.networkId === "SN_DEVNET")).toBe(true);
   });
@@ -167,12 +168,17 @@ describe("createPreferencesStore", () => {
     const accountId = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 
     await preferences.setAccountLabel({ accountId, label: "  Savings  " });
-    await preferences.setDisplay({ displayCurrency: "eur", theme: "dark" });
+    await preferences.setDisplay({
+      approvalSurface: "popup",
+      displayCurrency: "eur",
+      theme: "dark",
+    });
     await preferences.saveAddress({ address: "0x123", label: "Ada", networkId: "SN_MAIN" });
     await preferences.removeAddress("SN_MAIN:0x123");
 
     const stored = await preferences.read();
     expect(stored.accountLabels?.[accountId]).toBe("Savings");
+    expect(stored.approvalSurface).toBe("popup");
     expect(stored.displayCurrency).toBe("eur");
     expect(stored.theme).toBe("dark");
     expect(stored.addressBook).toEqual([]);
@@ -202,6 +208,23 @@ describe("createPreferencesStore", () => {
 
     await expect(
       preferences.setDisplay({ theme: "midnight" as unknown as "system" }),
+    ).rejects.toThrow("Invalid display preference");
+  });
+
+  test("accepts legacy preferences and validates approval surfaces", async () => {
+    const store = createMemoryStore();
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["approvalSurface"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+
+    const preferences = createPreferencesStore({ store });
+    expect((await preferences.read()).approvalSurface).toBeUndefined();
+    await preferences.setDisplay({ approvalSurface: "popup" });
+    expect((await preferences.read()).approvalSurface).toBe("popup");
+    await expect(
+      preferences.setDisplay({
+        approvalSurface: "window" as unknown as "side-panel",
+      }),
     ).rejects.toThrow("Invalid display preference");
   });
 

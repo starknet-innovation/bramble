@@ -86,6 +86,9 @@ describe("sidepanel views", () => {
     expect(html).toContain('data-theme-id="light"');
     expect(html).not.toContain('data-theme-id="system"');
     expect(html).toContain('id="currency-select"');
+    expect(html).toContain('data-approval-surface="side-panel"');
+    expect(html).toContain('data-approval-surface="popup"');
+    expect(html).toMatch(/data-approval-surface="side-panel"[^>]*aria-pressed="true"/);
     // The dock is a solid anchored bottom bar (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');
   });

@@ -21,6 +21,7 @@ import { assertStoreAccess, type StoreActor } from "./permissioned-store";
 import {
   isAccountLabels,
   isAddressBookEntry,
+  isApprovalSurfacePreference,
   isDisplayCurrency,
   isHiddenTokens,
   isLabel,
@@ -40,6 +41,7 @@ import { isAccountId } from "./vault-schema";
 export type {
   AccountLabels,
   AddressBookEntry,
+  ApprovalSurfacePreference,
   DisplayCurrency,
   RpcOverrides,
   ThemeChoice,
@@ -66,6 +68,7 @@ type WalletPreferencesStoreOptions = {
 const PREFERENCE_KEYS: readonly string[] = [
   "accountLabels",
   "activeNetworkId",
+  "approvalSurface",
   "addressBook",
   "customNetworks",
   "displayCurrency",
@@ -87,6 +90,8 @@ const hasValidCustomNetworks = (value: Record<string, unknown>): boolean =>
     hasUniqueStrings(value["customNetworks"].map((network) => normalizeChainId(network.chainId))));
 const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
   (value["accountLabels"] === undefined || isAccountLabels(value["accountLabels"])) &&
+  (value["approvalSurface"] === undefined ||
+    isApprovalSurfacePreference(value["approvalSurface"])) &&
   (value["displayCurrency"] === undefined || isDisplayCurrency(value["displayCurrency"])) &&
   (value["groups"] === undefined || isAccountGroups(value["groups"])) &&
   (value["hiddenTokens"] === undefined || isHiddenTokens(value["hiddenTokens"])) &&
@@ -127,6 +132,7 @@ export const isWalletPreferences = (value: unknown): value is WalletPreferences 
 export const defaultWalletPreferences = (): WalletPreferences => ({
   accountLabels: {},
   activeNetworkId: DEFAULT_NETWORK.id,
+  approvalSurface: "side-panel",
   addressBook: [],
   customNetworks: [],
   displayCurrency: "usd",
@@ -311,6 +317,8 @@ export const createPreferencesStore = ({
       },
       async setDisplay(input) {
         if (
+          (input.approvalSurface !== undefined &&
+            !isApprovalSurfacePreference(input.approvalSurface)) ||
           (input.displayCurrency !== undefined && !isDisplayCurrency(input.displayCurrency)) ||
           (input.theme !== undefined && !isThemeChoice(input.theme))
         ) {
@@ -319,6 +327,9 @@ export const createPreferencesStore = ({
         const preferences = await read();
         const next = {
           ...preferences,
+          ...(input.approvalSurface === undefined
+            ? {}
+            : { approvalSurface: input.approvalSurface }),
           ...(input.displayCurrency === undefined
             ? {}
             : { displayCurrency: input.displayCurrency }),

@@ -91,7 +91,7 @@ describe("bigint felt regression", () => {
         { id: REQUEST_ID, method: "wallet_requestAccounts", params: { silent_mode: true } },
         ORIGIN,
       ),
-    ).toEqual({ origin: ORIGIN, type: "wallet.requestAccounts" });
+    ).toEqual({ origin: ORIGIN, silent: true, type: "wallet.requestAccounts" });
     expect(
       toRuntimeMessage(
         { id: REQUEST_ID, method: "wallet_requestChainId", params: { api_version: "0.7.2" } },

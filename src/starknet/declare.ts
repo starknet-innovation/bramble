@@ -6,7 +6,7 @@ import type { Account, CompiledContract, RpcProvider } from "starknet";
 import type { AccountRef } from "../storage/vault-schema";
 import { ensureAccountDeployed } from "./deployment";
 import { STARKNET_NETWORKS } from "./networks";
-import { krustyAccount, type StarkHashSigner, withRpcWrite } from "./provider";
+import { krustyAccount, type StarkHashSigner, withRpcFallback, withRpcWrite } from "./provider";
 
 /**
  * Inputs for submitting one declare transaction. `contractClass` is the opaque
@@ -31,6 +31,50 @@ export type DeclareSubmission = {
 };
 
 /**
+ * Network fee estimate for a declaration, denominated by the RPC-provided unit.
+ */
+export type DeclareFeeEstimate = {
+  readonly overallFee: string;
+  readonly unit: string;
+};
+
+const declarePayload = ({
+  classHash,
+  compiledClassHash,
+  contractClass,
+}: Pick<DeclareInput, "classHash" | "compiledClassHash" | "contractClass">) => ({
+  compiledClassHash,
+  contract: contractClass as CompiledContract,
+  ...(classHash === undefined ? {} : { classHash }),
+});
+
+/**
+ * Estimates a Cairo 1 declaration fee without broadcasting or signing. The
+ * estimate explicitly skips account validation, so the Krusty signer remains
+ * untouched until the user approves the queued declaration.
+ */
+export const estimateDeclareFee = async (
+  input: DeclareInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+  makeAccount: typeof krustyAccount = krustyAccount,
+): Promise<DeclareFeeEstimate> =>
+  withRpcFallback(
+    input.rpcUrls,
+    async (provider) => {
+      const estimate = await makeAccount(
+        provider,
+        input.account,
+        input.signHash,
+      ).estimateDeclareFee(declarePayload(input), { skipValidate: true });
+      return {
+        overallFee: BigInt(estimate.overall_fee).toString(),
+        unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
+      };
+    },
+    makeProvider,
+  );
+
+/**
  * Signs and submits a declare transaction through an account contract,
  * deploying the counterfactual account first when this is its first
  * transaction. Returns the node's transaction and class hashes. Optional
@@ -48,11 +92,13 @@ export const submitDeclareTransaction = async (
     async (provider) => {
       const starknetAccount = makeAccount(provider, account, signHash);
       await ensureAccountDeployed(provider, starknetAccount, account);
-      const result = await (starknetAccount as Account).declare({
-        compiledClassHash,
-        contract: contractClass as CompiledContract,
-        ...(classHash === undefined ? {} : { classHash }),
-      });
+      const result = await (starknetAccount as Account).declare(
+        declarePayload({
+          compiledClassHash,
+          contractClass,
+          ...(classHash === undefined ? {} : { classHash }),
+        }),
+      );
       return {
         classHash: result.class_hash,
         transactionHash: result.transaction_hash,

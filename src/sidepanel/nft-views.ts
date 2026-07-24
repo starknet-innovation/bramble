@@ -11,22 +11,27 @@
  */
 import type { DiscoveredNft, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import type { NftAttribute } from "../starknet/nft-metadata";
 import type { WatchedNft } from "../storage/nft";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { icon } from "./icons";
 import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "./parts";
 
-// One row in the gallery, normalized from either a discovered NFT (rich: image
-// and collection) or a manually watched one (plain). `watched` marks entries
-// that live in preferences so only those expose Remove; discovered-only entries
-// expose a Hide that persists them as spam.
-type GalleryItem = {
+/**
+ * One display-safe collectible normalized from discovery metadata or a saved
+ * watch. Unresolved fields stay empty and `watched` identifies user-solicited
+ * images that wallet surfaces may load without weakening the privacy boundary.
+ */
+export type NftGalleryItem = {
+  readonly attributes: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
+  readonly description: string;
   readonly id: string;
   readonly image: string;
   readonly networkId: string;
+  readonly pixelated: boolean;
   readonly title: string;
   readonly tokenId: string;
   readonly watched: boolean;
@@ -37,30 +42,48 @@ const watchedTitle = (nft: WatchedNft): string => nft.label ?? `NFT #${nft.token
 const discoveredTitle = (nft: DiscoveredNft, watched: WatchedNft | undefined): string =>
   nft.name.length > 0 ? nft.name : (watched?.label ?? `NFT #${nft.tokenId}`);
 
+const usesPixelArtwork = (attributes: readonly NftAttribute[]): boolean =>
+  attributes.some(
+    (attribute) =>
+      attribute.traitType.toLowerCase() === "catalog" &&
+      attribute.value.toLowerCase() === "cryptopunks",
+  );
+
 // Builds the visible gallery rows for the active network by merging discovered
 // NFTs (deduped against watched ones by id) with manually watched NFTs, dropping
 // anything hidden as spam. Discovered rows win on collision so their image and
 // collection are kept.
-const visibleItems = (
+/**
+ * Merges owned discovery metadata with saved watch entries for one network.
+ *
+ * Discovery metadata wins on matching ids so every wallet surface uses the
+ * same image, title, and collection. Hidden entries are removed and watched
+ * entries remain available when metadata resolution fails.
+ */
+export const visibleNftItems = (
   watched: readonly WatchedNft[],
   discovered: readonly DiscoveredNft[],
   networkId: string,
-): readonly GalleryItem[] => {
+): readonly NftGalleryItem[] => {
   const onNetwork = watched.filter((nft) => nft.networkId === networkId);
   const watchedById = new Map(onNetwork.map((nft) => [nft.id, nft]));
   const spamIds = new Set(onNetwork.filter((nft) => nft.spam === true).map((nft) => nft.id));
   const discoveredIds = new Set(discovered.map((nft) => nft.id));
-  const items: GalleryItem[] = [];
+  const items: NftGalleryItem[] = [];
   for (const nft of discovered) {
     if (nft.networkId !== networkId || spamIds.has(nft.id)) {
       continue;
     }
+    const attributes = nft.attributes ?? [];
     items.push({
+      attributes,
       collection: nft.collection,
       contract: nft.contract,
+      description: nft.description ?? "",
       id: nft.id,
       image: nft.image,
       networkId: nft.networkId,
+      pixelated: usesPixelArtwork(attributes),
       title: discoveredTitle(nft, watchedById.get(nft.id)),
       tokenId: nft.tokenId,
       watched: watchedById.has(nft.id),
@@ -71,11 +94,14 @@ const visibleItems = (
       continue;
     }
     items.push({
+      attributes: [],
       collection: "",
       contract: nft.contract,
+      description: "",
       id: nft.id,
       image: "",
       networkId: nft.networkId,
+      pixelated: false,
       title: watchedTitle(nft),
       tokenId: nft.tokenId,
       watched: true,
@@ -91,24 +117,29 @@ const visibleItems = (
 // an airdropped tile cannot deanonymize the wallet (address -> IP) merely by the
 // gallery painting a remote <img>. Solicited (manually watched) NFTs and the
 // opened detail view reveal immediately.
-const nftArt = (image: string, reveal: boolean): string =>
-  `<span class="nft-art">${
-    reveal && image
-      ? `<img class="nft-image" src="${escapeHtml(image)}" alt="" loading="lazy" />`
-      : ""
-  }${icon("image")}</span>`;
+/**
+ * Renders a resolved NFT image only after the caller has established that the
+ * user solicited it. Remote-load failure is handled by the shared NFT binding.
+ */
+export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean): string =>
+  reveal && item.image
+    ? `<img class="nft-image${item.pixelated ? " nft-image--pixelated" : ""}" src="${escapeHtml(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" />`
+    : "";
+
+const nftArt = (item: NftGalleryItem, reveal: boolean): string =>
+  `<span class="nft-art">${nftImageMarkup(item, reveal)}${icon("image")}</span>`;
 
 // The Hide control: a watched entry toggles its stored spam flag; a
 // discovered-only entry is persisted-as-spam by nft-ui using the data-* target.
-const hideButton = (item: GalleryItem): string =>
+const hideButton = (item: NftGalleryItem): string =>
   item.watched
     ? `<button class="ghost small" data-nft-spam="${escapeHtml(item.id)}" data-nft-spam-value="true" type="button">Hide</button>`
     : `<button class="ghost small" data-nft-hide="${escapeHtml(item.id)}" data-nft-hide-contract="${escapeHtml(item.contract)}" data-nft-hide-token="${escapeHtml(item.tokenId)}" data-nft-hide-network="${escapeHtml(item.networkId)}" data-nft-hide-name="${escapeHtml(item.title)}" type="button">Hide</button>`;
 
-const nftCard = (item: GalleryItem): string => `
+const nftCard = (item: NftGalleryItem): string => `
   <li class="nft-card">
     <button class="nft-open" data-nft-open="${escapeHtml(item.id)}" type="button">
-      ${nftArt(item.image, item.watched)}
+      ${nftArt(item, item.watched)}
       <span class="nft-copy">
         <strong>${escapeHtml(item.title)}</strong>
         <code>${escapeHtml(item.collection || accountLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
@@ -146,7 +177,7 @@ export const nftGalleryFlow = (
   discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => {
   const watched = preferences?.nfts ?? [];
-  const visible = visibleItems(watched, discoveredNfts, status.networkId);
+  const visible = visibleNftItems(watched, discoveredNfts, status.networkId);
   const hidden = watched.filter((nft) => nft.networkId === status.networkId && nft.spam === true);
   return (
     flowHeader("NFTs", status, `${visible.length} shown`) +
@@ -184,41 +215,56 @@ export const nftGalleryFlow = (
   );
 };
 
-// Resolves the selected NFT for the detail screen from watched NFTs first, then
-// from the auto-discovered list, so a gallery entry the account owns but has not
-// manually watched still opens.
+// Resolves the selected NFT for the detail screen from the rich discovery copy
+// first, using its matching watch only for the label/action state. This avoids
+// discarding fetched metadata for manually watched NFTs. A watch-only fallback
+// still opens when discovery has not completed.
 const selectedDetail = (
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[],
   selectedNftId: string | null,
-): GalleryItem | null => {
+): NftGalleryItem | null => {
   const watched = (preferences?.nfts ?? []).find((nft) => nft.id === selectedNftId);
-  if (watched) {
+  const discovered = discoveredNfts.find((nft) => nft.id === selectedNftId);
+  if (discovered) {
     return {
-      collection: "",
-      contract: watched.contract,
-      id: watched.id,
-      image: "",
-      networkId: watched.networkId,
-      title: watchedTitle(watched),
-      tokenId: watched.tokenId,
-      watched: true,
+      attributes: discovered.attributes ?? [],
+      collection: discovered.collection,
+      contract: discovered.contract,
+      description: discovered.description ?? "",
+      id: discovered.id,
+      image: discovered.image,
+      networkId: discovered.networkId,
+      pixelated: usesPixelArtwork(discovered.attributes ?? []),
+      title: discoveredTitle(discovered, watched),
+      tokenId: discovered.tokenId,
+      watched: watched !== undefined,
     };
   }
-  const discovered = discoveredNfts.find((nft) => nft.id === selectedNftId);
-  return discovered
+  return watched
     ? {
-        collection: discovered.collection,
-        contract: discovered.contract,
-        id: discovered.id,
-        image: discovered.image,
-        networkId: discovered.networkId,
-        title: discoveredTitle(discovered, undefined),
-        tokenId: discovered.tokenId,
-        watched: false,
+        attributes: [],
+        collection: "",
+        contract: watched.contract,
+        description: "",
+        id: watched.id,
+        image: "",
+        networkId: watched.networkId,
+        pixelated: false,
+        title: watchedTitle(watched),
+        tokenId: watched.tokenId,
+        watched: true,
       }
     : null;
 };
+
+const attributeRows = (attributes: readonly NftAttribute[]): string =>
+  attributes
+    .map(
+      (attribute) =>
+        `<div class="receipt-row"><dt>${escapeHtml(attribute.traitType)}</dt><dd>${escapeHtml(attribute.value)}</dd></div>`,
+    )
+    .join("");
 
 /**
  * NFT detail flow: image and identifiers plus a send form through the verified
@@ -240,12 +286,21 @@ export const nftDetailFlow = (
       nft === null
         ? '<section class="section"><p class="empty">This NFT is no longer watched.</p></section>'
         : `<section class="section">
-            ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft.image, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
-            <p class="eyebrow">Contract</p>
-            <div class="address-line"><code>${escapeHtml(nft.contract)}</code></div>
-            <p class="eyebrow">Token id</p>
-            <div class="address-line"><code>${escapeHtml(nft.tokenId)}</code></div>
+            ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
+            ${nft.description ? `<p class="lede">${escapeHtml(nft.description)}</p>` : ""}
+            <dl class="receipt">
+              <div class="receipt-row"><dt>Contract</dt><dd><code>${escapeHtml(accountLabel(nft.contract))}</code></dd></div>
+              <div class="receipt-row"><dt>Token id</dt><dd><code>${escapeHtml(nft.tokenId)}</code></dd></div>
+            </dl>
           </section>
+          ${
+            nft.attributes.length === 0
+              ? ""
+              : `<section class="section">
+                  <h2>Attributes</h2>
+                  <dl class="receipt">${attributeRows(nft.attributes)}</dl>
+                </section>`
+          }
           <section class="section">
             <h2>Send</h2>
             ${account ? "" : noAccountEmpty(status)}
@@ -254,7 +309,7 @@ export const nftDetailFlow = (
               <input name="tokenId" type="hidden" value="${escapeHtml(nft.tokenId)}" />
               <input name="networkId" type="hidden" value="${escapeHtml(nft.networkId)}" />
               <label><span>Recipient</span><input class="mono" name="recipient" placeholder="0x…" required autocomplete="off" spellcheck="false" ${account ? "" : "disabled"} /></label>
-              <span class="hint">Sends this token with transfer_from. Ownership is re-checked and the recipient is screened for address-poisoning before signing.</span>
+              <span class="hint">Ownership and token standard are re-checked on-chain, then the recipient is screened for address-poisoning before signing.</span>
               <button type="submit" ${account ? "" : "disabled"}>${icon("send")}Send NFT</button>
               <p id="nft-send-result" role="status"></p>
             </form>

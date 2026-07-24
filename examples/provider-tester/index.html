@@ -302,7 +302,7 @@
         $("s-chain").textContent = p.chainId ?? "—";
       };
 
-      const call = async (label, id, type, params) => {
+      const call = async (id, type, params) => {
         const p = provider();
         if (!p) return show(id, "Provider not detected.", "err");
         show(id, "…");
@@ -358,8 +358,8 @@
           show("r-authz", `isPreauthorized: ${value}`, value ? "ok" : "err");
           log(`← isPreauthorized: ${value}`);
         },
-        permissions: () => call("permissions", "r-authz", "wallet_getPermissions"),
-        chainId: () => call("chainId", "r-chain", "wallet_requestChainId"),
+        permissions: () => call("r-authz", "wallet_getPermissions"),
+        chainId: () => call("r-chain", "wallet_requestChainId"),
         async sign() {
           const address = connected[0] ?? provider()?.selectedAddress ?? "0x0";
           const typedData = {
@@ -377,14 +377,14 @@
           };
           show("r-sign", "Awaiting your decision in the wallet (this call holds)…");
           void address;
-          await call("sign", "r-sign", "wallet_signTypedData", typedData);
+          await call("r-sign", "wallet_signTypedData", typedData);
         },
         async invoke() {
           const recipient = ($("i-recipient").value.trim() || connected[0] || "0x0");
           const amount = $("i-amount").value.trim() || "1";
           let low = "0x0";
           try {
-            low = "0x" + BigInt(amount).toString(16);
+            low = `0x${BigInt(amount).toString(16)}`;
           } catch {
             return show("r-invoke", "Amount must be a whole number.", "err");
           }
@@ -398,17 +398,17 @@
               },
             ],
           };
-          await call("invoke", "r-invoke", "wallet_addInvokeTransaction", params).catch(() => {});
+          await call("r-invoke", "wallet_addInvokeTransaction", params).catch(() => {});
         },
         async switch(button) {
           const chainId = button.dataset.chain;
-          await call("switch", "r-switch", "wallet_switchStarknetChain", { chainId }).catch(() => {});
+          await call("r-switch", "wallet_switchStarknetChain", { chainId }).catch(() => {});
         },
         async watch() {
           const address = $("i-token").value.trim();
           const symbol = $("i-symbol").value.trim();
           const params = { type: "ERC20", options: { address, symbol, decimals: 18, name: symbol } };
-          await call("watch", "r-watch", "wallet_watchAsset", params).catch(() => {});
+          await call("r-watch", "wallet_watchAsset", params).catch(() => {});
         },
         subscribe() {
           const p = provider();

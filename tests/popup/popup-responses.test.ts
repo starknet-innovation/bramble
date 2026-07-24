@@ -288,6 +288,56 @@ describe("popup response validators", () => {
     ).toBe(false);
   });
 
+  test("validates declaration review fees and rejects incomplete declaration data", () => {
+    const context = {
+      accountId: "SN_MAIN:0x1",
+      chainId: "0x534e5f4d41494e",
+      networkId: "SN_MAIN",
+      payloadDigest: `sha256:${"a".repeat(64)}`,
+    };
+    const declaration = {
+      abiEntryCount: 14,
+      accountDeployment: "deployed",
+      classHash: "0x5abc",
+      compiledClassHash: "0x6def",
+      deploymentFee: null,
+      deploymentFeeEstimateFailed: false,
+      entryPointCount: 9,
+      fee: { overallFee: "2500000000000000", unit: "FRI" },
+      feeEstimateFailed: false,
+      sierraProgramLength: 4_321,
+    };
+    const pending = (review: unknown) => ({
+      ok: true,
+      pending: [
+        {
+          context,
+          declaration: review,
+          id: approvalId,
+          kind: "declare",
+          origin: "https://example.com",
+        },
+      ],
+    });
+
+    expect(isPendingApprovalsResponse(pending(declaration))).toBe(true);
+    expect(isPendingApprovalsResponse(pending({ ...declaration, fee: null }))).toBe(false);
+    expect(
+      isPendingApprovalsResponse(pending({ ...declaration, fee: null, feeEstimateFailed: true })),
+    ).toBe(true);
+    expect(
+      isPendingApprovalsResponse(
+        pending({ ...declaration, fee: { overallFee: "1", unit: "ETH" } }),
+      ),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [{ context, id: approvalId, kind: "declare", origin: "https://example.com" }],
+      }),
+    ).toBe(false);
+  });
+
   test("validates approval decision responses before popup state updates", () => {
     const sparseAccounts = new Array<unknown>(1);
 

@@ -198,6 +198,7 @@ export type RuntimeMessage =
     }
   | {
       readonly origin: string;
+      readonly silent?: boolean;
       readonly type: "wallet.requestAccounts";
     }
   | {
@@ -393,8 +394,16 @@ const versionedMessage = <
 };
 
 // The legacy mc_requestAccounts alias shares wallet_requestAccounts' param gate.
-const requestAccountsMessage: RuntimeBuilder = (params, origin) =>
-  isRequestAccountsParams(params) ? { origin, type: "wallet.requestAccounts" } : null;
+const requestAccountsMessage: RuntimeBuilder = (params, origin) => {
+  if (!isRequestAccountsParams(params)) {
+    return null;
+  }
+  return {
+    origin,
+    ...(isRecord(params) && params["silent_mode"] === true ? { silent: true } : {}),
+    type: "wallet.requestAccounts",
+  };
+};
 
 // One builder per method, mirroring the original if-chain's normalize-then-wrap;
 // exhaustive over ProviderMethod, so a new method cannot be routed without one.

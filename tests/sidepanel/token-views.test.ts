@@ -86,7 +86,8 @@ describe("token views", () => {
   test("home shows fiat totals, hides spam, and links to the tokens flow", () => {
     const html = dashboard("home", status, [], preferences, { balances }, null, [], [], prices);
 
-    expect(html).toContain('class="hero-total">$2,000.00</p>');
+    expect(html).toContain('class="hero-total"');
+    expect(html).toContain('data-live-value="2000">$2,000.00</p>');
     expect(html).toContain(">1</p>");
     expect(html).not.toContain("Fake USD");
     expect(html).toContain("1 hidden");

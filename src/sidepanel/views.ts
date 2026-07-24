@@ -48,6 +48,7 @@ import {
 } from "./parts";
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
+import { TERMINAL_URL } from "./terminal-link";
 import { DEFAULT_CURRENCY, tokenDetailFlow, tokensFlow } from "./token-flows";
 
 /**
@@ -75,6 +76,7 @@ const walletHeader = (
     </button>
     <div class="header-actions">
       <button class="icon-button ghost" data-view="connected-sites" type="button" aria-label="Connected sites" title="Connected sites">${icon("link")}</button>
+      <a id="terminal-button" class="icon-button ghost" href="${escapeHtml(TERMINAL_URL)}" target="_blank" rel="noopener noreferrer" aria-label="Open trade terminal" title="Open trade terminal">${icon("terminal")}</a>
       <button id="lock-button" class="icon-button ghost" type="button" aria-label="Lock wallet" title="Lock wallet">${icon("lock")}</button>
     </div>
   </header>`;
@@ -188,7 +190,9 @@ const homeScreen = (
   priceStale: boolean,
   priceAsOf: number | null,
   historyUnavailable: boolean,
+  discoveredNfts: readonly DiscoveredNft[],
 ): string => {
+  const nfts = discoveredNfts;
   const showTotal = account !== null && Object.keys(prices).length > 0;
   const total = showTotal ? portfolioTotal(visibleHomeBalances(balances, preferences), prices) : 0;
   return dockScreen(
@@ -196,7 +200,7 @@ const homeScreen = (
     `${pendingCallout(pendingCount)}
     <section class="hero">
       <p class="hero-eyebrow">Total balance</p>
-      <p class="hero-total">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
+      <p class="hero-total" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(balances, preferences, prices, changes, currency) : ""}
       ${account !== null ? heroPriceNotice(priceStale, showTotal, priceAsOf) : ""}
       ${
@@ -211,7 +215,7 @@ const homeScreen = (
       ${actionTile("swap", "Swap", "swap", false, account !== null)}
       ${actionTile("receive", "Receive", "receive", false, account !== null)}
     </div>
-    ${homeTabs(balances, preferences, prices, changes, currency, transactions, status, historyUnavailable)}`,
+    ${homeTabs(balances, preferences, prices, changes, currency, transactions, status, historyUnavailable, nfts)}`,
   );
 };
 
@@ -297,6 +301,18 @@ const settingsScreen = (status: WalletStatus, preferences: WalletPreferences | n
             .join("")}
         </select>
       </label>
+      <div class="stack">
+        <span>Open wallet requests in</span>
+        <div class="seg" role="group" aria-label="Wallet request surface">
+          ${(["side-panel", "popup"] as const)
+            .map((surface) => {
+              const active = (preferences?.approvalSurface ?? "side-panel") === surface;
+              const label = surface === "side-panel" ? "Side panel" : "Toolbar popup";
+              return `<button class="seg-option" data-approval-surface="${surface}" type="button" aria-pressed="${active}">${label}</button>`;
+            })
+            .join("")}
+        </div>
+      </div>
     </section>
     <section class="section">
       <p class="eyebrow">Wallet</p>
@@ -472,6 +488,7 @@ export const dashboard = (
             priceStale,
             priceAsOf,
             historyUnavailable,
+            discoveredNfts,
           );
   return `
     ${walletHeader(status, account, preferences)}

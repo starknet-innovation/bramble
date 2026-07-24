@@ -112,7 +112,10 @@ const amountLabel = (amount: bigint, token: TokenConfig | undefined): string =>
 // transfer_from is the only selector that needs this. One source of truth so
 // the decode branch and the recipient-index flag logic never drift.
 const isTransferFrom = (entrypoint: string): boolean =>
-  entrypoint === "transfer_from" || entrypoint === "transferFrom";
+  entrypoint === "transfer_from" ||
+  entrypoint === "transferFrom" ||
+  entrypoint === "safe_transfer_from" ||
+  entrypoint === "safeTransferFrom";
 
 // One decoder per known entrypoint shape: given the call, its guarded calldata,
 // and the matching token (if any), it returns a decoded summary or null to fall
@@ -151,6 +154,27 @@ const decodeTransferFromCall: CallDecoder = (call, calldata, token) => {
   };
 };
 
+// ERC1155 safe_transfer_from(from, to, id_low, id_high, value_low,
+// value_high, data_len, ...data): the wallet uses this shape to move one
+// edition while preserving the same recipient safety checks as ERC721.
+const decodeErc1155TransferCall: CallDecoder = (call, calldata) => {
+  if (calldata.length < 7) {
+    return null;
+  }
+  const recipient = readAddressAt(calldata, 1);
+  const tokenId = readUint256At(calldata, 2, 3);
+  const amount = readUint256At(calldata, 4, 5);
+  if (!recipient || tokenId === null || amount === null) {
+    return null;
+  }
+  return {
+    contractAddress: call.contractAddress,
+    entrypoint: call.entrypoint,
+    kind: "transfer",
+    summary: `Send ${amount} of NFT #${tokenId} to ${shortAddress(canonical(recipient))}`,
+  };
+};
+
 const decodeTransferOrApproveCall: CallDecoder = (call, calldata, token) => {
   if (calldata.length < 3) {
     return null;
@@ -184,6 +208,8 @@ const decodeUnknownCall = (call: Call): DecodedCall => ({
 // one decoder (see isTransferFrom); transfer and approve share another.
 const CALL_DECODERS: Readonly<Record<string, CallDecoder>> = {
   approve: decodeTransferOrApproveCall,
+  safeTransferFrom: decodeErc1155TransferCall,
+  safe_transfer_from: decodeErc1155TransferCall,
   transfer: decodeTransferOrApproveCall,
   transferFrom: decodeTransferFromCall,
   transfer_from: decodeTransferFromCall,

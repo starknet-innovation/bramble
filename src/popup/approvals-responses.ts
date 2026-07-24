@@ -29,6 +29,22 @@ export type ApprovalRiskFlag = {
 };
 
 /**
+ * Display-safe declaration facts returned without exposing the contract class.
+ */
+export type DeclarationReview = {
+  readonly abiEntryCount: number;
+  readonly accountDeployment: "deployed" | "undeployed" | "unknown";
+  readonly classHash?: string;
+  readonly compiledClassHash: string;
+  readonly deploymentFee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly deploymentFeeEstimateFailed: boolean;
+  readonly entryPointCount: number;
+  readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly feeEstimateFailed: boolean;
+  readonly sierraProgramLength: number;
+};
+
+/**
  * Exact account, network, chain, and private-payload digest reviewed by the
  * user for a security-sensitive approval.
  */
@@ -48,6 +64,7 @@ export type ApprovalContext = {
 export type PendingApproval = {
   readonly blocked?: boolean;
   readonly context?: ApprovalContext;
+  readonly declaration?: DeclarationReview;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
@@ -132,12 +149,56 @@ const isApprovalContext = (value: unknown): value is ApprovalContext =>
   typeof value["payloadDigest"] === "string" &&
   /^sha256:[0-9a-f]{64}$/.test(value["payloadDigest"]);
 
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+
+const isFee = (value: unknown): value is { readonly overallFee: string; readonly unit: string } =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["overallFee", "unit"]) &&
+  typeof value["overallFee"] === "string" &&
+  /^(?:0|[1-9][0-9]*)$/.test(value["overallFee"]) &&
+  (value["unit"] === "FRI" || value["unit"] === "WEI");
+
+const isDeclarationReview = (value: unknown): value is DeclarationReview =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, [
+    "abiEntryCount",
+    "accountDeployment",
+    "classHash",
+    "compiledClassHash",
+    "deploymentFee",
+    "deploymentFeeEstimateFailed",
+    "entryPointCount",
+    "fee",
+    "feeEstimateFailed",
+    "sierraProgramLength",
+  ]) &&
+  isCount(value["abiEntryCount"]) &&
+  (value["accountDeployment"] === "deployed" ||
+    value["accountDeployment"] === "undeployed" ||
+    value["accountDeployment"] === "unknown") &&
+  (value["classHash"] === undefined ||
+    (typeof value["classHash"] === "string" && isStarkFieldElement(value["classHash"]))) &&
+  typeof value["compiledClassHash"] === "string" &&
+  isStarkFieldElement(value["compiledClassHash"]) &&
+  (value["deploymentFee"] === null || isFee(value["deploymentFee"])) &&
+  typeof value["deploymentFeeEstimateFailed"] === "boolean" &&
+  (value["accountDeployment"] === "undeployed"
+    ? value["deploymentFeeEstimateFailed"] === (value["deploymentFee"] === null)
+    : value["deploymentFee"] === null && value["deploymentFeeEstimateFailed"] === false) &&
+  isCount(value["entryPointCount"]) &&
+  (value["fee"] === null || isFee(value["fee"])) &&
+  typeof value["feeEstimateFailed"] === "boolean" &&
+  value["feeEstimateFailed"] === (value["fee"] === null) &&
+  isCount(value["sierraProgramLength"]);
+
 const isPendingApproval = (value: unknown): value is PendingApproval => {
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, [
       "blocked",
       "context",
+      "declaration",
       "flags",
       "id",
       "insights",
@@ -180,8 +241,13 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "invoke" ||
     value["kind"] === "sign-typed-data" ||
     value["kind"] === "strk20-invoke";
+  const declarationValid =
+    value["kind"] === "declare"
+      ? isDeclarationReview(value["declaration"])
+      : value["declaration"] === undefined;
   return (
     tokenValid &&
+    declarationValid &&
     (needsContext ? isApprovalContext(value["context"]) : value["context"] === undefined)
   );
 };

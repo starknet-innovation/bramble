@@ -52,6 +52,11 @@ export type AccountLabels = Readonly<Partial<Record<string, string>>>;
 export type DisplayCurrency = "eur" | "gbp" | "usd";
 
 /**
+ * Browser surface used for wallet approvals and toolbar activation.
+ */
+export type ApprovalSurfacePreference = "popup" | "side-panel";
+
+/**
  * UI theme choice applied through the skin contract. `"dark"` and `"light"`
  * pin the two designed skins. `"system"` is a LEGACY stored value only — the
  * follow-the-browser theme was removed (its system-color neutrals broke the
@@ -139,6 +144,12 @@ export const isAccountLabels = (value: unknown): value is AccountLabels =>
  */
 export const isDisplayCurrency = (value: unknown): value is DisplayCurrency =>
   value === "eur" || value === "gbp" || value === "usd";
+
+/**
+ * Checks a browser approval-surface choice.
+ */
+export const isApprovalSurfacePreference = (value: unknown): value is ApprovalSurfacePreference =>
+  value === "popup" || value === "side-panel";
 
 /**
  * Checks a UI theme choice. Accepts the legacy `"system"` value so stored

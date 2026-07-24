@@ -12,11 +12,15 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { Account, RpcProvider } from "starknet";
-import { submitDeclareTransaction } from "../../src/starknet/declare";
+import { estimateDeclareFee, submitDeclareTransaction } from "../../src/starknet/declare";
 import type { AccountRef } from "../../src/storage/vault-schema";
 
 const declareCalls: Array<Record<string, unknown>> = [];
 const classHashAtCalls: string[] = [];
+const estimateCalls: Array<{
+  readonly details: Record<string, unknown>;
+  readonly payload: Record<string, unknown>;
+}> = [];
 
 class FakeRpcProvider {
   public async getChainId(): Promise<string> {
@@ -42,6 +46,13 @@ class FakeAccount {
     declareCalls.push(payload);
     return { class_hash: "0xc1a55", transaction_hash: "0x7dec1a5e" };
   }
+  public async estimateDeclareFee(
+    payload: Record<string, unknown>,
+    details: Record<string, unknown>,
+  ): Promise<{ overall_fee: bigint; unit: string }> {
+    estimateCalls.push({ details, payload });
+    return { overall_fee: 2_500_000_000_000_000n, unit: "FRI" };
+  }
 }
 
 const makeProvider = (): RpcProvider => new FakeRpcProvider() as unknown as RpcProvider;
@@ -62,6 +73,40 @@ const contractClass = { entry_points_by_type: { EXTERNAL: [] }, sierra_program: 
 const signHash = async () => ({ publicKey: account.publicKeyX, r: "0x1", s: "0x2" });
 
 describe("submitDeclareTransaction", () => {
+  test("estimates with validation skipped and never invokes the signer", async () => {
+    estimateCalls.length = 0;
+    let signed = false;
+
+    const fee = await estimateDeclareFee(
+      {
+        account,
+        classHash: "0x5abc",
+        compiledClassHash: "0x6def",
+        contractClass,
+        rpcUrls: ["https://rpc.example"],
+        signHash: async () => {
+          signed = true;
+          return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+        },
+      },
+      makeProvider,
+      makeAccount,
+    );
+
+    expect(fee).toEqual({ overallFee: "2500000000000000", unit: "FRI" });
+    expect(signed).toBe(false);
+    expect(estimateCalls).toEqual([
+      {
+        details: { skipValidate: true },
+        payload: {
+          classHash: "0x5abc",
+          compiledClassHash: "0x6def",
+          contract: contractClass,
+        },
+      },
+    ]);
+  });
+
   test("signs, submits, and returns the node's class and transaction hashes", async () => {
     declareCalls.length = 0;
     classHashAtCalls.length = 0;

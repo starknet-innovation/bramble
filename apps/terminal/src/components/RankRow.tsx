@@ -11,6 +11,8 @@ export type RankRowProps = {
   readonly rank: number;
   /** Symbol shown in the icon glyph. */
   readonly symbol: string;
+  /** Canonical token artwork URL, when this is a token rather than a perp. */
+  readonly logoUri?: string | null;
   /** Primary name (n1). */
   readonly name: ReactNode;
   /** Secondary line under the name (n2), e.g. ticker or a leverage pill. */
@@ -28,6 +30,7 @@ export type RankRowProps = {
 export const RankRow = ({
   rank,
   symbol,
+  logoUri,
   name,
   subLabel,
   colorIndex = 0,
@@ -38,7 +41,13 @@ export const RankRow = ({
     <td>{rank}</td>
     <td className="name">
       <div className="namecell">
-        <TokenIcon symbol={symbol} size={26} colorIndex={colorIndex} />
+        <TokenIcon
+          symbol={symbol}
+          logoUri={logoUri}
+          name={typeof name === "string" ? name : symbol}
+          size={26}
+          colorIndex={colorIndex}
+        />
         <div>
           <div className="n1">{name}</div>
           {subLabel !== undefined && <div className="n2">{subLabel}</div>}

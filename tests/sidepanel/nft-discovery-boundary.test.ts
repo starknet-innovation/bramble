@@ -10,8 +10,11 @@ import { createMemoryStore } from "../../src/storage/kv";
 import { createPreferencesStore } from "../../src/storage/preferences-store";
 
 const nft: DiscoveredNft = {
+  attributes: [{ displayType: "number", traitType: "Punk ID", value: "5" }],
   collection: "Punks",
   contract: "0x511a2b3",
+  description: "A test collectible",
+  externalUrl: "https://example.com/punks/5",
   id: "SN_MAIN:0x511a2b3:5",
   image: "https://cdn.example/5.png",
   name: "Punk #5",
@@ -28,6 +31,18 @@ describe("isDiscoverNftsResponse", () => {
   test("rejects duplicates, bad entries, and non-ok shapes", () => {
     expect(isDiscoverNftsResponse({ nfts: [nft, nft], ok: true })).toBe(false);
     expect(isDiscoverNftsResponse({ nfts: [{ ...nft, image: "http://x" }], ok: true })).toBe(false);
+    expect(
+      isDiscoverNftsResponse({
+        nfts: [{ ...nft, image: "https://127.0.0.1/private.png" }],
+        ok: true,
+      }),
+    ).toBe(false);
+    expect(
+      isDiscoverNftsResponse({
+        nfts: [{ ...nft, attributes: [{ traitType: "", value: "5" }] }],
+        ok: true,
+      }),
+    ).toBe(false);
     expect(isDiscoverNftsResponse({ nfts: [nft], ok: false })).toBe(false);
     expect(isDiscoverNftsResponse({ ok: true })).toBe(false);
   });

@@ -1,6 +1,6 @@
 /**
- * Pure ERC721 helpers: build the transfer call used to send a watched NFT. The
- * on-chain owner read lives in ./rpc because it needs network access.
+ * Pure ERC721/ERC1155 helpers that build watched-NFT transfer calls. On-chain
+ * ownership reads live in ./rpc because they need network access.
  */
 import { type Call, CallData, cairo } from "starknet";
 import { WalletError } from "../shared/errors";
@@ -29,5 +29,30 @@ export const buildErc721TransferCall = (
     calldata: CallData.compile([from, to, cairo.uint256(tokenIdRaw)]),
     contractAddress: contract,
     entrypoint: "transfer_from",
+  };
+};
+
+/**
+ * Builds an ERC1155 `safe_transfer_from(from, to, token_id, amount, data)` call
+ * without signing or broadcasting it. The wallet sends one edition at a time
+ * and supplies an empty data span.
+ */
+export const buildErc1155TransferCall = (
+  contract: string,
+  from: string,
+  to: string,
+  tokenIdRaw: bigint,
+): Call => {
+  if (
+    !isNonZeroStarkFieldElement(contract) ||
+    !isNonZeroStarkFieldElement(from) ||
+    !isNonZeroStarkFieldElement(to)
+  ) {
+    throw new WalletError("Invalid NFT transfer address");
+  }
+  return {
+    calldata: CallData.compile([from, to, cairo.uint256(tokenIdRaw), cairo.uint256(1n), []]),
+    contractAddress: contract,
+    entrypoint: "safe_transfer_from",
   };
 };

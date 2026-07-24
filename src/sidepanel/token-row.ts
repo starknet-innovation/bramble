@@ -96,10 +96,10 @@ export const balanceRow = (
       ${tokenGlyph(token.address, token.symbol)}
       <div class="token-copy">
         <strong>${escapeHtml(token.symbol)}</strong>
-        <p>${escapeHtml(compactAmount(token.formatted))}</p>
+        <p data-live-key="token:${escapeHtml(token.id)}:balance" data-live-value="${escapeHtml(token.formatted)}">${escapeHtml(compactAmount(token.formatted))}</p>
       </div>
       <div class="token-side">
-        <span class="token-amount">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>
+        <span class="token-amount" data-live-key="token:${escapeHtml(token.id)}:fiat" data-live-value="${fiat === null ? "unknown" : fiat}">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>
         ${changeBadge(change)}
       </div>
     </button>

@@ -212,6 +212,20 @@ describe("provider bridge", () => {
       type: "wallet.requestAccounts",
     });
     expect(
+      toRuntimeMessage(
+        {
+          id: "6-silent",
+          method: "wallet_requestAccounts",
+          params: { silent_mode: true },
+        },
+        "https://a.test",
+      ),
+    ).toEqual({
+      origin: "https://a.test",
+      silent: true,
+      type: "wallet.requestAccounts",
+    });
+    expect(
       toRuntimeMessage({ id: "7", method: "wallet_requestChainId" }, "https://a.test"),
     ).toEqual({
       origin: "https://a.test",

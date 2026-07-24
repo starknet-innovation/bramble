@@ -275,9 +275,18 @@ describe("token and preference wrappers", () => {
   test("setDisplay forwards the display input and resolves", async () => {
     const { sent, wallet } = captureRuntime(preferencesResponse);
     await expect(
-      wallet.setDisplay({ displayCurrency: "eur", theme: "dark" }),
+      wallet.setDisplay({
+        approvalSurface: "popup",
+        displayCurrency: "eur",
+        theme: "dark",
+      }),
     ).resolves.toBeUndefined();
-    expect(sent[0]).toEqual({ displayCurrency: "eur", theme: "dark", type: "wallet.setDisplay" });
+    expect(sent[0]).toEqual({
+      approvalSurface: "popup",
+      displayCurrency: "eur",
+      theme: "dark",
+      type: "wallet.setDisplay",
+    });
     await expect(runtimeReturning({}).setDisplay({ theme: "light" })).rejects.toThrow(
       "display update failed",
     );

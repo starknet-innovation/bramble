@@ -8,8 +8,13 @@ import { readSetDisplayInput } from "../../src/background/preference-inputs";
 describe("readSetDisplayInput", () => {
   test("reads a well-formed display-settings message", () => {
     expect(
-      readSetDisplayInput({ displayCurrency: "eur", theme: "dark", type: "wallet.setDisplay" }),
-    ).toEqual({ displayCurrency: "eur", theme: "dark" });
+      readSetDisplayInput({
+        approvalSurface: "popup",
+        displayCurrency: "eur",
+        theme: "dark",
+        type: "wallet.setDisplay",
+      }),
+    ).toEqual({ approvalSurface: "popup", displayCurrency: "eur", theme: "dark" });
   });
 
   test("rejects a non-record, wrong-type, or unknown-key envelope", () => {
@@ -21,6 +26,9 @@ describe("readSetDisplayInput", () => {
   });
 
   test("rejects unknown currency or theme values", () => {
+    expect(
+      readSetDisplayInput({ approvalSurface: "window", type: "wallet.setDisplay" }),
+    ).toBeNull();
     expect(readSetDisplayInput({ displayCurrency: "jpy", type: "wallet.setDisplay" })).toBeNull();
     expect(readSetDisplayInput({ theme: "solarized", type: "wallet.setDisplay" })).toBeNull();
   });

@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { useState } from "react";
+import { CallData } from "starknet";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +32,7 @@ type WalletEvent = "accountsChanged" | "networkChanged";
 const makeWallet = () => {
   const listeners = new Map<WalletEvent, (...args: never[]) => void>();
   const account = { execute: vi.fn() };
+  const invoke = vi.fn(async () => ({ transaction_hash: "0xabc" }));
   const request = vi.fn(async ({ type }: { readonly type: string }) => {
     if (type === "wallet_requestAccounts") {
       return ["0x1234"];
@@ -37,12 +40,19 @@ const makeWallet = () => {
     if (type === "wallet_requestChainId") {
       return "SN_MAIN";
     }
+    if (type === "wallet_addDeclareTransaction") {
+      return { class_hash: "0x5", transaction_hash: "0x6" };
+    }
+    if (type === "wallet_addInvokeTransaction") {
+      return invoke();
+    }
     return null;
   });
   return {
     account,
     id: "mc-wallet",
     isPreauthorized: vi.fn(async () => false),
+    invoke,
     name: "MC Wallet",
     on: vi.fn((event: WalletEvent, listener: (...args: never[]) => void) => {
       listeners.set(event, listener);
@@ -75,6 +85,68 @@ const renderProvider = (): void => {
     <WalletProvider>
       <Probe />
     </WalletProvider>,
+  );
+};
+
+const DeclareProbe = (): ReactNode => {
+  const wallet = useWallet();
+  const [result, setResult] = useState("idle");
+  return (
+    <div>
+      <button type="button" onClick={() => void wallet.connect()}>
+        Connect
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void wallet
+            .declareContract({
+              classHash: "0x5",
+              compiledClassHash: "0x7",
+              contractClass: { sierra_program: ["0x1"] },
+            })
+            .then((value) => setResult(value.transactionHash))
+        }
+      >
+        Declare
+      </button>
+      <span data-testid="declare-result">{result}</span>
+    </div>
+  );
+};
+
+const TransactionProbe = (): ReactNode => {
+  const wallet = useWallet();
+  const [result, setResult] = useState("idle");
+  return (
+    <div>
+      <button type="button" onClick={() => void wallet.connect()}>
+        Connect
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void wallet
+            .requestTransaction({
+              calls: [
+                {
+                  contractAddress: "0x1",
+                  entrypoint: "transfer",
+                  calldata: CallData.compile(["0x2"]),
+                },
+              ],
+              description: "Move one test asset.",
+              details: [{ label: "Recipient", value: "0x2" }],
+              title: "Send test asset",
+            })
+            .then((value) => setResult(value.transaction_hash))
+        }
+      >
+        Send
+      </button>
+      <span data-testid="transaction-address">{wallet.address ?? "disconnected"}</span>
+      <span data-testid="transaction-result">{result}</span>
+    </div>
   );
 };
 
@@ -113,5 +185,104 @@ describe("WalletProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Connection rejected"));
     expect(screen.getByTestId("address").textContent).toBe("disconnected");
+  });
+
+  test("silently reconnects without opening a prompting wallet fallback", async () => {
+    const wallet = makeWallet();
+    const enable = vi.fn();
+    Object.assign(wallet, { enable });
+    wallet.isPreauthorized = vi.fn().mockResolvedValue(true);
+    wallet.request.mockResolvedValueOnce([]);
+    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    renderProvider();
+
+    await waitFor(() =>
+      expect(wallet.request).toHaveBeenCalledWith({
+        params: { silent_mode: true },
+        type: "wallet_requestAccounts",
+      }),
+    );
+    expect(enable).not.toHaveBeenCalled();
+    expect(screen.getByTestId("address").textContent).toBe("disconnected");
+  });
+
+  test("wraps Sierra declarations in the wallet RPC declare_transaction shape", async () => {
+    const wallet = makeWallet();
+    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    render(
+      <WalletProvider>
+        <DeclareProbe />
+      </WalletProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() =>
+      expect(wallet.request).toHaveBeenCalledWith({ type: "wallet_requestAccounts" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Declare" }));
+    expect(
+      await screen.findByRole("heading", { name: "Declare Punk collection" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continue in wallet" }));
+    await waitFor(() => expect(screen.getByTestId("declare-result").textContent).toBe("0x6"));
+    expect(wallet.request).toHaveBeenLastCalledWith({
+      type: "wallet_addDeclareTransaction",
+      params: {
+        declare_transaction: {
+          class_hash: "0x5",
+          compiled_class_hash: "0x7",
+          contract_class: { sierra_program: ["0x1"] },
+        },
+      },
+    });
+  });
+
+  test("reviews calls before execute and supports a safe retry after rejection", async () => {
+    const wallet = makeWallet();
+    wallet.invoke
+      .mockRejectedValueOnce(Object.assign(new Error("User rejected"), { code: 113 }))
+      .mockResolvedValueOnce({ transaction_hash: "0xabc" });
+    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    render(
+      <WalletProvider>
+        <TransactionProbe />
+      </WalletProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("transaction-address").textContent).toBe("0x1234"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByRole("heading", { name: "Send test asset" })).toBeTruthy();
+    expect(wallet.invoke).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Continue in wallet" }));
+    expect(
+      await screen.findByText("The request was declined in the wallet. Nothing was submitted."),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),
+    );
+    expect(wallet.invoke).toHaveBeenCalledTimes(2);
+    expect(wallet.request).toHaveBeenLastCalledWith({
+      type: "wallet_addInvokeTransaction",
+      params: {
+        invoke_transaction: [
+          {
+            calldata: ["2"],
+            contract_address: "0x1",
+            entry_point: "transfer",
+          },
+        ],
+      },
+    });
+    const request = wallet.request.mock.calls.at(-1)?.[0] as {
+      readonly params: { readonly invoke_transaction: readonly { readonly calldata: unknown }[] };
+    };
+    expect(Reflect.ownKeys(request.params.invoke_transaction[0]?.calldata ?? [])).toEqual([
+      "0",
+      "length",
+    ]);
   });
 });

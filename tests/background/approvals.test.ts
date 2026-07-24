@@ -11,6 +11,19 @@ const CONTEXT = {
   payloadDigest: `sha256:${"a".repeat(64)}`,
 };
 
+const DECLARATION = {
+  abiEntryCount: 1,
+  accountDeployment: "deployed" as const,
+  classHash: "0x2",
+  compiledClassHash: "0x1",
+  deploymentFee: null,
+  deploymentFeeEstimateFailed: false,
+  entryPointCount: 1,
+  fee: { overallFee: "1000", unit: "FRI" },
+  feeEstimateFailed: false,
+  sierraProgramLength: 1,
+};
+
 describe("createApprovalQueue", () => {
   test("deduplicates requests by origin", () => {
     const queue = createApprovalQueue();
@@ -179,6 +192,7 @@ describe("createApprovalQueue payload discrimination", () => {
     const { id } = queue.requestDeclare({
       context: CONTEXT,
       declare,
+      declaration: DECLARATION,
       origin: ORIGIN,
       summaries: ["Declare"],
     });
@@ -257,6 +271,7 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
       queue.requestDeclare({
         context: CONTEXT,
         declare,
+        declaration: DECLARATION,
         origin: BAD_ORIGIN,
         summaries: ["Declare"],
       }),

@@ -82,6 +82,31 @@ export const unlockWallet = async (sidepanel: Page): Promise<void> => {
 };
 
 /**
+ * Models Chrome opening a fresh native wallet surface in headless Chromium,
+ * which does not expose its side-panel container to Playwright.
+ */
+export const openPendingWalletSurface = async (sidepanel: Page): Promise<void> => {
+  await expect
+    .poll(async () =>
+      sidepanel.evaluate(async () => {
+        const extensionGlobal = globalThis as typeof globalThis & {
+          readonly chrome?: {
+            readonly runtime?: {
+              readonly sendMessage?: (message: unknown) => Promise<unknown>;
+            };
+          };
+        };
+        const response = (await extensionGlobal.chrome?.runtime?.sendMessage?.({
+          type: "wallet.pendingApprovals",
+        })) as { readonly pending?: readonly unknown[] } | undefined;
+        return response?.pending?.length ?? 0;
+      }),
+    )
+    .toBeGreaterThan(0);
+  await sidepanel.reload();
+};
+
+/**
  * Handles a pending connection approval on the takeover screen.
  */
 export const resolveConnectionApproval = async (
@@ -104,6 +129,7 @@ export const resolvePendingApproval = async (
   origin: string,
   action: "approve" | "deny",
 ): Promise<void> => {
+  await openPendingWalletSurface(sidepanel);
   await expect(sidepanel.getByText("Review request")).toBeVisible();
   await expect(sidepanel.getByText(eyebrow)).toBeVisible();
   // The origin renders in both the takeover header and the request card.

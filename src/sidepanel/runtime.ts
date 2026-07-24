@@ -433,6 +433,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       throw responseError(response, "group membership update failed");
     },
     async setDisplay(input: {
+      readonly approvalSurface?: "popup" | "side-panel";
       readonly displayCurrency?: "eur" | "gbp" | "usd";
       readonly theme?: "dark" | "light";
     }): Promise<void> {

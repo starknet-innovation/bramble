@@ -263,6 +263,9 @@ const handleRequestAccounts: RouterHandler = async (ctx, messageType, message, s
       return { accounts, ok: true };
     }
   }
+  if (input.silent) {
+    return { accounts: [], ok: true };
+  }
   // Queue a connection approval and hold the response until the user approves.
   const approval = ctx.approvals.request(input.origin);
   notifyApprovalsChanged();

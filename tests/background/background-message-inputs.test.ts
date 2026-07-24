@@ -68,6 +68,13 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(
+      readRequestAccountsInput({
+        origin: "https://example.com",
+        silent: true,
+        type: "wallet.requestAccounts",
+      }),
+    ).toEqual({ origin: "https://example.com", silent: true });
+    expect(
       readSignHashInput({
         debug: true,
         messageHash: "0x1234",

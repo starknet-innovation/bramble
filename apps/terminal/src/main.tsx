@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { WalletProvider } from "./wallet/WalletProvider";
 import "./styles/theme.css";
+import "./styles/wallet-ui.css";
+import "./styles/nft-studio.css";
+import "./styles/nft-studio-finishing.css";
 
 const container = document.getElementById("root");
 if (container === null) {

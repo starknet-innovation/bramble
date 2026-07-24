@@ -26,15 +26,18 @@ import { bindLedgerFirstRun } from "./ledger/first-run";
 import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
 import { webHidConnector } from "./ledger/sign-connector";
 import { createLedgerSignRuntime } from "./ledger/sign-runtime";
+import { animateLiveValueChanges, captureLiveValues } from "./live-updates";
 import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
 import { bindOnboarding, bindUnlock } from "./onboarding-ui";
+import { createRefreshScheduler } from "./refresh-scheduler";
 import { emptyRenderCache, type RenderData, verificationForAccount } from "./render-cache";
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
+import { createMutationRuntime } from "./runtime-refresh";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -55,9 +58,10 @@ type ExtensionGlobal = typeof globalThis & {
 };
 const app = document.querySelector("#app");
 const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
-const wallet = createSidepanelRuntime(runtime);
-const multisig = createMultisigClient(runtime);
-const swapClient = createSwapClient(runtime);
+const mutationRuntime = createMutationRuntime(runtime);
+const wallet = createSidepanelRuntime(mutationRuntime);
+const multisig = createMultisigClient(mutationRuntime);
+const swapClient = createSwapClient(mutationRuntime);
 let activeView: WalletView = "home";
 let selectedNftId: string | null = null;
 let selectedMultisigId: string | null = null;
@@ -67,29 +71,16 @@ let lastScene = "";
 let lastContent = "";
 let lastSkinName = "";
 let lastActiveView: WalletView = "home";
-// Back-stack of screens to return to (see ./nav-history). navigate() pushes the
-// screen being left; goBack() pops to the true previous one.
 let viewHistory: ViewHistory = [];
-// Set to "back" by goBack() so a pop animates as a reverse transition even when
-// the depth-based navDirection would read it as a lateral swap; consumed and
-// cleared by the next paint().
 let forcedDirection: NavDirection | null = null;
 let selectedTokenId: string | null = null;
 let homeTab: HomeTab = "tokens";
 let drawerOpen = false;
 let drawerGroupFilter: string | null = null;
-// Transient group UI selections, held here so they survive full re-renders and
-// are self-healed in paint(): which account's quick folder picker is open in the
-// drawer, and which panel is open in the manage-accounts Groups accordion (a
-// group's bulk editor or the "Create a group" panel; null = all collapsed).
 let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
-// Requests the user parked with the takeover's "Not now" for this panel
-// session; self-healed in paint() so a decided request never lingers here.
 let snoozedApprovalIds: readonly string[] = [];
 
-// The View Transitions API is progressively enhanced: typed locally so the
-// build does not depend on the lib.dom version shipping the declarations.
 type ViewTransition = { readonly finished: Promise<void> };
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => ViewTransition;
@@ -118,8 +109,10 @@ const renderShell = (content: string, animate: boolean): void => {
     return;
   }
   const focus = captureRepaintFocus();
+  const liveValues = captureLiveValues(app);
   app.innerHTML = `<style>${SIDEPANEL_STYLES}</style><section class="shell${animate ? " shell-animate" : ""}">${content}</section>`;
   restoreRepaintFocus(app, focus);
+  animateLiveValueChanges(app, liveValues);
 };
 
 // Swaps the shell markup and re-binds listeners. When the scene changed and the
@@ -147,10 +140,7 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
 
-// Ledger sign takeover lives outside #app so a dashboard repaint (which replaces
-// the shell markup) never resets an in-flight device prompt. Polled from the
-// render cycle; when the background parks a keyless-Ledger signature it fires a
-// wallet event, the panel re-renders, and poll() surfaces the request here.
+// Ledger sign takeover lives outside #app so repaints cannot reset it.
 const ledgerSignMount = document.createElement("div");
 ledgerSignMount.className = "ledger-sign-overlay";
 ledgerSignMount.hidden = true;
@@ -317,7 +307,6 @@ const bindAll = (): void => {
 };
 
 // Applies the skin and CSS `color-scheme` for the current theme choice, but
-// Apply only when the resolved skin changes. Both palettes and the matching
 // native-control color scheme are pinned.
 // A legacy stored "system" choice resolves to the default dark skin.
 const applyTheme = (): void => {
@@ -370,7 +359,7 @@ const paint = (): void => {
   const content = !status.hasVault
     ? onboarding(status)
     : status.locked
-      ? locked(status)
+      ? locked(status, cache.pending)
       : dashboard(
           activeView,
           status,
@@ -409,7 +398,10 @@ const paint = (): void => {
   lastContent = content;
   renderScene(content, animate, direction);
 };
+let renderGeneration = 0;
 const render = async (status: WalletStatus): Promise<void> => {
+  const generation = ++renderGeneration;
+  const isCurrent = (): boolean => generation === renderGeneration;
   const multisigScopeChanged =
     cache.status.activeAccountId !== status.activeAccountId ||
     cache.status.networkId !== status.networkId;
@@ -418,9 +410,17 @@ const render = async (status: WalletStatus): Promise<void> => {
     cache.multisigSync = null;
     cache.multisigsError = false;
   }
-  cache.pending = await wallet.loadPendingApprovals();
-  cache.preferences =
-    status.hasVault && !status.locked ? await wallet.loadPreferences().catch(() => null) : null;
+  const [pending, nextPreferences] = await Promise.all([
+    wallet.loadPendingApprovals(),
+    status.hasVault && !status.locked
+      ? wallet.loadPreferences().catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  if (!isCurrent()) {
+    return;
+  }
+  cache.pending = pending;
+  cache.preferences = nextPreferences;
   if (!status.hasVault || status.locked) {
     // Reset every view-scoped field from one source so stale state cannot leak
     // across a lock; preserve the status/pending/preferences just refreshed.
@@ -445,6 +445,7 @@ const render = async (status: WalletStatus): Promise<void> => {
     wallet,
     multisig,
     deployment,
+    isCurrent,
     paint,
   });
 };
@@ -475,25 +476,24 @@ const goBack = (): void => {
   void wallet.loadStatus().then(render);
 };
 
-let refreshQueued = false;
-const queueRefresh = (): void => {
-  if (refreshQueued) {
-    return;
-  }
-  refreshQueued = true;
-  setTimeout(() => {
-    refreshQueued = false;
-    void wallet.loadStatus().then(render);
-  }, 80);
-};
+const refreshScheduler = createRefreshScheduler({
+  refresh: async () => render(await wallet.loadStatus()),
+  visible: () => document.visibilityState === "visible",
+});
+mutationRuntime.setListener(refreshScheduler.afterAction);
 
 runtime?.onMessage?.addListener((message) => {
   if (isWalletEventMessage(message)) {
-    queueRefresh();
+    refreshScheduler.afterAction();
   }
 });
+document.addEventListener("visibilitychange", refreshScheduler.visibilityChanged);
+window.addEventListener("focus", () => {
+  refreshScheduler.start();
+  refreshScheduler.afterAction();
+});
+window.addEventListener("pagehide", refreshScheduler.stop, { once: true });
 
-// Apply the theme before the first paint so the pinned skin and color-scheme
-// are in place before any markup renders (no flash of the wrong ground).
 applyTheme();
 void render(await wallet.loadStatus());
+refreshScheduler.start();

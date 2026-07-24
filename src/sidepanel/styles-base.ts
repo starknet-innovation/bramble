@@ -62,6 +62,11 @@ export const BASE_STYLES = `
     margin: 0;
     overflow-x: hidden;
   }
+  body.popup-surface {
+    height: 600px;
+    width: 380px;
+  }
+  body.popup-surface #app { min-height: 600px; }
   h1, h2, h3, p, ul { margin: 0; }
   ul { list-style: none; padding: 0; }
   h1 { font-size: ${TYPE.title.size}; font-weight: 700; letter-spacing: -0.02em; line-height: ${TYPE.title.line}; }

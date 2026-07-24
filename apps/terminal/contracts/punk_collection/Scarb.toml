@@ -1,0 +1,26 @@
+[package]
+name = "mc_punk"
+version = "0.1.0"
+edition = "2024_07"
+
+# The terminal ships the compiled Sierra class. Keep the compiler and
+# OpenZeppelin component versions exact so its class hashes stay reproducible.
+[dependencies]
+starknet = "=2.18.0"
+openzeppelin_access = "=3.0.0"
+openzeppelin_interfaces = "=2.1.0"
+openzeppelin_introspection = "=3.0.0"
+openzeppelin_token = "=3.0.0"
+
+[dev-dependencies]
+snforge_std = "=0.59.0"
+
+[[target.starknet-contract]]
+sierra = true
+casm = true
+
+[scripts]
+test = "snforge test"
+
+[tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]

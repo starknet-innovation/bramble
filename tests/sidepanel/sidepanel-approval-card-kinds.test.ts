@@ -152,13 +152,31 @@ describe("approvalCard renders each approval kind", () => {
       id: ID,
       kind: "declare",
       origin: ORIGIN,
-      summaries: ["Declare class 0xabc"],
+      declaration: {
+        abiEntryCount: 14,
+        accountDeployment: "undeployed",
+        classHash: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+        compiledClassHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+        deploymentFee: { overallFee: "1500000000000000", unit: "FRI" },
+        deploymentFeeEstimateFailed: false,
+        entryPointCount: 9,
+        fee: { overallFee: "2500000000000000", unit: "FRI" },
+        feeEstimateFailed: false,
+        sierraProgramLength: 4_321,
+      },
     };
     const html = approvalCard(approval, lockedStatus);
 
     expect(html).toContain("Declare contract request");
     expect(html).toContain("Unlock the wallet to review and declare this contract class.");
-    expect(html).toContain("Declare class 0xabc");
+    expect(html).toContain("Register Cairo 1 contract code");
+    expect(html).toContain("0.0025 STRK");
+    expect(html).toContain("0.0015 STRK");
+    expect(html).toContain("0.004 STRK");
+    expect(html).toContain("Required before declaration");
+    expect(html).toContain("4,321 Sierra words · 14 ABI entries · 9 entry points");
+    expect(html).toContain("additional STRK fee not included");
+    expect(html).not.toContain("sierra_program");
     expect(html).toContain(`data-approval-id="${ID}" type="button" disabled`);
   });
 

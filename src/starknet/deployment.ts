@@ -132,6 +132,14 @@ export type DeploySubmission = {
 };
 
 /**
+ * Network fee estimate for deploying the wallet account, before signing.
+ */
+export type AccountDeploymentFeeEstimate = {
+  readonly overallFee: string;
+  readonly unit: string;
+};
+
+/**
  * Reads whether an account contract exists on-chain.
  */
 export const getDeploymentStatus = async (
@@ -147,6 +155,37 @@ export const getDeploymentStatus = async (
     makeProvider,
   );
 };
+
+/**
+ * Estimates counterfactual account deployment with validation skipped. This
+ * never signs or broadcasts and is safe to use while a dapp approval is still
+ * pending.
+ */
+export const estimateAccountDeploymentFee = async (
+  { account, rpcUrls, signHash }: DeployAccountInput,
+  makeProvider?: (nodeUrl: string) => RpcProvider,
+  makeAccount: typeof krustyAccount = krustyAccount,
+): Promise<AccountDeploymentFeeEstimate> =>
+  withRpcFallback(
+    rpcUrls,
+    async (provider) => {
+      const deployment = ozAccountDeployment(account);
+      const estimate = await makeAccount(provider, account, signHash).estimateAccountDeployFee(
+        {
+          addressSalt: deployment.addressSalt,
+          classHash: deployment.classHash,
+          constructorCalldata: [...deployment.constructorCalldata],
+          contractAddress: deployment.contractAddress,
+        },
+        { skipValidate: true },
+      );
+      return {
+        overallFee: BigInt(estimate.overall_fee).toString(),
+        unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
+      };
+    },
+    makeProvider,
+  );
 
 /**
  * Signs and submits the DEPLOY_ACCOUNT transaction for a counterfactual

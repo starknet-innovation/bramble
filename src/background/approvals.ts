@@ -7,6 +7,7 @@ import type { ProviderDeclare } from "../provider/declare-params";
 import { WalletError } from "../shared/errors";
 import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
+import type { DeclareFeeEstimate } from "../starknet/declare";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { Strk20Action } from "../starknet/strk20/schemas";
 import type { ApprovalContext } from "./approval-context";
@@ -51,6 +52,23 @@ export type ApprovalRiskFlag = {
 };
 
 /**
+ * Safe, display-only facts derived from a private Cairo declaration payload.
+ * The contract class itself never crosses to the approval UI.
+ */
+export type DeclarationReview = {
+  readonly abiEntryCount: number;
+  readonly accountDeployment: "deployed" | "undeployed" | "unknown";
+  readonly classHash?: string;
+  readonly compiledClassHash: string;
+  readonly deploymentFee: DeclareFeeEstimate | null;
+  readonly deploymentFeeEstimateFailed: boolean;
+  readonly entryPointCount: number;
+  readonly fee: DeclareFeeEstimate | null;
+  readonly feeEstimateFailed: boolean;
+  readonly sierraProgramLength: number;
+};
+
+/**
  * Pending dapp approval. `kind` and `token` describe watch-asset prompts;
  * `summaries`/`flags` describe an invoke prompt's decoded calls and risk flags;
  * `blocked` and `insights` are attached by the reputation layer when the queue
@@ -59,6 +77,7 @@ export type ApprovalRiskFlag = {
 export type PendingApproval = {
   readonly blocked?: boolean;
   readonly context?: ApprovalContext;
+  readonly declaration?: DeclarationReview;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
@@ -114,6 +133,7 @@ export type ApprovalQueue = {
   readonly requestDeclare: (input: {
     readonly context: ApprovalContext;
     readonly declare: ProviderDeclare;
+    readonly declaration: DeclarationReview;
     readonly origin: string;
     readonly summaries: readonly string[];
   }) => PendingApproval;
@@ -201,6 +221,17 @@ const readApprovalPayload = (approval: ApprovalEntry): ApprovalPayload | null =>
 
 const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
   ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
+  ...(approval.declaration === undefined
+    ? {}
+    : {
+        declaration: {
+          ...approval.declaration,
+          deploymentFee: approval.declaration.deploymentFee && {
+            ...approval.declaration.deploymentFee,
+          },
+          fee: approval.declaration.fee && { ...approval.declaration.fee },
+        },
+      }),
   id: approval.id,
   kind: approval.kind,
   origin: approval.origin,
@@ -304,13 +335,18 @@ export const createApprovalQueue = (): ApprovalQueue => {
         summaries: [...summaries],
       });
     },
-    requestDeclare({ context, declare, origin, summaries }) {
+    requestDeclare({ context, declaration, declare, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
       return enqueue({
         context: { ...context },
+        declaration: {
+          ...declaration,
+          deploymentFee: declaration.deploymentFee && { ...declaration.deploymentFee },
+          fee: declaration.fee && { ...declaration.fee },
+        },
         declare: cloneValue(declare),
         id: crypto.randomUUID(),
         kind: "declare",

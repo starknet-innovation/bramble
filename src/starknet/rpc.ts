@@ -18,8 +18,10 @@ import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-
  * Re-exported declare-transaction submission so callers keep one RPC import path.
  */
 export {
+  type DeclareFeeEstimate,
   type DeclareInput,
   type DeclareSubmission,
+  estimateDeclareFee,
   submitDeclareTransaction,
 } from "./declare";
 /**
@@ -27,9 +29,11 @@ export {
  */
 export {
   type AccountDeployment,
+  type AccountDeploymentFeeEstimate,
   type DeployAccountInput,
   type DeploymentStatusInput,
   type DeploySubmission,
+  estimateAccountDeploymentFee,
   getDeploymentStatus,
   ozAccountDeployment,
   submitAccountDeployment,
@@ -50,7 +54,13 @@ export {
 export {
   buildErc20ApproveCall,
   getNftOwner,
+  getNftOwnership,
+  getNftTokenUri,
   type NftOwnerInput,
+  type NftOwnership,
+  type NftOwnershipInput,
+  type NftStandard,
+  type NftTokenUriInput,
 } from "./rpc-assets";
 /**
  * Re-exported invoke submission types and operation.

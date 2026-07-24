@@ -9,6 +9,7 @@ import {
   type StarknetNetworkId,
 } from "../starknet/networks";
 import { type AccountGroupIcon, isAccountGroupIcon } from "../storage/account-groups";
+import { isApprovalSurfacePreference, isDisplayCurrency } from "../storage/preferences-entries";
 import { isAccountId } from "../storage/vault-schema";
 
 const isGroupNameText = (value: unknown): value is string =>
@@ -145,36 +146,38 @@ export const readSetAccountInGroupInput = (
     : null;
 
 /**
- * Parses display preference updates (currency, theme) from extension pages.
+ * Parses display and approval-surface preference updates from extension pages.
  */
 export const readSetDisplayInput = (
   message: unknown,
 ): {
+  readonly approvalSurface?: "popup" | "side-panel";
   readonly displayCurrency?: "eur" | "gbp" | "usd";
   readonly theme?: "dark" | "light";
 } | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["displayCurrency", "theme", "type"]) ||
-    message["type"] !== "wallet.setDisplay"
-  ) {
+  if (!isRecord(message)) {
     return null;
   }
-  const displayCurrency =
-    message["displayCurrency"] === "eur" ||
-    message["displayCurrency"] === "gbp" ||
-    message["displayCurrency"] === "usd"
-      ? message["displayCurrency"]
-      : undefined;
-  const theme =
-    message["theme"] === "dark" || message["theme"] === "light" ? message["theme"] : undefined;
-  if (
-    (message["displayCurrency"] !== undefined && displayCurrency === undefined) ||
-    (message["theme"] !== undefined && theme === undefined)
-  ) {
+  if (!hasOnlyKnownKeys(message, ["approvalSurface", "displayCurrency", "theme", "type"])) {
+    return null;
+  }
+  if (message["type"] !== "wallet.setDisplay") {
+    return null;
+  }
+  const approvalSurface = message["approvalSurface"];
+  const displayCurrency = message["displayCurrency"];
+  const theme = message["theme"];
+  if (approvalSurface !== undefined && !isApprovalSurfacePreference(approvalSurface)) {
+    return null;
+  }
+  if (displayCurrency !== undefined && !isDisplayCurrency(displayCurrency)) {
+    return null;
+  }
+  if (theme !== undefined && theme !== "dark" && theme !== "light") {
     return null;
   }
   return {
+    ...(approvalSurface === undefined ? {} : { approvalSurface }),
     ...(displayCurrency === undefined ? {} : { displayCurrency }),
     ...(theme === undefined ? {} : { theme }),
   };

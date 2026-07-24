@@ -6,7 +6,7 @@
 import type { PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { icon } from "./icons";
-import { accountLabel } from "./parts";
+import { accountLabel, formatFri } from "./parts";
 import { reviewCallsList, reviewPanel, riskFlagMessages } from "./review-render";
 import { signRequestDetails } from "./sign-request";
 
@@ -23,11 +23,81 @@ const contextDetails = (approval: PendingApproval): string => {
   return `<dl class="request-detail"><div><dt>Account</dt><dd><code>${escapeHtml(accountLabel(context.accountId))}</code></dd></div><div><dt>Network</dt><dd>${escapeHtml(context.networkId)}</dd></div><div><dt>Review digest</dt><dd><code>${escapeHtml(context.payloadDigest.slice(0, 23))}…</code></dd></div></dl>`;
 };
 
+const declarationDetails = (approval: PendingApproval): string => {
+  const declaration = approval.declaration;
+  if (!declaration) {
+    return "";
+  }
+  const formatFee = (fee: NonNullable<typeof declaration.fee>): string =>
+    fee.unit === "FRI" ? formatFri(fee.overallFee) : `${fee.overallFee} ${fee.unit}`;
+  const fee = declaration.fee ? formatFee(declaration.fee) : "Unavailable";
+  const deploymentFee = declaration.deploymentFee
+    ? formatFee(declaration.deploymentFee)
+    : "Unavailable";
+  const estimatedTotal =
+    declaration.fee?.unit === "FRI" &&
+    (declaration.accountDeployment === "deployed" || declaration.deploymentFee?.unit === "FRI")
+      ? formatFri(
+          (
+            BigInt(declaration.fee.overallFee) +
+            BigInt(declaration.deploymentFee?.overallFee ?? "0")
+          ).toString(),
+        )
+      : null;
+  const deployment =
+    declaration.accountDeployment === "undeployed"
+      ? "Required before declaration"
+      : declaration.accountDeployment === "deployed"
+        ? "Already deployed"
+        : "Could not verify";
+  return `<dl class="request-detail declaration-detail"><div><dt>Action</dt><dd>Register Cairo 1 contract code</dd></div><div><dt>Declaration fee</dt><dd><strong>${escapeHtml(fee)}</strong></dd></div>${declaration.accountDeployment === "undeployed" ? `<div><dt>Account deployment fee</dt><dd><strong>${escapeHtml(deploymentFee)}</strong></dd></div>` : ""}${estimatedTotal === null ? "" : `<div><dt>Estimated total</dt><dd><strong>${escapeHtml(estimatedTotal)}</strong></dd></div>`}<div><dt>Fee token</dt><dd>${declaration.fee?.unit === "FRI" ? "STRK" : escapeHtml(declaration.fee?.unit ?? "Unavailable")}</dd></div><div><dt>Account deployment</dt><dd>${deployment}</dd></div>${declaration.classHash === undefined ? "" : `<div><dt>Class hash</dt><dd><code>${escapeHtml(declaration.classHash)}</code></dd></div>`}<div><dt>Compiled hash</dt><dd><code>${escapeHtml(declaration.compiledClassHash)}</code></dd></div><div><dt>Contract shape</dt><dd>${declaration.sierraProgramLength.toLocaleString()} Sierra words · ${declaration.abiEntryCount.toLocaleString()} ABI entries · ${declaration.entryPointCount.toLocaleString()} entry points</dd></div></dl>`;
+};
+
+const declarationWarnings = (approval: PendingApproval): readonly string[] => {
+  const declaration = approval.declaration;
+  if (!declaration) {
+    return [];
+  }
+  return [
+    "A declaration registers immutable contract code on this network. It does not deploy the collection or transfer assets.",
+    ...(declaration.accountDeployment === "undeployed"
+      ? [
+          "This account is not deployed yet. Approval first submits account deployment, which has an additional STRK fee not included in the declaration estimate.",
+        ]
+      : []),
+    ...(declaration.deploymentFeeEstimateFailed
+      ? [
+          "The account deployment fee could not be estimated. Fund the account with STRK and retry if deployment fails.",
+        ]
+      : []),
+    ...(declaration.accountDeployment === "unknown"
+      ? [
+          "The wallet could not verify whether this account needs deployment. An additional STRK fee may apply.",
+        ]
+      : []),
+    ...(declaration.feeEstimateFailed
+      ? [
+          "The declaration fee could not be estimated. Check the RPC connection and the account's STRK balance before approving.",
+        ]
+      : []),
+  ];
+};
+
+const requestIdentity = (origin: string, kind: string): string => {
+  let host = origin;
+  try {
+    host = new URL(origin).host || origin;
+  } catch {
+    // The full escaped value remains visible if an invalid origin reaches this
+    // presentation boundary; approval validation still fails closed upstream.
+  }
+  return `<p class="eyebrow">${kind}</p><div class="request-site"><span class="request-site-mark">${icon("globe")}</span><div class="request-site-copy"><span>Request from</span><strong>${escapeHtml(host)}</strong><code>${escapeHtml(origin)}</code></div></div>`;
+};
+
 const connectCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      <p class="eyebrow">Connection request</p>
-      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      ${requestIdentity(approval.origin, "Connection request")}
       <p class="hint">${status.locked ? "Unlock the wallet to approve this site." : "Once approved, this site can see your granted account addresses."}</p>
     </div>
     ${reviewPanel(approval.insights ?? [])}
@@ -42,8 +112,7 @@ const watchAssetCard = (approval: PendingApproval): string => {
   return `
   <li class="request-card">
     <div class="request-copy">
-      <p class="eyebrow">Add token request</p>
-      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      ${requestIdentity(approval.origin, "Add token request")}
       <dl class="request-detail"><div><dt>Symbol</dt><dd>${escapeHtml(token.symbol)}</dd></div><div><dt>Name</dt><dd>${escapeHtml(token.name)}</dd></div><div><dt>Decimals</dt><dd>${escapeHtml(String(token.decimals))}</dd></div><div><dt>Address</dt><dd><code>${escapeHtml(accountLabel(token.address))}</code></dd></div></dl>
       <p class="hint">Approve to track this ERC20 token in your wallet.</p>
     </div>
@@ -57,8 +126,7 @@ const watchAssetCard = (approval: PendingApproval): string => {
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      <p class="eyebrow">Transaction request</p>
-      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      ${requestIdentity(approval.origin, "Transaction request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and approve this transaction." : "Review each call carefully. Approving signs and submits it from your active account."}</p>
       ${contextDetails(approval)}
       ${reviewCallsList(approval.summaries ?? [])}
@@ -70,8 +138,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
 const signCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      <p class="eyebrow">Sign request</p>
-      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      ${requestIdentity(approval.origin, "Sign request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Review exactly what this site asks you to sign. Signing does not move funds — only sign messages you understand."}</p>
       ${contextDetails(approval)}
     </div>
@@ -83,8 +150,7 @@ const signCard = (approval: PendingApproval, status: WalletStatus): string => `
 const strk20Card = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      <p class="eyebrow">Private transaction request</p>
-      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      ${requestIdentity(approval.origin, "Private transaction request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action and the frozen execution call. The prover cannot change it after approval."}</p>
       ${contextDetails(approval)}
       ${reviewCallsList(approval.summaries ?? [])}
@@ -96,8 +162,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      <p class="eyebrow">Network switch request</p>
-      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      ${requestIdentity(approval.origin, "Network switch request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review this network change." : "This site is asking to change the wallet's active network. Nothing changes unless you approve."}</p>
       ${reviewCallsList(approval.summaries ?? [])}
     </div>
@@ -108,8 +173,7 @@ const switchCard = (approval: PendingApproval, status: WalletStatus): string => 
 const addChainCard = (approval: PendingApproval): string => `
   <li class="request-card">
     <div class="request-copy">
-      <p class="eyebrow">Add network request</p>
-      <p class="request-origin">${escapeHtml(approval.origin)}</p>
+      ${requestIdentity(approval.origin, "Add network request")}
       <p class="hint">This site is asking to add a custom Starknet network. Nothing is saved unless you approve.</p>
       ${reviewCallsList(approval.summaries ?? [])}
     </div>
@@ -120,13 +184,12 @@ const addChainCard = (approval: PendingApproval): string => `
 const declareCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
-      <p class="eyebrow">Declare contract request</p>
-      <p class="request-origin">${escapeHtml(approval.origin)}</p>
-      <p class="hint">${status.locked ? "Unlock the wallet to review and declare this contract class." : "Approving signs and submits a declare transaction from your active account."}</p>
+      ${requestIdentity(approval.origin, "Declare contract request")}
+      <p class="hint">${status.locked ? "Unlock the wallet to review and declare this contract class." : "Approving signs and submits this exact class declaration from the account shown below."}</p>
       ${contextDetails(approval)}
-      ${reviewCallsList(approval.summaries ?? [])}
+      ${declarationDetails(approval)}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel([...declarationWarnings(approval), ...(approval.insights ?? [])])}
     ${decisionRow(approval, "Declare", status.locked)}
   </li>`;
 

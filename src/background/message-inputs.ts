@@ -238,11 +238,7 @@ export const readOriginRequestInput = (
   return origin ? { origin } : null;
 };
 
-/**
- * Parses dapp account requests from content-script traffic.
- */
-export const readRequestAccountsInput = (message: unknown): { readonly origin: string } | null =>
-  readOriginRequestInput(message, "wallet.requestAccounts");
+export { readRequestAccountsInput } from "./request-accounts-input";
 
 /**
  * Parses dapp invoke transaction requests from content-script traffic.

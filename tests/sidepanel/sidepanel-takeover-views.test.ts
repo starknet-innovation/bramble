@@ -38,6 +38,10 @@ describe("approval takeover views", () => {
 
     expect(home).toContain("Review request");
     expect(home).toContain("https://dapp.example");
+    expect(home.match(/https:\/\/dapp\.example/g)).toHaveLength(1);
+    expect(home).toContain("dapp.example");
+    expect(home).toContain("Starknet Mainnet");
+    expect(home).toContain('class="request-site"');
     expect(home).toContain('data-approval-action="approve"');
     expect(home).toContain('data-approval-action="deny"');
     expect(home).toContain(`data-approval-later="${pending[0]?.id}"`);

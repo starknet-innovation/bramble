@@ -8,6 +8,7 @@ import type { WatchedNft } from "./nft";
 import type {
   AccountLabels,
   AddressBookEntry,
+  ApprovalSurfacePreference,
   DisplayCurrency,
   RpcOverrides,
   ThemeChoice,
@@ -21,6 +22,7 @@ import type {
 export type WalletPreferences = {
   readonly accountLabels?: AccountLabels;
   readonly activeNetworkId: StarknetNetworkId;
+  readonly approvalSurface?: ApprovalSurfacePreference;
   readonly addressBook: readonly AddressBookEntry[];
   readonly customNetworks?: readonly CustomNetwork[];
   readonly displayCurrency?: DisplayCurrency;
@@ -75,6 +77,7 @@ export type WalletPreferencesStore = {
   }) => Promise<WalletPreferences>;
   readonly setActiveNetwork: (networkId: StarknetNetworkId) => Promise<WalletPreferences>;
   readonly setDisplay: (input: {
+    readonly approvalSurface?: ApprovalSurfacePreference;
     readonly displayCurrency?: DisplayCurrency;
     readonly theme?: ThemeChoice;
   }) => Promise<WalletPreferences>;

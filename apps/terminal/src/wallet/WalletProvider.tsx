@@ -5,9 +5,9 @@
  * (preferring window.starknet_mcWallet), exposes the connected account and
  * address, and drives the Connect / Disconnect buttons throughout the shell.
  *
- * Screens consume this via the `useWallet()` hook. To send protocol calldata,
- * build `Call[]` with the protocol layer (src/protocols) and hand them to the
- * connected account: `await account.execute(calls)`.
+ * Screens consume this via the `useWallet()` hook. Protocol calldata is handed
+ * to `requestTransaction()` so every action receives the same terminal review,
+ * wallet hand-off, rejection, retry, and submission feedback.
  */
 import { getStarknet } from "get-starknet-core";
 import type { StarknetWindowObject } from "get-starknet-core";
@@ -21,25 +21,35 @@ import {
   useRef,
   useState,
 } from "react";
-import { WalletAccount } from "starknet";
-import type { AccountInterface } from "starknet";
-import { STARKNET_NETWORKS } from "../protocols/support/networks";
+import type { AccountInterface, InvokeFunctionResponse } from "starknet";
 import {
   INJECTION_TIMEOUT_MS,
   pickMcWallet,
   waitForInjectedMcWallet,
 } from "./starknet-window";
-
-// The mainnet RPC used to bind a WalletAccount for modern wallets that expose
-// only the request API (no ready `account` object). Reuses the single source of
-// truth in the protocol layer rather than hardcoding a second endpoint.
-const MAINNET_RPC_URL = STARKNET_NETWORKS.SN_MAIN.rpcUrls[0];
+import {
+  requestAccounts,
+  requestChainId,
+  resolveAccount,
+  resolveWallet,
+  walletNetwork,
+  type WalletRequest,
+} from "./wallet-connection";
+import { WalletRequestDialog } from "./WalletRequestDialog";
+import {
+  type WalletRequestPreview,
+  type WalletRequestView,
+  type WalletTransactionRequest,
+  walletInvokeParams,
+  walletRequestError,
+  walletTransactionHash,
+} from "./wallet-request";
 
 /**
  * The wallet state + actions exposed to the app through `useWallet()`.
  */
 export type WalletContextValue = {
-  /** The connected wallet account, or null when disconnected. Use `account.execute(calls)` to send protocol calldata. */
+  /** The connected wallet account, or null when disconnected. Read-only consumers may inspect it; actions use requestTransaction(). */
   readonly account: AccountInterface | null;
   /** The selected account address (canonical hex), or null when disconnected. */
   readonly address: string | null;
@@ -53,118 +63,49 @@ export type WalletContextValue = {
   readonly isConnecting: boolean;
   /** The last connection error message, or null. */
   readonly error: string | null;
+  /** Clears a surfaced connection error without changing the wallet session. */
+  readonly clearError: () => void;
   /** Opens the wallet and connects an account. Prefers the MC Wallet provider. */
   readonly connect: () => Promise<void>;
+  /** Reviews and executes Starknet calls through the connected wallet. */
+  readonly requestTransaction: (
+    input: WalletTransactionRequest,
+  ) => Promise<InvokeFunctionResponse>;
+  /** Requests an approved Sierra class declaration through the connected wallet. */
+  readonly declareContract: (input: ContractDeclaration) => Promise<DeclarationResult>;
   /** Disconnects the current wallet and clears the last-connected hint. */
   readonly disconnect: () => Promise<void>;
 };
 
+export type ContractDeclaration = {
+  readonly classHash: string;
+  readonly compiledClassHash: string;
+  readonly contractClass: Readonly<Record<string, unknown>>;
+};
+
+export type DeclarationResult = {
+  readonly classHash: string;
+  readonly transactionHash: string;
+};
+
 const WalletContext = createContext<WalletContextValue | null>(null);
 
-// Loosely-typed view of the provider's request method. get-starknet-core's
-// RpcMessage union does not enumerate the account/chain permission requests, so
-// we cast to call them without fighting the published types.
-type WalletRequest = (call: { readonly type: string }) => Promise<unknown>;
-
-// A user explicitly rejecting the connection prompt (SNIP error 113 / a
-// reject/deny message). We must not silently retry through a second path when
-// this happens — surface it instead.
-const isUserRejection = (cause: unknown): boolean => {
-  if (cause instanceof Error && /reject|denied|refus/i.test(cause.message)) {
-    return true;
-  }
-  const code = (cause as { readonly code?: unknown } | null | undefined)?.code;
-  return code === 113;
-};
-
-const normalizeAddresses = (value: unknown): readonly string[] =>
-  Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-    : [];
-
-// Asks the wallet to authorize account access and returns the granted
-// addresses. Prefers the modern `request({ type: "wallet_requestAccounts" })`
-// API, falling back to the legacy `enable()` method and finally to a
-// synchronously-populated `selectedAddress`. THIS is the core connect fix: the
-// old code assumed the enable() call left `isConnected`/`account` populated on
-// the window object, which modern wallets no longer do — so approving in the
-// wallet changed nothing in the app.
-const requestAccounts = async (wallet: StarknetWindowObject): Promise<readonly string[]> => {
-  if (typeof wallet.request === "function") {
-    try {
-      const raw = wallet.request as unknown as WalletRequest;
-      const result = await raw({ type: "wallet_requestAccounts" });
-      const addresses = normalizeAddresses(result);
-      if (addresses.length > 0) {
-        return addresses;
-      }
-    } catch (cause) {
-      if (isUserRejection(cause)) {
-        throw cause;
-      }
-      // Unknown request type on an older wallet — fall through to enable().
-    }
-  }
-  if (typeof wallet.enable === "function") {
-    const result = await wallet.enable({ starknetVersion: "v5" });
-    const addresses = normalizeAddresses(result);
-    if (addresses.length > 0) {
-      return addresses;
-    }
-  }
-  if (typeof wallet.selectedAddress === "string" && wallet.selectedAddress.length > 0) {
-    return [wallet.selectedAddress];
-  }
-  return [];
-};
-
-// Reads the wallet's current chain id, preferring the request API and falling
-// back to the window object's own field.
-const requestChainId = async (wallet: StarknetWindowObject): Promise<string | null> => {
-  if (typeof wallet.request === "function") {
-    try {
-      const raw = wallet.request as unknown as WalletRequest;
-      const result = await raw({ type: "wallet_requestChainId" });
-      if (typeof result === "string" && result.length > 0) {
-        return result;
-      }
-    } catch {
-      // Fall back to the field below.
-    }
-  }
-  return typeof wallet.chainId === "string" ? wallet.chainId : null;
-};
-
-// Resolves an executable account. Legacy wallets (and the test double) expose a
-// ready `account`; modern request-only wallets are bound to a WalletAccount
-// against the injected provider so `account.execute(calls)` still works.
-const resolveAccount = async (
-  wallet: StarknetWindowObject,
-): Promise<AccountInterface | null> => {
-  if (wallet.account !== undefined) {
-    return wallet.account as unknown as AccountInterface;
-  }
-  try {
-    const account = await WalletAccount.connect(
-      { nodeUrl: MAINNET_RPC_URL },
-      wallet as never,
-    );
-    return account as unknown as AccountInterface;
-  } catch {
+const declarationResult = (value: unknown): DeclarationResult | null => {
+  if (typeof value !== "object" || value === null) {
     return null;
   }
+  const record = value as Record<string, unknown>;
+  const classHash = record["class_hash"];
+  const transactionHash = record["transaction_hash"];
+  return typeof classHash === "string" && typeof transactionHash === "string"
+    ? { classHash, transactionHash }
+    : null;
 };
 
-// Resolves the provider to connect to: waits for the injected MC Wallet (so a
-// click that beats extension injection still works), then any MC Wallet from
-// get-starknet discovery, then any available wallet.
-const resolveWallet = async (): Promise<StarknetWindowObject | null> => {
-  const injected = await waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
-  if (injected !== null) {
-    return injected;
-  }
-  const available = await getStarknet().getAvailableWallets();
-  return pickMcWallet(available) ?? available[0] ?? null;
+type PendingWalletRequest = {
+  readonly perform: () => Promise<unknown>;
+  readonly reject: (reason: Error) => void;
+  readonly resolve: (value: unknown) => void;
 };
 
 /**
@@ -178,7 +119,9 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
   const [walletName, setWalletName] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requestView, setRequestView] = useState<WalletRequestView | null>(null);
   const walletRef = useRef<StarknetWindowObject | null>(null);
+  const pendingRequestRef = useRef<PendingWalletRequest | null>(null);
 
   const applyConnected = useCallback(
     (
@@ -199,6 +142,9 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
   );
 
   const clear = useCallback(() => {
+    pendingRequestRef.current?.reject(new Error("Wallet disconnected before approval."));
+    pendingRequestRef.current = null;
+    setRequestView(null);
     walletRef.current = null;
     setWallet(null);
     setAccount(null);
@@ -220,11 +166,11 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       if (nextAddress === undefined) {
         throw new Error("Wallet did not authorize an account.");
       }
-      const nextAccount = await resolveAccount(target);
+      const nextChainId = await requestChainId(target);
+      const nextAccount = await resolveAccount(target, nextChainId);
       if (nextAccount === null) {
         throw new Error("Could not resolve the connected account.");
       }
-      const nextChainId = await requestChainId(target);
       applyConnected(target, nextAccount, nextAddress, nextChainId);
     } catch (cause) {
       clear();
@@ -242,6 +188,149 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     }
     clear();
   }, [clear]);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  const reviewWalletRequest = useCallback(
+    <Result,>(
+      preview: WalletRequestPreview,
+      perform: () => Promise<Result>,
+    ): Promise<Result> => {
+      if (pendingRequestRef.current !== null) {
+        return Promise.reject(new Error("Finish the open wallet request first."));
+      }
+      return new Promise<Result>((resolve, reject) => {
+        pendingRequestRef.current = {
+          perform,
+          reject,
+          resolve: (value) => resolve(value as Result),
+        };
+        setRequestView({ phase: "review", preview });
+      });
+    },
+    [],
+  );
+
+  const performWalletRequest = useCallback(async (): Promise<void> => {
+    const pending = pendingRequestRef.current;
+    const preview = requestView?.preview;
+    if (pending === null || preview === undefined) {
+      return;
+    }
+    setRequestView({ phase: "awaiting", preview });
+    try {
+      const result = await pending.perform();
+      const transactionHash = walletTransactionHash(result);
+      if (transactionHash === null) {
+        throw new Error("Wallet returned an invalid transaction hash.");
+      }
+      pendingRequestRef.current = null;
+      setRequestView({ phase: "submitted", preview, transactionHash });
+      pending.resolve(result);
+    } catch (cause) {
+      setRequestView({
+        phase: "failed",
+        preview,
+        message: walletRequestError(cause),
+      });
+    }
+  }, [requestView]);
+
+  const cancelWalletRequest = useCallback(() => {
+    pendingRequestRef.current?.reject(new Error("Wallet request cancelled."));
+    pendingRequestRef.current = null;
+    setRequestView(null);
+  }, []);
+
+  const closeWalletRequest = useCallback(() => setRequestView(null), []);
+
+  const requestTransaction = useCallback(
+    async (input: WalletTransactionRequest): Promise<InvokeFunctionResponse> => {
+      if (account === null) {
+        throw new Error("Connect a wallet before submitting a transaction.");
+      }
+      if (input.calls.length === 0) {
+        throw new Error("The terminal refused an empty wallet request.");
+      }
+      return reviewWalletRequest<InvokeFunctionResponse>(
+        {
+          callCount: input.calls.length,
+          description: input.description,
+          details: input.details ?? [],
+          kind: "transaction",
+          title: input.title,
+          warning: input.warning,
+        },
+        async () => {
+          const params = walletInvokeParams(input.calls);
+          if (wallet !== null && typeof wallet.request === "function") {
+            const raw = wallet.request as unknown as WalletRequest;
+            const result = await raw({
+              type: "wallet_addInvokeTransaction",
+              params,
+            });
+            const transactionHash = walletTransactionHash(result);
+            if (transactionHash === null) {
+              throw new Error("Wallet returned an invalid transaction hash.");
+            }
+            return { transaction_hash: transactionHash };
+          }
+          const calls = params.invoke_transaction.map((call) => ({
+            calldata: [...call.calldata],
+            contractAddress: call.contract_address,
+            entrypoint: call.entry_point,
+          }));
+          return account.execute(calls);
+        },
+      );
+    },
+    [account, reviewWalletRequest, wallet],
+  );
+
+  const declareContract = useCallback(
+    async (input: ContractDeclaration): Promise<DeclarationResult> => {
+      if (wallet === null || typeof wallet.request !== "function") {
+        throw new Error("Connect a wallet that supports contract declarations.");
+      }
+      const raw = wallet.request as unknown as WalletRequest;
+      return reviewWalletRequest<DeclarationResult>(
+        {
+          description:
+            "Register the audited MC Punks Sierra class on this network before deploying it.",
+          details: [
+            { label: "Class hash", value: input.classHash },
+            { label: "Compiled hash", value: input.compiledClassHash },
+          ],
+          kind: "declaration",
+          title: "Declare Punk collection",
+          warning: "Declaration fees are paid even if you decide not to deploy afterward.",
+        },
+        async () => {
+          const result = declarationResult(
+            await raw({
+              type: "wallet_addDeclareTransaction",
+              params: {
+                declare_transaction: {
+                  class_hash: input.classHash,
+                  compiled_class_hash: input.compiledClassHash,
+                  contract_class: input.contractClass,
+                },
+              },
+            }),
+          );
+          if (result === null) {
+            throw new Error("Wallet returned an invalid contract declaration result.");
+          }
+          return {
+            classHash: result.classHash,
+            transactionHash: result.transactionHash,
+            transaction_hash: result.transactionHash,
+          } as DeclarationResult & { readonly transaction_hash: string };
+        },
+      ).then(({ classHash, transactionHash }) => ({ classHash, transactionHash }));
+    },
+    [reviewWalletRequest, wallet],
+  );
 
   // Attempt a silent reconnect if the wallet pre-authorized this origin.
   useEffect(() => {
@@ -261,16 +350,16 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
         if (cancelled || !preauthorized) {
           return;
         }
-        const addresses = await requestAccounts(target);
+        const addresses = await requestAccounts(target, true);
         const nextAddress = addresses[0];
         if (cancelled || nextAddress === undefined) {
           return;
         }
-        const nextAccount = await resolveAccount(target);
+        const nextChainId = await requestChainId(target);
+        const nextAccount = await resolveAccount(target, nextChainId);
         if (cancelled || nextAccount === null) {
           return;
         }
-        const nextChainId = await requestChainId(target);
         applyConnected(target, nextAccount, nextAddress, nextChainId);
       } catch {
         // No pre-authorization / no wallet — stay disconnected silently.
@@ -295,15 +384,26 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       setAddress(next);
       const current = walletRef.current;
       if (current !== null) {
-        void resolveAccount(current).then((nextAccount) => {
+        void requestChainId(current).then((activeChain) =>
+          resolveAccount(current, activeChain).then((nextAccount) => {
+            if (nextAccount !== null) {
+              setAccount(nextAccount);
+            }
+          }),
+        );
+      }
+    };
+    const onNetworkChanged = (network?: string): void => {
+      const nextNetwork = network ?? null;
+      setChainId(nextNetwork);
+      const current = walletRef.current;
+      if (current !== null) {
+        void resolveAccount(current, nextNetwork).then((nextAccount) => {
           if (nextAccount !== null) {
             setAccount(nextAccount);
           }
         });
       }
-    };
-    const onNetworkChanged = (network?: string): void => {
-      setChainId(network ?? null);
     };
     wallet.on("accountsChanged", onAccountsChanged);
     wallet.on("networkChanged", onNetworkChanged);
@@ -322,13 +422,45 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       isConnected: account !== null && address !== null,
       isConnecting,
       error,
+      clearError,
       connect,
+      requestTransaction,
+      declareContract,
       disconnect,
     }),
-    [account, address, chainId, walletName, isConnecting, error, connect, disconnect],
+    [
+      account,
+      address,
+      chainId,
+      walletName,
+      isConnecting,
+      error,
+      clearError,
+      connect,
+      requestTransaction,
+      declareContract,
+      disconnect,
+    ],
   );
 
-  return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
+  const chainName = walletNetwork(chainId)?.name ?? chainId ?? "Unknown network";
+  return (
+    <WalletContext.Provider value={value}>
+      {children}
+      {requestView === null ? null : (
+        <WalletRequestDialog
+          address={address}
+          chainName={chainName}
+          onApprove={() => void performWalletRequest()}
+          onCancel={cancelWalletRequest}
+          onClose={closeWalletRequest}
+          onRetry={() => void performWalletRequest()}
+          request={requestView}
+          walletName={walletName}
+        />
+      )}
+    </WalletContext.Provider>
+  );
 };
 
 /**

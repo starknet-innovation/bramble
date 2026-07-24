@@ -28,7 +28,7 @@ const CHEVRON_MASK =
 export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons. appearance:none removes the
      native button bevel (a light top edge + dark bottom edge) so controls are
      genuinely borderless; feedback is a colour shift plus a subtle press scale. */
-  button {
+  button, a.icon-button {
     align-items: center;
     appearance: none;
     -webkit-appearance: none;
@@ -47,25 +47,26 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     min-height: ${SIZE.control};
     min-width: 0;
     padding: 0 ${SPACE.lg};
+    text-decoration: none;
     transition:
       background ${MOTION.pressMs}ms ${MOTION.ease},
       border-color ${MOTION.pressMs}ms ${MOTION.ease},
       color ${MOTION.pressMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  button:not(:disabled):active { background: var(--mc-accent-press); transform: scale(0.98); }
+  button:not(:disabled):active, a.icon-button:active { background: var(--mc-accent-press); transform: scale(0.98); }
   button.secondary {
     background: var(--mc-elevated);
     color: var(--mc-text);
   }
-  button.icon-button {
+  button.icon-button, a.icon-button {
     background: transparent;
     color: var(--mc-text);
   }
-  button.secondary:not(:disabled):active, button.icon-button:not(:disabled):active {
+  button.secondary:not(:disabled):active, button.icon-button:not(:disabled):active, a.icon-button:active {
     background: var(--mc-soft-press);
   }
-  button.ghost {
+  button.ghost, a.icon-button.ghost {
     background: transparent;
     color: var(--mc-muted);
   }
@@ -73,14 +74,14 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   button.danger:not(:disabled):active { background: var(--mc-danger-soft); }
   @media (hover: hover) and (pointer: fine) {
     button:not(:disabled):hover { background: var(--mc-accent-hover); }
-    button.secondary:not(:disabled):hover, button.icon-button:not(:disabled):hover {
+    button.secondary:not(:disabled):hover, button.icon-button:not(:disabled):hover, a.icon-button:hover {
       background: var(--mc-hover);
     }
-    button.ghost:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+    button.ghost:not(:disabled):hover, a.icon-button.ghost:hover { background: var(--mc-hover); color: var(--mc-text); }
     button.danger:not(:disabled):hover { background: var(--mc-danger-soft); }
   }
-  button.icon-button { flex: none; height: ${CONTROL.hit}; min-height: 0; padding: 0; width: ${CONTROL.hit}; }
-  button.icon-button:not(:disabled):active { transform: scale(0.92); }
+  button.icon-button, a.icon-button { flex: none; height: ${CONTROL.hit}; min-height: 0; padding: 0; width: ${CONTROL.hit}; }
+  button.icon-button:not(:disabled):active, a.icon-button:active { transform: scale(0.92); }
   button.small { font-size: ${TYPE.label.size}; min-height: ${CONTROL.hitSmall}; padding: 0 ${SPACE.md}; }
   button:disabled, input:disabled, select:disabled, textarea:disabled {
     cursor: not-allowed;

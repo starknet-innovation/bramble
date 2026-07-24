@@ -23,18 +23,29 @@ import {
   type NftIndexerService,
 } from "../starknet/nft-indexer";
 import {
+  type NftMetadataHttp,
+  type NftTokenMetadata,
+  resolveNftMetadataUri,
+} from "../starknet/nft-token-metadata";
+import {
   type BalanceInput,
   type DeclareInput,
   type DeployAccountInput,
   type DeploymentStatusInput,
+  estimateAccountDeploymentFee,
+  estimateDeclareFee,
   estimateInvokeFee,
   getDeploymentStatus,
   getNftOwner,
+  getNftOwnership,
+  getNftTokenUri,
   getTokenBalances,
   getTokenMetadata,
   getTransactionStatuses,
   type InvokeInput,
   type NftOwnerInput,
+  type NftOwnershipInput,
+  type NftTokenUriInput,
   submitAccountDeployment,
   submitDeclareTransaction,
   submitErc20Transfer,
@@ -67,6 +78,17 @@ export type MultisigRpc = {
  * Injectable Starknet RPC operations used by the message handler.
  */
 export type RuntimeRpc = {
+  /**
+   * Estimates counterfactual account deployment without signing or broadcast.
+   */
+  readonly estimateAccountDeploymentFee?: (
+    input: DeployAccountInput,
+  ) => ReturnType<typeof estimateAccountDeploymentFee>;
+  /**
+   * Estimates a Cairo 1 declaration with validation skipped, so a pending dapp
+   * request can show its fee without invoking protected key operations.
+   */
+  readonly estimateDeclareFee?: (input: DeclareInput) => ReturnType<typeof estimateDeclareFee>;
   readonly estimateInvokeFee: (input: InvokeInput) => ReturnType<typeof estimateInvokeFee>;
   /**
    * Discovers ERC20 allowances granted outside this wallet for an account's
@@ -80,6 +102,17 @@ export type RuntimeRpc = {
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
   readonly getNftOwner: (input: NftOwnerInput) => ReturnType<typeof getNftOwner>;
+  /**
+   * Identifies and proves ERC721/ERC1155 holdings. Optional so existing narrow
+   * test doubles can retain their ERC721-only `getNftOwner` behavior.
+   */
+  readonly getNftOwnership?: (input: NftOwnershipInput) => ReturnType<typeof getNftOwnership>;
+  /**
+   * Resolves on-chain ERC721 metadata for an explicitly watched token. Optional
+   * so background test doubles and deployments without metadata hydration keep
+   * their existing behavior.
+   */
+  readonly getNftMetadata?: (input: NftTokenUriInput) => Promise<NftTokenMetadata | null>;
   readonly getTokenBalances: (input: BalanceInput) => ReturnType<typeof getTokenBalances>;
   readonly getTokenMetadata: (input: TokenMetadataInput) => ReturnType<typeof getTokenMetadata>;
   /**
@@ -137,15 +170,25 @@ const strk20Http: Strk20Http = (url, init) => fetch(url, init);
 // Real network transport for the NFT indexer: a thin `fetch` wrapper matching
 // the {@link NftIndexerHttp} shape the discovery client expects.
 const nftIndexerHttp: NftIndexerHttp = (url) => fetch(url);
+const NFT_METADATA_TIMEOUT_MS = 10_000;
+const nftMetadataHttp: NftMetadataHttp = (url, init) =>
+  fetch(url, { ...init, signal: AbortSignal.timeout(NFT_METADATA_TIMEOUT_MS) });
+
+const getNftMetadata = async (input: NftTokenUriInput): Promise<NftTokenMetadata | null> =>
+  resolveNftMetadataUri(await getNftTokenUri(input), nftMetadataHttp);
 
 /**
  * Production RPC wiring used when no stub is injected.
  */
 export const defaultRuntimeRpc: RuntimeRpc = {
+  estimateAccountDeploymentFee,
+  estimateDeclareFee,
   estimateInvokeFee,
   getExternalAllowances: scanExternalAllowances,
   getDeploymentStatus,
+  getNftMetadata,
   getNftOwner,
+  getNftOwnership,
   getTokenBalances,
   getTokenMetadata,
   getTransactionHistory: scanTransactionHistory,

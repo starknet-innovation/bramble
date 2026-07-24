@@ -10,6 +10,7 @@ import { describe, expect, test } from "bun:test";
 import { type Account, CallData, hash, type RpcProvider } from "starknet";
 import {
   ensureAccountDeployed,
+  estimateAccountDeploymentFee,
   getDeploymentStatus,
   submitAccountDeployment,
 } from "../../src/starknet/deployment";
@@ -180,6 +181,43 @@ describe("getDeploymentStatus", () => {
         () => makeProvider(false),
       ),
     ).toBe(false);
+  });
+});
+
+describe("estimateAccountDeploymentFee", () => {
+  test("uses the proven deployment parameters, skips validation, and never signs", async () => {
+    let signed = false;
+    let received: readonly unknown[] = [];
+    const estimate = await estimateAccountDeploymentFee(
+      {
+        account,
+        rpcUrls: ["https://rpc.example"],
+        signHash: async () => {
+          signed = true;
+          return { publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" };
+        },
+      },
+      () => makeProvider(false),
+      () =>
+        ({
+          async estimateAccountDeployFee(payload: unknown, details: unknown) {
+            received = [payload, details];
+            return { overall_fee: 1_500_000_000_000_000n, unit: "FRI" };
+          },
+        }) as unknown as Account,
+    );
+
+    expect(estimate).toEqual({ overallFee: "1500000000000000", unit: "FRI" });
+    expect(signed).toBe(false);
+    expect(received).toEqual([
+      {
+        addressSalt: "0x0",
+        classHash: CLASS_HASH,
+        constructorCalldata: [BigInt(PUBLIC_KEY).toString()],
+        contractAddress: DEPLOY_ADDRESS,
+      },
+      { skipValidate: true },
+    ]);
   });
 });
 

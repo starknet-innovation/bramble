@@ -14,6 +14,7 @@ import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
+import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
@@ -34,6 +35,7 @@ export type DeclareOpsDeps = {
   readonly extensionId: string;
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
+  readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
@@ -78,6 +80,97 @@ const declareSummaries = (declare: ProviderDeclare): readonly string[] => [
   ...(declare.classHash === undefined ? [] : [`Class hash ${declare.classHash}`]),
 ];
 
+const countArray = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
+
+const declarationStructure = (declare: ProviderDeclare) => {
+  const contract = isRecord(declare.contractClass) ? declare.contractClass : {};
+  const entryPoints = isRecord(contract["entry_points_by_type"])
+    ? Object.values(contract["entry_points_by_type"]).reduce<number>(
+        (total, entries) => total + countArray(entries),
+        0,
+      )
+    : 0;
+  return {
+    abiEntryCount: countArray(contract["abi"]),
+    ...(declare.classHash === undefined ? {} : { classHash: declare.classHash }),
+    compiledClassHash: declare.compiledClassHash,
+    entryPointCount: entryPoints,
+    sierraProgramLength: countArray(contract["sierra_program"]),
+  };
+};
+
+const declarationReview = async (
+  deps: DeclareOpsDeps,
+  account: AccountRef,
+  declare: ProviderDeclare,
+  preferences: Awaited<ReturnType<WalletPreferencesStore["read"]>>,
+  passphrase: string,
+) => {
+  const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
+  let accountDeployment: "deployed" | "undeployed" | "unknown" = "unknown";
+  try {
+    accountDeployment = (await deps.runtimeRpc.getDeploymentStatus({
+      accountAddress: account.address,
+      rpcUrls,
+    }))
+      ? "deployed"
+      : "undeployed";
+  } catch {
+    accountDeployment = "unknown";
+  }
+  const fee = deps.runtimeRpc.estimateDeclareFee
+    ? await deps.runtimeRpc
+        .estimateDeclareFee({
+          account,
+          compiledClassHash: declare.compiledClassHash,
+          contractClass: declare.contractClass,
+          rpcUrls,
+          signHash: accountHashSigner(deps, account, passphrase),
+          ...(declare.classHash === undefined ? {} : { classHash: declare.classHash }),
+        })
+        .catch(() => null)
+    : null;
+  const deploymentFee =
+    accountDeployment === "undeployed" && deps.runtimeRpc.estimateAccountDeploymentFee
+      ? await deps.runtimeRpc
+          .estimateAccountDeploymentFee({
+            account,
+            rpcUrls,
+            signHash: accountHashSigner(deps, account, passphrase),
+          })
+          .catch(() => null)
+      : null;
+  return {
+    ...declarationStructure(declare),
+    accountDeployment,
+    deploymentFee,
+    deploymentFeeEstimateFailed: accountDeployment === "undeployed" && deploymentFee === null,
+    fee,
+    feeEstimateFailed: fee === null,
+  };
+};
+
+const declarationErrorMessage = (error: unknown): string => {
+  const curated = walletErrorMessage(error, "");
+  if (curated) {
+    return curated;
+  }
+  const message = error instanceof Error ? error.message : "";
+  if (/already declared/i.test(message)) {
+    return "This contract class is already declared on the selected network.";
+  }
+  if (/insufficient|balance|fee.*exceed|max.*fee/i.test(message)) {
+    return "The account does not have enough STRK to pay the declaration fee.";
+  }
+  if (/compiled class hash|class hash.*mismatch/i.test(message)) {
+    return "The declaration artifact does not match its compiled class hash.";
+  }
+  if (/validation|validate/i.test(message)) {
+    return "The account contract rejected the declaration during Starknet validation.";
+  }
+  return "Starknet rejected the declaration. Check the account's STRK balance, network, and class hashes, then try again.";
+};
+
 /**
  * Handles a dapp declare message; returns null for other message types.
  */
@@ -115,6 +208,7 @@ export const handleDeclareOps = async (
   const approval = approvals.requestDeclare({
     context: await createApprovalContext(account, { declare: input.declare }),
     declare: input.declare,
+    declaration: await declarationReview(deps, account, input.declare, preferences, passphrase),
     origin: input.origin,
     summaries: declareSummaries(input.declare),
   });
@@ -126,7 +220,8 @@ export const handleDeclareOps = async (
  * Executes a user-approved declare: re-resolves the active account for the
  * origin (a locked wallet or revoked grant fails safely), submits the held
  * declare, and returns the node's transaction and class hashes. Returns an
- * error response instead of throwing so the caller can keep the approval queued.
+ * actionable error response instead of throwing so the claimed request and
+ * held dapp promise settle together without leaving stale approval controls.
  */
 export const executeDeclareApproval = async (
   deps: DeclareExecuteDeps,
@@ -175,6 +270,6 @@ export const executeDeclareApproval = async (
     });
     return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return { error: walletErrorMessage(error, "declare request failed") };
+    return { error: declarationErrorMessage(error) };
   }
 };

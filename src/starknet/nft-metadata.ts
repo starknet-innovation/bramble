@@ -33,8 +33,11 @@ const IPFS_GATEWAY = "https://ipfs.io/ipfs/";
  * lists dedupe cleanly.
  */
 export type DiscoveredNft = {
+  readonly attributes?: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
+  readonly description?: string;
+  readonly externalUrl?: string;
   readonly id: string;
   readonly image: string;
   readonly networkId: StarknetNetworkId;
@@ -42,13 +45,68 @@ export type DiscoveredNft = {
   readonly tokenId: string;
 };
 
+/**
+ * One normalized NFT trait safe to render in the detail receipt.
+ */
+export type NftAttribute = {
+  readonly displayType?: string;
+  readonly traitType: string;
+  readonly value: string;
+};
+
 const isTokenIdString = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length <= MAX_TOKEN_ID_DIGITS &&
   /^(?:0|[1-9][0-9]*)$/.test(value);
 
-const isHttpsImage = (value: string): boolean =>
-  value.length <= MAX_IMAGE_URL_LENGTH && value.startsWith("https://");
+const isPrivateIpv4 = (hostname: string): boolean => {
+  const parts = hostname.split(".").map(Number);
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
+    return false;
+  }
+  const [first = 0, second = 0] = parts;
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    first >= 224
+  );
+};
+
+/**
+ * Normalizes a public HTTPS NFT resource URL, rejecting credentials and
+ * literal local/private hosts.
+ */
+export const normalizeNftHttpsUrl = (value: unknown): string => {
+  if (typeof value !== "string" || value.length > MAX_IMAGE_URL_LENGTH) {
+    return "";
+  }
+  try {
+    const url = new URL(value.trim());
+    const hostname = url.hostname.toLowerCase();
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname.endsWith(".local") ||
+      hostname.includes(":") ||
+      isPrivateIpv4(hostname)
+    ) {
+      return "";
+    }
+    return url.href;
+  } catch {
+    return "";
+  }
+};
 
 /**
  * Builds the deterministic NFT id shared by discovered and watched collectibles.
@@ -58,8 +116,23 @@ export const nftId = (networkId: StarknetNetworkId, contract: string, tokenId: s
 
 // Trims and length-caps a free-text metadata field (name/collection), returning
 // "" for anything that is not a usable string.
-const clampText = (value: unknown): string =>
-  typeof value === "string" ? value.trim().slice(0, MAX_TEXT_LENGTH) : "";
+/**
+ * Trims and length-caps an untrusted NFT metadata field.
+ */
+export const clampNftText = (value: unknown, maxLength = MAX_TEXT_LENGTH): string =>
+  typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+
+const isNftAttribute = (value: unknown): value is NftAttribute =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["displayType", "traitType", "value"]) &&
+  (value["displayType"] === undefined ||
+    (typeof value["displayType"] === "string" && value["displayType"].length <= 64)) &&
+  typeof value["traitType"] === "string" &&
+  value["traitType"].length > 0 &&
+  value["traitType"].length <= MAX_TEXT_LENGTH &&
+  typeof value["value"] === "string" &&
+  value["value"].length > 0 &&
+  value["value"].length <= 256;
 
 /**
  * Normalizes an untrusted image reference into an https URL the panel can
@@ -75,9 +148,9 @@ export const normalizeImageUrl = (value: unknown): string => {
   if (trimmed.startsWith("ipfs://")) {
     const path = trimmed.slice("ipfs://".length).replace(/^ipfs\//, "");
     const gatewayed = `${IPFS_GATEWAY}${path}`;
-    return path.length > 0 && gatewayed.length <= MAX_IMAGE_URL_LENGTH ? gatewayed : "";
+    return path.length > 0 ? normalizeNftHttpsUrl(gatewayed) : "";
   }
-  return isHttpsImage(trimmed) ? trimmed : "";
+  return normalizeNftHttpsUrl(trimmed);
 };
 
 /**
@@ -86,22 +159,35 @@ export const normalizeImageUrl = (value: unknown): string => {
 export const isDiscoveredNft = (value: unknown): value is DiscoveredNft =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
+    "attributes",
     "collection",
     "contract",
+    "description",
+    "externalUrl",
     "id",
     "image",
     "networkId",
     "name",
     "tokenId",
   ]) &&
+  (value["attributes"] === undefined ||
+    (Array.isArray(value["attributes"]) &&
+      value["attributes"].length <= 32 &&
+      value["attributes"].every(isNftAttribute))) &&
   typeof value["collection"] === "string" &&
   value["collection"].length <= MAX_TEXT_LENGTH &&
   typeof value["contract"] === "string" &&
   isNonZeroStarkFieldElement(value["contract"]) &&
+  (value["description"] === undefined ||
+    (typeof value["description"] === "string" && value["description"].length <= 1_024)) &&
+  (value["externalUrl"] === undefined ||
+    (typeof value["externalUrl"] === "string" &&
+      (value["externalUrl"] === "" ||
+        normalizeNftHttpsUrl(value["externalUrl"]) === value["externalUrl"]))) &&
   typeof value["name"] === "string" &&
   value["name"].length <= MAX_TEXT_LENGTH &&
   typeof value["image"] === "string" &&
-  (value["image"] === "" || isHttpsImage(value["image"])) &&
+  (value["image"] === "" || normalizeImageUrl(value["image"]) === value["image"]) &&
   isTokenIdString(value["tokenId"]) &&
   isStarknetNetworkId(value["networkId"]) &&
   typeof value["id"] === "string" &&
@@ -139,11 +225,11 @@ export const normalizeIndexerNft = (
     return null;
   }
   return {
-    collection: clampText(value["collection_name"]),
+    collection: clampNftText(value["collection_name"]),
     contract,
     id: nftId(networkId, contract, tokenId),
     image: normalizeImageUrl(value["image_url"]),
-    name: clampText(value["name"]),
+    name: clampNftText(value["name"]),
     networkId,
     tokenId,
   };

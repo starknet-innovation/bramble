@@ -7,6 +7,7 @@ export const EXPECTED_RUNTIME_FILES = [
   "ledger-grant.html",
   "ledger-grant/index.js",
   "manifest.json",
+  "popup.html",
   "provider/inpage.js",
   "sidepanel.html",
   "sidepanel/index.js",

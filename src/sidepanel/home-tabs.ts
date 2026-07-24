@@ -5,13 +5,13 @@
  * re-renders the shell — the runtime just toggles visibility. Pure templates;
  * bindings live in ./home-ui.ts, styles in ./styles-home.ts.
  */
-import type { TokenBalance, WalletStatus } from "../popup/responses";
+import type { DiscoveredNft, TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { friendlyNetworkError } from "../shared/network-error";
 import type { ActivityEntry } from "../storage/activity-store";
-import type { WatchedNft } from "../storage/nft";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { icon } from "./icons";
+import { type NftGalleryItem, nftImageMarkup, visibleNftItems } from "./nft-views";
 import type { BalanceState } from "./runtime";
 import { isHiddenFromHome } from "./token-flows";
 import { balanceRow } from "./token-row";
@@ -76,7 +76,7 @@ export const transactionRow = (entry: ActivityEntry): string => `
       <code>${escapeHtml(`${entry.hash.slice(0, 10)}…${entry.hash.slice(-6)}`)}</code>
       ${entry.status === "pending" ? `<span class="tx-hint">${escapeHtml(PENDING_TX_HINT)}</span>` : ""}
     </div>
-    <span class="tx-status ${entry.status}"${entry.status === "pending" ? ` title="${escapeHtml(PENDING_TX_HINT)}"` : ""}>${escapeHtml(entry.status)}</span>
+    <span class="tx-status ${entry.status}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}"${entry.status === "pending" ? ` title="${escapeHtml(PENDING_TX_HINT)}"` : ""}>${escapeHtml(entry.status)}</span>
     <button class="icon-button" data-copy="${escapeHtml(entry.hash)}" type="button" aria-label="Copy transaction hash" title="Copy transaction hash">${icon("copy")}</button>
   </li>`;
 
@@ -116,20 +116,24 @@ const tokensPanel = (
     <p id="panel-result" role="status"></p>`;
 };
 
-const collectibleCard = (nft: WatchedNft): string => `
+const collectibleCard = (nft: NftGalleryItem): string => `
   <li>
     <button class="collectible-card" data-nft-open="${escapeHtml(nft.id)}" type="button">
-      <span class="collectible-art">${icon("image")}</span>
+      <span class="collectible-art">${nftImageMarkup(nft, true)}${icon("image")}</span>
       <span class="collectible-copy">
-        <strong>${escapeHtml(nft.label ?? `NFT #${nft.tokenId}`)}</strong>
+        <strong>${escapeHtml(nft.title)}</strong>
         <code>#${escapeHtml(nft.tokenId)}</code>
       </span>
     </button>
   </li>`;
 
-const collectiblesPanel = (status: WalletStatus, preferences: WalletPreferences | null): string => {
-  const nfts = (preferences?.nfts ?? []).filter(
-    (nft) => nft.networkId === status.networkId && nft.spam !== true,
+const collectiblesPanel = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+  discoveredNfts: readonly DiscoveredNft[],
+): string => {
+  const nfts = visibleNftItems(preferences?.nfts ?? [], discoveredNfts, status.networkId).filter(
+    (nft) => nft.watched,
   );
   return `${
     nfts.length === 0
@@ -194,6 +198,7 @@ export const homeTabs = (
   transactions: readonly ActivityEntry[],
   status: WalletStatus,
   historyUnavailable: boolean,
+  discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => `
   <section class="home-tabs" data-active-tab="tokens" aria-label="Portfolio">
     <div class="tab-bar">
@@ -213,6 +218,6 @@ export const homeTabs = (
       </div>
     </div>
     ${tabPanel("tokens", tokensPanel(state, preferences, prices, changes, currency))}
-    ${tabPanel("collectibles", collectiblesPanel(status, preferences))}
+    ${tabPanel("collectibles", collectiblesPanel(status, preferences, discoveredNfts))}
     ${tabPanel("activity", activityPanel(transactions, historyUnavailable))}
   </section>`;

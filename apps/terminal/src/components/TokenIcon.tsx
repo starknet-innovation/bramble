@@ -1,12 +1,16 @@
 /**
- * Solid token/perp icon square.
+ * AVNU-backed token artwork with a deterministic ticker fallback.
  */
-import type { CSSProperties, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { iconColor } from "./palette";
 
 export type TokenIconProps = {
-  /** Symbol; the first three characters are shown as the glyph. */
+  /** Symbol; the first three characters are used only when artwork fails. */
   readonly symbol: string;
+  /** Canonical artwork URL from the token metadata provider. */
+  readonly logoUri?: string | null;
+  /** Human-readable token name used in the image title. */
+  readonly name?: string;
   /** Square edge length in px. Defaults to 30. */
   readonly size?: number;
   /** Palette seed (usually the list index) selecting the solid color. */
@@ -17,16 +21,21 @@ export type TokenIconProps = {
 };
 
 /**
- * Renders the muted solid square used everywhere a token or perp market is
- * listed. Glyph is the uppercased first three chars of the symbol.
+ * Renders canonical token artwork when available. Unavailable or broken remote
+ * artwork fails soft to the existing ticker tile without leaving a broken image.
  */
 export const TokenIcon = ({
   symbol,
+  logoUri = null,
+  name,
   size = 30,
   colorIndex = 0,
   color,
   className,
 }: TokenIconProps): ReactNode => {
+  const [failedUri, setFailedUri] = useState<string | null>(null);
+  const usableLogo = logoUri?.trim() ?? "";
+  const showLogo = usableLogo !== "" && failedUri !== usableLogo;
   const style: CSSProperties = {
     width: size,
     height: size,
@@ -34,8 +43,23 @@ export const TokenIcon = ({
     background: color ?? iconColor(colorIndex),
   };
   return (
-    <div className={className === undefined ? "ticon" : `ticon ${className}`} style={style}>
-      {symbol.slice(0, 3).toUpperCase()}
+    <div
+      className={className === undefined ? "ticon" : `ticon ${className}`}
+      style={style}
+      title={name ?? symbol}
+    >
+      {showLogo ? (
+        <img
+          alt=""
+          decoding="async"
+          loading="lazy"
+          onError={() => setFailedUri(usableLogo)}
+          referrerPolicy="no-referrer"
+          src={usableLogo}
+        />
+      ) : (
+        symbol.slice(0, 3).toUpperCase()
+      )}
     </div>
   );
 };

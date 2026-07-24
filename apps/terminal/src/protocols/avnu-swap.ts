@@ -89,6 +89,9 @@ export type AvnuQuoteResult = {
   readonly quoteId: string;
   readonly sellAmount: string;
   readonly buyAmount: string;
+  readonly gasFeesInUsd: number | null;
+  readonly priceImpactBps: number | null;
+  readonly routeLabels: readonly string[];
 };
 
 /**
@@ -191,7 +194,34 @@ export const parseQuoteResponse = (payload: unknown): AvnuQuoteResult => {
   if (sellAmount === null || buyAmount === null) {
     throw new WalletError("Invalid AVNU quote response");
   }
-  return { buyAmount, quoteId: quote.quoteId, sellAmount };
+  const gasFeesInUsd =
+    typeof quote.gasFeesInUsd === "number" && Number.isFinite(quote.gasFeesInUsd)
+      ? quote.gasFeesInUsd
+      : null;
+  const priceImpactBps =
+    typeof quote.priceImpact === "number" && Number.isFinite(quote.priceImpact)
+      ? quote.priceImpact
+      : null;
+  const routeLabels = Array.isArray(quote.routes)
+    ? quote.routes.flatMap((route) => {
+        if (!isRecord(route) || typeof route.name !== "string" || route.name.trim() === "") {
+          return [];
+        }
+        const percent =
+          typeof route.percent === "number" && Number.isFinite(route.percent)
+            ? ` ${Math.round(route.percent)}%`
+            : "";
+        return [`${route.name.trim()}${percent}`];
+      })
+    : [];
+  return {
+    buyAmount,
+    gasFeesInUsd,
+    priceImpactBps,
+    quoteId: quote.quoteId,
+    routeLabels,
+    sellAmount,
+  };
 };
 
 /**

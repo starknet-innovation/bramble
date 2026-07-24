@@ -10,10 +10,75 @@ several public APIs.
 bun install
 bun run dev        # dev server on http://localhost:5273 (with the CORS proxy)
 bun run build      # tsc --noEmit && vite build
+bun run build:contract # rebuild + hash-check the OpenZeppelin Punk class
 bun run typecheck  # tsc --noEmit
 bun run test       # vitest (mocked fetch/RPC — no network needed)
 bun run check:api  # LIVE API smoke test — run on your own machine (see below)
 ```
+
+## NFT Studio
+
+The **NFT Studio** tab is a mint-only surface for the deployed, owner-controlled
+MC Punks ERC-721 collection on Starknet Mainnet:
+
+1. Connect MC Wallet and select Starknet Mainnet.
+2. Choose an unclaimed catalog id from `0` through `9999`.
+3. Choose the recipient and review the mint through MC Wallet.
+
+The UI is pinned to
+`0xda8b762dcb301e6b144e521ede1e2870ce9c723e5b4e6856c870ad341098a9`.
+It exposes no class declaration, collection deployment, or NFT transfer
+controls. The collection contract remains owner-minted, so the connected
+account must hold its owner authority.
+
+The Cairo class in `contracts/punk_collection/` composes OpenZeppelin Contracts
+for Cairo v3.0.0 `ERC721Component`, `SRC5Component`, and `OwnableComponent`.
+It adds only an owner-gated `mint` entry point, a fixed catalog limit, and
+per-token metadata. It is intentionally non-upgradeable.
+
+```bash
+cd apps/terminal
+SCARB_CACHE=/tmp/mc-wallet-scarb-cache bun run build:contract
+cd contracts/punk_collection
+SCARB_CACHE=/tmp/mc-wallet-scarb-cache snforge test
+```
+
+`build:contract` uses Scarb 2.18.0, rebuilds both Sierra and CASM, verifies the
+pinned hashes, and only then publishes the Sierra class to
+`public/contracts/punk_collection.contract_class.json`.
+
+- Sierra class:
+  `0x5b5f364528b903513d36dce0aa5544d192c6a25865eeba9ba8a059d7f858263`
+- Compiled class:
+  `0x7372305f2ffd87350af2927b3e484d91ba0e594d62f5a33d8c8ac656729560a`
+
+The Foundry tests prove the owner-only mint rule and a complete
+owner → user A mint → user B transfer. The terminal separately tests calldata,
+class-hash validation, declaration wrapping, and launch/mint/send UI flows.
+
+Artwork previews and metadata reference the official per-Punk image host at
+runtime. Each mint stores its JSON as a self-contained Base64 data URI for
+consistent wallet and explorer parsing. No CryptoPunks artwork is copied into
+this repository. This project is an unaffiliated interoperability demo; the NFT
+contract and terminal code do not grant rights to the referenced artwork.
+
+## Wallet request experience
+
+All terminal mutations go through `WalletProvider.requestTransaction` instead
+of calling `account.execute` from individual screens. The provider owns a
+single, consistent lifecycle:
+
+- terminal-side review with account, network, call count, and action details;
+- spec-shaped `invoke_transaction` payloads with compiled calldata copied into
+  plain JSON before it crosses the wallet provider trust boundary;
+- explicit hand-off while MC Wallet is waiting for approval;
+- calm rejection copy with a safe retry;
+- validated transaction-hash feedback after submission.
+
+The connected control in the top navigation is a session menu with wallet,
+network, address copy, and explicit disconnect actions. A wallet-side account
+or network change updates the executable account binding before the next
+request.
 
 ## Data sources & the CORS dev proxy
 
@@ -48,11 +113,12 @@ browser error/reconnect loop.
 
 ### Production
 
-The Vite dev proxy only runs under `bun run dev`. A production deployment must
-front Extended REST with a reverse proxy that adds CORS headers, then set
-`VITE_EXTENDED_REST_BASE` to it. To retain no-history candle normalization in a
-deployed build, expose AVNU market data through the same reverse proxy and set
-`VITE_AVNU_MARKETS_BASE` to it.
+The persistent production deployment is
+[mc-wallet-terminal.vercel.app](https://mc-wallet-terminal.vercel.app).
+`vercel.json` supplies same-origin reverse-proxy routes for Extended REST and
+AVNU market data, then builds their `VITE_*_BASE` overrides into the client.
+Other production hosts must provide equivalent CORS-enabled routes and set
+`VITE_EXTENDED_REST_BASE` and `VITE_AVNU_MARKETS_BASE` themselves.
 
 ## Rate limits & resilience
 

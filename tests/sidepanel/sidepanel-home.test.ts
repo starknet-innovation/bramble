@@ -6,6 +6,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
+import { homeTabs } from "../../src/sidepanel/home-tabs";
+import { TERMINAL_URL } from "../../src/sidepanel/terminal-link";
 import { dashboard } from "../../src/sidepanel/views";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
 import { account, preferences, secondAccount } from "../support/sidepanel-fixtures";
@@ -42,11 +44,16 @@ describe("sidepanel home", () => {
     expect(drawer).toContain("data-drawer-close");
   });
 
-  test("header keeps ghost shortcuts for connected sites and lock", () => {
+  test("header keeps ghost shortcuts for sites, terminal, and lock", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const header = html.slice(html.indexOf("wallet-header"), html.indexOf("hero"));
 
     expect(header).toContain('data-view="connected-sites"');
+    expect(header).toContain(
+      `id="terminal-button" class="icon-button ghost" href="${TERMINAL_URL}"`,
+    );
+    expect(header).toContain('target="_blank" rel="noopener noreferrer"');
+    expect(header).toContain('aria-label="Open trade terminal"');
     expect(header).toContain('id="lock-button"');
   });
 
@@ -126,6 +133,36 @@ describe("sidepanel home", () => {
     expect(panel).toContain('data-view="nfts"');
   });
 
+  test("collectibles tab joins watched NFTs with resolved artwork metadata", () => {
+    const watched: WalletPreferences = {
+      ...preferences,
+      nfts: [
+        {
+          contract: "0xabc",
+          id: "SN_MAIN:0xabc:0",
+          networkId: "SN_MAIN",
+          tokenId: "0",
+        },
+      ],
+    };
+    const html = homeTabs({ balances: [] }, watched, {}, {}, "usd", [], status, false, [
+      {
+        attributes: [{ traitType: "Catalog", value: "CryptoPunks" }],
+        collection: "MC Punks",
+        contract: "0xabc",
+        id: "SN_MAIN:0xabc:0",
+        image: "https://cdn.example/punk0000.png",
+        name: "Starknet Test Punk #0",
+        networkId: "SN_MAIN",
+        tokenId: "0",
+      },
+    ]);
+
+    expect(html).toContain('class="nft-image nft-image--pixelated"');
+    expect(html).toContain('src="https://cdn.example/punk0000.png"');
+    expect(html).toContain("Starknet Test Punk #0");
+  });
+
   test("activity tab shows recent transactions with a jump to the full log", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] }, null, [
       {
@@ -201,7 +238,8 @@ describe("sidepanel home", () => {
     expect(hero).toContain('class="hero-stale"');
     expect(hero).toContain("Live prices unavailable right now");
     // No prices to convert: the total degrades to the em dash, as before.
-    expect(hero).toContain('class="hero-total">—');
+    expect(hero).toContain('class="hero-total"');
+    expect(hero).toContain('data-live-value="unknown">—');
   });
 
   test("fresh prices render no stale notice", () => {

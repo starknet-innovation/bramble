@@ -34,4 +34,18 @@ describe("locked gate view", () => {
     expect(locked(lockedStatus(true))).toMatch(/<button type="submit" >Unlock<\/button>/);
     expect(locked(lockedStatus(false))).toMatch(/<button type="submit" disabled>Unlock<\/button>/);
   });
+
+  test("explains that an origin request will continue after unlock", () => {
+    const html = locked(lockedStatus(true), [
+      {
+        id: "123e4567-e89b-42d3-a456-426614174000",
+        kind: "connect",
+        origin: "https://terminal.example",
+      },
+    ]);
+
+    expect(html).toContain("Unlock to review the wallet request waiting for you.");
+    expect(html).toContain("Site request waiting");
+    expect(html).toContain("https://terminal.example");
+  });
 });

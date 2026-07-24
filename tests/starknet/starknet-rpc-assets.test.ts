@@ -9,9 +9,14 @@
  * tests/starknet/starknet-rpc.test.ts asserts the transfer-call guard.
  */
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { RpcProvider } from "starknet";
+import { byteArray, RpcProvider } from "starknet";
 import { WalletError } from "../../src/shared/errors";
-import { buildErc20ApproveCall, getNftOwner } from "../../src/starknet/rpc-assets";
+import {
+  buildErc20ApproveCall,
+  getNftOwner,
+  getNftOwnership,
+  getNftTokenUri,
+} from "../../src/starknet/rpc-assets";
 
 const CONTRACT = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const OWNER = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
@@ -23,6 +28,16 @@ const spyCallContract = (impl: (call: CallArg) => Promise<readonly string[]>): v
   const spy = spyOn(RpcProvider.prototype, "callContract").mockImplementation(((call: CallArg) =>
     impl(call)) as never);
   spies.push(spy);
+};
+
+const encodedByteArray = (value: string): readonly string[] => {
+  const encoded = byteArray.byteArrayFromString(value);
+  return [
+    String(encoded.data.length),
+    ...encoded.data.map(String),
+    String(encoded.pending_word),
+    String(encoded.pending_word_len),
+  ];
 };
 
 afterEach(() => {
@@ -112,6 +127,124 @@ describe("getNftOwner", () => {
       getNftOwner({ contractAddress: "0x0", rpcUrls: ["https://rpc.example"], tokenId: "1" }),
     ).rejects.toThrow("Invalid NFT contract address");
     expect(called).toBe(false);
+  });
+});
+
+describe("getNftTokenUri", () => {
+  test("decodes a Cairo ByteArray from token_uri", async () => {
+    const uri = 'data:application/json,{"name":"Punk"}';
+    const seen: string[] = [];
+    spyCallContract(async (call) => {
+      seen.push(call.entrypoint);
+      return encodedByteArray(uri);
+    });
+
+    await expect(
+      getNftTokenUri({
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "0",
+      }),
+    ).resolves.toBe(uri);
+    expect(seen).toEqual(["token_uri"]);
+  });
+
+  test("falls back to tokenURI when token_uri is unsupported", async () => {
+    const uri = "ipfs://bafybeigdyrzt/0.json";
+    const seen: string[] = [];
+    spyCallContract(async (call) => {
+      seen.push(call.entrypoint);
+      if (call.entrypoint === "token_uri") {
+        throw Object.assign(new Error("entrypoint not found"), {
+          baseError: { code: 21, message: "entrypoint not found" },
+        });
+      }
+      return encodedByteArray(uri);
+    });
+
+    await expect(
+      getNftTokenUri({
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "5",
+      }),
+    ).resolves.toBe(uri);
+    expect(seen).toEqual(["token_uri", "tokenURI"]);
+  });
+
+  test("rejects malformed ByteArray responses", async () => {
+    spyCallContract(async () => ["1000000", "0x1", "0x0", "0"]);
+
+    await expect(
+      getNftTokenUri({
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "5",
+      }),
+    ).rejects.toThrow("Could not read NFT metadata URI");
+  });
+
+  test("reads an ERC1155 uri and substitutes the standard id placeholder", async () => {
+    const template = "https://metadata.example/{id}.json";
+    const seen: string[] = [];
+    spyCallContract(async (call) => {
+      seen.push(call.entrypoint);
+      if (call.entrypoint !== "uri") {
+        throw Object.assign(new Error("entrypoint not found"), {
+          baseError: { code: 21, message: "entrypoint not found" },
+        });
+      }
+      return encodedByteArray(template);
+    });
+
+    await expect(
+      getNftTokenUri({
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "342",
+      }),
+    ).resolves.toBe(
+      "https://metadata.example/0000000000000000000000000000000000000000000000000000000000000156.json",
+    );
+    expect(seen).toEqual(["token_uri", "tokenURI", "uri"]);
+  });
+});
+
+describe("getNftOwnership", () => {
+  test("falls back from ERC721 owner reads to an ERC1155 balance", async () => {
+    const seen: string[] = [];
+    spyCallContract(async (call) => {
+      seen.push(call.entrypoint);
+      if (call.entrypoint === "balance_of") {
+        return ["0x2", "0x0"];
+      }
+      throw Object.assign(new Error("entrypoint not found"), {
+        baseError: { code: 21, message: "entrypoint not found" },
+      });
+    });
+
+    await expect(
+      getNftOwnership({
+        accountAddress: OWNER,
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "342",
+      }),
+    ).resolves.toEqual({ balance: "2", standard: "ERC1155" });
+    expect(seen).toEqual(["owner_of", "ownerOf", "balance_of"]);
+  });
+
+  test("returns a zero ERC721 balance without misclassifying the contract", async () => {
+    spyCallContract(async () => ["0x999"]);
+
+    await expect(
+      getNftOwnership({
+        accountAddress: OWNER,
+        contractAddress: CONTRACT,
+        rpcUrls: ["https://rpc.example"],
+        tokenId: "5",
+      }),
+    ).resolves.toEqual({ balance: "0", standard: "ERC721" });
   });
 });
 

@@ -19,7 +19,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Recovery** — seed-phrase backup with on-screen verification for software accounts; Ledger accounts stay keyless and are recovered from the Ledger device's own recovery phrase.
 - **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
-- **NFT gallery** — watch collectibles with on-chain ownership proof before they're stored.
+- **NFT gallery** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`.
 - **Multisig** — watch, propose, confirm, and execute on OpenZeppelin multisig accounts.
 - **Anti-phishing** — domain blocklist plus lookalike / punycode detection and per-origin connection history.
 - **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap.

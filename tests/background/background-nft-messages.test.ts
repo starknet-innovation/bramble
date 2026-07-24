@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../../src/background/messages";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
+import type { NftOwnership } from "../../src/starknet/rpc-assets";
 import { createMemoryStore } from "../../src/storage/kv";
 import { createPreferencesStore } from "../../src/storage/preferences-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
@@ -67,13 +68,21 @@ const walletStub = {
   },
 };
 
-const makeHarness = (options?: { readonly owner?: string }) => {
+const makeHarness = (options?: { readonly owner?: string; readonly ownership?: NftOwnership }) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const invokeCalls: (readonly unknown[])[] = [];
+  const ownership = options?.ownership;
   const handler = createMessageHandler(walletStub, "extension-id", {
     preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
     runtimeRpc: makeRuntimeRpc({
+      ...(ownership
+        ? {
+            async getNftOwnership() {
+              return ownership;
+            },
+          }
+        : {}),
       async getNftOwner() {
         return options?.owner ?? account.address;
       },
@@ -141,5 +150,43 @@ describe("NFT gallery messages", () => {
     expect(call.contractAddress).toBe(CONTRACT);
     expect(call.calldata).toHaveLength(4);
     expect(call.calldata.slice(2)).toEqual(["5", "0"]);
+  });
+
+  test("watches and sends an ERC1155 edition through safe_transfer_from", async () => {
+    const { handler, invokeCalls } = makeHarness({
+      ownership: { balance: "1", standard: "ERC1155" },
+    });
+    await expect(
+      handler(
+        { contract: CONTRACT, networkId: "SN_MAIN", tokenId: "342", type: "wallet.addNft" },
+        sender,
+      ),
+    ).resolves.toMatchObject({ ok: true });
+
+    await expect(
+      handler(
+        {
+          contract: CONTRACT,
+          networkId: "SN_MAIN",
+          recipient: "0x777",
+          tokenId: "342",
+          type: "wallet.transferNft",
+        },
+        sender,
+      ),
+    ).resolves.toEqual({ ok: true, transactionHash: "0x7cd" });
+
+    const call = invokeCalls[0]?.[0] as {
+      calldata: string[];
+      contractAddress: string;
+      entrypoint: string;
+    };
+    expect(call).toMatchObject({
+      contractAddress: CONTRACT,
+      entrypoint: "safe_transfer_from",
+    });
+    expect(call.calldata.slice(2)).toEqual(["342", "0", "1", "0", "0"]);
+    expect(BigInt(call.calldata[0] ?? "0")).toBe(BigInt(account.address));
+    expect(BigInt(call.calldata[1] ?? "0")).toBe(0x777n);
   });
 });
