@@ -8,6 +8,66 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [0.7.0] - 2026-07-24
+
+NFT interoperability, deliberate transfer review, faster collectible hydration,
+and clearer dapp approval hand-offs.
+
+### Added
+- Mainnet-ready ERC-721 and ERC-1155 ownership detection, transfers, and
+  metadata resolution across Starknet naming conventions. The wallet decodes
+  Cairo `ByteArray` token URIs, inline JSON and IPFS/HTTPS metadata, collection
+  names, descriptions, images, and bounded attributes.
+- A two-step NFT send flow with recipient validation, decoded call summary,
+  address-poisoning warnings, deployment state, fee estimation, explicit
+  confirmation, and retryable failure states before any signature or broadcast.
+- A user-selectable dapp approval surface: requests can open in the side panel
+  or toolbar popup, with popup failure falling back safely to the side panel.
+- A companion mainnet MC Punks interoperability collection and mint-only NFT
+  Studio in the terminal test app. The deployed test collection is
+  `0xda8b762dcb301e6b144e521ede1e2870ce9c723e5b4e6856c870ad341098a9`.
+
+### Changed
+- Collectibles now use gallery-scale artwork, a larger detail hero, structured
+  attributes, resilient broken-image placeholders, and eager loading for the
+  first solicited items rather than tiny thumbnails.
+- Unlock and resync prioritize explicitly watched collectible artwork ahead of
+  slower portfolio and indexer work, coalesce duplicate loads, and discard
+  stale account-scoped results after account or network changes.
+- Terminal wallet requests now show a focused review dialog with route,
+  network, calldata summary, wallet hand-off, submitted hash, retry, and
+  accessible keyboard/focus behavior.
+- The unit suite is organized by source boundary, and privileged GitHub
+  workflows now isolate untrusted source execution from release authority
+  ([#158](https://github.com/starknet-innovation/mc-wallet/pull/158),
+  [#160](https://github.com/starknet-innovation/mc-wallet/pull/160)).
+
+### Fixed
+- “Add NFT” no longer assumes one `owner_of` ABI shape. Contracts exposing
+  `ownerOf`, ERC-1155 balance reads, `tokenURI`, `token_uri`, or `uri` now
+  resolve through validated fallbacks, including large decimal token IDs.
+- NFT metadata and artwork now survive explorer/indexer gaps by resolving
+  explicitly watched tokens directly from the contract while preserving
+  on-chain ownership proof.
+- NFT sends no longer broadcast immediately from the detail form; the reviewed
+  recipient and call must match the separately confirmed submission.
+- Gallery add/hide/spam/remove and send-review failures restore actionable UI
+  state instead of leaving controls wedged.
+
+### Security
+- Indexer ownership claims are never trusted: discovered, added, reviewed, and
+  submitted collectibles are re-proven on-chain, with bounded RPC concurrency.
+- Unsolicited airdrops do not trigger attacker-controlled metadata or image
+  requests during background discovery or gallery paint. Remote metadata is
+  public-HTTPS only, size-capped, credentialless, no-referrer, redirect-rejected,
+  and blocked from private/local hosts.
+- Review and submit share the same NFT call-preparation boundary; recipient
+  poisoning is a submission-blocking check, and all malformed metadata degrades
+  to an empty display rather than crossing into HTML unsanitized.
+- The coverage gate remains enforced at 95%; focused NFT success, malformed
+  input, fee retry, wallet failure, and control-recovery tests close the release
+  regression without lowering the threshold.
+
 ## [0.6.0] - 2026-07-23
 
 Phase 6 security work plus release-hygiene and audit closeout.

@@ -6,8 +6,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
 import { bindNfts, type NftUiDeps } from "../../src/sidepanel/nft-ui";
-import { nftDetailFlow } from "../../src/sidepanel/nft-views";
+import { nftDetailFlow, nftGalleryFlow } from "../../src/sidepanel/nft-views";
 import type { DiscoveredNft } from "../../src/starknet/nft-metadata";
+import type { WalletPreferences } from "../../src/storage/preferences-store";
 import { registerDom, unregisterDom } from "../support/groups-harness";
 import { account, preferences } from "../support/sidepanel-fixtures";
 
@@ -36,6 +37,14 @@ const nft: DiscoveredNft = {
   tokenId: "5",
 };
 
+const airdrop: DiscoveredNft = {
+  ...nft,
+  contract: "0x7330000",
+  id: "SN_MAIN:0x7330000:11",
+  name: "Airdrop #11",
+  tokenId: "11",
+};
+
 beforeAll(registerDom);
 afterAll(unregisterDom);
 
@@ -54,6 +63,10 @@ const mount = (
     requiresDeployment: false,
     summaries: ["Send NFT #5 to 0x02a3…6071"],
   },
+  failures: {
+    readonly review?: Error;
+    readonly transfer?: Error;
+  } = {},
 ) => {
   const app = document.createElement("div");
   app.replaceChildren(
@@ -69,10 +82,16 @@ const mount = (
     },
     async reviewNftTransfer(...args: unknown[]) {
       calls.review.push(args);
+      if (failures.review) {
+        throw failures.review;
+      }
       return review;
     },
     async transferNft(...args: unknown[]) {
       calls.transfer.push(args);
+      if (failures.transfer) {
+        throw failures.transfer;
+      }
       return "0xdeadbeef";
     },
   };
@@ -166,5 +185,239 @@ describe("NFT send review", () => {
     await flush();
     expect(calls.review).toHaveLength(2);
     expect(calls.transfer).toHaveLength(0);
+  });
+
+  test("keeps malformed recipients and failed reviews away from signing", async () => {
+    const invalid = mount();
+    recipientInput(invalid.app).value = "not-an-address";
+    submit(invalid.app);
+    await flush();
+    expect(invalid.calls.review).toHaveLength(0);
+    expect(invalid.calls.transfer).toHaveLength(0);
+    expect(invalid.app.querySelector("#nft-send-result")?.textContent).toBe(
+      "Enter a valid Starknet address.",
+    );
+
+    document.body.replaceChildren();
+    const failed = mount(undefined, {
+      review: new Error("invalid nft transfer review request"),
+    });
+    recipientInput(failed.app).value = RECIPIENT;
+    submit(failed.app);
+    await flush();
+    expect(failed.calls.review).toHaveLength(1);
+    expect(failed.calls.transfer).toHaveLength(0);
+    expect(failed.app.querySelector("#nft-send-result")?.textContent).toBe(
+      "Enter a valid Starknet address.",
+    );
+  });
+
+  test("requires a successful fee retry before confirmation", async () => {
+    const review = {
+      fee: null,
+      feeEstimateFailed: true,
+      flags: [],
+      requiresDeployment: false,
+      summaries: ["Send NFT #5"],
+    } as const;
+    const { app, calls } = mount(review);
+    recipientInput(app).value = RECIPIENT;
+
+    submit(app);
+    await flush();
+    expect(calls.review).toHaveLength(1);
+    expect(calls.transfer).toHaveLength(0);
+    expect(app.querySelector<HTMLButtonElement>("#review-retry-fee")).not.toBeNull();
+
+    app.querySelector<HTMLButtonElement>("#review-retry-fee")?.click();
+    await flush();
+    expect(calls.review).toHaveLength(2);
+    expect(calls.transfer).toHaveLength(0);
+  });
+
+  test("reports a failed confirmation and leaves the reviewed transfer retryable", async () => {
+    const { app, calls } = mount(undefined, {
+      transfer: new Error("Ledger disconnected"),
+    });
+    recipientInput(app).value = RECIPIENT;
+
+    submit(app);
+    await flush();
+    submit(app);
+    await flush();
+
+    expect(calls.review).toHaveLength(1);
+    expect(calls.transfer).toHaveLength(1);
+    expect(app.querySelector("#nft-send-result")?.textContent).toBe("Ledger disconnected");
+
+    submit(app);
+    await flush();
+    expect(calls.transfer).toHaveLength(2);
+  });
+});
+
+describe("NFT gallery bindings", () => {
+  test("binds add, open, hide, spam, remove, and broken-image behavior", async () => {
+    const watchedPreferences: WalletPreferences = {
+      ...preferences,
+      nfts: [
+        {
+          contract: nft.contract,
+          id: nft.id,
+          label: nft.name,
+          networkId: nft.networkId,
+          tokenId: nft.tokenId,
+        },
+        {
+          contract: "0x6220000",
+          id: "SN_MAIN:0x6220000:9",
+          networkId: "SN_MAIN",
+          spam: true,
+          tokenId: "9",
+        },
+      ],
+    };
+    const app = document.createElement("div");
+    app.replaceChildren(
+      document
+        .createRange()
+        .createContextualFragment(
+          nftGalleryFlow(status, account, watchedPreferences, [nft, airdrop]),
+        ),
+    );
+    document.body.append(app);
+
+    const added: unknown[][] = [];
+    const spammed: unknown[][] = [];
+    const removed: string[] = [];
+    const opened: string[] = [];
+    let renders = 0;
+    bindNfts({
+      app,
+      openDetail: (id) => {
+        opened.push(id);
+      },
+      render: async () => {
+        renders += 1;
+      },
+      wallet: {
+        async addNft(...args: unknown[]) {
+          added.push(args);
+        },
+        async loadStatus() {
+          return status;
+        },
+        async removeNft(id: string) {
+          removed.push(id);
+        },
+        async setNftSpam(...args: unknown[]) {
+          spammed.push(args);
+        },
+      } as unknown as NftUiDeps["wallet"],
+    });
+
+    app.querySelector<HTMLButtonElement>(`[data-nft-open="${nft.id}"]`)?.click();
+    expect(opened).toEqual([nft.id]);
+
+    const image = app.querySelector<HTMLImageElement>("img.nft-image");
+    image?.dispatchEvent(new Event("error"));
+    expect(image?.classList.contains("nft-image--broken")).toBe(true);
+
+    app.querySelector<HTMLButtonElement>(`[data-nft-hide="${airdrop.id}"]`)?.click();
+    app.querySelector<HTMLButtonElement>(`[data-nft-spam="${nft.id}"]`)?.click();
+    app.querySelector<HTMLButtonElement>(`[data-remove-nft="${nft.id}"]`)?.click();
+
+    const form = app.querySelector<HTMLFormElement>("#nft-form");
+    const contract = form?.querySelector<HTMLInputElement>('input[name="contract"]');
+    const tokenId = form?.querySelector<HTMLInputElement>('input[name="tokenId"]');
+    const label = form?.querySelector<HTMLInputElement>('input[name="label"]');
+    if (!form || !contract || !tokenId || !label) {
+      throw new Error("NFT add form missing");
+    }
+    contract.value = " 0x0444 ";
+    tokenId.value = "12";
+    label.value = "Manual #12";
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    await flush();
+    await flush();
+    expect(added).toContainEqual([
+      airdrop.contract,
+      airdrop.tokenId,
+      airdrop.networkId,
+      airdrop.name,
+    ]);
+    expect(added).toContainEqual(["0x444", "12", "SN_MAIN", "Manual #12"]);
+    expect(spammed).toContainEqual([airdrop.id, true]);
+    expect(spammed).toContainEqual([nft.id, true]);
+    expect(removed).toEqual([nft.id]);
+    expect(renders).toBeGreaterThanOrEqual(4);
+  });
+
+  test("recovers each gallery control after a wallet failure", async () => {
+    const watchedPreferences: WalletPreferences = {
+      ...preferences,
+      nfts: [
+        {
+          contract: nft.contract,
+          id: nft.id,
+          label: nft.name,
+          networkId: nft.networkId,
+          tokenId: nft.tokenId,
+        },
+      ],
+    };
+    const app = document.createElement("div");
+    app.replaceChildren(
+      document
+        .createRange()
+        .createContextualFragment(
+          nftGalleryFlow(status, account, watchedPreferences, [nft, airdrop]),
+        ),
+    );
+    document.body.append(app);
+    bindNfts({
+      app,
+      openDetail: () => undefined,
+      render: async () => undefined,
+      wallet: {
+        async addNft(...args: unknown[]) {
+          throw new Error(args[0] === airdrop.contract ? "Hide failed" : "Ownership failed");
+        },
+        async loadStatus() {
+          return status;
+        },
+        async removeNft() {
+          throw new Error("Removal failed");
+        },
+        async setNftSpam() {
+          throw new Error("Spam update failed");
+        },
+      } as unknown as NftUiDeps["wallet"],
+    });
+
+    const hide = app.querySelector<HTMLButtonElement>(`[data-nft-hide="${airdrop.id}"]`);
+    const spam = app.querySelector<HTMLButtonElement>(`[data-nft-spam="${nft.id}"]`);
+    const remove = app.querySelector<HTMLButtonElement>(`[data-remove-nft="${nft.id}"]`);
+    hide?.click();
+    spam?.click();
+    remove?.click();
+
+    const form = app.querySelector<HTMLFormElement>("#nft-form");
+    const contract = form?.querySelector<HTMLInputElement>('input[name="contract"]');
+    const tokenId = form?.querySelector<HTMLInputElement>('input[name="tokenId"]');
+    if (!form || !contract || !tokenId) {
+      throw new Error("NFT add form missing");
+    }
+    contract.value = "0x444";
+    tokenId.value = "12";
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+    await flush();
+    await flush();
+    expect(hide?.disabled).toBe(false);
+    expect(spam?.disabled).toBe(false);
+    expect(remove?.disabled).toBe(false);
+    expect(app.querySelector("#nft-result")?.textContent).toBe("Ownership failed");
   });
 });
