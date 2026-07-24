@@ -6,6 +6,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
+import { homeTabs } from "../../src/sidepanel/home-tabs";
 import { bindNfts, type NftUiDeps } from "../../src/sidepanel/nft-ui";
 import { nftDetailFlow, nftGalleryFlow } from "../../src/sidepanel/nft-views";
 import type { DiscoveredNft } from "../../src/starknet/nft-metadata";
@@ -131,6 +132,62 @@ describe("NFT collectibles-tile animation", () => {
   test("shows no tile play affordance for a collectible without an animation", () => {
     const app = fromHtml(nftGalleryFlow(status, account, preferences, [plain]));
     bind(app);
+    expect(app.querySelector(".nft-play-tile")).toBeNull();
+  });
+});
+
+describe("NFT home Collectibles-tab animation", () => {
+  const watchedPrefs: WalletPreferences = {
+    ...preferences,
+    nfts: [
+      {
+        contract: animated.contract,
+        id: animated.id,
+        label: animated.name,
+        networkId: animated.networkId,
+        tokenId: animated.tokenId,
+      },
+    ],
+  };
+
+  test("surfaces and plays the animation from the home Collectibles tile", () => {
+    const app = fromHtml(
+      homeTabs({ balances: [] }, watchedPrefs, {}, {}, "usd", [], status, false, [animated]),
+    );
+    bind(app);
+
+    const play = app.querySelector<HTMLButtonElement>(".collectible-tile .nft-play-tile");
+    const frame = app.querySelector<HTMLIFrameElement>(
+      ".collectible-tile iframe.nft-animation--tile",
+    );
+    expect(play).not.toBeNull();
+    expect(frame?.hidden).toBe(true);
+
+    play?.click();
+
+    expect(frame?.hidden).toBe(false);
+    expect(frame?.getAttribute("src")).toBe(
+      `sandbox/render.html#${encodeURIComponent(animated.animationUrl ?? "")}`,
+    );
+    expect(play?.hasAttribute("hidden")).toBe(true);
+  });
+
+  test("shows no play control on the home tile for a collectible without an animation", () => {
+    const plainPrefs: WalletPreferences = {
+      ...preferences,
+      nfts: [
+        {
+          contract: plain.contract,
+          id: plain.id,
+          label: plain.name,
+          networkId: plain.networkId,
+          tokenId: plain.tokenId,
+        },
+      ],
+    };
+    const app = fromHtml(
+      homeTabs({ balances: [] }, plainPrefs, {}, {}, "usd", [], status, false, [plain]),
+    );
     expect(app.querySelector(".nft-play-tile")).toBeNull();
   });
 });

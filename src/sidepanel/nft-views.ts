@@ -134,13 +134,17 @@ export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = fa
 const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
   `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}</span>`;
 
-// The gallery-tile play affordance for a collectible with an on-chain animation:
-// a button overlays the art square (revealed on hover/focus) and, when clicked,
-// nft-ui points the adjacent sandboxed iframe at the renderer so the animation
-// plays in place where the image would be. It sits outside the open button (no
-// nested buttons) and only appears for watched, solicited tokens, so it never
-// runs on gallery paint.
-const nftTilePlay = (item: NftGalleryItem): string =>
+/**
+ * The tile play affordance for a collectible with an on-chain animation: a button
+ * that overlays the art square (revealed on hover/focus) plus the hidden
+ * sandboxed iframe it drives. Shared by the NFTs gallery card and the home
+ * Collectibles tile so both surface one identical, audited control; nft-ui's
+ * `bindAnimation` wires the click. It sits outside the tile's open button (no
+ * nested buttons) and is emitted only for watched, solicited tokens carrying an
+ * `animationUrl`, so it never runs on gallery paint. The host `<li>` must be
+ * positioned (`.nft-card`/`.collectible-tile`) for the overlay to cover the art.
+ */
+export const nftTilePlay = (item: NftGalleryItem): string =>
   item.animationUrl
     ? `<button class="nft-play-tile" data-nft-play="${escapeHtml(item.animationUrl)}" type="button" aria-label="Play animation">${icon("gamepad")}<span>Play animation</span></button>
       <iframe class="nft-animation nft-animation--tile" title="Collectible animation" hidden></iframe>`

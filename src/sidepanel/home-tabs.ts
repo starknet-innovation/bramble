@@ -11,7 +11,7 @@ import { friendlyNetworkError } from "../shared/network-error";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { icon } from "./icons";
-import { type NftGalleryItem, nftImageMarkup, visibleNftItems } from "./nft-views";
+import { type NftGalleryItem, nftImageMarkup, nftTilePlay, visibleNftItems } from "./nft-views";
 import type { BalanceState } from "./runtime";
 import { isHiddenFromHome } from "./token-flows";
 import { balanceRow } from "./token-row";
@@ -117,7 +117,7 @@ const tokensPanel = (
 };
 
 const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
-  <li>
+  <li class="collectible-tile">
     <button class="collectible-card" data-nft-open="${escapeHtml(nft.id)}" type="button">
       <span class="collectible-art">${nftImageMarkup(nft, true, eager)}${icon("image")}</span>
       <span class="collectible-copy">
@@ -125,6 +125,7 @@ const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
         <code>#${escapeHtml(nft.tokenId)}</code>
       </span>
     </button>
+    ${nftTilePlay(nft)}
   </li>`;
 
 const collectiblesPanel = (

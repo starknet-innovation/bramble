@@ -179,6 +179,11 @@ export const HOME_STYLES = `
      aligns the tiles. Tapping a tile opens its detail; hover tints the name and
      lifts the art with a soft shadow (no box behind the caption). */
   .collectible-grid { display: grid; gap: ${SPACE.md}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Positioned so the shared .nft-play-tile / .nft-animation--tile overlay covers
+     the art square; the play affordance is revealed on hover/focus. */
+  .collectible-tile { position: relative; }
+  .collectible-tile:hover .nft-play-tile,
+  .collectible-tile:focus-within .nft-play-tile { opacity: 1; pointer-events: auto; }
   button.collectible-card {
     align-content: start;
     background: transparent;
