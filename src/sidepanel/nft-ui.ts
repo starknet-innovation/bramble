@@ -198,7 +198,7 @@ const bindAnimation = (deps: NftUiDeps): void => {
     button.addEventListener("click", () => {
       const animationUrl = button.dataset["nftPlay"];
       const frame = button
-        .closest("section")
+        .closest(".nft-card, section")
         ?.querySelector<HTMLIFrameElement>("iframe.nft-animation");
       if (!animationUrl || !frame) {
         return;

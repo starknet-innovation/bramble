@@ -134,6 +134,18 @@ export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = fa
 const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
   `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}</span>`;
 
+// The gallery-tile play affordance for a collectible with an on-chain animation:
+// a button overlays the art square (revealed on hover/focus) and, when clicked,
+// nft-ui points the adjacent sandboxed iframe at the renderer so the animation
+// plays in place where the image would be. It sits outside the open button (no
+// nested buttons) and only appears for watched, solicited tokens, so it never
+// runs on gallery paint.
+const nftTilePlay = (item: NftGalleryItem): string =>
+  item.animationUrl
+    ? `<button class="nft-play-tile" data-nft-play="${escapeHtml(item.animationUrl)}" type="button" aria-label="Play animation">${icon("gamepad")}<span>Play animation</span></button>
+      <iframe class="nft-animation nft-animation--tile" title="Collectible animation" hidden></iframe>`
+    : "";
+
 // The Hide control: a watched entry toggles its stored spam flag; a
 // discovered-only entry is persisted-as-spam by nft-ui using the data-* target.
 const hideButton = (item: NftGalleryItem): string =>
@@ -150,6 +162,7 @@ const nftCard = (item: NftGalleryItem, eager: boolean): string => `
         <code>${escapeHtml(item.collection || accountLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
       </span>
     </button>
+    ${nftTilePlay(item)}
     <div class="nft-actions">
       ${hideButton(item)}
       ${
