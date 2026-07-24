@@ -18,6 +18,8 @@ boundaries, release controls, and security posture.
   12 immediate packages under `src/`.
 - [v0.6 release audit](security-audit/releases/v0.6/) records the Ledger and multisig PR reviews,
   remediations, validation evidence, and residual third-party boundaries.
+- [v0.7 release assurance](security-audit/releases/v0.7/) records the NFT ownership, metadata,
+  transfer-review, privacy, performance, and release-gate review.
 - [Security policy](https://github.com/starknet-innovation/mc-wallet/blob/main/SECURITY.md) explains
   how to report a vulnerability privately.
 - [Contributing](https://github.com/starknet-innovation/mc-wallet/blob/main/CONTRIBUTING.md) contains

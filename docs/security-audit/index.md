@@ -7,8 +7,8 @@ permalink: /security-audit/
 # MC Wallet security audit
 
 This is the living, directory-by-directory security review of MC Wallet. The source baseline is
-the released `main` commit below. The Ledger and multisig changes added for v0.6 were reviewed
-separately against that baseline and are recorded in the release follow-up.
+the released `main` commit below. Later Ledger, multisig, NFT, approval-surface, and release-control
+changes are reviewed in versioned release follow-ups rather than rewriting the historical baseline.
 
 | Field | Value |
 | --- | --- |
@@ -17,7 +17,8 @@ separately against that baseline and are recorded in the release follow-up.
 | Baseline date | 2026-07-16 |
 | Audit started | 2026-07-23 |
 | v0.6 runtime follow-up | `cf1b174a8297264141b0449b129c11c7ad1d44d0` |
-| Current phase | Repository root, manifest, `.github/`, all `src/` packages, and v0.6 PR follow-up complete |
+| v0.7 runtime follow-up | `7be9ab68788083c417e169d75c2a5a0bbf7b1afa` |
+| Current phase | Repository root, manifest, `.github/`, all `src/` packages, and v0.6/v0.7 release follow-ups complete |
 | Open product security findings | 0 |
 | Open defense-in-depth and audit-assurance findings | 0 |
 | Open documentation findings | 0 |
@@ -29,6 +30,7 @@ separately against that baseline and are recorded in the release follow-up.
 - [Sanitized findings ledger](findings/)
 - [Consolidated source package audit](src-package-audit/)
 - [v0.6 Ledger and multisig release audit](releases/v0.6/)
+- [v0.7 NFT and approval-surface release assurance](releases/v0.7/)
 - [Directory review log](reviews/)
 
 ## Review sequence

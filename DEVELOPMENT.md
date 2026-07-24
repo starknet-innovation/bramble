@@ -11,7 +11,7 @@ It complements — does not replace — the other docs:
 - **`AGENTS.md`** — the operational guide for coding agents (setup, gates, layout).
 - **`RELEASING.md`** — the runbook that takes a finished release to a published build.
 
-> Current release: **`v0.6.0`**. The release-branch model began with **`v0.4`**;
+> Current release: **`v0.7.0`**. The release-branch model began with **`v0.4`**;
 > each later milestone maps 1:1 to its matching `release/vX.Y` branch.
 
 ---
