@@ -8,6 +8,43 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [0.7.1] - 2026-07-24
+
+Live Starknet portfolio data, a production trading terminal, and faster wallet
+state convergence after unlock and transactions.
+
+### Added
+- A strictly validated Starkscan read boundary for address summaries,
+  transactions, activity, token transfers, holdings and balances, contract
+  metadata, events, and blocks on indexed Starknet networks.
+- Starkscan-preferred wallet balances and transaction history, with incomplete
+  index snapshots rejected and existing RPC reads retained as the safe fallback.
+- A persistent production trading terminal with connected-wallet positions,
+  activity and follows, live token and perps markets, swap and lending actions,
+  Starknet activity streaming, and a wallet toolbar shortcut.
+
+### Changed
+- Wallet refreshes now converge sooner after unlock and submitted actions while
+  retaining account-scoped stale-result guards.
+- Terminal token prices, daily changes, chart history, trade fills, portfolio
+  totals, and protocol positions now come from validated live data sources.
+- Token artwork is served from local high-resolution AVNU and Extended asset
+  catalogs across Tokens, Perps, Discover, and portfolio surfaces.
+
+### Fixed
+- Stablecoin supply changes are no longer presented as daily price moves.
+- Non-ETH token charts, spot trade tapes, swap token selection, and utilization
+  curve inspection now behave consistently across supported assets.
+- Starknet Live now interleaves activity smoothly and restores at least twenty
+  cached rows instead of visibly repopulating from an empty feed.
+
+### Security
+- Every consumed Starkscan response is parsed at the trust boundary with
+  bounded pages and response sizes; malformed or incomplete indexed data fails
+  closed to the wallet's existing RPC path.
+- The wallet requests only the fixed Starkscan HTTPS host permission and keeps
+  external terminal navigation pinned to the reviewed production origin.
+
 ## [0.7.0] - 2026-07-24
 
 NFT interoperability, deliberate transfer review, faster collectible hydration,
