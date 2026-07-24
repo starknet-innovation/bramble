@@ -17,7 +17,7 @@ separately against that baseline and are recorded in the release follow-up.
 | Baseline date | 2026-07-16 |
 | Audit started | 2026-07-23 |
 | v0.6 runtime follow-up | `cf1b174a8297264141b0449b129c11c7ad1d44d0` |
-| Current phase | Repository root, manifest, all `src/` packages, and v0.6 PR follow-up complete |
+| Current phase | Repository root, manifest, `.github/`, all `src/` packages, and v0.6 PR follow-up complete |
 | Open product security findings | 0 |
 | Open defense-in-depth and audit-assurance findings | 0 |
 | Open documentation findings | 0 |
@@ -36,7 +36,7 @@ separately against that baseline and are recorded in the release follow-up.
 | Order | Area | Security focus | Status |
 | --- | --- | --- | --- |
 | 00 | Repository root + `public/manifest.json` | Dependencies, compiler policy, permissions, CSP, packaged surface | Complete |
-| 01 | `.github/` | CI trust, action pins, permissions, release and secret handling | Pending |
+| 01 | `.github/` | CI trust, action pins, permissions, release and secret handling | Complete |
 | 02 | `scripts/` | Build integrity, vendoring, packaging, release automation | Pending |
 | 03 | `src/content/` | Page-to-extension isolation and message authenticity | Complete |
 | 04 | `src/provider/` | Injected provider API, request/response validation | Complete |

@@ -53,8 +53,9 @@ permissions:
 
 jobs:
   # Resolve the build inputs from the trigger. A tag push releases that tag; a
-  # manual dispatch only builds the current package version for a store publish
-  # (create_release=false — the dispatch never cuts a GitHub Release).
+  # manual dispatch resolves the current version from trusted `main` and builds
+  # the existing immutable release tag for that version (create_release=false —
+  # the dispatch never cuts a GitHub Release).
   prepare:
     runs-on: ubuntu-latest
     outputs:
@@ -63,6 +64,10 @@ jobs:
       create_release: ${{ steps.pick.outputs.create_release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # A manual dispatcher may select any branch in the UI. Never execute
+          # that selected ref while deriving the privileged store-publish input.
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.3
@@ -74,6 +79,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
+          TRIGGER_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "push" ]; then
@@ -81,9 +87,18 @@ jobs:
             echo "ref=$REF_NAME" >> "$GITHUB_OUTPUT"
             echo "create_release=true" >> "$GITHUB_OUTPUT"
           else
+            if [ "$TRIGGER_REF" != "refs/heads/main" ]; then
+              echo "::error::Manual release runs must use the workflow from main."
+              exit 1
+            fi
             version="$(bun --print "require('./package.json').version")"
-            echo "tag=v${version}" >> "$GITHUB_OUTPUT"
-            echo "ref=$REF_NAME" >> "$GITHUB_OUTPUT"
+            tag="v${version}"
+            if ! git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+              echo "::error::Release tag ${tag} does not exist. Manual store publishing only accepts an existing immutable release tag."
+              exit 1
+            fi
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "ref=$tag" >> "$GITHUB_OUTPUT"
             echo "create_release=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -102,15 +117,22 @@ jobs:
   # cleanly if the CWS_* secrets are absent. The `chrome-web-store` environment
   # scopes the secrets so PR/fork runs can never read them.
   publish-chrome-web-store:
-    needs: build-release
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish == true }}
+    needs: [prepare, build-release]
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.publish == true
     environment: chrome-web-store
     permissions:
       contents: read
-    runs-on:
-      - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Execute the reviewed publish client from protected `main`; the bytes
+          # being uploaded still come exclusively from the immutable tag build.
+          ref: main
+          persist-credentials: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.3
@@ -118,9 +140,20 @@ jobs:
         with:
           name: mc-wallet-release
           path: artifacts
+      - name: Verify downloaded checksum
+        working-directory: artifacts
+        run: sha256sum -c ./*.zip.sha256
       - name: Resolve packaged zip path
         id: zip
-        run: echo "path=$(ls artifacts/*.zip)" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(artifacts/*.zip)
+          if [ "${#zips[@]}" -ne 1 ]; then
+            echo "::error::Expected exactly one packaged zip, found ${#zips[@]}."
+            exit 1
+          fi
+          echo "path=${zips[0]}" >> "$GITHUB_OUTPUT"
       # The publish client fails closed on a real API rejection but skips
       # cleanly (exit 0) when any CWS_* secret is missing, so this job is safe
       # even before a Chrome Web Store account exists.
@@ -134,4 +167,4 @@ jobs:
           CWS_PUBLISH_TARGET: ${{ inputs.publish_target }}
           CWS_DEPLOY_PERCENTAGE: ${{ inputs.deploy_percentage }}
           CWS_DRY_RUN: ${{ inputs.dry_run }}
-        run: bun run release:publish
+        run: bun run scripts/publish-chrome-web-store.ts

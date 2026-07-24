@@ -34,7 +34,7 @@ permissions:
 jobs:
   build-release:
     permissions:
-      contents: write
+      contents: read
     runs-on:
       - codebuild-gha-runner-mc-wallet-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -48,6 +48,8 @@ jobs:
         with:
           bun-version: 1.3.3
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          toolchain: 1.96.1
       # Same cargo/wasm-pack cache key as ci.yml so the release build reuses the
       # exact toolchain the vendored krusty artifacts are built with.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -91,7 +93,6 @@ jobs:
       # generator (scripts/generate-changelog.ts). TAG is passed via env (never
       # interpolated into the shell) and is a workflow input, not event data.
       - name: Derive release notes
-        if: ${{ inputs.create_release }}
         env:
           TAG: ${{ inputs.tag }}
         run: |
@@ -109,9 +110,9 @@ jobs:
           CHANGELOG_DATE="$(date -u +%Y-%m-%d)" \
           CHANGELOG_MODE=notes \
           CHANGELOG_COMMITS="$commits" \
-            bun run changelog > release-notes.md
+            bun run changelog > artifacts/release-notes.md
           echo "--- release notes ---"
-          cat release-notes.md
+          cat artifacts/release-notes.md
       # Consumable by the Chrome Web Store job so store bytes == release bytes.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -119,7 +120,23 @@ jobs:
           path: |
             artifacts/*.zip
             artifacts/*.zip.sha256
+            artifacts/release-notes.md
           if-no-files-found: error
+
+  # Publish from a fresh hosted runner that never checks out or executes wallet
+  # source. The self-hosted build above receives only read permission; this job
+  # receives the narrow write capability after consuming its inert artifacts.
+  publish-release:
+    needs: build-release
+    if: ${{ inputs.create_release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: mc-wallet-release
+          path: artifacts
       # Create the GitHub Release. Idempotent (create-or-upload): a release for
       # the tag can already exist (e.g. cut via the GitHub UI, a documented path
       # in RELEASING.md). When it exists we only attach/replace the built assets
@@ -134,9 +151,9 @@ jobs:
       # any OTHER reason the Release still will not exist and the upload fails
       # too, so a real error is never masked.
       - name: Create GitHub Release
-        if: ${{ inputs.create_release }}
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
@@ -149,7 +166,7 @@ jobs:
             upload
           elif ! gh release create "$TAG" \
               --title "$TAG" \
-              --notes-file release-notes.md \
+              --notes-file artifacts/release-notes.md \
               artifacts/*.zip artifacts/*.zip.sha256; then
             echo "gh release create failed for ${TAG}; if it now exists a concurrent build won the race, so attaching assets to it instead."
             upload

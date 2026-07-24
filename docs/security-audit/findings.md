@@ -13,6 +13,12 @@ impact, remediation, and retest condition.
 | ID | Severity | Status | Area | Summary |
 | --- | --- | --- | --- | --- |
 | MCW-AUD-001 | Low | Resolved | Root tooling | Biome analyzes the repository without the prior internal panics |
+| [MCW-CI-001](../reviews/01-github-workflows/#mcw-ci-001--fork-branch-name-could-authorize-the-self-hosted-release-runner) | High | Resolved | PR validation | Fork-controlled branch names cannot authorize the self-hosted runner |
+| [MCW-CI-002](../reviews/01-github-workflows/#mcw-ci-002--privileged-release-jobs-executed-selected-source) | High | Resolved | Release pipeline | Source execution is separated from release/store credentials and immutable inputs |
+| [MCW-CI-003](../reviews/01-github-workflows/#mcw-ci-003--roadmap-token-verification-used-the-pr-workflow-revision) | Medium | Resolved | Project sync | Token verification runs trusted base workflow code without checkout |
+| [MCW-CI-004](../reviews/01-github-workflows/#mcw-ci-004--nightly-accepted-unbounded-configured-refs-with-write-authority) | Medium | Resolved | Nightly | Self-hosted execution accepts only existing canonical release branches and is read-only |
+| [MCW-CI-005](../reviews/01-github-workflows/#mcw-ci-005--server-side-repository-rules-did-not-match-the-documented-model) | Medium | Resolved | Repository rules | Required checks, reviews, SHA pins, and secret scanning are enforced server-side |
+| [MCW-CI-006](../reviews/01-github-workflows/#mcw-ci-006--rust-action-followed-a-moving-toolchain-channel) | Low | Resolved | Toolchain | Rust action and compiler version are both immutable |
 | [MCW-SRC-001](../src-package-audit/#mcw-src-001) | High | Resolved | Swap execution | Execution uses a one-time call bundle frozen before confirmation |
 | [MCW-SRC-002](../src-package-audit/#mcw-src-002) | High | Resolved | STRK20 execution | Execution uses the exact prover call frozen before approval |
 | [MCW-SRC-003](../src-package-audit/#mcw-src-003) | Medium | Resolved | RPC submission | Write failover stops before submission begins |
