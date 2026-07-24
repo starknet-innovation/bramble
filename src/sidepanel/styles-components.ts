@@ -7,7 +7,7 @@
  *
  * Surface rules: controls are borderless (structure from elevation and space),
  * fills are solid, and feedback transforms stay inside the press/lift envelope
- * enforced by tests/sidepanel-styles.test.ts. Colour discipline: the cobalt
+ * enforced by tests/sidepanel/sidepanel-styles.test.ts. Colour discipline: the cobalt
  * accent marks interactive/active state only; market and status semantics ride
  * --mc-positive/--mc-danger so a gain, a success, or a risk always reads by
  * meaning, never by brand.

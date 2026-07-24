@@ -1,7 +1,7 @@
 /**
  * Maps low-level fetch/RPC transport failures to a single friendly, actionable
  * line so the UI never surfaces raw strings like "Failed to fetch". Pure and
- * side-effect free; see tests/network-error.test.ts.
+ * side-effect free; see tests/shared/network-error.test.ts.
  */
 
 /**

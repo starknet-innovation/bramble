@@ -22,7 +22,7 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
   `src/starknet/multisig-deploy.ts` is only reproducible on that version). Without the vendored
   outputs, `check:krusty`/`check:multisig` and `build` fail — that is expected in offline
   sandboxes; run the rest of the gates and say so.
-- Narrower loops while iterating: `bun test tests/<name>.test.ts`, `bun run check:types`,
+- Narrower loops while iterating: `bun test tests/<module>/<name>.test.ts`, `bun run check:types`,
   `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the
   full `bun run check`.
 - `bun run format` (Biome) fixes formatting/lint; Biome owns style, don't hand-format.
@@ -39,7 +39,10 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 - `src/security` — phishing blocklist and lookalike heuristics.
 - `src/sidepanel` + `src/ui` — side-panel UI; pure view templates + skin/scale tokens.
 - `scripts/` — build, packaging, vendoring, and the custom standards checks.
-- `tests/` — flat `*.test.ts` files (bun test); `tests/fake-kms.ts` is the KMS test double.
+- `tests/<module>/` — unit/integration tests mirror the primary `src/` trust boundary;
+  `tests/starknet/strk20/` mirrors its source sub-package. Cross-cutting `conformance/`, browser
+  `e2e/`, shared `support/`, and build-tool `scripts/` suites stay separate;
+  `tests/support/fake-kms.ts` is the KMS test double.
 
 ## Hard rules (enforced by `bun run check` and review)
 
@@ -71,8 +74,8 @@ Migrations must be deterministic. See README "Migration Workflow".
 - Pure functions by default; classes only where state/browser resources demand them. Avoid
   single-caller speculative abstractions. Explicit return types at exported boundaries.
 - Tests document invariants — when changing storage, permissions, signing paths, or migrations,
-  the corresponding test file must change too (e.g. `tests/key-boundary.test.ts` sanctions every
-  path that may expose secret material).
+  the corresponding test file must change too (e.g.
+  `tests/background/key-boundary.test.ts` sanctions every path that may expose secret material).
 - Commit style follows the existing history: imperative summary line, optional scope prefix like
   `ci:`, body explains the why.
 
