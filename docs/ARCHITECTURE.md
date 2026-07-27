@@ -110,7 +110,7 @@ The hardware signing path is split across two mutually checking contexts:
 
 1. The privileged background creates the exact Starknet message hash, parks a bounded signing
    request, and records the active unlock-session generation.
-2. A top-level extension window owns the selected transport. The side panel checks the app version
+2. A top-level extension tab owns the selected transport. The side panel checks the app version
    and public key at the stored path through its validated session broker, then asks the device to
    blind-sign that exact hash.
 3. The background receives only `(r, s)`, verifies it against the parked hash and stored public
@@ -118,29 +118,31 @@ The hardware signing path is split across two mutually checking contexts:
    broadcast. A missing queue, timeout, lock/expiry, wrong device, malformed response, rejected
    prompt, or bad signature fails closed.
 
-Chrome does not reliably display native hardware choosers from an extension side panel. Device
-selection therefore happens in the small `ledger-grant.html` extension popup. Some Nano X
-firmware exposes Ledger's APDU
+Chrome displays its native hardware chooser only from an ordinary browser tab. Both an extension
+side panel and a `chrome.windows.create({ type: "popup" })` window can resolve a picker request with
+an empty device list even while the OS sees the Ledger; this was reproduced with an unlocked Nano
+X and with an unfiltered chooser. Device selection therefore happens in `ledger-grant.html` opened
+as an active tab. Do not move this boundary back to a popup window. Some Nano X firmware exposes Ledger's APDU
 collection and a protected FIDO collection as one composite HID device. Chrome deliberately hides
 that entire device from WebHID, even when the chooser filter targets only Ledger's vendor-defined
 APDU usage page (`0xFFA0`). Browser API presence does not identify the attached model or connection,
-so the popup never infers Bluetooth from `navigator.bluetooth`. It presents cable as the primary
+so the tab never infers Bluetooth from `navigator.bluetooth`. It presents cable as the primary
 method (WebUSB with an APDU-filtered WebHID compatibility path) and Bluetooth as an explicit
-alternative for BLE-capable models. Nano S Plus is cable-only. Before reporting success, the popup
+alternative for BLE-capable models. Nano S Plus is cable-only. Before reporting success, the tab
 opens the user-selected
 transport, reads the Starknet app version, derives
 and discards the public key at the canonical index-zero path, then retains that transport for the
-current operation. Stable Chrome does not expose `Bluetooth.getDevices()`, so closing the popup and
+current operation. Stable Chrome does not expose `Bluetooth.getDevices()`, so closing the tab and
 silently reopening a paired device from the side panel is not a supported design. The Bluetooth
 path therefore owns and explicitly disconnects its GATT session; its readiness sequence pairs from
 the Ledger dashboard before asking the user to open Starknet.
 
 The side panel reaches the retained transport over a same-extension `BroadcastChannel` named with
-a random, per-window capability. Both ends validate exact message shapes. Only canonical Ledger
+a random, per-tab capability. Both ends validate exact message shapes. Only canonical Ledger
 paths, Stark field hashes, public app/key responses, and the raw `(r, s)` result can cross; no seed,
 private key, vault secret, device identifier, raw transport error, `postMessage`, or Chrome runtime
-message does. The popup returns focus to the wallet after the app probe and closes automatically
-when the owned session finishes. Every popup and APDU wait is bounded. For already-granted cable
+message does. The tab closes only itself when the owned session finishes; it never closes the
+browser window that hosts unrelated tabs. Every tab and APDU wait is bounded. For already-granted cable
 devices, the side panel may reconnect silently and presents explicit non-secret device choices
 when several are connected; Bluetooth disambiguation remains in Chrome's native pairing chooser.
 

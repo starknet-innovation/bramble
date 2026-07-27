@@ -2,7 +2,7 @@
  * Browser transport boundary for the side panel — the ONE place a live Ledger
  * device is opened after permission is granted. It must run in a Window
  * context, never the service worker. This module silently reopens origin-granted
- * WebUSB/WebHID cable devices. The standalone grant popup separately owns Web
+ * WebUSB/WebHID cable devices. The standalone grant tab separately owns Web
  * Bluetooth for the current operation because stable Chrome cannot enumerate
  * paired Bluetooth devices for a silent reopen. Construction wraps the transport in the
  * `@ledgerhq/hw-app-starknet` `StarknetClient`, exposed through the structural
@@ -34,7 +34,7 @@ type NavigatorWithLedgerTransport = {
 
 /**
  * True when the runtime exposes Web Bluetooth, WebUSB, or WebHID. This is
- * capability detection, not a permission check; the grant popup still owns
+ * capability detection, not a permission check; the grant tab still owns
  * the user gesture.
  */
 export const isLedgerTransportAvailable = (): boolean =>
@@ -54,10 +54,10 @@ const mapOpenError = (error: unknown): LedgerRejection => {
 /**
  * Silently reopens an already-granted device (no permission prompt). Returns
  * null when no granted device is connected, so the caller can fall back to the
- * grant-window popup (`./grant-window`'s `requestDeviceGrant`, driven by
+ * grant tab (`./grant-window`'s `requestDeviceGrant`, driven by
  * `./sign-connector.ts`) and retry. Cable device grants are origin-wide and
  * survive restarts, so this is the normal cable reconnect path. Bluetooth
- * sessions are retained and proxied by the dedicated hardware window instead.
+ * sessions are retained and proxied by the dedicated hardware tab instead.
  */
 export const openConnectedTransport = async (
   deviceId?: string,

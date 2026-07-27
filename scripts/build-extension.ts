@@ -13,7 +13,7 @@ const LEDGER_BLE_RAW_DISCONNECT_LOG = 'console.log("onDisconnect!", e);';
 
 // Ledger's browser packages still reference the Node `Buffer` identifier
 // without importing it. Inject a MODULE-LOCAL import only into those pinned
-// package files while building the side panel and grant popup; this avoids
+// package files while building the side panel and grant tab; this avoids
 // installing Buffer on `globalThis`, where unrelated UI code could observe or
 // replace it.
 const ledgerBufferBoundary: Bun.BunPlugin = {

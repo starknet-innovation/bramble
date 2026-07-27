@@ -386,7 +386,7 @@ export const LEDGER_GRANT_STYLES = `
   }
   /* Once Chrome returns a result, the recovery/success notice becomes the
      useful footer. Remove the redundant privacy line so the complete state and
-     both actions stay visible inside Chrome's reduced popup content height. */
+     both actions stay visible in a reduced browser viewport. */
   .grant-shell:has(.grant-status:not([hidden])) .grant-footnote { display: none; }
 
   @keyframes grant-spin { to { transform: rotate(360deg); } }

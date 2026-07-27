@@ -21,8 +21,8 @@ export type LedgerTransport = { close(): Promise<void> };
 
 /**
  * Reopens an already-granted device without a prompt. Resolves null when no
- * granted device is connected, so the caller can open the dedicated
- * grant-window popup and retry.
+ * granted device is connected, so the caller can open the dedicated grant tab
+ * and retry.
  */
 export function openConnectedTransportRaw(deviceId?: string): Promise<LedgerTransport | null>;
 

@@ -1,12 +1,14 @@
 /**
- * Top-level Ledger hardware-window boundary. Chrome suppresses a composite Nano
- * X from WebHID when any interface exposes FIDO, while stable Web Bluetooth
- * does not expose `Bluetooth.getDevices()` for a later silent reopen. The
- * gesture-owning popup therefore retains the live transport for the current
+ * Top-level Ledger hardware-tab boundary. Chrome exposes its native hardware
+ * chooser only from an ordinary browser tab: extension side panels and
+ * `chrome.windows.create({ type: "popup" })` windows can resolve with an empty
+ * device list even when the OS sees the Ledger. Stable Web Bluetooth also does
+ * not expose `Bluetooth.getDevices()` for a later silent reopen. The
+ * gesture-owning tab therefore retains the live transport for the current
  * read/sign operation and this module presents it as an owned
  * {@link LedgerDeviceSession} to the side panel.
  *
- * Communication uses a per-window, random-capability BroadcastChannel scoped
+ * Communication uses a per-tab, random-capability BroadcastChannel scoped
  * to this extension origin. Both ends validate every message; only canonical
  * Ledger paths, Stark hashes, public app/key responses, and raw signatures can
  * cross it. Private keys and device identifiers never do.
@@ -21,40 +23,33 @@ import { LedgerRejection } from "./errors";
 import type { LedgerDeviceSession } from "./sign-session";
 
 /**
- * Narrow `chrome.windows`/`chrome.runtime` surface needed to create, track,
- * refocus, and close the dedicated hardware window.
+ * Narrow `chrome.tabs`/`chrome.runtime` surface needed to create, track, and
+ * close the dedicated hardware tab. These calls do not require the `tabs`
+ * manifest permission because no privileged tab metadata is read.
  */
 export type GrantBrowser = {
   readonly runtime: {
     readonly getURL: (path: string) => string;
   };
-  readonly windows: {
+  readonly tabs: {
     readonly create: (options: {
       readonly url: string;
-      readonly type: "popup";
-      readonly width: number;
-      readonly height: number;
-      readonly focused: boolean;
+      readonly active: boolean;
     }) => Promise<{ readonly id?: number }>;
-    readonly get: (windowId: number) => Promise<{ readonly id?: number }>;
-    readonly getCurrent: () => Promise<{ readonly id?: number }>;
+    readonly get: (tabId: number) => Promise<{ readonly id?: number }>;
     readonly onRemoved: {
-      readonly addListener: (callback: (windowId: number) => void) => void;
-      readonly removeListener: (callback: (windowId: number) => void) => void;
+      readonly addListener: (callback: (tabId: number) => void) => void;
+      readonly removeListener: (callback: (tabId: number) => void) => void;
     };
-    readonly remove: (windowId: number) => Promise<void>;
-    readonly update: (
-      windowId: number,
-      options: { readonly focused: true },
-    ) => Promise<{ readonly id?: number }>;
+    readonly remove: (tabId: number) => Promise<void>;
   };
 };
 
 /**
- * Injected upper bound for waiting on the popup or one APDU command. Production
+ * Injected upper bound for waiting on the tab or one APDU command. Production
  * uses `setTimeout`; tests inject a deterministic scheduler.
  */
-export type GrantWindowTimeout = {
+export type GrantTabTimeout = {
   readonly ms: number;
   readonly schedule: (onElapsed: () => void, ms: number) => () => void;
 };
@@ -83,7 +78,7 @@ export type GrantClientChannel = {
 export type GrantSessionRuntime = {
   readonly channel: (name: string) => GrantClientChannel;
   readonly sessionId: () => string;
-  readonly timeout: GrantWindowTimeout;
+  readonly timeout: GrantTabTimeout;
 };
 
 type ExtensionGlobal = typeof globalThis & {
@@ -92,13 +87,11 @@ type ExtensionGlobal = typeof globalThis & {
 
 const hasGrantBrowserShape = (value: Partial<GrantBrowser> | undefined): value is GrantBrowser =>
   typeof value?.runtime?.getURL === "function" &&
-  typeof value?.windows?.create === "function" &&
-  typeof value?.windows?.get === "function" &&
-  typeof value?.windows?.getCurrent === "function" &&
-  typeof value?.windows?.onRemoved?.addListener === "function" &&
-  typeof value?.windows?.onRemoved?.removeListener === "function" &&
-  typeof value?.windows?.remove === "function" &&
-  typeof value?.windows?.update === "function";
+  typeof value?.tabs?.create === "function" &&
+  typeof value?.tabs?.get === "function" &&
+  typeof value?.tabs?.onRemoved?.addListener === "function" &&
+  typeof value?.tabs?.onRemoved?.removeListener === "function" &&
+  typeof value?.tabs?.remove === "function";
 
 /**
  * Reads and validates the extension browser surface, or returns null outside a
@@ -109,9 +102,7 @@ export const extensionBrowser = (): GrantBrowser | null => {
   return hasGrantBrowserShape(chrome) ? chrome : null;
 };
 
-const GRANT_WINDOW_WIDTH = 500;
-const GRANT_WINDOW_HEIGHT = 680;
-const GRANT_WINDOW_TIMEOUT: GrantWindowTimeout = {
+const GRANT_TAB_TIMEOUT: GrantTabTimeout = {
   ms: 120_000,
   schedule: (onElapsed, ms) => {
     const handle = setTimeout(onElapsed, ms);
@@ -121,7 +112,7 @@ const GRANT_WINDOW_TIMEOUT: GrantWindowTimeout = {
 const GRANT_SESSION_RUNTIME: GrantSessionRuntime = {
   channel: (name) => new BroadcastChannel(name),
   sessionId: () => crypto.randomUUID(),
-  timeout: GRANT_WINDOW_TIMEOUT,
+  timeout: GRANT_TAB_TIMEOUT,
 };
 
 type PendingCommand = {
@@ -222,10 +213,10 @@ const requireSignatureResponse = (value: unknown) => {
 };
 
 /**
- * Opens the dedicated Ledger window and resolves after it has selected a
+ * Opens the dedicated Ledger tab and resolves after it has selected a
  * transport and verified the Starknet app. The returned session proxies APDU
- * operations to that retained window and owns its lifecycle; `close()` closes
- * the window, channel, and underlying transport. Closing the popup early rejects
+ * operations to that retained tab and owns its lifecycle; `close()` closes
+ * the tab, channel, and underlying transport. Closing the tab early rejects
  * with `picker-cancelled`, and every wait is bounded so a lost chooser or
  * context cannot wedge onboarding/signing indefinitely.
  */
@@ -237,7 +228,7 @@ export const requestDeviceGrant = async (
   const channel = runtime.channel(ledgerBrokerChannelName(sessionId));
   const pending = new Map<number, PendingCommand>();
   let requestId = 0;
-  let windowId: number | undefined;
+  let tabId: number | undefined;
   let ready = false;
   let closed = false;
   let rejectReady: ((error: LedgerRejection) => void) | null = null;
@@ -260,12 +251,12 @@ export const requestDeviceGrant = async (
   };
 
   const detach = (): void => {
-    browser.windows.onRemoved.removeListener(onRemoved);
+    browser.tabs.onRemoved.removeListener(onRemoved);
     channel.removeEventListener("message", onMessage);
   };
 
   const onRemoved = (removedId: number): void => {
-    if (removedId !== windowId || closed) {
+    if (removedId !== tabId || closed) {
       return;
     }
     closed = true;
@@ -300,18 +291,14 @@ export const requestDeviceGrant = async (
   };
 
   channel.addEventListener("message", onMessage);
-  browser.windows.onRemoved.addListener(onRemoved);
+  browser.tabs.onRemoved.addListener(onRemoved);
 
-  const parent: { readonly id?: number } = await browser.windows.getCurrent().catch(() => ({}));
   try {
-    const created = await browser.windows.create({
-      focused: true,
-      height: GRANT_WINDOW_HEIGHT,
-      type: "popup",
+    const created = await browser.tabs.create({
+      active: true,
       url: `${browser.runtime.getURL("ledger-grant.html")}#session=${sessionId}`,
-      width: GRANT_WINDOW_WIDTH,
     });
-    windowId = created.id;
+    tabId = created.id;
   } catch {
     closed = true;
     detach();
@@ -319,15 +306,15 @@ export const requestDeviceGrant = async (
     throw new LedgerRejection("unexpected-device-error");
   }
 
-  if (windowId === undefined) {
+  if (tabId === undefined) {
     closed = true;
     detach();
     channel.close();
     throw new LedgerRejection("unexpected-device-error");
   }
 
-  // Catch a close that raced window creation/listener registration.
-  void browser.windows.get(windowId).catch(() => onRemoved(windowId as number));
+  // Catch a close that raced tab creation/listener registration.
+  void browser.tabs.get(tabId).catch(() => onRemoved(tabId as number));
 
   const cancelReadyTimeout = runtime.timeout.schedule(() => {
     if (!ready && !closed) {
@@ -335,15 +322,11 @@ export const requestDeviceGrant = async (
       detach();
       channel.close();
       failPending(new LedgerRejection("picker-cancelled"));
-      void browser.windows.remove(windowId as number).catch(() => undefined);
+      void browser.tabs.remove(tabId as number).catch(() => undefined);
     }
   }, runtime.timeout.ms);
 
   await readyPromise.finally(cancelReadyTimeout);
-  if (parent.id !== undefined) {
-    await browser.windows.update(parent.id, { focused: true }).catch(() => undefined);
-  }
-
   const call = (command: LedgerBrokerCall) =>
     new Promise<unknown>((resolve, reject) => {
       if (closed) {
@@ -386,7 +369,7 @@ export const requestDeviceGrant = async (
       detach();
       channel.close();
       failPending(new LedgerRejection("panel-context-lost"));
-      await browser.windows.remove(windowId as number).catch(() => undefined);
+      await browser.tabs.remove(tabId as number).catch(() => undefined);
     },
   };
 };

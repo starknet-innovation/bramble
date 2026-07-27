@@ -1,10 +1,10 @@
 /**
- * Typed surface for the grant-window-only Ledger transport selector.
+ * Typed surface for the grant-tab-only Ledger transport selector.
  */
 import type { LedgerTransport } from "../sidepanel/ledger/webhid-impl";
 
 /**
- * Browser transport choices shown by the hardware window
+ * Browser transport choices shown by the hardware tab
  */
 export type LedgerTransportKind = "ble" | "usb" | "hid";
 
@@ -15,7 +15,7 @@ export function supportedGrantTransportKinds(): readonly LedgerTransportKind[];
 
 /**
  * Opens one user-selected transport from a direct click in the top-level
- * hardware window
+ * hardware tab
  */
 export function requestGrantTransport(kind: LedgerTransportKind): Promise<LedgerTransport>;
 

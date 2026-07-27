@@ -1,5 +1,5 @@
 /**
- * The hardware-window protocol rejects arbitrary paths, non-field hashes,
+ * The hardware-tab protocol rejects arbitrary paths, non-field hashes,
  * unexpected fields, malformed capabilities, and unknown error codes.
  */
 import { describe, expect, test } from "bun:test";

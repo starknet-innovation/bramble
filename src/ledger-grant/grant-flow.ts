@@ -63,7 +63,7 @@ export const transportForConnectionMethod = (
 };
 
 /**
- * Non-sensitive browser failure categories safe to render in the grant popup.
+ * Non-sensitive browser failure categories safe to render in the grant tab.
  * Raw device and transport details never cross this policy boundary.
  */
 export type LedgerGrantFailure =

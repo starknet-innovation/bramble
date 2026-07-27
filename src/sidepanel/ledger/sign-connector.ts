@@ -4,7 +4,9 @@
  * Chrome blocks from WebHID; WebUSB and APDU-filtered WebHID remain cable
  * fallbacks. A thin adapter over the transport boundary turns an open cable
  * transport into a typed device client, mapping "no granted device" to the
- * top-level hardware popup. `request` never opens a browser device picker
+ * top-level hardware tab. Chrome exposes the native hardware chooser only in
+ * an ordinary tab; extension side panels and popup windows can return an empty
+ * device list. `request` never opens a browser device picker
  * inside the side panel; it retries a silent cable reconnect first, and only on
  * a miss opens `ledger-grant.html`, which retains the selected transport for
  * this operation and presents it as a validated remote device session.
@@ -39,7 +41,7 @@ const sessionFrom = (transport: LedgerTransport): LedgerDeviceSession => ({
  * already-granted devices.
  * `request` never shows a device picker in the side panel: it reconnects a
  * previously granted cable device first, then opens the hardware-owning
- * `ledger-grant.html` window when no silent route is available. Both paths return an OWNED
+ * `ledger-grant.html` tab when no silent route is available. Both paths return an OWNED
  * {@link LedgerDeviceSession} whose `close` releases the browser transport; the
  * caller MUST close it (success, failure, retry, or cancel) or the device stays
  * claimed.

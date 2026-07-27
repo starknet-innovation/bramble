@@ -1,13 +1,15 @@
 /**
- * Standalone popup page that obtains and verifies a browser Ledger grant.
- * Chrome cannot reliably render hardware pickers inside an extension side
- * panel, so this top-level window owns the user gesture. Cable is the primary
- * path for every supported model; Bluetooth is an explicit alternative on
- * devices that provide it. The popup opens the user-selected transport, probes the Starknet app,
- * and retains the live session while the side panel performs the current read
- * or sign result through a validated, per-session extension-origin broker. This
- * retained ownership is required for Web Bluetooth because stable Chrome cannot
- * silently enumerate a previously paired device.
+ * Standalone browser-tab page that obtains and verifies a Ledger grant. Chrome
+ * exposes its native hardware chooser only from an ordinary browser tab:
+ * extension side panels and `chrome.windows.create({ type: "popup" })` windows
+ * can resolve with an empty device list even when the OS sees the Ledger. Cable
+ * is the primary path for every supported model; Bluetooth is an explicit
+ * alternative on devices that provide it. The tab opens the user-selected
+ * transport, probes the Starknet app, and retains the live session while the
+ * side panel performs the current read or sign result through a validated,
+ * per-session extension-origin broker. This retained ownership is required for
+ * Web Bluetooth because stable Chrome cannot silently enumerate a previously
+ * paired device.
  *
  * Deliberately framework-free: trusted DOM construction, the shared wallet
  * skin/scale tokens, and a narrow Chrome type surface. Selection/failure policy
@@ -39,9 +41,9 @@ import {
 import { LEDGER_GRANT_STYLES } from "./styles";
 
 type GrantChrome = {
-  readonly windows?: {
-    readonly getCurrent: () => Promise<{ readonly id?: number }>;
-    readonly remove: (windowId: number) => Promise<void>;
+  readonly tabs?: {
+    readonly getCurrent: () => Promise<{ readonly id?: number } | undefined>;
+    readonly remove: (tabId: number) => Promise<void>;
   };
 };
 
@@ -50,22 +52,21 @@ type GrantGlobal = typeof globalThis & {
   readonly close?: () => void;
 };
 
-// Closes this popup once the grant is settled. Best-effort: outside a real
-// extension window (e.g. this file loaded stand-alone) there is nothing to
-// close, so a missing `chrome.windows` surface is silently skipped rather than
-// thrown.
-const closeThisWindow = async (): Promise<void> => {
+// Closes only this hardware tab once the retained session is settled. Never
+// remove the hosting browser window: doing so would close unrelated user tabs.
+// Best-effort outside a real extension tab.
+const closeThisTab = async (): Promise<void> => {
   const grantGlobal = globalThis as GrantGlobal;
   try {
-    const windows = grantGlobal.chrome?.windows;
-    const current = await windows?.getCurrent();
+    const tabs = grantGlobal.chrome?.tabs;
+    const current = await tabs?.getCurrent();
     if (current?.id !== undefined) {
-      await windows?.remove(current.id);
+      await tabs?.remove(current.id);
       return;
     }
   } catch {
     // A successful permission grant must not be reported as a connection
-    // failure merely because Chrome raced or rejected its window-removal call.
+    // failure merely because Chrome raced or rejected its tab-removal call.
   }
   grantGlobal.close?.();
 };
@@ -153,7 +154,7 @@ const render = (): void => {
     textElement(
       "p",
       "",
-      "Chrome uses this secure window to keep the device connection alive. It closes automatically when the wallet finishes.",
+      "Chrome uses this secure tab to keep the device connection alive. It closes automatically when the wallet finishes.",
     ),
   );
   hero.append(ledgerVisual(), copy);
@@ -273,7 +274,7 @@ const render = (): void => {
       transport && transportKind
         ? closeGrantTransport(transportKind, transport).catch(() => undefined)
         : Promise.resolve();
-    await closeThisWindow();
+    await closeThisTab();
     await cleanup;
   };
 
@@ -474,7 +475,7 @@ const render = (): void => {
     button.disabled = true;
     setStatus(
       "Open Ledger from MC Wallet",
-      "This hardware window needs a fresh secure session from the wallet.",
+      "This hardware tab needs a fresh secure session from the wallet.",
       "danger",
       "Support code · MC-LDG-SESSION",
     );

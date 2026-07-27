@@ -1,5 +1,5 @@
 /**
- * Hardware-owning half of the Ledger grant-window broker. It accepts only the
+ * Hardware-owning half of the Ledger grant-tab broker. It accepts only the
  * strictly validated protocol from `broker-protocol.ts`, executes one APDU
  * operation at a time against the retained Starknet client, and reduces thrown
  * failures to the fixed Ledger error catalog before responding.

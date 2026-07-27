@@ -1,8 +1,9 @@
 /**
- * Retained Ledger-window boundary: the popup is opened with a per-session
- * capability, resolves only after its validated broker reports ready, proxies
- * typed device calls, refocuses the parent wallet window, and tears every
- * resource down on close/timeout.
+ * Retained Ledger-tab boundary: an ordinary active tab is opened with a
+ * per-session capability, resolves only after its validated broker reports
+ * ready, proxies typed device calls, and tears every resource down on
+ * close/timeout. The tab surface is pinned so the broken popup-window chooser
+ * cannot be reintroduced.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import {
@@ -23,8 +24,8 @@ afterEach(() => {
   globalWithChrome.chrome = undefined;
 });
 
-type FakeWindow = { readonly id?: number };
-type WindowsCreateOptions = Parameters<GrantBrowser["windows"]["create"]>[0];
+type FakeTab = { readonly id?: number };
+type TabsCreateOptions = Parameters<GrantBrowser["tabs"]["create"]>[0];
 
 const createFakeChannel = (): {
   readonly channel: GrantClientChannel;
@@ -58,39 +59,36 @@ const createFakeChannel = (): {
 };
 
 const createFakeBrowser = (
-  createdWindow: FakeWindow,
+  createdTab: FakeTab,
   missingOnGet = false,
 ): {
   readonly browser: GrantBrowser;
-  readonly createCalls: WindowsCreateOptions[];
+  readonly createCalls: TabsCreateOptions[];
   readonly getCalls: number[];
-  readonly listeners: Set<(windowId: number) => void>;
+  readonly listeners: Set<(tabId: number) => void>;
   readonly removeCalls: number[];
-  readonly updateCalls: Array<readonly [number, { readonly focused: true }]>;
 } => {
-  const createCalls: WindowsCreateOptions[] = [];
+  const createCalls: TabsCreateOptions[] = [];
   const getCalls: number[] = [];
-  const listeners = new Set<(windowId: number) => void>();
+  const listeners = new Set<(tabId: number) => void>();
   const removeCalls: number[] = [];
-  const updateCalls: Array<readonly [number, { readonly focused: true }]> = [];
 
   const browser: GrantBrowser = {
     runtime: {
       getURL: (path) => `chrome-extension://fake-id/${path}`,
     },
-    windows: {
+    tabs: {
       create: async (options) => {
         createCalls.push(options);
-        return createdWindow;
+        return createdTab;
       },
-      get: async (windowId) => {
-        getCalls.push(windowId);
+      get: async (tabId) => {
+        getCalls.push(tabId);
         if (missingOnGet) {
-          throw new Error(`No window with id: ${windowId}`);
+          throw new Error(`No tab with id: ${tabId}`);
         }
-        return { id: windowId };
+        return { id: tabId };
       },
-      getCurrent: async () => ({ id: 3 }),
       onRemoved: {
         addListener: (callback) => {
           listeners.add(callback);
@@ -99,17 +97,13 @@ const createFakeBrowser = (
           listeners.delete(callback);
         },
       },
-      remove: async (windowId) => {
-        removeCalls.push(windowId);
-      },
-      update: async (windowId, options) => {
-        updateCalls.push([windowId, options]);
-        return { id: windowId };
+      remove: async (tabId) => {
+        removeCalls.push(tabId);
       },
     },
   };
 
-  return { browser, createCalls, getCalls, listeners, removeCalls, updateCalls };
+  return { browser, createCalls, getCalls, listeners, removeCalls };
 };
 
 const createRuntime = (
@@ -131,24 +125,21 @@ const createRuntime = (
 });
 
 describe("requestDeviceGrant", () => {
-  test("opens a capability-scoped popup, waits for ready, and refocuses the wallet", async () => {
+  test("opens a capability-scoped active tab and waits for ready", async () => {
     const fake = createFakeChannel();
-    const { browser, createCalls, updateCalls } = createFakeBrowser({ id: 7 });
+    const { browser, createCalls } = createFakeBrowser({ id: 7 });
     const pending = requestDeviceGrant(browser, createRuntime(fake));
     await tick();
 
     expect(createCalls).toEqual([
       {
-        focused: true,
-        height: 680,
-        type: "popup",
+        active: true,
         url: `chrome-extension://fake-id/ledger-grant.html#session=${SESSION_ID}`,
-        width: 500,
       },
     ]);
+    expect(Object.keys({ ...createCalls[0] }).sort()).toEqual(["active", "url"]);
     fake.emit({ kind: "ready" });
     const session = await pending;
-    expect(updateCalls).toEqual([[3, { focused: true }]]);
     await session.close();
   });
 
@@ -199,7 +190,7 @@ describe("requestDeviceGrant", () => {
     await session.close();
   });
 
-  test("closing the owned session signals the broker and removes its exact window", async () => {
+  test("closing the owned session signals the broker and removes its exact tab", async () => {
     const fake = createFakeChannel();
     const { browser, listeners, removeCalls } = createFakeBrowser({ id: 17 });
     const pending = requestDeviceGrant(browser, createRuntime(fake));
@@ -213,7 +204,7 @@ describe("requestDeviceGrant", () => {
     expect(listeners.size).toBe(0);
   });
 
-  test("ignores unrelated window closes and rejects when its popup closes before ready", async () => {
+  test("ignores unrelated tab closes and rejects when its tab closes before ready", async () => {
     const fake = createFakeChannel();
     const { browser, listeners } = createFakeBrowser({ id: 19 });
     const pending = requestDeviceGrant(browser, createRuntime(fake));
@@ -242,7 +233,7 @@ describe("requestDeviceGrant", () => {
     expect(removeCalls).toEqual([23]);
   });
 
-  test("rejects a created popup that has no trackable window id", async () => {
+  test("rejects a created tab that has no trackable id", async () => {
     const fake = createFakeChannel();
     const { browser, listeners } = createFakeBrowser({});
     await expect(requestDeviceGrant(browser, createRuntime(fake))).rejects.toMatchObject({
@@ -251,7 +242,7 @@ describe("requestDeviceGrant", () => {
     expect(listeners.size).toBe(0);
   });
 
-  test("detects a popup that closed during creation", async () => {
+  test("detects a tab that closed during creation", async () => {
     const fake = createFakeChannel();
     const { browser, getCalls } = createFakeBrowser({ id: 29 }, true);
     const pending = requestDeviceGrant(browser, createRuntime(fake));
@@ -266,15 +257,28 @@ describe("extensionBrowser", () => {
     expect(extensionBrowser()).toBeNull();
   });
 
-  test("returns null when chrome is missing the windows/runtime surface", () => {
+  test("returns null when chrome is missing the tabs/runtime surface", () => {
     globalWithChrome.chrome = { runtime: {} };
     expect(extensionBrowser()).toBeNull();
   });
 
-  test("returns null when focus/update lifecycle methods are missing", () => {
+  test("returns null when tab lifecycle methods are missing", () => {
     globalWithChrome.chrome = {
       runtime: { getURL: (path: string) => path },
-      windows: { create: async () => ({}), onRemoved: {} },
+      tabs: { create: async () => ({}), onRemoved: {} },
+    };
+    expect(extensionBrowser()).toBeNull();
+  });
+
+  test("returns null for the superseded chrome.windows surface", () => {
+    globalWithChrome.chrome = {
+      runtime: { getURL: (path: string) => path },
+      windows: {
+        create: async () => ({}),
+        get: async () => ({}),
+        onRemoved: { addListener: () => undefined, removeListener: () => undefined },
+        remove: async () => undefined,
+      },
     };
     expect(extensionBrowser()).toBeNull();
   });

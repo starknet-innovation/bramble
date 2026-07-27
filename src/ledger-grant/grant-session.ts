@@ -1,6 +1,6 @@
 /**
  * Verifies that a newly granted browser transport can actually speak to the
- * Starknet app before the popup reports success. The transport is always
+ * Starknet app before the grant tab reports success. The transport is always
  * released; a close failure only replaces a successful probe, never the more
  * actionable app/device failure that happened first.
  */

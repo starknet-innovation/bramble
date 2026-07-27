@@ -5,7 +5,7 @@
  * top-level window that receives the user gesture must retain ownership of the
  * live transport while the side panel performs the current read or sign.
  *
- * The channel name contains an unguessable per-window capability and both ends
+ * The channel name contains an unguessable per-tab capability and both ends
  * validate every message. Only canonical mc-wallet Ledger paths and Stark field
  * hashes may reach the device. Responses carry public app/key data or a raw
  * signature over the caller-supplied hash; no seed, private key, vault secret,
@@ -24,7 +24,7 @@ const SESSION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}
 export const LEDGER_BROKER_CHANNEL_PREFIX = "mc-wallet-ledger-v1:";
 
 /**
- * A validated session capability parsed from the grant-window URL fragment.
+ * A validated session capability parsed from the grant-tab URL fragment.
  * Returns null for any missing or malformed value so an independently opened
  * grant page cannot expose a device command channel.
  */

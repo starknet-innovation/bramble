@@ -1,5 +1,5 @@
 /**
- * The grant popup must verify the Starknet app and release its transport before
+ * The grant tab must verify the Starknet app and release its transport before
  * returning control to the side panel. Probe failures remain actionable even
  * when teardown also fails; a teardown failure after a good probe is surfaced.
  */

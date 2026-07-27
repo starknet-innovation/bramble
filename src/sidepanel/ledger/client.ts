@@ -153,7 +153,7 @@ const mapThrown = (error: unknown): LedgerRejection => {
 
 /**
  * Reduces an untrusted browser-transport throw to the fixed Ledger rejection
- * catalog. The retained hardware-window broker uses this before an error crosses
+ * catalog. The retained hardware-tab broker uses this before an error crosses
  * its extension-origin channel, so raw device/library messages never leave the
  * transport-owning context.
  */
