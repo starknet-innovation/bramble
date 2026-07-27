@@ -8,11 +8,16 @@ const MAX_LINES = 500;
 const EXCLUDED = new Set([
   ".claude",
   ".git",
+  ".impeccable",
+  ".playwright-cli",
   "apps",
   "artifacts",
   "bun.lock",
   "dist",
   "node_modules",
+  "output",
+  "playwright-report",
+  "test-results",
   "vendor",
 ]);
 const BROWSER_GLOBAL_FILES = new Set([

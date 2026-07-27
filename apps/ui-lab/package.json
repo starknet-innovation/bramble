@@ -1,0 +1,32 @@
+{
+  "name": "@mc-wallet/ui-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.3",
+  "scripts": {
+    "build": "storybook build",
+    "check": "bun run check:types && bun run check:lint && bun run test",
+    "check:lint": "biome check .",
+    "check:types": "tsc --noEmit",
+    "chromatic": "chromatic --exit-zero-on-changes --only-changed",
+    "dev": "storybook dev -p 6006 --no-open",
+    "test": "vitest run --project=storybook"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.5",
+    "@storybook/addon-a11y": "10.5.5",
+    "@storybook/addon-vitest": "10.5.5",
+    "@storybook/html-vite": "10.5.5",
+    "@types/react": "19.2.17",
+    "@vitest/browser": "4.1.10",
+    "@vitest/browser-playwright": "4.1.10",
+    "@vitest/runner": "4.1.10",
+    "chromatic": "18.1.0",
+    "playwright": "1.62.0",
+    "storybook": "10.5.5",
+    "typescript": "6.0.3",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

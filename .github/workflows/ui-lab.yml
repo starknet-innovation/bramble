@@ -1,0 +1,51 @@
+name: UI Lab
+
+on:
+  pull_request:
+    paths:
+      - "apps/ui-lab/**"
+      - "src/sidepanel/**"
+      - "src/ui/**"
+      - ".github/workflows/ui-lab.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/ui-lab/**"
+      - "src/sidepanel/**"
+      - "src/ui/**"
+      - ".github/workflows/ui-lab.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ui-lab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+    defaults:
+      run:
+        working-directory: apps/ui-lab
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.3
+      - name: Install UI Lab dependencies
+        run: bun install --frozen-lockfile
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+      - name: Check stories and interactions
+        run: bun run check
+      - name: Build static Storybook
+        run: bun run build
+      - name: Publish to Chromatic
+        if: ${{ env.CHROMATIC_PROJECT_TOKEN != '' }}
+        run: bun run chromatic

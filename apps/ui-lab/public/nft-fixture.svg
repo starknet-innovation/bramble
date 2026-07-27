@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title description">
+  <title id="title">MC fixture collectible</title>
+  <desc id="description">Geometric blue arches on a dark field, created only for the local UI lab.</desc>
+  <rect width="800" height="800" fill="#0b0e13"/>
+  <circle cx="400" cy="400" r="300" fill="#12151b" stroke="#232833" stroke-width="6"/>
+  <path d="M190 520c35-180 105-270 210-270s175 90 210 270" fill="none" stroke="#5c8dff" stroke-width="72" stroke-linecap="round"/>
+  <path d="M260 520c25-112 72-168 140-168s115 56 140 168" fill="none" stroke="#2fcf8e" stroke-width="42" stroke-linecap="round"/>
+  <circle cx="400" cy="520" r="46" fill="#f2f5fa"/>
+</svg>

@@ -11,6 +11,8 @@ boundaries, release controls, and security posture.
 
 ## Start here
 
+- [UI Lab](https://github.com/starknet-innovation/mc-wallet/tree/main/apps/ui-lab) provides
+  deterministic Storybook scenarios for production wallet UI and Chromatic review.
 - [Architecture and internals](architecture/) explains the runtime and data model.
 - [Security audit](security-audit/) tracks the directory-by-directory review of the current
   released baseline.
