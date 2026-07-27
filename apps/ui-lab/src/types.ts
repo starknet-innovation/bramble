@@ -1,3 +1,5 @@
+import type { WalletView } from "../../../src/sidepanel/views";
+
 export type LabSurface = "popup" | "sidepanel";
 export type LabTheme = "dark" | "light";
 
@@ -27,4 +29,5 @@ export type WalletScenario = {
   readonly id: string;
   readonly surface: LabSurface;
   readonly title: string;
+  readonly views?: readonly WalletView[];
 };

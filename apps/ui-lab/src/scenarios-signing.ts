@@ -147,6 +147,7 @@ export const sendScenario: WalletScenario = {
   id: "send",
   surface: "sidepanel",
   title: "Send lifecycle",
+  views: ["send"],
 };
 
 const ledgerRequest = {
