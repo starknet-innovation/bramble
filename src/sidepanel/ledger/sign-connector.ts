@@ -1,15 +1,16 @@
 /**
  * The live WebHID {@link LedgerConnector} used by the side-panel signing runtime.
  * A thin adapter over the transport boundary: it turns an open transport into a
- * typed device client, mapping "no granted device" to a popup-window grant and
- * only a persistent miss to a {@link LedgerRejection}. Chrome cannot render the
- * WebHID device chooser inside the extension side panel —
- * `navigator.hid.requestDevice()` resolves with an empty list there, even
- * though the device shows in `chrome://device-log` — so `request` never calls
- * the picker directly. It retries a silent reconnect
- * ({@link openConnectedTransport}) first, and only on a miss opens the small
- * `ledger-grant.html` popup window (`./grant-window`), where the native picker
- * does work, then retries the silent reconnect once more before giving up.
+ * typed device client, mapping "no granted device" to a grant-tab request and
+ * only a persistent miss to a {@link LedgerRejection}. Chrome renders the WebHID
+ * device chooser only for an ordinary browser tab: inside the extension side
+ * panel — and inside a `chrome.windows.create({ type: "popup" })` window —
+ * `navigator.hid.requestDevice()` resolves with an empty list, even though the
+ * device shows in `chrome://device-log`, so `request` never calls the picker
+ * directly. It retries a silent reconnect ({@link openConnectedTransport})
+ * first, and only on a miss opens `ledger-grant.html` as a tab
+ * (`./grant-window`), where the native picker does work, then retries the
+ * silent reconnect once more before giving up.
  * Already-granted devices are listed first so the controller can ask the user
  * to choose explicitly when more than one is connected. This is the one seam
  * that touches real hardware; controller decisions are tested through injected

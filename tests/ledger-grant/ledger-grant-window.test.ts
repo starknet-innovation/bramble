@@ -1,15 +1,18 @@
 /**
- * Ledger grant-window boundary:
- *   - requestDeviceGrant opens the grant page as a focused popup with the
- *     pinned URL/type/dimensions, resolves only when THAT window closes (a
- *     different window closing must not resolve it), and always removes its
- *     `onRemoved` listener so repeated calls never leak listeners;
- *   - requestDeviceGrant resolves immediately, registering no listener at all,
- *     when the created window carries no id;
+ * Ledger grant-tab boundary:
+ *   - requestDeviceGrant opens the grant page as an active TAB with the pinned
+ *     URL — never a `chrome.windows` popup, which is the context where Chrome
+ *     resolves `navigator.hid.requestDevice()` with an empty device list even
+ *     for a connected, unlocked Ledger;
+ *   - it resolves only when THAT tab closes (a different tab closing must not
+ *     resolve it), and always removes its `onRemoved` listener so repeated
+ *     calls never leak listeners;
+ *   - it resolves immediately, registering no listener at all, when the created
+ *     tab carries no id;
  *   - extensionBrowser narrows `globalThis.chrome` to the `GrantBrowser` shape
- *     this module needs, or returns null when the shape is missing or
- *     incomplete.
- * Everything is a fake `GrantBrowser` — no real `chrome.windows` or WebHID.
+ *     this module needs, or returns null when the shape is missing, incomplete,
+ *     or is the superseded `chrome.windows` surface.
+ * Everything is a fake `GrantBrowser` — no real `chrome.tabs` or WebHID.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import {
@@ -27,39 +30,39 @@ afterEach(() => {
   globalWithChrome.chrome = undefined;
 });
 
-type FakeWindow = { readonly id?: number };
-type WindowsCreateOptions = Parameters<GrantBrowser["windows"]["create"]>[0];
+type FakeTab = { readonly id?: number };
+type TabsCreateOptions = Parameters<GrantBrowser["tabs"]["create"]>[0];
 
 const createFakeBrowser = (
-  createdWindow: FakeWindow,
+  createdTab: FakeTab,
   missingOnGet = false,
 ): {
   readonly browser: GrantBrowser;
-  readonly createCalls: WindowsCreateOptions[];
+  readonly createCalls: TabsCreateOptions[];
   readonly getCalls: number[];
-  readonly listeners: Set<(windowId: number) => void>;
+  readonly listeners: Set<(tabId: number) => void>;
   readonly removeCalls: number[];
 } => {
-  const createCalls: WindowsCreateOptions[] = [];
+  const createCalls: TabsCreateOptions[] = [];
   const getCalls: number[] = [];
-  const listeners = new Set<(windowId: number) => void>();
+  const listeners = new Set<(tabId: number) => void>();
   const removeCalls: number[] = [];
 
   const browser: GrantBrowser = {
     runtime: {
       getURL: (path) => `chrome-extension://fake-id/${path}`,
     },
-    windows: {
+    tabs: {
       create: async (options) => {
         createCalls.push(options);
-        return createdWindow;
+        return createdTab;
       },
-      get: async (windowId) => {
-        getCalls.push(windowId);
+      get: async (tabId) => {
+        getCalls.push(tabId);
         if (missingOnGet) {
-          throw new Error(`No window with id: ${windowId}`);
+          throw new Error(`No tab with id: ${tabId}`);
         }
-        return { id: windowId };
+        return { id: tabId };
       },
       onRemoved: {
         addListener: (callback) => {
@@ -69,8 +72,8 @@ const createFakeBrowser = (
           listeners.delete(callback);
         },
       },
-      remove: async (windowId) => {
-        removeCalls.push(windowId);
+      remove: async (tabId) => {
+        removeCalls.push(tabId);
       },
     },
   };
@@ -79,7 +82,7 @@ const createFakeBrowser = (
 };
 
 describe("requestDeviceGrant", () => {
-  test("opens the grant page as a focused popup with the pinned URL, type, and dimensions", async () => {
+  test("opens the grant page as an active tab with the pinned URL", async () => {
     const { browser, createCalls, listeners } = createFakeBrowser({ id: 7 });
 
     const pending = requestDeviceGrant(browser);
@@ -87,11 +90,8 @@ describe("requestDeviceGrant", () => {
 
     expect(createCalls).toEqual([
       {
-        focused: true,
-        height: 420,
-        type: "popup",
+        active: true,
         url: "chrome-extension://fake-id/ledger-grant.html",
-        width: 460,
       },
     ]);
 
@@ -101,7 +101,25 @@ describe("requestDeviceGrant", () => {
     await pending;
   });
 
-  test("resolves only when the matching window id closes, and removes its listener", async () => {
+  test("never opens a popup window: the created surface carries no window options", async () => {
+    const { browser, createCalls, listeners } = createFakeBrowser({ id: 8 });
+
+    const pending = requestDeviceGrant(browser);
+    await tick();
+
+    // Chrome returns an empty HID device list from a `type: "popup"` window, so
+    // any reappearance of window-shaped options (`type`, `width`, `height`,
+    // `focused`) here is the original bug. Pinning the exact key set rejects all
+    // of them, and anything else added without a test.
+    expect(Object.keys({ ...createCalls[0] }).sort()).toEqual(["active", "url"]);
+
+    for (const listener of listeners) {
+      listener(8);
+    }
+    await pending;
+  });
+
+  test("resolves only when the matching tab id closes, and removes its listener", async () => {
     const { browser, listeners } = createFakeBrowser({ id: 11 });
 
     let resolved = false;
@@ -128,7 +146,7 @@ describe("requestDeviceGrant", () => {
     expect(listeners.size).toBe(0);
   });
 
-  test("resolves immediately and registers no listener when the created window has no id", async () => {
+  test("resolves immediately and registers no listener when the created tab has no id", async () => {
     const { browser, listeners } = createFakeBrowser({});
 
     await requestDeviceGrant(browser);
@@ -136,7 +154,7 @@ describe("requestDeviceGrant", () => {
     expect(listeners.size).toBe(0);
   });
 
-  test("bounds a popup that never closes and removes it without leaking the listener", async () => {
+  test("bounds a tab that never closes and removes it without leaking the listener", async () => {
     const { browser, listeners, removeCalls } = createFakeBrowser({ id: 13 });
     const timers: Array<() => void> = [];
     const pending = requestDeviceGrant(browser, {
@@ -155,7 +173,7 @@ describe("requestDeviceGrant", () => {
     expect(removeCalls).toEqual([13]);
   });
 
-  test("detects a popup that closed before its listener was registered", async () => {
+  test("detects a tab that closed before its listener was registered", async () => {
     const { browser, getCalls, listeners } = createFakeBrowser({ id: 17 }, true);
 
     await requestDeviceGrant(browser);
@@ -171,7 +189,7 @@ describe("extensionBrowser", () => {
     expect(extensionBrowser()).toBeNull();
   });
 
-  test("returns null when chrome is missing the windows/runtime surface", () => {
+  test("returns null when chrome is missing the tabs/runtime surface", () => {
     globalWithChrome.chrome = { runtime: {} };
     expect(extensionBrowser()).toBeNull();
   });
@@ -179,7 +197,20 @@ describe("extensionBrowser", () => {
   test("returns null when onRemoved is missing addListener/removeListener", () => {
     globalWithChrome.chrome = {
       runtime: { getURL: (path: string) => path },
-      windows: { create: async () => ({}), onRemoved: {} },
+      tabs: { create: async () => ({}), onRemoved: {} },
+    };
+    expect(extensionBrowser()).toBeNull();
+  });
+
+  test("returns null for the superseded chrome.windows surface", () => {
+    globalWithChrome.chrome = {
+      runtime: { getURL: (path: string) => path },
+      windows: {
+        create: async () => ({}),
+        get: async () => ({}),
+        onRemoved: { addListener: () => undefined, removeListener: () => undefined },
+        remove: async () => undefined,
+      },
     };
     expect(extensionBrowser()).toBeNull();
   });

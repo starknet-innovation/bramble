@@ -2,11 +2,12 @@
  * WebHID transport boundary for the side panel — the ONE place a live Ledger
  * device is opened. It must run in a Window context (the side panel), never
  * the service worker. Only a SILENT reconnect of an already-granted device
- * lives here: Chrome cannot render the WebHID device chooser inside an
- * extension side panel (the picker resolves with an empty list there, even
- * though the device shows in `chrome://device-log`), so the one-time grant
- * itself is obtained in a separate popup window (`./grant-window`, driven by
- * `./sign-connector.ts`) and this module only ever reopens what that popup
+ * lives here: Chrome renders the WebHID device chooser only for an ordinary
+ * browser tab (in an extension side panel, and in a
+ * `chrome.windows.create({ type: "popup" })` window, the picker resolves with an
+ * empty list even though the device shows in `chrome://device-log`), so the
+ * one-time grant itself is obtained in a separate tab (`./grant-window`, driven
+ * by `./sign-connector.ts`) and this module only ever reopens what that tab
  * already granted. Construction wraps the transport in the
  * `@ledgerhq/hw-app-starknet` `StarknetClient`, exposed through the structural
  * {@link LedgerDeviceClient} so the rest of the flow stays hardware-agnostic
@@ -49,7 +50,7 @@ const mapOpenError = (error: unknown): LedgerRejection => {
 /**
  * Silently reopens an already-granted device (no permission prompt). Returns
  * null when no granted device is connected, so the caller can fall back to the
- * grant-window popup (`./grant-window`'s `requestDeviceGrant`, driven by
+ * grant tab (`./grant-window`'s `requestDeviceGrant`, driven by
  * `./sign-connector.ts`) and retry. The WebHID grant is origin-wide and
  * survives restarts, so this is the normal reconnect path — used on every
  * connect, not only the first one after a grant.

@@ -1,14 +1,15 @@
 /**
- * Standalone popup page that obtains the one-time WebHID grant for a Ledger.
- * Chrome cannot render its device chooser inside an extension side panel —
- * `navigator.hid.requestDevice()` resolves with an empty list there, even
- * though the device is visible in `chrome://device-log` — so this small
- * top-level window is the ONLY place `requestDevice` is ever called. The grant
- * it produces is origin-wide and persists, so the side panel reconnects
- * silently afterward through `getDevices()` (see
- * `../sidepanel/ledger/transport.ts`'s `openConnectedTransport`, reached via
- * `../sidepanel/ledger/grant-window.ts`'s `requestDeviceGrant`, which opens this
- * page) — no picker on this or any future connect.
+ * Standalone page that obtains the one-time WebHID grant for a Ledger. Chrome
+ * renders its device chooser only for an ordinary browser tab:
+ * `navigator.hid.requestDevice()` resolves with an empty list in an extension
+ * side panel AND in a `chrome.windows.create({ type: "popup" })` window, even
+ * though the device is visible in `chrome://device-log` — so this page, opened
+ * as a TAB by `../sidepanel/ledger/grant-window.ts`'s `requestDeviceGrant`, is
+ * the ONLY place `requestDevice` is ever called. Do not reintroduce a popup
+ * window here; that was the original bug. The grant it produces is origin-wide
+ * and persists, so the side panel reconnects silently afterward through
+ * `getDevices()` (see `../sidepanel/ledger/transport.ts`'s
+ * `openConnectedTransport`) — no chooser on any future connect.
  *
  * Deliberately framework-free: one button, one status line, a hand-rolled
  * WebHID/chrome type surface (matching the hand-typed surfaces elsewhere at
@@ -32,9 +33,9 @@ type WebHidApi = {
 type NavigatorWithHid = { readonly hid?: WebHidApi };
 
 type GrantChrome = {
-  readonly windows?: {
-    readonly getCurrent: () => Promise<{ readonly id?: number }>;
-    readonly remove: (windowId: number) => Promise<void>;
+  readonly tabs?: {
+    readonly getCurrent: () => Promise<{ readonly id?: number } | undefined>;
+    readonly remove: (tabId: number) => Promise<void>;
   };
 };
 
@@ -42,15 +43,17 @@ type GrantGlobal = typeof globalThis & { readonly chrome?: GrantChrome };
 
 const webHid = (): WebHidApi | null => (navigator as NavigatorWithHid).hid ?? null;
 
-// Closes this popup once the grant is settled. Best-effort: outside a real
-// extension window (e.g. this file loaded stand-alone) there is nothing to
-// close, so a missing `chrome.windows` surface is silently skipped rather than
-// thrown.
-const closeThisWindow = async (): Promise<void> => {
-  const windows = (globalThis as GrantGlobal).chrome?.windows;
-  const current = await windows?.getCurrent();
+// Closes this tab once the grant is settled. Deliberately scoped to the TAB,
+// never the window: this page is opened as one tab inside the user's ordinary
+// browser window, so removing the window would take every unrelated tab in it
+// with it. Best-effort — outside a real extension tab (e.g. this file loaded
+// stand-alone) `getCurrent` yields nothing to close, so a missing
+// `chrome.tabs` surface or absent tab is silently skipped rather than thrown.
+const closeThisTab = async (): Promise<void> => {
+  const tabs = (globalThis as GrantGlobal).chrome?.tabs;
+  const current = await tabs?.getCurrent();
   if (current?.id !== undefined) {
-    await windows?.remove(current.id);
+    await tabs?.remove(current.id);
   }
 };
 
@@ -65,7 +68,7 @@ const render = (): void => {
 
   const copy = document.createElement("p");
   copy.textContent =
-    "Plug in your Ledger, unlock it, and open the Starknet app. Then choose it below.";
+    "Connect your Ledger by USB, unlock it, and open the Starknet app. Then choose it below.";
 
   const button = document.createElement("button");
   button.type = "button";
@@ -90,15 +93,18 @@ const render = (): void => {
     try {
       const devices = await hid.requestDevice({ filters: [{ vendorId: LEDGER_USB_VENDOR_ID }] });
       if (devices.length === 0) {
-        status.textContent = "No Ledger was selected. You can close this window and try again.";
+        // Chrome resolves with an empty list both when the chooser was
+        // dismissed and when it had nothing to offer, and exposes no way to
+        // tell those apart — so this must not assert that the user cancelled.
+        status.textContent =
+          "No Ledger was chosen. If the list was empty, check that your Ledger is connected by USB, unlocked, and showing the Starknet app, then try again.";
         button.disabled = false;
         return;
       }
-      status.textContent = "Connected. Closing this window…";
-      await closeThisWindow();
+      status.textContent = "Connected. Closing this tab…";
+      await closeThisTab();
     } catch {
-      status.textContent =
-        "Couldn't connect to your Ledger. You can close this window and try again.";
+      status.textContent = "Couldn't connect to your Ledger. You can close this tab and try again.";
       button.disabled = false;
     }
   };

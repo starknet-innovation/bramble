@@ -117,11 +117,16 @@ The hardware signing path is split across two mutually checking contexts:
    broadcast. A missing queue, timeout, lock/expiry, wrong device, malformed response, rejected
    prompt, or bad signature fails closed.
 
-Chrome does not reliably display its native WebHID chooser from an extension side panel. The first
-grant therefore happens in the small `ledger-grant.html` extension popup. It carries no wallet
-secret and sends no `postMessage` or runtime message; the only result is Chrome's origin-scoped
-WebHID permission. The side panel then reconnects silently. Its wait is bounded, detects a popup
-that closed before listener registration, and best-effort closes a stuck popup. When several
+Chrome displays its native WebHID chooser only for an ordinary browser tab. From an extension side
+panel, and equally from a `chrome.windows.create({ type: "popup" })` window,
+`navigator.hid.requestDevice()` resolves with an empty device list rather than rejecting — observed
+against a connected, unlocked Nano X that the OS enumerated normally and that other extensions in
+the same Chrome profile could reach, and reproduced even with `filters: []`. Because an empty
+chooser is indistinguishable from a user cancelling, the first grant happens in `ledger-grant.html`
+opened as a **tab**. It carries no wallet secret and sends no `postMessage` or runtime message; the
+only result is Chrome's origin-scoped WebHID permission. The page closes only its own tab, never
+the window that hosts it. The side panel then reconnects silently. Its wait is bounded, detects a
+tab that closed before listener registration, and best-effort closes a stuck tab. When several
 granted devices are connected, the UI lists non-secret labels with side-panel-local opaque ids and
 opens only the device the user selects; ids are neither persisted nor sent across an extension
 message boundary.
