@@ -7,6 +7,7 @@ import {
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
+  sameFelt,
 } from "../starknet/networks";
 import type { KeyValueStore } from "./kv";
 import { serializeStoreMutations } from "./mutation-queue";
@@ -16,7 +17,7 @@ import { serializeStoreMutations } from "./mutation-queue";
  */
 const ACTIVITY_STORE_KEY = "mc-wallet:activity";
 
-const MAX_ENTRIES = 200;
+const MAX_ENTRIES_PER_SCOPE = 200;
 
 /**
  * System wall-clock reader. Lives in this clock-boundary module so other
@@ -49,6 +50,16 @@ export type ActivityEntry = {
 };
 
 /**
+ * Account and network boundary for a single activity feed. Both fields remain
+ * explicit so callers cannot accidentally treat an account id as globally
+ * scoped if its representation changes in a future vault schema.
+ */
+export type ActivityScope = {
+  readonly accountId: string;
+  readonly networkId: StarknetNetworkId;
+};
+
+/**
  * Activity log surface used by background message handling.
  */
 export type ActivityLog = {
@@ -56,6 +67,7 @@ export type ActivityLog = {
   readonly record: (entry: Omit<ActivityEntry, "status" | "submittedAt">) => Promise<void>;
   readonly updateStatuses: (
     statuses: Readonly<Record<string, ActivityStatus>>,
+    scope: ActivityScope,
   ) => Promise<readonly ActivityEntry[]>;
 };
 
@@ -108,6 +120,44 @@ const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry
   return Array.isArray(stored) ? stored.filter(isActivityEntry) : [];
 };
 
+const matchesScope = (entry: ActivityEntry, scope: ActivityScope): boolean =>
+  entry.accountId === scope.accountId && entry.networkId === scope.networkId;
+
+/**
+ * Selects the rows that belong to one account on one network. The persistent
+ * store may contain many scopes, but no UI or status reconciliation boundary
+ * should consume the unfiltered list.
+ */
+export const activityForScope = (
+  entries: readonly ActivityEntry[],
+  scope: ActivityScope,
+): readonly ActivityEntry[] => entries.filter((entry) => matchesScope(entry, scope));
+
+const entriesAfterRecord = (
+  entries: readonly ActivityEntry[],
+  next: ActivityEntry,
+): readonly ActivityEntry[] => {
+  const scope = { accountId: next.accountId, networkId: next.networkId };
+  const sameScope = activityForScope(entries, scope).filter(
+    (stored) => !sameFelt(stored.hash, next.hash),
+  );
+  const retainedScope = new Set(sameScope.slice(-(MAX_ENTRIES_PER_SCOPE - 1)));
+  return [
+    ...entries.filter(
+      (stored) =>
+        !matchesScope(stored, scope) ||
+        (!sameFelt(stored.hash, next.hash) && retainedScope.has(stored)),
+    ),
+    next,
+  ];
+};
+
+const statusForHash = (
+  statuses: Readonly<Record<string, ActivityStatus>>,
+  hash: string,
+): ActivityStatus | undefined =>
+  Object.entries(statuses).find(([candidate]) => sameFelt(candidate, hash))?.[1];
+
 /**
  * Creates the persistent activity log.
  */
@@ -130,21 +180,21 @@ export const createActivityLog = ({
           return;
         }
         const entries = await readEntries(store);
-        const kept = entries
-          .filter((stored) => stored.hash !== next.hash)
-          .slice(-(MAX_ENTRIES - 1));
-        await store.set(ACTIVITY_STORE_KEY, [...kept, next]);
+        await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
       },
-      async updateStatuses(statuses) {
+      async updateStatuses(statuses, scope) {
         const entries = await readEntries(store);
         const updated = entries.map((entry) => {
-          const status = statuses[entry.hash];
+          if (!matchesScope(entry, scope)) {
+            return entry;
+          }
+          const status = statusForHash(statuses, entry.hash);
           return status && isActivityStatus(status) && status !== entry.status
             ? { ...entry, status }
             : entry;
         });
         await store.set(ACTIVITY_STORE_KEY, updated);
-        return [...updated].sort((a, b) => b.submittedAt - a.submittedAt);
+        return [...activityForScope(updated, scope)].sort((a, b) => b.submittedAt - a.submittedAt);
       },
     },
     ["list"],
@@ -161,16 +211,19 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
     },
     async record(entry) {
       const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
-      entries.push(next);
+      entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
     },
-    async updateStatuses(statuses) {
+    async updateStatuses(statuses, scope) {
       for (const [index, entry] of entries.entries()) {
-        const status = statuses[entry.hash];
+        if (!matchesScope(entry, scope)) {
+          continue;
+        }
+        const status = statusForHash(statuses, entry.hash);
         if (status) {
           entries[index] = { ...entry, status };
         }
       }
-      return [...entries].sort((a, b) => b.submittedAt - a.submittedAt);
+      return [...activityForScope(entries, scope)].sort((a, b) => b.submittedAt - a.submittedAt);
     },
   };
 };

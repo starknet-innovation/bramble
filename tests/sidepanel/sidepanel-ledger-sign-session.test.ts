@@ -124,8 +124,7 @@ describe("Ledger sign controller", () => {
     controllerFor(h).present(REQUEST);
     await tick();
 
-    // Went straight to the on-device wait, then dismissed on success.
-    expect(phases(h.views)).toEqual(["confirming", null]);
+    expect(phases(h.views)).toEqual(["checking", "verifying", "confirming", "submitting", null]);
     // The raw device (r, s) was reported to the background queue for this id.
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
     // The owned transport is released on the success path.
@@ -150,7 +149,15 @@ describe("Ledger sign controller", () => {
 
     controller.connect();
     await tick();
-    expect(phases(h.views)).toEqual(["connect", "confirming", null]);
+    expect(phases(h.views)).toEqual([
+      "connect",
+      "connecting",
+      "checking",
+      "verifying",
+      "confirming",
+      "submitting",
+      null,
+    ]);
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
   });
 
@@ -477,7 +484,6 @@ describe("Ledger sign controller", () => {
     expect(reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
     expect(views.at(-1)).toBeNull();
   });
-
   test("connect and retry are no-ops when nothing is active", async () => {
     const h = harness({
       openConnected: () => Promise.reject(new Error("must not be called")),

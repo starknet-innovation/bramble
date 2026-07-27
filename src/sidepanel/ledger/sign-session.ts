@@ -87,16 +87,22 @@ export const closeLedgerSessionQuietly = async (session: LedgerDeviceSession): P
 };
 
 /**
- * The device-prompt phase the panel renders for the active request. `connect`
- * needs a user gesture (no granted device); `devices` asks the user to select
- * one of several granted devices; `confirming` is the on-device wait; `error`
- * carries a catalog code and its user-facing copy.
+ * The device-prompt phase the panel renders for the active request. Discovery,
+ * transport connection, app checks, account-key verification, device approval,
+ * and signature handoff are distinct so the user always sees the real work
+ * currently happening. `connect` needs a user gesture; `error` carries a
+ * catalog code and actionable recovery copy.
  */
 export type LedgerSignPhase =
+  | { readonly kind: "checking" }
   | { readonly kind: "connect" }
+  | { readonly kind: "connecting" }
   | { readonly kind: "confirming" }
+  | { readonly kind: "discovering" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
-  | { readonly kind: "error"; readonly code: LedgerRejectionCode; readonly message: string };
+  | { readonly kind: "error"; readonly code: LedgerRejectionCode; readonly message: string }
+  | { readonly kind: "submitting" }
+  | { readonly kind: "verifying" };
 
 /**
  * The full device-prompt view: the phase plus the request it is for. `null`
@@ -168,7 +174,7 @@ export const createLedgerSignController = (
       return;
     }
     const isActive = (): boolean => current?.id === request.id && operationEpoch === epoch;
-    show({ kind: "confirming" });
+    show({ kind: "checking" });
     // Shared pre-check before the on-device confirm: assert the Starknet app is
     // at/above the pinned floor (a locked/disconnected device surfaces here as a
     // thrown transport error on the version read), then confirm the device holds
@@ -179,6 +185,7 @@ export const createLedgerSignController = (
     if (!isActive()) {
       return;
     }
+    show({ kind: "verifying" });
     const devicePublicKeyX = await ledgerPublicKeyX(client, request.path);
     if (!isActive()) {
       return;
@@ -186,15 +193,17 @@ export const createLedgerSignController = (
     if (!sameFelt(devicePublicKeyX, request.publicKeyX)) {
       throw new LedgerRejection("wrong-device");
     }
+    show({ kind: "confirming" });
     const signature = await ledgerSignHashOnDevice(client, request.path, request.messageHash);
     if (!isActive()) {
       return;
     }
+    show({ kind: "submitting" });
+    await deps.report({ id: request.id, r: signature.r, s: signature.s });
     current = null;
     devices = [];
     operationEpoch += 1;
     deps.render(null);
-    await deps.report({ id: request.id, r: signature.r, s: signature.s });
   };
 
   // Resolves a session through `obtain`, then blind-signs. A `null` session (no
@@ -236,6 +245,7 @@ export const createLedgerSignController = (
     if (!current || busy) {
       return;
     }
+    show({ kind: "discovering" });
     busy = true;
     try {
       devices = await list();
@@ -269,9 +279,14 @@ export const createLedgerSignController = (
       if (!devices.some((device) => device.id === deviceId)) {
         return;
       }
+      show({ kind: "connecting" });
       void drive(() => deps.connector.openConnected(deviceId));
     },
     connect() {
+      if (!current || busy) {
+        return;
+      }
+      show({ kind: "connecting" });
       void drive(deps.connector.request);
     },
     present(request) {

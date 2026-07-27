@@ -21,6 +21,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/ledger-grant/index.ts",
   "src/provider/inpage.ts",
   "src/sidepanel/dom.ts",
+  "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/ledger/grant-window.ts",
   "src/sidepanel/settings-ui.ts",

@@ -55,7 +55,7 @@ import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
-import { bindActivity, bindTransfer } from "./transfer-ui";
+import { bindActivity, bindTransfer, markTransferLedgerAuthorized } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {
@@ -145,7 +145,6 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
 
-// Ledger sign takeover lives outside #app so repaints cannot reset it.
 const ledgerSignMount = document.createElement("div");
 ledgerSignMount.className = "ledger-sign-overlay";
 ledgerSignMount.hidden = true;
@@ -153,6 +152,7 @@ document.body.append(ledgerSignMount);
 const ledgerSign = createLedgerSignRuntime({
   connector: ledgerConnector,
   mount: ledgerSignMount,
+  onSignatureReported: markTransferLedgerAuthorized,
   status: () => cache.status,
   wallet,
 });
@@ -222,7 +222,7 @@ const bindAll = (): void => {
   });
   bindReveal({ app, wallet });
   bindActivity({ app, render, wallet });
-  bindTransfer({ app, render, wallet });
+  bindTransfer({ app, navigate: (view) => navigate(view), render, wallet });
   const settingsDeps = {
     activeAccountId: () => lastAccountId,
     app,

@@ -66,6 +66,15 @@ export const emptyNftCache = (): Pick<
 });
 
 /**
+ * Empty account-scoped activity lane used during account/network switches so
+ * transactions and degraded-history state never flash under another account.
+ */
+export const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "transactions"> => ({
+  historyUnavailable: false,
+  transactions: [],
+});
+
+/**
  * Applies a freshly loaded status and clears account-scoped render data when
  * the active account or network changed.
  */
@@ -75,7 +84,14 @@ export const updateRenderScope = (cache: RenderData, status: WalletStatus): void
     cache.status.networkId !== status.networkId;
   Object.assign(cache, {
     status,
-    ...(changed ? { ...emptyNftCache(), multisigSync: null, multisigsError: false } : {}),
+    ...(changed
+      ? {
+          ...emptyActivityCache(),
+          ...emptyNftCache(),
+          multisigSync: null,
+          multisigsError: false,
+        }
+      : {}),
   });
 };
 
@@ -96,6 +112,7 @@ export const emptyRenderCache = (): RenderData => ({
   classHashVerification: null,
   connectedSites: [],
   deployment: null,
+  ...emptyActivityCache(),
   ...emptyNftCache(),
   pending: [],
   changes: {},
@@ -104,8 +121,6 @@ export const emptyRenderCache = (): RenderData => ({
   priceAsOf: null,
   priceStale: false,
   status: emptyStatus(),
-  transactions: [],
-  historyUnavailable: false,
 });
 
 /**

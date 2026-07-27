@@ -1,6 +1,6 @@
 /**
  * In-memory queue that bridges a background sign request to the side panel that
- * owns the Ledger transport. The service worker cannot hold a WebHID device, so
+ * owns the Ledger transport. The service worker cannot hold a browser device, so
  * `request` parks a deferred promise and surfaces the pending intent to the
  * panel, which signs on the device and calls back through `settle` (or `reject`
  * on device/user failure). Never persisted; a worker restart drops in-flight
