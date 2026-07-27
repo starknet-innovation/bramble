@@ -32,7 +32,9 @@ The static UI Lab from `main` is hosted on repository GitHub Pages at
 
 ## Review a flow
 
-1. Choose one of the scenario families in Storybook's sidebar.
+1. Open **Wallet journeys** in Storybook's sidebar and follow the numbered product journey from
+   onboarding through settings, or jump directly to the task under review. Cross-cutting coverage
+   and interaction contracts live separately under **Wallet UI Lab**.
 2. Select a direct checkpoint or use **Play**, **Pause**, **Step**, **Replay**, and **Reset** to
    inspect the complete sequence.
 3. Adjust speed, theme, reduced motion, and the 400 × 760 side-panel or 380 × 600 popup surface.

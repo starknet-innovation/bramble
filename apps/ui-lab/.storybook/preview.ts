@@ -17,7 +17,21 @@ const preview: Preview = {
     layout: "fullscreen",
     options: {
       storySort: {
-        order: ["Wallet UI Lab"],
+        order: [
+          "Wallet journeys",
+          [
+            "01 Onboarding",
+            "02 Portfolio",
+            "03 Send and swap",
+            "04 Ledger",
+            "05 dApp requests",
+            "06 Activity and assets",
+            "07 Collectibles",
+            "08 Multisig",
+            "09 Settings and security",
+          ],
+          "Wallet UI Lab",
+        ],
       },
     },
     viewport: {
