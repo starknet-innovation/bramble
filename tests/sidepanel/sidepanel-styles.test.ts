@@ -285,4 +285,18 @@ describe("sidepanel styles", () => {
       /@media \(prefers-reduced-motion: reduce\) \{\s*::view-transition-old\(root\)[^}]*animation: none/s,
     );
   });
+
+  test("onboarding transitions only the stable stage in both directions", () => {
+    expect(SIDEPANEL_STYLES).toContain("view-transition-name: onboarding-stage");
+    expect(SIDEPANEL_STYLES).toContain(
+      'html[data-onboarding-direction="forward"]::view-transition-new(onboarding-stage)',
+    );
+    expect(SIDEPANEL_STYLES).toContain(
+      'html[data-onboarding-direction="back"]::view-transition-old(onboarding-stage)',
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.onboarding-wizard > \.onboarding-step \{[^}]*position: absolute/s,
+    );
+    expect(SIDEPANEL_STYLES).toContain("button.onboarding-option:not(:disabled):hover");
+  });
 });

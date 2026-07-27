@@ -11,7 +11,8 @@ import type { WalletStatus } from "../popup/responses";
 import { isVaultPassphrase } from "../storage/encrypted-store";
 import { verifyBackupWords } from "./backup-verify";
 import { buttonBusy, errorMessage, showToast } from "./dom";
-import { MAINNET_NETWORK_ID, mainnetAckSatisfied, requiresMainnetAck } from "./mainnet-ack";
+import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
+import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -24,177 +25,403 @@ export type OnboardingUiDeps = {
 };
 
 /**
- * Binds the create-wallet form: generate or paste a recovery phrase, keep a
- * generated phrase blurred until the user taps to reveal it, verify generated
- * phrases through re-typed words, then create the wallet.
+ * Binds the staged first-run journey. Recovery material stays in this page and
+ * is sent only to the privileged KMS-backed preview/create messages. Preview
+ * returns public account metadata and writes nothing; creation remains the
+ * final, explicitly confirmed step.
  */
 export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const { app, wallet } = deps;
   const form = app?.querySelector<HTMLFormElement>("#create-form");
-  const generateButton = app?.querySelector<HTMLButtonElement>("#generate-button");
-  const result = app?.querySelector<HTMLElement>("#form-result");
-  const mnemonicInput = form?.querySelector<HTMLTextAreaElement>('textarea[name="mnemonic"]');
-  const passphraseInput = form?.querySelector<HTMLInputElement>('input[name="vaultPassphrase"]');
-  const passphraseResult = form?.querySelector<HTMLElement>("#passphrase-result");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  const verifySection = form?.querySelector<HTMLElement>("#backup-verify");
-  const verifyInputs = Array.from(
-    form?.querySelectorAll<HTMLInputElement>('input[name^="verify-"]') ?? [],
+  if (!form) {
+    return;
+  }
+  const steps = Array.from(app?.querySelectorAll<HTMLElement>("[data-onboarding-step]") ?? []);
+  const importInputs = Array.from(
+    form.querySelectorAll<HTMLInputElement>('input[data-recovery-kind="import"]'),
   );
-  const verifyResult = form?.querySelector<HTMLElement>("#verify-result");
-  const phraseToggle = form?.querySelector<HTMLButtonElement>("#phrase-toggle");
-  const networkSelect = form?.querySelector<HTMLSelectElement>('select[name="networkId"]');
-  const ackContainer = form?.querySelector<HTMLElement>("#mainnet-ack");
-  const ackCheckbox = form?.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
-  // The template only disables Create for a not-ready wallet; capture that so the
-  // gates below never re-enable a wallet that cannot create an account yet.
-  const initiallyReady = !(submitButton?.disabled ?? true);
+  const generatedInputs = Array.from(
+    form.querySelectorAll<HTMLInputElement>('input[data-recovery-kind="generated"]'),
+  );
+  const verifyInputs = Array.from(
+    form.querySelectorAll<HTMLInputElement>('input[name^="verify-"]'),
+  );
+  const passphraseInput = form.querySelector<HTMLInputElement>('input[name="vaultPassphrase"]');
+  const confirmationInput = form.querySelector<HTMLInputElement>(
+    'input[name="vaultPassphraseConfirm"]',
+  );
+  const passwordResult = form.querySelector<HTMLElement>("[data-password-result]");
+  const passwordRequirement = passwordResult?.closest<HTMLElement>(".password-requirement");
+  const passphraseResult = form.querySelector<HTMLElement>("#passphrase-result");
+  const verifyResult = form.querySelector<HTMLElement>("#verify-result");
+  const recoveryResult = form.querySelector<HTMLElement>("#recovery-result");
+  const generateResult = form.querySelector<HTMLElement>("#generate-result");
+  const result = form.querySelector<HTMLElement>("#form-result");
+  const ackContainer = form.querySelector<HTMLElement>("#mainnet-ack");
+  const ackCheckbox = form.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
+  const recoveryContinue = form.querySelector<HTMLButtonElement>("#recovery-continue");
+  const generatedContinue = form.querySelector<HTMLButtonElement>("#generated-continue");
+  const verifyContinue = form.querySelector<HTMLButtonElement>("#verify-continue");
+  const reviewAccount = form.querySelector<HTMLButtonElement>("#review-account-button");
+  const submitButton = form.querySelector<HTMLButtonElement>("#create-wallet-button");
+  const accountButton = form.querySelector<HTMLButtonElement>("#account-preview");
+  const previewAddress = form.querySelector<HTMLElement>("[data-preview-address]");
+  const phraseToggle = form.querySelector<HTMLButtonElement>("#phrase-toggle");
+  const generatedGrid = form.querySelector<HTMLElement>('[data-recovery-grid="generated"]');
+  const walletReady = form.dataset["walletReady"] === "true";
+  const history: string[] = ["welcome"];
+  let mnemonic = "";
+  let importWordCount: 12 | 24 = 12;
+  let generatedWasRevealed = false;
   let requiresVerification = false;
+  let accountSelected = false;
+  let previewMatchesInput = false;
 
-  const answers = (): readonly string[] => verifyInputs.map((input) => input.value);
+  const stepFor = (id: string): HTMLElement | undefined =>
+    steps.find((step) => step.dataset["onboardingStep"] === id);
+  const transitionStep = createOnboardingStepTransition(app, steps);
 
-  const passphraseOk = (): boolean => isVaultPassphrase(passphraseInput?.value ?? "");
-
-  const maskPhrase = (masked: boolean): void => {
-    mnemonicInput?.classList.toggle("is-masked", masked);
-    phraseToggle?.lastChild?.replaceWith(masked ? "Tap to show phrase" : "Tap to hide phrase");
+  const showStep = (id: string, direction: OnboardingDirection = "forward", push = true): void => {
+    const next = stepFor(id);
+    const current = steps.find((step) => !step.hidden);
+    if (!next || current === next) {
+      return;
+    }
+    if (push && history.at(-1) !== id) {
+      history.push(id);
+    }
+    transitionStep(next, direction);
   };
 
-  const selectedNetworkId = (): string => networkSelect?.value ?? MAINNET_NETWORK_ID;
+  const goBack = (): void => {
+    if (history.length > 1) {
+      history.pop();
+      showStep(history.at(-1) ?? "welcome", "back", false);
+    }
+  };
+
+  const setWordCount = (
+    inputs: readonly HTMLInputElement[],
+    count: 12 | 24,
+    kind: "generated" | "import",
+  ): void => {
+    for (const [index, input] of inputs.entries()) {
+      input.hidden = index >= count;
+    }
+    if (kind === "import") {
+      importWordCount = count;
+      const toggle = form.querySelector<HTMLButtonElement>("#phrase-length-toggle");
+      if (toggle) {
+        toggle.textContent = count === 12 ? "Use a 24-word phrase" : "Use a 12-word phrase";
+      }
+    }
+  };
+
+  const wordsFrom = (inputs: readonly HTMLInputElement[], count: number): readonly string[] =>
+    inputs.slice(0, count).map((input) => input.value.trim());
+
+  const importedMnemonic = (): string => wordsFrom(importInputs, importWordCount).join(" ").trim();
+
+  const fillWords = (
+    inputs: readonly HTMLInputElement[],
+    words: readonly string[],
+    kind: "generated" | "import",
+  ): void => {
+    const count: 12 | 24 = words.length > 12 ? 24 : 12;
+    setWordCount(inputs, count, kind);
+    for (const [index, input] of inputs.entries()) {
+      input.value = words[index] ?? "";
+    }
+  };
+
+  const setGeneratedPhraseMasked = (masked: boolean): void => {
+    generatedGrid?.classList.toggle("is-masked", masked);
+    generatedGrid?.toggleAttribute("inert", masked);
+    if (masked) {
+      generatedGrid?.setAttribute("aria-hidden", "true");
+    } else {
+      generatedGrid?.removeAttribute("aria-hidden");
+    }
+    for (const input of generatedInputs) {
+      input.tabIndex = masked ? -1 : 0;
+    }
+  };
+
+  const refreshRecovery = (): void => {
+    const words = wordsFrom(importInputs, importWordCount);
+    if (recoveryContinue) {
+      recoveryContinue.disabled = words.some((word) => word.length === 0);
+    }
+    if (recoveryResult) {
+      recoveryResult.textContent =
+        words.some((word) => word.length === 0) && words.some((word) => word.length > 0)
+          ? `Enter all ${importWordCount} words to continue.`
+          : "";
+    }
+    previewMatchesInput = false;
+  };
+
+  const passwordOk = (): boolean => {
+    const value = passphraseInput?.value ?? "";
+    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
+  };
+
+  const refreshPassword = (): void => {
+    const value = passphraseInput?.value ?? "";
+    const confirmation = confirmationInput?.value ?? "";
+    const validLength = isVaultPassphrase(value);
+    const matches = value === confirmation && confirmation.length > 0;
+    if (passwordResult) {
+      passwordResult.textContent = !validLength
+        ? "Enter at least 12 characters"
+        : matches
+          ? "Passphrases match"
+          : "Passphrases do not match";
+    }
+    passwordRequirement?.classList.toggle("is-ready", validLength && matches);
+    if (reviewAccount) {
+      reviewAccount.disabled = !passwordOk();
+    }
+    if (passphraseResult) {
+      passphraseResult.textContent =
+        confirmation.length > 0 && !matches ? "Enter the same passphrase in both fields." : "";
+    }
+    previewMatchesInput = false;
+  };
 
   const verificationSatisfied = (): boolean =>
-    !requiresVerification || verifyBackupWords(mnemonicInput?.value ?? "", answers());
+    verifyBackupWords(
+      mnemonic,
+      verifyInputs.map((input) => input.value),
+    );
 
+  const refreshVerification = (): void => {
+    const satisfied = verificationSatisfied();
+    if (verifyContinue) {
+      verifyContinue.disabled = !satisfied;
+    }
+    if (verifyResult) {
+      verifyResult.textContent = satisfied
+        ? "Backup confirmed."
+        : "Enter the requested words to continue.";
+    }
+  };
+
+  const selectedNetworkId = (): string => MAINNET_NETWORK_ID;
   const ackSatisfied = (): boolean =>
     mainnetAckSatisfied(selectedNetworkId(), ackCheckbox?.checked ?? false);
 
-  const refreshGate = (): void => {
+  const refreshAccountGate = (): void => {
     if (submitButton) {
       submitButton.disabled = !(
-        initiallyReady &&
-        passphraseOk() &&
-        verificationSatisfied() &&
+        walletReady &&
+        accountSelected &&
+        previewMatchesInput &&
         ackSatisfied()
       );
-    }
-    if (passphraseResult) {
-      const value = passphraseInput?.value ?? "";
-      passphraseResult.textContent =
-        value.length > 0 && !isVaultPassphrase(value)
-          ? "Passphrase must be at least 12 characters."
-          : "";
-    }
-    if (verifyResult && requiresVerification) {
-      verifyResult.textContent = verificationSatisfied()
-        ? "Confirmed"
-        : "Re-type the requested words to continue.";
     }
   };
 
   const syncNetworkGate = (): void => {
     if (ackContainer) {
-      if (requiresMainnetAck(selectedNetworkId())) {
-        ackContainer.removeAttribute("hidden");
-      } else {
-        ackContainer.setAttribute("hidden", "");
-      }
+      ackContainer.hidden = false;
     }
-    refreshGate();
+    previewMatchesInput = false;
+    refreshAccountGate();
   };
 
-  mnemonicInput?.addEventListener("input", refreshGate);
-  passphraseInput?.addEventListener("input", refreshGate);
-  for (const input of verifyInputs) {
-    input.addEventListener("input", refreshGate);
-  }
-  networkSelect?.addEventListener("change", syncNetworkGate);
-  ackCheckbox?.addEventListener("change", refreshGate);
-  syncNetworkGate();
+  app?.querySelectorAll<HTMLButtonElement>("[data-onboarding-back]").forEach((button) => {
+    button.addEventListener("click", goBack);
+  });
+  form
+    .querySelector('[id="add-existing-button"]')
+    ?.addEventListener("click", () => showStep("method"));
+  form.querySelector("#recovery-method-button")?.addEventListener("click", () => {
+    requiresVerification = false;
+    showStep("recovery");
+  });
+  form.querySelector("#ledger-method-button")?.addEventListener("click", () => showStep("ledger"));
 
-  phraseToggle?.addEventListener("click", () => {
-    maskPhrase(!(mnemonicInput?.classList.contains("is-masked") ?? false));
+  form.querySelector("#phrase-length-toggle")?.addEventListener("click", () => {
+    setWordCount(importInputs, importWordCount === 12 ? 24 : 12, "import");
+    refreshRecovery();
   });
 
-  generateButton?.addEventListener("click", () => {
-    buttonBusy(generateButton, true);
+  for (const [index, input] of importInputs.entries()) {
+    input.addEventListener("input", () => {
+      const pastedWords = input.value.trim().split(/\s+/).filter(Boolean);
+      if (pastedWords.length === 12 || pastedWords.length === 24) {
+        fillWords(importInputs, pastedWords, "import");
+      }
+      refreshRecovery();
+    });
+    input.addEventListener("keydown", (event) => {
+      if (event.key === " " && input.value.trim().length > 0) {
+        event.preventDefault();
+        importInputs[index + 1]?.focus();
+      } else if (event.key === "Backspace" && input.value.length === 0) {
+        importInputs[index - 1]?.focus();
+      }
+    });
+    input.addEventListener("paste", (event) => {
+      const words = event.clipboardData?.getData("text").trim().split(/\s+/).filter(Boolean) ?? [];
+      if (words.length !== 12 && words.length !== 24) {
+        return;
+      }
+      event.preventDefault();
+      fillWords(importInputs, words, "import");
+      refreshRecovery();
+    });
+  }
+
+  recoveryContinue?.addEventListener("click", () => {
+    mnemonic = importedMnemonic();
+    showStep("password");
+    refreshPassword();
+  });
+
+  const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");
+  createNew?.addEventListener("click", () => {
+    buttonBusy(createNew, true);
     void wallet.generateMnemonic().then(
-      (mnemonic) => {
-        if (mnemonicInput) {
-          mnemonicInput.value = mnemonic;
-        }
+      (generated) => {
+        mnemonic = generated.trim();
         requiresVerification = true;
-        verifySection?.removeAttribute("hidden");
-        phraseToggle?.removeAttribute("hidden");
-        maskPhrase(true);
+        generatedWasRevealed = false;
+        setGeneratedPhraseMasked(true);
+        fillWords(generatedInputs, mnemonic.split(/\s+/), "generated");
         for (const input of verifyInputs) {
           input.value = "";
         }
-        if (submitButton) {
-          submitButton.disabled = true;
+        if (generatedContinue) {
+          generatedContinue.disabled = true;
         }
-        refreshGate();
-        if (result) {
-          result.textContent = "Recovery phrase generated. Confirm the words below.";
+        if (generateResult) {
+          generateResult.textContent = "Reveal the phrase, save it offline, then continue.";
         }
-        showToast("Recovery phrase generated", "success");
-        buttonBusy(generateButton, false);
+        showStep("generated");
+        buttonBusy(createNew, false);
       },
       (error: unknown) => {
-        showToast(errorMessage(error, "Recovery phrase failed"), "error");
-        if (result) {
-          result.textContent = errorMessage(error, "Recovery phrase failed");
-        }
-        buttonBusy(generateButton, false);
+        const message = errorMessage(error, "Recovery phrase failed");
+        showToast(message, "error");
+        buttonBusy(createNew, false);
       },
     );
   });
 
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (!passphraseOk()) {
-      if (passphraseResult) {
-        passphraseResult.textContent = "Passphrase must be at least 12 characters.";
-      }
-      showToast("Passphrase must be at least 12 characters", "error");
+  phraseToggle?.addEventListener("click", () => {
+    const masked = !(generatedGrid?.classList.contains("is-masked") ?? false);
+    setGeneratedPhraseMasked(masked);
+    phraseToggle.lastChild?.replaceWith(masked ? "Show recovery phrase" : "Hide recovery phrase");
+    if (!masked) {
+      generatedWasRevealed = true;
+    }
+    if (generatedContinue) {
+      generatedContinue.disabled = !generatedWasRevealed;
+    }
+  });
+
+  generatedContinue?.addEventListener("click", () => {
+    showStep("verify");
+    refreshVerification();
+  });
+  for (const input of verifyInputs) {
+    input.addEventListener("input", refreshVerification);
+  }
+  verifyContinue?.addEventListener("click", () => {
+    if (verificationSatisfied()) {
+      showStep("password");
+      refreshPassword();
+    }
+  });
+
+  passphraseInput?.addEventListener("input", refreshPassword);
+  confirmationInput?.addEventListener("input", refreshPassword);
+  ackCheckbox?.addEventListener("change", refreshAccountGate);
+  accountButton?.addEventListener("click", () => {
+    accountSelected = !(accountButton.getAttribute("aria-pressed") === "true");
+    accountButton.setAttribute("aria-pressed", String(accountSelected));
+    refreshAccountGate();
+  });
+
+  reviewAccount?.addEventListener("click", () => {
+    if (!passwordOk()) {
+      refreshPassword();
       return;
     }
-    if (requiresVerification && !verifyBackupWords(mnemonicInput?.value ?? "", answers())) {
-      if (verifyResult) {
-        verifyResult.textContent = "Confirm the recovery words before creating the wallet.";
-      }
+    if (requiresVerification && !verificationSatisfied()) {
       showToast("Confirm your recovery phrase first", "error");
+      return;
+    }
+    buttonBusy(reviewAccount, true);
+    if (passphraseResult) {
+      passphraseResult.textContent = "Deriving the public account address…";
+    }
+    void wallet.previewAccount(mnemonic, selectedNetworkId()).then(
+      (account) => {
+        previewMatchesInput = true;
+        accountSelected = false;
+        accountButton?.setAttribute("aria-pressed", "false");
+        if (previewAddress) {
+          previewAddress.textContent = `${account.address.slice(0, 10)}…${account.address.slice(-8)}`;
+          previewAddress.title = account.address;
+        }
+        if (passphraseResult) {
+          passphraseResult.textContent = "";
+        }
+        syncNetworkGate();
+        previewMatchesInput = true;
+        refreshAccountGate();
+        showStep("accounts");
+        buttonBusy(reviewAccount, false);
+      },
+      (error: unknown) => {
+        const message = errorMessage(error, "Could not derive this account");
+        if (passphraseResult) {
+          passphraseResult.textContent = message;
+        }
+        showToast(message, "error");
+        buttonBusy(reviewAccount, false);
+      },
+    );
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!accountSelected || !previewMatchesInput) {
+      if (result) {
+        result.textContent = "Select the account before continuing.";
+      }
       return;
     }
     if (!ackSatisfied()) {
       if (result) {
-        result.textContent =
-          "Confirm you understand this wallet holds real funds on Starknet Mainnet.";
+        result.textContent = "Confirm you understand this wallet can hold real funds.";
       }
       showToast("Acknowledge the real-funds warning first", "error");
       return;
     }
-    const data = new FormData(form);
     buttonBusy(submitButton, true);
-    void wallet
-      .createAccount(
-        String(data.get("mnemonic") ?? "").trim(),
-        String(data.get("networkId") ?? "SN_MAIN"),
-        String(data.get("vaultPassphrase") ?? ""),
-      )
-      .then(
-        async () => {
-          showToast("Wallet created", "success");
-          await deps.render(await wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Account import failed"), "error");
-          if (result) {
-            result.textContent = errorMessage(error, "Account import failed");
-          }
-          buttonBusy(submitButton, false);
-        },
-      );
+    void wallet.createAccount(mnemonic, selectedNetworkId(), passphraseInput?.value ?? "").then(
+      async () => {
+        showToast("Wallet created", "success");
+        await deps.render(await wallet.loadStatus());
+      },
+      (error: unknown) => {
+        const message = errorMessage(error, "Account import failed");
+        showToast(message, "error");
+        if (result) {
+          result.textContent = message;
+        }
+        buttonBusy(submitButton, false);
+      },
+    );
   });
+
+  syncNetworkGate();
+  refreshRecovery();
+  refreshPassword();
 };
 
 /**

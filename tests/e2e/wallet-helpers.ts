@@ -14,6 +14,24 @@ export const IMPORT_MNEMONIC =
 const phraseWords = (phrase: string): readonly string[] =>
   phrase.trim().split(/\s+/).filter(Boolean);
 
+const fullScreenSetup = async (
+  walletSurface: Page,
+): Promise<{ readonly finish: () => Promise<void>; readonly page: Page }> => {
+  if (new URL(walletSurface.url()).pathname.endsWith("/onboarding.html")) {
+    return { finish: async () => undefined, page: walletSurface };
+  }
+  const onboarding = await walletSurface.context().newPage();
+  await onboarding.goto(new URL("onboarding.html", walletSurface.url()).toString());
+  return {
+    finish: async () => {
+      await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible();
+      await onboarding.close();
+      await walletSurface.reload();
+    },
+    page: onboarding,
+  };
+};
+
 const acknowledgeMainnetIfPresent = async (sidepanel: Page): Promise<void> => {
   const checkbox = sidepanel.locator('input[name="mainnetAck"]');
   if ((await checkbox.count()) === 0 || !(await checkbox.isVisible())) {
@@ -27,27 +45,46 @@ const acknowledgeMainnetIfPresent = async (sidepanel: Page): Promise<void> => {
  */
 export const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> => {
   const words = phraseWords(phrase);
-  await expect(sidepanel.locator("#backup-verify")).toBeVisible();
+  await expect(sidepanel.getByRole("heading", { name: "Confirm your backup" })).toBeVisible();
   for (const [index, position] of BACKUP_VERIFY_POSITIONS.entries()) {
     await sidepanel.locator(`input[name="verify-${index}"]`).fill(words[position - 1] ?? "");
   }
-  await expect(sidepanel.locator("#verify-result")).toHaveText("Confirmed");
+  await expect(sidepanel.locator("#verify-result")).toHaveText("Backup confirmed.");
+};
+
+const protectAndSelectAccount = async (sidepanel: Page): Promise<void> => {
+  await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
+  await sidepanel.locator('input[name="vaultPassphraseConfirm"]').fill(VAULT_PASSPHRASE);
+  await sidepanel.getByRole("button", { name: "Review account" }).click();
+  await expect(sidepanel.getByRole("heading", { name: "Choose accounts to add" })).toBeVisible();
+  await sidepanel.locator("#account-preview").click();
+  await acknowledgeMainnetIfPresent(sidepanel);
+  await expect(sidepanel.getByRole("button", { name: "Add selected account" })).toBeEnabled();
+  await sidepanel.getByRole("button", { name: "Add selected account" }).click();
 };
 
 /**
  * Creates a wallet by generating a fresh recovery phrase and confirming backup words.
  */
 export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<void> => {
-  await expect(sidepanel.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
-  await sidepanel.getByRole("button", { name: /Generate phrase/ }).click();
-
-  const phraseInput = sidepanel.locator('textarea[name="mnemonic"]');
-  await expect(phraseInput).not.toHaveValue("");
-  const phrase = await phraseInput.inputValue();
-  await fillBackupVerify(sidepanel, phrase);
-  await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
-  await acknowledgeMainnetIfPresent(sidepanel);
-  await sidepanel.getByRole("button", { name: "Create wallet" }).click();
+  const setup = await fullScreenSetup(sidepanel);
+  const onboarding = setup.page;
+  await expect(onboarding.getByRole("button", { name: "Create a new wallet" })).toBeVisible();
+  await onboarding.getByRole("button", { name: "Create a new wallet" }).click();
+  await expect(
+    onboarding.getByRole("heading", { name: "Save your recovery phrase" }),
+  ).toBeVisible();
+  const phraseInputs = onboarding.locator('input[data-recovery-kind="generated"]:not([hidden])');
+  await expect(phraseInputs.first()).not.toHaveValue("");
+  const phrase = await phraseInputs.evaluateAll((inputs) =>
+    inputs.map((input) => (input as HTMLInputElement).value).join(" "),
+  );
+  await onboarding.getByRole("button", { name: "Show recovery phrase" }).click();
+  await onboarding.getByRole("button", { name: "I saved my phrase" }).click();
+  await fillBackupVerify(onboarding, phrase);
+  await onboarding.getByRole("button", { name: "Continue" }).click();
+  await protectAndSelectAccount(onboarding);
+  await setup.finish();
   await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
 };
 
@@ -55,14 +92,18 @@ export const createWalletFromGeneratedPhrase = async (sidepanel: Page): Promise<
  * Creates a wallet by pasting an existing recovery phrase (skips backup verification).
  */
 export const importWalletFromPhrase = async (sidepanel: Page, mnemonic: string): Promise<void> => {
-  await expect(sidepanel.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
-  await sidepanel.locator('textarea[name="mnemonic"]').fill(mnemonic);
-  await sidepanel.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
-  await expect(sidepanel.locator("#backup-verify")).toBeHidden();
-  await acknowledgeMainnetIfPresent(sidepanel);
-  await expect(sidepanel.getByRole("button", { name: "Create wallet" })).toBeEnabled();
-  await sidepanel.getByRole("button", { name: "Create wallet" }).click();
-  await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
+  const setup = await fullScreenSetup(sidepanel);
+  const onboarding = setup.page;
+  await expect(onboarding.getByRole("button", { name: "Add an existing wallet" })).toBeVisible();
+  await onboarding.getByRole("button", { name: "Add an existing wallet" }).click();
+  await onboarding.getByRole("button", { name: "Recovery phrase" }).click();
+  await onboarding.locator('input[name="import-word-0"]').fill(mnemonic);
+  await onboarding.getByRole("button", { name: "Continue" }).click();
+  await protectAndSelectAccount(onboarding);
+  await setup.finish();
+  if (!new URL(sidepanel.url()).pathname.endsWith("/onboarding.html")) {
+    await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
+  }
 };
 
 /**

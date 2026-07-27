@@ -59,7 +59,8 @@ Storybook section.
 2. Select a direct checkpoint or use **Play**, **Pause**, **Step**, **Replay**, and **Reset** to
    inspect the complete sequence.
 3. Adjust speed, theme, reduced motion, and the 960 × 800 onboarding-tab, 400 × 760 side-panel,
-   or 380 × 600 popup surface.
+   or 380 × 600 popup surface. Wallet scenarios default to the side panel; full-screen onboarding
+   keeps the onboarding-tab preset. The popup remains an explicit responsive-layout check.
 4. Read the event/state log beside the wallet frame. Add local feedback notes and export them as
    Markdown when a review needs to leave the browser.
 5. Use the Canvas for motion review and the Interactions panel to rewind or step through story play
@@ -71,7 +72,7 @@ The lab has 100 deterministic checkpoints across 14 scenario families:
 
 | Family | Review surface |
 | --- | --- |
-| Full-screen onboarding | First run, generated-backup verification, and import in the expanded tab. |
+| Full-screen onboarding | Welcome, import method, phrase entry, local passphrase, account selection, generated-backup verification, Ledger protection, and completion. |
 | Returning unlock | Locked, request-waiting, and failed-authentication side-panel states. |
 | Home and portfolio | Ready, tabs, account drawer, undeployed, offline, error, and empty-network states. |
 | Send lifecycle | Details, review latency, fee failure, signing, broadcast, and receipt. |

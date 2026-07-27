@@ -230,6 +230,14 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   { message: { type: "wallet.generateMnemonic" }, sender: extensionSender },
   {
+    message: {
+      mnemonic: SECRET_MNEMONIC,
+      networkId: "SN_MAIN",
+      type: "wallet.previewAccount",
+    },
+    sender: extensionSender,
+  },
+  {
     message: { accountId: account.id, origin: ORIGIN, type: "wallet.grantOrigin" },
     sender: extensionSender,
   },

@@ -93,6 +93,7 @@ describe("bindLedgerFirstRun", () => {
     expect(button?.disabled).toBe(true);
 
     setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
     // Passphrase alone is not enough on Mainnet — the ack must be checked too.
     expect(button?.disabled).toBe(true);
 
@@ -115,21 +116,24 @@ describe("bindLedgerFirstRun", () => {
     );
   });
 
-  test("does not require an ack off Mainnet and starts setup on a valid passphrase", () => {
-    const { app, captured } = mountOnboarding({ ...mainnetStatus, networkId: "SN_MAIN" });
-    const networkSelect = app.querySelector<HTMLSelectElement>('select[name="ledgerNetworkId"]');
-    if (networkSelect) {
-      networkSelect.value = "SN_SEPOLIA";
-      networkSelect.dispatchEvent(new window.Event("change", { bubbles: true }));
-    }
+  test("pins first-run Ledger setup to Mainnet without a network dropdown", () => {
+    const { app, captured } = mountOnboarding({
+      ...mainnetStatus,
+      network: "Starknet Sepolia",
+      networkId: "SN_SEPOLIA",
+    });
     setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
+    check(app, 'input[name="ledgerMainnetAck"]');
     click(app, "#ledger-setup-button");
-    expect(captured).toEqual([["SN_SEPOLIA", PASSPHRASE]]);
+    expect(app.querySelector('select[name="ledgerNetworkId"]')).toBeNull();
+    expect(captured).toEqual([["SN_MAIN", PASSPHRASE]]);
   });
 
   test("blocks setup and toasts when the Mainnet ack is missing at click time", () => {
     const { app, captured } = mountOnboarding(mainnetStatus);
     setValue(app, 'input[name="ledgerVaultPassphrase"]', PASSPHRASE);
+    setValue(app, 'input[name="ledgerVaultPassphraseConfirm"]', PASSPHRASE);
     // Valid passphrase but the Mainnet ack is unchecked: clicking must not start.
     click(app, "#ledger-setup-button");
     expect(captured).toEqual([]);
@@ -137,12 +141,7 @@ describe("bindLedgerFirstRun", () => {
   });
 
   test("blocks setup and toasts when the passphrase is too short at click time", () => {
-    const { app, captured } = mountOnboarding({
-      ...mainnetStatus,
-      networkId: "SN_SEPOLIA",
-      network: "Starknet Sepolia",
-    });
-    // Off Mainnet, no ack needed; click with an empty passphrase must not start.
+    const { app, captured } = mountOnboarding(mainnetStatus);
     click(app, "#ledger-setup-button");
     expect(captured).toEqual([]);
     expect(document.querySelector(".toast.error")?.textContent).toContain("at least 12 characters");

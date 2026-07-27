@@ -36,6 +36,7 @@ import {
   bindOnboardingCompletion,
   type OnboardingCompletionBrowser,
   onboardingComplete,
+  onboardingLaunch,
 } from "./onboarding-surface";
 import { bindOnboarding, bindUnlock } from "./onboarding-ui";
 import { createRefreshScheduler } from "./refresh-scheduler";
@@ -159,7 +160,6 @@ const ledgerSign = createLedgerSignRuntime({
   wallet,
 });
 
-// Shared repaint-surviving Ledger overlay for first-run and add-account flows.
 const ledgerOnboardMount = document.createElement("div");
 ledgerOnboardMount.className = "ledger-onboard-overlay";
 ledgerOnboardMount.hidden = true;
@@ -310,7 +310,6 @@ const bindAll = (): void => {
   });
 };
 
-// Resolve the theme while keeping native-control color scheme pinned.
 const applyTheme = (): void => {
   const choice = cache.preferences?.theme ?? "dark";
   const skin = skinForChoice(choice);
@@ -321,7 +320,6 @@ const applyTheme = (): void => {
   }
 };
 
-// Paint cached state synchronously, then let hydrate() stream fresh data.
 const paint = (): void => {
   const { status } = cache;
   lastNetworkId = status.networkId;
@@ -364,7 +362,9 @@ const paint = (): void => {
     fullPageOnboarding && status.hasVault
       ? onboardingComplete()
       : !status.hasVault
-        ? onboarding(status)
+        ? fullPageOnboarding
+          ? onboarding(status)
+          : onboardingLaunch()
         : status.locked
           ? locked(status, cache.pending)
           : dashboard(
@@ -493,7 +493,6 @@ window.addEventListener("focus", () => {
 window.addEventListener("pagehide", refreshScheduler.stop, { once: true });
 
 applyTheme();
-// Start before the initial status read so an approval queued while Chrome is
-// opening the panel cannot fall into the ambient-poll interval.
+// Start before the initial read so a new approval cannot miss the first poll.
 refreshScheduler.start();
 void render(await wallet.loadStatus());

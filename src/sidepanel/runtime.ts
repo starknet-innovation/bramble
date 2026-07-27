@@ -34,6 +34,7 @@ import {
   type WalletStatus,
 } from "../popup/responses";
 import type { AccountGroupIcon } from "../storage/account-groups";
+import type { AccountRef } from "../storage/vault-schema";
 import { createLedgerRuntimeClient } from "./ledger/runtime-client";
 import { createNftRuntimeClient } from "./nft-runtime";
 
@@ -128,6 +129,18 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "wallet unavailable");
+    },
+    async previewAccount(mnemonic: string, networkId: string): Promise<AccountRef> {
+      const response = await sendMessage({
+        accountIndex: 0,
+        mnemonic,
+        networkId,
+        type: "wallet.previewAccount",
+      });
+      if (isCreateAccountResponse(response)) {
+        return response.account;
+      }
+      throw responseError(response, "account preview unavailable");
     },
     async deployAccount(): Promise<string> {
       const response = await sendMessage({ type: "wallet.deployAccount" });

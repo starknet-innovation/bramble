@@ -50,6 +50,7 @@ export type InputControlProps = {
   readonly maxlength?: number;
   readonly name?: string;
   readonly placeholder?: string;
+  readonly readonly?: boolean;
   readonly spellcheck?: boolean;
   readonly type?: "password" | "search" | "text" | "url";
   readonly value?: string;
@@ -68,11 +69,12 @@ export const inputControl = ({
   maxlength,
   name,
   placeholder,
+  readonly = false,
   spellcheck,
   type = "text",
   value,
 }: InputControlProps): string =>
-  `<input${className ? ` class="${uiClassNames(className)}"` : ""}${name ? ` name="${escapeHtml(name)}"` : ""} type="${type}" aria-label="${escapeHtml(ariaLabel)}"${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />`;
+  `<input${className ? ` class="${uiClassNames(className)}"` : ""}${name ? ` name="${escapeHtml(name)}"` : ""} type="${type}" aria-label="${escapeHtml(ariaLabel)}"${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${readonly ? " readonly" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />`;
 
 /**
  * Renders an escaped single-line field. Browser capability attributes are

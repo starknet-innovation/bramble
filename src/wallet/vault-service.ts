@@ -22,6 +22,7 @@ import {
 } from "../storage/vault-schema";
 import {
   deriveAccount,
+  deriveAccountRef,
   deriveImportedAccount,
   deriveLedgerAccount,
   deriveLedgerAccountRefs,
@@ -32,10 +33,7 @@ import {
 import type { ConnectedSite, RevealedSecrets, WalletVaultService } from "./vault-service-types";
 
 /**
- * Re-exports the vault-service type surface (split into `vault-service-types.ts`
- * for the file-size budget) so existing importers keep resolving these from the
- * service module. Trust boundary and failure behavior are documented on each
- * type at its definition.
+ * Re-exports the documented type surface from its size-budget split.
  */
 export type {
   AddDerivedAccountInput,
@@ -384,6 +382,7 @@ export const createWalletVaultService = ({
     generateMnemonic() {
       return kms.generateMnemonic();
     },
+    previewAccount: (input) => deriveAccountRef(kms, input),
     async grantOrigin(input) {
       if (!isWalletOrigin(input.origin)) {
         throw new WalletError("Invalid origin");

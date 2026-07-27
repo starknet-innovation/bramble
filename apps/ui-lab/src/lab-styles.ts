@@ -159,6 +159,7 @@ export const LAB_STYLES = `
     background: color-mix(in srgb, var(--lab-bg) 58%, black);
     border: 1px solid color-mix(in srgb, var(--lab-border) 88%, white);
     border-radius: 18px;
+    box-sizing: content-box;
     box-shadow: 0 18px 45px rgb(0 0 0 / 36%);
     display: grid;
     padding: 7px;
@@ -172,9 +173,16 @@ export const LAB_STYLES = `
     background: var(--lab-bg);
     border: 0;
     border-radius: 11px;
+    grid-area: 1 / 1;
     height: 100%;
+    opacity: 1;
+    transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1);
     width: 100%;
   }
+  .wallet-frame.is-preparing { opacity: 0; pointer-events: none; }
+  .wallet-frame.is-active { opacity: 1; position: relative; z-index: 2; }
+  .wallet-frame.is-leaving { opacity: 0; pointer-events: none; z-index: 1; }
+  .wallet-frame[data-reduced-motion="true"] { transition: none; }
   .device-label {
     bottom: 3px;
     color: var(--lab-muted);

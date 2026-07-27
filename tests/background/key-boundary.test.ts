@@ -43,6 +43,9 @@ const walletStub = {
   async importRawKeyAccount() {
     return account;
   },
+  async previewAccount() {
+    return account;
+  },
   async getGrantedAccounts() {
     return [account];
   },

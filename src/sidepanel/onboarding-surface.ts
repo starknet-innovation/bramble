@@ -1,7 +1,7 @@
 /**
  * Dedicated full-page onboarding completion UI and Chrome side-panel handoff.
  */
-import { button } from "../ui/controls";
+import { actionLink, button } from "../ui/controls";
 import { icon } from "./icons";
 
 /**
@@ -18,19 +18,46 @@ export type OnboardingCompletionBrowser = {
 };
 
 /**
+ * Compact handoff shown when a first-run user opens the toolbar surface.
+ * Wallet setup never runs inside the popup or side panel: the explicit link
+ * opens the dedicated extension tab where security decisions have stable room.
+ */
+export const onboardingLaunch = (): string => `
+  <main class="screen flow gate onboarding-gate">
+    <div class="gate-brand">${icon("wallet")}</div>
+    <div class="gate-head">
+      <p class="eyebrow">Wallet setup</p>
+      <h1>Set up in a browser tab</h1>
+      <p class="lede">MC Wallet uses a full-screen setup so every recovery, protection, and account choice stays clear.</p>
+    </div>
+    <div class="onboarding-gate-actions">
+      ${actionLink({
+        href: "onboarding.html",
+        label: "Open full-screen setup",
+        target: "_blank",
+      })}
+      <p class="onboarding-local-note">${icon("lock")} Encrypted locally on this device</p>
+    </div>
+  </main>`;
+
+/**
  * Completion screen rendered when onboarding.html observes an existing vault.
  * It contains no account data or secret material.
  */
 export const onboardingComplete = (): string => `
-  <main class="screen gate onboarding-complete">
+  <main class="screen flow gate onboarding-complete">
     <div class="gate-brand onboarding-complete-mark">${icon("check")}</div>
     <div class="gate-head">
       <p class="eyebrow">Setup complete</p>
-      <h1>Your wallet is ready</h1>
-      <p class="lede">MC Wallet is encrypted on this device. Continue in the side panel to deploy your account, receive assets, or connect to an app.</p>
+      <h1>You’re all set</h1>
+      <p class="lede">Your account is ready in MC Wallet. Open the side panel to receive assets, connect to an app, or deploy when you’re ready.</p>
+    </div>
+    <div class="onboarding-complete-details">
+      <div class="onboarding-complete-detail">${icon("lock")} <span>Vault encrypted locally on this device</span></div>
+      <div class="onboarding-complete-detail">${icon("shield")} <span>Recovery and signing material stay behind the wallet boundary</span></div>
     </div>
     <div class="onboarding-complete-actions">
-      ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open wallet" })}
+      ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open MC Wallet" })}
       <p id="onboarding-complete-result" class="hint" role="status"></p>
     </div>
   </main>`;

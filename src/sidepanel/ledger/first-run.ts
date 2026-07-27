@@ -9,7 +9,7 @@
 
 import { isVaultPassphrase } from "../../storage/encrypted-store";
 import { showToast } from "../dom";
-import { MAINNET_NETWORK_ID, mainnetAckSatisfied, requiresMainnetAck } from "../mainnet-ack";
+import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "../mainnet-ack";
 
 /**
  * Dependencies the first-run Ledger setup binding closes over. `startLedgerSetup`
@@ -32,17 +32,22 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
   const passphraseInput = form?.querySelector<HTMLInputElement>(
     'input[name="ledgerVaultPassphrase"]',
   );
-  const networkSelect = form?.querySelector<HTMLSelectElement>('select[name="ledgerNetworkId"]');
-  const ackContainer = form?.querySelector<HTMLElement>("#ledger-mainnet-ack");
+  const confirmationInput = form?.querySelector<HTMLInputElement>(
+    'input[name="ledgerVaultPassphraseConfirm"]',
+  );
+  const passwordResult = form?.querySelector<HTMLElement>("[data-password-result]");
+  const passwordRequirement = passwordResult?.closest<HTMLElement>(".password-requirement");
   const ackCheckbox = form?.querySelector<HTMLInputElement>('input[name="ledgerMainnetAck"]');
   const button = form?.querySelector<HTMLButtonElement>("#ledger-setup-button");
   const result = form?.querySelector<HTMLElement>("#ledger-passphrase-result");
   const initiallyReady = !(button?.disabled ?? true);
 
-  const selectedNetworkId = (): string => networkSelect?.value ?? MAINNET_NETWORK_ID;
-  const passphraseOk = (): boolean => isVaultPassphrase(passphraseInput?.value ?? "");
+  const passphraseOk = (): boolean => {
+    const value = passphraseInput?.value ?? "";
+    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
+  };
   const ackOk = (): boolean =>
-    mainnetAckSatisfied(selectedNetworkId(), ackCheckbox?.checked ?? false);
+    mainnetAckSatisfied(MAINNET_NETWORK_ID, ackCheckbox?.checked ?? false);
 
   const refreshGate = (): void => {
     if (button) {
@@ -50,28 +55,31 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
     }
     if (result) {
       const value = passphraseInput?.value ?? "";
-      result.textContent =
-        value.length > 0 && !isVaultPassphrase(value)
+      const confirmation = confirmationInput?.value ?? "";
+      const valueLength = value.length;
+      const passphraseValid = isVaultPassphrase(value);
+      result.textContent = !passphraseValid
+        ? valueLength > 0
           ? "Passphrase must be at least 12 characters."
+          : ""
+        : confirmation.length > 0 && value !== confirmation
+          ? "Enter the same passphrase in both fields."
           : "";
     }
-  };
-
-  const syncNetworkGate = (): void => {
-    if (ackContainer) {
-      if (requiresMainnetAck(selectedNetworkId())) {
-        ackContainer.removeAttribute("hidden");
-      } else {
-        ackContainer.setAttribute("hidden", "");
-      }
+    if (passwordResult) {
+      passwordResult.textContent = !isVaultPassphrase(passphraseInput?.value ?? "")
+        ? "Enter at least 12 characters"
+        : passphraseOk()
+          ? "Passphrases match"
+          : "Passphrases do not match";
     }
-    refreshGate();
+    passwordRequirement?.classList.toggle("is-ready", passphraseOk());
   };
 
   passphraseInput?.addEventListener("input", refreshGate);
-  networkSelect?.addEventListener("change", syncNetworkGate);
+  confirmationInput?.addEventListener("input", refreshGate);
   ackCheckbox?.addEventListener("change", refreshGate);
-  syncNetworkGate();
+  refreshGate();
 
   button?.addEventListener("click", () => {
     if (!passphraseOk()) {
@@ -82,6 +90,6 @@ export const bindLedgerFirstRun = (deps: LedgerFirstRunDeps): void => {
       showToast("Acknowledge the real-funds warning first", "error");
       return;
     }
-    deps.startLedgerSetup(selectedNetworkId(), passphraseInput?.value ?? "");
+    deps.startLedgerSetup(MAINNET_NETWORK_ID, passphraseInput?.value ?? "");
   });
 };

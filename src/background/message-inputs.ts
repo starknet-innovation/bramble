@@ -16,21 +16,9 @@ import {
 } from "../starknet/networks";
 import { isVaultPassphrase } from "../storage/encrypted-store";
 import { isAccountId } from "../storage/vault-schema";
-import type {
-  CreateVaultAccountInput,
-  OriginGrantInput,
-  SignHashInput,
-} from "../wallet/vault-service";
+import type { OriginGrantInput, SignHashInput } from "../wallet/vault-service";
 
-const readOptionalIndex = (value: unknown): number | null | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
-};
-
-const isMnemonicText = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0;
+export { readCreateAccountInput } from "./account-creation-inputs";
 
 /**
  * Checks a human-entered decimal token amount string (shared by the transfer
@@ -81,57 +69,6 @@ const readInvokeCall = (value: unknown): Call | null => {
  */
 export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
   isRecord(message) && hasOnlyKnownKeys(message, ["type"]) && message["type"] === type;
-
-/**
- * Parses privileged account-import messages from extension pages.
- */
-export const readCreateAccountInput = (message: unknown): CreateVaultAccountInput | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, [
-      "accountIndex",
-      "addressIndex",
-      "mnemonic",
-      "mnemonicPassphrase",
-      "networkId",
-      "type",
-      "vaultPassphrase",
-    ]) ||
-    message["type"] !== "wallet.createAccount" ||
-    !isMnemonicText(message["mnemonic"]) ||
-    !isVaultPassphrase(message["vaultPassphrase"])
-  ) {
-    return null;
-  }
-
-  const accountIndex = readOptionalIndex(message["accountIndex"]);
-  const addressIndex = readOptionalIndex(message["addressIndex"]);
-  if (accountIndex === null || addressIndex === null) {
-    return null;
-  }
-
-  if (
-    message["mnemonicPassphrase"] !== undefined &&
-    typeof message["mnemonicPassphrase"] !== "string"
-  ) {
-    return null;
-  }
-
-  if (message["networkId"] !== undefined && !isStarknetNetworkId(message["networkId"])) {
-    return null;
-  }
-
-  return {
-    ...(accountIndex === undefined ? {} : { accountIndex }),
-    ...(addressIndex === undefined ? {} : { addressIndex }),
-    mnemonic: message["mnemonic"],
-    ...(message["mnemonicPassphrase"] === undefined
-      ? {}
-      : { mnemonicPassphrase: message["mnemonicPassphrase"] }),
-    ...(message["networkId"] === undefined ? {} : { networkId: message["networkId"] }),
-    vaultPassphrase: message["vaultPassphrase"],
-  };
-};
 
 /**
  * Parses privileged origin-grant messages and normalizes origins.

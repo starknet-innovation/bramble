@@ -1,46 +1,10 @@
+import { downloadMarkdown, loadNotes, saveNotes } from "./feedback";
 import { LAB_STYLES } from "./lab-styles";
 import { walletScenario, walletScenarios } from "./scenarios";
 import type { LabEvent, LabSurface, LabTheme, ScenarioCheckpoint } from "./types";
-import { loadWalletFrame } from "./wallet-frame";
+import { prepareWalletFrame } from "./wallet-frame";
 
-const FEEDBACK_KEY = "mc-wallet:ui-lab-feedback:v1";
-
-type FeedbackNote = {
-  readonly checkpoint: string;
-  readonly scenario: string;
-  readonly text: string;
-};
-
-const loadNotes = (): readonly FeedbackNote[] => {
-  try {
-    const raw = globalThis.localStorage?.getItem(FEEDBACK_KEY);
-    if (!raw) {
-      return [];
-    }
-    const candidate: unknown = JSON.parse(raw);
-    if (!Array.isArray(candidate)) {
-      return [];
-    }
-    return candidate.filter(
-      (note): note is FeedbackNote =>
-        typeof note === "object" &&
-        note !== null &&
-        typeof Reflect.get(note, "checkpoint") === "string" &&
-        typeof Reflect.get(note, "scenario") === "string" &&
-        typeof Reflect.get(note, "text") === "string",
-    );
-  } catch {
-    return [];
-  }
-};
-
-const saveNotes = (notes: readonly FeedbackNote[]): void => {
-  try {
-    globalThis.localStorage?.setItem(FEEDBACK_KEY, JSON.stringify(notes));
-  } catch {
-    // Local notes are optional. Storage denial never blocks scenario review.
-  }
-};
+const PLAYBACK_STEP_MS = 7_500;
 
 const scenarioOptions = (selectedId: string): string =>
   walletScenarios
@@ -179,22 +143,6 @@ const required = <T extends Element>(root: Element, selector: string): T => {
   return element;
 };
 
-const noteMarkdown = (notes: readonly FeedbackNote[]): string =>
-  [
-    "# MC Wallet UI Lab feedback",
-    "",
-    ...notes.flatMap((note) => [`## ${note.scenario} / ${note.checkpoint}`, "", note.text, ""]),
-  ].join("\n");
-
-const downloadMarkdown = (notes: readonly FeedbackNote[]): void => {
-  const url = URL.createObjectURL(new Blob([noteMarkdown(notes)], { type: "text/markdown" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "mc-wallet-ui-lab-feedback.md";
-  anchor.click();
-  URL.revokeObjectURL(url);
-};
-
 export type UiLabOptions = {
   readonly checkpointId?: string;
   readonly scenarioId: string;
@@ -221,7 +169,7 @@ export const createUiLab = (options: UiLabOptions): HTMLElement => {
   let notes = loadNotes();
   const events: LabEvent[] = [];
 
-  const frame = required<HTMLIFrameElement>(root, "[data-lab-frame]");
+  let frame = required<HTMLIFrameElement>(root, "[data-lab-frame]");
   const device = required<HTMLElement>(root, "[data-lab-device]");
   const title = required<HTMLElement>(root, "[data-lab-title]");
   const description = required<HTMLElement>(root, "[data-lab-description]");
@@ -329,11 +277,23 @@ export const createUiLab = (options: UiLabOptions): HTMLElement => {
     updateFeedbackCount();
     emit({ detail: `${scenario.id}/${current.id}`, kind: "state" });
     try {
-      const loaded = await loadWalletFrame(frame, current.content(), surface, theme, reducedMotion);
+      const prepared = await prepareWalletFrame(
+        frame,
+        current.content(),
+        surface,
+        theme,
+        reducedMotion,
+      );
       if (epoch !== renderEpoch) {
+        prepared.discard();
         return;
       }
-      await current.prepare?.({ ...loaded, emit });
+      await current.prepare?.({ app: prepared.app, document: prepared.document, emit });
+      if (epoch !== renderEpoch) {
+        prepared.discard();
+        return;
+      }
+      frame = prepared.commit();
       root.dataset["labReady"] = "true";
     } catch (error) {
       if (epoch !== renderEpoch) {
@@ -374,7 +334,7 @@ export const createUiLab = (options: UiLabOptions): HTMLElement => {
         checkpointIndex += 1;
         void render().then(schedule);
       },
-      Math.round(1500 / speed),
+      Math.round(PLAYBACK_STEP_MS / speed),
     );
   };
 

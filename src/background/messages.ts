@@ -12,6 +12,7 @@ import { type MultisigStore, memoryMultisigStore } from "../storage/multisig-sto
 import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-history";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { activeAccountSecrets } from "../wallet/vault-service";
+import { readCreateAccountInput } from "./account-creation-inputs";
 import { handleAddChainOps } from "./add-chain-ops";
 import { handleAllowanceOps } from "./allowance-ops";
 import { handleApprovalDecision } from "./approval-decisions";
@@ -30,7 +31,6 @@ import {
 } from "./ledger-sign-queue";
 import {
   readAddAccountInput,
-  readCreateAccountInput,
   readGetGrantedAccountsInput,
   readGrantOriginInput,
   readRequestAccountsInput,
@@ -44,6 +44,7 @@ import {
 import { handleMultisigOps, type MultisigOpsDeps } from "./multisig-ops";
 import { handleMultisigTxOps } from "./multisig-tx-ops";
 import { handleNftOps } from "./nft-ops";
+import { handleOnboardingOps } from "./onboarding-ops";
 import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
 import { handleProviderOps } from "./provider-ops";
@@ -166,10 +167,9 @@ const handleGenerateMnemonic: RouterHandler = async (ctx, messageType, message) 
   if (messageType !== "wallet.generateMnemonic") {
     return null;
   }
-  if (!readTypeOnlyInput(message, "wallet.generateMnemonic")) {
-    return { error: "invalid generate mnemonic request" };
-  }
-  return { mnemonic: await ctx.wallet.generateMnemonic(), ok: true };
+  return readTypeOnlyInput(message, "wallet.generateMnemonic")
+    ? { mnemonic: await ctx.wallet.generateMnemonic(), ok: true }
+    : { error: "invalid generate mnemonic request" };
 };
 
 const handleRevealSecrets: RouterHandler = async (ctx, messageType, message) => {
@@ -372,6 +372,7 @@ const HANDLERS: readonly RouterHandler[] = [
   handleImportAccount,
   (ctx, messageType, message) => handleApprovalDecision(ctx, messageType, message),
   handleGenerateMnemonic,
+  (ctx, messageType, message) => handleOnboardingOps(ctx.wallet, messageType, message),
   handleRevealSecrets,
   handleGrantOrigin,
   handleGetGrantedAccounts,

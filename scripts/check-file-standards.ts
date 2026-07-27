@@ -45,6 +45,7 @@ const RANDOM_UUID_FILES = new Set([
 const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/content/index.ts"]);
 const SECRET_MATERIAL_FILES = new Set([
   "src/background/account-hash-signer.ts",
+  "src/background/account-creation-inputs.ts",
   "src/background/add-chain-ops.ts",
   "src/background/approval-decisions.ts",
   "src/background/chain-ops.ts",
@@ -87,6 +88,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/sidepanel/import-key-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/onboarding-ui.ts",
+  "src/sidepanel/onboarding-views.ts",
   "src/sidepanel/reveal-ui.ts",
   "src/sidepanel/runtime.ts",
   "src/starknet/ledger-verify.ts",

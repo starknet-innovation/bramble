@@ -142,23 +142,15 @@ describe("design system", () => {
     expect(violations).toEqual([]);
   });
 
-  test("full-screen onboarding consumes shared controls and fields", () => {
+  test("full-screen onboarding consumes shared controls and defaults to Mainnet", () => {
     const markup = onboarding(status);
     expect(markup).toContain(
       button({
-        attributes: { id: "generate-button" },
-        icon: "refresh",
-        label: "Generate phrase",
-        variant: "secondary",
+        attributes: { id: "create-new-button" },
+        label: "Create a new wallet",
       }),
     );
-    expect(markup).toContain(
-      selectField({
-        label: "Network",
-        name: "networkId",
-        options: [{ label: "Starknet Mainnet", value: "SN_MAIN" }],
-        selected: "SN_MAIN",
-      }),
-    );
+    expect(markup).not.toContain("<select");
+    expect(markup).toContain("Starknet Mainnet");
   });
 });

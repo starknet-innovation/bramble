@@ -101,6 +101,6 @@ export const approvalsScenario: WalletScenario = {
   description:
     "Every dApp-facing approval kind, proactive takeover, blocked-origin handling, and queue visibility.",
   id: "approvals",
-  surface: "popup",
+  surface: "sidepanel",
   title: "dApp approvals",
 };

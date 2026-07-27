@@ -21,6 +21,7 @@ describe("walletEventBroadcasts", () => {
     expect(walletEventBroadcasts({ type: "wallet.lock" }, { error: "wallet locked" })).toEqual([]);
     expect(walletEventBroadcasts({ type: "wallet.status" }, { hasVault: true })).toEqual([]);
     expect(walletEventBroadcasts({ type: "wallet.getBalances" }, { balances: [] })).toEqual([]);
+    expect(walletEventBroadcasts({ type: "wallet.previewAccount" }, { account: {} })).toEqual([]);
   });
 
   test("announces accounts and network after creating a wallet", () => {

@@ -83,7 +83,7 @@ const dappScenario: WalletScenario = {
   description:
     "External requests preempt stale wallet navigation, remain reviewable, and can be explicitly parked.",
   id: "dapp",
-  surface: "popup",
+  surface: "sidepanel",
   title: "dApp request takeover",
 };
 
