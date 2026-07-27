@@ -27,8 +27,8 @@ bun run storybook
 Open `http://localhost:6006` (or the URL Storybook prints). `bun run dev` is an equivalent
 shorthand. Stop the local server with <kbd>Control</kbd>+<kbd>C</kbd>.
 
-The static UI Lab from `main` is hosted on repository GitHub Pages at
-<https://starknet-innovation.github.io/mc-wallet/>.
+The static UI Lab from `main` is hosted on the repository's access-controlled GitHub Pages site at
+<https://effective-adventure-qwr464j.pages.github.io/>.
 
 ## Review a flow
 

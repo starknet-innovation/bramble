@@ -11,7 +11,7 @@ boundaries, release controls, and security posture.
 
 ## Start here
 
-- [UI Lab](https://starknet-innovation.github.io/mc-wallet/) hosts deterministic Storybook
+- [UI Lab](https://effective-adventure-qwr464j.pages.github.io/) hosts deterministic Storybook
   scenarios for production wallet UI and Chromatic review. Its
   [runbook](https://github.com/starknet-innovation/mc-wallet/tree/main/apps/ui-lab) covers local
   setup, testing, static builds, review controls, and safety boundaries.
