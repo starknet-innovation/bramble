@@ -1,25 +1,28 @@
 /**
- * Hand-written type surface for the runtime-only `webhid-impl.js` boundary. It
- * exposes ONLY the tiny WebHID/StarknetClient surface this wallet uses, in terms
- * of local types, so no typed module ever references the vendored Ledger `.d.ts`
- * (which does not compile under the repo's pinned `skipLibCheck: false`). This
- * declaration is the trust boundary between the type-checked flow and the opaque
- * hardware library; the runtime `.js` is what actually executes.
+ * Hand-written type surface for the runtime-only browser Ledger transport
+ * boundary. It exposes only the WebUSB/WebHID/StarknetClient
+ * operations the wallet uses, so the Ledger packages' incompatible
+ * declarations never enter the strict TypeScript program.
  */
 import type { LedgerDeviceClient } from "./client";
 import type { LedgerDeviceChoice } from "./sign-session";
 
 /**
- * An open WebHID transport handle. Opaque to the flow: the only method callers
- * need is `close`, used to release the device on teardown. Constructing the
- * device client from it is done via {@link newStarknetClient}.
+ * Cable transports available to the side-panel reconnect path.
+ */
+export type LedgerTransportKind = "usb" | "hid";
+
+/**
+ * An open Ledger transport handle. Opaque to typed code: callers can only close
+ * it or construct the structural Starknet client through
+ * {@link newStarknetClient}.
  */
 export type LedgerTransport = { close(): Promise<void> };
 
 /**
  * Reopens an already-granted device without a prompt. Resolves null when no
- * granted device is connected, so the caller can open the dedicated
- * grant-window popup and retry.
+ * granted device is connected, so the caller can open the dedicated grant tab
+ * and retry.
  */
 export function openConnectedTransportRaw(deviceId?: string): Promise<LedgerTransport | null>;
 
@@ -28,6 +31,17 @@ export function openConnectedTransportRaw(deviceId?: string): Promise<LedgerTran
  * ids are opaque and valid only within the current side-panel context.
  */
 export function listConnectedDevicesRaw(): Promise<readonly LedgerDeviceChoice[]>;
+
+/**
+ * Returns the browser Ledger transports available in this extension page.
+ */
+export function supportedTransportKindsRaw(): Promise<readonly LedgerTransportKind[]>;
+
+/**
+ * Opens the browser-owned picker for one transport and returns the selected,
+ * already-open device. Must be called from a user gesture.
+ */
+export function requestTransportRaw(kind: LedgerTransportKind): Promise<LedgerTransport>;
 
 /**
  * Wraps an open transport in the Starknet APDU client, exposed through the

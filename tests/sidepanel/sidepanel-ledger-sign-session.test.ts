@@ -124,8 +124,7 @@ describe("Ledger sign controller", () => {
     controllerFor(h).present(REQUEST);
     await tick();
 
-    // Went straight to the on-device wait, then dismissed on success.
-    expect(phases(h.views)).toEqual(["confirming", null]);
+    expect(phases(h.views)).toEqual(["checking", "verifying", "confirming", "submitting", null]);
     // The raw device (r, s) was reported to the background queue for this id.
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
     // The owned transport is released on the success path.
@@ -150,7 +149,15 @@ describe("Ledger sign controller", () => {
 
     controller.connect();
     await tick();
-    expect(phases(h.views)).toEqual(["connect", "confirming", null]);
+    expect(phases(h.views)).toEqual([
+      "connect",
+      "connecting",
+      "checking",
+      "verifying",
+      "confirming",
+      "submitting",
+      null,
+    ]);
     expect(h.reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
   });
 
@@ -422,6 +429,34 @@ describe("Ledger sign controller", () => {
     expect(h.closed()).toBe(1);
   });
 
+  test("cancel discards a signature that resolves after cancellation", async () => {
+    let resolveSignature: (value: Awaited<ReturnType<LedgerDeviceClient["signHash"]>>) => void =
+      () => undefined;
+    const signature = new Promise<Awaited<ReturnType<LedgerDeviceClient["signHash"]>>>(
+      (resolve) => {
+        resolveSignature = resolve;
+      },
+    );
+    const h = harness({
+      openConnected: () => Promise.resolve(fakeClient(() => signature)),
+      request: () => Promise.reject(new Error("unused")),
+    });
+    const controller = controllerFor(h);
+    controller.present(REQUEST);
+    await tick();
+    await controller.cancel();
+    resolveSignature({
+      errorMessage: "No errors",
+      r: new Uint8Array([...Array(31).fill(0), 1]),
+      returnCode: 0x9000,
+      s: new Uint8Array([...Array(31).fill(0), 2]),
+    });
+    await tick();
+
+    expect(h.reports).toEqual([{ error: "rejected-on-device", id: "ledger-sign-1" }]);
+    expect(h.closed()).toBe(1);
+  });
+
   test("a close failure is swallowed and does not mask the sign result", async () => {
     // The session's close rejects, but the sign already succeeded: the failure
     // must be swallowed (fail closed) so the reported (r, s) and dismissal stand.
@@ -449,7 +484,6 @@ describe("Ledger sign controller", () => {
     expect(reports).toEqual([{ id: "ledger-sign-1", r: "0x1", s: "0x2" }]);
     expect(views.at(-1)).toBeNull();
   });
-
   test("connect and retry are no-ops when nothing is active", async () => {
     const h = harness({
       openConnected: () => Promise.reject(new Error("must not be called")),

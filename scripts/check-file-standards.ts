@@ -8,11 +8,16 @@ const MAX_LINES = 500;
 const EXCLUDED = new Set([
   ".claude",
   ".git",
+  ".impeccable",
+  ".playwright-cli",
   "apps",
   "artifacts",
   "bun.lock",
   "dist",
   "node_modules",
+  "output",
+  "playwright-report",
+  "test-results",
   "vendor",
 ]);
 const BROWSER_GLOBAL_FILES = new Set([
@@ -21,6 +26,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/ledger-grant/index.ts",
   "src/provider/inpage.ts",
   "src/sidepanel/dom.ts",
+  "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/ledger/grant-window.ts",
   "src/sidepanel/settings-ui.ts",
@@ -31,7 +37,11 @@ const ENCRYPTED_STORE_WIRING_FILES = new Set([
   "src/background/index.ts",
   "src/storage/encrypted-store.ts",
 ]);
-const RANDOM_UUID_FILES = new Set(["src/background/approvals.ts", "src/provider/inpage.ts"]);
+const RANDOM_UUID_FILES = new Set([
+  "src/background/approvals.ts",
+  "src/provider/inpage.ts",
+  "src/sidepanel/ledger/grant-window.ts",
+]);
 const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/content/index.ts"]);
 const SECRET_MATERIAL_FILES = new Set([
   "src/background/account-hash-signer.ts",
@@ -54,6 +64,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
   "src/background/session.ts",
+  "src/ledger-grant/broker-protocol.ts",
   "src/background/unlock-errors.ts",
   "src/background/wallet-ops.ts",
   "src/background/wallet-reader.ts",

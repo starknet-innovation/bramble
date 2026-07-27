@@ -63,7 +63,7 @@ vendored outputs; Playwright needs its Chromium install once per machine.
 
 ## Built with
 
-Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · Biome · Krusty KMS (WASM) · Ledger WebHID · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
+Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · Biome · Krusty KMS (WASM) · Ledger Web Bluetooth/WebUSB/WebHID · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
 
 ## Architecture
 
@@ -76,7 +76,7 @@ src/storage                encrypted persistence, permissions, schema migrations
 src/crypto                 Krusty KMS boundary (validates every WASM input/output)
 src/starknet               RPC, networks, token registry, prices
 src/security               phishing blocklist and lookalike heuristics
-src/sidepanel + src/ui      the side-panel app, Ledger WebHID boundary, and design system
+src/sidepanel + src/ui      the side-panel app, Ledger browser transport boundary, and design system
 contracts/multisig         the pinned OpenZeppelin multisig shell (Cairo)
 ```
 

@@ -3,10 +3,16 @@
  * export stay validated and deterministic.
  */
 import { describe, expect, test } from "bun:test";
-import { activityToCsv, createActivityLog } from "../../src/storage/activity-store";
+import {
+  activityForScope,
+  activityToCsv,
+  createActivityLog,
+} from "../../src/storage/activity-store";
 import { createMemoryStore } from "../../src/storage/kv";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+const OTHER_ACCOUNT_ID =
+  "SN_MAIN:0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 
 const makeLog = () => {
   let tick = 0;
@@ -51,10 +57,53 @@ describe("createActivityLog", () => {
       networkId: "SN_MAIN",
       summary: "Send",
     });
-    const updated = await log.updateStatuses({ "0x1": "accepted", "0x9": "reverted" });
+    const updated = await log.updateStatuses(
+      { "0x1": "accepted", "0x9": "reverted" },
+      { accountId: ACCOUNT_ID, networkId: "SN_MAIN" },
+    );
 
     expect(updated[0]?.status).toBe("accepted");
     expect(updated).toHaveLength(1);
+  });
+
+  test("partitions duplicate hashes and status updates by account and network", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x01",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "First account send",
+    });
+    await log.record({
+      accountId: OTHER_ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Second account send",
+    });
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_SEPOLIA",
+      summary: "Other network send",
+    });
+
+    const scope = { accountId: ACCOUNT_ID, networkId: "SN_MAIN" as const };
+    const updated = await log.updateStatuses({ "0x1": "accepted" }, scope);
+    expect(updated).toHaveLength(1);
+    expect(updated[0]?.summary).toBe("First account send");
+    expect(updated[0]?.status).toBe("accepted");
+
+    const all = await log.list();
+    expect(all).toHaveLength(3);
+    expect(
+      activityForScope(all, { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" })[0]?.status,
+    ).toBe("pending");
+    expect(
+      activityForScope(all, { accountId: ACCOUNT_ID, networkId: "SN_SEPOLIA" })[0]?.status,
+    ).toBe("pending");
   });
 
   test("drops malformed stored entries instead of trusting them", async () => {

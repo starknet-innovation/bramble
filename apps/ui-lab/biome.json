@@ -1,0 +1,16 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.5/schema.json",
+  "extends": ["../../biome.json"],
+  "files": {
+    "includes": [
+      ".storybook/**/*.ts",
+      "src/**/*.ts",
+      "*.json",
+      "*.ts",
+      "!bun.lock",
+      "!**/node_modules",
+      "!**/storybook-static",
+      "!**/test-results"
+    ]
+  }
+}

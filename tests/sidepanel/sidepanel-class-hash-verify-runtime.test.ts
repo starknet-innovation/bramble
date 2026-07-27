@@ -132,7 +132,7 @@ describe("emptyRenderCache (lock-reset single source)", () => {
 });
 
 describe("updateRenderScope", () => {
-  test("retains NFT lanes for same-account resyncs and clears them on account switches", () => {
+  test("retains scoped lanes on resync and clears them on account switches", () => {
     const cache = emptyRenderCache();
     const nft = {
       collection: "Punks",
@@ -143,19 +143,34 @@ describe("updateRenderScope", () => {
       networkId: "SN_MAIN" as const,
       tokenId: "0",
     };
+    const transaction = {
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer" as const,
+      networkId: "SN_MAIN" as const,
+      status: "pending" as const,
+      submittedAt: 1,
+      summary: "Send",
+    };
     Object.assign(cache, {
       discoveredNfts: [nft],
+      historyUnavailable: true,
       indexedNfts: [nft],
       status: { ...cache.status, activeAccountId: ACCOUNT_ID, networkId: "SN_MAIN" as const },
+      transactions: [transaction],
       watchedNfts: [nft],
     });
 
     updateRenderScope(cache, { ...cache.status });
     expect(cache.discoveredNfts).toEqual([nft]);
+    expect(cache.transactions).toEqual([transaction]);
+    expect(cache.historyUnavailable).toBe(true);
 
     updateRenderScope(cache, { ...cache.status, activeAccountId: OTHER_ACCOUNT_ID });
     expect(cache.discoveredNfts).toEqual([]);
     expect(cache.indexedNfts).toEqual([]);
     expect(cache.watchedNfts).toEqual([]);
+    expect(cache.transactions).toEqual([]);
+    expect(cache.historyUnavailable).toBe(false);
   });
 });

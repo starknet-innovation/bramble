@@ -71,6 +71,20 @@ describe("ledgerAppVersion / assertLedgerAppReady", () => {
     });
   });
 
+  test("maps wrong-app APDU status to the open-Starknet recovery", async () => {
+    for (const returnCode of [0x6e00, 0x6e01]) {
+      const wrongApp = fakeClient({
+        async getAppVersion() {
+          return { errorMessage: "wrong app", major: 0, minor: 0, patch: 0, returnCode };
+        },
+      });
+      await expect(ledgerAppVersion(wrongApp)).rejects.toMatchObject({
+        code: "no-app-open",
+        statusWord: returnCode,
+      });
+    }
+  });
+
   test("rejects malformed version bytes on an otherwise successful response", async () => {
     const client = fakeClient({
       async getAppVersion() {
@@ -181,6 +195,15 @@ describe("thrown transport errors on the version read", () => {
       },
     });
     await expect(ledgerAppVersion(client)).rejects.toMatchObject({ code: "device-locked" });
+  });
+
+  test("maps a thrown wrong-app transport status to no-app-open", async () => {
+    const client = fakeClient({
+      async getAppVersion() {
+        throw new Error("TransportStatusError: Ledger device: INS_NOT_SUPPORTED (0x6d00)");
+      },
+    });
+    await expect(ledgerAppVersion(client)).rejects.toMatchObject({ code: "no-app-open" });
   });
 
   test("wraps an unrecognized thrown value as an unexpected-device-error rejection", async () => {
