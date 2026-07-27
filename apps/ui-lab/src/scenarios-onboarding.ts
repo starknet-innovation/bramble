@@ -125,6 +125,15 @@ export const onboardingScenario: WalletScenario = {
       prepare: prepareImported,
       state: { mode: "import", verification: "not generated" },
     },
+  ],
+  description: "Full-page first run, generated-backup verification, and existing-wallet import.",
+  id: "onboarding",
+  surface: "fullpage",
+  title: "Full-page onboarding",
+};
+
+export const unlockScenario: WalletScenario = {
+  checkpoints: [
     {
       content: () => locked(lockedStatus),
       id: "locked",
@@ -150,11 +159,10 @@ export const onboardingScenario: WalletScenario = {
       state: { gate: "locked", result: "error" },
     },
   ],
-  description:
-    "First run, generated-backup verification, existing-wallet import, and returning unlock gates.",
-  id: "onboarding",
+  description: "Returning-wallet unlock, pending-request visibility, and authentication failure.",
+  id: "unlock",
   surface: "sidepanel",
-  title: "Onboarding and unlock",
+  title: "Returning wallet unlock",
 };
 
 const ledgerCandidate = (

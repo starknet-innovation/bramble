@@ -113,6 +113,7 @@ requireBuild(
 );
 
 await cp("public/manifest.json", join(outdir, "manifest.json"));
+await cp("public/onboarding.html", join(outdir, "onboarding.html"));
 await cp("public/popup.html", join(outdir, "popup.html"));
 await cp("public/sidepanel.html", join(outdir, "sidepanel.html"));
 await cp("public/ledger-grant.html", join(outdir, "ledger-grant.html"));

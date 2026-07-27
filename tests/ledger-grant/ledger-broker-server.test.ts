@@ -72,6 +72,37 @@ describe("serveLedgerBroker", () => {
     });
   });
 
+  test("routes key and signing commands and supports explicit detachment", async () => {
+    const fake = createFakeChannel();
+    const path = ledgerAccountPath(0);
+    const detach = serveLedgerBroker(fake.channel, okClient(), () => undefined);
+
+    fake.emit({ id: 1, kind: "command", method: "getPubKey", path });
+    await tick();
+    expect(fake.posts[1]).toMatchObject({
+      id: 1,
+      kind: "response",
+      ok: true,
+      value: { publicKey: new Uint8Array(64), returnCode: 0x9000 },
+    });
+
+    fake.emit({ hash: "0x1", id: 2, kind: "command", method: "signHash", path });
+    await tick();
+    expect(fake.posts[2]).toMatchObject({
+      id: 2,
+      kind: "response",
+      ok: true,
+      value: {
+        r: new Uint8Array(32),
+        returnCode: 0x9000,
+        s: new Uint8Array(32),
+      },
+    });
+
+    detach();
+    expect(fake.listeners.size).toBe(0);
+  });
+
   test("ignores malformed paths without touching the device", async () => {
     const fake = createFakeChannel();
     let calls = 0;

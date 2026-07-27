@@ -8,12 +8,25 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
-## [0.7.1] - 2026-07-24
+## [0.7.1] - 2026-07-27
 
 Live Starknet portfolio data, a production trading terminal, and faster wallet
-state convergence after unlock and transactions.
+state convergence after unlock and transactions, with reliable Ledger transport
+ownership and an inspectable wallet interaction-design lab.
 
 ### Added
+- A dedicated full-page first-install onboarding tab for creating, importing,
+  or connecting a Ledger, with a side-panel fallback link and explicit handoff
+  into the normal wallet surface after setup.
+- An isolated Storybook HTML UI Lab with 100 deterministic checkpoints across
+  14 scenario families, exact onboarding-tab/side-panel/popup presets,
+  production templates and motion, fixture-only RPC behavior, direct state
+  links, playback controls, evidence logs, and local review notes.
+- Repository-hosted, access-controlled GitHub Pages delivery for the static UI
+  Lab, plus conditional Chromatic publishing for PR-linked visual review.
+- A validated ordinary-tab Ledger transport broker supporting explicit USB and
+  Bluetooth device choice, retained sessions, lifecycle recovery, timeouts, and
+  actionable support diagnostics.
 - A strictly validated Starkscan read boundary for address summaries,
   transactions, activity, token transfers, holdings and balances, contract
   metadata, events, and blocks on indexed Starknet networks.
@@ -24,6 +37,15 @@ state convergence after unlock and transactions.
   Starknet activity streaming, and a wallet toolbar shortcut.
 
 ### Changed
+- Send and Ledger-signing progress now use explicit authorization, submission,
+  confirmation, success, and failure states with smoother transitions and
+  visible liveness throughout the transaction.
+- Activity snapshots are partitioned by network and account, and stale rows are
+  cleared immediately during scope switches so state cannot bleed between
+  wallets.
+- Storybook navigation is organized into numbered user journeys from onboarding
+  through security settings, with cross-cutting runtime contracts kept
+  separately reviewable.
 - Wallet refreshes now converge sooner after unlock and submitted actions while
   retaining account-scoped stale-result guards.
 - Terminal token prices, daily changes, chart history, trade fills, portfolio
@@ -32,6 +54,12 @@ state convergence after unlock and transactions.
   catalogs across Tokens, Perps, Discover, and portfolio surfaces.
 
 ### Fixed
+- Ledger connection no longer depends on Chrome exposing a chooser inside the
+  side panel; permission and live transport ownership remain in the ordinary
+  extension tab while the side panel communicates through a bounded broker.
+- Full-page onboarding completion no longer falls through into an expanded
+  dashboard; it stops background hydration and gives the user a deliberate
+  side-panel handoff.
 - Stablecoin supply changes are no longer presented as daily price moves.
 - Non-ETH token charts, spot trade tapes, swap token selection, and utilization
   curve inspection now behave consistently across supported assets.
@@ -39,6 +67,12 @@ state convergence after unlock and transactions.
   cached rows instead of visibly repopulating from an empty feed.
 
 ### Security
+- Ledger accounts remain mnemonic-less, broker session identifiers and messages
+  are validated and ephemeral, raw device events are not logged, and every
+  signing path retains device/key verification before broadcast.
+- The UI Lab has no production RPC, vault, hardware transport, recovery
+  material, or signing capability; production view coverage fails when a new
+  wallet view lacks a deterministic scenario.
 - Every consumed Starkscan response is parsed at the trust boundary with
   bounded pages and response sizes; malformed or incomplete indexed data fails
   closed to the wallet's existing RPC path.

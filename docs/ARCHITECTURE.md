@@ -352,7 +352,11 @@ The build requires `vendor/krusty-kms/crates/wasm/pkg` and copies its runtime fi
 ## Extension
 
 Load `dist/` as an unpacked extension after `bun run build`.
-Click the extension action to open the Chrome side panel wallet.
+A fresh install opens `onboarding.html` as a dedicated extension tab. It reuses the production
+side-panel templates, bindings, encrypted-vault boundary, and Ledger onboarding controller, but
+applies the expanded onboarding layout. Updates never reopen the tab. The side-panel first-run
+screen retains an explicit full-screen link if setup was dismissed, and successful setup hands the
+user back to the Chrome side panel. Click the extension action for the normal wallet surface.
 
 Release zips and SHA-256 checksum files are written to `artifacts/` by
 `bun run package:extension`.

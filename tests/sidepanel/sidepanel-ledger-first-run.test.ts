@@ -248,6 +248,14 @@ describe("createLedgerOnboardEntry", () => {
     expect(h.refreshed()).toBe(1);
   });
 
+  test("opens add-account setup directly from the entry API", () => {
+    const h = entryHarness();
+
+    h.entry.startAddAccount();
+
+    expect(h.mount.hidden).toBe(false);
+  });
+
   test("the add-to-existing trigger adds a keyless account without a passphrase", async () => {
     const h = entryHarness();
     const app = document.createElement("div");

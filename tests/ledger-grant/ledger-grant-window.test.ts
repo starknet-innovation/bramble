@@ -6,6 +6,7 @@
  * cannot be reintroduced.
  */
 import { afterEach, describe, expect, test } from "bun:test";
+import { ledgerBrokerChannelName } from "../../src/ledger-grant/broker-protocol";
 import {
   extensionBrowser,
   type GrantBrowser,
@@ -13,6 +14,7 @@ import {
   type GrantSessionRuntime,
   requestDeviceGrant,
 } from "../../src/sidepanel/ledger/grant-window";
+import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 
 const SESSION_ID = "00000000-0000-4000-8000-000000000001";
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -61,6 +63,7 @@ const createFakeChannel = (): {
 const createFakeBrowser = (
   createdTab: FakeTab,
   missingOnGet = false,
+  failOnRemove = false,
 ): {
   readonly browser: GrantBrowser;
   readonly createCalls: TabsCreateOptions[];
@@ -99,6 +102,9 @@ const createFakeBrowser = (
       },
       remove: async (tabId) => {
         removeCalls.push(tabId);
+        if (failOnRemove) {
+          throw new Error(`Could not remove tab: ${tabId}`);
+        }
       },
     },
   };
@@ -125,6 +131,23 @@ const createRuntime = (
 });
 
 describe("requestDeviceGrant", () => {
+  test("uses the bounded production channel runtime", async () => {
+    const { browser, createCalls } = createFakeBrowser({ id: 6 });
+    const pending = requestDeviceGrant(browser);
+    await tick();
+    const createdUrl = createCalls[0]?.url;
+    if (!createdUrl) {
+      throw new Error("grant tab was not created");
+    }
+    const sessionId = new URL(createdUrl).hash.replace("#session=", "");
+    const broker = new BroadcastChannel(ledgerBrokerChannelName(sessionId));
+    broker.postMessage({ kind: "ready" });
+
+    const session = await pending;
+    await session.close();
+    broker.close();
+  });
+
   test("opens a capability-scoped active tab and waits for ready", async () => {
     const fake = createFakeChannel();
     const { browser, createCalls } = createFakeBrowser({ id: 7 });
@@ -170,6 +193,89 @@ describe("requestDeviceGrant", () => {
     await session.close();
   });
 
+  test("proxies validated public-key and signature responses", async () => {
+    const fake = createFakeChannel();
+    const { browser } = createFakeBrowser({ id: 12 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
+    await tick();
+    fake.emit({ kind: "ready" });
+    const session = await pending;
+    const path = ledgerAccountPath(0);
+
+    const publicKey = session.client.getPubKey(path);
+    await tick();
+    expect(fake.posts[0]).toEqual({
+      id: 1,
+      kind: "command",
+      method: "getPubKey",
+      path,
+    });
+    fake.emit({
+      id: 1,
+      kind: "response",
+      ok: true,
+      value: {
+        errorMessage: "",
+        publicKey: new Uint8Array(64),
+        returnCode: 0x9000,
+      },
+    });
+    expect((await publicKey).publicKey).toEqual(new Uint8Array(64));
+
+    const signature = session.client.signHash(path, "0x1");
+    await tick();
+    expect(fake.posts[1]).toEqual({
+      hash: "0x1",
+      id: 2,
+      kind: "command",
+      method: "signHash",
+      path,
+    });
+    fake.emit({
+      id: 2,
+      kind: "response",
+      ok: true,
+      value: {
+        errorMessage: "",
+        r: new Uint8Array(32),
+        returnCode: 0x9000,
+        s: new Uint8Array(32),
+      },
+    });
+    expect(await signature).toMatchObject({
+      r: new Uint8Array(32),
+      returnCode: 0x9000,
+      s: new Uint8Array(32),
+    });
+    await session.close();
+  });
+
+  test("rejects broker failures and bounded command timeouts", async () => {
+    const fake = createFakeChannel();
+    const timers: Array<() => void> = [];
+    const { browser } = createFakeBrowser({ id: 14 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake, timers));
+    await tick();
+    fake.emit({ kind: "ready" });
+    const session = await pending;
+
+    const rejected = session.client.getAppVersion();
+    await tick();
+    fake.emit({
+      error: "device-busy",
+      id: 1,
+      kind: "response",
+      ok: false,
+    });
+    await expect(rejected).rejects.toMatchObject({ code: "device-busy" });
+
+    const timedOut = session.client.getAppVersion();
+    await tick();
+    timers.at(-1)?.();
+    await expect(timedOut).rejects.toMatchObject({ code: "sign-timeout" });
+    await session.close();
+  });
+
   test("fails closed on a malformed device response", async () => {
     const fake = createFakeChannel();
     const { browser } = createFakeBrowser({ id: 13 });
@@ -192,7 +298,7 @@ describe("requestDeviceGrant", () => {
 
   test("closing the owned session signals the broker and removes its exact tab", async () => {
     const fake = createFakeChannel();
-    const { browser, listeners, removeCalls } = createFakeBrowser({ id: 17 });
+    const { browser, listeners, removeCalls } = createFakeBrowser({ id: 17 }, false, true);
     const pending = requestDeviceGrant(browser, createRuntime(fake));
     await tick();
     fake.emit({ kind: "ready" });
@@ -202,6 +308,23 @@ describe("requestDeviceGrant", () => {
     expect(fake.posts).toEqual([{ kind: "close" }]);
     expect(removeCalls).toEqual([17]);
     expect(listeners.size).toBe(0);
+  });
+
+  test("rejects active calls when the retained tab closes", async () => {
+    const fake = createFakeChannel();
+    const { browser, listeners } = createFakeBrowser({ id: 18 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
+    await tick();
+    fake.emit({ kind: "ready" });
+    const session = await pending;
+    const version = session.client.getAppVersion();
+    await tick();
+
+    for (const listener of listeners) {
+      listener(18);
+    }
+
+    await expect(version).rejects.toMatchObject({ code: "panel-context-lost" });
   });
 
   test("ignores unrelated tab closes and rejects when its tab closes before ready", async () => {
@@ -223,7 +346,7 @@ describe("requestDeviceGrant", () => {
   test("bounds a picker that never becomes ready", async () => {
     const fake = createFakeChannel();
     const timers: Array<() => void> = [];
-    const { browser, listeners, removeCalls } = createFakeBrowser({ id: 23 });
+    const { browser, listeners, removeCalls } = createFakeBrowser({ id: 23 }, false, true);
     const pending = requestDeviceGrant(browser, createRuntime(fake, timers));
     await tick();
 
