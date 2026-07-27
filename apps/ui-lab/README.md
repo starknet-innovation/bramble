@@ -10,12 +10,13 @@ broadcast path.
 ```bash
 cd apps/ui-lab
 bun install --frozen-lockfile
-bun run dev
+bun run storybook
 ```
 
 Open the URL Storybook prints (normally `http://localhost:6006`). Use the lab controls to select a
 checkpoint, replay or step through a scenario, change speed, switch theme, enforce reduced motion,
 or move between the 400 × 760 side-panel reference and the production 380 × 600 popup preset.
+`bun run dev` is an equivalent shorthand.
 
 `bun run test` executes the stories and their play-function interactions in Playwright Chromium.
 `bun run build` writes the static site to `storybook-static/`.
