@@ -8,21 +8,27 @@ const outdir = "dist";
 const krustyModule = "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
 const vendorOutdir = join(outdir, "vendor/krusty-kms/pkg");
 const LEDGER_BUFFER_MODULES =
-  /[\\/]node_modules[\\/]@ledgerhq[\\/](?:hw-app-starknet|hw-transport|hw-transport-webhid)[\\/].*\.js$/;
+  /[\\/]node_modules[\\/]@ledgerhq[\\/](?:hw-app-starknet|hw-transport|hw-transport-web-ble|hw-transport-webhid|hw-transport-webusb)[\\/].*\.js$/;
+const LEDGER_BLE_RAW_DISCONNECT_LOG = 'console.log("onDisconnect!", e);';
 
 // Ledger's browser packages still reference the Node `Buffer` identifier
 // without importing it. Inject a MODULE-LOCAL import only into those pinned
-// package files while building the side panel; this avoids installing Buffer
-// on `globalThis`, where unrelated panel code could observe or replace it.
+// package files while building the side panel and grant tab; this avoids
+// installing Buffer on `globalThis`, where unrelated UI code could observe or
+// replace it.
 const ledgerBufferBoundary: Bun.BunPlugin = {
   name: "ledger-buffer-boundary",
   setup(builder) {
     builder.onLoad({ filter: LEDGER_BUFFER_MODULES }, async ({ path }) => {
       const source = await readFile(path, "utf8");
+      // The pinned Web Bluetooth package logs its raw disconnect event. Device
+      // objects must not cross the Ledger boundary through console output, so
+      // remove that one upstream diagnostic while bundling.
+      const boundarySource = source.replace(LEDGER_BLE_RAW_DISCONNECT_LOG, "");
       return {
-        contents: source.includes("Buffer")
-          ? `import { Buffer } from "buffer";\n${source}`
-          : source,
+        contents: boundarySource.includes("Buffer")
+          ? `import { Buffer } from "buffer";\n${boundarySource}`
+          : boundarySource,
         loader: "js",
       };
     });
@@ -81,6 +87,7 @@ requireBuild(
     format: "esm",
     minify: true,
     outdir: join(outdir, "ledger-grant"),
+    plugins: [ledgerBufferBoundary],
     target: "browser",
   }),
 );
@@ -106,6 +113,7 @@ requireBuild(
 );
 
 await cp("public/manifest.json", join(outdir, "manifest.json"));
+await cp("public/onboarding.html", join(outdir, "onboarding.html"));
 await cp("public/popup.html", join(outdir, "popup.html"));
 await cp("public/sidepanel.html", join(outdir, "sidepanel.html"));
 await cp("public/ledger-grant.html", join(outdir, "ledger-grant.html"));

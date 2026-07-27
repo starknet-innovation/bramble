@@ -23,11 +23,52 @@ test("loads the built extension and renders side panel onboarding", async ({ ext
   await expect(sidepanel.locator('select[name="networkId"]')).toHaveValue("SN_MAIN");
 });
 
+test("loads the dedicated full-screen onboarding surface", async ({ extension }) => {
+  const onboarding = await extension.openExtensionPage("onboarding.html");
+
+  await expect(onboarding.locator("body")).toHaveClass("onboarding-surface");
+  await expect(onboarding.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
+  await expect(onboarding.getByRole("link", { name: "Open full-screen setup" })).toBeHidden();
+});
+
+test("completes an imported wallet in full-screen onboarding", async ({ extension }) => {
+  const onboarding = await extension.openExtensionPage("onboarding.html");
+
+  await onboarding.locator('textarea[name="mnemonic"]').fill(IMPORT_MNEMONIC);
+  await onboarding.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
+  await onboarding.locator('input[name="mainnetAck"]').check();
+  await onboarding.getByRole("button", { name: "Create wallet" }).click();
+
+  await expect(onboarding.getByRole("heading", { name: "Your wallet is ready" })).toBeVisible();
+  await expect(onboarding.getByRole("button", { name: "Open wallet" })).toBeVisible();
+});
+
 test("loads the built toolbar popup surface", async ({ extension }) => {
   const popup = await extension.openExtensionPage("popup.html");
 
   await expect(popup.locator("body")).toHaveClass("popup-surface");
   await expect(popup.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
+});
+
+test("loads the dedicated Ledger hardware session surface", async ({ extension }) => {
+  const ledger = await extension.openExtensionPage(
+    "ledger-grant.html#session=2db2df18-12db-4d66-9b38-02dc16460ce3",
+  );
+
+  await expect(ledger.getByRole("heading", { name: "Connect your Ledger" })).toBeVisible();
+  await expect(ledger.getByText("Secure device session")).toBeVisible();
+  await expect(ledger.getByRole("button", { name: /USB cable/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(ledger.getByRole("button", { name: /Bluetooth/ })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(ledger.getByRole("button", { name: "Connect with USB" })).toBeEnabled();
+  await ledger.getByRole("button", { name: /Bluetooth/ }).click();
+  await expect(ledger.getByRole("button", { name: "Pair with Bluetooth" })).toBeEnabled();
+  await expect(ledger.getByText("Stay on the Ledger dashboard")).toBeVisible();
 });
 
 test("imports an existing recovery phrase without backup verification", async ({ extension }) => {

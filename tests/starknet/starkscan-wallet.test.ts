@@ -2,8 +2,11 @@
  * Indexed holdings and transfer adapter checks for wallet-facing data.
  */
 import { describe, expect, test } from "bun:test";
+import type { RpcProvider } from "starknet";
 import { createStarkscanClient } from "../../src/starknet/starkscan";
 import {
+  createStarkscanPreferredBalances,
+  createStarkscanPreferredHistory,
   getStarkscanTokenBalances,
   getStarkscanTransactionHistory,
 } from "../../src/starknet/starkscan-wallet";
@@ -140,5 +143,58 @@ describe("Starkscan wallet adapters", () => {
         { accountAddress: ACCOUNT, rpcUrls: ["https://rpc.example"], tokens: [strk] },
       ),
     ).rejects.toThrow("incomplete");
+  });
+
+  test("preferred wallet reads use Starkscan first and preserve RPC fallback", async () => {
+    const input = {
+      accountAddress: ACCOUNT,
+      rpcUrls: ["https://rpc.example"],
+      tokens: [strk],
+    } as const;
+    const complete = clientFor({
+      chainId: "SN_MAIN",
+      ownerAddress: ACCOUNT,
+      items: [],
+      exact: true,
+      truncated: false,
+      completeness: {
+        exact: true,
+        truncated: false,
+        complete: true,
+        reasonCode: "complete",
+        reason: "Complete snapshot.",
+        lagBlocks: 0,
+        capped: false,
+        cap: null,
+      },
+    });
+    expect((await createStarkscanPreferredBalances(complete)(input))[0]?.balance).toBe("0");
+
+    const unavailable = createStarkscanClient({
+      baseUrl: "https://starkscan.test/v1",
+      http: async () => {
+        throw new Error("offline");
+      },
+    });
+    let rpcBalanceReads = 0;
+    const balances = await createStarkscanPreferredBalances(unavailable)(input, () => {
+      return {
+        async callContract() {
+          rpcBalanceReads += 1;
+          return ["0x2", "0x0"];
+        },
+      } as unknown as RpcProvider;
+    });
+    expect(balances[0]?.balance).toBe("2");
+    expect(rpcBalanceReads).toBe(1);
+
+    const historyInput = {
+      account: ACCOUNT,
+      accountId: `SN_MAIN:${ACCOUNT}`,
+      networkId: "SN_MAIN",
+      rpcUrls: ["https://rpc.example"],
+      tokens: [],
+    } as const;
+    expect(await createStarkscanPreferredHistory(unavailable)(historyInput)).toEqual([]);
   });
 });

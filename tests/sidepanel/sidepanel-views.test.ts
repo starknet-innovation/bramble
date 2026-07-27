@@ -150,7 +150,7 @@ describe("sidepanel views", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
     expect(html).toContain("No tokens are tracked on this network yet");
-    expect(html).toMatch(/<button type="submit" disabled>/);
+    expect(html).toMatch(/id="send-review-button" type="submit" disabled/);
   });
 
   test("shows a clickable deploy chip only when the account is not deployed", () => {

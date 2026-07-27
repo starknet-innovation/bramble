@@ -24,7 +24,7 @@ import { hydrateView } from "./hydrate";
 import { bindImportKey } from "./import-key-ui";
 import { bindLedgerFirstRun } from "./ledger/first-run";
 import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
-import { webHidConnector } from "./ledger/sign-connector";
+import { ledgerConnector } from "./ledger/sign-connector";
 import { createLedgerSignRuntime } from "./ledger/sign-runtime";
 import { animateLiveValueChanges, captureLiveValues } from "./live-updates";
 import { prefersReducedMotion } from "./motion";
@@ -32,6 +32,11 @@ import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
+import {
+  bindOnboardingCompletion,
+  type OnboardingCompletionBrowser,
+  onboardingComplete,
+} from "./onboarding-surface";
 import { bindOnboarding, bindUnlock } from "./onboarding-ui";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import {
@@ -55,14 +60,16 @@ import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
-import { bindActivity, bindTransfer } from "./transfer-ui";
+import { bindActivity, bindTransfer, markTransferLedgerAuthorized } from "./transfer-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: { readonly runtime?: RuntimeApi };
+  readonly chrome?: OnboardingCompletionBrowser & { readonly runtime?: RuntimeApi };
 };
 const app = document.querySelector("#app");
-const runtime = (globalThis as ExtensionGlobal).chrome?.runtime;
+const fullPageOnboarding = document.body.classList.contains("onboarding-surface");
+const extensionApi = (globalThis as ExtensionGlobal).chrome;
+const runtime = extensionApi?.runtime;
 const mutationRuntime = createMutationRuntime(runtime);
 const wallet = createSidepanelRuntime(mutationRuntime);
 const multisig = createMultisigClient(mutationRuntime);
@@ -120,11 +127,6 @@ const renderShell = (content: string, animate: boolean): void => {
   animateLiveValueChanges(app, liveValues);
 };
 
-// Swaps the shell markup and re-binds listeners. When the scene changed and the
-// View Transitions API is available (and motion is allowed), the swap runs
-// inside a direction-aware transition; otherwise it falls back to the instant
-// swap with the CSS scene-enter class. Overlapping navigations let the browser
-// skip the in-flight transition, keeping it interruptible.
 const renderScene = (content: string, animate: boolean, direction: NavDirection): void => {
   const doc = document as ViewTransitionDocument;
   if (!animate || prefersReducedMotion() || typeof doc.startViewTransition !== "function") {
@@ -145,34 +147,30 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
 
-// Ledger sign takeover lives outside #app so repaints cannot reset it.
 const ledgerSignMount = document.createElement("div");
 ledgerSignMount.className = "ledger-sign-overlay";
 ledgerSignMount.hidden = true;
 document.body.append(ledgerSignMount);
 const ledgerSign = createLedgerSignRuntime({
-  connector: webHidConnector,
+  connector: ledgerConnector,
   mount: ledgerSignMount,
+  onSignatureReported: markTransferLedgerAuthorized,
   status: () => cache.status,
   wallet,
 });
 
-// Ledger onboarding overlay, shared by the first-run "Set up with a Ledger" card
-// and the add-to-existing-wallet chooser. Its own overlay outside #app for the
-// same repaint-survival reason as the sign takeover; the first-run stash and the
-// create/add branch live in ./ledger/onboard-entry so this file stays in budget.
+// Shared repaint-surviving Ledger overlay for first-run and add-account flows.
 const ledgerOnboardMount = document.createElement("div");
 ledgerOnboardMount.className = "ledger-onboard-overlay";
 ledgerOnboardMount.hidden = true;
 document.body.append(ledgerOnboardMount);
-// The chooser's non-Ledger routes: HD-derive, and import (via the account flow).
 const ledgerOnboard = createLedgerOnboardEntry({
   addHd: async () => {
     await wallet.addAccount(lastNetworkId);
     showToast("Account added", "success");
   },
   cache,
-  connector: webHidConnector,
+  connector: ledgerConnector,
   mount: ledgerOnboardMount,
   openImport: () => navigate("account"),
   refresh: async () => {
@@ -185,6 +183,7 @@ const bindAll = (): void => {
   bindNavigation();
   bindBack();
   bindCopyButtons(app);
+  bindOnboardingCompletion(app, extensionApi, () => globalThis.close());
   bindOnboarding({ app, render, wallet });
   bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });
   bindUnlock({ app, render, wallet }, () => {
@@ -222,7 +221,7 @@ const bindAll = (): void => {
   });
   bindReveal({ app, wallet });
   bindActivity({ app, render, wallet });
-  bindTransfer({ app, render, wallet });
+  bindTransfer({ app, navigate: (view) => navigate(view), render, wallet });
   const settingsDeps = {
     activeAccountId: () => lastAccountId,
     app,
@@ -311,9 +310,7 @@ const bindAll = (): void => {
   });
 };
 
-// Applies the skin and CSS `color-scheme` for the current theme choice, but
-// native-control color scheme are pinned.
-// A legacy stored "system" choice resolves to the default dark skin.
+// Resolve the theme while keeping native-control color scheme pinned.
 const applyTheme = (): void => {
   const choice = cache.preferences?.theme ?? "dark";
   const skin = skinForChoice(choice);
@@ -324,18 +321,20 @@ const applyTheme = (): void => {
   }
 };
 
-// Synchronous paint from the current cache. Navigation calls this first so the
-// screen swaps instantly, then hydrate() streams fresh data in and repaints.
+// Paint cached state synchronously, then let hydrate() stream fresh data.
 const paint = (): void => {
   const { status } = cache;
   lastNetworkId = status.networkId;
   lastAccountId = status.activeAccountId;
   applyTheme();
-  const scene = !status.hasVault
-    ? "onboarding"
-    : status.locked
-      ? "locked"
-      : `dashboard:${activeView}`;
+  const scene =
+    fullPageOnboarding && status.hasVault
+      ? "onboarding-complete"
+      : !status.hasVault
+        ? "onboarding"
+        : status.locked
+          ? "locked"
+          : `dashboard:${activeView}`;
   const animate = scene !== lastScene;
   lastScene = scene;
   const direction = forcedDirection ?? navDirection(lastActiveView, activeView);
@@ -361,41 +360,44 @@ const paint = (): void => {
   snoozedApprovalIds = snoozedApprovalIds.filter((id) =>
     cache.pending.some((approval) => approval.id === id),
   );
-  const content = !status.hasVault
-    ? onboarding(status)
-    : status.locked
-      ? locked(status, cache.pending)
-      : dashboard(
-          activeView,
-          status,
-          cache.pending,
-          cache.preferences,
-          cache.balances,
-          cache.deployment,
-          cache.transactions,
-          cache.connectedSites,
-          cache.prices,
-          cache.chart,
-          selectedTokenId,
-          cache.allowances,
-          selectedNftId,
-          cache.changes,
-          cache.multisigs.multisigs,
-          cache.multisigs.proposals,
-          selectedMultisigId,
-          cache.multisigClassDeclared,
-          drawerGroupFilter,
-          expandedGroupId,
-          cache.priceStale,
-          cache.priceAsOf,
-          cache.discoveredNfts,
-          openAssignId,
-          classHashVerification,
-          cache.historyUnavailable,
-          snoozedApprovalIds,
-          cache.multisigsError,
-          cache.multisigSync,
-        );
+  const content =
+    fullPageOnboarding && status.hasVault
+      ? onboardingComplete()
+      : !status.hasVault
+        ? onboarding(status)
+        : status.locked
+          ? locked(status, cache.pending)
+          : dashboard(
+              activeView,
+              status,
+              cache.pending,
+              cache.preferences,
+              cache.balances,
+              cache.deployment,
+              cache.transactions,
+              cache.connectedSites,
+              cache.prices,
+              cache.chart,
+              selectedTokenId,
+              cache.allowances,
+              selectedNftId,
+              cache.changes,
+              cache.multisigs.multisigs,
+              cache.multisigs.proposals,
+              selectedMultisigId,
+              cache.multisigClassDeclared,
+              drawerGroupFilter,
+              expandedGroupId,
+              cache.priceStale,
+              cache.priceAsOf,
+              cache.discoveredNfts,
+              openAssignId,
+              classHashVerification,
+              cache.historyUnavailable,
+              snoozedApprovalIds,
+              cache.multisigsError,
+              cache.multisigSync,
+            );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
     return;
@@ -430,9 +432,11 @@ const render = async (status: WalletStatus): Promise<void> => {
     paint();
     return;
   }
+  if (fullPageOnboarding) {
+    paint();
+    return;
+  }
   paint();
-  // Surface any parked keyless-Ledger signature for this now-unlocked panel; the
-  // takeover renders itself over the dashboard and drives the device.
   void ledgerSign.poll();
   await hydrateView({
     status,
@@ -448,9 +452,7 @@ const render = async (status: WalletStatus): Promise<void> => {
   });
 };
 
-// Instant navigation: swap the visible screen from cache now, hydrate after.
-// Any navigation dismisses the account drawer so it never lingers over flows.
-// The screen being left is pushed onto the history so Back can return to it.
+// Swap cached navigation state immediately, then hydrate it.
 const navigate = (view: WalletView): void => {
   if (view !== activeView) {
     viewHistory = pushView(viewHistory, activeView);
@@ -461,9 +463,7 @@ const navigate = (view: WalletView): void => {
   void wallet.loadStatus().then(render);
 };
 
-// Steps back to the screen the user actually came from (or Home at the root),
-// animating as a reverse transition. Same instant-swap-then-hydrate path as
-// navigate(); the back control in every flow header (`[data-nav-back]`) calls it.
+// Return to the prior view with reverse-transition direction.
 const goBack = (): void => {
   const popped = popView(viewHistory);
   viewHistory = popped.history;

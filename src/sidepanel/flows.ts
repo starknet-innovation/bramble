@@ -27,60 +27,10 @@ import {
   type WalletView,
 } from "./parts";
 import { qrSvg } from "./qr";
+import { sendFlow } from "./send-views";
 import { swapFlow } from "./swap-views";
 
-/**
- * Send flow: pick a token, a recipient, and an amount, then submit.
- */
-export const sendFlow = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  preferences: WalletPreferences | null,
-): string => {
-  const tokens = preferences?.tokens.filter((token) => token.networkId === status.networkId) ?? [];
-  const addresses =
-    preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
-  const canSend = account !== null && tokens.length > 0;
-  return (
-    flowHeader("Send", status, account ? `From ${accountLabel(account.address)}` : "") +
-    flowScreen(
-      "send",
-      `<section class="section">
-        ${account ? "" : noAccountEmpty(status)}
-        ${
-          account && tokens.length === 0
-            ? '<p class="empty">No tokens are tracked on this network yet, so nothing can be sent.</p>'
-            : ""
-        }
-        <form id="transfer-form">
-          <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
-          <label><span>Token</span>
-            <select name="tokenId" ${canSend ? "" : "disabled"}>
-              ${tokens.map((token) => `<option value="${escapeHtml(token.id)}">${escapeHtml(token.symbol)} — ${escapeHtml(token.name)}</option>`).join("")}
-            </select>
-          </label>
-          <label><span>Recipient</span>
-            <input class="mono" name="recipient" list="address-book" placeholder="0x…" required autocomplete="off" spellcheck="false" ${canSend ? "" : "disabled"} />
-            <span class="hint">Paste an address or pick a saved one from your address book.</span>
-          </label>
-          <label><span>Amount</span>
-            <input class="mono" name="amount" inputmode="decimal" placeholder="0.0" required autocomplete="off" ${canSend ? "" : "disabled"} />
-          </label>
-          <label><span>Speed</span>
-            <select name="speed" ${canSend ? "" : "disabled"}>
-              <option value="standard" selected>Standard</option>
-              <option value="fast">Fast — pays up to 1.5x the estimated fee</option>
-            </select>
-          </label>
-          <div id="review-panel"></div>
-          <button type="submit" ${canSend ? "" : "disabled"}>${icon("send")}Review send</button>
-          <p id="transfer-result" role="status"></p>
-        </form>
-        <datalist id="address-book">${addresses.map((entry) => `<option value="${escapeHtml(entry.address)}">${escapeHtml(entry.label)}</option>`).join("")}</datalist>
-      </section>`,
-    )
-  );
-};
+export { sendFlow } from "./send-views";
 
 /**
  * Receive flow: show and copy the active account address.

@@ -101,6 +101,150 @@ describe("Starkscan client boundary", () => {
     expect(page.nextCursor).toBe("opaque");
   });
 
+  test("exposes the remaining validated wallet and chain read routes", async () => {
+    const requests: string[] = [];
+    const event = {
+      blockNumber: 12,
+      timestampIso: "2026-07-24T11:29:01.000Z",
+      txHash: "0x40f454",
+      txIndex: 2,
+      logIndex: 1,
+      address: TOKEN,
+      keys: ["0x1"],
+      data: ["0x2"],
+      decodingStatus: "decoded",
+      eventName: "Transfer",
+      sourceTier: "finalized",
+    };
+    const client = createStarkscanClient({
+      baseUrl: "https://starkscan.test/v1/",
+      async http(url) {
+        requests.push(url);
+        if (url.includes("/transactions?")) {
+          return jsonResponse({
+            items: [
+              {
+                blockNumber: 12,
+                timestampIso: "2026-07-24T11:29:01.000Z",
+                txIndex: 2,
+                txHash: "0x40f454",
+                kinds: ["invoke"],
+                counterparty: ACCOUNT,
+                txType: "INVOKE",
+                executionStatus: "SUCCEEDED",
+                finalityStatus: "ACCEPTED_ON_L2",
+                transferCount: 1,
+                operationKind: "swap",
+                operationLabel: "Token swap",
+              },
+            ],
+            nextCursor: null,
+          });
+        }
+        if (url.includes("/activity?")) {
+          return jsonResponse({
+            items: [
+              {
+                blockNumber: 12,
+                timestampIso: "2026-07-24T11:29:01.000Z",
+                txIndex: 2,
+                logIndex: 1,
+                transferIndex: 0,
+                txHash: "0x40f454",
+                kind: "token_out",
+                counterparty: ACCOUNT,
+                tokenAddress: TOKEN,
+                amount: "2",
+                tokenId: null,
+              },
+            ],
+            nextCursor: null,
+          });
+        }
+        if (url.includes("/balance-of/")) {
+          return jsonResponse({
+            chainId: "SN_MAIN",
+            tokenAddress: TOKEN,
+            ownerAddress: ACCOUNT,
+            blockTag: "latest",
+            balanceRaw: "2",
+          });
+        }
+        if (url.includes("/contract/") && url.includes("/events?")) {
+          return jsonResponse({ items: [event], nextCursor: null });
+        }
+        if (url.includes("/contract/")) {
+          return jsonResponse({
+            chainId: "SN_MAIN",
+            address: TOKEN,
+            classHash: "0x1",
+            deployedAtBlock: 10,
+            deployedAtTx: "0x2",
+            createdOnIso: "2026-07-24T11:00:00.000Z",
+            deployedByAddress: ACCOUNT,
+            isAccount: false,
+            isToken: true,
+            tokenKind: "erc20",
+            alias: "STRK",
+            metadataCompleteness: true,
+            source: "indexed",
+          });
+        }
+        if (url.includes("/blocks?")) {
+          return jsonResponse({
+            items: [
+              {
+                blockNumber: 12,
+                blockHash: "0x12",
+                parentHash: "0x11",
+                timestampIso: "2026-07-24T11:29:01.000Z",
+                txCount: 3,
+                finalityStatus: "ACCEPTED_ON_L2",
+              },
+            ],
+            nextCursor: null,
+          });
+        }
+        if (url.includes("/events?")) {
+          return jsonResponse({ items: [{ ...event, sourceTier: null }], nextCursor: null });
+        }
+        return jsonResponse({
+          address: ACCOUNT,
+          totalActivityCount: 3,
+          latestActivityBlock: 12,
+          activityCountExact: true,
+          classHash: "0x1",
+          isAccount: true,
+          createdOnIso: "2026-07-24T11:00:00.000Z",
+          deployedAtTxHash: "0x2",
+          deployedByAddress: ACCOUNT,
+        });
+      },
+    });
+
+    const [address, transactions, activity, balance, contract, contractEvents, blocks, events] =
+      await Promise.all([
+        client.getAddress("SN_MAIN", ACCOUNT),
+        client.getAddressTransactions("SN_MAIN", ACCOUNT, { cursor: "next", limit: 2 }),
+        client.getAddressActivity("SN_MAIN", ACCOUNT),
+        client.getTokenBalance("SN_MAIN", TOKEN, ACCOUNT),
+        client.getContract("SN_MAIN", TOKEN),
+        client.getContractEvents("SN_MAIN", TOKEN),
+        client.getBlocks("SN_MAIN", { limit: 1 }),
+        client.getEvents("SN_MAIN", { limit: 1 }),
+      ]);
+
+    expect(address.totalActivityCount).toBe(3);
+    expect(transactions.items[0]?.operationLabel).toBe("Token swap");
+    expect(activity.items[0]?.kind).toBe("token_out");
+    expect(balance.balanceRaw).toBe("2");
+    expect(contract.tokenKind).toBe("erc20");
+    expect(contractEvents.items[0]?.eventName).toBe("Transfer");
+    expect(blocks.items[0]?.txCount).toBe(3);
+    expect(events.items[0]?.sourceTier).toBeNull();
+    expect(requests.some((url) => url.endsWith("transactions?limit=2&cursor=next"))).toBe(true);
+  });
+
   test("rejects malformed data and returns bounded structured HTTP errors", async () => {
     const malformed = createStarkscanClient({
       baseUrl: "https://starkscan.test/v1",
@@ -154,6 +298,13 @@ describe("Starkscan client boundary", () => {
     });
     expect(() => client.getAddress("SN_MAIN", "not-an-address")).toThrow(
       "Invalid Starkscan address",
+    );
+    expect(() => client.getBlocks("SN_MAIN", { limit: 201 })).toThrow(
+      "Invalid Starkscan page limit",
+    );
+    expect(() => client.getEvents("SN_MAIN", { cursor: "" })).toThrow("Invalid Starkscan cursor");
+    expect(() => client.getTokenBalance("SN_MAIN", TOKEN, ACCOUNT, "")).toThrow(
+      "Invalid Starkscan block tag",
     );
     expect(called).toBe(false);
   });

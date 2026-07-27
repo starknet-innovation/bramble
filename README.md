@@ -16,7 +16,7 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 ## Features
 
 - **Accounts & transfers** — OpenZeppelin accounts backed by either the encrypted software vault or a Ledger hardware wallet, with deploy/send/receive and network switching.
-- **Recovery** — seed-phrase backup with on-screen verification for software accounts; Ledger accounts stay keyless and are recovered from the Ledger device's own recovery phrase.
+- **Onboarding & recovery** — a dedicated full-page first-install flow for creating, importing, or connecting a Ledger; seed-phrase backup includes on-screen verification, while Ledger accounts stay keyless.
 - **dApp connect** — injects `window.starknet_mcWallet` (get-starknet compatible), with per-origin grants so connected sites never see each other.
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
 - **NFT gallery** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`.
@@ -36,7 +36,8 @@ bun run vendor:multisig   # pinned multisig contract artifacts
 bun run build             # -> dist/
 ```
 
-Open `chrome://extensions`, turn on Developer mode, hit **Load unpacked** and pick `dist/`, then click the toolbar icon to pop open the side panel.
+Open `chrome://extensions`, turn on Developer mode, hit **Load unpacked** and pick `dist/`. A
+fresh install opens the full-page setup flow; after setup, use the toolbar icon for the side panel.
 
 Day to day:
 
@@ -63,7 +64,7 @@ vendored outputs; Playwright needs its Chromium install once per machine.
 
 ## Built with
 
-Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · Biome · Krusty KMS (WASM) · Ledger WebHID · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
+Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · Biome · Krusty KMS (WASM) · Ledger Web Bluetooth/WebUSB/WebHID · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
 
 ## Architecture
 
@@ -76,7 +77,7 @@ src/storage                encrypted persistence, permissions, schema migrations
 src/crypto                 Krusty KMS boundary (validates every WASM input/output)
 src/starknet               RPC, networks, token registry, prices
 src/security               phishing blocklist and lookalike heuristics
-src/sidepanel + src/ui      the side-panel app, Ledger WebHID boundary, and design system
+src/sidepanel + src/ui      full-page onboarding, side-panel app, Ledger boundary, and design system
 contracts/multisig         the pinned OpenZeppelin multisig shell (Cairo)
 ```
 

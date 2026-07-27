@@ -24,9 +24,12 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
+  "@ledgerhq/devices": "8.17.0",
   "@ledgerhq/hw-app-starknet": "3.0.2",
   "@ledgerhq/hw-transport": "6.35.6",
+  "@ledgerhq/hw-transport-web-ble": "6.35.0",
   "@ledgerhq/hw-transport-webhid": "6.36.0",
+  "@ledgerhq/hw-transport-webusb": "6.35.0",
   buffer: "5.7.1",
   starknet: "10.0.2",
 };
@@ -37,6 +40,7 @@ export const PINNED_RUNTIME_FILES = [
   "ledger-grant.html",
   "ledger-grant/index.js",
   "manifest.json",
+  "onboarding.html",
   "popup.html",
   "provider/inpage.js",
   "sidepanel.html",

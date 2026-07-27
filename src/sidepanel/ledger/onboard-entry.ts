@@ -37,7 +37,7 @@ export type LedgerOnboardEntry = {
 
 /**
  * Creates the shared Ledger onboarding overlay entry over an injected overlay
- * `mount` and device `connector` (the entrypoint passes the WebHID connector).
+ * `mount` and device `connector` (the entrypoint passes the browser Ledger connector).
  * Reads live status through the render `cache` and drives account creation
  * through the panel `wallet`; the injected `addHd` (derive the next HD account)
  * and `openImport` (jump to the raw-key form) back the chooser's other two

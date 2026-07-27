@@ -28,6 +28,7 @@ export const onboarding = (status: WalletStatus): string => `
       <h1>Create your wallet</h1>
       <p class="lede">Generate a fresh recovery phrase, or paste one you already have to import an existing wallet.</p>
     </div>
+    <a class="onboarding-launch" href="onboarding.html" target="_blank" rel="noopener">Open full-screen setup</a>
     <form id="create-form" class="gate-form">
       <label><span>Network</span><select name="networkId">${networkOptions(status)}</select></label>
       <label><span>Recovery phrase</span>

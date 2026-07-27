@@ -33,6 +33,7 @@ import {
 import { createApprovalQueue } from "./approvals";
 import { walletEventBroadcasts } from "./events";
 import { createMessageHandler } from "./messages";
+import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboarding-surface";
 import { defaultRuntimeRpc } from "./runtime-rpc";
 import type { RuntimeSender } from "./senders";
 import { createUnlockSession, type UnlockSessionStore } from "./session";
@@ -42,7 +43,7 @@ type RuntimeApi = {
   readonly getURL?: (path: string) => string;
   readonly id: string;
   readonly onInstalled: {
-    readonly addListener: (listener: () => void) => void;
+    readonly addListener: (listener: (details: { readonly reason?: string }) => void) => void;
   };
   readonly onMessage: {
     readonly addListener: (
@@ -64,10 +65,11 @@ type TabsApi = {
 };
 
 type ExtensionGlobal = typeof globalThis & {
-  readonly chrome?: ApprovalSurfaceBrowser & {
-    readonly runtime?: RuntimeApi;
-    readonly tabs?: TabsApi;
-  };
+  readonly chrome?: ApprovalSurfaceBrowser &
+    OnboardingSurfaceBrowser & {
+      readonly runtime?: RuntimeApi;
+      readonly tabs?: TabsApi;
+    };
 };
 
 const SESSION_STORE_KEY = "mc-wallet:session";
@@ -401,7 +403,9 @@ const broadcastWalletEvents = (message: unknown, response: unknown): void => {
 // it pushes an approvals-changed signal at queue time via this notifier.
 setApprovalNotifier(() => broadcastEvent({ event: "approvalsChanged", type: "wallet.event" }));
 
-runtime?.onInstalled.addListener(() => undefined);
+runtime?.onInstalled.addListener((details) => {
+  void openOnboardingOnInstall(extensionApi, details.reason);
+});
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   requestApprovalSurface(extensionApi, approvalSurfacePreference, runtime.id, message, sender);
   void sessionReady
