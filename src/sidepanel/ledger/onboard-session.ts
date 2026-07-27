@@ -39,7 +39,7 @@ export const LEDGER_PAGE_SIZE = 5;
  * Reads the app version (rejecting a below-minimum app with `app-below-minimum`)
  * on every call, then reads the public-key x-coordinate for one page of account
  * indices — `startIndex … startIndex + count - 1` — SILENTLY and one round-trip
- * at a time (WebHID is a serial pipe). Returns the enumerated `(index,
+ * at a time (the browser transport is a serial pipe). Returns the enumerated `(index,
  * publicKeyX)` pairs for {@link LedgerOnboardController} to derive into
  * candidates. Any device/transport failure propagates as a typed
  * {@link LedgerRejection} so the caller aborts cleanly.
@@ -239,7 +239,7 @@ export const createLedgerOnboardController = (
   // Reads one page end to end: obtain a session, enumerate the page SILENTLY,
   // release the transport (account state + creation are background ops, no
   // device), derive addresses, append them pending, then fold in on-chain state.
-  // The session owns the WebHID transport so it is closed on every outcome — the
+  // The session owns the browser transport so it is closed on every outcome — the
   // device is never left claimed — and any failure maps to a typed error state.
   const loadPage = async (
     obtain: () => Promise<LedgerDeviceSession>,

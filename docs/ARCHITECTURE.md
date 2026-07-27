@@ -26,9 +26,9 @@ local signing fallback.
   or vault operations to dapps.
 - `src/storage` owns encrypted persistence, permission checks, schema validation, and migrations.
 - `src/crypto` adapts Krusty KMS and rejects invalid inputs or WASM outputs at the boundary.
-- `src/sidepanel/ledger` owns the Window-only WebHID transport and hardware interaction. The
-  service worker never opens a device, and the side panel never decides what transaction may be
-  broadcast.
+- `src/sidepanel/ledger` owns the Window-only Web Bluetooth/WebUSB/WebHID transport and hardware
+  interaction. The service worker never opens a device, and the side panel never decides what
+  transaction may be broadcast.
 - `src/ui` defines the design system: the replaceable color skin contract plus the shared scale
   tokens (spacing, radius, type, motion, control metrics) consumed by side panel styling.
 
@@ -102,7 +102,7 @@ a networked host and expect the same result.
 
 Ledger accounts use the same pinned OpenZeppelin account class, but the vault stores only public
 account metadata: the account address, public-key x-coordinate, account index, and canonical
-EIP-2645 path `m/2645'/579218131'/0'/<index>'`. No Ledger mnemonic or signing key enters MC
+EIP-2645 path `m/2645'/1195502025'/734980059'/0'/<index>'/0`. No Ledger mnemonic or signing key enters MC
 Wallet. A Ledger-only vault therefore has `mnemonic: null` and no `signingKeys` entry for its
 accounts; a mixed vault may contain both software and Ledger account records.
 
@@ -110,21 +110,39 @@ The hardware signing path is split across two mutually checking contexts:
 
 1. The privileged background creates the exact Starknet message hash, parks a bounded signing
    request, and records the active unlock-session generation.
-2. The side panel opens the selected origin-granted device, checks the app version and public key
-   at the stored path, then asks the device to blind-sign that exact hash.
+2. A top-level extension window owns the selected transport. The side panel checks the app version
+   and public key at the stored path through its validated session broker, then asks the device to
+   blind-sign that exact hash.
 3. The background receives only `(r, s)`, verifies it against the parked hash and stored public
    key, re-checks the unlock generation, and only then allows the existing submit path to
    broadcast. A missing queue, timeout, lock/expiry, wrong device, malformed response, rejected
    prompt, or bad signature fails closed.
 
-Chrome does not reliably display its native WebHID chooser from an extension side panel. The first
-grant therefore happens in the small `ledger-grant.html` extension popup. It carries no wallet
-secret and sends no `postMessage` or runtime message; the only result is Chrome's origin-scoped
-WebHID permission. The side panel then reconnects silently. Its wait is bounded, detects a popup
-that closed before listener registration, and best-effort closes a stuck popup. When several
-granted devices are connected, the UI lists non-secret labels with side-panel-local opaque ids and
-opens only the device the user selects; ids are neither persisted nor sent across an extension
-message boundary.
+Chrome does not reliably display native hardware choosers from an extension side panel. Device
+selection therefore happens in the small `ledger-grant.html` extension popup. Some Nano X
+firmware exposes Ledger's APDU
+collection and a protected FIDO collection as one composite HID device. Chrome deliberately hides
+that entire device from WebHID, even when the chooser filter targets only Ledger's vendor-defined
+APDU usage page (`0xFFA0`). Browser API presence does not identify the attached model or connection,
+so the popup never infers Bluetooth from `navigator.bluetooth`. It presents cable as the primary
+method (WebUSB with an APDU-filtered WebHID compatibility path) and Bluetooth as an explicit
+alternative for BLE-capable models. Nano S Plus is cable-only. Before reporting success, the popup
+opens the user-selected
+transport, reads the Starknet app version, derives
+and discards the public key at the canonical index-zero path, then retains that transport for the
+current operation. Stable Chrome does not expose `Bluetooth.getDevices()`, so closing the popup and
+silently reopening a paired device from the side panel is not a supported design. The Bluetooth
+path therefore owns and explicitly disconnects its GATT session; its readiness sequence pairs from
+the Ledger dashboard before asking the user to open Starknet.
+
+The side panel reaches the retained transport over a same-extension `BroadcastChannel` named with
+a random, per-window capability. Both ends validate exact message shapes. Only canonical Ledger
+paths, Stark field hashes, public app/key responses, and the raw `(r, s)` result can cross; no seed,
+private key, vault secret, device identifier, raw transport error, `postMessage`, or Chrome runtime
+message does. The popup returns focus to the wallet after the app probe and closes automatically
+when the owned session finishes. Every popup and APDU wait is bounded. For already-granted cable
+devices, the side panel may reconnect silently and presents explicit non-secret device choices
+when several are connected; Bluetooth disambiguation remains in Chrome's native pairing chooser.
 
 MC Wallet supports the Starknet Ledger app 2.x compatibility line and rejects legacy 1.x before
 enumeration or signing. The floor is a product compatibility boundary, not a substitute for the

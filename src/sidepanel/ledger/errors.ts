@@ -93,6 +93,13 @@ export class LedgerRejection extends Error {
 export const ledgerMessage = (code: LedgerRejectionCode): string => LEDGER_MESSAGES[code];
 
 /**
+ * Narrows an untrusted value to a code actually present in the single-source
+ * Ledger message catalog.
+ */
+export const isLedgerRejectionCode = (value: unknown): value is LedgerRejectionCode =>
+  typeof value === "string" && Object.hasOwn(LEDGER_MESSAGES, value);
+
+/**
  * Narrows an unknown thrown value to a {@link LedgerRejection}, or wraps it as
  * `unexpected-device-error`. Use at the UI boundary so a raw error is never
  * surfaced. Fails closed: anything unrecognized becomes the default rejection.

@@ -1,23 +1,19 @@
 /**
- * Ledger grant-window boundary:
- *   - requestDeviceGrant opens the grant page as a focused popup with the
- *     pinned URL/type/dimensions, resolves only when THAT window closes (a
- *     different window closing must not resolve it), and always removes its
- *     `onRemoved` listener so repeated calls never leak listeners;
- *   - requestDeviceGrant resolves immediately, registering no listener at all,
- *     when the created window carries no id;
- *   - extensionBrowser narrows `globalThis.chrome` to the `GrantBrowser` shape
- *     this module needs, or returns null when the shape is missing or
- *     incomplete.
- * Everything is a fake `GrantBrowser` — no real `chrome.windows` or WebHID.
+ * Retained Ledger-window boundary: the popup is opened with a per-session
+ * capability, resolves only after its validated broker reports ready, proxies
+ * typed device calls, refocuses the parent wallet window, and tears every
+ * resource down on close/timeout.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   extensionBrowser,
   type GrantBrowser,
+  type GrantClientChannel,
+  type GrantSessionRuntime,
   requestDeviceGrant,
 } from "../../src/sidepanel/ledger/grant-window";
 
+const SESSION_ID = "00000000-0000-4000-8000-000000000001";
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 type MutableGlobal = { chrome?: unknown };
@@ -30,6 +26,37 @@ afterEach(() => {
 type FakeWindow = { readonly id?: number };
 type WindowsCreateOptions = Parameters<GrantBrowser["windows"]["create"]>[0];
 
+const createFakeChannel = (): {
+  readonly channel: GrantClientChannel;
+  readonly emit: (data: unknown) => void;
+  readonly listeners: Set<(event: MessageEvent<unknown>) => void>;
+  readonly posts: unknown[];
+} => {
+  const listeners = new Set<(event: MessageEvent<unknown>) => void>();
+  const posts: unknown[] = [];
+  return {
+    channel: {
+      addEventListener: (_type, listener) => {
+        listeners.add(listener);
+      },
+      close: () => undefined,
+      postMessage: (message) => {
+        posts.push(message);
+      },
+      removeEventListener: (_type, listener) => {
+        listeners.delete(listener);
+      },
+    },
+    emit: (data) => {
+      for (const listener of listeners) {
+        listener({ data } as MessageEvent<unknown>);
+      }
+    },
+    listeners,
+    posts,
+  };
+};
+
 const createFakeBrowser = (
   createdWindow: FakeWindow,
   missingOnGet = false,
@@ -39,11 +66,13 @@ const createFakeBrowser = (
   readonly getCalls: number[];
   readonly listeners: Set<(windowId: number) => void>;
   readonly removeCalls: number[];
+  readonly updateCalls: Array<readonly [number, { readonly focused: true }]>;
 } => {
   const createCalls: WindowsCreateOptions[] = [];
   const getCalls: number[] = [];
   const listeners = new Set<(windowId: number) => void>();
   const removeCalls: number[] = [];
+  const updateCalls: Array<readonly [number, { readonly focused: true }]> = [];
 
   const browser: GrantBrowser = {
     runtime: {
@@ -61,6 +90,7 @@ const createFakeBrowser = (
         }
         return { id: windowId };
       },
+      getCurrent: async () => ({ id: 3 }),
       onRemoved: {
         addListener: (callback) => {
           listeners.add(callback);
@@ -72,96 +102,161 @@ const createFakeBrowser = (
       remove: async (windowId) => {
         removeCalls.push(windowId);
       },
+      update: async (windowId, options) => {
+        updateCalls.push([windowId, options]);
+        return { id: windowId };
+      },
     },
   };
 
-  return { browser, createCalls, getCalls, listeners, removeCalls };
+  return { browser, createCalls, getCalls, listeners, removeCalls, updateCalls };
 };
 
-describe("requestDeviceGrant", () => {
-  test("opens the grant page as a focused popup with the pinned URL, type, and dimensions", async () => {
-    const { browser, createCalls, listeners } = createFakeBrowser({ id: 7 });
+const createRuntime = (
+  fake: ReturnType<typeof createFakeChannel>,
+  timers: Array<() => void> = [],
+): GrantSessionRuntime => ({
+  channel: (name) => {
+    expect(name).toBe(`mc-wallet-ledger-v1:${SESSION_ID}`);
+    return fake.channel;
+  },
+  sessionId: () => SESSION_ID,
+  timeout: {
+    ms: 1_000,
+    schedule: (onElapsed) => {
+      timers.push(onElapsed);
+      return () => undefined;
+    },
+  },
+});
 
-    const pending = requestDeviceGrant(browser);
+describe("requestDeviceGrant", () => {
+  test("opens a capability-scoped popup, waits for ready, and refocuses the wallet", async () => {
+    const fake = createFakeChannel();
+    const { browser, createCalls, updateCalls } = createFakeBrowser({ id: 7 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
     await tick();
 
     expect(createCalls).toEqual([
       {
         focused: true,
-        height: 420,
+        height: 680,
         type: "popup",
-        url: "chrome-extension://fake-id/ledger-grant.html",
-        width: 460,
+        url: `chrome-extension://fake-id/ledger-grant.html#session=${SESSION_ID}`,
+        width: 500,
       },
     ]);
-
-    for (const listener of listeners) {
-      listener(7);
-    }
-    await pending;
+    fake.emit({ kind: "ready" });
+    const session = await pending;
+    expect(updateCalls).toEqual([[3, { focused: true }]]);
+    await session.close();
   });
 
-  test("resolves only when the matching window id closes, and removes its listener", async () => {
-    const { browser, listeners } = createFakeBrowser({ id: 11 });
-
-    let resolved = false;
-    const pending = requestDeviceGrant(browser).then(() => {
-      resolved = true;
-    });
+  test("proxies and validates app-version responses before resolving the client call", async () => {
+    const fake = createFakeChannel();
+    const { browser } = createFakeBrowser({ id: 11 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
     await tick();
+    fake.emit({ kind: "ready" });
+    const session = await pending;
 
-    expect(listeners.size).toBe(1);
+    const version = session.client.getAppVersion();
+    await tick();
+    expect(fake.posts[0]).toEqual({ id: 1, kind: "command", method: "getAppVersion" });
+    fake.emit({
+      id: 1,
+      kind: "response",
+      ok: true,
+      value: { errorMessage: "No errors", major: 2, minor: 4, patch: 1, returnCode: 0x9000 },
+    });
+    expect(await version).toEqual({
+      errorMessage: "No errors",
+      major: 2,
+      minor: 4,
+      patch: 1,
+      returnCode: 0x9000,
+    });
+    await session.close();
+  });
 
+  test("fails closed on a malformed device response", async () => {
+    const fake = createFakeChannel();
+    const { browser } = createFakeBrowser({ id: 13 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
+    await tick();
+    fake.emit({ kind: "ready" });
+    const session = await pending;
+
+    const publicKey = session.client.getPubKey("m/2645'/1195502025'/734980059'/0'/0'/0");
+    await tick();
+    fake.emit({
+      id: 1,
+      kind: "response",
+      ok: true,
+      value: { errorMessage: "", publicKey: new Uint8Array(63), returnCode: 0x9000 },
+    });
+    await expect(publicKey).rejects.toMatchObject({ code: "unexpected-device-error" });
+    await session.close();
+  });
+
+  test("closing the owned session signals the broker and removes its exact window", async () => {
+    const fake = createFakeChannel();
+    const { browser, listeners, removeCalls } = createFakeBrowser({ id: 17 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
+    await tick();
+    fake.emit({ kind: "ready" });
+    const session = await pending;
+
+    await session.close();
+    expect(fake.posts).toEqual([{ kind: "close" }]);
+    expect(removeCalls).toEqual([17]);
+    expect(listeners.size).toBe(0);
+  });
+
+  test("ignores unrelated window closes and rejects when its popup closes before ready", async () => {
+    const fake = createFakeChannel();
+    const { browser, listeners } = createFakeBrowser({ id: 19 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
+    await tick();
     for (const listener of listeners) {
       listener(99);
     }
-    await tick();
-    expect(resolved).toBe(false);
     expect(listeners.size).toBe(1);
-
     for (const listener of listeners) {
-      listener(11);
+      listener(19);
     }
-    await pending;
-
-    expect(resolved).toBe(true);
+    await expect(pending).rejects.toMatchObject({ code: "picker-cancelled" });
     expect(listeners.size).toBe(0);
   });
 
-  test("resolves immediately and registers no listener when the created window has no id", async () => {
-    const { browser, listeners } = createFakeBrowser({});
-
-    await requestDeviceGrant(browser);
-
-    expect(listeners.size).toBe(0);
-  });
-
-  test("bounds a popup that never closes and removes it without leaking the listener", async () => {
-    const { browser, listeners, removeCalls } = createFakeBrowser({ id: 13 });
+  test("bounds a picker that never becomes ready", async () => {
+    const fake = createFakeChannel();
     const timers: Array<() => void> = [];
-    const pending = requestDeviceGrant(browser, {
-      ms: 1_000,
-      schedule: (onElapsed) => {
-        timers.push(onElapsed);
-        return () => undefined;
-      },
-    });
+    const { browser, listeners, removeCalls } = createFakeBrowser({ id: 23 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake, timers));
     await tick();
 
-    expect(listeners.size).toBe(1);
     timers[0]?.();
-    await pending;
+    await expect(pending).rejects.toMatchObject({ code: "picker-cancelled" });
     expect(listeners.size).toBe(0);
-    expect(removeCalls).toEqual([13]);
+    expect(removeCalls).toEqual([23]);
   });
 
-  test("detects a popup that closed before its listener was registered", async () => {
-    const { browser, getCalls, listeners } = createFakeBrowser({ id: 17 }, true);
-
-    await requestDeviceGrant(browser);
-
-    expect(getCalls).toEqual([17]);
+  test("rejects a created popup that has no trackable window id", async () => {
+    const fake = createFakeChannel();
+    const { browser, listeners } = createFakeBrowser({});
+    await expect(requestDeviceGrant(browser, createRuntime(fake))).rejects.toMatchObject({
+      code: "unexpected-device-error",
+    });
     expect(listeners.size).toBe(0);
+  });
+
+  test("detects a popup that closed during creation", async () => {
+    const fake = createFakeChannel();
+    const { browser, getCalls } = createFakeBrowser({ id: 29 }, true);
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
+    await expect(pending).rejects.toMatchObject({ code: "picker-cancelled" });
+    expect(getCalls).toEqual([29]);
   });
 });
 
@@ -176,7 +271,7 @@ describe("extensionBrowser", () => {
     expect(extensionBrowser()).toBeNull();
   });
 
-  test("returns null when onRemoved is missing addListener/removeListener", () => {
+  test("returns null when focus/update lifecycle methods are missing", () => {
     globalWithChrome.chrome = {
       runtime: { getURL: (path: string) => path },
       windows: { create: async () => ({}), onRemoved: {} },

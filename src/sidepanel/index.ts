@@ -24,7 +24,7 @@ import { hydrateView } from "./hydrate";
 import { bindImportKey } from "./import-key-ui";
 import { bindLedgerFirstRun } from "./ledger/first-run";
 import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
-import { webHidConnector } from "./ledger/sign-connector";
+import { ledgerConnector } from "./ledger/sign-connector";
 import { createLedgerSignRuntime } from "./ledger/sign-runtime";
 import { animateLiveValueChanges, captureLiveValues } from "./live-updates";
 import { prefersReducedMotion } from "./motion";
@@ -151,7 +151,7 @@ ledgerSignMount.className = "ledger-sign-overlay";
 ledgerSignMount.hidden = true;
 document.body.append(ledgerSignMount);
 const ledgerSign = createLedgerSignRuntime({
-  connector: webHidConnector,
+  connector: ledgerConnector,
   mount: ledgerSignMount,
   status: () => cache.status,
   wallet,
@@ -172,7 +172,7 @@ const ledgerOnboard = createLedgerOnboardEntry({
     showToast("Account added", "success");
   },
   cache,
-  connector: webHidConnector,
+  connector: ledgerConnector,
   mount: ledgerOnboardMount,
   openImport: () => navigate("account"),
   refresh: async () => {

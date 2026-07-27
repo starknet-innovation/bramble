@@ -30,6 +30,27 @@ test("loads the built toolbar popup surface", async ({ extension }) => {
   await expect(popup.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
 });
 
+test("loads the dedicated Ledger hardware session surface", async ({ extension }) => {
+  const ledger = await extension.openExtensionPage(
+    "ledger-grant.html#session=2db2df18-12db-4d66-9b38-02dc16460ce3",
+  );
+
+  await expect(ledger.getByRole("heading", { name: "Connect your Ledger" })).toBeVisible();
+  await expect(ledger.getByText("Secure device session")).toBeVisible();
+  await expect(ledger.getByRole("button", { name: /USB cable/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(ledger.getByRole("button", { name: /Bluetooth/ })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(ledger.getByRole("button", { name: "Connect with USB" })).toBeEnabled();
+  await ledger.getByRole("button", { name: /Bluetooth/ }).click();
+  await expect(ledger.getByRole("button", { name: "Pair with Bluetooth" })).toBeEnabled();
+  await expect(ledger.getByText("Stay on the Ledger dashboard")).toBeVisible();
+});
+
 test("imports an existing recovery phrase without backup verification", async ({ extension }) => {
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
   await importWalletFromPhrase(sidepanel, IMPORT_MNEMONIC);

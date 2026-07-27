@@ -31,7 +31,11 @@ const ENCRYPTED_STORE_WIRING_FILES = new Set([
   "src/background/index.ts",
   "src/storage/encrypted-store.ts",
 ]);
-const RANDOM_UUID_FILES = new Set(["src/background/approvals.ts", "src/provider/inpage.ts"]);
+const RANDOM_UUID_FILES = new Set([
+  "src/background/approvals.ts",
+  "src/provider/inpage.ts",
+  "src/sidepanel/ledger/grant-window.ts",
+]);
 const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/content/index.ts"]);
 const SECRET_MATERIAL_FILES = new Set([
   "src/background/account-hash-signer.ts",
@@ -54,6 +58,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
   "src/background/session.ts",
+  "src/ledger-grant/broker-protocol.ts",
   "src/background/unlock-errors.ts",
   "src/background/wallet-ops.ts",
   "src/background/wallet-reader.ts",

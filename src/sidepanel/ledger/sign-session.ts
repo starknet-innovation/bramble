@@ -1,7 +1,7 @@
 /**
  * Side-panel consumer that fulfils a background Ledger sign request end to end.
  *
- * The service worker cannot hold a WebHID device, so it parks each keyless-Ledger
+ * The service worker cannot hold a browser device, so it parks each keyless-Ledger
  * signature as a pending request and waits for the panel — the one context that
  * owns the transport — to blind-sign it on the device and hand back the raw
  * `(r, s)`. This controller is that consumer: given one pending request it
@@ -39,7 +39,7 @@ import type { LedgerSignOutcome } from "./runtime-client";
 
 /**
  * An OWNED device session: the {@link LedgerDeviceClient} plus the `close` that
- * releases the underlying WebHID transport. The transport is a serial pipe held
+ * releases the underlying browser transport. The transport is a serial pipe held
  * open until `close` runs, so a session MUST be closed on every outcome
  * (success, failure, retry, cancel) or the device stays claimed and later
  * attempts — here or in other Ledger clients — block. Use
@@ -78,7 +78,7 @@ export type LedgerConnector = {
 
 /**
  * Closes a device session best-effort, swallowing any close error. Called in a
- * `finally` on every outcome so the WebHID transport is always released; a close
+ * `finally` on every outcome so the browser transport is always released; a close
  * failure must NEVER mask the sign result or the original device error (fail
  * closed), so it is intentionally not propagated.
  */
@@ -140,7 +140,7 @@ const errorPhase = (code: LedgerRejectionCode): LedgerSignPhase => ({
 
 /**
  * Creates a controller for the side-panel Ledger signing runtime. Single-flight
- * by design: it fulfils one request at a time (WebHID is a serial pipe) and
+ * by design: it fulfils one request at a time (the transport is a serial pipe) and
  * ignores a second `present` while one is active. `present` discovers granted
  * devices, asks for an explicit choice when necessary, and otherwise starts a
  * silent reconnect. `connect` runs the gesture-gated grant flow for the connect
@@ -154,6 +154,7 @@ export const createLedgerSignController = (
   let current: LedgerSignRequestSummary | null = null;
   let devices: readonly LedgerDeviceChoice[] = [];
   let busy = false;
+  let operationEpoch = 0;
 
   const show = (phase: LedgerSignPhase): void => {
     if (current) {
@@ -161,11 +162,12 @@ export const createLedgerSignController = (
     }
   };
 
-  const signWith = async (client: LedgerDeviceClient): Promise<void> => {
+  const signWith = async (client: LedgerDeviceClient, epoch: number): Promise<void> => {
     const request = current;
     if (!request) {
       return;
     }
+    const isActive = (): boolean => current?.id === request.id && operationEpoch === epoch;
     show({ kind: "confirming" });
     // Shared pre-check before the on-device confirm: assert the Starknet app is
     // at/above the pinned floor (a locked/disconnected device surfaces here as a
@@ -174,32 +176,44 @@ export const createLedgerSignController = (
     // actionable copy instead of a post-sign verify failure. Fund safety still
     // rests on the background verify gate; this only fails faster and clearer.
     await assertLedgerAppReady(client);
+    if (!isActive()) {
+      return;
+    }
     const devicePublicKeyX = await ledgerPublicKeyX(client, request.path);
+    if (!isActive()) {
+      return;
+    }
     if (!sameFelt(devicePublicKeyX, request.publicKeyX)) {
       throw new LedgerRejection("wrong-device");
     }
     const signature = await ledgerSignHashOnDevice(client, request.path, request.messageHash);
-    await deps.report({ id: request.id, r: signature.r, s: signature.s });
+    if (!isActive()) {
+      return;
+    }
     current = null;
+    devices = [];
+    operationEpoch += 1;
     deps.render(null);
+    await deps.report({ id: request.id, r: signature.r, s: signature.s });
   };
 
   // Resolves a session through `obtain`, then blind-signs. A `null` session (no
   // granted device) parks the connect state for a gesture; any thrown
   // device/transport failure becomes a typed error state, leaving the request
   // parked so a retry or cancel can still resolve it (nothing submitted). The
-  // session owns the WebHID transport, so it is closed in the `finally` on every
+  // session owns the browser transport, so it is closed in the `finally` on every
   // outcome (signed, failed, connect-parked) — the device is never left claimed.
   const drive = async (obtain: () => Promise<LedgerDeviceSession | null>): Promise<void> => {
     if (!current || busy) {
       return;
     }
     busy = true;
+    const epoch = operationEpoch;
     let session: LedgerDeviceSession | null = null;
     try {
       session = await obtain();
       if (session) {
-        await signWith(session.client);
+        await signWith(session.client, epoch);
       } else {
         show({ kind: "connect" });
       }
@@ -247,6 +261,7 @@ export const createLedgerSignController = (
       }
       current = null;
       devices = [];
+      operationEpoch += 1;
       deps.render(null);
       await deps.report({ error: "rejected-on-device", id: request.id });
     },
@@ -260,10 +275,11 @@ export const createLedgerSignController = (
       void drive(deps.connector.request);
     },
     present(request) {
-      if (current) {
+      if (current || busy) {
         return;
       }
       current = request;
+      operationEpoch += 1;
       void discover();
     },
     retry() {

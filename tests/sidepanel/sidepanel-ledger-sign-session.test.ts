@@ -422,6 +422,34 @@ describe("Ledger sign controller", () => {
     expect(h.closed()).toBe(1);
   });
 
+  test("cancel discards a signature that resolves after cancellation", async () => {
+    let resolveSignature: (value: Awaited<ReturnType<LedgerDeviceClient["signHash"]>>) => void =
+      () => undefined;
+    const signature = new Promise<Awaited<ReturnType<LedgerDeviceClient["signHash"]>>>(
+      (resolve) => {
+        resolveSignature = resolve;
+      },
+    );
+    const h = harness({
+      openConnected: () => Promise.resolve(fakeClient(() => signature)),
+      request: () => Promise.reject(new Error("unused")),
+    });
+    const controller = controllerFor(h);
+    controller.present(REQUEST);
+    await tick();
+    await controller.cancel();
+    resolveSignature({
+      errorMessage: "No errors",
+      r: new Uint8Array([...Array(31).fill(0), 1]),
+      returnCode: 0x9000,
+      s: new Uint8Array([...Array(31).fill(0), 2]),
+    });
+    await tick();
+
+    expect(h.reports).toEqual([{ error: "rejected-on-device", id: "ledger-sign-1" }]);
+    expect(h.closed()).toBe(1);
+  });
+
   test("a close failure is swallowed and does not mask the sign result", async () => {
     // The session's close rejects, but the sign already succeeded: the failure
     // must be swallowed (fail closed) so the reported (r, s) and dismissal stand.
