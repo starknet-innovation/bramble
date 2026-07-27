@@ -276,6 +276,7 @@ export const createUiLab = (options: UiLabOptions): HTMLElement => {
     });
     required<HTMLButtonElement>(root, "[data-lab-play]").disabled = playing;
     required<HTMLButtonElement>(root, "[data-lab-pause]").disabled = !playing;
+    root.dataset["labSurface"] = surface;
     device.dataset["surface"] = surface;
     deviceLabel.textContent =
       surface === "fullpage"

@@ -1,3 +1,5 @@
+import { darkSkin } from "../../../src/ui/dark-skin";
+
 export const LAB_STYLES = `
   :root {
     color-scheme: dark;
@@ -8,14 +10,16 @@ export const LAB_STYLES = `
   button, input, select, textarea { font: inherit; }
   button { cursor: pointer; }
   .ui-lab {
-    --lab-accent: #5c8dff;
-    --lab-border: #262c38;
-    --lab-elevated: #181d26;
-    --lab-muted: #96a2b5;
-    --lab-panel: #11151c;
-    --lab-positive: #2fcf8e;
-    --lab-sunken: #090c12;
-    --lab-text: #f2f5fa;
+    --lab-accent: ${darkSkin.tokens["--mc-accent"]};
+    --lab-accent-text: ${darkSkin.tokens["--mc-accent-text"]};
+    --lab-bg: ${darkSkin.tokens["--mc-bg"]};
+    --lab-border: ${darkSkin.tokens["--mc-border"]};
+    --lab-danger: ${darkSkin.tokens["--mc-danger"]};
+    --lab-elevated: ${darkSkin.tokens["--mc-elevated"]};
+    --lab-muted: ${darkSkin.tokens["--mc-muted"]};
+    --lab-panel: ${darkSkin.tokens["--mc-panel"]};
+    --lab-sunken: ${darkSkin.tokens["--mc-sunken"]};
+    --lab-text: ${darkSkin.tokens["--mc-text"]};
     background: var(--lab-sunken);
     color: var(--lab-text);
     display: grid;
@@ -40,7 +44,7 @@ export const LAB_STYLES = `
     align-items: center;
     background: var(--lab-accent);
     border-radius: 11px;
-    color: #0a1220;
+    color: var(--lab-accent-text);
     display: inline-flex;
     flex: none;
     font-weight: 850;
@@ -52,7 +56,7 @@ export const LAB_STYLES = `
   .lab-brand-copy { display: grid; gap: 1px; }
   .lab-brand strong { font-size: 14px; letter-spacing: -0.01em; }
   .lab-brand span, .lab-meta { color: var(--lab-muted); font-size: 11px; }
-  .lab-brand .lab-mark { color: #0a1220; }
+  .lab-brand .lab-mark { color: var(--lab-accent-text); }
   .lab-top-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; }
   .lab-field { display: grid; gap: 4px; }
   .lab-field > span {
@@ -82,7 +86,7 @@ export const LAB_STYLES = `
   .lab-button.primary {
     background: var(--lab-accent);
     border-color: var(--lab-accent);
-    color: #0a1220;
+    color: var(--lab-accent-text);
     font-weight: 750;
   }
   .lab-button[disabled] { cursor: default; opacity: 0.44; }
@@ -95,7 +99,7 @@ export const LAB_STYLES = `
   }
   .lab-stage {
     align-content: start;
-    background: #0d1118;
+    background: var(--lab-sunken);
     border: 1px solid var(--lab-border);
     border-radius: 16px;
     display: grid;
@@ -118,10 +122,10 @@ export const LAB_STYLES = `
   .stage-copy h1 { font-size: 18px; letter-spacing: -0.02em; margin: 0; }
   .fixture-badge {
     align-items: center;
-    background: color-mix(in srgb, var(--lab-positive) 12%, var(--lab-panel));
-    border: 1px solid color-mix(in srgb, var(--lab-positive) 28%, var(--lab-border));
+    background: color-mix(in srgb, var(--lab-accent) 9%, var(--lab-panel));
+    border: 1px solid color-mix(in srgb, var(--lab-accent) 18%, var(--lab-border));
     border-radius: 999px;
-    color: var(--lab-positive);
+    color: var(--lab-text);
     display: inline-flex;
     flex: none;
     font-size: 10px;
@@ -141,7 +145,7 @@ export const LAB_STYLES = `
     width: 100%;
   }
   .device-stand::after {
-    background: #05070a;
+    background: color-mix(in srgb, var(--lab-bg) 58%, black);
     border-radius: 50%;
     bottom: 14px;
     content: "";
@@ -152,8 +156,8 @@ export const LAB_STYLES = `
     width: min(420px, 80%);
   }
   .wallet-device {
-    background: #05070a;
-    border: 1px solid #303745;
+    background: color-mix(in srgb, var(--lab-bg) 58%, black);
+    border: 1px solid color-mix(in srgb, var(--lab-border) 88%, white);
     border-radius: 18px;
     box-shadow: 0 18px 45px rgb(0 0 0 / 36%);
     display: grid;
@@ -165,7 +169,7 @@ export const LAB_STYLES = `
   .wallet-device[data-surface="popup"] { height: 600px; width: 380px; }
   .wallet-device[data-surface="fullpage"] { height: 800px; width: 960px; }
   .wallet-frame {
-    background: #0b0e13;
+    background: var(--lab-bg);
     border: 0;
     border-radius: 11px;
     height: 100%;
@@ -178,6 +182,7 @@ export const LAB_STYLES = `
     left: 50%;
     position: absolute;
     transform: translateX(-50%);
+  }
   .lab-rail { display: grid; gap: 12px; min-width: 0; }
   .lab-card {
     background: var(--lab-panel);
@@ -241,7 +246,7 @@ export const LAB_STYLES = `
   }
   .checkpoint-button[aria-current="step"] span:first-child {
     background: var(--lab-accent);
-    color: #0a1220;
+    color: var(--lab-accent-text);
   }
   .evidence-grid { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
   .event-log, .state-view {
@@ -259,7 +264,7 @@ export const LAB_STYLES = `
   }
   .event-list { display: grid; gap: 5px; list-style: none; margin: 0; padding: 0; }
   .event-list li { display: grid; gap: 6px; grid-template-columns: 22px 48px 1fr; }
-  .event-list .event-index { color: #7f8a9d; }
+  .event-list .event-index { color: var(--lab-muted); }
   .event-list .event-kind { color: var(--lab-accent); }
   .feedback-input {
     background: var(--lab-sunken);
@@ -274,13 +279,19 @@ export const LAB_STYLES = `
   .feedback-actions { display: flex; gap: 8px; justify-content: space-between; }
   .feedback-count { align-self: center; color: var(--lab-muted); font-size: 10px; }
   .lab-error {
-    background: color-mix(in srgb, #f87171 11%, var(--lab-panel));
-    border: 1px solid color-mix(in srgb, #f87171 34%, var(--lab-border));
+    background: color-mix(in srgb, var(--lab-danger) 11%, var(--lab-panel));
+    border: 1px solid color-mix(in srgb, var(--lab-danger) 34%, var(--lab-border));
     border-radius: 9px;
-    color: #fca5a5;
+    color: var(--lab-danger);
     font-size: 11px;
     padding: 9px;
   }
+  [data-lab-surface="fullpage"] .lab-main { grid-template-columns: minmax(0, 1fr); }
+  [data-lab-surface="fullpage"] .lab-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  [data-lab-surface="fullpage"] .lab-card:first-child,
+  [data-lab-surface="fullpage"] .lab-card:last-child { grid-column: 1 / -1; }
   @media (max-width: 980px) {
     .lab-main { grid-template-columns: 1fr; }
     .lab-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }

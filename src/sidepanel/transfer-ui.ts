@@ -1,15 +1,16 @@
 /** Persistent Send review, authorization, broadcast, and receipt bindings. */
 import type { WalletStatus } from "../popup/responses";
-import { escapeHtml } from "../shared/html";
 import { isStarkFieldElement, normalizeFeltInput } from "../starknet/networks";
+import { receiptRows } from "../ui/content";
 import { buttonBusy, errorMessage, showToast } from "./dom";
-import { accountLabel, formatFri } from "./parts";
-import { reviewCallsList, reviewPanel, riskFlagMessages } from "./review-render";
+import { accountLabel } from "./parts";
 import type { SidepanelWallet } from "./runtime";
 import { transitionSendStage } from "./send-transition";
 import { watchDeployment } from "./shell-bindings";
+import { reviewPanelHtml } from "./transfer-review-markup";
 
 export { activityExportToast, bindActivity } from "./activity-ui";
+export { reviewPanelHtml } from "./transfer-review-markup";
 
 const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
 
@@ -69,34 +70,6 @@ const transferFields = (form: HTMLFormElement): TransferFields => {
 };
 
 type Review = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
-
-const feeLineHtml = (review: Review): string => {
-  if (review.fee) {
-    return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFri(review.fee.overallFee))}</p>`;
-  }
-  if (review.requiresDeployment) {
-    return '<p class="review-fee">The network fee is estimated once this account is deployed.</p>';
-  }
-  if (review.feeEstimateFailed) {
-    return '<p class="review-flag" role="alert">Couldn\'t estimate the network fee right now. Check your connection and retry before sending.</p><button type="button" class="secondary" id="review-retry-fee">Retry fee estimate</button>';
-  }
-  return "";
-};
-
-const deploymentNotes = (review: Review): readonly string[] =>
-  review.requiresDeployment
-    ? ["This account is not deployed yet; the first send also submits its deployment."]
-    : [];
-
-/**
- * Renders Send's decoded calls, risks, deployment note, and fee with the same
- * review components used by dApp approvals.
- */
-export const reviewPanelHtml = (review: Review): string =>
-  `${reviewCallsList(review.summaries)}${reviewPanel([
-    ...riskFlagMessages(review.flags),
-    ...deploymentNotes(review),
-  ])}${feeLineHtml(review)}`;
 
 type TransferStage =
   | "authorizing"
@@ -186,10 +159,12 @@ const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | n
   }
 };
 
-const reviewReceiptHtml = (fields: TransferFields): string => `
-  <div class="receipt-row"><dt>Amount</dt><dd>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</dd></div>
-  <div class="receipt-row"><dt>Recipient</dt><dd><code>${escapeHtml(fields.recipient)}</code></dd></div>
-  <div class="receipt-row"><dt>Speed</dt><dd>${fields.speed === "fast" ? "Fast" : "Standard"}</dd></div>`;
+const reviewReceiptHtml = (fields: TransferFields): string =>
+  receiptRows([
+    { label: "Amount", value: `${fields.amount} ${fields.tokenSymbol}` },
+    { label: "Recipient", value: fields.recipient, valueStyle: "code" },
+    { label: "Speed", value: fields.speed === "fast" ? "Fast" : "Standard" },
+  ]);
 
 type WorkingStatus = {
   readonly copy: string;

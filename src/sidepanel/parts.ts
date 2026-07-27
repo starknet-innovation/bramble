@@ -5,7 +5,10 @@ import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { icon } from "./icons";
+import { emptyState, pill } from "../ui/content";
+import { iconButton } from "../ui/controls";
+import type { IconName } from "../ui/icons";
+import { menuRow } from "../ui/navigation";
 
 /**
  * Side panel screen ids. The first three live on the bottom dock; the rest
@@ -150,10 +153,10 @@ export const accountDisplayName = (
 
 /**
  * Renders a flat, single-colour avatar chip for an address: one solid fill from
- * a small per-account palette (cobalt / teal / amber / violet) with a quiet
- * person glyph, matching the Clean Mono comp. The tone is chosen
- * deterministically from the address, so an account always keeps the same
- * colour. Fill and glyph ink come from the `--mc-avatar-*` tokens (see
+ * a small grayscale palette with a quiet person glyph, matching the Clean Mono
+ * system. The tone is chosen deterministically from the address, so an account
+ * always keeps the same identity. Fill and glyph ink come from the
+ * `--mc-avatar-*` tokens (see
  * ./styles-base) — no gradients, no raw colour literals — and the chip's
  * rounded-square shape and hairline are carried by its container
  * (`.brand-mark` / `.option-avatar`).
@@ -217,26 +220,45 @@ export const formatFri = (fri: string): string => {
  */
 export const hardwareBadge = (account: AccountRef): string =>
   account.derivation.kind === "ledger"
-    ? `<span class="pill pill-hardware">${icon("shield")}Hardware</span>`
+    ? pill("Hardware", { icon: "shield", tone: "hardware" })
     : "";
 
 /**
  * Renders an icon button that copies a value to the clipboard.
  */
 export const copyButton = (value: string, label: string): string =>
-  `<button class="icon-button" data-copy="${escapeHtml(value)}" type="button" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${icon("copy")}</button>`;
+  iconButton({
+    attributes: { "data-copy": value },
+    icon: "copy",
+    label,
+  });
 
 /**
  * Renders the network status pill.
  */
-const networkPill = (status: WalletStatus): string =>
-  `<span class="pill"><span class="dot"></span>${escapeHtml(status.network)}</span>`;
+const networkPill = (status: WalletStatus): string => pill(status.network, { dot: true });
 
 /**
  * Renders the shared empty state for networks without an account.
  */
 export const noAccountEmpty = (status: WalletStatus): string =>
-  `<p class="empty">No account on ${escapeHtml(status.network)} yet. Switch network from Settings to continue.</p>`;
+  emptyState(`No account on ${status.network} yet. Switch network from Settings to continue.`);
+
+/**
+ * Renders one settings destination with the side-panel navigation capability.
+ */
+export const walletMenuRow = (
+  view: WalletView,
+  label: string,
+  name: IconName,
+  value?: string,
+): string =>
+  menuRow({
+    attributes: { "data-view": view },
+    icon: name,
+    label,
+    ...(value ? { value } : {}),
+  });
 
 /**
  * Wraps dock screen content in its tab panel container.
@@ -259,7 +281,12 @@ export const flowScreen = (view: WalletView, body: string): string =>
  */
 export const flowHeader = (title: string, status: WalletStatus, subtitle?: string): string => `
   <header class="flow-header">
-    <button class="icon-button ghost" data-nav-back type="button" aria-label="Back" title="Back">${icon("chevronLeft")}</button>
+    ${iconButton({
+      attributes: { "data-nav-back": true },
+      icon: "chevronLeft",
+      label: "Back",
+      variant: "ghost",
+    })}
     <div class="flow-title">
       <h1>${escapeHtml(title)}</h1>
       ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}

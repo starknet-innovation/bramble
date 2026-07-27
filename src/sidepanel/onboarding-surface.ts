@@ -1,6 +1,7 @@
 /**
  * Dedicated full-page onboarding completion UI and Chrome side-panel handoff.
  */
+import { button } from "../ui/controls";
 import { icon } from "./icons";
 
 /**
@@ -29,7 +30,7 @@ export const onboardingComplete = (): string => `
       <p class="lede">MC Wallet is encrypted on this device. Continue in the side panel to deploy your account, receive assets, or connect to an app.</p>
     </div>
     <div class="onboarding-complete-actions">
-      <button id="onboarding-open-wallet" type="button">Open wallet</button>
+      ${button({ attributes: { id: "onboarding-open-wallet" }, label: "Open wallet" })}
       <p id="onboarding-complete-result" class="hint" role="status"></p>
     </div>
   </main>`;

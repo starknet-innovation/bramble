@@ -7,10 +7,10 @@
  *
  * Surface rules: controls are borderless (structure from elevation and space),
  * fills are solid, and feedback transforms stay inside the press/lift envelope
- * enforced by tests/sidepanel/sidepanel-styles.test.ts. Colour discipline: the cobalt
- * accent marks interactive/active state only; market and status semantics ride
- * --mc-positive/--mc-danger so a gain, a success, or a risk always reads by
- * meaning, never by brand.
+ * enforced by tests/sidepanel/sidepanel-styles.test.ts. Colour discipline:
+ * interactive and active states stay achromatic; market and status semantics
+ * ride --mc-positive/--mc-danger so a gain, success, or risk always reads by
+ * meaning rather than decorative hue.
  */
 import { CONTROL, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "../ui/tokens";
 import { SIGN_REQUEST_STYLES } from "./sign-request";

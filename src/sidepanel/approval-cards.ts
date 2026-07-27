@@ -5,6 +5,7 @@
  */
 import type { PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { button } from "../ui/controls";
 import { icon } from "./icons";
 import { accountLabel, formatFri } from "./parts";
 import { reviewCallsList, reviewPanel, riskFlagMessages } from "./review-render";
@@ -13,7 +14,18 @@ import { signRequestDetails } from "./sign-request";
 // Shared approve/deny controls (one long template line so it is not re-wrapped);
 // `approve` is disabled when the wallet is locked or the origin is blocked.
 const decisionRow = (approval: PendingApproval, label: string, locked: boolean): string =>
-  `<div class="button-row"><button data-approval-action="approve" data-approval-id="${escapeHtml(approval.id)}" type="button" ${locked || approval.blocked ? "disabled" : ""}>${icon("check")}${label}</button><button class="secondary danger" data-approval-action="deny" data-approval-id="${escapeHtml(approval.id)}" type="button">${icon("x")}Deny</button></div>`;
+  `<div class="button-row">${button({
+    attributes: { "data-approval-action": "approve", "data-approval-id": approval.id },
+    disabled: locked || approval.blocked === true,
+    icon: "check",
+    label,
+  })}${button({
+    attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
+    icon: "x",
+    label: "Deny",
+    tone: "danger",
+    variant: "secondary",
+  })}</div>`;
 
 const contextDetails = (approval: PendingApproval): string => {
   const context = approval.context;

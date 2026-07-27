@@ -1,12 +1,11 @@
 /**
  * Side panel stylesheet composed from the shared design-system tokens.
  *
- * DESIGN DIRECTION — "Clean Mono": quiet-luxury minimalism. A near-monochrome
- * neutral palette in both skins with a single restrained cobalt accent used
- * only where it earns attention (primary CTA, active states, focus), while
- * market and status semantics keep their own tokens — green strictly for gains
- * and success, red for losses and danger — so brand never masquerades as
- * signal. Hairline edges, gentle low elevation, generous whitespace, and a
+ * DESIGN DIRECTION — "Clean Mono": quiet-luxury minimalism. Structural and
+ * interactive roles are monochrome in both skins; contrast, weight, space, and
+ * motion carry hierarchy. Green is reserved for positive/success semantics and
+ * red for danger/failure. Hairline edges, gentle low elevation, generous
+ * whitespace, and a
  * crisp, precise type scale. Deliberately FLAT and legible — no glass, no
  * aurora, no backdrop-filter.
  *
@@ -21,7 +20,7 @@
  * 200ms   a newly opened screen slides in along the navigation direction via
  *         the View Transitions API (cross-fade fallback); the hero, action
  *         tiles, and first six token rows follow in a small 30–40ms stagger
- * ~260ms  the cobalt tab underline glides to the active tab on the snappy
+ * ~260ms  the high-contrast tab underline glides to the active tab on the snappy
  *         spring while the incoming panel cross-fades; toasts slide into the
  *         fixed stack above the anchored dock
  * 260ms   the account drawer settles in over a dimmed backdrop, its rows

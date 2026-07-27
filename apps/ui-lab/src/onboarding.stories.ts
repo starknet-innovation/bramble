@@ -8,7 +8,11 @@ const meta: LabMeta = {
 
 export default meta;
 
-export const ChooseSetup = checkpointStory("Choose setup path", "onboarding", "welcome");
+export const ChooseSetup = checkpointStory(
+  "Full-screen setup · choose path",
+  "onboarding",
+  "welcome",
+);
 export const GeneratedPhrase = checkpointStory(
   "Generated phrase · masked",
   "onboarding",

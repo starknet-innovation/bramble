@@ -60,6 +60,17 @@ const INKS: readonly SkinToken[] = [
   "--mc-danger",
 ];
 const GROUNDS: readonly SkinToken[] = ["--mc-bg", "--mc-panel", "--mc-elevated", "--mc-sunken"];
+const ACHROMATIC_TOKENS: readonly SkinToken[] = [
+  "--mc-accent",
+  "--mc-accent-text",
+  "--mc-bg",
+  "--mc-border",
+  "--mc-elevated",
+  "--mc-muted",
+  "--mc-panel",
+  "--mc-sunken",
+  "--mc-text",
+];
 
 describe.each([
   ["midnight", darkSkin],
@@ -96,7 +107,22 @@ describe.each([
     expect(contrast(token(skin, "--mc-danger"), dangerSoft)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
-  test("brand accent and market-positive are distinct tokens", () => {
+  test("interaction and structural roles are strictly achromatic", () => {
+    for (const name of ACHROMATIC_TOKENS) {
+      const [red, green, blue] = token(skin, name);
+      expect(red, `${name} must not carry a hue`).toBe(green);
+      expect(green, `${name} must not carry a hue`).toBe(blue);
+    }
+  });
+
+  test("green and red remain reserved semantic signals", () => {
+    const [positiveRed, positiveGreen, positiveBlue] = token(skin, "--mc-positive");
+    const [dangerRed, dangerGreen, dangerBlue] = token(skin, "--mc-danger");
+    expect(positiveGreen).toBeGreaterThan(positiveRed);
+    expect(positiveGreen).toBeGreaterThan(positiveBlue);
+    expect(dangerRed).toBeGreaterThan(dangerGreen);
+    expect(dangerRed).toBeGreaterThan(dangerBlue);
     expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-positive"]);
+    expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-danger"]);
   });
 });

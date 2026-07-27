@@ -21,13 +21,17 @@ import type { ActivityEntry } from "../storage/activity-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { emptyState, pill } from "../ui/content";
+import { iconButton, segmentedControl } from "../ui/controls";
+import { selectField } from "../ui/fields";
+import { menuLink } from "../ui/navigation";
 import { accountDrawer } from "./account-drawer";
 import { approvalCard } from "./approval-cards";
 import { actionableApprovals, approvalTakeover } from "./approval-screen";
 import { formatFiat, portfolioDelta, portfolioTotal } from "./fiat";
 import { backupFlow, simpleFlowScreen } from "./flows";
 import { activityEmptyCopy, homeTabs, transactionRow, visibleHomeBalances } from "./home-tabs";
-import { type IconName, icon } from "./icons";
+import { icon } from "./icons";
 import {
   multisigDeployFlow,
   multisigDetailFlow,
@@ -36,8 +40,6 @@ import {
 } from "./multisig-views";
 import { nftDetailFlow, nftGalleryFlow } from "./nft-views";
 import {
-  accountAvatar,
-  accountDisplayName,
   accountLabel,
   activeAccount,
   dockScreen,
@@ -45,95 +47,17 @@ import {
   noAccountEmpty,
   WALLET_VIEWS,
   type WalletView,
+  walletMenuRow,
 } from "./parts";
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
-import { TERMINAL_URL } from "./terminal-link";
 import { DEFAULT_CURRENCY, tokenDetailFlow, tokensFlow } from "./token-flows";
+import { actionTile, deployNotice, pendingCallout, walletDock, walletHeader } from "./wallet-shell";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
  */
 export { isWalletView, WALLET_VIEWS, type WalletView };
-
-const walletHeader = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  preferences: WalletPreferences | null,
-): string => {
-  const name = account ? accountDisplayName(account, preferences) : "MC Wallet";
-  const network = status.network
-    .replace(/^Starknet Mainnet$/, "Starknet")
-    .replace(/^Starknet\s+/, "");
-  return `
-  <header class="wallet-header">
-    <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" title="Manage accounts">
-      <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
-      <span class="account-meta">
-        <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
-        <span class="account-net"><span class="dot"></span>${escapeHtml(network)}</span>
-      </span>
-    </button>
-    <div class="header-actions">
-      <button class="icon-button ghost" data-view="connected-sites" type="button" aria-label="Connected sites" title="Connected sites">${icon("link")}</button>
-      <a id="terminal-button" class="icon-button ghost" href="${escapeHtml(TERMINAL_URL)}" target="_blank" rel="noopener noreferrer" aria-label="Open trade terminal" title="Open trade terminal">${icon("terminal")}</a>
-      <button id="lock-button" class="icon-button ghost" type="button" aria-label="Lock wallet" title="Lock wallet">${icon("lock")}</button>
-    </div>
-  </header>`;
-};
-
-const dockItem = (
-  activeView: WalletView,
-  view: WalletView,
-  label: string,
-  name: IconName,
-  pendingCount = 0,
-): string =>
-  `<button class="nav-item" data-view="${view}" type="button" role="tab" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}" aria-controls="wallet-screen-${view}" aria-selected="${activeView === view}">
-    <span class="tab-icon">${icon(name)}${pendingCount > 0 && view === "activity" ? `<span class="badge">${pendingCount}</span>` : ""}</span>
-    <span class="tab-label">${escapeHtml(label)}</span>
-  </button>`;
-
-const walletDock = (activeView: WalletView, pendingCount: number): string => `
-  <nav class="wallet-dock" aria-label="Wallet screens" role="tablist">
-    ${dockItem(activeView, "home", "Home", "home")}
-    ${dockItem(activeView, "activity", "Activity", "activity", pendingCount)}
-    ${dockItem(activeView, "settings", "Settings", "settings")}
-  </nav>`;
-
-const pendingCallout = (pendingCount: number): string =>
-  pendingCount === 0
-    ? ""
-    : `<section class="callout" role="note">
-        <span class="callout-icon">${icon("link")}</span>
-        <div class="callout-copy">
-          <strong>${pendingCount} connection ${pendingCount === 1 ? "request" : "requests"} waiting</strong>
-          <p>Review before any site can see your accounts.</p>
-        </div>
-        <button class="secondary small" data-view="activity" type="button">Review</button>
-      </section>`;
-
-const actionTile = (
-  view: WalletView,
-  label: string,
-  name: IconName,
-  primary: boolean,
-  enabled: boolean,
-): string =>
-  `<button class="action-tile${primary ? " primary" : ""}" data-view="${view}" type="button" ${enabled ? "" : "disabled"}>
-    <span class="tile-icon">${icon(name)}</span>
-    <span class="tile-label">${escapeHtml(label)}</span>
-  </button>`;
-
-const deployNotice = (account: AccountRef | null, deployment: boolean | null): string =>
-  account === null || deployment !== false
-    ? ""
-    : `<div class="deploy-notice">
-        <button id="deploy-button" class="secondary small deploy-chip" type="button" title="This account contract is not on-chain yet. Deploying it enables transactions.">
-          ${icon("alert")}Not deployed — deploy now
-        </button>
-        <p id="deploy-result" role="status"></p>
-      </div>`;
 
 // The portfolio 24h delta line under the balance: a green/red arrow and
 // magnitude beside a muted "percent · 24h" trailing label. Empty when nothing
@@ -223,10 +147,10 @@ const activityScreen = (
   dockScreen(
     "activity",
     `<section class="section">
-      <div class="row"><h2>Requests</h2><span class="pill">${pending.length} pending</span></div>
+      <div class="row"><h2>Requests</h2>${pill(`${pending.length} pending`)}</div>
       ${
         pending.length === 0
-          ? '<p class="empty">Nothing waiting on you. Connection requests from sites appear here.</p>'
+          ? emptyState("Nothing waiting on you. Connection requests from sites appear here.")
           : `<ul class="request-list">${pending.map((approval) => approvalCard(approval, status)).join("")}</ul>`
       }
       <p id="approval-result" role="status"></p>
@@ -235,27 +159,28 @@ const activityScreen = (
       <div class="row">
         <h2>Transactions</h2>
         <div class="header-actions">
-          <button id="activity-export" class="icon-button" type="button" aria-label="Export CSV" title="Export CSV" ${transactions.length === 0 ? "disabled" : ""}>${icon("receive")}</button>
-          <button id="activity-refresh" class="icon-button" type="button" aria-label="Refresh transactions" title="Refresh transactions">${icon("refresh")}</button>
+          ${iconButton({
+            attributes: { id: "activity-export" },
+            disabled: transactions.length === 0,
+            icon: "receive",
+            label: "Export CSV",
+          })}
+          ${iconButton({
+            attributes: { id: "activity-refresh" },
+            icon: "refresh",
+            label: "Refresh transactions",
+          })}
         </div>
       </div>
-      ${historyUnavailable ? `<p class="empty" role="status">${escapeHtml(HISTORY_UNAVAILABLE_NOTICE)}</p>` : ""}
+      ${historyUnavailable ? emptyState(HISTORY_UNAVAILABLE_NOTICE, "status") : ""}
       ${
         transactions.length === 0
-          ? `<p class="empty">${escapeHtml(activityEmptyCopy(historyUnavailable))}</p>`
+          ? emptyState(activityEmptyCopy(historyUnavailable))
           : `<ul class="tx-list">${transactions.map(transactionRow).join("")}</ul>`
       }
       <p id="activity-result" role="status"></p>
     </section>`,
   );
-
-const menuRow = (view: WalletView, label: string, name: IconName, value?: string): string =>
-  `<button class="menu-row" data-view="${view}" type="button">
-    <span class="menu-icon">${icon(name)}</span>
-    <span class="menu-copy"><strong>${escapeHtml(label)}</strong></span>
-    ${value ? `<span class="menu-value">${escapeHtml(value)}</span>` : ""}
-    <span class="menu-chevron">${icon("chevronRight")}</span>
-  </button>`;
 
 // The settings hub is a scannable map of the wallet, not a pile of buttons:
 // personal preferences lead as compact controls (theme segments, currency),
@@ -271,68 +196,67 @@ const settingsScreen = (status: WalletStatus, preferences: WalletPreferences | n
     `<h2>Settings</h2>
     <section class="section">
       <p class="eyebrow">Preferences</p>
-      <div class="seg" role="group" aria-label="Theme">
-        ${(["dark", "light"] as const)
-          .map((theme) => {
-            const active = (preferences?.theme === "light" ? "light" : "dark") === theme;
-            const label = theme === "light" ? "Light" : "Dark";
-            return `<button class="seg-option" data-theme-id="${theme}" type="button" aria-pressed="${active}">${label}</button>`;
-          })
-          .join("")}
-      </div>
-      <label><span>Display currency</span>
-        <select id="currency-select">
-          ${(["usd", "eur", "gbp"] as const)
-            .map(
-              (currency) =>
-                `<option value="${currency}" ${(preferences?.displayCurrency ?? "usd") === currency ? "selected" : ""}>${currency.toUpperCase()}</option>`,
-            )
-            .join("")}
-        </select>
-      </label>
+      ${segmentedControl(
+        "Theme",
+        (["dark", "light"] as const).map((theme) => ({
+          attributes: { "data-theme-id": theme },
+          label: theme === "light" ? "Light" : "Dark",
+          pressed: (preferences?.theme === "light" ? "light" : "dark") === theme,
+        })),
+      )}
+      ${selectField({
+        attributes: { id: "currency-select" },
+        label: "Display currency",
+        name: "displayCurrency",
+        options: (["usd", "eur", "gbp"] as const).map((currency) => ({
+          label: currency.toUpperCase(),
+          value: currency,
+        })),
+        selected: preferences?.displayCurrency ?? "usd",
+      })}
       <div class="stack">
         <span>Open wallet requests in</span>
-        <div class="seg" role="group" aria-label="Wallet request surface">
-          ${(["side-panel", "popup"] as const)
-            .map((surface) => {
-              const active = (preferences?.approvalSurface ?? "side-panel") === surface;
-              const label = surface === "side-panel" ? "Side panel" : "Toolbar popup";
-              return `<button class="seg-option" data-approval-surface="${surface}" type="button" aria-pressed="${active}">${label}</button>`;
-            })
-            .join("")}
-        </div>
+        ${segmentedControl(
+          "Wallet request surface",
+          (["side-panel", "popup"] as const).map((surface) => ({
+            attributes: { "data-approval-surface": surface },
+            label: surface === "side-panel" ? "Side panel" : "Toolbar popup",
+            pressed: (preferences?.approvalSurface ?? "side-panel") === surface,
+          })),
+        )}
       </div>
     </section>
     <section class="section">
       <p class="eyebrow">Wallet</p>
       <div class="menu-list" role="group" aria-label="Wallet">
-        ${menuRow("network", "Network", "globe", status.network)}
-        ${menuRow("account", "Accounts & groups", "wallet")}
-        ${menuRow("address-book", "Address book", "book")}
+        ${walletMenuRow("network", "Network", "globe", status.network)}
+        ${walletMenuRow("account", "Accounts & groups", "wallet")}
+        ${walletMenuRow("address-book", "Address book", "book")}
       </div>
     </section>
     <section class="section">
       <p class="eyebrow">Connections</p>
       <div class="menu-list" role="group" aria-label="Connections">
-        ${menuRow("connected-sites", "Connected sites", "link")}
-        ${menuRow("allowances", "Allowances", "coins")}
-        ${menuRow("multisigs", "Multisigs", "users")}
+        ${walletMenuRow("connected-sites", "Connected sites", "link")}
+        ${walletMenuRow("allowances", "Allowances", "coins")}
+        ${walletMenuRow("multisigs", "Multisigs", "users")}
       </div>
     </section>
     <section class="section">
       <p class="eyebrow">Security</p>
       <div class="menu-list" role="group" aria-label="Security">
-        ${menuRow("backup", "Backup & restore", "shield")}
-        ${menuRow("reveal", "Reveal secrets", "lock")}
+        ${walletMenuRow("backup", "Backup & restore", "shield")}
+        ${walletMenuRow("reveal", "Reveal secrets", "lock")}
       </div>
     </section>
     <section class="section">
       <div class="menu-list">
-        <a class="menu-row" href="https://github.com/mc-wallet/mc-wallet#readme" target="_blank" rel="noreferrer">
-          <span class="menu-icon">${icon("book")}</span>
-          <span class="menu-copy"><strong>Help &amp; docs</strong></span>
-          <span class="menu-chevron">${icon("chevronRight")}</span>
-        </a>
+        ${menuLink({
+          href: "https://github.com/mc-wallet/mc-wallet#readme",
+          icon: "book",
+          label: "Help & docs",
+          target: "_blank",
+        })}
       </div>
     </section>
     <p id="display-result" role="status"></p>`,

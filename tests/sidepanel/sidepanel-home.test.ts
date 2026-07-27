@@ -49,22 +49,22 @@ describe("sidepanel home", () => {
     const header = html.slice(html.indexOf("wallet-header"), html.indexOf("hero"));
 
     expect(header).toContain('data-view="connected-sites"');
-    expect(header).toContain(
-      `id="terminal-button" class="icon-button ghost" href="${TERMINAL_URL}"`,
-    );
+    expect(header).toContain('id="terminal-button"');
+    expect(header).toContain('class="icon-button ghost"');
+    expect(header).toContain(`href="${TERMINAL_URL}"`);
     expect(header).toContain('target="_blank" rel="noopener noreferrer"');
     expect(header).toContain('aria-label="Open trade terminal"');
     expect(header).toContain('id="lock-button"');
   });
 
-  test("quick actions render as borderless icon buttons with send carrying the accent", () => {
+  test("quick actions render as borderless icon buttons with send carrying emphasis", () => {
     // The action row is now just Send / Receive as plain borderless icon buttons
     // (labels beneath, no box treatment). The former third "NFTs" action tile was
     // removed as redundant with the Collectibles home tab (which already reaches
     // the NFT gallery + detail views), leaving a centred two-tile pair. The markup
     // keeps the `action-tile` hook and the `primary` modifier on Send — the box
     // removal lives in the stylesheet — so Send stays distinguishable via its
-    // accent-tinted icon.
+    // high-contrast icon.
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).toMatch(/class="action-tile primary" data-view="send"/);

@@ -39,6 +39,16 @@ export const assertCheckpointReady = async (canvasElement: HTMLElement): Promise
   expect(error).not.toBeVisible();
   const frame = canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]");
   expect(frame?.contentDocument?.querySelector(".shell")).toBeInTheDocument();
+  const lab = canvasElement.firstElementChild;
+  const device = canvasElement.querySelector<HTMLElement>("[data-lab-device]");
+  const surface = device?.dataset["surface"];
+  expect(lab).toHaveAttribute("data-lab-surface", surface ?? "");
+  if (surface === "fullpage") {
+    const main = canvasElement.querySelector<HTMLElement>(".lab-main");
+    const view = canvasElement.ownerDocument.defaultView;
+    const columns = main && view ? view.getComputedStyle(main).gridTemplateColumns : "";
+    expect(columns.trim().split(/\s+/)).toHaveLength(1);
+  }
 };
 
 export const checkpointStory = (

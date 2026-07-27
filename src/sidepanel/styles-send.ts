@@ -48,7 +48,7 @@ export const SEND_STYLES = `
     z-index: 0;
   }
   .send-progress li[data-state="done"] + li::before,
-  .send-progress li[data-state="done"]::before { background: var(--mc-accent); }
+  .send-progress li[data-state="done"]::before { background: var(--mc-positive); }
   .send-step-mark {
     align-items: center;
     background: var(--mc-panel);
@@ -70,8 +70,8 @@ export const SEND_STYLES = `
     transform: scale(1.06);
   }
   .send-progress li[data-state="done"] .send-step-mark {
-    background: var(--mc-accent-soft);
-    color: var(--mc-accent);
+    background: var(--mc-positive-soft);
+    color: var(--mc-positive);
   }
   html[data-send-transition]::view-transition-old(root),
   html[data-send-transition]::view-transition-new(root) { animation: none; }
@@ -332,7 +332,7 @@ export const SEND_STYLES = `
   .ledger-task-list li[data-state="active"] { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; }
   .ledger-task-list li[data-state="active"] .ledger-task-mark { background: var(--mc-accent); color: var(--mc-bg); }
   .ledger-task-list li[data-state="done"] { color: var(--mc-text); }
-  .ledger-task-list li[data-state="done"] .ledger-task-mark { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  .ledger-task-list li[data-state="done"] .ledger-task-mark { background: var(--mc-positive-soft); color: var(--mc-positive); }
   .ledger-phase-body {
     display: grid;
     font-size: ${TYPE.body.size};

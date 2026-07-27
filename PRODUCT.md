@@ -48,9 +48,10 @@ must never depend on a real vault, device, secret, signer, or broadcast.
 ## Brand Commitments
 
 The product name is MC Wallet. Product language is direct, calm, and specific about state, risk,
-and recovery. The established wallet interface uses a restrained neutral system with a single
-cobalt action accent, explicit semantic success/danger colors, crisp hierarchy, and purposeful
-motion with complete reduced-motion support.
+and recovery. The established wallet interface is monochrome: neutral surfaces, ink, actions,
+focus, and selection, with color reserved for explicit success/positive and failure/danger
+semantics. Crisp hierarchy and purposeful motion carry emphasis, with complete reduced-motion
+support.
 
 ## Evidence on Hand
 

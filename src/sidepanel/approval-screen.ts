@@ -15,6 +15,7 @@
  */
 import type { PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { button } from "../ui/controls";
 import { approvalCard } from "./approval-cards";
 
 /**
@@ -57,7 +58,12 @@ export const approvalTakeover = (
     <ul class="request-list">${approvalCard(first, status)}</ul>
     ${queue}
     <div class="takeover-foot">
-      <button class="ghost small" data-approval-later="${escapeHtml(first.id)}" type="button">Review later in Activity</button>
+      ${button({
+        attributes: { "data-approval-later": first.id },
+        label: "Review later in Activity",
+        size: "small",
+        variant: "ghost",
+      })}
     </div>
     <p id="approval-result" role="status"></p>
   </main>`;

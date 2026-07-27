@@ -13,7 +13,11 @@ import type {
   MultisigRecord,
 } from "../storage/multisig-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { icon } from "./icons";
+import { emptyState, pill } from "../ui/content";
+import { button, iconButton } from "../ui/controls";
+import { textareaField, textField } from "../ui/fields";
+import type { UiAttributes } from "../ui/html-attributes";
+import { menuRow } from "../ui/navigation";
 import {
   accountLabel,
   copyButton,
@@ -22,6 +26,8 @@ import {
   hardwareBadge,
   noAccountEmpty,
 } from "./parts";
+
+export { multisigDeployFlow } from "./multisig-deploy-view";
 
 const multisigDisplayName = (record: MultisigRecord): string =>
   record.name ?? accountLabel(record.address);
@@ -56,14 +62,12 @@ const untrackedProposalWarning = (): string => `
 
 const multisigRow = (record: MultisigRecord, pendingCount: number): string => `
   <li class="allowance-row">
-    <button class="menu-row" data-multisig-open="${escapeHtml(record.id)}" type="button">
-      <span class="menu-icon">${icon("wallet")}</span>
-      <span class="menu-copy">
-        <strong>${escapeHtml(multisigDisplayName(record))}</strong>
-        <span class="hint">${record.quorum} of ${record.signers.length} signers${pendingCount > 0 ? ` · ${pendingCount} open` : ""}</span>
-      </span>
-      <span class="menu-chevron">${icon("chevronRight")}</span>
-    </button>
+    ${menuRow({
+      attributes: { "data-multisig-open": record.id },
+      icon: "wallet",
+      label: multisigDisplayName(record),
+      supportingText: `${record.quorum} of ${record.signers.length} signers${pendingCount > 0 ? ` · ${pendingCount} open` : ""}`,
+    })}
   </li>`;
 
 const multisigSyncNotice = (
@@ -74,7 +78,13 @@ const multisigSyncNotice = (
   if (loadError || sync === "error") {
     return `<div class="review-panel" role="alert">
       <p class="review-flag">Could not refresh multisig state from the background or chain. Cached data may be stale.</p>
-      <button id="${retryId}" class="secondary small" type="button">${icon("refresh")}Retry</button>
+      ${button({
+        attributes: { id: retryId },
+        icon: "refresh",
+        label: "Retry",
+        size: "small",
+        variant: "secondary",
+      })}
     </div>`;
   }
   return sync === "current"
@@ -106,13 +116,20 @@ export const multisigsFlow = (
       `${multisigSyncNotice(loadError, sync, "multisig-list-retry")}
       <section class="section">
         <div class="row"><h2>Watched multisigs</h2>
-          <button class="secondary small" data-view="multisig-deploy" type="button" ${account ? "" : "disabled"}>${icon("plus")}Deploy new</button>
+          ${button({
+            attributes: { "data-view": "multisig-deploy" },
+            disabled: account === null,
+            icon: "plus",
+            label: "Deploy new",
+            size: "small",
+            variant: "secondary",
+          })}
         </div>
         ${
           account === null
             ? noAccountEmpty(status)
             : scoped.length === 0
-              ? '<p class="empty">No multisigs watched yet. Watch one below or deploy a new one.</p>'
+              ? emptyState("No multisigs watched yet. Watch one below or deploy a new one.")
               : `<ul class="allowance-list">${scoped.map((record) => multisigRow(record, openCount(record))).join("")}</ul>`
         }
         <p id="multisig-list-result" role="status"></p>
@@ -120,10 +137,31 @@ export const multisigsFlow = (
       <section class="section">
         <h2>Watch a multisig</h2>
         <form id="multisig-add-form">
-          <label><span>Contract address</span><input class="mono" name="address" placeholder="0x…" required autocomplete="off" spellcheck="false" ${account ? "" : "disabled"} /></label>
-          <label><span>Name (optional)</span><input name="name" maxlength="48" autocomplete="off" ${account ? "" : "disabled"} /></label>
+          ${textField({
+            autocomplete: "off",
+            className: "mono",
+            disabled: account === null,
+            label: "Contract address",
+            name: "address",
+            placeholder: "0x…",
+            required: true,
+            spellcheck: false,
+          })}
+          ${textField({
+            autocomplete: "off",
+            disabled: account === null,
+            label: "Name (optional)",
+            maxlength: 48,
+            name: "name",
+          })}
           <span class="hint">The active account must be one of the multisig's signers.</span>
-          <button class="secondary" type="submit" ${account ? "" : "disabled"}>${icon("check")}Watch multisig</button>
+          ${button({
+            disabled: account === null,
+            icon: "check",
+            label: "Watch multisig",
+            type: "submit",
+            variant: "secondary",
+          })}
           <p id="multisig-add-result" role="status"></p>
         </form>
       </section>`,
@@ -131,8 +169,16 @@ export const multisigsFlow = (
   );
 };
 
-const actionAttributes = (allowed: boolean, requiresAck: boolean): string =>
-  ` data-ms-action-allowed="${allowed}"${requiresAck ? ' data-ms-requires-ack="true"' : ""}${allowed && !requiresAck ? "" : " disabled"}`;
+const actionAttributes = (
+  action: "confirm" | "revoke",
+  proposalId: string,
+  allowed: boolean,
+  requiresAck: boolean,
+): UiAttributes => ({
+  [`data-ms-${action}`]: proposalId,
+  "data-ms-action-allowed": String(allowed),
+  ...(requiresAck ? { "data-ms-requires-ack": "true" } : {}),
+});
 
 const proposalActions = (
   proposal: MultisigProposalRecord,
@@ -145,7 +191,13 @@ const proposalActions = (
   const execute =
     proposal.state === "confirmed"
       ? proposal.call
-        ? `<button class="secondary small" data-ms-execute="${escapeHtml(proposal.id)}" type="button">${icon("send")}Execute</button>`
+        ? button({
+            attributes: { "data-ms-execute": proposal.id },
+            icon: "send",
+            label: "Execute",
+            size: "small",
+            variant: "secondary",
+          })
         : '<span class="hint">Execute from the wallet that proposed it (call details are not shared with a pasted id).</span>'
       : "";
   const signerSnapshotIsCurrent =
@@ -160,8 +212,22 @@ const proposalActions = (
   const revokeAllowed = canSign && signerSnapshotIsCurrent && proposal.confirmedBySigner === true;
   const requiresAck = proposal.call === null;
   return `<div class="row">
-    <button class="secondary small" data-ms-confirm="${escapeHtml(proposal.id)}" type="button"${actionAttributes(confirmAllowed, requiresAck)}>${icon("check")}Confirm</button>
-    <button class="secondary small" data-ms-revoke="${escapeHtml(proposal.id)}" type="button"${actionAttributes(revokeAllowed, requiresAck)}>${icon("x")}Revoke</button>
+    ${button({
+      attributes: actionAttributes("confirm", proposal.id, confirmAllowed, requiresAck),
+      disabled: !confirmAllowed || requiresAck,
+      icon: "check",
+      label: "Confirm",
+      size: "small",
+      variant: "secondary",
+    })}
+    ${button({
+      attributes: actionAttributes("revoke", proposal.id, revokeAllowed, requiresAck),
+      disabled: !revokeAllowed || requiresAck,
+      icon: "x",
+      label: "Revoke",
+      size: "small",
+      variant: "secondary",
+    })}
     ${execute}
   </div>`;
 };
@@ -194,7 +260,7 @@ const signerRow = (
   return `
   <li class="address-line">
     <code>${escapeHtml(accountLabel(signer))}</code>
-    ${account && sameFelt(signer, account.address) ? '<span class="pill">You</span>' : ""}
+    ${account && sameFelt(signer, account.address) ? pill("You") : ""}
     ${local ? hardwareBadge(local) : ""}
     ${copyButton(signer, "Copy signer address")}
   </li>`;
@@ -219,7 +285,7 @@ export const multisigDetailFlow = (
         "multisig-detail",
         loadError
           ? multisigSyncNotice(true, "error", "multisig-list-retry")
-          : '<p class="empty">This multisig is no longer watched.</p>',
+          : emptyState("This multisig is no longer watched."),
       )
     );
   }
@@ -238,8 +304,17 @@ export const multisigDetailFlow = (
       <section class="section">
         <div class="row"><h2>Contract</h2>
           <div class="header-actions">
-            <button id="multisig-refresh" class="icon-button" data-multisig-id="${escapeHtml(record.id)}" type="button" aria-label="Refresh from chain" title="Refresh from chain">${icon("refresh")}</button>
-            <button class="icon-button danger" data-multisig-remove="${escapeHtml(record.id)}" type="button" aria-label="Stop watching" title="Stop watching">${icon("x")}</button>
+            ${iconButton({
+              attributes: { "data-multisig-id": record.id, id: "multisig-refresh" },
+              icon: "refresh",
+              label: "Refresh from chain",
+            })}
+            ${iconButton({
+              attributes: { "data-multisig-remove": record.id },
+              icon: "x",
+              label: "Stop watching",
+              tone: "danger",
+            })}
           </div>
         </div>
         <p class="address-line"><code>${escapeHtml(record.address)}</code>${copyButton(record.address, "Copy multisig address")}</p>
@@ -250,11 +325,20 @@ export const multisigDetailFlow = (
       </section>
       <section class="section">
         <div class="row"><h2>Proposals</h2>
-          <button class="secondary small" data-view="multisig-propose" type="button" ${canSign ? "" : "disabled"}>${icon("plus")}New proposal</button>
+          ${button({
+            attributes: { "data-view": "multisig-propose" },
+            disabled: !canSign,
+            icon: "plus",
+            label: "New proposal",
+            size: "small",
+            variant: "secondary",
+          })}
         </div>
         ${
           tracked.length === 0
-            ? '<p class="empty">No proposals tracked yet. Propose one, or paste an id shared by another signer.</p>'
+            ? emptyState(
+                "No proposals tracked yet. Propose one, or paste an id shared by another signer.",
+              )
             : `<ul class="allowance-list">${tracked.map((proposal) => proposalRow(proposal, record.quorum, canSign, account?.address ?? null)).join("")}</ul>`
         }
         <p id="multisig-proposal-result" role="status"></p>
@@ -262,10 +346,28 @@ export const multisigDetailFlow = (
       <section class="section">
         <h2>Track a shared proposal</h2>
         <form id="multisig-track-form">
-          <label><span>Proposal id</span><input class="mono" name="txId" placeholder="0x…" required autocomplete="off" spellcheck="false" /></label>
-          <label><span>Note (optional)</span><input name="summary" maxlength="120" autocomplete="off" /></label>
+          ${textField({
+            autocomplete: "off",
+            className: "mono",
+            label: "Proposal id",
+            name: "txId",
+            placeholder: "0x…",
+            required: true,
+            spellcheck: false,
+          })}
+          ${textField({
+            autocomplete: "off",
+            label: "Note (optional)",
+            maxlength: 120,
+            name: "summary",
+          })}
           <span class="hint">Notes are not verified on-chain. Tracked proposals can be confirmed and revoked after you verify the proposal id; executing needs the original call from the proposer's wallet.</span>
-          <button class="secondary" type="submit">${icon("check")}Track proposal</button>
+          ${button({
+            icon: "check",
+            label: "Track proposal",
+            type: "submit",
+            variant: "secondary",
+          })}
           <p id="multisig-track-result" role="status"></p>
         </form>
       </section>`,
@@ -283,7 +385,7 @@ export const multisigProposeFlow = (
   if (!record) {
     return (
       flowHeader("New proposal", status) +
-      flowScreen("multisig-propose", '<p class="empty">This multisig is no longer watched.</p>')
+      flowScreen("multisig-propose", emptyState("This multisig is no longer watched."))
     );
   }
   return (
@@ -292,84 +394,56 @@ export const multisigProposeFlow = (
       "multisig-propose",
       `<section class="section">
         <form id="multisig-propose-form">
-          <label><span>Contract to call</span><input class="mono" name="to" placeholder="0x…" required autocomplete="off" spellcheck="false" /></label>
-          <label><span>Entrypoint</span><input class="mono" name="entrypoint" placeholder="transfer" required autocomplete="off" spellcheck="false" /></label>
-          <label><span>Calldata felts (space or newline separated)</span><textarea class="mono" name="calldata" rows="3" autocomplete="off" spellcheck="false"></textarea></label>
-          <label><span>Salt</span><input class="mono" name="salt" value="0x0" autocomplete="off" spellcheck="false" /></label>
-          <label><span>Note (optional)</span><input name="summary" maxlength="120" autocomplete="off" /></label>
+          ${textField({
+            autocomplete: "off",
+            className: "mono",
+            label: "Contract to call",
+            name: "to",
+            placeholder: "0x…",
+            required: true,
+            spellcheck: false,
+          })}
+          ${textField({
+            autocomplete: "off",
+            className: "mono",
+            label: "Entrypoint",
+            name: "entrypoint",
+            placeholder: "transfer",
+            required: true,
+            spellcheck: false,
+          })}
+          ${textareaField({
+            autocomplete: "off",
+            className: "mono",
+            label: "Calldata felts (space or newline separated)",
+            name: "calldata",
+            rows: 3,
+            spellcheck: false,
+          })}
+          ${textField({
+            autocomplete: "off",
+            className: "mono",
+            label: "Salt",
+            name: "salt",
+            spellcheck: false,
+            value: "0x0",
+          })}
+          ${textField({
+            autocomplete: "off",
+            label: "Note (optional)",
+            maxlength: 120,
+            name: "summary",
+          })}
           <span class="hint">Submitting does not confirm: confirm your own proposal from the detail screen, then share the proposal id with the other signers. Re-proposing identical calls needs a different salt.</span>
-          <button class="secondary" type="submit">${icon("send")}Submit proposal</button>
+          ${button({
+            icon: "send",
+            label: "Submit proposal",
+            type: "submit",
+            variant: "secondary",
+          })}
           <p id="multisig-propose-result" role="status"></p>
         </form>
       </section>`,
-    )
-  );
-};
-
-// A picker of this wallet's accounts on the active network, each inserting its
-// address into the signers field. Ledger accounts carry the hardware badge, so a
-// hardware key can be added as a signer with one tap (its address is all the
-// signer set needs — no device interaction to be a signer).
-const signerPicker = (status: WalletStatus): string => {
-  const accounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
-  if (accounts.length === 0) {
-    return "";
-  }
-  const rows = accounts
-    .map(
-      (stored) =>
-        `<button class="secondary small" data-signer-insert="${escapeHtml(stored.address)}" type="button">${icon("plus")}<code>${escapeHtml(accountLabel(stored.address))}</code>${hardwareBadge(stored)}</button>`,
-    )
-    .join("");
-  return `<div class="stack">
-    <span class="hint">Add a signer from this wallet's accounts:</span>
-    <div class="row wrap">${rows}</div>
-  </div>`;
-};
-
-/**
- * Renders the deploy form for a new multisig from the pinned class, including
- * the declare-first path when the class is missing on the active network.
- */
-export const multisigDeployFlow = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  declared: boolean | "error" | null,
-): string => {
-  if (!account) {
-    return (
-      flowHeader("Deploy multisig", status) + flowScreen("multisig-deploy", noAccountEmpty(status))
-    );
-  }
-  return (
-    flowHeader("Deploy multisig", status) +
-    flowScreen(
-      "multisig-deploy",
-      `<section class="section">
-      ${
-        declared === false
-          ? `<div class="row"><span class="pill">Class not declared</span></div>
-             <p class="hint">The multisig class is not declared on ${escapeHtml(status.network)} yet. Declaring is a one-time, fee-paying transaction from your account; afterwards anyone can deploy from the same class.</p>
-             <button id="multisig-declare" class="secondary" type="button">${icon("send")}Declare multisig class</button>
-             <p id="multisig-declare-result" role="status"></p>`
-          : declared === "error"
-            ? `<div class="row"><span class="pill">Status unavailable</span></div>
-               <p class="hint">Could not check whether the multisig class is declared on ${escapeHtml(status.network)} — the network may be unreachable.</p>
-               <button id="multisig-class-retry" class="secondary" type="button">${icon("refresh")}Retry</button>`
-            : declared === null
-              ? '<p class="hint">Checking whether the multisig class is declared on this network…</p>'
-              : ""
-      }
-      <form id="multisig-deploy-form">
-        <label><span>Signer addresses (one per line)</span><textarea class="mono" name="signers" rows="4" required autocomplete="off" spellcheck="false">${escapeHtml(account.address)}</textarea></label>
-        ${signerPicker(status)}
-        <label><span>Quorum (confirmations required)</span><input name="quorum" inputmode="numeric" value="1" required autocomplete="off" /></label>
-        <label><span>Salt</span><input class="mono" name="salt" value="0x0" autocomplete="off" spellcheck="false" /></label>
-        <span class="hint">The contract address is derived from the class, signers, quorum, and salt — the same inputs always produce the same address on every network. Name it after it finalizes, when you add it to your watched multisigs.</span>
-        <button class="secondary" type="submit" ${declared === true ? "" : "disabled"}>${icon("send")}Deploy multisig</button>
-        <p id="multisig-deploy-result" role="status"></p>
-      </form>
-    </section>`,
     )
   );
 };

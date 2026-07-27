@@ -7,6 +7,9 @@ import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { emptyState, receipt } from "../ui/content";
+import { button } from "../ui/controls";
+import { selectField, textField } from "../ui/fields";
 import { icon } from "./icons";
 import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "./parts";
 
@@ -52,8 +55,16 @@ const successStage = (): string => `
       <p class="hint">Starknet accepted the broadcast. Confirmation is tracked under Activity.</p>
     </div>
     <div class="send-actions">
-      <button id="send-view-activity" type="button">${icon("activity")}View activity</button>
-      <button id="send-another" class="secondary" type="button">Send another</button>
+      ${button({
+        attributes: { id: "send-view-activity" },
+        icon: "activity",
+        label: "View activity",
+      })}
+      ${button({
+        attributes: { id: "send-another" },
+        label: "Send another",
+        variant: "secondary",
+      })}
     </div>
   </section>`;
 
@@ -80,7 +91,7 @@ export const sendFlow = (
         ${account ? "" : noAccountEmpty(status)}
         ${
           account && tokens.length === 0
-            ? '<p class="empty">No tokens are tracked on this network yet, so nothing can be sent.</p>'
+            ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.")
             : ""
         }
         <form id="transfer-form" data-signer="${signer}">
@@ -88,32 +99,67 @@ export const sendFlow = (
           ${sendProgress()}
           <div class="send-stage-frame">
             <section class="send-stage" id="send-details">
-              <label><span>Token</span>
-                <select name="tokenId" ${canSend ? "" : "disabled"}>
-                  ${tokens.map((token) => `<option data-symbol="${escapeHtml(token.symbol)}" value="${escapeHtml(token.id)}">${escapeHtml(token.symbol)} — ${escapeHtml(token.name)}</option>`).join("")}
-                </select>
-              </label>
-              <label><span>Recipient</span>
-                <input class="mono" name="recipient" list="address-book" placeholder="0x…" required autocomplete="off" spellcheck="false" ${canSend ? "" : "disabled"} />
-                <span class="hint">Paste an address or choose a saved contact.</span>
-              </label>
-              <label><span>Amount</span>
-                <input class="mono" name="amount" inputmode="decimal" placeholder="0.0" required autocomplete="off" ${canSend ? "" : "disabled"} />
-              </label>
-              <label><span>Speed</span>
-                <select name="speed" ${canSend ? "" : "disabled"}>
-                  <option value="standard" selected>Standard</option>
-                  <option value="fast">Fast — up to 1.5× the estimated fee</option>
-                </select>
-              </label>
-              <button id="send-review-button" type="submit" ${canSend ? "" : "disabled"}>${icon("send")}Review send</button>
+              ${selectField({
+                disabled: !canSend,
+                label: "Token",
+                name: "tokenId",
+                options: tokens.map((token) => ({
+                  attributes: { "data-symbol": token.symbol },
+                  label: `${token.symbol} — ${token.name}`,
+                  value: token.id,
+                })),
+              })}
+              ${textField({
+                autocomplete: "off",
+                className: "mono",
+                disabled: !canSend,
+                hint: "Paste an address or choose a saved contact.",
+                label: "Recipient",
+                list: "address-book",
+                name: "recipient",
+                placeholder: "0x…",
+                required: true,
+                spellcheck: false,
+              })}
+              ${textField({
+                autocomplete: "off",
+                className: "mono",
+                disabled: !canSend,
+                inputmode: "decimal",
+                label: "Amount",
+                name: "amount",
+                placeholder: "0.0",
+                required: true,
+              })}
+              ${selectField({
+                disabled: !canSend,
+                label: "Speed",
+                name: "speed",
+                options: [
+                  { label: "Standard", value: "standard" },
+                  { label: "Fast — up to 1.5× the estimated fee", value: "fast" },
+                ],
+                selected: "standard",
+              })}
+              ${button({
+                attributes: { id: "send-review-button" },
+                disabled: !canSend,
+                icon: "send",
+                label: "Review send",
+                type: "submit",
+              })}
             </section>
             <section class="send-stage" id="send-review-stage" hidden>
               <div class="send-review-head">
                 <div><p class="context-label">Review ready</p><h2>Check every detail</h2></div>
-                <button id="send-edit" class="ghost small" type="button">Edit</button>
+                ${button({
+                  attributes: { id: "send-edit" },
+                  label: "Edit",
+                  size: "small",
+                  variant: "ghost",
+                })}
               </div>
-              <dl class="receipt" id="send-review-receipt"></dl>
+              ${receipt([], { id: "send-review-receipt" })}
               <div id="review-panel"></div>
               <div class="send-actions">
                 <button id="send-confirm-button" type="submit" ${canSend ? "" : "disabled"}>${icon("check")}<span id="send-confirm-label">Confirm and send</span></button>

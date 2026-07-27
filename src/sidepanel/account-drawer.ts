@@ -16,6 +16,9 @@ import { escapeHtml } from "../shared/html";
 import { type AccountGroups, accountGroup } from "../storage/account-groups";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { emptyState } from "../ui/content";
+import { button, iconButton } from "../ui/controls";
+import { menuRow } from "../ui/navigation";
 import { accountGroupsLine, groupFilterChips, groupPickerPanel } from "./group-controls";
 import { icon } from "./icons";
 import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "./parts";
@@ -46,7 +49,17 @@ const drawerAccountRow = (
         </span>
         ${stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>
-      <button class="icon-button ghost drawer-assign${folder ? "" : " is-ungrouped"}" data-assign-toggle="${escapeHtml(stored.id)}" type="button" aria-expanded="${assignOpen}" aria-label="${escapeHtml(`${pickerLabel} for ${name}`)}" title="${escapeHtml(pickerLabel)}">${icon(rowGlyph)}</button>
+      ${iconButton({
+        attributes: {
+          "aria-expanded": String(assignOpen),
+          "data-assign-toggle": stored.id,
+        },
+        className: `drawer-assign${folder ? "" : " is-ungrouped"}`,
+        icon: rowGlyph,
+        label: `${pickerLabel} for ${name}`,
+        title: pickerLabel,
+        variant: "ghost",
+      })}
     </div>
     ${groupPickerPanel(stored, groups, folder?.id ?? null, assignOpen)}
   </li>`;
@@ -82,12 +95,22 @@ export const accountDrawer = (
           <h2>Accounts</h2>
           <p>${escapeHtml(status.network)}</p>
         </div>
-        <button class="icon-button ghost drawer-close" data-drawer-close type="button" aria-label="Close accounts">${icon("x")}</button>
+        ${iconButton({
+          attributes: { "data-drawer-close": true },
+          className: "drawer-close",
+          icon: "x",
+          label: "Close accounts",
+          variant: "ghost",
+        })}
       </header>
       ${groupFilterChips(groups, groupFilter)}
       ${
         visible.length === 0
-          ? `<p class="empty">${activeGroup ? "No accounts in this group yet. Open an account's folder button to add it." : "No accounts on this network yet. Add one below."}</p>`
+          ? emptyState(
+              activeGroup
+                ? "No accounts in this group yet. Open an account's folder button to add it."
+                : "No accounts on this network yet. Add one below.",
+            )
           : `<ul class="drawer-list">${visible
               .map((stored) =>
                 drawerAccountRow(stored, account?.id ?? null, preferences, groups, openAssignId),
@@ -95,12 +118,17 @@ export const accountDrawer = (
               .join("")}</ul>`
       }
       <div class="drawer-foot">
-        <button id="drawer-add-account" class="secondary" type="button">${icon("plus")}Add account</button>
-        <button class="menu-row" data-view="account" type="button">
-          <span class="menu-icon">${icon("settings")}</span>
-          <span class="menu-copy"><strong>Manage accounts &amp; groups</strong></span>
-          <span class="menu-chevron">${icon("chevronRight")}</span>
-        </button>
+        ${button({
+          attributes: { id: "drawer-add-account" },
+          icon: "plus",
+          label: "Add account",
+          variant: "secondary",
+        })}
+        ${menuRow({
+          attributes: { "data-view": "account" },
+          icon: "settings",
+          label: "Manage accounts & groups",
+        })}
       </div>
     </aside>
   </div>`;

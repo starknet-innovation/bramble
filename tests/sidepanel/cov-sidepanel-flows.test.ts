@@ -78,7 +78,7 @@ describe("sendFlow list callbacks", () => {
 
     // Only the mainnet token/address survive the network filter, and each runs
     // through the map callback that builds an <option>.
-    expect(html).toContain('<option data-symbol="ETH" value="SN_MAIN:ETH">ETH — Ether</option>');
+    expect(html).toContain('<option value="SN_MAIN:ETH" data-symbol="ETH">ETH — Ether</option>');
     expect(html).not.toContain("SN_SEPOLIA:STRK");
     expect(html).toContain('<option value="0xaaa1">Ada</option>');
     expect(html).not.toContain("Grace");

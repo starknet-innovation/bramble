@@ -30,6 +30,27 @@ shorthand. Stop the local server with <kbd>Control</kbd>+<kbd>C</kbd>.
 The static UI Lab from `main` is hosted on the repository's access-controlled GitHub Pages site at
 <https://effective-adventure-qwr464j.pages.github.io/>.
 
+## Review the design system
+
+Open **Design system** first when changing shared interface code. The catalog is grouped into
+Foundations, Controls, Feedback, Data display, Cards, Navigation, and Assets. It renders the real
+production skins, styles, renderers, and domain components—never Storybook-only replicas.
+
+The source of truth lives in `src/ui/`:
+
+- `tokens.ts`, `skin.ts`, `default-skin.ts`, and `dark-skin.ts` own foundations.
+- `controls.ts`, `fields.ts`, `content.ts`, `navigation.ts`, and `icons.ts` own reusable
+  components.
+- `catalog.ts` is the authoritative inventory. `tests/ui/design-system.test.ts` fails when an
+  inventory item lacks Storybook coverage, a renderer stops escaping dynamic content, or a
+  side-panel template bypasses shared fields and structural primitives.
+- Wallet-specific cards and rows remain close to their domain in `src/sidepanel/`, but their
+  Storybook stories import those production renderers directly.
+
+When adding a shared component, grep for an existing pattern first, extend the library in place,
+use it from the production surface, add it to `catalog.ts`, and add its states to the matching
+Storybook section.
+
 ## Review a flow
 
 1. Open **Wallet journeys** in Storybook's sidebar and follow the numbered product journey from
@@ -50,7 +71,7 @@ The lab has 100 deterministic checkpoints across 14 scenario families:
 
 | Family | Review surface |
 | --- | --- |
-| Full-page onboarding | First run, generated-backup verification, and import in the expanded tab. |
+| Full-screen onboarding | First run, generated-backup verification, and import in the expanded tab. |
 | Returning unlock | Locked, request-waiting, and failed-authentication side-panel states. |
 | Home and portfolio | Ready, tabs, account drawer, undeployed, offline, error, and empty-network states. |
 | Send lifecycle | Details, review latency, fee failure, signing, broadcast, and receipt. |

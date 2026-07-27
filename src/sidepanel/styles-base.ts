@@ -6,10 +6,9 @@
  *
  * Surface rules ("Clean Mono"): solid fills only (no gradients, no glass),
  * structure carried by gentle low elevation and hairline edges; list rows are
- * flat fills separated by space, never boxes nested inside boxes. The single
- * cobalt accent is reserved for the primary CTA, active states, and focus;
- * market semantics (green gains, red losses) stay their own tokens — nothing
- * else leaves the near-mono neutral palette.
+ * flat fills separated by space, never boxes nested inside boxes. Primary
+ * actions, active states, and focus use high-contrast neutral ink; only
+ * positive/success and danger/failure semantics leave the monochrome palette.
  */
 import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE, WEIGHT } from "../ui/tokens";
 
@@ -30,8 +29,8 @@ export const BASE_STYLES = `
     --mc-soft-press: color-mix(in srgb, var(--mc-text) 11%, var(--mc-elevated));
     --mc-accent-hover: color-mix(in srgb, var(--mc-text) 10%, var(--mc-accent));
     --mc-accent-press: color-mix(in srgb, var(--mc-text) 18%, var(--mc-accent));
-    /* The accent tint stays whisper-quiet — enough to read as "active" without
-       becoming a second colour field. */
+    /* The action tint stays whisper-quiet — enough to read as "active" without
+       becoming a second field of contrast. */
     --mc-accent-soft: color-mix(in srgb, var(--mc-accent) 13%, var(--mc-panel));
     --mc-positive-soft: color-mix(in srgb, var(--mc-positive) 13%, var(--mc-panel));
     --mc-danger-soft: color-mix(in srgb, var(--mc-danger) 12%, var(--mc-panel));
@@ -40,15 +39,14 @@ export const BASE_STYLES = `
     /* Anchored bottom-bar footprint: one source of truth consumed by the dock
        itself, the dock-screen scroll clearance, and the toast stack offset. */
     --mc-dock-h: calc(${CONTROL.nav} + ${SPACE.sm});
-    /* Flat per-account avatar palette: four restrained mid-tone fills (the
-       first is the brand cobalt) plus one dark ink for the glyph. Mid-tone by
-       design so the same fills and ink read on both skins; defined once here as
-       tokens so avatar chips carry no scattered colour literals. */
-    --mc-avatar-0: hsl(222 68% 62%);
-    --mc-avatar-1: hsl(168 46% 44%);
-    --mc-avatar-2: hsl(28 78% 55%);
-    --mc-avatar-3: hsl(265 52% 62%);
-    --mc-avatar-ink: hsl(220 34% 12%);
+    /* Flat per-account avatar palette: four neutral mid-tone fills plus one
+       dark glyph ink. Tone, the deterministic nickname, and the address
+       distinguish accounts without adding decorative hues. */
+    --mc-avatar-0: hsl(0 0% 42%);
+    --mc-avatar-1: hsl(0 0% 52%);
+    --mc-avatar-2: hsl(0 0% 62%);
+    --mc-avatar-3: hsl(0 0% 72%);
+    --mc-avatar-ink: hsl(0 0% 10%);
   }
   * { box-sizing: border-box; }
   html, body, #app { min-height: 100%; }

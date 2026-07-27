@@ -24,7 +24,7 @@ export const HOME_STYLES = `
     margin-top: 6px;
   }
   .verify-status .icon { flex: none; }
-  .verify-status.verified { color: var(--mc-accent); font-weight: 600; }
+  .verify-status.verified { color: var(--mc-positive); font-weight: 600; }
   .verify-status.mismatch {
     align-items: flex-start;
     background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
@@ -134,14 +134,14 @@ export const HOME_STYLES = `
   }
   @media (hover: hover) and (pointer: fine) {
     button.home-tab:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-    /* The selected tab keeps its accent under the pointer (see the dock). */
+    /* The selected tab keeps its high-contrast ink under the pointer (see the dock). */
     button.home-tab[aria-selected="true"]:not(:disabled):hover { color: var(--mc-accent); }
   }
   button.home-tab:not(:disabled):active { background: transparent; transform: scale(0.95); }
   /* Active tab: no box/pill fill — a flat text tab that reads as selected via
-     the cobalt accent (matching the sliding .tab-indicator underline and the
-     borderless dock highlight). Inactive tabs stay muted; alignment plus the
-     accent carry the state without any background. */
+     high-contrast neutral ink (matching the sliding .tab-indicator underline
+     and borderless dock highlight). Inactive tabs stay muted; alignment plus
+     contrast carry the state without any background. */
   button.home-tab[aria-selected="true"] { color: var(--mc-accent); }
   /* The underline glides between tabs on the snappy spring — critically damped
      (no overshoot), settling from the current position so rapid tab taps
@@ -230,7 +230,7 @@ export const HOME_STYLES = `
 
   /* Copy confirmation: the glyph flips to a success-green check, then back */
   button.copy-confirm, .hero-chip.copy-confirm .icon { color: var(--mc-positive); }
-  .copy-confirm .icon { animation: glyph-pop ${MOTION.tabMs}ms ${MOTION.pop} both; }
+  .copy-confirm .icon { animation: glyph-pop ${MOTION.tabMs}ms ${MOTION.ease} both; }
 
   /* Busy refresh controls spin their glyph until work settles */
   button[data-busy] .icon { animation: none; }

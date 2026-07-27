@@ -129,7 +129,7 @@ describe("sidepanel styles", () => {
   test("colors come only from skin tokens, never literals", () => {
     // The stylesheet ships zero colour hex literals: every colour is a skin
     // token referenced through var()/color-mix. The near-mono palette adds a
-    // recessed --mc-sunken tier; the single emerald signal is --mc-accent.
+    // recessed --mc-sunken tier; green/red are semantic tokens only.
     expect(SIDEPANEL_STYLES).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(SIDEPANEL_STYLES).toContain("var(--mc-accent)");
     expect(SIDEPANEL_STYLES).toContain("var(--mc-bg)");
@@ -160,18 +160,17 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/:\s*ease-in\b/);
   });
 
-  test("the single cobalt accent is reserved for signal, not every surface", () => {
-    // Restraint check: the accent drives the active dock item, the portfolio tab
-    // indicator, and focus — but resting neutral rows/tiles carry a neutral
-    // fill, so the accent stays a rare highlight.
+  test("neutral action emphasis is reserved for signal, not every surface", () => {
+    // Restraint check: the achromatic action token drives the active dock item,
+    // portfolio tab indicator, and focus — but resting rows/tiles remain quiet.
     expect(SIDEPANEL_STYLES).toMatch(/\.tab-indicator \{[^}]*background: var\(--mc-accent\)/s);
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
     );
     // The active portfolio tab (Tokens/Collectibles/Activity) reads as selected
-    // via accent TEXT plus the underline indicator — a flat text tab, never a
-    // pill/box. So the active home-tab declares the accent colour and NO home-tab
-    // rule paints a background fill.
+    // via high-contrast text plus the underline indicator — a flat text tab,
+    // never a pill/box. The active home-tab declares the action ink and no
+    // home-tab rule paints a background fill.
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.home-tab\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
     );
@@ -182,10 +181,9 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(/\.token-mark \{[^}]*background: var\(--mc-sunken\)/s);
   });
 
-  test("market and status semantics ride --mc-positive/--mc-danger, never the brand accent", () => {
-    // Gains, success, and sparkline direction are meaning, not brand: they read
-    // green/red from the semantic tokens so the accent can change hue without
-    // ever recoloring a market signal.
+  test("market and status semantics ride --mc-positive/--mc-danger, never action emphasis", () => {
+    // Gains, success, and sparkline direction are meaning, not decoration:
+    // they read green/red from the semantic tokens.
     expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".tx-status.accepted { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
@@ -249,23 +247,22 @@ describe("sidepanel styles", () => {
     // the redundant NFTs tile was dropped) to read as plain icons with labels
     // beneath, so the tile box treatment is gone: the resting tile has a
     // transparent fill and carries no hairline edge, no elevation shadow, and no
-    // boxy fixed min-height. Primary (Send) stays distinguishable through an
-    // accent-tinted ICON, never a filled accent box.
+    // boxy fixed min-height. Primary (Send) stays distinguishable through a
+    // high-contrast icon, never a filled box.
     expect(SIDEPANEL_STYLES).toMatch(/button\.action-tile \{[^}]*background: transparent/s);
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile \{[^}]*box-shadow/s);
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile \{[^}]*min-height/s);
-    // No filled primary box — the accent lives on the icon only.
+    // No filled primary box — emphasis lives on the icon only.
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile\.primary \{/);
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.action-tile\.primary \.tile-icon \{ color: var\(--mc-accent\)/,
     );
   });
 
-  test("the active dock item is an accent icon, never a background pill", () => {
-    // The dock highlights the active/focused item by tinting the icon itself
-    // emerald (inactive stays muted) — there is NO filled background highlight
-    // behind it and NO moving indicator pill. So the active nav-item declares a
-    // colour but no background, and the icon holder never paints a fill.
+  test("the active dock item uses neutral emphasis, never a background pill", () => {
+    // The dock highlights the active/focused item with high-contrast ink while
+    // inactive items stay muted. There is no filled background or moving
+    // indicator pill.
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
     );

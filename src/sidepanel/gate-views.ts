@@ -4,19 +4,52 @@
  * brand mark, a large heading, and a primary action pinned to the bottom.
  */
 import type { PendingApproval, WalletStatus } from "../popup/responses";
-import { escapeHtml } from "../shared/html";
+import { callout } from "../ui/content";
+import { actionLink, button } from "../ui/controls";
+import { checkboxField, selectField, textareaField, textField } from "../ui/fields";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
 import { icon } from "./icons";
 import { requiresMainnetAck } from "./mainnet-ack";
-import { networkOptions } from "./parts";
 
 const backupVerifyInputs = (): string =>
-  BACKUP_VERIFY_POSITIONS.map(
-    (position, index) =>
-      `<label><span>Word ${position}</span><input name="verify-${index}" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" /></label>`,
+  BACKUP_VERIFY_POSITIONS.map((position, index) =>
+    textField({
+      autocomplete: "off",
+      autocapitalize: "off",
+      inputmode: "text",
+      label: `Word ${position}`,
+      name: `verify-${index}`,
+      spellcheck: false,
+    }),
   ).join("");
 
 const gateBrand = (): string => `<div class="gate-brand">${icon("wallet")}</div>`;
+
+const networkField = (status: WalletStatus, name: string): string =>
+  selectField({
+    label: "Network",
+    name,
+    options: status.networks.map((network) => ({
+      label: network.name,
+      value: network.id,
+    })),
+    selected: status.networkId,
+  });
+
+const mainnetAcknowledgement = (
+  status: WalletStatus,
+  name: string,
+  id: string,
+  text: string,
+): string =>
+  checkboxField({
+    containerAttributes: {
+      id,
+      hidden: !requiresMainnetAck(status.networkId),
+    },
+    name,
+    text,
+  });
 
 /**
  * First-run screen: create a wallet from a fresh or pasted recovery phrase.
@@ -28,32 +61,65 @@ export const onboarding = (status: WalletStatus): string => `
       <h1>Create your wallet</h1>
       <p class="lede">Generate a fresh recovery phrase, or paste one you already have to import an existing wallet.</p>
     </div>
-    <a class="onboarding-launch" href="onboarding.html" target="_blank" rel="noopener">Open full-screen setup</a>
+    ${actionLink({
+      href: "onboarding.html",
+      label: "Open full-screen setup",
+      target: "_blank",
+    })}
     <form id="create-form" class="gate-form">
-      <label><span>Network</span><select name="networkId">${networkOptions(status)}</select></label>
-      <label><span>Recovery phrase</span>
-        <textarea name="mnemonic" required autocomplete="off" spellcheck="false" placeholder="12 or 24 words separated by spaces"></textarea>
-        <span class="hint">Anyone with these words controls the wallet. Store them offline.</span>
-      </label>
-      <button id="phrase-toggle" class="secondary small" type="button" hidden>${icon("book")}Tap to show phrase</button>
-      <label><span>Vault passphrase</span>
-        <input name="vaultPassphrase" type="password" minlength="12" required autocomplete="new-password" placeholder="At least 12 characters" />
-        <span class="hint">Unlocks the wallet on this device.</span>
-      </label>
+      ${networkField(status, "networkId")}
+      ${textareaField({
+        autocomplete: "off",
+        hint: "Anyone with these words controls the wallet. Store them offline.",
+        label: "Recovery phrase",
+        name: "mnemonic",
+        placeholder: "12 or 24 words separated by spaces",
+        required: true,
+        spellcheck: false,
+      })}
+      ${button({
+        attributes: { id: "phrase-toggle", hidden: true },
+        icon: "book",
+        label: "Tap to show phrase",
+        size: "small",
+        variant: "secondary",
+      })}
+      ${textField({
+        autocomplete: "new-password",
+        hint: "Unlocks the wallet on this device.",
+        label: "Vault passphrase",
+        minlength: 12,
+        name: "vaultPassphrase",
+        placeholder: "At least 12 characters",
+        required: true,
+        type: "password",
+      })}
       <p id="passphrase-result" role="status"></p>
       <div id="backup-verify" class="stack" hidden>
         <span class="hint">Confirm you saved the phrase by re-typing these words.</span>
         <div class="verify-grid">${backupVerifyInputs()}</div>
         <p id="verify-result" role="status"></p>
       </div>
-      <label id="mainnet-ack" class="hint"${requiresMainnetAck(status.networkId) ? "" : " hidden"}>
-        <input name="mainnetAck" type="checkbox" />
-        <span>You are creating a wallet on Starknet Mainnet with real funds.</span>
-      </label>
+      ${mainnetAcknowledgement(
+        status,
+        "mainnetAck",
+        "mainnet-ack",
+        "You are creating a wallet on Starknet Mainnet with real funds.",
+      )}
       <p id="form-result" role="status"></p>
       <div class="gate-cta">
-        <button id="generate-button" class="secondary" type="button" ${status.ready ? "" : "disabled"}>${icon("refresh")}Generate phrase</button>
-        <button type="submit" ${status.ready ? "" : "disabled"}>Create wallet</button>
+        ${button({
+          attributes: { id: "generate-button" },
+          disabled: !status.ready,
+          icon: "refresh",
+          label: "Generate phrase",
+          variant: "secondary",
+        })}
+        ${button({
+          disabled: !status.ready,
+          label: "Create wallet",
+          type: "submit",
+        })}
       </div>
     </form>
     ${ledgerSetupCard(status)}
@@ -70,18 +136,32 @@ const ledgerSetupCard = (status: WalletStatus): string => `
       <p class="eyebrow">Or set up with a Ledger</p>
       <p class="lede">Back this wallet with a Ledger hardware device. No recovery phrase is generated — your keys stay on the device.</p>
       <form id="ledger-setup-form" class="gate-form">
-        <label><span>Network</span><select name="ledgerNetworkId">${networkOptions(status)}</select></label>
-        <label><span>Vault passphrase</span>
-          <input name="ledgerVaultPassphrase" type="password" minlength="12" required autocomplete="new-password" placeholder="At least 12 characters" />
-          <span class="hint">Unlocks the wallet on this device. It protects the account list — no key material is stored.</span>
-        </label>
+        ${networkField(status, "ledgerNetworkId")}
+        ${textField({
+          autocomplete: "new-password",
+          hint: "Unlocks the wallet on this device. It protects the account list — no key material is stored.",
+          label: "Vault passphrase",
+          minlength: 12,
+          name: "ledgerVaultPassphrase",
+          placeholder: "At least 12 characters",
+          required: true,
+          type: "password",
+        })}
         <p id="ledger-passphrase-result" role="status"></p>
-        <label id="ledger-mainnet-ack" class="hint"${requiresMainnetAck(status.networkId) ? "" : " hidden"}>
-          <input name="ledgerMainnetAck" type="checkbox" />
-          <span>You are setting up a wallet on Starknet Mainnet with real funds.</span>
-        </label>
+        ${mainnetAcknowledgement(
+          status,
+          "ledgerMainnetAck",
+          "ledger-mainnet-ack",
+          "You are setting up a wallet on Starknet Mainnet with real funds.",
+        )}
         <div class="gate-cta">
-          <button id="ledger-setup-button" class="secondary" data-ledger-first-run type="button" ${status.ready ? "" : "disabled"}>${icon("shield")}Set up with a Ledger</button>
+          ${button({
+            attributes: { "data-ledger-first-run": true, id: "ledger-setup-button" },
+            disabled: !status.ready,
+            icon: "shield",
+            label: "Set up with a Ledger",
+            variant: "secondary",
+          })}
         </div>
       </form>
     </div>`;
@@ -100,17 +180,32 @@ export const locked = (status: WalletStatus, pending: readonly PendingApproval[]
     </div>
     ${
       request
-        ? `<div class="callout gate-request" role="status">
-            <span class="callout-icon">${icon("link")}</span>
-            <span class="callout-copy"><strong>Site request waiting</strong><p>${escapeHtml(request.origin)}</p></span>
-          </div>`
+        ? callout({
+            body: request.origin,
+            className: "gate-request",
+            icon: "link",
+            role: "status",
+            title: "Site request waiting",
+          })
         : ""
     }
     <form id="unlock-form" class="gate-form">
-      <label><span>Vault passphrase</span><input name="vaultPassphrase" type="password" minlength="12" required autocomplete="current-password" placeholder="Enter your passphrase" /></label>
+      ${textField({
+        autocomplete: "current-password",
+        label: "Vault passphrase",
+        minlength: 12,
+        name: "vaultPassphrase",
+        placeholder: "Enter your passphrase",
+        required: true,
+        type: "password",
+      })}
       <p id="form-result" role="status"></p>
       <div class="gate-cta">
-        <button type="submit" ${status.ready ? "" : "disabled"}>Unlock</button>
+        ${button({
+          disabled: !status.ready,
+          label: "Unlock",
+          type: "submit",
+        })}
       </div>
     </form>
   </main>`;

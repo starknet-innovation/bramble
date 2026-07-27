@@ -126,10 +126,10 @@ export const onboardingScenario: WalletScenario = {
       state: { mode: "import", verification: "not generated" },
     },
   ],
-  description: "Full-page first run, generated-backup verification, and existing-wallet import.",
+  description: "Full-screen first run, generated-backup verification, and existing-wallet import.",
   id: "onboarding",
   surface: "fullpage",
-  title: "Full-page onboarding",
+  title: "Full-screen onboarding",
 };
 
 export const unlockScenario: WalletScenario = {

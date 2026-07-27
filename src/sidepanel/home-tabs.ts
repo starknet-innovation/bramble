@@ -10,6 +10,9 @@ import { escapeHtml } from "../shared/html";
 import { friendlyNetworkError } from "../shared/network-error";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
+import { emptyState } from "../ui/content";
+import { button, iconButton } from "../ui/controls";
+import { menuRow } from "../ui/navigation";
 import { icon } from "./icons";
 import { type NftGalleryItem, nftImageMarkup, visibleNftItems } from "./nft-views";
 import type { BalanceState } from "./runtime";
@@ -77,15 +80,25 @@ export const transactionRow = (entry: ActivityEntry): string => `
       ${entry.status === "pending" ? `<span class="tx-hint">${escapeHtml(PENDING_TX_HINT)}</span>` : ""}
     </div>
     <span class="tx-status ${entry.status}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}"${entry.status === "pending" ? ` title="${escapeHtml(PENDING_TX_HINT)}"` : ""}>${escapeHtml(entry.status)}</span>
-    <button class="icon-button" data-copy="${escapeHtml(entry.hash)}" type="button" aria-label="Copy transaction hash" title="Copy transaction hash">${icon("copy")}</button>
+    ${iconButton({
+      attributes: { "data-copy": entry.hash },
+      icon: "copy",
+      label: "Copy transaction hash",
+    })}
   </li>`;
 
 // Renders the failed-load state with a friendly, actionable line and an
 // in-panel retry that re-runs the balance load (wired in ./index.ts).
 const tokensErrorPanel = (error: string): string => `
   <div class="panel-error">
-    <p class="empty">${escapeHtml(friendlyNetworkError(error) ?? error)}</p>
-    <button class="ghost small" data-reload-balances type="button" aria-label="Retry loading balances">${icon("refresh")}Try again</button>
+    ${emptyState(friendlyNetworkError(error) ?? error)}
+    ${button({
+      attributes: { "aria-label": "Retry loading balances", "data-reload-balances": true },
+      icon: "refresh",
+      label: "Try again",
+      size: "small",
+      variant: "ghost",
+    })}
   </div>`;
 
 const tokensPanel = (
@@ -101,7 +114,7 @@ const tokensPanel = (
     "error" in state
       ? tokensErrorPanel(state.error)
       : visible.length === 0
-        ? '<p class="empty">No tracked balances yet. Add or detect tokens to see them here.</p>'
+        ? emptyState("No tracked balances yet. Add or detect tokens to see them here.")
         : `<ul class="token-list">${visible
             .map((token) =>
               balanceRow(token, prices[token.address], changes[token.address], currency),
@@ -110,13 +123,21 @@ const tokensPanel = (
   }
     ${
       hiddenCount > 0
-        ? `<button class="menu-row" data-view="tokens" type="button"><span class="menu-copy"><strong>Hidden tokens</strong></span><span class="menu-value">${hiddenCount} hidden</span><span class="menu-chevron">${icon("chevronRight")}</span></button>`
+        ? menuRow({
+            attributes: { "data-view": "tokens" },
+            icon: "coins",
+            label: "Hidden tokens",
+            value: `${hiddenCount} hidden`,
+          })
         : ""
     }
     <p id="panel-result" role="status"></p>`;
 };
 
-const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
+/**
+ * Renders one compact collectible card for the home portfolio tab.
+ */
+export const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
   <li>
     <button class="collectible-card" data-nft-open="${escapeHtml(nft.id)}" type="button">
       <span class="collectible-art">${nftImageMarkup(nft, true, eager)}${icon("image")}</span>
@@ -137,10 +158,18 @@ const collectiblesPanel = (
   );
   return `${
     nfts.length === 0
-      ? '<p class="empty">No collectibles watched on this network yet. Add one you own from the gallery.</p>'
+      ? emptyState("No collectibles watched on this network yet. Add one you own from the gallery.")
       : `<ul class="collectible-grid">${nfts.map((nft, index) => collectibleCard(nft, index < 4)).join("")}</ul>`
   }
-    <button class="ghost small tab-more" data-view="nfts" type="button">Open gallery${icon("chevronRight")}</button>`;
+    ${button({
+      attributes: { "data-view": "nfts" },
+      className: "tab-more",
+      icon: "chevronRight",
+      iconPosition: "after",
+      label: "Open gallery",
+      size: "small",
+      variant: "ghost",
+    })}`;
 };
 
 const RECENT_ACTIVITY_LIMIT = 5;
@@ -166,15 +195,23 @@ const activityPanel = (
   historyUnavailable: boolean,
 ): string => {
   const recent = transactions.slice(0, RECENT_ACTIVITY_LIMIT);
-  return `${historyUnavailable ? `<p class="empty" role="status">${escapeHtml(HISTORY_UNAVAILABLE_HINT)}</p>` : ""}
+  return `${historyUnavailable ? emptyState(HISTORY_UNAVAILABLE_HINT, "status") : ""}
     ${
       recent.length === 0
-        ? `<p class="empty">${escapeHtml(activityEmptyCopy(historyUnavailable))}</p>`
+        ? emptyState(activityEmptyCopy(historyUnavailable))
         : `<ul class="tx-list">${recent.map(transactionRow).join("")}</ul>`
     }
     ${
       transactions.length > 0
-        ? `<button class="ghost small tab-more" data-view="activity" type="button">View all activity${icon("chevronRight")}</button>`
+        ? button({
+            attributes: { "data-view": "activity" },
+            className: "tab-more",
+            icon: "chevronRight",
+            iconPosition: "after",
+            label: "View all activity",
+            size: "small",
+            variant: "ghost",
+          })
         : ""
     }`;
 };
@@ -207,14 +244,34 @@ export const homeTabs = (
         <span class="tab-indicator" aria-hidden="true"></span>
       </div>
       <div class="tab-actions" data-tab-actions="tokens">
-        <button class="icon-button ghost" data-view="tokens" type="button" aria-label="Manage tokens" title="Manage tokens">${icon("plus")}</button>
-        <button id="refresh-button" class="icon-button ghost" data-reload-balances type="button" aria-label="Refresh balances" title="Refresh balances">${icon("refresh")}</button>
+        ${iconButton({
+          attributes: { "data-view": "tokens" },
+          icon: "plus",
+          label: "Manage tokens",
+          variant: "ghost",
+        })}
+        ${iconButton({
+          attributes: { "data-reload-balances": true, id: "refresh-button" },
+          icon: "refresh",
+          label: "Refresh balances",
+          variant: "ghost",
+        })}
       </div>
       <div class="tab-actions" data-tab-actions="collectibles" hidden>
-        <button class="icon-button ghost" data-view="nfts" type="button" aria-label="Manage collectibles" title="Manage collectibles">${icon("plus")}</button>
+        ${iconButton({
+          attributes: { "data-view": "nfts" },
+          icon: "plus",
+          label: "Manage collectibles",
+          variant: "ghost",
+        })}
       </div>
       <div class="tab-actions" data-tab-actions="activity" hidden>
-        <button class="icon-button ghost" data-view="activity" type="button" aria-label="Open full activity" title="Open full activity">${icon("activity")}</button>
+        ${iconButton({
+          attributes: { "data-view": "activity" },
+          icon: "activity",
+          label: "Open full activity",
+          variant: "ghost",
+        })}
       </div>
     </div>
     ${tabPanel("tokens", tokensPanel(state, preferences, prices, changes, currency))}

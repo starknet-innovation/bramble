@@ -6,7 +6,7 @@ import type { LabSurface, LabTheme } from "./types";
 const DESIGN_CONTRACT = `
 <!--
 THESIS: A precise review bench makes wallet state, motion, and trust boundaries inspectable.
-OWN-WORLD: MC Wallet Clean Mono; deep neutral surfaces, cobalt action, honest status colour.
+OWN-WORLD: MC Wallet Clean Mono; achromatic interaction, honest success and failure colour.
 STORY: Choose a scenario, inspect the wallet, step through its state machine, then leave feedback.
 FIRST VIEWPORT: The wallet frame and current checkpoint lead; controls and evidence sit beside it.
 FORM: A workbench, not a marketing page. Dense enough for review, quiet enough for concentration.
@@ -28,17 +28,23 @@ const reducedMotionCss = (reducedMotion: boolean): string =>
 const surfaceClass = (surface: LabSurface): string =>
   surface === "popup" ? "popup-surface" : surface === "fullpage" ? "onboarding-surface" : "";
 
-const frameHtml = (
+/**
+ * Builds an isolated document with the exact production wallet skin and
+ * stylesheet. Content and extra CSS must be trusted fixture/catalog constants;
+ * no live wallet or RPC data reaches this UI Lab boundary.
+ */
+export const walletFrameDocument = (
   content: string,
   surface: LabSurface,
   theme: LabTheme,
   reducedMotion: boolean,
+  extraStyles = "",
 ): string => `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>${skinCss(theme)}${SIDEPANEL_STYLES}${reducedMotionCss(reducedMotion)}</style>
+  <style>${skinCss(theme)}${SIDEPANEL_STYLES}${reducedMotionCss(reducedMotion)}${extraStyles}</style>
 </head>
 <body class="${surfaceClass(surface)}">
   ${DESIGN_CONTRACT}
@@ -63,7 +69,7 @@ export const loadWalletFrame = async (
   const loaded = new Promise<void>((resolve) => {
     walletFrame.addEventListener("load", () => resolve(), { once: true });
   });
-  walletFrame.srcdoc = frameHtml(content, surface, theme, reducedMotion);
+  walletFrame.srcdoc = walletFrameDocument(content, surface, theme, reducedMotion);
   await loaded;
   const document = walletFrame.contentDocument;
   const app = document?.querySelector<HTMLElement>("#app");
