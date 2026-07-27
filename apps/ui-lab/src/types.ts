@@ -1,6 +1,6 @@
 import type { WalletView } from "../../../src/sidepanel/views";
 
-export type LabSurface = "popup" | "sidepanel";
+export type LabSurface = "fullpage" | "popup" | "sidepanel";
 export type LabTheme = "dark" | "light";
 
 export type LabEvent = {

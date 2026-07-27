@@ -49,6 +49,13 @@ describe("onboarding gate view", () => {
     expect(html).toContain("No recovery phrase is generated");
   });
 
+  test("offers the dedicated full-screen setup from the side-panel fallback", () => {
+    const html = onboarding(status);
+
+    expect(html).toContain('href="onboarding.html"');
+    expect(html).toContain("Open full-screen setup");
+  });
+
   test("hides the Ledger mainnet acknowledgement off Mainnet", () => {
     const sepolia: WalletStatus = {
       ...status,

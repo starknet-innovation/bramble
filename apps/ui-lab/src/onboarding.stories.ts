@@ -24,14 +24,14 @@ export const ImportExisting = checkpointStory(
   "onboarding",
   "import-existing",
 );
-export const ReturningLocked = checkpointStory("Returning wallet · locked", "onboarding", "locked");
+export const ReturningLocked = checkpointStory("Returning wallet · locked", "unlock", "locked");
 export const RequestWaiting = checkpointStory(
   "Returning wallet · request waiting",
-  "onboarding",
+  "unlock",
   "locked-request",
 );
 export const UnlockFailed = checkpointStory(
   "Returning wallet · unlock failed",
-  "onboarding",
+  "unlock",
   "unlock-failed",
 );

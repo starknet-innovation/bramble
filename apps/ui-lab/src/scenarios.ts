@@ -27,7 +27,11 @@ import {
 import { walletDashboard } from "./scenario-dashboard";
 import { messageType, nextTurn, updateForm } from "./scenario-runtime";
 import { approvalsScenario } from "./scenarios-approvals";
-import { ledgerOnboardingScenario, onboardingScenario } from "./scenarios-onboarding";
+import {
+  ledgerOnboardingScenario,
+  onboardingScenario,
+  unlockScenario,
+} from "./scenarios-onboarding";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
 import { assetsScenario, portfolioScenario, settingsScenario } from "./scenarios-wallet";
@@ -415,6 +419,7 @@ const multisigScenario: WalletScenario = {
 
 export const walletScenarios: readonly WalletScenario[] = [
   onboardingScenario,
+  unlockScenario,
   portfolioScenario,
   sendScenario,
   swapScenario,

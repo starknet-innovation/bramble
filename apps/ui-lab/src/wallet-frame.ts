@@ -25,6 +25,9 @@ const reducedMotionCss = (reducedMotion: boolean): string =>
     ? "*,:before,:after{animation-duration:0.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:0.01ms!important;}"
     : "";
 
+const surfaceClass = (surface: LabSurface): string =>
+  surface === "popup" ? "popup-surface" : surface === "fullpage" ? "onboarding-surface" : "";
+
 const frameHtml = (
   content: string,
   surface: LabSurface,
@@ -37,7 +40,7 @@ const frameHtml = (
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>${skinCss(theme)}${SIDEPANEL_STYLES}${reducedMotionCss(reducedMotion)}</style>
 </head>
-<body class="${surface === "popup" ? "popup-surface" : ""}">
+<body class="${surfaceClass(surface)}">
   ${DESIGN_CONTRACT}
   <main id="app"><section class="shell">${content}</section></main>
   <div id="toast-stack" class="toast-stack" aria-live="polite"></div>

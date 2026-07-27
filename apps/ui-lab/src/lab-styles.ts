@@ -110,7 +110,7 @@ export const LAB_STYLES = `
     display: flex;
     gap: 20px;
     justify-content: space-between;
-    max-width: 760px;
+    max-width: 960px;
     width: 100%;
   }
   .stage-copy { display: grid; gap: 4px; min-width: 0; }
@@ -163,6 +163,7 @@ export const LAB_STYLES = `
   }
   .wallet-device[data-surface="sidepanel"] { height: 760px; width: 400px; }
   .wallet-device[data-surface="popup"] { height: 600px; width: 380px; }
+  .wallet-device[data-surface="fullpage"] { height: 800px; width: 960px; }
   .wallet-frame {
     background: #0b0e13;
     border: 0;
@@ -177,7 +178,6 @@ export const LAB_STYLES = `
     left: 50%;
     position: absolute;
     transform: translateX(-50%);
-  }
   .lab-rail { display: grid; gap: 12px; min-width: 0; }
   .lab-card {
     background: var(--lab-panel);
@@ -205,7 +205,7 @@ export const LAB_STYLES = `
     border-radius: 10px;
     display: grid;
     gap: 3px;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     padding: 3px;
   }
   .lab-segment button { background: transparent; border-color: transparent; font-size: 11px; }

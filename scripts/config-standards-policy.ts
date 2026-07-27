@@ -40,6 +40,7 @@ export const PINNED_RUNTIME_FILES = [
   "ledger-grant.html",
   "ledger-grant/index.js",
   "manifest.json",
+  "onboarding.html",
   "popup.html",
   "provider/inpage.js",
   "sidepanel.html",

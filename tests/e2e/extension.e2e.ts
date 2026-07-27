@@ -23,6 +23,26 @@ test("loads the built extension and renders side panel onboarding", async ({ ext
   await expect(sidepanel.locator('select[name="networkId"]')).toHaveValue("SN_MAIN");
 });
 
+test("loads the dedicated full-screen onboarding surface", async ({ extension }) => {
+  const onboarding = await extension.openExtensionPage("onboarding.html");
+
+  await expect(onboarding.locator("body")).toHaveClass("onboarding-surface");
+  await expect(onboarding.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
+  await expect(onboarding.getByRole("link", { name: "Open full-screen setup" })).toBeHidden();
+});
+
+test("completes an imported wallet in full-screen onboarding", async ({ extension }) => {
+  const onboarding = await extension.openExtensionPage("onboarding.html");
+
+  await onboarding.locator('textarea[name="mnemonic"]').fill(IMPORT_MNEMONIC);
+  await onboarding.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
+  await onboarding.locator('input[name="mainnetAck"]').check();
+  await onboarding.getByRole("button", { name: "Create wallet" }).click();
+
+  await expect(onboarding.getByRole("heading", { name: "Your wallet is ready" })).toBeVisible();
+  await expect(onboarding.getByRole("button", { name: "Open wallet" })).toBeVisible();
+});
+
 test("loads the built toolbar popup surface", async ({ extension }) => {
   const popup = await extension.openExtensionPage("popup.html");
 

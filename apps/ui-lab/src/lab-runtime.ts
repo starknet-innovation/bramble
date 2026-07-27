@@ -70,7 +70,7 @@ const labMarkup = (selectedId: string): string => `
       </div>
     </header>
     <div class="lab-main">
-      <section class="lab-stage" aria-labelledby="lab-stage-title">
+      <section class="lab-stage" aria-labelledby="lab-stage-title" tabindex="0">
         <div class="stage-heading">
           <div class="stage-copy">
             <h1 id="lab-stage-title" data-lab-title></h1>
@@ -108,6 +108,7 @@ const labMarkup = (selectedId: string): string => `
             <div class="lab-field">
               <span>Surface preset</span>
               <div class="lab-segment" data-lab-surface>
+                <button data-surface="fullpage" type="button">960 × 800</button>
                 <button data-surface="sidepanel" type="button">400 × 760</button>
                 <button data-surface="popup" type="button">380 × 600</button>
               </div>
@@ -277,7 +278,11 @@ export const createUiLab = (options: UiLabOptions): HTMLElement => {
     required<HTMLButtonElement>(root, "[data-lab-pause]").disabled = !playing;
     device.dataset["surface"] = surface;
     deviceLabel.textContent =
-      surface === "popup" ? "TOOLBAR POPUP · 380 × 600" : "SIDE PANEL · 400 × 760";
+      surface === "fullpage"
+        ? "ONBOARDING TAB · 960 × 800"
+        : surface === "popup"
+          ? "TOOLBAR POPUP · 380 × 600"
+          : "SIDE PANEL · 400 × 760";
   };
 
   const renderCheckpointList = (): void => {
@@ -418,7 +423,7 @@ export const createUiLab = (options: UiLabOptions): HTMLElement => {
       return;
     }
     const nextSurface = target.dataset["surface"];
-    if (nextSurface === "popup" || nextSurface === "sidepanel") {
+    if (nextSurface === "fullpage" || nextSurface === "popup" || nextSurface === "sidepanel") {
       surface = nextSurface;
       void render();
       return;
