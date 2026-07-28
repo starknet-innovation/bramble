@@ -26,6 +26,7 @@ import {
 } from "./fixtures";
 import { walletDashboard } from "./scenario-dashboard";
 import { updateForm } from "./scenario-runtime";
+import { multisigReviewCheckpoints, showSharedTab } from "./scenarios-multisig-review";
 import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "./types";
 
 const multisigCheckpoint = (
@@ -60,11 +61,6 @@ const executedProposal: MultisigProposalRecord = {
   state: "executed",
   summary: "Completed research payment",
   txId: "0x903",
-};
-
-const openIndependentReview = (context: FrameContext): void => {
-  const panel = context.app.querySelector<HTMLElement>("[data-ms-review-panel]");
-  if (panel) panel.hidden = false;
 };
 
 const showAdvancedProposal = (context: FrameContext): void => {
@@ -114,16 +110,6 @@ const showDeploymentRules = (context: FrameContext): void => {
 const openSharedAccountDrawer = (context: FrameContext): void => {
   const drawer = context.app.querySelector<HTMLElement>(".drawer-root");
   if (drawer) drawer.dataset["open"] = "true";
-};
-
-const showSharedTab = (context: FrameContext, selected: string): void => {
-  context.app.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((tab) => {
-    tab.setAttribute("aria-selected", String(tab.dataset["msHomeTab"] === selected));
-  });
-  context.app.querySelectorAll<HTMLElement>("[data-ms-home-panel]").forEach((panel) => {
-    const target = panel;
-    target.hidden = target.dataset["msHomePanel"] !== selected;
-  });
 };
 
 const showSharedCollectibles = (context: FrameContext): void =>
@@ -214,26 +200,7 @@ export const multisigScenario: WalletScenario = {
       prepare: openSharedAccountDrawer,
       state: { accountType: "shared", openProposals: 1, quorum: 2 },
     },
-    {
-      content: () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [pendingProposal],
-          false,
-          "current",
-          preferences,
-          "multisig-home",
-          portfolio,
-        ),
-      id: "independent-review",
-      label: "Independent proposal review",
-      narrative:
-        "The QR carries the proposal id; the canonical public package supports offline copy/paste decoding.",
-      prepare: openIndependentReview,
-      state: { networkAccess: false, package: "secret-free", verification: "compare proposal id" },
-    },
+    ...multisigReviewCheckpoints(portfolio),
     multisigCheckpoint(
       "receive",
       "Receive to shared account",

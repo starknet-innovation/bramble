@@ -13,11 +13,6 @@ export const Watch = checkpointStory("Watch multisig", "multisig", "watch");
 export const Proposal = checkpointStory("Proposal detail", "multisig", "proposal");
 export const Collectibles = checkpointStory("Shared collectibles", "multisig", "collectibles");
 export const AccountDrawer = checkpointStory("Shared account drawer", "multisig", "drawer");
-export const IndependentReview = checkpointStory(
-  "Independent review",
-  "multisig",
-  "independent-review",
-);
 export const Receive = checkpointStory("Receive to shared account", "multisig", "receive");
 export const Signers = checkpointStory("Signers and quorum", "multisig", "signers");
 export const Track = checkpointStory("Track shared proposal", "multisig", "track");

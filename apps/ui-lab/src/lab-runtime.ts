@@ -113,7 +113,7 @@ const labMarkup = (selectedId: string): string => `
             </div>
             <div>
               <h3>State</h3>
-              <pre class="state-view" data-lab-state></pre>
+              <pre class="state-view" data-lab-state tabindex="0"></pre>
             </div>
           </div>
         </section>
