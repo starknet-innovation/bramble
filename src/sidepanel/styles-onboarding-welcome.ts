@@ -1,6 +1,6 @@
 /**
  * Welcome-screen motion separated from the onboarding form system. The pulse
- * and orbiting sparks are restrained, framework-free adaptations of Amicro
+ * and orbital choreography are restrained, framework-free adaptations of Amicro
  * motion ideas; see THIRD_PARTY_NOTICES.md.
  */
 import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "../ui/tokens";
@@ -25,8 +25,11 @@ export const ONBOARDING_WELCOME_STYLES = `
     width: min(100%, 330px);
   }
   .orbit-field {
-    --orbit-inner-size: 206px;
+    --orbit-core-size: 146px;
+    --orbit-inner-size: 178px;
+    --orbit-middle-size: 214px;
     --orbit-outer-size: 286px;
+    --orbit-wide-size: 250px;
     height: 330px;
     position: relative;
     width: 330px;
@@ -43,13 +46,25 @@ export const ONBOARDING_WELCOME_STYLES = `
     height: var(--orbit-outer-size);
     width: var(--orbit-outer-size);
   }
+  .orbit-ring-wide {
+    height: var(--orbit-wide-size);
+    width: var(--orbit-wide-size);
+  }
+  .orbit-ring-middle {
+    height: var(--orbit-middle-size);
+    width: var(--orbit-middle-size);
+  }
   .orbit-ring-inner {
     height: var(--orbit-inner-size);
     width: var(--orbit-inner-size);
   }
+  .orbit-ring-core {
+    height: var(--orbit-core-size);
+    width: var(--orbit-core-size);
+  }
   .orbit-track {
     --orbit-delay: 0ms;
-    --orbit-duration: 24s;
+    --orbit-duration: 600s;
     animation: onboarding-track-orbit var(--orbit-duration) linear var(--orbit-delay) infinite;
     border-radius: ${RADIUS.full};
     height: var(--orbit-outer-size);
@@ -59,17 +74,32 @@ export const ONBOARDING_WELCOME_STYLES = `
     top: 50%;
     width: var(--orbit-outer-size);
   }
+  .orbit-track-wide {
+    height: var(--orbit-wide-size);
+    width: var(--orbit-wide-size);
+  }
+  .orbit-track-middle {
+    height: var(--orbit-middle-size);
+    width: var(--orbit-middle-size);
+  }
   .orbit-track-inner {
-    --orbit-duration: 18s;
     height: var(--orbit-inner-size);
     width: var(--orbit-inner-size);
   }
-  .orbit-track-b { --orbit-delay: -12s; }
-  .orbit-track-c { --orbit-delay: -4.5s; }
-  .orbit-track-d { --orbit-delay: -13.5s; }
-  .orbit-track-spark-a { --orbit-delay: -6s; --orbit-duration: 16s; }
-  .orbit-track-spark-b { --orbit-delay: -13s; --orbit-duration: 20s; }
-  .orbit-node, .orbit-spark {
+  .orbit-track-core {
+    height: var(--orbit-core-size);
+    width: var(--orbit-core-size);
+  }
+  .orbit-track-reverse {
+    animation-name: onboarding-track-orbit-reverse;
+  }
+  .orbit-track-outer-b { --orbit-delay: -300s; }
+  .orbit-track-wide-a { --orbit-delay: -450s; }
+  .orbit-track-middle-a { --orbit-delay: -33.33s; }
+  .orbit-track-middle-b { --orbit-delay: -333.33s; }
+  .orbit-track-inner-a { --orbit-delay: -116.67s; }
+  .orbit-track-core-a { --orbit-delay: -183.33s; }
+  .orbit-node {
     left: 100%;
     position: absolute;
     top: 50%;
@@ -86,15 +116,17 @@ export const ONBOARDING_WELCOME_STYLES = `
     justify-content: center;
     width: 42px;
   }
-  .orbit-node .icon { height: 17px; width: 17px; }
-  .orbit-spark {
-    background: var(--mc-text);
-    border-radius: ${RADIUS.full};
-    height: 6px;
-    width: 6px;
+  .orbit-track-reverse .orbit-node-surface {
+    animation-name: onboarding-counter-orbit-reverse;
   }
+  .orbit-track-core .orbit-node-surface {
+    height: 32px;
+    width: 32px;
+  }
+  .orbit-node .icon { height: 17px; width: 17px; }
+  .orbit-track-core .icon { height: 14px; width: 14px; }
   .orbit-pulse {
-    animation: onboarding-concentric-pulse ${MOTION.waitLoopMs}ms var(--ease-out) infinite;
+    animation: onboarding-concentric-pulse ${MOTION.onboardingPulseMs}ms var(--ease-out) infinite;
     border-radius: ${RADIUS.full};
     box-shadow: 0 0 0 1px var(--mc-hairline-strong);
     height: 104px;
@@ -149,9 +181,17 @@ export const ONBOARDING_WELCOME_STYLES = `
     from { transform: translate(-50%, -50%) rotate(0deg); }
     to { transform: translate(-50%, -50%) rotate(360deg); }
   }
+  @keyframes onboarding-track-orbit-reverse {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(-360deg); }
+  }
   @keyframes onboarding-counter-orbit {
     from { transform: rotate(0deg); }
     to { transform: rotate(-360deg); }
+  }
+  @keyframes onboarding-counter-orbit-reverse {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
   @keyframes onboarding-concentric-pulse {
     0% { opacity: 0.42; transform: translate(-50%, -50%) scale(1); }
@@ -166,11 +206,12 @@ export const ONBOARDING_WELCOME_STYLES = `
   @media (prefers-reduced-motion: reduce) {
     .orbit-track, .orbit-node-surface, .orbit-pulse { animation: none; }
     .orbit-pulse { display: none; }
-    .orbit-track { transform: translate(-50%, -50%) rotate(0deg); }
-    .orbit-track-b { transform: translate(-50%, -50%) rotate(180deg); }
-    .orbit-track-c { transform: translate(-50%, -50%) rotate(90deg); }
-    .orbit-track-d { transform: translate(-50%, -50%) rotate(270deg); }
-    .orbit-track-spark-a { transform: translate(-50%, -50%) rotate(45deg); }
-    .orbit-track-spark-b { transform: translate(-50%, -50%) rotate(225deg); }
+    .orbit-track-outer-a { transform: translate(-50%, -50%) rotate(18deg); }
+    .orbit-track-outer-b { transform: translate(-50%, -50%) rotate(198deg); }
+    .orbit-track-wide-a { transform: translate(-50%, -50%) rotate(322deg); }
+    .orbit-track-middle-a { transform: translate(-50%, -50%) rotate(92deg); }
+    .orbit-track-middle-b { transform: translate(-50%, -50%) rotate(272deg); }
+    .orbit-track-inner-a { transform: translate(-50%, -50%) rotate(148deg); }
+    .orbit-track-core-a { transform: translate(-50%, -50%) rotate(0deg); }
   }
 `;

@@ -22,6 +22,11 @@ export const ChooseMethod = checkpointStory(
   "ledger-onboarding",
   "method",
 );
+export const ChooseMultisig = checkpointStory(
+  "Add account · choose Multisig",
+  "ledger-onboarding",
+  "method-multisig",
+);
 export const ChooseDevice = checkpointStory(
   "Add account · choose device",
   "ledger-onboarding",

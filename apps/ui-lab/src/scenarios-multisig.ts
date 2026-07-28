@@ -1,4 +1,5 @@
 import {
+  multisigAddFlow,
   multisigReceiveFlow,
   multisigSignersFlow,
   multisigTrackFlow,
@@ -127,6 +128,13 @@ const portfolio = {
 
 export const multisigScenario: WalletScenario = {
   checkpoints: [
+    multisigCheckpoint(
+      "add",
+      "Add a Multisig account",
+      "Create and add-existing are separate tasks with explicit membership semantics.",
+      () => multisigAddFlow(statusFor(), softwareAccount),
+      { choices: ["create", "add-existing"], membershipChange: false },
+    ),
     multisigCheckpoint(
       "list",
       "Watched multisigs",
@@ -386,6 +394,7 @@ export const multisigScenario: WalletScenario = {
   title: "Multisig operations",
   views: [
     "multisigs",
+    "multisig-add",
     "multisig-watch",
     "multisig-home",
     "multisig-detail",

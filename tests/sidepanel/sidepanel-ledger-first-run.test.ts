@@ -211,19 +211,23 @@ const entryHarness = () => {
     loadStatus: () => Promise.resolve(mainnetStatus),
   } as unknown as SidepanelWallet;
   let refreshed = 0;
+  let multisigs = 0;
   const entry = createLedgerOnboardEntry({
     addHd: () => Promise.resolve(),
     cache,
     connector,
     mount,
     openImport: () => undefined,
+    openMultisig: () => {
+      multisigs += 1;
+    },
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
     },
     wallet,
   });
-  return { added, created, entry, mount, refreshed: () => refreshed };
+  return { added, created, entry, mount, multisigs: () => multisigs, refreshed: () => refreshed };
 };
 
 describe("createLedgerOnboardEntry", () => {
@@ -253,6 +257,18 @@ describe("createLedgerOnboardEntry", () => {
     h.entry.startAddAccount();
 
     expect(h.mount.hidden).toBe(false);
+  });
+
+  test("routes the confirmed Multisig choice through the shared entry", () => {
+    const h = entryHarness();
+    h.entry.startAddAccount();
+
+    click(h.mount, '[data-add-kind="multisig"]');
+    expect(h.multisigs()).toBe(0);
+    click(h.mount, "[data-add-continue]");
+
+    expect(h.mount.hidden).toBe(true);
+    expect(h.multisigs()).toBe(1);
   });
 
   test("the add-to-existing trigger adds a keyless account without a passphrase", async () => {

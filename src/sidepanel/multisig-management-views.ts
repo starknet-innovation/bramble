@@ -10,9 +10,41 @@ import type { AccountRef } from "../storage/vault-schema";
 import { emptyState, receipt } from "../ui/content";
 import { button } from "../ui/controls";
 import { textField } from "../ui/fields";
+import { menuRow } from "../ui/navigation";
 import { multisigDisplayName, multisigSignerRow } from "./multisig-views";
 import { accountLabel, copyButton, flowHeader, flowScreen, noAccountEmpty } from "./parts";
 import { qrSvg } from "./qr";
+
+/**
+ * Renders the shared-account gateway reached from Add account. Creating
+ * deploys a new multisig; adding an existing one verifies on-chain that the
+ * active account is already a signer and never changes contract membership.
+ */
+export const multisigAddFlow = (status: WalletStatus, account: AccountRef | null): string =>
+  flowHeader("Multisig Account", status, "Choose how to add a shared account") +
+  flowScreen(
+    "multisig-add",
+    `<section class="section">
+      ${account ? "" : noAccountEmpty(status)}
+      <div class="menu-list multisig-add-options" role="group" aria-label="Multisig account setup">
+        ${menuRow({
+          attributes: { "data-view": "multisig-deploy" },
+          icon: "users",
+          label: "Create a new multisig",
+          supportingText:
+            "Choose signers and an approval threshold, then deploy the shared account.",
+        })}
+        ${menuRow({
+          attributes: { "data-view": "multisig-watch" },
+          icon: "search",
+          label: "Add an existing multisig",
+          supportingText:
+            "Verify and add a deployed shared account where this account is already a signer.",
+        })}
+      </div>
+      <p class="hint">Adding an existing multisig does not change its signers. Membership changes require an on-chain proposal.</p>
+    </section>`,
+  );
 
 /**
  * Renders watch-by-address as a focused membership verification task.

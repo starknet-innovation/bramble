@@ -26,6 +26,7 @@ export type HomeUiDeps = {
   readonly setHomeTab: (tab: HomeTab) => void;
   readonly networkId: () => string;
   readonly render: (status: WalletStatus) => Promise<void>;
+  readonly startAddAccount?: () => void;
   readonly wallet: SidepanelWallet;
 };
 
@@ -254,28 +255,8 @@ const bindDrawer = (deps: HomeUiDeps): void => {
 
   const addButton = root.querySelector<HTMLButtonElement>("#drawer-add-account");
   addButton?.addEventListener("click", () => {
-    buttonBusy(addButton, true);
-    // When a specific folder chip is active, the new account joins it; on "All"
-    // (no filter) it stays ungrouped. The filter is captured before the async
-    // hop so a concurrent repaint cannot change which folder is targeted.
-    const targetGroup = deps.drawerGroupFilter();
-    void deps.wallet
-      .addAccount(deps.networkId())
-      .then(async (accountId) => {
-        if (targetGroup) {
-          await deps.wallet.setAccountInGroup(accountId, targetGroup, true);
-        }
-      })
-      .then(
-        async () => {
-          showToast("Account added", "success");
-          await deps.render(await deps.wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Add account failed"), "error");
-          buttonBusy(addButton, false);
-        },
-      );
+    deps.setDrawerOpen(false);
+    deps.startAddAccount?.();
   });
 
   bindDrawerDrag(root, deps.drawerOpen, () => setOpen(false, false));

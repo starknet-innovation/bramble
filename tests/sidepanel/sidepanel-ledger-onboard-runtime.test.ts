@@ -74,6 +74,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
   let cancels = 0;
   let hdAdds = 0;
   let imports = 0;
+  let multisigs = 0;
   const connector: LedgerConnector = {
     openConnected: () => Promise.resolve(null),
     request: () => Promise.resolve({ client: enumerateClient, close: () => Promise.resolve() }),
@@ -98,6 +99,9 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     openImport: () => {
       imports += 1;
     },
+    openMultisig: () => {
+      multisigs += 1;
+    },
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
@@ -115,6 +119,7 @@ const mountRuntime = (overrides: Partial<LedgerOnboardRuntimeDeps> = {}) => {
     cancels: () => cancels,
     hdAdds: () => hdAdds,
     imports: () => imports,
+    multisigs: () => multisigs,
     mount,
     refreshed: () => refreshed,
     runtime,
@@ -288,22 +293,34 @@ describe("Ledger onboarding runtime (DOM)", () => {
     expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
 
-    // "Connect a Ledger" transitions the same overlay to the connect prompt.
+    expect(h.mount.querySelector('[data-add-kind="multisig"]')).not.toBeNull();
+
+    // Selection stays reversible until Continue confirms the route.
     click(h.mount, '[data-add-kind="ledger"]');
+    expect(h.mount.querySelector("[data-ledger-onboard-connect]")).toBeNull();
+    click(h.mount, "[data-add-continue]");
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
 
     // "Import a private key" dismisses the overlay and routes to the import form.
     h.runtime.startAddAccount();
     click(h.mount, '[data-add-kind="import"]');
+    click(h.mount, "[data-add-continue]");
     expect(h.mount.hidden).toBe(true);
     expect(h.imports()).toBe(1);
 
     // "New account" derives an HD account, then dismisses on success.
     h.runtime.startAddAccount();
     click(h.mount, '[data-add-kind="hd"]');
+    click(h.mount, "[data-add-continue]");
     await tick();
     expect(h.hdAdds()).toBe(1);
     expect(h.mount.hidden).toBe(true);
     expect(h.refreshed()).toBe(1);
+
+    h.runtime.startAddAccount();
+    click(h.mount, '[data-add-kind="multisig"]');
+    click(h.mount, "[data-add-continue]");
+    expect(h.mount.hidden).toBe(true);
+    expect(h.multisigs()).toBe(1);
   });
 });

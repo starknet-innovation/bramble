@@ -98,7 +98,11 @@ const mount = (html: string, multisig: MultisigUiDeps["multisig"]): HTMLElement 
 describe("guided Multisig actions", () => {
   test("derives an ERC-20 transfer from the familiar recipient and amount flow", async () => {
     const proposals: unknown[] = [];
-    const app = mount(multisigProposeFlow(status, record, preferences, portfolio), {
+    const flow = multisigProposeFlow(status, record, preferences, portfolio);
+    expect(flow).toMatch(
+      /<dt>Network<\/dt><dd class="network-inline-value">[\s\S]*?class="token-logo"/,
+    );
+    const app = mount(flow, {
       async proposeTransaction(value) {
         proposals.push(value);
         return "0xaaa";

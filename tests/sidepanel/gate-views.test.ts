@@ -23,9 +23,11 @@ describe("onboarding gate view", () => {
     expect(html).toContain('id="create-new-button"');
     expect(html).toContain('id="add-existing-button"');
     expect(html).toContain('class="orbit-field"');
-    expect(html.match(/class="orbit-track/g)?.length).toBe(6);
+    expect(html.match(/class="orbit-ring/g)?.length).toBe(5);
+    expect(html.match(/class="orbit-track/g)?.length).toBe(7);
+    expect(html.match(/orbit-track-reverse/g)?.length).toBe(2);
     expect(html.match(/class="orbit-pulse/g)?.length).toBe(3);
-    expect(html.match(/class="orbit-spark/g)?.length).toBe(2);
+    expect(html).not.toContain("orbit-spark");
     expect(html).not.toContain('href="onboarding.html"');
   });
 

@@ -10,15 +10,7 @@
  * ./sidepanel-groups-ui.test.ts.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import {
-  acctA,
-  click,
-  group,
-  mount,
-  newAccountId,
-  registerDom,
-  unregisterDom,
-} from "../support/groups-harness";
+import { acctA, click, group, mount, registerDom, unregisterDom } from "../support/groups-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -122,7 +114,7 @@ describe("account drawer folder picker", () => {
     ).toBe(true);
   });
 
-  test("Add account joins the active folder chip", async () => {
+  test("Add account opens the shared chooser instead of deriving inside the drawer", async () => {
     const harness = mount([group("briefcase", "work", "Work")], "drawer");
 
     click(harness.container.querySelector('[data-group-filter="work"]'));
@@ -130,20 +122,19 @@ describe("account drawer folder picker", () => {
     click(harness.container.querySelector("#drawer-add-account"));
     await harness.tick();
 
-    expect(harness.calls.addAccount).toEqual(["SN_MAIN"]);
-    expect(harness.calls.setAccountInGroup).toEqual([[newAccountId, "work", true]]);
-    expect(harness.groups()[0]?.accountIds).toContain(newAccountId);
+    expect(harness.calls.startAddAccount).toBe(1);
+    expect(harness.calls.addAccount).toEqual([]);
+    expect(harness.calls.setAccountInGroup).toEqual([]);
   });
 
-  test("Add account joins no folder when the filter is All", async () => {
+  test("Add account uses the same chooser when the filter is All", async () => {
     const harness = mount([group("briefcase", "work", "Work")], "drawer");
 
-    // No chip active (All): the new account stays ungrouped.
     click(harness.container.querySelector("#drawer-add-account"));
     await harness.tick();
 
-    expect(harness.calls.addAccount).toEqual(["SN_MAIN"]);
+    expect(harness.calls.startAddAccount).toBe(1);
+    expect(harness.calls.addAccount).toEqual([]);
     expect(harness.calls.setAccountInGroup).toEqual([]);
-    expect(harness.groups()[0]?.accountIds).not.toContain(newAccountId);
   });
 });

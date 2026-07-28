@@ -14,11 +14,11 @@
  */
 import { escapeHtml } from "../../shared/html";
 import { emptyState, pill } from "../../ui/content";
-import { button } from "../../ui/controls";
+import { button, iconButton } from "../../ui/controls";
 import { menuRow } from "../../ui/navigation";
 import { icon } from "../icons";
 import { accountLabel } from "../parts";
-import type { LedgerCandidate } from "./onboard-session";
+import type { LedgerCandidate, LedgerOnboardAddKind } from "./onboard-session";
 import type { LedgerDeviceChoice } from "./sign-session";
 
 // The dismiss control rendered in every onboarding state so the full-screen
@@ -44,39 +44,48 @@ const onboardHero = (chip: string, head: string, actions: string): string => `
   </div>`;
 
 /**
- * The add-account chooser: three explicit routes so a Ledger add is never
- * misrouted into recovery-phrase derivation. Each row carries a `data-add-kind`
- * the binder dispatches on. Rendered in the centred overlay shell so it reads as
- * a deliberate first step of the add-account flow.
+ * The shared add-account chooser used by both the account drawer and Manage
+ * accounts. Selection and confirmation are separate so a user can compare all
+ * four signer models before committing to one route.
  */
-export const addAccountChooser = (): string => `
-  <div class="onboard-hero">
-    <div class="gate-head">
-      <h1>Add an account</h1>
-      <p class="lede">Choose how to add an account to this wallet.</p>
-    </div>
+export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null): string => {
+  const option = (
+    kind: LedgerOnboardAddKind,
+    iconName: "link" | "shield" | "users" | "wallet",
+    label: string,
+    supportingText: string,
+  ): string => `
+    <button class="add-account-option" data-add-kind="${kind}" type="button" aria-pressed="${selected === kind}">
+      <span class="add-account-option-icon">${icon(iconName)}</span>
+      <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
+      <span class="add-account-option-check">${icon("check")}</span>
+    </button>`;
+  return `
+  <div class="onboard-hero add-account-hero">
+    <header class="add-account-header">
+      <h1>Add a new account</h1>
+      ${iconButton({
+        attributes: { "data-ledger-onboard-cancel": true },
+        icon: "x",
+        label: "Close Add account",
+        variant: "ghost",
+      })}
+    </header>
     <div class="add-account-chooser" role="group" aria-label="Add an account">
-      ${menuRow({
-        attributes: { "data-add-kind": "hd" },
-        icon: "plus",
-        label: "New account",
-        supportingText: "Derive the next account from your recovery phrase.",
-      })}
-      ${menuRow({
-        attributes: { "data-add-kind": "import" },
-        icon: "link",
-        label: "Import a private key",
-        supportingText: "Add an account from a raw Starknet key.",
-      })}
-      ${menuRow({
-        attributes: { "data-add-kind": "ledger" },
-        icon: "shield",
-        label: "Connect a Ledger",
-        supportingText: "Add a hardware account — its key never leaves the device.",
+      ${option("hd", "wallet", "Standard Account", "Create the next account from this wallet’s recovery phrase.")}
+      ${option("ledger", "shield", "Ledger Account", "Use a Ledger hardware wallet without exposing its key.")}
+      ${option("import", "link", "Import from private key", "Add an existing Starknet account from its raw key.")}
+      ${option("multisig", "users", "Multisig Account", "Create or add an account controlled by multiple signers.")}
+    </div>
+    <div class="onboard-actions">
+      ${button({
+        attributes: { "data-add-continue": true },
+        disabled: selected === null,
+        label: "Continue",
       })}
     </div>
-    <div class="onboard-actions">${ledgerOnboardCancel()}</div>
   </div>`;
+};
 
 /**
  * The pre-picker connect state: it needs a user gesture (the browser's device

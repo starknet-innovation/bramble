@@ -42,6 +42,7 @@ export const WALLET_VIEWS = [
   "token-detail",
   "allowances",
   "multisigs",
+  "multisig-add",
   "multisig-watch",
   "multisig-home",
   "multisig-detail",

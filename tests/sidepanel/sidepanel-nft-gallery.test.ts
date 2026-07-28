@@ -130,6 +130,33 @@ describe("NFT gallery auto-discovery", () => {
     expect(send).toContain("Review transfer");
   });
 
+  test("send offers matching address-book recipients and disables without an account", () => {
+    const withContacts: WalletPreferences = {
+      ...preferences,
+      addressBook: [
+        {
+          address: "0xabc",
+          id: "SN_MAIN:0xabc",
+          label: "Treasury",
+          networkId: "SN_MAIN",
+        },
+        {
+          address: "0xdef",
+          id: "SN_SEPOLIA:0xdef",
+          label: "Sepolia contact",
+          networkId: "SN_SEPOLIA",
+        },
+      ],
+    };
+    const send = nftSendFlow(status, account, withContacts, discovered.id, [discovered]);
+    expect(send).toContain('data-nft-recipient="0xabc"');
+    expect(send).not.toContain("Sepolia contact");
+
+    const disabled = nftSendFlow(status, null, withContacts, discovered.id, [discovered]);
+    expect(disabled).toContain("No account on Starknet");
+    expect(disabled).toMatch(/type="submit"[^>]*disabled|disabled[^>]*type="submit"/);
+  });
+
   test("keeps rich metadata when the selected NFT is also watched", () => {
     const watched: WalletPreferences = {
       ...preferences,

@@ -171,6 +171,7 @@ const ledgerOnboard = createLedgerOnboardEntry({
   connector: ledgerConnector,
   mount: ledgerOnboardMount,
   openImport: () => navigate("import-key"),
+  openMultisig: () => navigate("multisig-add"),
   refresh: async () => {
     await render(await wallet.loadStatus());
   },
@@ -215,6 +216,7 @@ const bindAll = (): void => {
     setHomeTab: (tab) => {
       homeTab = tab;
     },
+    startAddAccount: ledgerOnboard.startAddAccount,
     wallet,
   });
   bindReveal({ app, wallet });
@@ -238,7 +240,6 @@ const bindAll = (): void => {
     setOpenAssign: (id: string | null) => {
       openAssignId = id;
     },
-    // "Add account" opens the type chooser (New HD / Import / Connect a Ledger).
     startAddAccount: ledgerOnboard.startAddAccount,
     wallet,
   };
@@ -464,7 +465,6 @@ const navigate = (view: WalletView): void => {
   paint();
   void wallet.loadStatus().then(render);
 };
-
 // Return to the prior view with reverse-transition direction.
 const goBack = (): void => {
   const popped = popView(viewHistory);

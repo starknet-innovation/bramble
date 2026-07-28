@@ -140,8 +140,11 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toContain(MOTION.ease);
     expect(SIDEPANEL_STYLES).toContain(`${MOTION.pressMs}ms`);
     expect(SIDEPANEL_STYLES).toContain(`liquid-dot-left ${MOTION.waitLoopMs}ms`);
+    expect(SIDEPANEL_STYLES).toContain(`onboarding-concentric-pulse ${MOTION.onboardingPulseMs}ms`);
     expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-track-orbit");
+    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-track-orbit-reverse");
     expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-concentric-pulse");
+    expect(SIDEPANEL_STYLES).toContain("--orbit-duration: 600s");
     expect(SIDEPANEL_STYLES).not.toContain("@keyframes journey-spin");
     expect(SIDEPANEL_STYLES).not.toContain("@keyframes send-spin");
     expect(SIDEPANEL_STYLES).toContain("prefers-reduced-motion");

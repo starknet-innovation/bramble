@@ -30,6 +30,7 @@ import { backupFlow, simpleFlowScreen } from "./flows";
 import { homeTabs, visibleHomeBalances } from "./home-tabs";
 import { icon } from "./icons";
 import {
+  multisigAddFlow,
   multisigReceiveFlow,
   multisigSignersFlow,
   multisigTrackFlow,
@@ -168,6 +169,9 @@ type JourneyContext = {
 };
 
 const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext): string | null => {
+  if (activeView === "multisig-add") {
+    return multisigAddFlow(context.status, context.account);
+  }
   if (activeView === "multisigs") {
     return multisigsFlow(
       context.status,

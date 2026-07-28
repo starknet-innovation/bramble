@@ -113,24 +113,34 @@ const welcomeStep = (ready: boolean): string => `
     <div class="onboarding-orbit" aria-hidden="true">
       <div class="orbit-field">
         <span class="orbit-ring orbit-ring-outer"></span>
+        <span class="orbit-ring orbit-ring-wide"></span>
+        <span class="orbit-ring orbit-ring-middle"></span>
         <span class="orbit-ring orbit-ring-inner"></span>
+        <span class="orbit-ring orbit-ring-core"></span>
         <span class="orbit-pulse orbit-pulse-a"></span>
         <span class="orbit-pulse orbit-pulse-b"></span>
         <span class="orbit-pulse orbit-pulse-c"></span>
-        <span class="orbit-track orbit-track-a">
+        <span class="orbit-track orbit-track-outer-a">
           <span class="orbit-node"><span class="orbit-node-surface">${icon("shield")}</span></span>
         </span>
-        <span class="orbit-track orbit-track-b">
+        <span class="orbit-track orbit-track-outer-b">
+          <span class="orbit-node"><span class="orbit-node-surface">${icon("send")}</span></span>
+        </span>
+        <span class="orbit-track orbit-track-wide orbit-track-reverse orbit-track-wide-a">
           <span class="orbit-node"><span class="orbit-node-surface">${icon("activity")}</span></span>
         </span>
-        <span class="orbit-track orbit-track-inner orbit-track-c">
+        <span class="orbit-track orbit-track-middle orbit-track-middle-a">
           <span class="orbit-node"><span class="orbit-node-surface">${icon("image")}</span></span>
         </span>
-        <span class="orbit-track orbit-track-inner orbit-track-d">
+        <span class="orbit-track orbit-track-middle orbit-track-middle-b">
+          <span class="orbit-node"><span class="orbit-node-surface">${icon("globe")}</span></span>
+        </span>
+        <span class="orbit-track orbit-track-inner orbit-track-reverse orbit-track-inner-a">
           <span class="orbit-node"><span class="orbit-node-surface">${icon("link")}</span></span>
         </span>
-        <span class="orbit-track orbit-track-spark-a"><span class="orbit-spark"></span></span>
-        <span class="orbit-track orbit-track-inner orbit-track-spark-b"><span class="orbit-spark"></span></span>
+        <span class="orbit-track orbit-track-core orbit-track-core-a">
+          <span class="orbit-node"><span class="orbit-node-surface">${icon("coins")}</span></span>
+        </span>
         <span class="orbit-core"><strong>MC</strong><span>Wallet</span></span>
       </div>
     </div>

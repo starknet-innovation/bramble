@@ -8,6 +8,7 @@ const meta: LabMeta = {
 
 export default meta;
 
+export const AddAccount = checkpointStory("Add a Multisig account", "multisig", "add");
 export const Watched = checkpointStory("Watched multisigs", "multisig", "list");
 export const Watch = checkpointStory("Watch multisig", "multisig", "watch");
 export const Proposal = checkpointStory("Proposal detail", "multisig", "proposal");

@@ -33,7 +33,7 @@ SOFTWARE.
 
 The indeterminate progress treatment in `src/sidepanel/send-views.ts` and
 `src/sidepanel/styles-progress.ts`, plus the onboarding pulse and orbiting
-sparks in `src/sidepanel/styles-onboarding-welcome.ts`, are framework-free
+icons in `src/sidepanel/styles-onboarding-welcome.ts`, are framework-free
 CSS/SVG adaptations of the Liquid Dots, Concentric Pulse, and Fluid Dot Orbit
 components from
 [Subhan-code/Amicro--Micro-transitions-](https://github.com/Subhan-code/Amicro--Micro-transitions-),

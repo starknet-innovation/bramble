@@ -40,9 +40,9 @@ export type LedgerOnboardEntry = {
  * `mount` and device `connector` (the entrypoint passes the browser Ledger connector).
  * Reads live status through the render `cache` and drives account creation
  * through the panel `wallet`; the injected `addHd` (derive the next HD account)
- * and `openImport` (jump to the raw-key form) back the chooser's other two
- * routes, and `refresh` reloads the shell after a successful add so the new
- * account appears. Holds no secret beyond the transient first-run passphrase,
+ * `openImport` (jump to the raw-key form), and `openMultisig` (guided shared
+ * account setup) back the chooser's other routes. `refresh` reloads the shell
+ * after a successful add so the new account appears. Holds no secret beyond the transient first-run passphrase,
  * which is cleared as soon as the vault is created.
  */
 export const createLedgerOnboardEntry = (deps: {
@@ -51,10 +51,11 @@ export const createLedgerOnboardEntry = (deps: {
   readonly connector: LedgerConnector;
   readonly mount: HTMLElement;
   readonly openImport: () => void;
+  readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: SidepanelWallet;
 }): LedgerOnboardEntry => {
-  const { addHd, cache, connector, mount, openImport, refresh, wallet } = deps;
+  const { addHd, cache, connector, mount, openImport, openMultisig, refresh, wallet } = deps;
   let ledgerSetup: { readonly networkId: string; readonly vaultPassphrase: string } | null = null;
 
   const create = async (account: LedgerAccountRef): Promise<void> => {
@@ -93,6 +94,7 @@ export const createLedgerOnboardEntry = (deps: {
       ledgerSetup = null;
     },
     openImport,
+    openMultisig,
     refresh,
     wallet,
   });

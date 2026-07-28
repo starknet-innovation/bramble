@@ -274,11 +274,20 @@ const ledgerCandidate = (
 export const ledgerOnboardingScenario: WalletScenario = {
   checkpoints: [
     {
-      content: addAccountChooser,
+      content: () => addAccountChooser(),
       id: "method",
       label: "Choose account method",
-      narrative: "Software derivation, raw-key import, and hardware setup remain explicit routes.",
-      state: { choices: 3, secretBoundary: "visible" },
+      narrative:
+        "Standard, Ledger, private-key, and shared accounts remain explicit signer models.",
+      state: { choices: 4, secretBoundary: "visible", selected: null },
+    },
+    {
+      content: () => addAccountChooser("multisig"),
+      id: "method-multisig",
+      label: "Choose Multisig account",
+      narrative:
+        "Selection is visible before Continue routes into create or add-existing shared accounts.",
+      state: { choices: 4, selected: "multisig" },
     },
     {
       content: ledgerConnectPrompt,
@@ -371,7 +380,7 @@ export const ledgerOnboardingScenario: WalletScenario = {
     },
   ],
   description:
-    "Add-account method choice, device selection, enumeration, account selection, partial recovery, and errors.",
+    "Unified account-type choice, Ledger device selection, enumeration, account selection, partial recovery, and errors.",
   id: "ledger-onboarding",
   surface: "sidepanel",
   title: "Ledger account onboarding",

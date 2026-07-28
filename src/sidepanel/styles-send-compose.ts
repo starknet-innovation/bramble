@@ -45,13 +45,15 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-network-mark {
     align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
     color: var(--mc-text);
     display: inline-flex;
     flex: none;
     height: ${SIZE.mark};
     justify-content: center;
+    width: ${SIZE.mark};
+  }
+  .send-network-mark .token-logo {
+    height: ${SIZE.mark};
     width: ${SIZE.mark};
   }
   .send-network-context > span:last-child { display: grid; gap: 2px; }
@@ -63,6 +65,21 @@ export const SEND_COMPOSE_STYLES = `
     font-size: ${TYPE.caption.size};
   }
   .send-network-context strong { font-size: ${TYPE.body.size}; }
+  .network-inline-value {
+    align-items: center;
+    display: inline-flex;
+    gap: ${SPACE.sm};
+  }
+  .network-inline-mark {
+    display: inline-flex;
+    flex: none;
+    height: ${SPACE.xl};
+    width: ${SPACE.xl};
+  }
+  .network-inline-mark .token-logo {
+    height: 100%;
+    width: 100%;
+  }
 
   .send-search { gap: ${SPACE.sm}; }
   .send-search > span:first-child:not(.sr-only) {

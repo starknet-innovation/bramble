@@ -5,6 +5,8 @@
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
 import {
+  multisigAddFlow,
+  multisigReceiveFlow,
   multisigSignersFlow,
   multisigTrackFlow,
   multisigWatchFlow,
@@ -94,6 +96,16 @@ const render = (
   );
 
 describe("multisig views", () => {
+  test("Add account separates new deployment from verified existing membership", () => {
+    const html = render("multisig-add");
+    expect(html).toBe(multisigAddFlow(status, account));
+    expect(html).toContain("Create a new multisig");
+    expect(html).toContain('data-view="multisig-deploy"');
+    expect(html).toContain("Add an existing multisig");
+    expect(html).toContain('data-view="multisig-watch"');
+    expect(html).toContain("does not change its signers");
+  });
+
   test("settings links to the multisigs screen", () => {
     expect(render("settings")).toContain('data-view="security"');
     expect(render("security")).toContain('data-view="multisigs"');
@@ -154,6 +166,17 @@ describe("multisig views", () => {
     expect(multisigTrackFlow(status, multisig)).toContain('id="multisig-track-form"');
     expect(html).toContain('data-view="multisig-propose"');
     expect(html).not.toContain(`data-multisig-remove="${multisig.id}"`);
+  });
+
+  test("receive encodes the shared address and stale management routes fail visibly", () => {
+    const receive = multisigReceiveFlow(status, multisig);
+    expect(receive).toContain("QR code for multisig address");
+    expect(receive).toContain("Copy multisig address");
+    expect(receive).toContain("2-of-2 approval rule");
+
+    expect(multisigReceiveFlow(status, null)).toContain("no longer watched");
+    expect(multisigSignersFlow(status, account, null)).toContain("no longer watched");
+    expect(multisigTrackFlow(status, null)).toContain("no longer watched");
   });
 
   test("gates confirmation actions from fresh signer-specific chain state", () => {

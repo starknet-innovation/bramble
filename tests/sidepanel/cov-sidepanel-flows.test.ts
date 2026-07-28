@@ -84,6 +84,10 @@ describe("sendFlow list callbacks", () => {
     expect(html).toContain('data-send-recipient="0xaaa1"');
     expect(html).toContain('data-send-recipient-label="Ada"');
     expect(html).not.toContain("Grace");
+    expect(html).toMatch(/send-network-context[\s\S]*?send-network-mark[\s\S]*?class="token-logo"/);
+    expect(html).toMatch(
+      /<dt>Network<\/dt><dd class="network-inline-value">[\s\S]*?class="token-logo"/,
+    );
     // With a token available the form is enabled (canSend).
     expect(html).not.toMatch(/id="send-token-trigger"[^>]*disabled/);
   });

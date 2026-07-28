@@ -89,4 +89,46 @@ describe("bindApprovals", () => {
     await flush();
     expect(renderCount).toBe(1);
   });
+
+  test("completes a denial and lets Review later snooze without deciding", async () => {
+    const id = "a1c8df5b-894d-44e7-a925-27b730d92dc8";
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <button data-approval-action="deny" data-approval-id="${id}">Deny</button>
+      <button data-approval-later="${id}">Later</button>
+      <p id="approval-live-title"></p>
+      <p id="approval-live-copy"></p>
+      <p id="approval-result"></p>`;
+    document.body.replaceChildren(host);
+    const decisions: boolean[] = [];
+    const snoozed: string[] = [];
+    let renders = 0;
+
+    bindApprovals({
+      app: host,
+      render: async () => {
+        renders += 1;
+      },
+      snoozeApproval: (approvalId) => {
+        snoozed.push(approvalId);
+      },
+      wallet: {
+        decideApproval: async (_approvalId: string, approved: boolean) => {
+          decisions.push(approved);
+        },
+        loadStatus: async () => STATUS,
+      } as unknown as SidepanelWallet,
+    });
+
+    host.querySelector<HTMLButtonElement>("[data-approval-later]")?.click();
+    host.querySelector<HTMLButtonElement>("[data-approval-id]")?.click();
+    await flush();
+
+    expect(snoozed).toEqual([id]);
+    expect(decisions).toEqual([false]);
+    expect(host.querySelector("#approval-live-title")?.textContent).toBe("Denying request");
+    expect(host.querySelector("#approval-live-copy")?.textContent).toContain("returning control");
+    expect(host.querySelector("#approval-result")?.textContent).toBe("Rejecting request…");
+    expect(renders).toBe(1);
+  });
 });

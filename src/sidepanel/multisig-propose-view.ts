@@ -16,7 +16,7 @@ import { multisigDisplayName } from "./multisig-model";
 import { EMPTY_MULTISIG_PORTFOLIO, type MultisigPortfolioData } from "./multisig-portfolio";
 import { accountAvatar, accountDisplayName, accountLabel, flowHeader, flowScreen } from "./parts";
 import { type SendAsset, sendAssets, sendBalanceLabel } from "./send-model";
-import { tokenGlyph } from "./token-row";
+import { starknetNetworkGlyph, tokenGlyph } from "./token-row";
 
 const recipientRow = (address: string, label: string, source: "account" | "contact"): string => `
   <button class="send-recipient-row" type="button"
@@ -130,7 +130,7 @@ const amountStage = (
     </div>
     <dl class="send-context-receipt">
       <div><dt>Recipient</dt><dd><strong id="proposal-recipient-name">Not selected</strong><code id="proposal-recipient-label">—</code></dd></div>
-      <div><dt>Network</dt><dd><strong>${escapeHtml(status.network)}</strong></dd></div>
+      <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(status.network)}</strong></dd></div>
       <div><dt>From</dt><dd><strong>${escapeHtml(multisigDisplayName(record))}</strong><code>${escapeHtml(accountLabel(record.address))}</code></dd></div>
     </dl>
     ${button({

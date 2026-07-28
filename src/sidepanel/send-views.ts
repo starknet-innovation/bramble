@@ -22,7 +22,7 @@ import {
 } from "./parts";
 import { liquidDots, liquidDotsFilter } from "./progress-motion";
 import { type SendAsset, sendAssets, sendBalanceLabel, sendRecipientAccounts } from "./send-model";
-import { tokenGlyph } from "./token-row";
+import { starknetNetworkGlyph, tokenGlyph } from "./token-row";
 
 const sendHeader = (): string => `
   <header class="flow-header send-flow-header">
@@ -96,7 +96,7 @@ const recipientStage = (
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return `<section class="send-stage send-recipient-stage" id="send-recipient-stage">
     <div class="send-network-context">
-      <span class="send-network-mark">${icon("globe")}</span>
+      <span class="send-network-mark">${starknetNetworkGlyph()}</span>
       <span><small>Destination network</small><strong>${escapeHtml(status.network)}</strong></span>
     </div>
     <label class="send-search">
@@ -200,7 +200,7 @@ const amountStage = (
         <dt>Recipient</dt>
         <dd><strong id="send-recipient-name">Not selected</strong><code id="send-recipient-label">—</code></dd>
       </div>
-      <div><dt>Network</dt><dd><strong>${escapeHtml(status.network)}</strong></dd></div>
+      <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(status.network)}</strong></dd></div>
       <div><dt>From</dt><dd><strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong></dd></div>
     </dl>
     ${button({
