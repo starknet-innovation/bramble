@@ -8,6 +8,80 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [0.7.2] - 2026-07-28
+
+A focused interaction-design and security release: clearer onboarding and
+account management, deliberate transaction progress, practical multisig
+workflows, and an expanded review lab backed by hardened provider and release
+boundaries.
+
+### Added
+- A unified Add account chooser, shared by the account drawer and Manage
+  accounts, with explicit Standard, Ledger, private-key import, and Multisig
+  signer models. Multisig setup then separates creating a new shared account
+  from adding an existing deployed account where the active account is already
+  a signer.
+- A complete Multisig portfolio and operations journey: shared balances and
+  collectibles, proposal-first major actions, guided token-transfer proposals,
+  address-book and wallet-account signer selection, quorum review, deployment,
+  proposal tracking, and independent scan/copy/local-decoder verification.
+- Recipient-first sending with address-book selection, searchable token
+  selection, token/fiat amount switching, a network-aware summary, decoded
+  action accordion, and explicit review before submission.
+- Deterministic account identity artwork, a fourth Portfolio quick action, an
+  MC Terminal handoff, and production Starknet marks wherever a destination
+  network is displayed.
+- Storybook checkpoints for the unified account chooser and Multisig
+  create/add-existing gateway, extending the organized wallet journeys and
+  deterministic design-review coverage.
+
+### Changed
+- The wallet now uses an intentionally monochrome interaction system so
+  hierarchy, focus, motion, and state remain legible without pervasive accent
+  color. Green and red remain reserved for success and failure.
+- Full-browser onboarding follows a stable staged flow with slower,
+  counter-rotating icon orbits, smoother transitions, Mainnet defaults, and
+  reduced-motion behavior.
+- Portfolio surfaces use larger balances, four consistent major actions,
+  simplified Tokens/Collectibles navigation, a compact overflow menu, and a
+  cleaner icon-only wallet dock.
+- Send and Ledger transaction progress now advances through visible review,
+  hardware authorization, broadcast, confirmation, success, and failure states
+  with calmer liveness motion and direction-aware transitions.
+- Multisig proposals aggregate recipient, token, amount, source, network, and
+  decoded effects into focused stages while keeping raw contract calldata in an
+  explicit advanced path.
+
+### Fixed
+- Activity state is partitioned by network and account so switching wallets
+  cannot show another account's history.
+- Add account no longer derives a Standard account immediately from the drawer;
+  both entry points require the same visible account-model choice.
+- Hover, focus, selected, and disabled states retain readable contrast, and
+  native-looking select controls no longer escape the wallet design system.
+- Onboarding orbit icons stay separated at normal playback speeds, surface
+  presets retain side-panel spacing, and waiting animations no longer pulse too
+  aggressively.
+- Destination-network rows use the canonical Starknet token mark rather than a
+  generic placeholder.
+
+### Security
+- All open CodeQL findings are addressed without suppressions: dapp provider
+  requests and results use an exhaustive, single-sourced method set instead of
+  page-controlled computed dispatch.
+- Bounded JSON normalization preserves hostile keys such as `__proto__` only as
+  own data properties on null-prototype records, and changelog regex inputs are
+  escaped literally.
+- AVNU asset synchronization accepts only signature-checked PNG, JPEG, and WebP
+  downloads; remotely supplied SVG is no longer treated as safely sanitizable
+  with regular expressions.
+- Release and nightly workflows resolve immutable commit SHAs before
+  self-hosted execution, validate tag-to-commit correspondence, and detach onto
+  the verified revision.
+- The repository-wide coverage gate remains enforced above 95%, with new tests
+  covering account routing, settings and address-book bindings, approval
+  behavior, NFT views, network marks, and navigation primitives.
+
 ## [0.7.1] - 2026-07-27
 
 Live Starknet portfolio data, a production trading terminal, and faster wallet
