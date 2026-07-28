@@ -59,7 +59,14 @@ export const MULTISIG_STYLES = `
     padding: 0 ${SPACE.sm};
   }
   @media (hover: hover) and (pointer: fine) {
-    .proposal-advanced-entry:hover { color: var(--mc-text); }
+    .proposal-advanced-entry:not(:disabled):hover {
+      background: var(--mc-hover);
+      color: var(--mc-text);
+    }
+  }
+  .proposal-advanced-entry:not(:disabled):active {
+    background: var(--mc-soft-press);
+    color: var(--mc-text);
   }
   .proposal-inline-back {
     align-items: center;
@@ -75,6 +82,16 @@ export const MULTISIG_STYLES = `
     padding: 0;
   }
   .proposal-inline-back .icon { height: 15px; width: 15px; }
+  @media (hover: hover) and (pointer: fine) {
+    .proposal-inline-back:not(:disabled):hover {
+      background: transparent;
+      color: var(--mc-text);
+    }
+  }
+  .proposal-inline-back:not(:disabled):active {
+    background: transparent;
+    color: var(--mc-text);
+  }
   .proposal-options .disclosure-body { display: grid; gap: ${SPACE.md}; }
   #proposal-review-button,
   #proposal-advanced-review,
@@ -229,7 +246,14 @@ export const MULTISIG_STYLES = `
     width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
-    .multisig-signer-option:hover { background: var(--mc-soft); }
+    .multisig-signer-option:not(:disabled):hover {
+      background: var(--mc-hover);
+      color: var(--mc-text);
+    }
+  }
+  .multisig-signer-option:not(:disabled):active {
+    background: var(--mc-soft-press);
+    color: var(--mc-text);
   }
   .multisig-signer-check { color: var(--mc-positive); opacity: 0; }
   .multisig-signer-option[aria-pressed="true"] { background: var(--mc-soft); }

@@ -174,7 +174,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
      fields focus with a ring hugging just inside their edge (the field lights
      up); everything else gets an offset halo that never collides with hairline
      edges or shadows. Both follow the element's radius. */
-  :focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
+  :focus-visible { outline: 2px solid var(--mc-focus-ring); outline-offset: 2px; }
   input:focus-visible, select:focus-visible, textarea:focus-visible {
     background: var(--mc-elevated);
     outline-offset: -2px;

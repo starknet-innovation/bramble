@@ -203,16 +203,22 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(/\.badge \{[^}]*color: var\(--mc-bg\)/s);
   });
 
-  test("focus is one consistent accent ring declared once", () => {
+  test("focus is one consistent softened ring declared once", () => {
     // A single focus system: one generic ring (offset halo) plus a hugging
     // inner ring on filled fields. No other layer may redeclare the outline.
-    const rings = [...SIDEPANEL_STYLES.matchAll(/outline: 2px solid var\(--mc-accent\)/g)];
+    const rings = [...SIDEPANEL_STYLES.matchAll(/outline: 2px solid var\(--mc-focus-ring\)/g)];
     expect(rings.length).toBe(1);
     expect(SIDEPANEL_STYLES).toContain(
-      ":focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }",
+      "--mc-focus-ring: color-mix(in srgb, var(--mc-accent) 72%, var(--mc-bg));",
+    );
+    expect(SIDEPANEL_STYLES).toContain(
+      ":focus-visible { outline: 2px solid var(--mc-focus-ring); outline-offset: 2px; }",
     );
     expect(SIDEPANEL_STYLES).toMatch(
       /input:focus-visible, select:focus-visible, textarea:focus-visible \{[^}]*outline-offset: -2px/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.send-recipient-row:focus-visible,\s*\.send-asset-row:focus-visible \{[^}]*outline-offset: -2px/s,
     );
   });
 
@@ -235,6 +241,18 @@ describe("sidepanel styles", () => {
     );
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-text\)/,
+    );
+    // Non-primary Send and multisig controls must never inherit the generic
+    // high-contrast CTA fill, which can produce white-on-white rows in dark
+    // mode. Their more-specific selectors preserve neutral surfaces and ink.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.send-recipient-row:not\(:disabled\):hover,\s*\.send-asset-row:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.send-token-trigger:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.multisig-signer-option:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
     );
   });
 

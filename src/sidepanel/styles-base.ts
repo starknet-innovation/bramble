@@ -27,6 +27,7 @@ export const BASE_STYLES = `
     --mc-soft: var(--mc-sunken);
     --mc-hover: color-mix(in srgb, var(--mc-text) 6%, var(--mc-elevated));
     --mc-soft-press: color-mix(in srgb, var(--mc-text) 11%, var(--mc-elevated));
+    --mc-focus-ring: color-mix(in srgb, var(--mc-accent) 72%, var(--mc-bg));
     --mc-accent-hover: color-mix(in srgb, var(--mc-text) 10%, var(--mc-accent));
     --mc-accent-press: color-mix(in srgb, var(--mc-text) 18%, var(--mc-accent));
     /* The action tint stays whisper-quiet — enough to read as "active" without

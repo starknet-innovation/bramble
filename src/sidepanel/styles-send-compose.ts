@@ -86,7 +86,7 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-search-control input:focus-visible { outline: 0; }
   .send-search-control:has(input:focus-visible) {
-    box-shadow: inset 0 0 0 2px var(--mc-accent);
+    box-shadow: inset 0 0 0 2px var(--mc-focus-ring);
   }
   .send-recipient-tabs {
     border-bottom: 1px solid var(--mc-hairline);
@@ -111,6 +111,16 @@ export const SEND_COMPOSE_STYLES = `
     inset-inline: ${SPACE.sm};
     position: absolute;
   }
+  @media (hover: hover) and (pointer: fine) {
+    .send-recipient-tabs button:not(:disabled):hover {
+      background: transparent;
+      color: var(--mc-text);
+    }
+  }
+  .send-recipient-tabs button:not(:disabled):active {
+    background: transparent;
+    color: var(--mc-text);
+  }
   .send-recipient-list, .send-asset-list { display: grid; gap: ${SPACE.sm}; }
   .send-list-heading {
     align-items: center;
@@ -130,6 +140,22 @@ export const SEND_COMPOSE_STYLES = `
     min-height: ${SIZE.tile};
     padding: ${SPACE.md};
     text-align: left;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .send-recipient-row:not(:disabled):hover,
+    .send-asset-row:not(:disabled):hover {
+      background: var(--mc-hover);
+      color: var(--mc-text);
+    }
+  }
+  .send-recipient-row:not(:disabled):active,
+  .send-asset-row:not(:disabled):active {
+    background: var(--mc-soft-press);
+    color: var(--mc-text);
+  }
+  .send-recipient-row:focus-visible,
+  .send-asset-row:focus-visible {
+    outline-offset: -2px;
   }
   .send-recipient-row {
     align-items: center;
@@ -163,7 +189,7 @@ export const SEND_COMPOSE_STYLES = `
       box-shadow ${MOTION.pressMs}ms ${MOTION.ease};
   }
   .send-amount-card:has(.send-amount-field input:focus-visible) {
-    box-shadow: inset 0 0 0 2px var(--mc-accent);
+    box-shadow: inset 0 0 0 2px var(--mc-focus-ring);
   }
   .send-token-trigger {
     background: var(--mc-elevated);
@@ -171,6 +197,16 @@ export const SEND_COMPOSE_STYLES = `
     justify-self: start;
     min-height: ${CONTROL.hit};
     padding: 0 ${SPACE.md};
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .send-token-trigger:not(:disabled):hover {
+      background: var(--mc-hover);
+      color: var(--mc-text);
+    }
+  }
+  .send-token-trigger:not(:disabled):active {
+    background: var(--mc-soft-press);
+    color: var(--mc-text);
   }
   .send-token-trigger > span:first-child,
   .send-token-trigger > span:first-child > svg,
@@ -221,6 +257,16 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-amount-shortcuts #send-unit-toggle {
     background: var(--mc-elevated);
+    color: var(--mc-text);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .send-amount-shortcuts button:not(:disabled):hover {
+      background: var(--mc-hover);
+      color: var(--mc-text);
+    }
+  }
+  .send-amount-shortcuts button:not(:disabled):active {
+    background: var(--mc-soft-press);
     color: var(--mc-text);
   }
   .send-amount-shortcuts .icon { height: 14px; width: 14px; }
