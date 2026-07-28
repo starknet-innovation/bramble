@@ -6,8 +6,14 @@ import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks"
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "../starknet/rpc";
 import { mergeActivity } from "../starknet/tx-history";
 import { verifyCalls } from "../starknet/verify";
-import type { ActivityEntry, ActivityLog } from "../storage/activity-store";
+import {
+  type ActivityEntry,
+  type ActivityLog,
+  type ActivityScope,
+  activityForScope,
+} from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
+import type { MultisigStore } from "../storage/multisig-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
@@ -29,6 +35,11 @@ export type WalletOpsDeps = {
    * stubs stay valid; a Ledger signing request with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /**
+   * Watched shared-account registry used only to authorize address-scoped,
+   * read-only asset discovery. Signing paths resolve multisigs separately.
+   */
+  readonly multisigStore?: MultisigStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -255,8 +266,13 @@ const handleActivity: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.activity")) {
     return { error: "invalid activity request" };
   }
-  const local = await reconcilePendingStatuses(deps);
-  const history = await activeAccountHistory(deps);
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { activity: [], ok: true };
+  }
+  const scope = { accountId: context.account.id, networkId: context.networkId };
+  const local = await reconcilePendingStatuses(deps, scope);
+  const history = await activeAccountHistory(deps, context);
   return {
     activity: mergeActivity(local, history.onChain),
     ...(history.unavailable ? { historyUnavailable: true } : {}),
@@ -302,13 +318,16 @@ export const handleWalletOps = async (
 };
 
 /**
- * Re-polls the chain status of every locally recorded pending transaction, per
- * network, and returns the reconciled local activity log. A status query that
- * fails leaves those hashes pending rather than dropping them.
+ * Re-polls pending transactions for the active account/network scope and
+ * returns only that scope. A status query failure leaves those hashes pending
+ * rather than exposing or modifying another account's rows.
  */
-const reconcilePendingStatuses = async (deps: WalletOpsDeps): Promise<readonly ActivityEntry[]> => {
+const reconcilePendingStatuses = async (
+  deps: WalletOpsDeps,
+  scope: ActivityScope,
+): Promise<readonly ActivityEntry[]> => {
   const { activity, preferencesStore, runtimeRpc } = deps;
-  const entries = await activity.list();
+  const entries = activityForScope(await activity.list(), scope);
   const pendingByNetwork = new Map<StarknetNetworkId, string[]>();
   for (const entry of entries) {
     if (entry.status === "pending") {
@@ -332,7 +351,7 @@ const reconcilePendingStatuses = async (deps: WalletOpsDeps): Promise<readonly A
       .catch(() => ({}));
     statuses = { ...statuses, ...result };
   }
-  return activity.updateStatuses(statuses);
+  return activity.updateStatuses(statuses, scope);
 };
 
 /**
@@ -345,13 +364,13 @@ const reconcilePendingStatuses = async (deps: WalletOpsDeps): Promise<readonly A
  */
 const activeAccountHistory = async (
   deps: WalletOpsDeps,
+  context: {
+    readonly account: AccountRef;
+    readonly networkId: StarknetNetworkId;
+  },
 ): Promise<{ readonly onChain: readonly ActivityEntry[]; readonly unavailable: boolean }> => {
   const scan = deps.runtimeRpc.getTransactionHistory;
   if (!scan) {
-    return { onChain: [], unavailable: false };
-  }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) {
     return { onChain: [], unavailable: false };
   }
   const preferences = await deps.preferencesStore.read();

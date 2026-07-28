@@ -3,21 +3,14 @@
  * "Add account joins the focused folder" fix. Drives the real drawer template
  * and bindings through the shared happy-dom harness, asserting BOTH the store
  * call and the re-derived DOM: filing an account into a folder, exclusivity when
- * moving to a second folder, clearing to None, the row icon reflecting the
- * folder, and Add account joining the active chip (or nothing on All). The
+ * moving to a second folder, clearing to None, the folder-picker icon reflecting
+ * the folder without a redundant metadata icon, and Add account joining the
+ * active chip (or nothing on All). The
  * folder-management journeys (create/rename/icon/delete) stay in
  * ./sidepanel-groups-ui.test.ts.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import {
-  acctA,
-  click,
-  group,
-  mount,
-  newAccountId,
-  registerDom,
-  unregisterDom,
-} from "../support/groups-harness";
+import { acctA, click, group, mount, registerDom, unregisterDom } from "../support/groups-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -60,7 +53,7 @@ describe("account drawer folder picker", () => {
     const row = harness.container
       .querySelector(`[data-switch-account="${acctA.id}"]`)
       ?.closest(".drawer-account-item");
-    expect(row?.querySelector(".account-groups-line")).not.toBeNull();
+    expect(row?.querySelector(".account-groups-line")).toBeNull();
   });
 
   test("moving to a second folder is exclusive and keeps the picker open", async () => {
@@ -121,7 +114,7 @@ describe("account drawer folder picker", () => {
     ).toBe(true);
   });
 
-  test("Add account joins the active folder chip", async () => {
+  test("Add account opens the shared chooser instead of deriving inside the drawer", async () => {
     const harness = mount([group("briefcase", "work", "Work")], "drawer");
 
     click(harness.container.querySelector('[data-group-filter="work"]'));
@@ -129,20 +122,19 @@ describe("account drawer folder picker", () => {
     click(harness.container.querySelector("#drawer-add-account"));
     await harness.tick();
 
-    expect(harness.calls.addAccount).toEqual(["SN_MAIN"]);
-    expect(harness.calls.setAccountInGroup).toEqual([[newAccountId, "work", true]]);
-    expect(harness.groups()[0]?.accountIds).toContain(newAccountId);
+    expect(harness.calls.startAddAccount).toBe(1);
+    expect(harness.calls.addAccount).toEqual([]);
+    expect(harness.calls.setAccountInGroup).toEqual([]);
   });
 
-  test("Add account joins no folder when the filter is All", async () => {
+  test("Add account uses the same chooser when the filter is All", async () => {
     const harness = mount([group("briefcase", "work", "Work")], "drawer");
 
-    // No chip active (All): the new account stays ungrouped.
     click(harness.container.querySelector("#drawer-add-account"));
     await harness.tick();
 
-    expect(harness.calls.addAccount).toEqual(["SN_MAIN"]);
+    expect(harness.calls.startAddAccount).toBe(1);
+    expect(harness.calls.addAccount).toEqual([]);
     expect(harness.calls.setAccountInGroup).toEqual([]);
-    expect(harness.groups()[0]?.accountIds).not.toContain(newAccountId);
   });
 });

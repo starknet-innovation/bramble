@@ -1,15 +1,15 @@
 /**
- * The live WebHID {@link LedgerConnector} used by the side-panel signing runtime.
- * A thin adapter over the transport boundary: it turns an open transport into a
- * typed device client, mapping "no granted device" to a popup-window grant and
- * only a persistent miss to a {@link LedgerRejection}. Chrome cannot render the
- * WebHID device chooser inside the extension side panel —
- * `navigator.hid.requestDevice()` resolves with an empty list there, even
- * though the device shows in `chrome://device-log` — so `request` never calls
- * the picker directly. It retries a silent reconnect
- * ({@link openConnectedTransport}) first, and only on a miss opens the small
- * `ledger-grant.html` popup window (`./grant-window`), where the native picker
- * does work, then retries the silent reconnect once more before giving up.
+ * The live browser {@link LedgerConnector} used by the side-panel signing
+ * runtime. Web Bluetooth handles Nano X devices whose composite FIDO interface
+ * Chrome blocks from WebHID; WebUSB and APDU-filtered WebHID remain cable
+ * fallbacks. A thin adapter over the transport boundary turns an open cable
+ * transport into a typed device client, mapping "no granted device" to the
+ * top-level hardware tab. Chrome exposes the native hardware chooser only in
+ * an ordinary tab; extension side panels and popup windows can return an empty
+ * device list. `request` never opens a browser device picker
+ * inside the side panel; it retries a silent cable reconnect first, and only on
+ * a miss opens `ledger-grant.html`, which retains the selected transport for
+ * this operation and presents it as a validated remote device session.
  * Already-granted devices are listed first so the controller can ask the user
  * to choose explicitly when more than one is connected. This is the one seam
  * that touches real hardware; controller decisions are tested through injected
@@ -36,16 +36,17 @@ const sessionFrom = (transport: LedgerTransport): LedgerDeviceSession => ({
 });
 
 /**
- * Connector backed by `@ledgerhq/hw-transport-webhid`. `listConnected` exposes
- * non-secret chooser labels and opaque ids for already-granted devices.
- * `request` never shows a device picker in the side panel: it reconnects
- * silently first, and only pops the `ledger-grant.html` grant window when there
- * is no existing grant to reuse. Both open methods return an OWNED
- * {@link LedgerDeviceSession} whose `close` releases the WebHID transport; the
+ * Connector backed by Ledger's Web Bluetooth, WebUSB, and WebHID transports.
+ * `listConnected` exposes non-secret chooser labels and opaque ids for
+ * already-granted devices.
+ * `request` never shows a device picker in the side panel: it reconnects a
+ * previously granted cable device first, then opens the hardware-owning
+ * `ledger-grant.html` tab when no silent route is available. Both paths return an OWNED
+ * {@link LedgerDeviceSession} whose `close` releases the browser transport; the
  * caller MUST close it (success, failure, retry, or cancel) or the device stays
  * claimed.
  */
-export const webHidConnector: LedgerConnector = {
+export const ledgerConnector: LedgerConnector = {
   listConnected: listConnectedDevices,
   async openConnected(deviceId) {
     const transport = await openConnectedTransport(deviceId);
@@ -63,18 +64,8 @@ export const webHidConnector: LedgerConnector = {
 
     const browser = extensionBrowser();
     if (browser) {
-      await requestDeviceGrant(browser);
+      return requestDeviceGrant(browser);
     }
-
-    const grantedDevices = await listConnectedDevices();
-    if (grantedDevices.length > 1) {
-      throw new LedgerRejection("multiple-devices");
-    }
-    const granted = await openConnectedTransport(grantedDevices[0]?.id);
-    if (granted) {
-      return sessionFrom(granted);
-    }
-
-    throw new LedgerRejection("picker-cancelled");
+    throw new LedgerRejection("webhid-unavailable");
   },
 };

@@ -6,6 +6,8 @@
  * the shell re-renders (leaving the screen).
  */
 import type { WalletStatus } from "../popup/responses";
+import { button } from "../ui/controls";
+import { textField } from "../ui/fields";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { icon } from "./icons";
 import { flowHeader, flowScreen } from "./parts";
@@ -56,11 +58,16 @@ export const revealFlow = (status: WalletStatus): string => {
     </section>
     <section class="section">
       <form id="reveal-form">
-        <label><span>Confirm vault passphrase</span>
-          <input name="vaultPassphrase" type="password" minlength="12" required autocomplete="current-password" />
-          <span class="hint">Re-enter it to reveal. An unlocked session alone is not enough.</span>
-        </label>
-        <button type="submit">${icon("lock")}Reveal secrets</button>
+        ${textField({
+          autocomplete: "current-password",
+          hint: "Re-enter it to reveal. An unlocked session alone is not enough.",
+          label: "Confirm vault passphrase",
+          minlength: 12,
+          name: "vaultPassphrase",
+          required: true,
+          type: "password",
+        })}
+        ${button({ icon: "lock", label: "Reveal secrets", type: "submit" })}
         <p id="reveal-result" role="status"></p>
       </form>
       <div id="reveal-output" class="reveal-output" hidden>
@@ -73,7 +80,12 @@ export const revealFlow = (status: WalletStatus): string => {
             ? '<p class="hint" id="reveal-imported-note">This account was imported from a raw key, so the wallet recovery phrase above does not restore it — its private key shown here is its only backup.</p>'
             : ""
         }
-        <button id="reveal-toggle" class="secondary" type="button">${icon("check")}Tap to show</button>
+        ${button({
+          attributes: { id: "reveal-toggle" },
+          icon: "check",
+          label: "Tap to show",
+          variant: "secondary",
+        })}
         <p class="hint">Write them down offline. Leaving this screen hides them again.</p>
       </div>
     </section>`,

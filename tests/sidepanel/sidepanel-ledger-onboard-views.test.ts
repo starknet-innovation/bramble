@@ -31,12 +31,20 @@ const candidateAccount = (index: number): LedgerAccountRef => ({
 });
 
 describe("onboarding views", () => {
-  test("the chooser offers HD, import, and Ledger routes", () => {
+  test("the chooser offers four signer models and confirms the selection separately", () => {
     const html = addAccountChooser();
     expect(html).toContain('data-add-kind="hd"');
     expect(html).toContain('data-add-kind="import"');
     expect(html).toContain('data-add-kind="ledger"');
-    expect(html).toContain("Connect a Ledger");
+    expect(html).toContain('data-add-kind="multisig"');
+    expect(html).toContain("Standard Account");
+    expect(html).toContain("Ledger Account");
+    expect(html).toContain("Import from private key");
+    expect(html).toContain("Multisig Account");
+    expect(html).toMatch(/data-add-continue[^>]*disabled/);
+    expect(addAccountChooser("multisig")).toMatch(
+      /data-add-kind="multisig"[^>]*aria-pressed="true"/,
+    );
   });
 
   test("connect, reading, and error device states render their controls", () => {
@@ -63,7 +71,7 @@ describe("onboarding views", () => {
       ledgerReadingPrompt(),
       ledgerOnboardError("nope"),
     ]) {
-      expect(html).toContain('class="onboard-hero"');
+      expect(html).toContain('class="onboard-hero');
       expect(html).toContain("onboard-actions");
     }
     expect(ledgerAccountPicker([])).toContain('class="onboard-picker"');

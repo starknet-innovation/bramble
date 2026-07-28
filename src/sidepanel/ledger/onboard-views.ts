@@ -13,9 +13,12 @@
  * drawn from the scale tokens in the stylesheet — no inline pixel values here.
  */
 import { escapeHtml } from "../../shared/html";
+import { emptyState, pill } from "../../ui/content";
+import { button, iconButton } from "../../ui/controls";
+import { menuRow } from "../../ui/navigation";
 import { icon } from "../icons";
 import { accountLabel } from "../parts";
-import type { LedgerCandidate } from "./onboard-session";
+import type { LedgerCandidate, LedgerOnboardAddKind } from "./onboard-session";
 import type { LedgerDeviceChoice } from "./sign-session";
 
 // The dismiss control rendered in every onboarding state so the full-screen
@@ -23,7 +26,12 @@ import type { LedgerDeviceChoice } from "./sign-session";
 // returning the user to the screen behind it (first-run choice or the account
 // screen) and, on first run, clearing the captured setup unlock secret.
 const ledgerOnboardCancel = (): string =>
-  '<button class="ghost small" data-ledger-onboard-cancel type="button">Cancel</button>';
+  button({
+    attributes: { "data-ledger-onboard-cancel": true },
+    label: "Cancel",
+    size: "small",
+    variant: "ghost",
+  });
 
 // The shared vertically-centred overlay shell: a brand chip, a heading block,
 // and the state's actions, stacked with the overlay's scale-token rhythm and
@@ -36,36 +44,48 @@ const onboardHero = (chip: string, head: string, actions: string): string => `
   </div>`;
 
 /**
- * The add-account chooser: three explicit routes so a Ledger add is never
- * misrouted into recovery-phrase derivation. Each row carries a `data-add-kind`
- * the binder dispatches on. Rendered in the centred overlay shell so it reads as
- * a deliberate first step of the add-account flow.
+ * The shared add-account chooser used by both the account drawer and Manage
+ * accounts. Selection and confirmation are separate so a user can compare all
+ * four signer models before committing to one route.
  */
-export const addAccountChooser = (): string => `
-  <div class="onboard-hero">
-    <div class="gate-head">
-      <h1>Add an account</h1>
-      <p class="lede">Choose how to add an account to this wallet.</p>
-    </div>
+export const addAccountChooser = (selected: LedgerOnboardAddKind | null = null): string => {
+  const option = (
+    kind: LedgerOnboardAddKind,
+    iconName: "link" | "shield" | "users" | "wallet",
+    label: string,
+    supportingText: string,
+  ): string => `
+    <button class="add-account-option" data-add-kind="${kind}" type="button" aria-pressed="${selected === kind}">
+      <span class="add-account-option-icon">${icon(iconName)}</span>
+      <span class="add-account-option-copy"><strong>${label}</strong><span>${supportingText}</span></span>
+      <span class="add-account-option-check">${icon("check")}</span>
+    </button>`;
+  return `
+  <div class="onboard-hero add-account-hero">
+    <header class="add-account-header">
+      <h1>Add a new account</h1>
+      ${iconButton({
+        attributes: { "data-ledger-onboard-cancel": true },
+        icon: "x",
+        label: "Close Add account",
+        variant: "ghost",
+      })}
+    </header>
     <div class="add-account-chooser" role="group" aria-label="Add an account">
-      <button class="menu-row" data-add-kind="hd" type="button">
-        <span class="menu-icon">${icon("plus")}</span>
-        <span class="menu-copy"><strong>New account</strong><span class="hint">Derive the next account from your recovery phrase.</span></span>
-        <span class="menu-chevron">${icon("chevronRight")}</span>
-      </button>
-      <button class="menu-row" data-add-kind="import" type="button">
-        <span class="menu-icon">${icon("link")}</span>
-        <span class="menu-copy"><strong>Import a private key</strong><span class="hint">Add an account from a raw Starknet key.</span></span>
-        <span class="menu-chevron">${icon("chevronRight")}</span>
-      </button>
-      <button class="menu-row" data-add-kind="ledger" type="button">
-        <span class="menu-icon">${icon("shield")}</span>
-        <span class="menu-copy"><strong>Connect a Ledger</strong><span class="hint">Add a hardware account — its key never leaves the device.</span></span>
-        <span class="menu-chevron">${icon("chevronRight")}</span>
-      </button>
+      ${option("hd", "wallet", "Standard Account", "Create the next account from this wallet’s recovery phrase.")}
+      ${option("ledger", "shield", "Ledger Account", "Use a Ledger hardware wallet without exposing its key.")}
+      ${option("import", "link", "Import from private key", "Add an existing Starknet account from its raw key.")}
+      ${option("multisig", "users", "Multisig Account", "Create or add an account controlled by multiple signers.")}
     </div>
-    <div class="onboard-actions">${ledgerOnboardCancel()}</div>
+    <div class="onboard-actions">
+      ${button({
+        attributes: { "data-add-continue": true },
+        disabled: selected === null,
+        label: "Continue",
+      })}
+    </div>
   </div>`;
+};
 
 /**
  * The pre-picker connect state: it needs a user gesture (the browser's device
@@ -77,7 +97,11 @@ export const ledgerConnectPrompt = (): string =>
     icon("shield"),
     `<h1>Connect a Ledger</h1>
       <p class="lede">Your browser will ask you to select your Ledger. This only connects it — no funds move.</p>`,
-    `<button class="primary" data-ledger-onboard-connect type="button">${icon("shield")}Connect a Ledger</button>
+    `${button({
+      attributes: { "data-ledger-onboard-connect": true },
+      icon: "shield",
+      label: "Connect a Ledger",
+    })}
       ${ledgerOnboardCancel()}`,
   );
 
@@ -104,13 +128,12 @@ export const ledgerDevicePicker = (devices: readonly LedgerDeviceChoice[]): stri
       <p class="lede">More than one Ledger is connected. Select the device to read.</p>`,
     `<div class="add-account-chooser" role="group" aria-label="Connected Ledger devices">
       ${devices
-        .map(
-          (device) =>
-            `<button class="menu-row" data-ledger-device="${escapeHtml(device.id)}" type="button">
-              <span class="menu-icon">${icon("shield")}</span>
-              <span class="menu-copy"><strong>${escapeHtml(device.label)}</strong></span>
-              <span class="menu-chevron">${icon("chevronRight")}</span>
-            </button>`,
+        .map((device) =>
+          menuRow({
+            attributes: { "data-ledger-device": device.id },
+            icon: "shield",
+            label: device.label,
+          }),
         )
         .join("")}
     </div>
@@ -126,7 +149,12 @@ export const ledgerOnboardError = (message: string): string =>
     icon("alert"),
     `<h1>Something went wrong</h1>
       <p class="review-flag">${escapeHtml(message)}</p>`,
-    `<button class="secondary" data-ledger-onboard-connect type="button">${icon("refresh")}Try again</button>
+    `${button({
+      attributes: { "data-ledger-onboard-connect": true },
+      icon: "refresh",
+      label: "Try again",
+      variant: "secondary",
+    })}
       ${ledgerOnboardCancel()}`,
   );
 
@@ -134,7 +162,7 @@ const deployedLabel = (deployed: boolean | null): string =>
   deployed === null
     ? '<span class="hint">Checking…</span>'
     : deployed
-      ? '<span class="pill">Deployed</span>'
+      ? pill("Deployed")
       : '<span class="hint">Not deployed — needs funding before its first transaction</span>';
 
 const balanceLabel = (balance: string | null): string =>
@@ -156,7 +184,7 @@ const candidateRow = (candidate: LedgerCandidate, selected: readonly number[]): 
     return `
   <li class="allowance-row is-duplicate">
     <div class="allowance-copy">${candidateMeta(candidate)}</div>
-    <span class="pill">Already in this wallet</span>
+    ${pill("Already in this wallet")}
   </li>`;
   }
   const checked = selected.includes(index) ? " checked" : "";
@@ -185,7 +213,7 @@ export const ledgerAccountPicker = (
 ): string => {
   const list =
     candidates.length === 0
-      ? '<p class="empty">No accounts read from the device yet.</p>'
+      ? emptyState("No accounts read from the device yet.")
       : `<ul class="allowance-list">${candidates.map((candidate) => candidateRow(candidate, selected)).join("")}</ul>`;
   const count = selected.length;
   const addLabel = count > 0 ? `Add selected (${count})` : "Add selected";
@@ -197,9 +225,20 @@ export const ledgerAccountPicker = (
     </div>
     ${message ? `<p class="review-flag" role="alert">${escapeHtml(message)}</p>` : ""}
     ${list}
-    <button class="ghost small" data-ledger-load-more type="button">${icon("plus")}Show more</button>
+    ${button({
+      attributes: { "data-ledger-load-more": true },
+      icon: "plus",
+      label: "Show more",
+      size: "small",
+      variant: "ghost",
+    })}
     <div class="onboard-actions">
-      <button class="primary" data-ledger-add-selected type="button"${count === 0 ? " disabled" : ""}>${icon("plus")}${addLabel}</button>
+      ${button({
+        attributes: { "data-ledger-add-selected": true },
+        disabled: count === 0,
+        icon: "plus",
+        label: addLabel,
+      })}
       ${ledgerOnboardCancel()}
     </div>
   </div>`;

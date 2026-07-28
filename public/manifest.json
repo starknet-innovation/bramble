@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MC Wallet",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Starknet browser extension wallet shell.",
   "action": {
     "default_title": "Open MC Wallet"

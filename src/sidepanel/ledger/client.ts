@@ -25,7 +25,7 @@ import { LedgerRejection, type LedgerRejectionCode } from "./errors";
 // package's types would pull its `@ledgerhq/hw-transport` declaration into the
 // type-checked program, and that vendored `.d.ts` does not compile under this
 // repo's pinned `skipLibCheck: false` / `types: ["bun-types"]` toolchain. The
-// concrete `StarknetClient` is confined to the runtime-only WebHID boundary
+// concrete `StarknetClient` is confined to the runtime-only browser transport boundary
 // (`webhid-impl.js`); every typed field below matches the real response, so the
 // real client is structurally assignable to {@link LedgerDeviceClient}.
 type DeviceResponseBase = { readonly errorMessage: string; readonly returnCode: number };
@@ -73,6 +73,8 @@ export const MC_LEDGER_STARKNET_APP_MIN: LedgerAppVersion = { major: 2, minor: 0
 // LedgerError). Kept as local constants so this module needs no runtime import
 // from the ledger package (type-only imports above keep tests light).
 const STATUS_OK = 0x9000;
+const STATUS_BAD_CLA = 0x6e00;
+const STATUS_BAD_INS = 0x6e01;
 const STATUS_USER_REJECTED = 0x6e04;
 // The catch-all the library reports for every thrown transport error and for any
 // status word its `sendApdu` does not explicitly accept (see the module header).
@@ -106,7 +108,9 @@ const publicKeyXOf = (publicKey: Uint8Array): string => feltFromBytes(publicKey.
 const classifyDeviceStatus = (returnCode: number): LedgerRejection =>
   returnCode === STATUS_USER_REJECTED
     ? new LedgerRejection("rejected-on-device", returnCode)
-    : new LedgerRejection("unexpected-device-error", returnCode);
+    : returnCode === STATUS_BAD_CLA || returnCode === STATUS_BAD_INS
+      ? new LedgerRejection("no-app-open", returnCode)
+      : new LedgerRejection("unexpected-device-error", returnCode);
 
 // Classifies a non-OK return code from `signHash`. The library reports a user
 // rejection as UserRejected, but folds every other on-device refusal — including
@@ -132,6 +136,7 @@ const classifySignStatus = (returnCode: number): LedgerRejection => {
 // pre-check's version read is where a locked/disconnected/busy device surfaces.
 // The default is unexpected-device-error.
 const THROWN_SIGNATURES: readonly (readonly [RegExp, LedgerRejectionCode])[] = [
+  [/\b(?:0x6d00|0x6e00|0x6e01|INS_NOT_SUPPORTED|CLA_NOT_SUPPORTED)\b/i, "no-app-open"],
   [/locked/i, "device-locked"],
   [/disconnect/i, "disconnected-mid-sign"],
   [/already open|in use|claimed|busy/i, "device-busy"],
@@ -145,6 +150,14 @@ const mapThrown = (error: unknown): LedgerRejection => {
   const match = THROWN_SIGNATURES.find(([pattern]) => pattern.test(text));
   return new LedgerRejection(match ? match[1] : "unexpected-device-error");
 };
+
+/**
+ * Reduces an untrusted browser-transport throw to the fixed Ledger rejection
+ * catalog. The retained hardware-tab broker uses this before an error crosses
+ * its extension-origin channel, so raw device/library messages never leave the
+ * transport-owning context.
+ */
+export const ledgerTransportRejection = (error: unknown): LedgerRejection => mapThrown(error);
 
 const runDevice = async <T>(op: () => Promise<T>): Promise<T> => {
   try {

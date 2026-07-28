@@ -30,6 +30,8 @@ const extensionSender: RuntimeSender = {
 const vaultPassphrase = "correct horse battery staple";
 const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
 const tokenId = `SN_MAIN:ETH:${ETH}`;
+const OTHER_ACCOUNT_ID =
+  "SN_MAIN:0x9234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 
 const walletStub = {
   async createAccount() {
@@ -217,7 +219,21 @@ describe("wallet operations", () => {
   });
 
   test("transfers are recorded and the activity feed refreshes their status", async () => {
-    const { handler, statusRequests } = makeHarness();
+    const { activity: activityLog, handler, statusRequests } = makeHarness();
+    await activityLog.record({
+      accountId: OTHER_ACCOUNT_ID,
+      hash: "0x8ab",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Another account send",
+    });
+    await activityLog.record({
+      accountId: account.id,
+      hash: "0x9ab",
+      kind: "transfer",
+      networkId: "SN_SEPOLIA",
+      summary: "Another network send",
+    });
     await handler(
       {
         accountId: account.id,
@@ -240,6 +256,9 @@ describe("wallet operations", () => {
     expect(activity[0]?.status).toBe("accepted");
     expect(activity[0]?.summary).toContain("Send 1.5 ETH");
     expect(statusRequests).toEqual([["0x7ab"]]);
+    const stored = await activityLog.list();
+    expect(stored.find((entry) => entry.hash === "0x8ab")?.status).toBe("pending");
+    expect(stored.find((entry) => entry.hash === "0x9ab")?.status).toBe("pending");
   });
 
   test("merges real on-chain history into the feed, deduped against local records", async () => {

@@ -104,6 +104,20 @@ describe("account lifecycle wrappers", () => {
     );
   });
 
+  test("previewAccount returns public metadata and pins the first derivation index", async () => {
+    const { sent, wallet } = captureRuntime(createAccountResponse);
+    await expect(wallet.previewAccount("seed words", "SN_SEPOLIA")).resolves.toEqual(account);
+    expect(sent[0]).toEqual({
+      accountIndex: 0,
+      mnemonic: "seed words",
+      networkId: "SN_SEPOLIA",
+      type: "wallet.previewAccount",
+    });
+    await expect(runtimeReturning({}).previewAccount("seed", "SN_MAIN")).rejects.toThrow(
+      "account preview unavailable",
+    );
+  });
+
   test("setActiveAccount resolves on a create-account echo and throws otherwise", async () => {
     await expect(
       runtimeReturning(createAccountResponse).setActiveAccount(account.id),

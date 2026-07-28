@@ -189,4 +189,80 @@ describe("home hydration priority", () => {
     expect(paints).toBe(0);
     expect(cache.balances).toEqual({ error: "wallet locked" });
   });
+
+  test("hydrates a multisig home from the shared account balance scope", async () => {
+    const multisigId = "SN_MAIN:0x7123";
+    const sharedBalances = {
+      balances: [
+        {
+          address: "0x3306",
+          balance: "125000000",
+          decimals: 6,
+          formatted: "125",
+          id: "SN_MAIN:USDC:0x3306",
+          name: "USD Coin",
+          networkId: "SN_MAIN" as const,
+          symbol: "USDC",
+        },
+      ],
+    };
+    const cache = emptyRenderCache();
+    let signerBalanceReads = 0;
+    const sharedBalanceReads: string[] = [];
+    const sharedNftReads: unknown[][] = [];
+    const record = {
+      address: "0x7123",
+      id: multisigId,
+      networkId: "SN_MAIN" as const,
+      quorum: 2,
+      signers: ["0x1", "0x2"],
+    };
+
+    await hydrateView({
+      activeView: "multisig-home",
+      cache,
+      deployment: {},
+      multisig: {
+        loadBalances: async (id: string) => {
+          sharedBalanceReads.push(id);
+          return sharedBalances;
+        },
+        loadMultisigs: async () => ({ multisigs: [record], proposals: [] }),
+        refreshMultisig: async () => undefined,
+      },
+      paint: () => undefined,
+      selectedMultisigId: multisigId,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        discoverNfts: async (...input: readonly unknown[]) => {
+          sharedNftReads.push([...input]);
+          return [
+            {
+              collection: "Shared collection",
+              contract: "0x456",
+              id: "SN_MAIN:0x456:7",
+              image: "",
+              name: "Shared NFT #7",
+              networkId: "SN_MAIN",
+              tokenId: "7",
+            },
+          ];
+        },
+        loadBalances: async () => {
+          signerBalanceReads += 1;
+          return { balances: [] };
+        },
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    expect(sharedBalanceReads).toEqual([multisigId]);
+    expect(signerBalanceReads).toBe(0);
+    expect(cache.multisigBalanceId).toBe(multisigId);
+    expect(cache.multisigBalances).toEqual(sharedBalances);
+    expect(sharedNftReads).toEqual([[true, `${status.networkId}:${multisigId}`, multisigId]]);
+    expect(cache.multisigNftId).toBe(multisigId);
+    expect(cache.multisigNfts).toHaveLength(1);
+  });
 });

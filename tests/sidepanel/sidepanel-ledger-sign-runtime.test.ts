@@ -86,6 +86,7 @@ type ClientConnector = {
 type Harness = {
   readonly closed: () => number;
   readonly mount: HTMLElement;
+  readonly signatureReports: () => number;
   readonly reports: LedgerSignOutcome[];
 };
 
@@ -100,6 +101,7 @@ const mountRuntime = (
   document.body.append(mount);
   const reports: LedgerSignOutcome[] = [];
   let closed = 0;
+  let signatureReports = 0;
   const wrap = (client: LedgerDeviceClient): LedgerDeviceSession => ({
     client,
     close: () => {
@@ -116,6 +118,9 @@ const mountRuntime = (
   const runtime = createLedgerSignRuntime({
     connector,
     mount,
+    onSignatureReported: () => {
+      signatureReports += 1;
+    },
     status: () => status,
     wallet: {
       completeLedgerSign: (outcome) => {
@@ -125,7 +130,13 @@ const mountRuntime = (
       loadLedgerSignPending: () => Promise.resolve(pending),
     },
   });
-  return { closed: () => closed, mount, poll: runtime.poll, reports };
+  return {
+    closed: () => closed,
+    mount,
+    poll: runtime.poll,
+    reports,
+    signatureReports: () => signatureReports,
+  };
 };
 
 const click = (mount: HTMLElement, selector: string): void => {
@@ -172,6 +183,7 @@ describe("Ledger sign runtime (DOM)", () => {
     expect(h.mount.hidden).toBe(true);
     expect(h.mount.children.length).toBe(0);
     expect(h.closed()).toBe(1);
+    expect(h.signatureReports()).toBe(1);
   });
 
   test("the connect button click resolves a gesture and signs", async () => {
@@ -242,6 +254,7 @@ describe("Ledger sign runtime (DOM)", () => {
     await tick();
     expect(h.reports).toEqual([{ error: "rejected-on-device", id: "ledger-sign-1" }]);
     expect(h.mount.hidden).toBe(true);
+    expect(h.signatureReports()).toBe(0);
   });
 
   test("the retry button re-drives the device after a recoverable error", async () => {

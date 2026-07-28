@@ -77,19 +77,25 @@ describe("sendFlow list callbacks", () => {
     const html = sendFlow(status, account, withData);
 
     // Only the mainnet token/address survive the network filter, and each runs
-    // through the map callback that builds an <option>.
-    expect(html).toContain('<option value="SN_MAIN:ETH">ETH — Ether</option>');
+    // through the picker row callback.
+    expect(html).toContain('data-send-asset="SN_MAIN:ETH"');
+    expect(html).toContain('data-send-symbol="ETH"');
     expect(html).not.toContain("SN_SEPOLIA:STRK");
-    expect(html).toContain('<option value="0xaaa1">Ada</option>');
+    expect(html).toContain('data-send-recipient="0xaaa1"');
+    expect(html).toContain('data-send-recipient-label="Ada"');
     expect(html).not.toContain("Grace");
+    expect(html).toMatch(/send-network-context[\s\S]*?send-network-mark[\s\S]*?class="token-logo"/);
+    expect(html).toMatch(
+      /<dt>Network<\/dt><dd class="network-inline-value">[\s\S]*?class="token-logo"/,
+    );
     // With a token available the form is enabled (canSend).
-    expect(html).not.toMatch(/name="tokenId"[^>]*disabled/);
+    expect(html).not.toMatch(/id="send-token-trigger"[^>]*disabled/);
   });
 
   test("disables the form and lists no tokens when the network has none", () => {
     const html = sendFlow(status, account, preferences);
     expect(html).toContain("No tokens are tracked on this network yet");
-    expect(html).toMatch(/name="tokenId"[^>]*disabled/);
+    expect(html).toMatch(/id="send-token-trigger"[^>]*disabled/);
   });
 });
 

@@ -8,7 +8,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
-import { multisigDeployFlow, multisigDetailFlow } from "../../src/sidepanel/multisig-views";
+import { multisigSignersFlow } from "../../src/sidepanel/multisig-management-views";
+import { multisigDeployFlow } from "../../src/sidepanel/multisig-views";
 import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 import type { MultisigRecord } from "../../src/storage/multisig-store";
 import type { AccountRef, LedgerAccountRef } from "../../src/storage/vault-schema";
@@ -60,7 +61,7 @@ describe("multisig detail signer badge", () => {
       quorum: 1,
       signers: [ledgerSigner.address, "0x222"],
     };
-    const html = multisigDetailFlow(status, account, record, []);
+    const html = multisigSignersFlow(status, account, record);
     expect(html).toContain("pill-hardware");
     // Only the Ledger signer row carries it, not the plain 0x222 signer.
     expect(html.match(/pill-hardware/g)?.length).toBe(1);

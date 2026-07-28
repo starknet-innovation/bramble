@@ -41,4 +41,14 @@ describe("mutation runtime", () => {
 
     expect(notifications).toBe(0);
   });
+
+  test("has a harmless default listener before the UI scheduler is attached", async () => {
+    const runtime = createMutationRuntime({
+      async sendMessage() {
+        return { ok: true };
+      },
+    });
+
+    await expect(runtime.sendMessage({ type: "wallet.transfer" })).resolves.toEqual({ ok: true });
+  });
 });

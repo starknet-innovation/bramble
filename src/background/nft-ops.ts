@@ -353,11 +353,21 @@ const handleDiscoverNfts = async (
   if (context.error !== undefined) {
     return { error: context.error };
   }
+  const watchedMultisig =
+    input.multisigId === undefined || !deps.multisigStore
+      ? undefined
+      : (await deps.multisigStore.listMultisigs()).find(
+          (record) => record.id === input.multisigId && record.networkId === context.networkId,
+        );
+  const owner = input.multisigId === undefined ? context.account.address : watchedMultisig?.address;
+  if (owner === undefined) {
+    return { error: "multisig not found on the active network" };
+  }
   const preferences = await deps.preferencesStore.read();
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences);
   const indexer = deps.runtimeRpc.nftIndexer ?? unavailableNftIndexer;
   const candidates = await indexer.listOwnedNfts({
-    address: context.account.address,
+    address: owner,
     indexerUrl: preferences.nftIndexerUrl ?? null,
     networkId: context.networkId,
   });
@@ -369,7 +379,7 @@ const handleDiscoverNfts = async (
   // Never trust the indexer's ownership claim: re-prove each token through its
   // ERC721 owner or ERC1155 balance surface, dropping any the account no longer
   // owns (or that fail to read) so the gallery only shows verified holdings.
-  const owned = await filterOwnedNfts(deps, candidatesToVerify, context.account.address, rpcUrls);
+  const owned = await filterOwnedNfts(deps, candidatesToVerify, owner, rpcUrls);
   // Only explicitly watched NFTs resolve their token_uri/uri here. This preserves
   // the gallery's anti-tracking boundary: unsolicited airdrops never make the
   // extension contact an attacker-controlled metadata host in the background.

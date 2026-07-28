@@ -1,8 +1,7 @@
 /**
  * Snapshot-style coverage for the pure Ledger sign device-prompt template. Each
- * phase (connect / confirm / error) renders its title, controls, and the
- * account/index being signed with, and the error phase surfaces the catalog
- * message escaped — never a raw device error as the headline.
+ * Each phase renders its title, controls, progress rail, and the account/index
+ * being signed with. Errors surface escaped catalog recovery copy.
  */
 import { describe, expect, test } from "bun:test";
 import type { LedgerSignRequestSummary, WalletStatus } from "../../src/popup/responses";
@@ -45,9 +44,12 @@ describe("ledgerSignScreen", () => {
 
   test("confirming phase shows the on-device wait and a cancel control", () => {
     const html = render({ kind: "confirming" });
-    expect(html).toContain("Confirm on your Ledger");
+    expect(html).toContain("Approve on your Ledger");
     expect(html).toContain("data-ledger-cancel");
     expect(html).not.toContain("data-ledger-connect");
+    expect(html).toContain('aria-current="step"');
+    expect(html).toContain('data-liquid-dots="ledger"');
+    expect(html).toContain('id="mc-liquid-dots-ledger"');
   });
 
   test("error phase renders the escaped catalog message with retry and cancel", () => {
@@ -56,10 +58,11 @@ describe("ledgerSignScreen", () => {
       kind: "error",
       message: "Turn on Blind signing in the Starknet app settings on your Ledger, then retry.",
     });
-    expect(html).toContain("Ledger could not sign");
+    expect(html).toContain("Ledger needs attention");
     expect(html).toContain("Turn on Blind signing");
     expect(html).toContain("data-ledger-retry");
     expect(html).toContain("data-ledger-cancel");
+    expect(html).not.toContain('data-liquid-dots="ledger"');
   });
 
   test("device phase renders escaped device choices", () => {
@@ -73,6 +76,12 @@ describe("ledgerSignScreen", () => {
     expect(html).toContain("Choose your Ledger");
     expect(html).toContain('data-ledger-device="second"');
     expect(html).toContain("Ledger &lt;2&gt;");
+  });
+
+  test("verification and handoff phases describe the real work in progress", () => {
+    expect(render({ kind: "checking" })).toContain("Reading the Starknet app version");
+    expect(render({ kind: "verifying" })).toContain("Matching the device public key");
+    expect(render({ kind: "submitting" })).toContain("Signature received");
   });
 
   test("a path with no recoverable index omits the index suffix", () => {

@@ -1,7 +1,7 @@
 /**
  * Background-side Ledger signing adapter. A keyless Ledger account cannot be
  * signed by the vault (it holds no key), so the background hands the hash to the
- * side panel that owns the WebHID transport, the device blind-signs it, and the
+ * side panel that owns the browser transport, the device blind-signs it, and the
  * raw `(r, s)` comes back. This wraps that round-trip in the mandatory
  * verify-before-broadcast gate: the returned signature is checked against the
  * account's stored `publicKeyX` for the exact hash handed out, and any mismatch

@@ -55,8 +55,9 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
     "This Ledger account was set up for another network. Switch networks or pick a matching account.",
   "no-app-open":
     "Open the Starknet app on your Ledger. If Ledger Live can't find or install it, update your device firmware first (Ledger Live > My Ledger), then open the app.",
-  "panel-context-lost": "The signing window closed before you confirmed. Nothing was submitted.",
-  "picker-cancelled": "No Ledger was selected.",
+  "panel-context-lost": "The Ledger tab closed before you confirmed. Nothing was submitted.",
+  "picker-cancelled":
+    "No Ledger was chosen. Connect it by USB, unlock it, open the Starknet app, then try again.",
   "rejected-on-device": "You rejected the request on your Ledger. Nothing was submitted.",
   replug: "Reconnect your Ledger, then try again.",
   "sign-timeout": "Still waiting for you to confirm on your Ledger.",
@@ -91,6 +92,13 @@ export class LedgerRejection extends Error {
  * new code cannot ship without copy.
  */
 export const ledgerMessage = (code: LedgerRejectionCode): string => LEDGER_MESSAGES[code];
+
+/**
+ * Narrows an untrusted value to a code actually present in the single-source
+ * Ledger message catalog.
+ */
+export const isLedgerRejectionCode = (value: unknown): value is LedgerRejectionCode =>
+  typeof value === "string" && Object.hasOwn(LEDGER_MESSAGES, value);
 
 /**
  * Narrows an unknown thrown value to a {@link LedgerRejection}, or wraps it as

@@ -16,6 +16,8 @@ import {
   GROUP_ICONS,
 } from "../storage/account-groups";
 import type { AccountRef } from "../storage/vault-schema";
+import { button } from "../ui/controls";
+import { inputControl } from "../ui/fields";
 import { icon } from "./icons";
 
 /**
@@ -38,9 +40,23 @@ export const groupIconPicker = (selected: AccountGroupIcon = "folder"): string =
  */
 export const newGroupForm = (): string => `
   <form class="new-group-form">
-    <input class="group-name-input" data-group-name maxlength="64" placeholder="New group name" autocomplete="off" aria-label="New group name" />
+    ${inputControl({
+      ariaLabel: "New group name",
+      attributes: { "data-group-name": true },
+      autocomplete: "off",
+      className: "group-name-input",
+      maxlength: 64,
+      placeholder: "New group name",
+    })}
     ${groupIconPicker()}
-    <button class="secondary small" type="submit" data-create-group>${icon("plus")}Create group</button>
+    ${button({
+      attributes: { "data-create-group": true },
+      icon: "plus",
+      label: "Create group",
+      size: "small",
+      type: "submit",
+      variant: "secondary",
+    })}
   </form>`;
 
 /**
@@ -52,9 +68,23 @@ export const newGroupForm = (): string => `
  */
 export const editGroupForm = (group: AccountGroup): string => `
   <form class="edit-group-form" data-edit-group="${escapeHtml(group.id)}">
-    <input class="group-name-input" data-group-name maxlength="64" value="${escapeHtml(group.name)}" autocomplete="off" aria-label="Group name" />
+    ${inputControl({
+      ariaLabel: "Group name",
+      attributes: { "data-group-name": true },
+      autocomplete: "off",
+      className: "group-name-input",
+      maxlength: 64,
+      value: group.name,
+    })}
     ${groupIconPicker(group.icon)}
-    <button class="secondary small" type="submit" data-save-group="${escapeHtml(group.id)}">${icon("check")}Save changes</button>
+    ${button({
+      attributes: { "data-save-group": group.id },
+      icon: "check",
+      label: "Save changes",
+      size: "small",
+      type: "submit",
+      variant: "secondary",
+    })}
   </form>`;
 
 /**

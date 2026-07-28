@@ -4,14 +4,18 @@
  * returns through its back control, so journeys never blur into the home
  * screen.
  */
-import type { ConnectedSite, WalletStatus } from "../popup/responses";
+import type { ConnectedSite, TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { knownAccountType } from "../starknet/account-types";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import { isStarknetNetworkId } from "../starknet/networks";
-import type { WalletPreferences } from "../storage/preferences-store";
+import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { receipt } from "../ui/content";
+import { button } from "../ui/controls";
+import { textareaField, textField } from "../ui/fields";
+import { menuRow } from "../ui/navigation";
 import { allowancesFlow } from "./allowance-views";
 import { accountGroupsLine } from "./group-controls";
 import { groupsSection } from "./group-members";
@@ -25,62 +29,23 @@ import {
   flowScreen,
   noAccountEmpty,
   type WalletView,
+  walletMenuRow,
 } from "./parts";
 import { qrSvg } from "./qr";
+import { sendFlow } from "./send-views";
+import {
+  appearanceFlow,
+  backupExportFlow,
+  backupRestoreFlow,
+  requestSettingsFlow,
+  securityFlow,
+} from "./settings-views";
+import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 import { swapFlow } from "./swap-views";
 
-/**
- * Send flow: pick a token, a recipient, and an amount, then submit.
- */
-export const sendFlow = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  preferences: WalletPreferences | null,
-): string => {
-  const tokens = preferences?.tokens.filter((token) => token.networkId === status.networkId) ?? [];
-  const addresses =
-    preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
-  const canSend = account !== null && tokens.length > 0;
-  return (
-    flowHeader("Send", status, account ? `From ${accountLabel(account.address)}` : "") +
-    flowScreen(
-      "send",
-      `<section class="section">
-        ${account ? "" : noAccountEmpty(status)}
-        ${
-          account && tokens.length === 0
-            ? '<p class="empty">No tokens are tracked on this network yet, so nothing can be sent.</p>'
-            : ""
-        }
-        <form id="transfer-form">
-          <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
-          <label><span>Token</span>
-            <select name="tokenId" ${canSend ? "" : "disabled"}>
-              ${tokens.map((token) => `<option value="${escapeHtml(token.id)}">${escapeHtml(token.symbol)} — ${escapeHtml(token.name)}</option>`).join("")}
-            </select>
-          </label>
-          <label><span>Recipient</span>
-            <input class="mono" name="recipient" list="address-book" placeholder="0x…" required autocomplete="off" spellcheck="false" ${canSend ? "" : "disabled"} />
-            <span class="hint">Paste an address or pick a saved one from your address book.</span>
-          </label>
-          <label><span>Amount</span>
-            <input class="mono" name="amount" inputmode="decimal" placeholder="0.0" required autocomplete="off" ${canSend ? "" : "disabled"} />
-          </label>
-          <label><span>Speed</span>
-            <select name="speed" ${canSend ? "" : "disabled"}>
-              <option value="standard" selected>Standard</option>
-              <option value="fast">Fast — pays up to 1.5x the estimated fee</option>
-            </select>
-          </label>
-          <div id="review-panel"></div>
-          <button type="submit" ${canSend ? "" : "disabled"}>${icon("send")}Review send</button>
-          <p id="transfer-result" role="status"></p>
-        </form>
-        <datalist id="address-book">${addresses.map((entry) => `<option value="${escapeHtml(entry.address)}">${escapeHtml(entry.label)}</option>`).join("")}</datalist>
-      </section>`,
-    )
-  );
-};
+export { sendFlow } from "./send-views";
+export { backupHubFlow as backupFlow } from "./settings-views";
+export { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 /**
  * Receive flow: show and copy the active account address.
@@ -99,12 +64,46 @@ export const receiveFlow = (status: WalletStatus, account: AccountRef | null): s
                 <code>${escapeHtml(account.address)}</code>
                 ${copyButton(account.address, "Copy address")}
               </div>
-              <button data-copy="${escapeHtml(account.address)}" type="button">${icon("copy")}Copy address</button>
+              ${button({
+                attributes: { "data-copy": account.address },
+                icon: "copy",
+                label: "Copy address",
+              })}
               <p class="hint">Only send ${escapeHtml(status.network)} assets to this address.</p>
             </div>`
           : noAccountEmpty(status)
       }
       <p id="receive-result" role="status"></p>
+    </section>`,
+  );
+
+/**
+ * Renders raw-key import as a dedicated security-sensitive task reached from
+ * the Add account chooser.
+ */
+export const importKeyFlow = (status: WalletStatus): string =>
+  flowHeader("Import private key", status, `Add a standalone account on ${status.network}`) +
+  flowScreen(
+    "import-key",
+    `<section class="section">
+      <p class="review-flag" role="note">Anyone with this key controls the account. Paste it only on a device you trust.</p>
+      <form id="import-key-form" class="stack">
+        ${textareaField({
+          autocomplete: "off",
+          hint: "The key is validated and stored inside the encrypted vault, never in plain settings.",
+          label: "Raw Starknet private key",
+          name: "rawKey",
+          placeholder: "0x…",
+          required: true,
+          spellcheck: false,
+        })}
+        ${button({
+          icon: "wallet",
+          label: "Import account",
+          type: "submit",
+        })}
+        <p id="import-key-result" role="status"></p>
+      </form>
     </section>`,
   );
 
@@ -138,9 +137,8 @@ const endpointDisclosure = (
   </details>`;
 
 /**
- * Network flow: pick the active network up top; custom endpoints (RPC, STRK20
- * prover, NFT indexer) sit behind collapsed disclosures so the expert plumbing
- * never crowds the primary task.
+ * Network flow: choose the active network without mixing infrastructure edits
+ * into the same task. Advanced endpoints are a deliberate second screen.
  */
 export const networkFlow = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   flowHeader("Network", status, "Choose where the wallet operates") +
@@ -166,18 +164,53 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
       <p id="picker-result" role="status"></p>
     </section>
     <section class="section">
-      <p class="eyebrow">Advanced</p>
+      <div class="menu-list">
+        ${walletMenuRow(
+          "advanced-network",
+          "Advanced endpoints",
+          "settings",
+          rpcOverrideFor(status, preferences) ? "Custom RPC" : "Defaults",
+        )}
+      </div>
+    </section>`,
+  );
+
+/**
+ * Renders expert RPC, prover, and NFT-indexer endpoints away from the primary
+ * network picker. Every field preserves its existing privileged binding.
+ */
+export const advancedNetworkFlow = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): string =>
+  flowHeader("Advanced endpoints", status, "Only change infrastructure you trust") +
+  flowScreen(
+    "advanced-network",
+    `<section class="section">
+      <p class="review-flag" role="note">Custom endpoints can observe requests made through them. Leave a field empty to use the wallet default or keep that integration off.</p>
       <div class="disclosure-stack">
         ${endpointDisclosure(
           "rpc",
           "RPC endpoint",
           rpcOverrideFor(status, preferences) ? "Custom" : "Default",
           `<form id="rpc-form">
-            <label><span>Custom endpoint for ${escapeHtml(status.network)}</span>
-              <input class="mono" name="rpcUrl" type="url" placeholder="https://…" value="${escapeHtml(rpcOverrideFor(status, preferences))}" autocomplete="off" spellcheck="false" />
-              <span class="hint">Used as the default when set. Leave empty to use the built-in endpoint.</span>
-            </label>
-            <button class="secondary" type="submit">${icon("check")}Save endpoint</button>
+            ${textField({
+              autocomplete: "off",
+              className: "mono",
+              hint: "Used as the default when set. Leave empty to use the built-in endpoint.",
+              label: `Custom endpoint for ${status.network}`,
+              name: "rpcUrl",
+              placeholder: "https://…",
+              spellcheck: false,
+              type: "url",
+              value: rpcOverrideFor(status, preferences),
+            })}
+            ${button({
+              icon: "check",
+              label: "Save endpoint",
+              type: "submit",
+              variant: "secondary",
+            })}
             <p id="rpc-result" role="status"></p>
           </form>`,
         )}
@@ -186,11 +219,23 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
           "STRK20 prover",
           strk20ProverUrlFor(preferences) ? "Configured" : "Off",
           `<form id="strk20-prover-form">
-            <label><span>Privacy prover endpoint</span>
-              <input class="mono" name="proverUrl" type="url" placeholder="https://…" value="${escapeHtml(strk20ProverUrlFor(preferences))}" autocomplete="off" spellcheck="false" />
-              <span class="hint">Where the wallet requests STRK20 proofs. Leave empty to keep privacy features off.</span>
-            </label>
-            <button class="secondary" type="submit">${icon("check")}Save prover</button>
+            ${textField({
+              autocomplete: "off",
+              className: "mono",
+              hint: "Where the wallet requests STRK20 proofs. Leave empty to keep privacy features off.",
+              label: "Privacy prover endpoint",
+              name: "proverUrl",
+              placeholder: "https://…",
+              spellcheck: false,
+              type: "url",
+              value: strk20ProverUrlFor(preferences),
+            })}
+            ${button({
+              icon: "check",
+              label: "Save prover",
+              type: "submit",
+              variant: "secondary",
+            })}
             <p id="strk20-prover-result" role="status"></p>
           </form>`,
         )}
@@ -199,11 +244,23 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
           "NFT indexer",
           nftIndexerUrlFor(preferences) ? "Configured" : "Off",
           `<form id="nft-indexer-form">
-            <label><span>NFT discovery endpoint</span>
-              <input class="mono" name="indexerUrl" type="url" placeholder="https://…" value="${escapeHtml(nftIndexerUrlFor(preferences))}" autocomplete="off" spellcheck="false" />
-              <span class="hint">Where the wallet lists NFTs an account owns. Ownership is re-checked on-chain. Leave empty to only show manually watched NFTs.</span>
-            </label>
-            <button class="secondary" type="submit">${icon("check")}Save indexer</button>
+            ${textField({
+              autocomplete: "off",
+              className: "mono",
+              hint: "Where the wallet lists NFTs an account owns. Ownership is re-checked on-chain. Leave empty to only show manually watched NFTs.",
+              label: "NFT discovery endpoint",
+              name: "indexerUrl",
+              placeholder: "https://…",
+              spellcheck: false,
+              type: "url",
+              value: nftIndexerUrlFor(preferences),
+            })}
+            ${button({
+              icon: "check",
+              label: "Save indexer",
+              type: "submit",
+              variant: "secondary",
+            })}
             <p id="nft-indexer-result" role="status"></p>
           </form>`,
         )}
@@ -277,31 +334,19 @@ export const accountFlow = (
                   </button>`;
             })
             .join("")}
-          <button id="new-account" class="menu-row row-action" type="button" title="Derives the next account on ${escapeHtml(status.network)} from this wallet's recovery phrase.">
-            <span class="menu-icon">${icon("plus")}</span>
-            <span class="menu-copy"><strong>Add account</strong></span>
-          </button>
+          ${menuRow({
+            attributes: {
+              id: "new-account",
+              title: `Derives the next account on ${status.network} from this wallet's recovery phrase.`,
+            },
+            className: "row-action",
+            icon: "plus",
+            label: "Add account",
+          })}
         </div>
         ${networkAccounts.length === 0 ? noAccountEmpty(status) : ""}
         <p id="picker-result" role="status"></p>
         <p id="new-account-result" role="status"></p>
-      </section>
-      <section class="section">
-        <h2>Import private key</h2>
-        <p class="hint">Add a standalone account on ${escapeHtml(status.network)} from a raw Starknet key you already hold. The key is validated and stored in the encrypted vault, never in plain settings.</p>
-        <form id="import-key-form" class="stack">
-          <label><span>Raw private key</span>
-            <textarea name="rawKey" required autocomplete="off" spellcheck="false" placeholder="0x… (Starknet felt)"></textarea>
-            <span class="hint">Anyone with this key controls the account. Paste it only on a device you trust.</span>
-          </label>
-          <button class="secondary" type="submit">${icon("wallet")}Import account</button>
-          <p id="import-key-result" role="status"></p>
-        </form>
-      </section>
-      <section class="section">
-        <h2>Connect a Ledger</h2>
-        <p class="hint">Add a hardware account on ${escapeHtml(status.network)} from a Ledger device. Its private key never leaves the device; this reads only public keys to build the account list. The account is counterfactual until its first transaction — fund its address with STRK before sending.</p>
-        <button id="connect-ledger" class="secondary" data-connect-ledger type="button">${icon("shield")}Connect a Ledger</button>
       </section>
       ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}
       ${
@@ -309,129 +354,50 @@ export const accountFlow = (
           ? `<section class="section">
               <p class="eyebrow">Active account</p>
               <form id="label-form">
-                <label><span>Name</span>
-                  <input name="label" maxlength="64" value="${escapeHtml(preferences?.accountLabels?.[account.id] ?? "")}" placeholder="${accountLabel(account.address)}" autocomplete="off" />
-                  <span class="hint">Shown instead of the address. Leave empty to clear.</span>
-                </label>
-                <button class="secondary" type="submit">${icon("check")}Save name</button>
+                ${textField({
+                  autocomplete: "off",
+                  hint: "Shown instead of the address. Leave empty to clear.",
+                  label: "Name",
+                  maxlength: 64,
+                  name: "label",
+                  placeholder: accountLabel(account.address),
+                  value: preferences?.accountLabels?.[account.id] ?? "",
+                })}
+                ${button({
+                  icon: "check",
+                  label: "Save name",
+                  type: "submit",
+                  variant: "secondary",
+                })}
                 <p id="label-result" role="status"></p>
               </form>
-              <dl class="receipt">
-                <div class="receipt-row"><dt>Address</dt><dd><code>${accountLabel(account.address)}</code>${copyButton(account.address, "Copy address")}</dd></div>
-                <div class="receipt-row"><dt>Class hash</dt><dd><code>${accountLabel(account.classHash)}</code>${copyButton(account.classHash, "Copy class hash")}</dd></div>
-                ${accountType ? `<div class="receipt-row"><dt>Type</dt><dd>${escapeHtml(accountType)}</dd></div>` : ""}
-              </dl>
+              ${receipt([
+                {
+                  action: {
+                    attributes: { "data-copy": account.address },
+                    icon: "copy",
+                    label: "Copy address",
+                  },
+                  label: "Address",
+                  value: accountLabel(account.address),
+                  valueStyle: "code",
+                },
+                {
+                  action: {
+                    attributes: { "data-copy": account.classHash },
+                    icon: "copy",
+                    label: "Copy class hash",
+                  },
+                  label: "Class hash",
+                  value: accountLabel(account.classHash),
+                  valueStyle: "code",
+                },
+                ...(accountType ? [{ label: "Type", value: accountType }] : []),
+              ])}
               ${classHashVerificationBadge(classHashVerification)}
             </section>`
           : ""
       }`,
-    )
-  );
-};
-
-/**
- * Backup flow: export or restore non-secret wallet data. Never includes the
- * vault or any key material.
- */
-export const backupFlow = (status: WalletStatus): string => {
-  const hasLedgerAccount = status.accounts.some((account) => account.derivation.kind === "ledger");
-  return (
-    flowHeader("Backup & restore", status, "Preferences, labels, and contacts") +
-    flowScreen(
-      "backup",
-      `<section class="section">
-      <p class="eyebrow">Export</p>
-      <p class="hint">Downloads tokens, contacts, labels, and settings as JSON. Your recovery phrase and keys are never included.</p>
-      ${
-        hasLedgerAccount
-          ? '<p class="review-flag" role="note">Ledger accounts are not restored by this JSON backup or by MC Wallet’s recovery phrase. Recover them with your Ledger device and its Ledger recovery phrase.</p>'
-          : ""
-      }
-      <button id="backup-export" class="secondary" type="button">${icon("receive")}Download backup</button>
-      <p id="backup-result" role="status"></p>
-    </section>
-    <section class="section">
-      <p class="eyebrow">Restore</p>
-      <p class="hint">Replaces current preferences with a backup file exported from this wallet.</p>
-      <label><span>Backup file</span><input id="backup-file" type="file" accept="application/json" /></label>
-      <button id="backup-import" class="secondary" type="button">${icon("check")}Restore backup</button>
-    </section>`,
-    )
-  );
-};
-
-/**
- * Connected sites flow: list origins with active grants and revoke access.
- * Reachable from settings; reads its list from the background permissions
- * store and returns through the flow header back control.
- */
-export const connectedSitesFlow = (status: WalletStatus, sites: readonly ConnectedSite[]): string =>
-  flowHeader("Connected sites", status, `${sites.length} connected`) +
-  flowScreen(
-    "connected-sites",
-    `<section class="section">
-      <p class="hint">Connected sites can see your granted account addresses. Revoke any you no longer trust; the site is asked to reconnect next time.</p>
-      ${
-        sites.length === 0
-          ? '<p class="empty">No sites are connected yet. Approving a connection request lists the site here.</p>'
-          : `<ul class="address-book">${sites
-              .map(
-                (site) => `<li>
-                    <div class="stack-tight">
-                      <strong class="request-origin">${escapeHtml(site.origin)}</strong>
-                      <span class="hint">${site.accountCount} account${site.accountCount === 1 ? "" : "s"} shared</span>
-                    </div>
-                    <button class="icon-button danger" data-revoke-origin="${escapeHtml(site.origin)}" type="button" aria-label="Revoke ${escapeHtml(site.origin)}" title="Revoke ${escapeHtml(site.origin)}">${icon("x")}</button>
-                  </li>`,
-              )
-              .join("")}</ul>`
-      }
-      <p id="connected-sites-result" role="status"></p>
-    </section>`,
-  );
-
-/**
- * Address book flow: save and reuse recipient addresses for this network.
- */
-export const addressBookFlow = (
-  status: WalletStatus,
-  preferences: WalletPreferences | null,
-): string => {
-  const addresses =
-    preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
-  return (
-    flowHeader("Address book", status, `${addresses.length} saved`) +
-    flowScreen(
-      "address-book",
-      `<section class="section">
-        <form id="address-form">
-          <input name="networkId" type="hidden" value="${escapeHtml(status.networkId)}" />
-          <label><span>Label</span><input name="label" required autocomplete="off" /></label>
-          <label><span>Address</span><input class="mono" name="address" placeholder="0x…" required autocomplete="off" spellcheck="false" /></label>
-          <span class="hint">Saving an existing address updates its label.</span>
-          <button class="secondary" type="submit">${icon("check")}Save address</button>
-          <p id="address-result" role="status"></p>
-        </form>
-      </section>
-      <section class="section">
-        <p class="eyebrow">Saved addresses</p>
-        ${
-          addresses.length === 0
-            ? '<p class="empty">No saved addresses yet. Save one to reuse it when sending.</p>'
-            : `<ul class="address-book">${addresses
-                .map(
-                  (entry) => `<li>
-                    <div class="stack-tight">
-                      <strong>${escapeHtml(entry.label)}</strong>
-                      <code>${escapeHtml(accountLabel(entry.address))}</code>
-                    </div>
-                    ${copyButton(entry.address, `Copy ${entry.label}`)}
-                    <button class="icon-button danger" data-remove-address="${escapeHtml(entry.id)}" type="button" aria-label="Remove ${escapeHtml(entry.label)}" title="Remove ${escapeHtml(entry.label)}">${icon("x")}</button>
-                  </li>`,
-                )
-                .join("")}</ul>`
-        }
-      </section>`,
     )
   );
 };
@@ -446,22 +412,36 @@ export const simpleFlowScreen = (
   ctx: {
     readonly account: AccountRef | null;
     readonly allowances: readonly AllowanceView[];
+    readonly balances: readonly TokenBalance[];
+    readonly changes: Readonly<Record<string, number>>;
     readonly classHashVerification: ClassHashVerification | null;
     readonly connectedSites: readonly ConnectedSite[];
+    readonly currency: DisplayCurrency;
     readonly expandedGroupId: string | null;
     readonly preferences: WalletPreferences | null;
+    readonly prices: Readonly<Record<string, number>>;
     readonly status: WalletStatus;
   },
 ): string | null => {
   switch (activeView) {
     case "send":
-      return sendFlow(ctx.status, ctx.account, ctx.preferences);
+      return sendFlow(
+        ctx.status,
+        ctx.account,
+        ctx.preferences,
+        ctx.balances,
+        ctx.prices,
+        ctx.changes,
+        ctx.currency,
+      );
     case "swap":
       return swapFlow(ctx.status, ctx.account);
     case "receive":
       return receiveFlow(ctx.status, ctx.account);
     case "network":
       return networkFlow(ctx.status, ctx.preferences);
+    case "advanced-network":
+      return advancedNetworkFlow(ctx.status, ctx.preferences);
     case "account":
       return accountFlow(
         ctx.status,
@@ -470,12 +450,24 @@ export const simpleFlowScreen = (
         ctx.expandedGroupId,
         ctx.classHashVerification,
       );
+    case "import-key":
+      return importKeyFlow(ctx.status);
     case "address-book":
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":
       return connectedSitesFlow(ctx.status, ctx.connectedSites);
     case "allowances":
       return allowancesFlow(ctx.status, ctx.account, ctx.allowances);
+    case "appearance":
+      return appearanceFlow(ctx.status, ctx.preferences);
+    case "request-settings":
+      return requestSettingsFlow(ctx.status, ctx.preferences);
+    case "security":
+      return securityFlow(ctx.status);
+    case "backup-export":
+      return backupExportFlow(ctx.status);
+    case "backup-restore":
+      return backupRestoreFlow(ctx.status);
     default:
       return null;
   }

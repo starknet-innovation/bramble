@@ -8,12 +8,99 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
-## [0.7.1] - 2026-07-24
+## [0.7.2] - 2026-07-28
 
-Live Starknet portfolio data, a production trading terminal, and faster wallet
-state convergence after unlock and transactions.
+A focused interaction-design and security release: clearer onboarding and
+account management, deliberate transaction progress, practical multisig
+workflows, and an expanded review lab backed by hardened provider and release
+boundaries.
 
 ### Added
+- A unified Add account chooser, shared by the account drawer and Manage
+  accounts, with explicit Standard, Ledger, private-key import, and Multisig
+  signer models. Multisig setup then separates creating a new shared account
+  from adding an existing deployed account where the active account is already
+  a signer.
+- A complete Multisig portfolio and operations journey: shared balances and
+  collectibles, proposal-first major actions, guided token-transfer proposals,
+  address-book and wallet-account signer selection, quorum review, deployment,
+  proposal tracking, and independent scan/copy/local-decoder verification.
+- Recipient-first sending with address-book selection, searchable token
+  selection, token/fiat amount switching, a network-aware summary, decoded
+  action accordion, and explicit review before submission.
+- Deterministic account identity artwork, a fourth Portfolio quick action, an
+  MC Terminal handoff, and production Starknet marks wherever a destination
+  network is displayed.
+- Storybook checkpoints for the unified account chooser and Multisig
+  create/add-existing gateway, extending the organized wallet journeys and
+  deterministic design-review coverage.
+
+### Changed
+- The wallet now uses an intentionally monochrome interaction system so
+  hierarchy, focus, motion, and state remain legible without pervasive accent
+  color. Green and red remain reserved for success and failure.
+- Full-browser onboarding follows a stable staged flow with slower,
+  counter-rotating icon orbits, smoother transitions, Mainnet defaults, and
+  reduced-motion behavior.
+- Portfolio surfaces use larger balances, four consistent major actions,
+  simplified Tokens/Collectibles navigation, a compact overflow menu, and a
+  cleaner icon-only wallet dock.
+- Send and Ledger transaction progress now advances through visible review,
+  hardware authorization, broadcast, confirmation, success, and failure states
+  with calmer liveness motion and direction-aware transitions.
+- Multisig proposals aggregate recipient, token, amount, source, network, and
+  decoded effects into focused stages while keeping raw contract calldata in an
+  explicit advanced path.
+
+### Fixed
+- Activity state is partitioned by network and account so switching wallets
+  cannot show another account's history.
+- Add account no longer derives a Standard account immediately from the drawer;
+  both entry points require the same visible account-model choice.
+- Hover, focus, selected, and disabled states retain readable contrast, and
+  native-looking select controls no longer escape the wallet design system.
+- Onboarding orbit icons stay separated at normal playback speeds, surface
+  presets retain side-panel spacing, and waiting animations no longer pulse too
+  aggressively.
+- Destination-network rows use the canonical Starknet token mark rather than a
+  generic placeholder.
+
+### Security
+- All open CodeQL findings are addressed without suppressions: dapp provider
+  requests and results use an exhaustive, single-sourced method set instead of
+  page-controlled computed dispatch.
+- Bounded JSON normalization preserves hostile keys such as `__proto__` only as
+  own data properties on null-prototype records, and changelog regex inputs are
+  escaped literally.
+- AVNU asset synchronization accepts only signature-checked PNG, JPEG, and WebP
+  downloads; remotely supplied SVG is no longer treated as safely sanitizable
+  with regular expressions.
+- Release and nightly workflows resolve immutable commit SHAs before
+  self-hosted execution, validate tag-to-commit correspondence, and detach onto
+  the verified revision.
+- The repository-wide coverage gate remains enforced above 95%, with new tests
+  covering account routing, settings and address-book bindings, approval
+  behavior, NFT views, network marks, and navigation primitives.
+
+## [0.7.1] - 2026-07-27
+
+Live Starknet portfolio data, a production trading terminal, and faster wallet
+state convergence after unlock and transactions, with reliable Ledger transport
+ownership and an inspectable wallet interaction-design lab.
+
+### Added
+- A dedicated full-page first-install onboarding tab for creating, importing,
+  or connecting a Ledger, with a side-panel fallback link and explicit handoff
+  into the normal wallet surface after setup.
+- An isolated Storybook HTML UI Lab with 100 deterministic checkpoints across
+  14 scenario families, exact onboarding-tab/side-panel/popup presets,
+  production templates and motion, fixture-only RPC behavior, direct state
+  links, playback controls, evidence logs, and local review notes.
+- Repository-hosted, access-controlled GitHub Pages delivery for the static UI
+  Lab, plus conditional Chromatic publishing for PR-linked visual review.
+- A validated ordinary-tab Ledger transport broker supporting explicit USB and
+  Bluetooth device choice, retained sessions, lifecycle recovery, timeouts, and
+  actionable support diagnostics.
 - A strictly validated Starkscan read boundary for address summaries,
   transactions, activity, token transfers, holdings and balances, contract
   metadata, events, and blocks on indexed Starknet networks.
@@ -24,6 +111,15 @@ state convergence after unlock and transactions.
   Starknet activity streaming, and a wallet toolbar shortcut.
 
 ### Changed
+- Send and Ledger-signing progress now use explicit authorization, submission,
+  confirmation, success, and failure states with smoother transitions and
+  visible liveness throughout the transaction.
+- Activity snapshots are partitioned by network and account, and stale rows are
+  cleared immediately during scope switches so state cannot bleed between
+  wallets.
+- Storybook navigation is organized into numbered user journeys from onboarding
+  through security settings, with cross-cutting runtime contracts kept
+  separately reviewable.
 - Wallet refreshes now converge sooner after unlock and submitted actions while
   retaining account-scoped stale-result guards.
 - Terminal token prices, daily changes, chart history, trade fills, portfolio
@@ -32,6 +128,12 @@ state convergence after unlock and transactions.
   catalogs across Tokens, Perps, Discover, and portfolio surfaces.
 
 ### Fixed
+- Ledger connection no longer depends on Chrome exposing a chooser inside the
+  side panel; permission and live transport ownership remain in the ordinary
+  extension tab while the side panel communicates through a bounded broker.
+- Full-page onboarding completion no longer falls through into an expanded
+  dashboard; it stops background hydration and gives the user a deliberate
+  side-panel handoff.
 - Stablecoin supply changes are no longer presented as daily price moves.
 - Non-ETH token charts, spot trade tapes, swap token selection, and utilization
   curve inspection now behave consistently across supported assets.
@@ -39,6 +141,12 @@ state convergence after unlock and transactions.
   cached rows instead of visibly repopulating from an empty feed.
 
 ### Security
+- Ledger accounts remain mnemonic-less, broker session identifiers and messages
+  are validated and ephemeral, raw device events are not logged, and every
+  signing path retains device/key verification before broadcast.
+- The UI Lab has no production RPC, vault, hardware transport, recovery
+  material, or signing capability; production view coverage fails when a new
+  wallet view lacks a deterministic scenario.
 - Every consumed Starkscan response is parsed at the trust boundary with
   bounded pages and response sizes; malformed or incomplete indexed data fails
   closed to the wallet's existing RPC path.

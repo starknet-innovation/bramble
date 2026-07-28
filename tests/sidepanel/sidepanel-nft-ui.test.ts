@@ -5,8 +5,9 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
+import { nftSendFlow } from "../../src/sidepanel/nft-send-view";
 import { bindNfts, type NftUiDeps } from "../../src/sidepanel/nft-ui";
-import { nftDetailFlow, nftGalleryFlow } from "../../src/sidepanel/nft-views";
+import { nftGalleryFlow, nftWatchFlow } from "../../src/sidepanel/nft-views";
 import type { DiscoveredNft } from "../../src/starknet/nft-metadata";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
 import { registerDom, unregisterDom } from "../support/groups-harness";
@@ -72,7 +73,7 @@ const mount = (
   app.replaceChildren(
     document
       .createRange()
-      .createContextualFragment(nftDetailFlow(status, account, preferences, nft.id, [nft])),
+      .createContextualFragment(nftSendFlow(status, account, preferences, nft.id, [nft])),
   );
   document.body.append(app);
   const calls: Calls = { review: [], transfer: [] };
@@ -141,7 +142,10 @@ describe("NFT send review", () => {
     submit(app);
     await flush();
     expect(calls.transfer).toHaveLength(1);
-    expect(app.querySelector("#nft-send-result")?.textContent).toBe("Submitted 0xdeadbeef");
+    expect(app.querySelector("#nft-send-result")?.textContent).toContain(
+      "Confirmation is tracked in Activity",
+    );
+    expect(app.querySelector("#nft-review-panel")?.textContent).toContain("Submitted to Starknet");
   });
 
   test("editing the recipient invalidates the completed review", async () => {
@@ -248,7 +252,8 @@ describe("NFT send review", () => {
 
     expect(calls.review).toHaveLength(1);
     expect(calls.transfer).toHaveLength(1);
-    expect(app.querySelector("#nft-send-result")?.textContent).toBe("Ledger disconnected");
+    expect(app.querySelector("#nft-send-result")?.textContent).toContain("Ledger disconnected");
+    expect(app.querySelector("#nft-send-result")?.textContent).toContain("Nothing was submitted");
 
     submit(app);
     await flush();
@@ -282,7 +287,8 @@ describe("NFT gallery bindings", () => {
       document
         .createRange()
         .createContextualFragment(
-          nftGalleryFlow(status, account, watchedPreferences, [nft, airdrop]),
+          nftGalleryFlow(status, account, watchedPreferences, [nft, airdrop]) +
+            nftWatchFlow(status, account),
         ),
     );
     document.body.append(app);
@@ -372,7 +378,8 @@ describe("NFT gallery bindings", () => {
       document
         .createRange()
         .createContextualFragment(
-          nftGalleryFlow(status, account, watchedPreferences, [nft, airdrop]),
+          nftGalleryFlow(status, account, watchedPreferences, [nft, airdrop]) +
+            nftWatchFlow(status, account),
         ),
     );
     document.body.append(app);

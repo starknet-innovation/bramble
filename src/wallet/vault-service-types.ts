@@ -158,6 +158,11 @@ export type WalletVaultService = {
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
   readonly importRawKeyAccount: (input: ImportRawKeyAccountInput) => Promise<ImportedAccountRef>;
+  /**
+   * Derives public account metadata through Krusty without persisting a vault or
+   * returning key material. Invalid derivation input fails closed.
+   */
+  readonly previewAccount: (input: AccountDerivationInput) => Promise<DerivedAccountRef>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly getGrantedAccounts: (
     origin: string,

@@ -95,14 +95,20 @@ describe("token views", () => {
     expect(html).toMatch(/data-token-detail="SN_MAIN:ETH:/);
   });
 
-  test("tokens flow lists add, detect, and per-token controls with spam flags", () => {
+  test("tokens flow lists focused add/detect routes and per-token controls", () => {
     const html = dashboard("tokens", status, [], preferences, { balances }, null, [], [], prices);
 
-    expect(html).toContain('id="token-add-form"');
-    expect(html).toContain('id="detect-tokens"');
+    expect(html).toContain('data-view="token-add"');
+    expect(html).toContain('data-view="token-discover"');
     expect(html).toMatch(new RegExp(`data-token-toggle="${ethToken.id}"`));
     expect(html).toContain("Likely spam");
     expect(html).not.toContain("wallet-dock");
+    expect(dashboard("token-add", status, [], preferences, { balances: [] })).toContain(
+      'id="token-add-form"',
+    );
+    expect(dashboard("token-discover", status, [], preferences, { balances: [] })).toContain(
+      'id="detect-tokens"',
+    );
   });
 
   test("token detail flow draws price, sparkline, and contract facts", () => {

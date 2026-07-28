@@ -115,3 +115,19 @@ test("bounded normalization never executes accessors and rejects cycles", () => 
   expect(normalizeFeltBigints(cyclic)).toBeUndefined();
   expect(getterCalls).toBe(0);
 });
+
+test("bounded normalization preserves hostile property names without changing prototypes", () => {
+  const source = JSON.parse(
+    '{"__proto__":{"polluted":true},"constructor":"own-value","prototype":"own-value"}',
+  );
+  const normalized = normalizeFeltBigints(source);
+
+  expect(normalized).toBeDefined();
+  expect(Object.getPrototypeOf(normalized)).toBeNull();
+  expect(Object.getOwnPropertyDescriptor(normalized, "__proto__")?.value).toEqual({
+    polluted: true,
+  });
+  expect(Object.getOwnPropertyDescriptor(normalized, "constructor")?.value).toBe("own-value");
+  expect(Object.getOwnPropertyDescriptor(normalized, "prototype")?.value).toBe("own-value");
+  expect(Object.hasOwn(Object.prototype, "polluted")).toBe(false);
+});

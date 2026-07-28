@@ -6,12 +6,12 @@
  */
 import { describe, expect, test } from "bun:test";
 import { SIDEPANEL_STYLES } from "../../src/sidepanel/styles";
-import { EASE, MOTION, SHADOW } from "../../src/ui/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE } from "../../src/ui/tokens";
 
 describe("sidepanel styles", () => {
   test("press and hover motion stays inside the lift/scale envelope", () => {
     // Feedback transforms are allowed but bounded: press scales stay within
-    // 0.92–1.0 and hover/press lifts within 2px, so controls feel alive
+    // 0.95–1.0 and hover/press lifts within 2px, so controls feel alive
     // without drifting under the pointer. Entrance keyframes are exempt.
     const pressBlocks = [...SIDEPANEL_STYLES.matchAll(/:(?:active|hover)[^{]*\{([^}]*)\}/g)].map(
       (match) => match[1] ?? "",
@@ -21,7 +21,7 @@ describe("sidepanel styles", () => {
     );
     expect(scales.length).toBeGreaterThan(0);
     for (const scale of scales) {
-      expect(scale).toBeGreaterThanOrEqual(0.92);
+      expect(scale).toBeGreaterThanOrEqual(0.95);
       expect(scale).toBeLessThanOrEqual(1);
     }
     const lifts = pressBlocks.flatMap((block) =>
@@ -129,7 +129,7 @@ describe("sidepanel styles", () => {
   test("colors come only from skin tokens, never literals", () => {
     // The stylesheet ships zero colour hex literals: every colour is a skin
     // token referenced through var()/color-mix. The near-mono palette adds a
-    // recessed --mc-sunken tier; the single emerald signal is --mc-accent.
+    // recessed --mc-sunken tier; green/red are semantic tokens only.
     expect(SIDEPANEL_STYLES).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
     expect(SIDEPANEL_STYLES).toContain("var(--mc-accent)");
     expect(SIDEPANEL_STYLES).toContain("var(--mc-bg)");
@@ -139,6 +139,14 @@ describe("sidepanel styles", () => {
   test("motion uses shared tokens and respects reduced-motion", () => {
     expect(SIDEPANEL_STYLES).toContain(MOTION.ease);
     expect(SIDEPANEL_STYLES).toContain(`${MOTION.pressMs}ms`);
+    expect(SIDEPANEL_STYLES).toContain(`liquid-dot-left ${MOTION.waitLoopMs}ms`);
+    expect(SIDEPANEL_STYLES).toContain(`onboarding-concentric-pulse ${MOTION.onboardingPulseMs}ms`);
+    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-track-orbit");
+    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-track-orbit-reverse");
+    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-concentric-pulse");
+    expect(SIDEPANEL_STYLES).toContain("--orbit-duration: 600s");
+    expect(SIDEPANEL_STYLES).not.toContain("@keyframes journey-spin");
+    expect(SIDEPANEL_STYLES).not.toContain("@keyframes send-spin");
     expect(SIDEPANEL_STYLES).toContain("prefers-reduced-motion");
     expect(SIDEPANEL_STYLES).toContain(":focus-visible");
   });
@@ -160,20 +168,16 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toMatch(/:\s*ease-in\b/);
   });
 
-  test("the single cobalt accent is reserved for signal, not every surface", () => {
-    // Restraint check: the accent drives the active dock item, the portfolio tab
-    // indicator, and focus — but resting neutral rows/tiles carry a neutral
-    // fill, so the accent stays a rare highlight.
-    expect(SIDEPANEL_STYLES).toMatch(/\.tab-indicator \{[^}]*background: var\(--mc-accent\)/s);
+  test("neutral action emphasis is reserved for signal, not every surface", () => {
+    // The icon-only dock and Portfolio tabs both use text/icon contrast alone
+    // and deliberately carry no containers or underline indicators.
+    expect(SIDEPANEL_STYLES).not.toContain(".tab-indicator");
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
+      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--mc-text\)/,
     );
-    // The active portfolio tab (Tokens/Collectibles/Activity) reads as selected
-    // via accent TEXT plus the underline indicator — a flat text tab, never a
-    // pill/box. So the active home-tab declares the accent colour and NO home-tab
-    // rule paints a background fill.
+    // The active Portfolio tab is plain high-contrast text, never a pill.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.home-tab\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
+      /button\.home-tab\[aria-selected="true"\] \{ color: var\(--mc-text\)/,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(
       /button\.home-tab\[aria-selected="true"\][^}]*background:(?! transparent)/,
@@ -182,10 +186,9 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(/\.token-mark \{[^}]*background: var\(--mc-sunken\)/s);
   });
 
-  test("market and status semantics ride --mc-positive/--mc-danger, never the brand accent", () => {
-    // Gains, success, and sparkline direction are meaning, not brand: they read
-    // green/red from the semantic tokens so the accent can change hue without
-    // ever recoloring a market signal.
+  test("market and status semantics ride --mc-positive/--mc-danger, never action emphasis", () => {
+    // Gains, success, and sparkline direction are meaning, not decoration:
+    // they read green/red from the semantic tokens.
     expect(SIDEPANEL_STYLES).toContain(".token-change.up { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".tx-status.accepted { color: var(--mc-positive); }");
     expect(SIDEPANEL_STYLES).toContain(".sparkline-up polyline { stroke: var(--mc-positive); }");
@@ -208,16 +211,22 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(/\.badge \{[^}]*color: var\(--mc-bg\)/s);
   });
 
-  test("focus is one consistent accent ring declared once", () => {
+  test("focus is one consistent softened ring declared once", () => {
     // A single focus system: one generic ring (offset halo) plus a hugging
     // inner ring on filled fields. No other layer may redeclare the outline.
-    const rings = [...SIDEPANEL_STYLES.matchAll(/outline: 2px solid var\(--mc-accent\)/g)];
+    const rings = [...SIDEPANEL_STYLES.matchAll(/outline: 2px solid var\(--mc-focus-ring\)/g)];
     expect(rings.length).toBe(1);
     expect(SIDEPANEL_STYLES).toContain(
-      ":focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }",
+      "--mc-focus-ring: color-mix(in srgb, var(--mc-accent) 72%, var(--mc-bg));",
+    );
+    expect(SIDEPANEL_STYLES).toContain(
+      ":focus-visible { outline: 2px solid var(--mc-focus-ring); outline-offset: 2px; }",
     );
     expect(SIDEPANEL_STYLES).toMatch(
       /input:focus-visible, select:focus-visible, textarea:focus-visible \{[^}]*outline-offset: -2px/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.send-recipient-row:focus-visible,\s*\.send-asset-row:focus-visible \{[^}]*outline-offset: -2px/s,
     );
   });
 
@@ -226,6 +235,24 @@ describe("sidepanel styles", () => {
     // (hover: hover) media blocks so a tap never strands a highlighted row.
     const gates = [...SIDEPANEL_STYLES.matchAll(/@media \(hover: hover\) and \(pointer: fine\)/g)];
     expect(gates.length).toBeGreaterThanOrEqual(8);
+    // The generic primary feedback is deliberately zero-specificity. Otherwise
+    // it can outrank neutral component rows and produce accent-text on an
+    // accent background (white-on-white in the default dark skin).
+    expect(SIDEPANEL_STYLES).toContain(
+      ":where(button:not(:disabled):hover) { background: var(--mc-accent-hover); }",
+    );
+    expect(SIDEPANEL_STYLES).toContain(
+      ":where(button:not(:disabled):active), a.icon-button:active",
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.add-account-option:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.add-account-option\[aria-pressed="true"\]:not\(:disabled\):hover \{[^}]*background: var\(--mc-elevated\);[^}]*color: var\(--mc-text\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.onboarding-inline-action:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+    );
     // Selected controls keep their accent-soft fill under the pointer — the
     // pressed-state hover rules exist so hovering never visually deselects.
     expect(SIDEPANEL_STYLES).toMatch(
@@ -234,42 +261,62 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.account-check\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--mc-accent-soft\)/,
     );
-    // Same guarantee for accent-ink selection: hovering the active dock item
-    // or portfolio tab must never strip its accent back to plain text.
+    // Hovering selected navigation preserves its high-contrast ink.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-accent\)/,
+      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{\s*color: var\(--mc-text\)/,
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-accent\)/,
+      /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-text\)/,
     );
-  });
-
-  test("home action tiles are borderless icons, not boxes", () => {
-    // The client asked the Send/Receive row (formerly Send/Receive/NFTs, before
-    // the redundant NFTs tile was dropped) to read as plain icons with labels
-    // beneath, so the tile box treatment is gone: the resting tile has a
-    // transparent fill and carries no hairline edge, no elevation shadow, and no
-    // boxy fixed min-height. Primary (Send) stays distinguishable through an
-    // accent-tinted ICON, never a filled accent box.
-    expect(SIDEPANEL_STYLES).toMatch(/button\.action-tile \{[^}]*background: transparent/s);
-    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile \{[^}]*box-shadow/s);
-    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile \{[^}]*min-height/s);
-    // No filled primary box — the accent lives on the icon only.
-    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile\.primary \{/);
+    // Non-primary Send and multisig controls must never inherit the generic
+    // high-contrast CTA fill, which can produce white-on-white rows in dark
+    // mode. Their more-specific selectors preserve neutral surfaces and ink.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.action-tile\.primary \.tile-icon \{ color: var\(--mc-accent\)/,
+      /\.send-recipient-row:not\(:disabled\):hover,\s*\.send-asset-row:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.send-token-trigger:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.multisig-signer-option:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
     );
   });
 
-  test("the active dock item is an accent icon, never a background pill", () => {
-    // The dock highlights the active/focused item by tinting the icon itself
-    // emerald (inactive stays muted) — there is NO filled background highlight
-    // behind it and NO moving indicator pill. So the active nav-item declares a
-    // colour but no background, and the icon holder never paints a fill.
+  test("home action tiles are four equal width-filling tools", () => {
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
+      /\.action-row \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(/\.action-tile \{[^}]*background: var\(--mc-elevated\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      new RegExp(`\\.action-tile \\{[^}]*border-radius: ${RADIUS.lg}`, "s"),
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      new RegExp(`\\.action-tile \\{[^}]*min-height: ${SIZE.actionTile}`, "s"),
+    );
+    expect(SIZE.actionTile).toBe("72px");
+    expect(SIDEPANEL_STYLES).toMatch(
+      new RegExp(`\\.tile-icon \\.icon \\{[^}]*height: ${CONTROL.majorIcon}`, "s"),
+    );
+    expect(CONTROL.majorIcon).toBe("22.5px");
+    expect(SIDEPANEL_STYLES).not.toContain(".action-tile.primary");
+  });
+
+  test("Terminal icon is an unboxed workstation glyph", () => {
+    const iconBlock = SIDEPANEL_STYLES.match(/\.terminal-cta-icon \{([^}]*)\}/)?.[1] ?? "";
+    expect(iconBlock).not.toContain("background:");
+    expect(iconBlock).not.toContain("border-radius:");
+    expect(SIDEPANEL_STYLES).toMatch(/\.terminal-cta-icon \.icon \{ height: 34px/);
+  });
+
+  test("the icon-only dock uses white and grey focus without icon containers", () => {
+    // The dock removes persistent text labels but retains names in accessible
+    // tooltip copy. White and muted grey distinguish state without a surface.
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--mc-text\)/,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*background/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*box-shadow/);
+    expect(SIDEPANEL_STYLES).toMatch(/\.nav-tooltip \{[^}]*opacity: 0;[^}]*visibility: hidden/s);
     expect(SIDEPANEL_STYLES).not.toMatch(/\.tab-icon[^{}]*\{[^}]*background/s);
   });
 
@@ -287,5 +334,19 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{\s*::view-transition-old\(root\)[^}]*animation: none/s,
     );
+  });
+
+  test("onboarding transitions only the stable stage in both directions", () => {
+    expect(SIDEPANEL_STYLES).toContain("view-transition-name: onboarding-stage");
+    expect(SIDEPANEL_STYLES).toContain(
+      'html[data-onboarding-direction="forward"]::view-transition-new(onboarding-stage)',
+    );
+    expect(SIDEPANEL_STYLES).toContain(
+      'html[data-onboarding-direction="back"]::view-transition-old(onboarding-stage)',
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /\.onboarding-wizard > \.onboarding-step \{[^}]*position: absolute/s,
+    );
+    expect(SIDEPANEL_STYLES).toContain("button.onboarding-option:not(:disabled):hover");
   });
 });

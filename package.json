@@ -1,6 +1,6 @@
 {
   "name": "mc-wallet",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -43,9 +43,12 @@
     "typescript": "6.0.3"
   },
   "dependencies": {
+    "@ledgerhq/devices": "8.17.0",
     "@ledgerhq/hw-app-starknet": "3.0.2",
     "@ledgerhq/hw-transport": "6.35.6",
+    "@ledgerhq/hw-transport-web-ble": "6.35.0",
     "@ledgerhq/hw-transport-webhid": "6.36.0",
+    "@ledgerhq/hw-transport-webusb": "6.35.0",
     "buffer": "5.7.1",
     "starknet": "10.0.2"
   }

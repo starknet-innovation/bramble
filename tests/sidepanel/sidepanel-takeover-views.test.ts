@@ -45,6 +45,8 @@ describe("approval takeover views", () => {
     expect(home).toContain('data-approval-action="approve"');
     expect(home).toContain('data-approval-action="deny"');
     expect(home).toContain(`data-approval-later="${pending[0]?.id}"`);
+    expect(home).toContain('data-liquid-dots="approval"');
+    expect(home).toContain('id="mc-liquid-dots-approval"');
     expect(home).not.toContain("wallet-dock");
     expect(quiet).not.toContain("Review request");
     expect(quiet).toContain("wallet-dock");
