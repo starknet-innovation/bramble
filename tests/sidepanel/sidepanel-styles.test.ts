@@ -139,6 +139,11 @@ describe("sidepanel styles", () => {
   test("motion uses shared tokens and respects reduced-motion", () => {
     expect(SIDEPANEL_STYLES).toContain(MOTION.ease);
     expect(SIDEPANEL_STYLES).toContain(`${MOTION.pressMs}ms`);
+    expect(SIDEPANEL_STYLES).toContain(`liquid-dot-left ${MOTION.waitLoopMs}ms`);
+    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-track-orbit");
+    expect(SIDEPANEL_STYLES).toContain("@keyframes onboarding-concentric-pulse");
+    expect(SIDEPANEL_STYLES).not.toContain("@keyframes journey-spin");
+    expect(SIDEPANEL_STYLES).not.toContain("@keyframes send-spin");
     expect(SIDEPANEL_STYLES).toContain("prefers-reduced-motion");
     expect(SIDEPANEL_STYLES).toContain(":focus-visible");
   });
@@ -161,11 +166,11 @@ describe("sidepanel styles", () => {
   });
 
   test("neutral action emphasis is reserved for signal, not every surface", () => {
-    // The active dock remains high-contrast, while Portfolio tabs use text
-    // contrast alone and deliberately carry no underline indicator.
+    // The icon-only dock and Portfolio tabs both use text/icon contrast alone
+    // and deliberately carry no containers or underline indicators.
     expect(SIDEPANEL_STYLES).not.toContain(".tab-indicator");
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
+      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--mc-text\)/,
     );
     // The active Portfolio tab is plain high-contrast text, never a pill.
     expect(SIDEPANEL_STYLES).toMatch(
@@ -235,9 +240,9 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.account-check\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--mc-accent-soft\)/,
     );
-    // Hovering selected navigation keeps its intended high contrast.
+    // Hovering selected navigation preserves its high-contrast ink.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-accent\)/,
+      /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{\s*color: var\(--mc-text\)/,
     );
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-text\)/,
@@ -269,8 +274,9 @@ describe("sidepanel styles", () => {
     );
     expect(SIZE.actionTile).toBe("72px");
     expect(SIDEPANEL_STYLES).toMatch(
-      new RegExp(`\\.tile-icon \\.icon \\{[^}]*height: ${CONTROL.icon}`, "s"),
+      new RegExp(`\\.tile-icon \\.icon \\{[^}]*height: ${CONTROL.majorIcon}`, "s"),
     );
+    expect(CONTROL.majorIcon).toBe("22.5px");
     expect(SIDEPANEL_STYLES).not.toContain(".action-tile.primary");
   });
 
@@ -281,14 +287,15 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(/\.terminal-cta-icon \.icon \{ height: 34px/);
   });
 
-  test("the active dock item uses neutral emphasis, never a background pill", () => {
-    // The dock highlights the active/focused item with high-contrast ink while
-    // inactive items stay muted. There is no filled background or moving
-    // indicator pill.
+  test("the icon-only dock uses white and grey focus without icon containers", () => {
+    // The dock removes persistent text labels but retains names in accessible
+    // tooltip copy. White and muted grey distinguish state without a surface.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
+      /button\.nav-item\[aria-selected="true"\] \{\s*color: var\(--mc-text\)/,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*background/);
+    expect(SIDEPANEL_STYLES).not.toMatch(/button\.nav-item\[aria-selected="true"\][^}]*box-shadow/);
+    expect(SIDEPANEL_STYLES).toMatch(/\.nav-tooltip \{[^}]*opacity: 0;[^}]*visibility: hidden/s);
     expect(SIDEPANEL_STYLES).not.toMatch(/\.tab-icon[^{}]*\{[^}]*background/s);
   });
 

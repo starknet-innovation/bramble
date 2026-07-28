@@ -163,7 +163,7 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-recipient-row > .icon { color: var(--mc-muted); height: 16px; width: 16px; }
   .send-recipient-avatar {
-    border-radius: ${RADIUS.md};
+    border-radius: ${RADIUS.full};
     height: ${SIZE.mark};
     overflow: hidden;
     width: ${SIZE.mark};

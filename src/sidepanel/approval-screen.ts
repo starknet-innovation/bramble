@@ -17,7 +17,7 @@ import type { PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { button } from "../ui/controls";
 import { approvalCard } from "./approval-cards";
-import { icon } from "./icons";
+import { liquidDots, liquidDotsFilter } from "./progress-motion";
 
 /**
  * Pending approvals that should take the screen: everything not snoozed this
@@ -58,7 +58,7 @@ export const approvalTakeover = (
   <main class="screen flow approval-takeover" id="wallet-screen-approval-takeover" aria-labelledby="approval-title" tabindex="-1">
     <ul class="request-list">${approvalCard(first, status)}</ul>
     <section class="approval-live" id="approval-live" role="status" aria-live="polite" hidden>
-      <span class="approval-live-mark">${icon("refresh")}</span>
+      <span class="approval-live-mark">${liquidDots("approval", true)}${liquidDotsFilter("approval")}</span>
       <div>
         <strong id="approval-live-title">Authorizing request</strong>
         <p id="approval-live-copy">Keep this wallet open while the request is completed.</p>

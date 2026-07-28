@@ -7,8 +7,8 @@
  * Surface rules ("Clean Mono"): solid fills only (no gradients, no glass),
  * structure carried by gentle low elevation and hairline edges; list rows are
  * flat fills separated by space, never boxes nested inside boxes. Primary
- * actions, active states, and focus use high-contrast neutral ink; only
- * positive/success and danger/failure semantics leave the monochrome palette.
+ * actions, active states, and focus use high-contrast neutral ink; compact
+ * identity marks and positive/danger semantics are the restrained exceptions.
  */
 import { CONTROL, FONT, MOTION, RADIUS, SIZE, SPACE, TRACKING, TYPE, WEIGHT } from "../ui/tokens";
 
@@ -40,14 +40,12 @@ export const BASE_STYLES = `
     /* Anchored bottom-bar footprint: one source of truth consumed by the dock
        itself, the dock-screen scroll clearance, and the toast stack offset. */
     --mc-dock-h: calc(${CONTROL.nav} + ${SPACE.sm});
-    /* Flat per-account avatar palette: four neutral mid-tone fills plus one
-       dark glyph ink. Tone, the deterministic nickname, and the address
-       distinguish accounts without adding decorative hues. */
+    /* Token fallbacks remain neutral so unverified assets do not acquire a
+       decorative identity that could imply trust. */
     --mc-avatar-0: hsl(0 0% 42%);
     --mc-avatar-1: hsl(0 0% 52%);
     --mc-avatar-2: hsl(0 0% 62%);
     --mc-avatar-3: hsl(0 0% 72%);
-    --mc-avatar-ink: hsl(0 0% 10%);
   }
   * { box-sizing: border-box; }
   html, body, #app { min-height: 100%; }
@@ -151,7 +149,7 @@ export const BASE_STYLES = `
   .brand-mark {
     align-items: center;
     background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
+    border-radius: ${RADIUS.full};
     color: var(--mc-muted);
     display: inline-flex;
     flex: none;
@@ -279,7 +277,11 @@ export const BASE_STYLES = `
     justify-content: center;
   }
   .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.semibold}; }
-  .tile-icon .icon { height: ${CONTROL.icon}; stroke-width: 1.85; width: ${CONTROL.icon}; }
+  .tile-icon .icon {
+    height: ${CONTROL.majorIcon};
+    stroke-width: 1.85;
+    width: ${CONTROL.majorIcon};
+  }
 
   /* MC Terminal is the one promotional surface on Home: a compact, trusted
      handoff with a real monitor glyph and a quieter explanatory second line. */
@@ -317,62 +319,6 @@ export const BASE_STYLES = `
     .terminal-cta:hover .terminal-cta-arrow { color: var(--mc-text); transform: translateX(2px); }
   }
   .terminal-cta:active { background: var(--mc-soft-press); transform: scale(0.985); }
-
-  /* Bottom dock: an anchored, full-bleed bottom bar — a solid panel drawn to
-     the panel edges, separated from scrolling content by a top hairline and
-     the softest upward shadow. Flat, no glass, no floating card: navigation
-     reads as structural chrome, not a component drifting over the page. */
-  .wallet-dock {
-    background: var(--mc-panel);
-    bottom: 0;
-    box-shadow: inset 0 1px 0 var(--mc-hairline), var(--mc-elev-up);
-    display: grid;
-    gap: ${SPACE.xs};
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    left: 0;
-    min-height: var(--mc-dock-h);
-    padding: ${SPACE.xs} ${SPACE.lg};
-    position: fixed;
-    right: 0;
-    z-index: 5;
-  }
-  button.nav-item {
-    background: transparent;
-    border-radius: ${RADIUS.sm};
-    color: var(--mc-muted);
-    display: grid;
-    font-size: ${TYPE.micro.size};
-    font-weight: ${WEIGHT.medium};
-    gap: 3px;
-    justify-items: center;
-    letter-spacing: ${TRACKING.caption};
-    min-height: ${CONTROL.nav};
-    padding: ${SPACE.sm} 2px ${SPACE.xs};
-    transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
-  }
-  @media (hover: hover) and (pointer: fine) {
-    button.nav-item:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-    /* The active item keeps its accent under the pointer — hovering the tab
-       you are already on must never read as leaving it. */
-    button.nav-item[aria-selected="true"]:not(:disabled):hover { color: var(--mc-accent); }
-  }
-  button.nav-item:not(:disabled):active { background: transparent; transform: scale(0.97); }
-  /* Active state is carried by ink alone — the accent tints the icon and its
-     label, with inactive items muted — never a filled background pill behind
-     it. The dock stays flat: no moving indicator, no accent-soft field. */
-  button.nav-item[aria-selected="true"] { color: var(--mc-accent); }
-  .tab-icon {
-    align-items: center;
-    display: inline-flex;
-    justify-content: center;
-    min-height: 22px;
-    padding: 0 ${SPACE.md};
-    position: relative;
-    transition: color ${MOTION.tabMs}ms ${MOTION.ease};
-  }
-  .tab-icon .icon { height: 22px; width: 22px; }
-  .tab-icon .badge { position: absolute; right: 0; top: -2px; }
-  .tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 
   /* Flow screens: back control + goal title */
   .flow-header {
@@ -445,12 +391,18 @@ export const BASE_STYLES = `
   button.menu-row.row-action .menu-icon { color: var(--mc-accent); }
   .menu-icon, .menu-chevron { color: var(--mc-muted); display: inline-flex; flex: none; }
   .menu-icon .icon { height: 20px; width: 20px; }
-  .avatar { display: block; height: 100%; width: 100%; }
+  .avatar {
+    border-radius: ${RADIUS.full};
+    display: block;
+    height: 100%;
+    overflow: hidden;
+    width: 100%;
+  }
   .brand-mark .icon { height: 20px; width: 20px; }
   .option-avatar {
     align-items: center;
     background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
+    border-radius: ${RADIUS.full};
     color: var(--mc-muted);
     display: inline-flex;
     flex: none;

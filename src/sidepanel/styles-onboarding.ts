@@ -120,100 +120,6 @@ export const ONBOARDING_STYLES = `
   }
   .onboarding-step-cta button, .onboarding-welcome-actions button { width: 100%; }
 
-  .onboarding-welcome {
-    align-items: center;
-    justify-content: flex-end;
-    padding-top: 26px;
-    text-align: center;
-  }
-  .onboarding-orbit {
-    align-items: center;
-    display: flex;
-    flex: 1;
-    justify-content: center;
-    min-height: 330px;
-    position: relative;
-    width: min(100%, 330px);
-  }
-  .orbit-ring {
-    border-radius: ${RADIUS.full};
-    box-shadow: 0 0 0 1px var(--mc-hairline-strong);
-    position: absolute;
-  }
-  .orbit-ring::before, .orbit-ring::after {
-    background: var(--mc-text);
-    border-radius: ${RADIUS.full};
-    content: "";
-    height: 5px;
-    position: absolute;
-    width: 5px;
-  }
-  .orbit-ring::before { left: 22%; top: -3px; }
-  .orbit-ring::after { bottom: -3px; right: 22%; }
-  .orbit-ring-outer {
-    animation: onboarding-orbit 24s linear infinite;
-    height: 286px;
-    width: 286px;
-  }
-  .orbit-ring-inner {
-    animation: onboarding-orbit 18s linear infinite reverse;
-    height: 206px;
-    width: 206px;
-  }
-  .orbit-core {
-    align-items: center;
-    background: var(--mc-text);
-    border-radius: ${RADIUS.xl};
-    box-shadow: var(--mc-elev-md);
-    color: var(--mc-bg);
-    display: flex;
-    flex-direction: column;
-    height: 104px;
-    justify-content: center;
-    transform: rotate(-3deg);
-    width: 104px;
-  }
-  .orbit-core strong { font-size: 29px; letter-spacing: -0.08em; line-height: 1; }
-  .orbit-core span { font-size: ${TYPE.micro.size}; font-weight: ${WEIGHT.semibold}; margin-top: 5px; }
-  .orbit-node {
-    align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.full};
-    box-shadow: var(--mc-elev-xs);
-    display: flex;
-    height: 42px;
-    justify-content: center;
-    position: absolute;
-    width: 42px;
-  }
-  .orbit-node .icon { height: 17px; width: 17px; }
-  .orbit-node-a { left: 8px; top: 86px; }
-  .orbit-node-b { right: 11px; top: 68px; }
-  .orbit-node-c { bottom: 52px; left: 44px; }
-  .orbit-node-d { bottom: 38px; right: 48px; }
-  .orbit-node-a, .orbit-node-d { animation: onboarding-float 4.8s var(--ease-in-out) infinite alternate; }
-  .orbit-node-b, .orbit-node-c { animation: onboarding-float 5.4s var(--ease-in-out) -1.8s infinite alternate-reverse; }
-  .onboarding-welcome-actions { display: grid; gap: ${SPACE.sm}; width: 100%; }
-  .onboarding-launch {
-    align-items: center;
-    color: var(--mc-muted);
-    display: inline-flex;
-    font-size: ${TYPE.caption.size};
-    justify-content: center;
-    min-height: 34px;
-    text-decoration: none;
-  }
-  .onboarding-local-note {
-    align-items: center;
-    color: var(--mc-muted);
-    display: inline-flex;
-    font-size: ${TYPE.caption.size};
-    gap: 6px;
-    justify-content: center;
-    margin-top: ${SPACE.sm};
-  }
-  .onboarding-local-note .icon { height: 13px; width: 13px; }
-
   .onboarding-gate {
     justify-content: center;
     min-height: 100vh;
@@ -455,13 +361,7 @@ export const ONBOARDING_STYLES = `
     from { opacity: 1; transform: translateX(0) scale(1); }
     to { opacity: 0; transform: translateX(${ONBOARDING_TRANSITION.exitTravel}) scale(0.996); }
   }
-  @keyframes onboarding-orbit { to { transform: rotate(360deg); } }
-  @keyframes onboarding-float {
-    from { transform: translateY(-3px) rotate(-2deg); }
-    to { transform: translateY(5px) rotate(3deg); }
-  }
   @media (hover: hover) and (pointer: fine) {
-    .onboarding-launch:hover { color: var(--mc-text); }
     button.onboarding-option:not(:disabled):hover,
     button.onboarding-account:not(:disabled):hover {
       background: var(--mc-hover);
@@ -477,7 +377,6 @@ export const ONBOARDING_STYLES = `
   @media (max-height: 760px) {
     .onboarding-step { min-height: inherit; padding-bottom: 22px; padding-top: 30px; }
     .onboarding-step-head { margin-bottom: ${SPACE.sm}; margin-top: 40px; }
-    .onboarding-orbit { min-height: 260px; transform: scale(0.88); }
   }
   @media (max-width: 520px) {
     .onboarding-surface .shell { padding: 0; }
@@ -490,7 +389,7 @@ export const ONBOARDING_STYLES = `
     .onboarding-step { padding-left: ${SPACE.lg}; padding-right: ${SPACE.lg}; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .onboarding-step.is-entering, .orbit-ring, .orbit-node { animation: none; }
+    .onboarding-step.is-entering { animation: none; }
     .onboarding-account-check, .password-requirement-bar > span { transition: none; }
     html[data-onboarding-direction]::view-transition-group(onboarding-stage),
     html[data-onboarding-direction]::view-transition-old(onboarding-stage),

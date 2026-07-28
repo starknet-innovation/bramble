@@ -18,6 +18,14 @@ const skinForTheme = (theme: CatalogArgs["theme"]): Skin =>
   theme === "light" ? defaultSkin : darkSkin;
 
 const semanticColorTokens = new Set(["--mc-danger", "--mc-positive"]);
+const identityColorTokens = new Set([
+  "--mc-account-avatar-0",
+  "--mc-account-avatar-1",
+  "--mc-account-avatar-2",
+  "--mc-account-avatar-3",
+  "--mc-account-avatar-ink",
+  "--mc-account-avatar-paper",
+]);
 
 const colorSwatches = (entries: readonly (readonly [string, string])[]): string =>
   entries
@@ -33,7 +41,10 @@ const colorSwatches = (entries: readonly (readonly [string, string])[]): string 
 const colors = (args: CatalogArgs): HTMLIFrameElement => {
   const skin = skinForTheme(args.theme);
   const entries = Object.entries(skin.tokens);
-  const neutrals = colorSwatches(entries.filter(([name]) => !semanticColorTokens.has(name)));
+  const neutrals = colorSwatches(
+    entries.filter(([name]) => !semanticColorTokens.has(name) && !identityColorTokens.has(name)),
+  );
+  const identities = colorSwatches(entries.filter(([name]) => identityColorTokens.has(name)));
   const semantics = colorSwatches(entries.filter(([name]) => semanticColorTokens.has(name)));
   return catalogFrame(
     "Colors",
@@ -43,6 +54,11 @@ const colors = (args: CatalogArgs): HTMLIFrameElement => {
       "Surfaces, ink, actions, focus, and selection remain achromatic.",
       `<div class="catalog-grid">${neutrals}</div>`,
     )}
+     ${catalogGroup(
+       "Account identity",
+       "A compact, non-semantic palette gives deterministic account characters enough contrast to scan quickly.",
+       `<div class="catalog-grid">${identities}</div>`,
+     )}
      ${catalogGroup(
        "Reserved signals",
        "Green and red appear only when state carries positive or negative meaning.",

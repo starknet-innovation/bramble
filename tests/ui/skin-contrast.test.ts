@@ -71,6 +71,8 @@ const ACHROMATIC_TOKENS: readonly SkinToken[] = [
   "--mc-sunken",
   "--mc-text",
 ];
+const LIGHT_AVATAR_TONES: readonly SkinToken[] = ["--mc-account-avatar-0", "--mc-account-avatar-3"];
+const DARK_AVATAR_TONES: readonly SkinToken[] = ["--mc-account-avatar-1", "--mc-account-avatar-2"];
 
 describe.each([
   ["midnight", darkSkin],
@@ -96,6 +98,19 @@ describe.each([
   test("the badge ink (page ground) meets AA on the danger fill", () => {
     const ratio = contrast(token(skin, "--mc-bg"), token(skin, "--mc-danger"));
     expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
+  });
+
+  test("account character features keep non-text contrast against every identity tone", () => {
+    for (const ground of LIGHT_AVATAR_TONES) {
+      expect(
+        contrast(token(skin, "--mc-account-avatar-paper"), token(skin, ground)),
+      ).toBeGreaterThanOrEqual(3);
+    }
+    for (const ground of DARK_AVATAR_TONES) {
+      expect(
+        contrast(token(skin, "--mc-account-avatar-ink"), token(skin, ground)),
+      ).toBeGreaterThanOrEqual(3);
+    }
   });
 
   test("accent and danger inks meet AA on their derived soft fills", () => {

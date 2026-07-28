@@ -12,6 +12,7 @@ import { button } from "../../ui/controls";
 import { menuRow } from "../../ui/navigation";
 import { icon } from "../icons";
 import { accountLabel } from "../parts";
+import { liquidDots, liquidDotsFilter } from "../progress-motion";
 import type { LedgerSignView } from "./sign-session";
 
 const addressOfAccountId = (accountId: string): string => accountId.split(":")[1] ?? accountId;
@@ -133,6 +134,16 @@ const phaseLiveness: Readonly<Record<LedgerSignView["phase"]["kind"], string>> =
   verifying: "Comparing the device key with this account…",
 };
 
+const livenessMark = (view: LedgerSignView): string => {
+  if (view.phase.kind === "error") {
+    return icon("alert");
+  }
+  if (view.phase.kind === "connect") {
+    return icon("lock");
+  }
+  return `${liquidDots("ledger", true)}${liquidDotsFilter("ledger")}`;
+};
+
 const ledgerProgress = (view: LedgerSignView): string => {
   const activeIndex = phaseIndex(view);
   const labels = ["Connect", "Verify account", "Approve", "Finish"];
@@ -180,13 +191,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
       ${ledgerProgress(view)}
       <div class="ledger-phase-body">${phaseBody(view)}</div>
       <p class="ledger-liveness" role="status">
-        <span class="ledger-liveness-mark">${icon(
-          view.phase.kind === "error"
-            ? "alert"
-            : view.phase.kind === "connect"
-              ? "lock"
-              : "refresh",
-        )}</span>
+        <span class="ledger-liveness-mark">${livenessMark(view)}</span>
         ${escapeHtml(phaseLiveness[view.phase.kind])}
       </p>
     </section>

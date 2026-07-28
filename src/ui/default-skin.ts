@@ -21,6 +21,12 @@ export const defaultSkin: Skin = {
   tokens: {
     "--mc-accent": "#171717",
     "--mc-accent-text": "#fafafa",
+    "--mc-account-avatar-0": "#6842a8",
+    "--mc-account-avatar-1": "#e27a35",
+    "--mc-account-avatar-2": "#e9b83f",
+    "--mc-account-avatar-3": "#9f356f",
+    "--mc-account-avatar-ink": "#171717",
+    "--mc-account-avatar-paper": "#fafafa",
     "--mc-bg": "#f5f5f5",
     "--mc-border": "#dedede",
     "--mc-danger": "#b4232c",

@@ -67,17 +67,22 @@ export const MOTION = {
   enterMs: 200,
   liftMs: 160,
   pressMs: 90,
+  pulseStaggerMs: 600,
   tabMs: 220,
   toastMs: 220,
+  waitLoopMs: 2000,
 } as const;
 
 /**
  * Control metrics that keep hit targets and icons consistent.
  */
 export const CONTROL = {
+  dockIcon: "24px",
+  dockItem: "44px",
   hit: "40px",
   hitSmall: "32px",
   icon: "18px",
+  majorIcon: "22.5px",
   nav: "52px",
 } as const;
 

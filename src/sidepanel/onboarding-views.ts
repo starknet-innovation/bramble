@@ -111,13 +111,28 @@ const passwordFields = (prefix: "" | "ledger" = ""): string => {
 const welcomeStep = (ready: boolean): string => `
   <section class="onboarding-step onboarding-welcome" data-onboarding-step="welcome">
     <div class="onboarding-orbit" aria-hidden="true">
-      <span class="orbit-ring orbit-ring-outer"></span>
-      <span class="orbit-ring orbit-ring-inner"></span>
-      <span class="orbit-node orbit-node-a">${icon("shield")}</span>
-      <span class="orbit-node orbit-node-b">${icon("activity")}</span>
-      <span class="orbit-node orbit-node-c">${icon("image")}</span>
-      <span class="orbit-node orbit-node-d">${icon("link")}</span>
-      <span class="orbit-core"><strong>MC</strong><span>Wallet</span></span>
+      <div class="orbit-field">
+        <span class="orbit-ring orbit-ring-outer"></span>
+        <span class="orbit-ring orbit-ring-inner"></span>
+        <span class="orbit-pulse orbit-pulse-a"></span>
+        <span class="orbit-pulse orbit-pulse-b"></span>
+        <span class="orbit-pulse orbit-pulse-c"></span>
+        <span class="orbit-track orbit-track-a">
+          <span class="orbit-node"><span class="orbit-node-surface">${icon("shield")}</span></span>
+        </span>
+        <span class="orbit-track orbit-track-b">
+          <span class="orbit-node"><span class="orbit-node-surface">${icon("activity")}</span></span>
+        </span>
+        <span class="orbit-track orbit-track-inner orbit-track-c">
+          <span class="orbit-node"><span class="orbit-node-surface">${icon("image")}</span></span>
+        </span>
+        <span class="orbit-track orbit-track-inner orbit-track-d">
+          <span class="orbit-node"><span class="orbit-node-surface">${icon("link")}</span></span>
+        </span>
+        <span class="orbit-track orbit-track-spark-a"><span class="orbit-spark"></span></span>
+        <span class="orbit-track orbit-track-inner orbit-track-spark-b"><span class="orbit-spark"></span></span>
+        <span class="orbit-core"><strong>MC</strong><span>Wallet</span></span>
+      </div>
     </div>
     <div class="onboarding-welcome-actions">
       ${button({

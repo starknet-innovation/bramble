@@ -22,6 +22,12 @@ export const darkSkin: Skin = {
   tokens: {
     "--mc-accent": "#f5f5f5",
     "--mc-accent-text": "#171717",
+    "--mc-account-avatar-0": "#6842a8",
+    "--mc-account-avatar-1": "#e27a35",
+    "--mc-account-avatar-2": "#e9b83f",
+    "--mc-account-avatar-3": "#9f356f",
+    "--mc-account-avatar-ink": "#171717",
+    "--mc-account-avatar-paper": "#fafafa",
     "--mc-bg": "#0a0a0a",
     "--mc-border": "#2b2b2b",
     "--mc-danger": "#ff7474",

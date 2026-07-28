@@ -29,7 +29,6 @@ export const JOURNEY_STYLES = `
     justify-content: center;
     width: 40px;
   }
-  .approval-live-mark .icon { animation: journey-spin 1100ms linear infinite; }
   .approval-live div { display: grid; gap: 2px; min-width: 0; }
   .approval-live strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.semibold}; }
   .approval-live p { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
@@ -56,9 +55,6 @@ export const JOURNEY_STYLES = `
     flex: none;
   }
   .ledger-liveness-mark .icon { height: 16px; width: 16px; }
-  .ledger-progress-card:not([data-phase="connect"]):not([data-phase="error"]) .ledger-liveness-mark .icon {
-    animation: journey-spin 1100ms linear infinite;
-  }
 
   .nft-send-identity {
     align-items: center;
@@ -113,9 +109,4 @@ export const JOURNEY_STYLES = `
   #nft-send-form[data-stage="reviewing"] #nft-review-panel,
   #nft-send-form[data-stage="submitting"] #nft-review-panel { opacity: 0.62; }
 
-  @keyframes journey-spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) {
-    .approval-live-mark .icon,
-    .ledger-liveness-mark .icon { animation: none !important; }
-  }
 `;

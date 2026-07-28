@@ -42,6 +42,8 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('data-view="receive"');
     expect(html).toContain('aria-controls="wallet-screen-home"');
     expect(html).toContain('aria-selected="true"');
+    expect(dock).toContain('class="nav-tooltip"');
+    expect(dock).not.toContain('class="tab-label"');
   });
 
   test("home keeps four frequent actions together, not settings or activity", () => {
@@ -177,6 +179,10 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="review-panel"');
     expect(html).toContain('name="speed"');
     expect(html).toContain("Review send");
+    expect(html).toContain('class="liquid-dots"');
+    expect(html).toContain('data-liquid-dots="send"');
+    expect(html).toContain('id="mc-liquid-dots-send"');
+    expect(html).not.toContain("send-spin");
   });
 
   test("activity lists recorded transactions with status and export controls", () => {
@@ -277,15 +283,20 @@ describe("sidepanel views", () => {
     expect(accountFlowHtml).toContain('class="option-avatar"');
   });
 
-  test("avatars are flat single-colour chips from the palette, never gradients", () => {
-    // Clean Mono avatars: one solid --mc-avatar-* fill per account with a glyph
-    // — no <linearGradient>, so the only non-mono field is the flat chip itself.
+  test("avatars are deterministic Beam characters from the identity palette", () => {
+    // Account identity colour stays within the dedicated local tokens—no
+    // gradients, remote imagery, raw colour values, or inset frames.
     const html = dashboard("home", status, [], preferences, { balances: [] });
     expect(html).toContain('class="avatar"');
-    expect(html).toMatch(/fill="var\(--mc-avatar-\d\)"/);
-    expect(html).toContain("var(--mc-avatar-ink)");
+    expect(html).toContain('class="avatar-character"');
+    expect(html).toContain('class="avatar-eyes"');
+    expect(html).toContain('class="avatar-mouth"');
+    expect(html).toMatch(/fill="var\(--mc-account-avatar-\d\)"/);
+    expect(html).toMatch(/var\(--mc-account-avatar-(?:ink|paper)\)/);
+    expect(html).not.toContain('class="avatar-frame"');
     expect(html).not.toContain("linearGradient");
     expect(html).not.toContain("<defs>");
+    expect(html).not.toMatch(/fill="#/);
   });
 
   test("home hero carries the value and 24h delta without redundant identity copy", () => {

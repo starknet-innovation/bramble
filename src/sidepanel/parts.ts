@@ -10,6 +10,8 @@ import { iconButton } from "../ui/controls";
 import type { IconName } from "../ui/icons";
 import { menuRow } from "../ui/navigation";
 
+export { accountAvatar } from "./account-avatar";
+
 /**
  * Side panel screen ids. The first three live on the bottom dock; the rest
  * are dedicated flow screens reached from a dock screen.
@@ -168,31 +170,6 @@ export const accountDisplayName = (
   account: AccountRef,
   preferences: WalletPreferences | null,
 ): string => preferences?.accountLabels?.[account.id] ?? friendlyAccountName(account.address);
-
-/**
- * Renders a flat, single-colour avatar chip for an address: one solid fill from
- * a small grayscale palette with a quiet person glyph, matching the Clean Mono
- * system. The tone is chosen deterministically from the address, so an account
- * always keeps the same identity. Fill and glyph ink come from the
- * `--mc-avatar-*` tokens (see
- * ./styles-base) — no gradients, no raw colour literals — and the chip's
- * rounded-square shape and hairline are carried by its container
- * (`.brand-mark` / `.option-avatar`).
- */
-export const accountAvatar = (address: string): string => {
-  let bits: bigint;
-  try {
-    bits = BigInt(address);
-  } catch {
-    bits = 0n;
-  }
-  const tone = Number(bits % 4n);
-  return `<svg class="avatar" viewBox="0 0 40 40" aria-hidden="true" preserveAspectRatio="xMidYMid slice">
-    <rect width="40" height="40" fill="var(--mc-avatar-${tone})" />
-    <circle cx="20" cy="15.5" r="6" fill="var(--mc-avatar-ink)" opacity="0.9" />
-    <path d="M8 34c1.7-7 6.4-10.5 12-10.5S30.3 27 32 34" fill="var(--mc-avatar-ink)" opacity="0.9" />
-  </svg>`;
-};
 
 /**
  * Resolves the active account for the current network.

@@ -107,17 +107,17 @@ export type DockItemProps = {
 };
 
 /**
- * Renders the shared bottom dock. Labels and target ids are escaped, count
- * badges are validated, and navigation capabilities remain explicit data
- * attributes.
+ * Renders the shared icon-only bottom dock. Accessible labels, tooltip copy,
+ * and target ids are escaped; count badges are validated, and navigation
+ * capabilities remain explicit data attributes.
  */
 export const dockNavigation = (items: readonly DockItemProps[]): string =>
   `<nav class="wallet-dock" aria-label="Wallet screens" role="tablist">${items
     .map(
       (item) =>
-        `<button class="nav-item"${uiAttributes(item.attributes)} type="button" role="tab" aria-label="${escapeHtml(item.label)}" title="${escapeHtml(item.label)}" aria-controls="${escapeHtml(item.controls)}" aria-selected="${item.selected}">
+        `<button class="nav-item"${uiAttributes(item.attributes)} type="button" role="tab" aria-label="${escapeHtml(item.label)}" aria-controls="${escapeHtml(item.controls)}" aria-selected="${item.selected}">
           <span class="tab-icon">${icon(item.icon)}${item.count && item.count > 0 ? badge(item.count) : ""}</span>
-          <span class="tab-label">${escapeHtml(item.label)}</span>
+          <span class="nav-tooltip" role="tooltip">${escapeHtml(item.label)}</span>
         </button>`,
     )
     .join("")}</nav>`;

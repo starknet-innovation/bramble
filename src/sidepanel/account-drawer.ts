@@ -1,8 +1,8 @@
 /**
  * Left slide-in account drawer opened from the header avatar. Kept lean: it
  * lists this network's accounts with identicons and names, marks the active one,
- * filters by folder/group chips, shows each account's folder on its row icon,
- * lets each account be filed into a single folder from an inline quick picker,
+ * filters by folder/group chips, lets each account be filed into a single
+ * folder from the row's inline quick picker,
  * offers "Add account", and links to the dedicated "Manage accounts & groups"
  * view. All group management (create/rename/change-icon/delete and bulk
  * assignment) lives on that view, not here — the drawer carries no group-CRUD
@@ -20,7 +20,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { emptyState } from "../ui/content";
 import { button, iconButton } from "../ui/controls";
 import { menuRow } from "../ui/navigation";
-import { accountGroupsLine, groupFilterChips, groupPickerPanel } from "./group-controls";
+import { groupFilterChips, groupPickerPanel } from "./group-controls";
 import { icon } from "./icons";
 import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "./parts";
 
@@ -66,7 +66,6 @@ const drawerAccountRow = (
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
           <code>${accountLabel(stored.address)}</code>
-          ${accountGroupsLine(folder ? [folder] : [])}
         </span>
         ${stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>

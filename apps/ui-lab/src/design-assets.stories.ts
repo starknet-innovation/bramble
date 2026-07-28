@@ -4,7 +4,7 @@ import { tokenGlyph } from "../../../src/sidepanel/token-row";
 import { ICON_NAMES, icon } from "../../../src/ui/icons";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
-import { SOFTWARE_ADDRESS, USDC_ADDRESS } from "./fixtures";
+import { LEDGER_ADDRESS, SECOND_ADDRESS, SOFTWARE_ADDRESS, USDC_ADDRESS } from "./fixtures";
 
 const meta = {
   ...CATALOG_META,
@@ -37,9 +37,17 @@ export const IdentityMarks: CatalogStory = {
       "Deterministic account avatars and token marks improve scanning without asserting unverified brand identity.",
       catalogGroup(
         "Account and token identity",
-        "Known tokens use bundled vector marks; unknown tokens fall back to escaped deterministic initials.",
+        "Account marks are derived locally from the full public address. Known tokens use bundled vector marks; unknown tokens fall back to escaped deterministic initials.",
         `<div class="catalog-grid">
-          ${catalogSample("Account avatar", `<div class="catalog-row"><span class="brand-mark">${accountAvatar(SOFTWARE_ADDRESS)}</span><span>Daily account</span></div>`)}
+          ${catalogSample(
+            "Address identities",
+            `<div class="catalog-row">
+              <span class="brand-mark" title="Daily account">${accountAvatar(SOFTWARE_ADDRESS)}</span>
+              <span class="brand-mark" title="Ledger vault">${accountAvatar(LEDGER_ADDRESS)}</span>
+              <span class="brand-mark" title="Trading account">${accountAvatar(SECOND_ADDRESS)}</span>
+              <span>Stable, distinct marks</span>
+            </div>`,
+          )}
           ${catalogSample("Known token", `<div class="catalog-row">${tokenGlyph(USDC_ADDRESS, "USDC")}<span>USD Coin</span></div>`)}
           ${catalogSample("Fallback token", `<div class="catalog-row">${tokenGlyph("0x999", "NEW")}<span>Unverified token</span></div>`)}
         </div>`,

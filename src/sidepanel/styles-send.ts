@@ -4,7 +4,7 @@
  * Motion is reserved for active work and the final submitted receipt, with a
  * complete reduced-motion cut.
  */
-import { CONTROL, EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "../ui/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens";
 
 /**
  * Send-flow stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -151,20 +151,12 @@ export const SEND_STYLES = `
   }
   .send-working-mark {
     align-items: center;
-    background: var(--mc-accent-soft);
-    border-radius: ${RADIUS.full};
     color: var(--mc-accent);
     display: inline-flex;
-    height: 64px;
+    height: ${SIZE.brand};
     justify-content: center;
-    width: 64px;
+    width: ${SIZE.brand};
   }
-  .send-working-mark .icon {
-    animation: send-spin 900ms linear infinite;
-    height: ${SPACE.xl};
-    width: ${SPACE.xl};
-  }
-  @keyframes send-spin { to { transform: rotate(360deg); } }
   .send-working-copy { display: grid; gap: ${SPACE.sm}; max-width: 30ch; }
   .send-working-copy h2 { font-size: ${TYPE.title.size}; }
   .send-working-copy p {
@@ -358,7 +350,7 @@ export const SEND_STYLES = `
     html[data-send-transition]::view-transition-group(send-stage),
     html[data-send-transition]::view-transition-old(send-stage),
     html[data-send-transition]::view-transition-new(send-stage),
-    .send-working-mark .icon,
+    .liquid-dot,
     .send-task-list li[data-state="active"] > span:first-child::after,
     .send-success-ring,
     .send-success-check,

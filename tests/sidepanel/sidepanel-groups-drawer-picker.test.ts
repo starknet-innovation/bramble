@@ -3,8 +3,9 @@
  * "Add account joins the focused folder" fix. Drives the real drawer template
  * and bindings through the shared happy-dom harness, asserting BOTH the store
  * call and the re-derived DOM: filing an account into a folder, exclusivity when
- * moving to a second folder, clearing to None, the row icon reflecting the
- * folder, and Add account joining the active chip (or nothing on All). The
+ * moving to a second folder, clearing to None, the folder-picker icon reflecting
+ * the folder without a redundant metadata icon, and Add account joining the
+ * active chip (or nothing on All). The
  * folder-management journeys (create/rename/icon/delete) stay in
  * ./sidepanel-groups-ui.test.ts.
  */
@@ -60,7 +61,7 @@ describe("account drawer folder picker", () => {
     const row = harness.container
       .querySelector(`[data-switch-account="${acctA.id}"]`)
       ?.closest(".drawer-account-item");
-    expect(row?.querySelector(".account-groups-line")).not.toBeNull();
+    expect(row?.querySelector(".account-groups-line")).toBeNull();
   });
 
   test("moving to a second folder is exclusive and keeps the picker open", async () => {

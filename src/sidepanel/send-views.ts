@@ -20,6 +20,7 @@ import {
   flowScreen,
   noAccountEmpty,
 } from "./parts";
+import { liquidDots, liquidDotsFilter } from "./progress-motion";
 import { type SendAsset, sendAssets, sendBalanceLabel, sendRecipientAccounts } from "./send-model";
 import { tokenGlyph } from "./token-row";
 
@@ -233,7 +234,7 @@ const assetStage = (assets: readonly SendAsset[], currency: DisplayCurrency): st
 
 const workingStage = (): string => `
   <section class="send-working" id="send-working" role="status" aria-live="polite" hidden>
-    <span class="send-working-mark" aria-hidden="true">${icon("refresh")}</span>
+    <span class="send-working-mark">${liquidDots("send")}</span>
     <div class="send-working-copy">
       <h2 id="send-working-title">Preparing review</h2>
       <p id="send-working-copy">Checking the exact transaction.</p>
@@ -283,7 +284,7 @@ const failureStage = (): string => `
 
 const pendingStage = (): string => `
   <section class="send-outcome send-pending" id="send-pending" role="status" aria-live="polite" hidden>
-    <span class="send-working-mark" aria-hidden="true">${icon("activity")}</span>
+    <span class="send-working-mark">${liquidDots("send")}</span>
     <div class="send-outcome-copy">
       <p class="send-outcome-kicker">Submitted to Starknet</p>
       <h2>Confirmation is taking longer</h2>
@@ -326,6 +327,7 @@ export const sendFlow = (
         ${account ? "" : noAccountEmpty(status)}
         ${account && assets.length === 0 ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.") : ""}
         <form id="transfer-form" data-signer="${signer}" data-amount-mode="token">
+          ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
           <input name="fiatEstimate" type="hidden" value="" />
