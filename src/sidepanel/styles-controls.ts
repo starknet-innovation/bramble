@@ -54,7 +54,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
       color ${MOTION.pressMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms var(--ease-out);
   }
-  button:not(:disabled):active, a.icon-button:active { background: var(--mc-accent-press); transform: scale(0.98); }
+  :where(button:not(:disabled):active), a.icon-button:active { background: var(--mc-accent-press); transform: scale(0.98); }
   button.secondary {
     background: var(--mc-elevated);
     color: var(--mc-text);
@@ -73,7 +73,9 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
   button.danger { background: var(--mc-elevated); color: var(--mc-danger); }
   button.danger:not(:disabled):active { background: var(--mc-danger-soft); }
   @media (hover: hover) and (pointer: fine) {
-    button:not(:disabled):hover { background: var(--mc-accent-hover); }
+    /* The primary fill is a fallback, not a specificity trap: component rows
+       declare their own neutral hover surfaces later in the cascade. */
+    :where(button:not(:disabled):hover) { background: var(--mc-accent-hover); }
     button.secondary:not(:disabled):hover, button.icon-button:not(:disabled):hover, a.icon-button:hover {
       background: var(--mc-hover);
     }

@@ -372,7 +372,10 @@ export const ONBOARDING_STYLES = `
       color: var(--mc-muted);
     }
     button.onboarding-option:not(:disabled):hover > .icon { transform: translateX(3px); }
-    .onboarding-inline-action:hover { background: var(--mc-hover); color: var(--mc-text); }
+    button.onboarding-inline-action:not(:disabled):hover {
+      background: var(--mc-hover);
+      color: var(--mc-text);
+    }
   }
   @media (max-height: 760px) {
     .onboarding-step { min-height: inherit; padding-bottom: 22px; padding-top: 30px; }

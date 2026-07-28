@@ -235,6 +235,24 @@ describe("sidepanel styles", () => {
     // (hover: hover) media blocks so a tap never strands a highlighted row.
     const gates = [...SIDEPANEL_STYLES.matchAll(/@media \(hover: hover\) and \(pointer: fine\)/g)];
     expect(gates.length).toBeGreaterThanOrEqual(8);
+    // The generic primary feedback is deliberately zero-specificity. Otherwise
+    // it can outrank neutral component rows and produce accent-text on an
+    // accent background (white-on-white in the default dark skin).
+    expect(SIDEPANEL_STYLES).toContain(
+      ":where(button:not(:disabled):hover) { background: var(--mc-accent-hover); }",
+    );
+    expect(SIDEPANEL_STYLES).toContain(
+      ":where(button:not(:disabled):active), a.icon-button:active",
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.add-account-option:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.add-account-option\[aria-pressed="true"\]:not\(:disabled\):hover \{[^}]*background: var\(--mc-elevated\);[^}]*color: var\(--mc-text\)/s,
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      /button\.onboarding-inline-action:not\(:disabled\):hover \{[^}]*background: var\(--mc-hover\);[^}]*color: var\(--mc-text\)/s,
+    );
     // Selected controls keep their accent-soft fill under the pointer — the
     // pressed-state hover rules exist so hovering never visually deselects.
     expect(SIDEPANEL_STYLES).toMatch(

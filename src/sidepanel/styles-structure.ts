@@ -393,8 +393,12 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     transform: scale(1);
   }
   @media (hover: hover) and (pointer: fine) {
-    .add-account-option:hover {
+    button.add-account-option:not(:disabled):hover {
       background: var(--mc-hover);
+      color: var(--mc-text);
+    }
+    button.add-account-option[aria-pressed="true"]:not(:disabled):hover {
+      background: var(--mc-elevated);
       color: var(--mc-text);
     }
   }
