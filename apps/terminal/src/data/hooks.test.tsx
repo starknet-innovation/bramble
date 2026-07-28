@@ -7,7 +7,7 @@
  */
 import { renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MAINNET_TOKEN_ADDRESSES } from "../protocols";
+import { EKUBO_API_BASE, MAINNET_TOKEN_ADDRESSES } from "../protocols";
 
 // Shared, hoisted balance table the stubbed RPC provider reads from.
 const rpc = vi.hoisted(() => ({ balances: new Map<string, bigint>() }));
@@ -169,7 +169,7 @@ const routeFetch = (avnuStatus = 200): void => {
     if (url.includes("avnu.fi")) {
       return respond(avnuStatus === 200 ? AVNU_TOKENS : { error: "boom" }, avnuStatus);
     }
-    if (url.includes("ekubo.org") && url.includes("/tokens")) {
+    if (new URL(url).origin === EKUBO_API_BASE && url.includes("/tokens")) {
       return respond([
         { name: "Nostra", symbol: "NSTR", decimals: 18, l2_token_address: "0xdef", logo_url: "u" },
       ]);

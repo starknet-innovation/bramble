@@ -44,6 +44,7 @@ jobs:
       should_release: ${{ steps.tag.outputs.should_release }}
       tag: ${{ steps.gate.outputs.tag }}
       version: ${{ steps.gate.outputs.version }}
+      commit_sha: ${{ github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -179,5 +180,5 @@ jobs:
     uses: ./.github/workflows/release-build.yml
     with:
       tag: ${{ needs.compute.outputs.tag }}
-      ref: ${{ needs.compute.outputs.tag }}
+      commit_sha: ${{ needs.compute.outputs.commit_sha }}
       create_release: true
