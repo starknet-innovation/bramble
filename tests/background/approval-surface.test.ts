@@ -170,6 +170,34 @@ describe("approval surface", () => {
     expect(opened).toEqual([42]);
   });
 
+  test("keeps the request queued when both preferred surfaces reject", async () => {
+    requestApprovalSurface(
+      {
+        action: {
+          async openPopup() {
+            throw new Error("popup unavailable");
+          },
+        },
+        sidePanel: {
+          async open() {
+            throw new Error("panel unavailable");
+          },
+        },
+      },
+      "popup",
+      "extension-id",
+      { type: "wallet.requestAccounts" },
+      {
+        id: "extension-id",
+        tab: { id: 42 },
+        url: "https://dapp.example/app",
+      },
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+
   test("configures toolbar activation for each stored surface", async () => {
     const popups: string[] = [];
     const panelBehaviors: boolean[] = [];

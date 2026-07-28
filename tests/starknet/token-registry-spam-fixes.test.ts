@@ -7,7 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { type SpamCandidate, tokenSpamReasons } from "../../src/starknet/token-registry";
 
 // Must match the USDC alias registered in src/starknet/token-registry.ts.
-const USDC_ALIAS = "0x0409e46a52c3c31a8c1c8b8d0a1e4c5f0b8f2b9dfd8b6f0c2c2f4a2d6e8c0a2b4";
+const USDC_ALIAS = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 
 const candidate = (overrides: Partial<SpamCandidate>): SpamCandidate => ({
   address: "0xdead",

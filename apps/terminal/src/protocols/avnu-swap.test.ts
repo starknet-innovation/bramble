@@ -48,15 +48,17 @@ describe("AVNU v3 swap boundary", () => {
       parseQuoteResponse([
         {
           buyAmount: "990",
+          gasFees: "0xde0b6b3a7640000",
           gasFeesInUsd: 0.08,
           priceImpact: 12,
           quoteId: "quote-1",
-          routes: [{ name: "Ekubo", percent: 70 }, { name: "Hashstack", percent: 30 }],
+          routes: [{ name: "Ekubo", percent: 0.7 }, { name: "Hashstack", percent: 0.3 }],
           sellAmount: "1000",
         },
       ]),
     ).toEqual({
       buyAmount: "990",
+      gasFeesInStrk: "1000000000000000000",
       gasFeesInUsd: 0.08,
       priceImpactBps: 12,
       quoteId: "quote-1",

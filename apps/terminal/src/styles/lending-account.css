@@ -1,0 +1,218 @@
+.lending-account-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+.lending-account-workspace > header {
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.lending-account-workspace > header > div,
+.lending-account-workspace > header > div > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lending-account-workspace > header > div > span {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0;
+}
+.lending-account-workspace > header small {
+  color: var(--text-3);
+  font-size: 9.5px;
+}
+.lending-account-workspace > header button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+  font-size: 10px;
+}
+.lending-account-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px;
+}
+.lending-account-empty {
+  max-width: 360px;
+  margin: 70px auto;
+  color: var(--text-3);
+  text-align: center;
+}
+.lending-account-empty h2 {
+  margin-top: 12px;
+  color: var(--text);
+  font-size: 15px;
+}
+.lending-account-empty p {
+  margin-top: 5px;
+  font-size: 11px;
+}
+.lending-account-empty button {
+  width: auto;
+  margin: 15px auto 0;
+  padding: 0 16px;
+}
+.lending-position-head,
+.lending-position-row,
+.lending-vault-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 0.7fr 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.lending-position-head {
+  min-height: 29px;
+  padding: 0 11px;
+  color: var(--text-3);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  font-size: 9.5px;
+}
+.lending-position-row,
+.lending-vault-row {
+  min-height: 54px;
+  padding: 7px 11px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  font-size: 10.5px;
+}
+.lending-position-row > span:nth-child(n + 2),
+.lending-vault-row > span:nth-child(n + 2) {
+  text-align: right;
+}
+.lending-position-row span small {
+  display: block;
+  color: var(--text-3);
+  font-size: 8.5px;
+}
+.lending-position-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.lending-position-kind strong {
+  display: block;
+  text-transform: capitalize;
+}
+.lending-position-kind small {
+  display: block;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lending-warn-text {
+  color: var(--yellow);
+}
+.lending-vault-layout {
+  display: grid;
+  grid-template-columns: minmax(550px, 1fr) 300px;
+  gap: 14px;
+}
+.vault-head,
+.lending-vault-row {
+  grid-template-columns: 1.5fr 0.8fr 0.7fr 0.7fr 0.9fr;
+}
+.lending-vault-row {
+  width: 100%;
+  text-align: left;
+}
+.lending-vault-row:hover,
+.lending-vault-row.selected {
+  background: var(--surface);
+}
+.lending-vault-row.selected {
+  box-shadow: inset 2px 0 var(--text);
+}
+.lending-vault-ticket {
+  padding: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.lending-vault-ticket > span {
+  color: var(--text-3);
+  font-size: 9.5px;
+}
+.lending-vault-ticket h2 {
+  margin: 3px 0 12px;
+  font-size: 15px;
+}
+.lending-rewards {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 0.45fr);
+  gap: 14px;
+}
+.lending-reward-ledger,
+.lending-reward-action {
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.lending-reward-ledger {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+}
+.lending-reward-mark {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  color: var(--bg);
+  background: var(--text);
+  border-radius: 12px 5px 12px 5px;
+}
+.lending-reward-ledger h2 {
+  margin-top: 3px;
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+.lending-reward-ledger p,
+.lending-reward-action p {
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: 10px;
+}
+.lending-reward-ledger dl {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.lending-reward-ledger dl div {
+  padding: 12px 8px 0 0;
+}
+.lending-reward-ledger dt {
+  color: var(--text-3);
+  font-size: 9px;
+}
+.lending-reward-ledger dd {
+  margin-top: 3px;
+  font-size: 11px;
+}
+.lending-reward-action h3 {
+  margin-top: 12px;
+  font-size: 14px;
+}
+.lending-reward-action > small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  color: var(--text-3);
+  font-size: 8.5px;
+}

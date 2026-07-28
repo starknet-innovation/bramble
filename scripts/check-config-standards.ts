@@ -135,10 +135,13 @@ if (
   !hasStringList(biomeFiles?.["includes"], [
     "**",
     "!.claude",
+    "!.impeccable",
+    "!.playwright-cli",
     "!apps",
     "!bun.lock",
     "!dist",
     "!node_modules",
+    "!output",
     "!playwright-report",
     "!test-results",
     "!vendor",

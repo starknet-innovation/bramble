@@ -12,3 +12,17 @@ export * as extended from "./extended";
 export * as privacy from "./privacy";
 export * from "./types";
 export * as vesu from "./vesu";
+export {
+  buildVesuRewardClaimCalls,
+  buildVesuVaultClaimCalls,
+  buildVesuVaultDepositCalls,
+  buildVesuVaultRedeemCalls,
+} from "./vesu-actions";
+export {
+  buildVesuMultiplyCloseCalls,
+  buildVesuMultiplyIncreaseCalls,
+  parseVesuMultiplyExactOutQuote,
+  quoteVesuMultiplyClose,
+  quoteVesuMultiplyIncrease,
+  type VesuMultiplyExactOutQuote,
+} from "./vesu-multiply";

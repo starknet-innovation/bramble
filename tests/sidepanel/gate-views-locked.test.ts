@@ -31,7 +31,7 @@ describe("locked gate view", () => {
   });
 
   test("enables the submit button only when the wallet is ready", () => {
-    expect(locked(lockedStatus(true))).toMatch(/<button type="submit" >Unlock<\/button>/);
+    expect(locked(lockedStatus(true))).toMatch(/<button type="submit">Unlock<\/button>/);
     expect(locked(lockedStatus(false))).toMatch(/<button type="submit" disabled>Unlock<\/button>/);
   });
 

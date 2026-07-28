@@ -75,6 +75,7 @@ export const quoteSwap = async (params: SwapQuoteParams): Promise<SwapQuote> => 
   return {
     buyAmount: quote.buyAmount,
     buyToken: params.buyToken,
+    gasFeesInStrk: quote.gasFeesInStrk,
     gasFeesInUsd: quote.gasFeesInUsd,
     minBuyAmount: applySlippageFloor(BigInt(quote.buyAmount), slippageBps).toString(),
     priceImpactBps: quote.priceImpactBps,

@@ -15,9 +15,11 @@ import {
   bindActivity,
   bindTransfer,
   friendlyReviewError,
+  markTransferLedgerAuthorized,
   recipientFieldError,
   type TransferUiDeps,
 } from "../../src/sidepanel/transfer-ui";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "../../src/starknet/ledger-path";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
 import { registerDom, unregisterDom } from "../support/groups-harness";
 import { account } from "../support/sidepanel-fixtures";
@@ -98,7 +100,20 @@ const makeWallet = (overrides: Record<string, unknown> = {}) => {
   const wallet = {
     async loadActivity() {
       calls.loadActivity += 1;
-      return { entries: [], historyUnavailable: false };
+      return {
+        entries: [
+          {
+            accountId: account.id,
+            hash: "0xdeadbeef",
+            kind: "transfer",
+            networkId: "SN_MAIN",
+            status: "accepted",
+            submittedAt: 1,
+            summary: "Sent 1 ETH",
+          },
+        ],
+        historyUnavailable: false,
+      };
     },
     async loadDeploymentStatus() {
       calls.loadDeploymentStatus += 1;
@@ -218,15 +233,18 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(calls.reviewTransfer).toHaveLength(1);
-    expect(resultText(app)).toBe("Review the details above, then confirm.");
-    const button = app.querySelector("#transfer-form button[type=submit]");
-    expect(button?.textContent).toContain("Confirm send");
+    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(true);
+    expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
+    const button = app.querySelector("#send-confirm-button");
+    expect(button?.textContent).toContain("Confirm and send");
     expect(reviewText(app)).toContain("Estimated fee");
 
     submit(app);
     await flush();
     expect(calls.submitTransfer).toHaveLength(1);
-    expect(resultText(app)).toBe("Submitted 0xdeadbeef");
+    expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
+    expect(app.querySelector('[data-send-step="sent"]')?.getAttribute("data-state")).toBe("active");
   });
 
   test("watches for deployment after confirming a first send", async () => {
@@ -278,9 +296,9 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(reviewCount).toBe(1);
-    expect(resultText(app)).toContain("Fee estimate failed");
-    const button = app.querySelector("#transfer-form button[type=submit]");
-    expect(button?.textContent).toContain("Review send");
+    expect(resultText(app)).toContain("Fee estimate unavailable");
+    const button = app.querySelector<HTMLButtonElement>("#send-confirm-button");
+    expect(button?.disabled).toBe(true);
     const retry = app.querySelector<HTMLButtonElement>("#review-retry-fee");
     expect(retry).not.toBeNull();
     expect(calls.submitTransfer).toHaveLength(0);
@@ -323,7 +341,63 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(submitCount).toBe(1);
-    expect(resultText(app)).toBe("network exploded");
+    expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("failed");
+    expect(app.querySelector("#send-failure-copy")?.textContent).toContain("network exploded");
+    expect(app.querySelector("#send-failure")?.hasAttribute("hidden")).toBe(false);
+  });
+
+  test("keeps Ledger progress alive across a shell repaint and advances after device signing", async () => {
+    let resolveSubmit = (_hash: string): void => {
+      throw new Error("submit promise was not initialized");
+    };
+    const pendingSubmit = new Promise<string>((resolve) => {
+      resolveSubmit = resolve;
+    });
+    const ledgerAccount = {
+      ...account,
+      derivation: {
+        accountIndex: 0,
+        eip2645application: LEDGER_EIP2645_APPLICATION,
+        kind: "ledger" as const,
+        path: ledgerAccountPath(0),
+      },
+      publicKeyY: undefined,
+    };
+    const ledgerStatus = {
+      ...status,
+      accounts: [ledgerAccount],
+      activeAccountId: ledgerAccount.id,
+    };
+    const { app, deps } = mount({
+      submitTransfer: () => pendingSubmit,
+    });
+    paint(app, sendFlow(ledgerStatus, ledgerAccount, preferences));
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    submit(app);
+    await flush();
+    expect(app.querySelector("#send-working-title")?.textContent).toBe("Waiting for your Ledger");
+
+    paint(app, sendFlow(ledgerStatus, ledgerAccount, preferences));
+    bindTransfer(deps);
+    expect(app.querySelector("#send-working")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#send-working-title")?.textContent).toBe("Waiting for your Ledger");
+
+    markTransferLedgerAuthorized();
+    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending to Starknet");
+    expect(app.querySelector('[data-send-task="broadcast"]')?.getAttribute("data-state")).toBe(
+      "active",
+    );
+
+    resolveSubmit("0xdeadbeef");
+    await flush();
+    await flush();
+    expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("submitted");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
   });
 });
 

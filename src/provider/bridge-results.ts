@@ -12,6 +12,7 @@ import { isAccountRef } from "../storage/vault-schema";
 
 export { type ProviderInvokeCall, providerInvokeCalls } from "./invoke-params";
 
+import type { ProviderMethod } from "./methods";
 import { providerStrk20Balances, providerStrk20CallAndProof } from "./strk20-bridge";
 
 /**
@@ -70,24 +71,7 @@ export type ProviderPayload = { readonly error?: WalletRpcError; readonly result
 /**
  * Method key used to shape a background result into its dapp response.
  */
-export type ProviderResultMethod =
-  | "mc_accounts"
-  | "mc_requestAccounts"
-  | "wallet_addDeclareTransaction"
-  | "wallet_addInvokeTransaction"
-  | "wallet_deploymentData"
-  | "wallet_addStarknetChain"
-  | "wallet_getPermissions"
-  | "wallet_requestAccounts"
-  | "wallet_requestChainId"
-  | "wallet_signTypedData"
-  | "wallet_supportedSpecs"
-  | "wallet_supportedWalletApi"
-  | "wallet_strk20Balances"
-  | "wallet_strk20InvokeTransaction"
-  | "wallet_strk20PrepareInvoke"
-  | "wallet_switchStarknetChain"
-  | "wallet_watchAsset";
+export type ProviderResultMethod = ProviderMethod;
 
 /**
  * Left-pads a felt to a spec PADDED_FELT (`0x` + 64 hex, lowercased). Returns
@@ -412,6 +396,45 @@ const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
     okFieldPayload(result, "callAndProof", providerStrk20CallAndProof),
 };
 
+const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
+  switch (method) {
+    case "mc_accounts":
+      return RESULT_MAPPERS.mc_accounts;
+    case "mc_requestAccounts":
+      return RESULT_MAPPERS.mc_requestAccounts;
+    case "wallet_addDeclareTransaction":
+      return RESULT_MAPPERS.wallet_addDeclareTransaction;
+    case "wallet_addInvokeTransaction":
+      return RESULT_MAPPERS.wallet_addInvokeTransaction;
+    case "wallet_deploymentData":
+      return RESULT_MAPPERS.wallet_deploymentData;
+    case "wallet_addStarknetChain":
+      return RESULT_MAPPERS.wallet_addStarknetChain;
+    case "wallet_getPermissions":
+      return RESULT_MAPPERS.wallet_getPermissions;
+    case "wallet_requestAccounts":
+      return RESULT_MAPPERS.wallet_requestAccounts;
+    case "wallet_requestChainId":
+      return RESULT_MAPPERS.wallet_requestChainId;
+    case "wallet_signTypedData":
+      return RESULT_MAPPERS.wallet_signTypedData;
+    case "wallet_supportedSpecs":
+      return RESULT_MAPPERS.wallet_supportedSpecs;
+    case "wallet_supportedWalletApi":
+      return RESULT_MAPPERS.wallet_supportedWalletApi;
+    case "wallet_strk20Balances":
+      return RESULT_MAPPERS.wallet_strk20Balances;
+    case "wallet_strk20InvokeTransaction":
+      return RESULT_MAPPERS.wallet_strk20InvokeTransaction;
+    case "wallet_strk20PrepareInvoke":
+      return RESULT_MAPPERS.wallet_strk20PrepareInvoke;
+    case "wallet_switchStarknetChain":
+      return RESULT_MAPPERS.wallet_switchStarknetChain;
+    case "wallet_watchAsset":
+      return RESULT_MAPPERS.wallet_watchAsset;
+  }
+};
+
 /**
  * Converts background runtime results into provider success or rejection
  * payloads, mapping every failure to a spec `{ code, message, data? }` object.
@@ -419,4 +442,4 @@ const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
 export const toProviderPayload = (
   result: unknown,
   method: ProviderResultMethod = "mc_accounts",
-): ProviderPayload => readRuntimeFailure(result) ?? RESULT_MAPPERS[method](result);
+): ProviderPayload => readRuntimeFailure(result) ?? resultMapperFor(method)(result);

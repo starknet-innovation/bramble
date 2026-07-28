@@ -7,6 +7,7 @@ import { X } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
 import Discover from "./screens/Discover";
 import NftStudio from "./screens/NftStudio";
+import Lending from "./screens/Lending";
 import Perps from "./screens/Perps";
 import Portfolio from "./screens/Portfolio";
 import Tokens from "./screens/Tokens";
@@ -19,6 +20,7 @@ type ScreenProps = { readonly onNavigate: (screen: ScreenId) => void };
 
 const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
   discover: Discover,
+  lending: Lending,
   nfts: NftStudio,
   tokens: Tokens,
   perps: Perps,

@@ -16,6 +16,7 @@
  *                already present (idempotent), then write the file back.
  */
 import { readFile, writeFile } from "node:fs/promises";
+import { escapeRegExp } from "./regexp";
 
 /** A commit subject parsed into its Conventional-Commit parts. */
 export interface ParsedCommit {
@@ -147,7 +148,7 @@ export const renderSection = (
 };
 
 const sectionPattern = (version: string): RegExp =>
-  new RegExp(`^## \\[?${version.replace(/\./g, "\\.")}\\]?(?:\\s|$)`);
+  new RegExp(`^## \\[?${escapeRegExp(version)}\\]?(?:\\s|$)`);
 
 /** Whether a `CHANGELOG.md` body already documents a version. */
 export const hasSection = (changelog: string, version: string): boolean =>

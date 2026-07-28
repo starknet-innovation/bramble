@@ -15,6 +15,7 @@ const paths = {
 } as const;
 
 type WorkflowName = keyof typeof paths;
+const GITHUB_EXPRESSION = "$" + "{{";
 const SHELL_EXPANSION = "$" + "{";
 
 const readWorkflows = async (): Promise<Record<WorkflowName, string>> =>
@@ -63,6 +64,14 @@ describe("workflow security policy", () => {
       failure: "self-hosted release builds must have read-only repository permission",
     },
     {
+      name: "rejects caller-controlled release checkout refs",
+      workflow: "releaseBuild",
+      search:
+        "with:\n          fetch-depth: 0\n          fetch-tags: true\n      - name: Check out immutable release commit",
+      replacement: `with:\n          ref: ${GITHUB_EXPRESSION} inputs.commit_sha }}\n          fetch-depth: 0\n          fetch-tags: true\n      - name: Check out immutable release commit`,
+      failure: "self-hosted release builds must not pass caller-controlled refs to checkout",
+    },
+    {
       name: "rejects release publishing that executes checked-out source",
       workflow: "releaseBuild",
       search: "steps:\n      - uses: actions/download-artifact@",
@@ -83,6 +92,14 @@ describe("workflow security policy", () => {
       search: '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+$ ]]',
       replacement: '[[ -z "$candidate" ]]',
       failure: "nightly must constrain configured refs to canonical release branches",
+    },
+    {
+      name: "rejects configured nightly checkout refs",
+      workflow: "nightly",
+      search:
+        "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - name: Check out resolved release commit",
+      replacement: `uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${GITHUB_EXPRESSION} needs.resolve.outputs.branch }}\n      - name: Check out resolved release commit`,
+      failure: "self-hosted nightly execution must not pass configured refs to checkout",
     },
     {
       name: "rejects pull-request execution with the roadmap token",

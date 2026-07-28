@@ -139,6 +139,13 @@ describe("NFT wrappers", () => {
     await indexed.wallet.discoverNfts(false);
     expect(indexed.sent[0]).toEqual({ includeWatched: false, type: "wallet.discoverNfts" });
 
+    const shared = captureRuntime({ nfts: [discoveredNft], ok: true });
+    await shared.wallet.discoverNfts(true, "SN_MAIN:shared", "SN_MAIN:0x456");
+    expect(shared.sent[0]).toEqual({
+      multisigId: "SN_MAIN:0x456",
+      type: "wallet.discoverNfts",
+    });
+
     const watched = captureRuntime({ nfts: [discoveredNft], ok: true });
     await watched.wallet.loadWatchedNfts();
     expect(watched.sent[0]).toEqual({ type: "wallet.loadWatchedNfts" });

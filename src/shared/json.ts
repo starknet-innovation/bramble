@@ -163,9 +163,7 @@ const normalizeJsonRecord = (
   if (keys.length > context.tracker.budget.maxObjectKeys) {
     return INVALID_JSON;
   }
-  // A null-prototype output is immune to inherited non-writable properties
-  // and prototype-pollution names such as `__proto__` / `constructor`.
-  const normalized = Object.create(null) as Record<string, Json>;
+  const normalizedEntries: Array<readonly [string, Json]> = [];
   for (const key of keys) {
     if (
       typeof key !== "string" ||
@@ -182,9 +180,11 @@ const normalizeJsonRecord = (
     if (item === INVALID_JSON) {
       return INVALID_JSON;
     }
-    normalized[key] = item;
+    normalizedEntries.push([key, item]);
   }
-  return normalized;
+  // Object.fromEntries creates own data properties even for `__proto__` and
+  // `constructor`; removing the prototype also prevents inherited collisions.
+  return Object.setPrototypeOf(Object.fromEntries(normalizedEntries), null) as Record<string, Json>;
 };
 
 const normalizeJsonObject = (

@@ -62,6 +62,35 @@ consistent wallet and explorer parsing. No CryptoPunks artwork is copied into
 this repository. This project is an unaffiliated interoperability demo; the NFT
 contract and terminal code do not grant rights to the referenced artwork.
 
+## Vesu professional lending
+
+The **Lending** tab is a mainnet Vesu V2 desk built around the live verified
+pool inventory. It includes:
+
+- searchable/sortable earn and borrow markets, isolated-pool liquidity,
+  utilization, supply APY, and borrow APR;
+- an interactive implementation of Vesu's adaptive piecewise interest-rate
+  curve, with current utilization, target band, max-utilization boundary, and a
+  keyboard-accessible what-if readout;
+- explicit oracle heuristics on every market: Oracle contract, Pragma key,
+  source count, aggregation mode, timeout, and time window;
+- supply, withdraw, collateralized borrow, and repay actions;
+- atomic **Multiply wind** through Ekubo exact-output routing and one-click
+  **full unwind** from the Positions view;
+- open position health/LTV, curated vault deposits, asynchronous redemption
+  requests/claims, and proof-backed BTCFi reward claims.
+
+Every mutation uses one Starknet account multicall. Temporary ERC-20 allowances
+and Vesu delegation are revoked in that same transaction, and all calls flow
+through the terminal review before the wallet opens. Multiply wind/unwind
+reviews show the target multiplier or full debt, route slippage, LTV, and
+delegation lifecycle.
+
+The data boundary only accepts `protocolVersion=v2`, Vesu-verified,
+non-deprecated pools. API JSON is validated and normalized before rendering;
+deployed `modify_position`, `modify_delegation`, ERC-4626, and `modify_lever`
+ABIs were cross-checked on Starknet Mainnet.
+
 ## Wallet request experience
 
 All terminal mutations go through `WalletProvider.requestTransaction` instead
@@ -86,16 +115,21 @@ The terminal reads from these hosts:
 
 | Purpose                    | Host                                           | Browser access             |
 | -------------------------- | ---------------------------------------------- | -------------------------- |
-| Token markets and candles  | `https://starknet.impulse.avnu.fi`             | `/proxy/avnu-markets` in dev |
+| Token markets and history  | `https://starknet.impulse.avnu.fi`             | `/proxy/avnu-markets` in dev |
 | Swap quotes/builds         | `https://starknet.api.avnu.fi`                 | Direct (CORS-enabled)      |
 | Token fallback             | `https://prod-api.ekubo.org`                   | Direct (CORS-enabled)      |
 | Perps (REST)               | `https://api.starknet.extended.exchange`       | `/proxy/extended` in dev   |
 | Perps (WebSocket)          | `wss://api.starknet.extended.exchange`         | `/proxy/extended-ws` in dev|
+| Vesu V2 pools/positions    | `https://api.vesu.xyz`                         | Direct (CORS-enabled)      |
+| Vesu Multiply routes       | `https://prod-api-quoter.ekubo.org`            | Direct (CORS-enabled)      |
+| Indexed holdings/activity  | `https://starkscan.co/v1/SN_MAIN`              | `/proxy/starkscan` in dev  |
 | Starknet RPC               | `https://api.cartridge.gg/x/starknet/mainnet`  | Direct (CORS-enabled)      |
 
-Ekubo and Cartridge allow browser origins. AVNU market data is still routed
-through Vite in development so its `404`/`5xx` response for an asset with no
-candle history becomes a clean empty series. Extended REST and WebSocket traffic
+Ekubo and Cartridge allow browser origins. AVNU market data is routed through
+Vite in development for one consistent browser path. Token charts prefer a
+liquid Extended index-price market when the symbol maps and otherwise use
+AVNU's contract-specific line history; AVNU's legacy OHLC route fails for most
+non-ETH assets. Extended REST and WebSocket traffic
 are proxied because Extended rejects browser REST origins and WebSocket
 handshakes unless their headers are sanitized server-side. The development
 WebSocket bridge keeps its browser-facing sockets stable while it reconnects a
@@ -105,18 +139,21 @@ browser error/reconnect loop.
 `src/data/endpoints.ts` is the single source of truth for every base and is
 **environment-aware**:
 
-- **Dev server** (`import.meta.env.DEV`, excluding vitest): proxies Extended and
-  AVNU market data; quote/build, Ekubo, and RPC sources remain direct.
+- **Dev server** (`import.meta.env.DEV`, excluding vitest): proxies Extended,
+  AVNU market data, and Starkscan reads; quote/build, Ekubo, and RPC sources
+  remain direct.
 - **Production build / tests**: uses direct hosts, overridable with
   `VITE_AVNU_BASE`, `VITE_AVNU_MARKETS_BASE`, `VITE_EKUBO_BASE`,
-  `VITE_EXTENDED_REST_BASE`, and `VITE_EXTENDED_WS_BASE`.
+  `VITE_EXTENDED_REST_BASE`, `VITE_EXTENDED_WS_BASE`, and
+  `VITE_STARKSCAN_BASE`.
 
 ### Production
 
 The persistent production deployment is
 [mc-wallet-terminal.vercel.app](https://mc-wallet-terminal.vercel.app).
-`vercel.json` supplies same-origin reverse-proxy routes for Extended REST and
-AVNU market data, then builds their `VITE_*_BASE` overrides into the client.
+`vercel.json` supplies same-origin reverse-proxy routes for Extended REST, AVNU
+market data, and Starkscan indexed reads, then builds their `VITE_*_BASE`
+overrides into the client.
 Other production hosts must provide equivalent CORS-enabled routes and set
 `VITE_EXTENDED_REST_BASE` and `VITE_AVNU_MARKETS_BASE` themselves.
 
@@ -126,11 +163,14 @@ The data layer stays within public API limits by:
 
 - Coalesces concurrent requests for the same URL into one network call and
   serves a short-lived in-memory cache (`src/data/cache.ts`).
-- Polls at calm intervals — prices every 60s, token universe every 120s, candles
-  per-timeframe (60s intraday → 1h for multi-year), perps stats every 20s.
+- Polls at calm intervals — prices every 60s, token universe every 120s, chart
+  history per-timeframe (60s intraday → 30m for yearly), spot fills every 5s,
+  perps stats every 20s,
+  Starkscan chain activity every 5s, indexed holdings every 30s, Vesu markets
+  every 60s, positions/redemptions every 30s, and vaults every 120s.
 - Backs off exponentially on `429`/`5xx`, honoring `Retry-After` while keeping
-  the last-good data on screen. Candle history does not retry because the AVNU
-  service uses `5xx` for some assets that simply have no series.
+  the last-good data on screen. Chart history and pair fills do not blindly
+  retry because each can fall through to a shorter history or reference pair.
 - Letting each caller cancel its own wait without aborting the shared request
   used by other tabs or React Strict Mode remounts.
 
@@ -151,8 +191,12 @@ parsed result, and feeds the real response through the app's own
 parser/normalizer (`toAvnuRows`, `toEkuboRows`, `toAvnuCandles`, and
 the `data/extended/parse.ts` functions). It covers:
 
-- AVNU `/v3/tokens` and token OHLC, Ekubo `/tokens` (fallback, optional)
+- AVNU `/v3/tokens` and multi-token line history, Ekubo `/tokens` (fallback,
+  optional), and the live Ekubo spot-fill index
 - AVNU v3 swap quote/build and an Extended public WebSocket frame
+- verified Vesu V2 pool parsing, an Ekubo exact-output unwind route, and the
+  deployed Pool/Multiply ABI entrypoints
+- exact Starkscan token holdings plus recent block and transfer parsing
 - Extended `/info/markets`, `/info/markets/{m}/stats`,
   `/info/candles/{m}/{type}`, `/info/{m}/funding`, `/info/markets/{m}/orderbook`
 - Starknet RPC `starknet_chainId` + a sample `balanceOf`

@@ -1,0 +1,359 @@
+.lending-risk {
+  overflow: visible;
+  padding: 12px;
+  background: transparent;
+  border-right: 1px solid var(--border);
+}
+.lending-risk.empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  text-align: center;
+}
+.lending-detail-title,
+.lending-risk-section header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lending-detail-title span:first-child {
+  color: var(--text-3);
+  font-size: 9.5px;
+}
+.lending-detail-identity {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+}
+.lending-detail-identity > span {
+  min-width: 0;
+}
+.lending-detail-identity small {
+  display: block;
+  color: var(--text-3);
+  font-size: 8.5px;
+  letter-spacing: 0.03em;
+}
+.lending-detail-title h2 {
+  margin-top: 2px;
+  font-size: 14px;
+}
+.lending-detail-identity h2 {
+  max-width: 225px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lending-verified-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 4px 6px;
+  color: var(--text-2);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 8.5px;
+}
+.lending-market-badges {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.lending-rate-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 0;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.lending-rate-pair > div {
+  padding: 9px 10px;
+  background: var(--bg-2);
+}
+.lending-rate-pair small,
+.lending-rate-pair strong {
+  display: block;
+}
+.lending-rate-pair small {
+  color: var(--text-3);
+  font-size: 9.5px;
+}
+.lending-rate-pair strong {
+  margin-top: 3px;
+  font-size: 16px;
+}
+.lending-risk-section {
+  margin-top: 15px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.lending-risk-section header {
+  margin-bottom: 9px;
+  font-size: 10px;
+}
+.lending-risk-section header span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-2);
+}
+.lending-risk-section header strong {
+  font-size: 10px;
+}
+.lending-risk-rail {
+  position: relative;
+  height: 6px;
+  margin: 11px 2px 5px;
+  background: var(--surface-3);
+  border-radius: 4px;
+}
+.lending-risk-rail::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 70%;
+  background: color-mix(in srgb, var(--green) 45%, var(--surface-3));
+  border-radius: inherit;
+}
+.lending-risk-rail.warn::before {
+  background: color-mix(in srgb, var(--yellow) 45%, var(--surface-3));
+}
+.lending-risk-rail.danger::before {
+  background: color-mix(in srgb, var(--red) 45%, var(--surface-3));
+}
+.lending-risk-rail span {
+  position: absolute;
+  top: -4px;
+  width: 1px;
+  height: 14px;
+  background: var(--text);
+}
+.lending-risk-rail .target {
+  background: var(--yellow);
+}
+.lending-risk-rail .limit {
+  background: var(--red);
+}
+.lending-rail-labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 5px;
+  color: var(--text-3);
+  font-size: 8px;
+}
+.lending-facts {
+  margin-top: 9px;
+}
+.lending-facts > div,
+.lending-pair,
+.lending-vault-ticket dl > div,
+.lending-multiply-planner dl > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 25px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
+}
+.lending-facts dt,
+.lending-vault-ticket dt,
+.lending-multiply-planner dt {
+  color: var(--text-3);
+}
+.lending-facts dd,
+.lending-vault-ticket dd,
+.lending-multiply-planner dd {
+  text-align: right;
+}
+.lending-pair {
+  font-size: 9.5px;
+}
+.collateral-envelope p {
+  color: var(--text-3);
+  font-size: 9.5px;
+}
+.lending-risk-links {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin: 15px 0 3px;
+}
+.lending-risk-links > span {
+  margin-right: auto;
+  color: var(--text-3);
+  font-size: 9px;
+}
+.lending-risk-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-2);
+  font-size: 9.5px;
+}
+.lending-risk-links a:hover {
+  color: var(--text);
+}
+.lending-ticket {
+  overflow: visible;
+  padding: 12px;
+  background: transparent;
+}
+.lending-action-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  margin-top: 10px;
+  padding: 2px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.lending-action-tabs button {
+  height: 27px;
+  color: var(--text-3);
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 650;
+}
+.lending-action-tabs button:hover {
+  color: var(--text);
+}
+.lending-action-tabs button.active {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.lending-input-block,
+.lending-field {
+  display: block;
+  margin-top: 13px;
+}
+.lending-input-block > span,
+.lending-field > span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-3);
+  font-size: 9.5px;
+}
+.lending-input-block > div {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.lending-input-asset {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+.lending-input-block.compact > div {
+  height: 40px;
+}
+.lending-input-block input {
+  width: 100%;
+  min-width: 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.lending-input-block.compact input {
+  font-size: 15px;
+}
+.lending-input-block > small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-3);
+  font-size: 9px;
+}
+.lending-field select {
+  width: 100%;
+}
+.lending-ltv-preview,
+.lending-multiply-planner,
+.lending-ticket-warning {
+  margin-top: 13px;
+  padding: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.lending-ltv-preview > div:first-child,
+.lending-multiply-planner > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+}
+.lending-ltv-preview small {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-3);
+  font-size: 8.5px;
+}
+.lending-ltv-line {
+  margin-top: 7px;
+}
+.lending-multiply-planner > div span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.lending-multiply-planner input[type="range"] {
+  width: 100%;
+  margin: 9px 0 4px;
+  accent-color: var(--text);
+}
+.lending-ticket-warning {
+  display: flex;
+  gap: 7px;
+  color: var(--yellow);
+  font-size: 9.5px;
+}
+.lending-ticket-message {
+  margin-top: 9px;
+  color: var(--text-2);
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+.lending-submit,
+.lending-account-empty button {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 13px;
+  color: var(--bg);
+  background: var(--text);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 750;
+}
+.lending-submit:hover,
+.lending-account-empty button:hover {
+  background: var(--accent);
+}
+.lending-submit:disabled {
+  color: var(--text-3);
+  background: var(--surface-3);
+  cursor: not-allowed;
+}
+.lending-ticket-fine {
+  margin-top: 7px;
+  color: var(--text-3);
+  font-size: 8.5px;
+  text-align: center;
+}

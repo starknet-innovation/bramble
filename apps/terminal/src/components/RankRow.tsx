@@ -11,7 +11,7 @@ export type RankRowProps = {
   readonly rank: number;
   /** Symbol shown in the icon glyph. */
   readonly symbol: string;
-  /** Canonical token artwork URL, when this is a token rather than a perp. */
+  /** Canonical token or market artwork URL. */
   readonly logoUri?: string | null;
   /** Primary name (n1). */
   readonly name: ReactNode;

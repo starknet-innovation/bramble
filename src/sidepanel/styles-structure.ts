@@ -10,7 +10,7 @@
  * DIVIDERS for separation (never rings around content), values right-aligned
  * with tabular/mono voices where the data warrants it.
  */
-import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "../ui/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens";
 
 /**
  * Structured-content stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -305,7 +305,103 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
     font-weight: ${WEIGHT.bold};
     letter-spacing: -0.02em;
   }
-  .onboard-hero .add-account-chooser { display: grid; gap: ${SPACE.sm}; text-align: left; width: 100%; }
+  .add-account-hero {
+    align-content: stretch;
+    grid-template-rows: auto 1fr auto;
+    justify-items: stretch;
+    text-align: left;
+  }
+  .add-account-header {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    min-height: ${CONTROL.hit};
+    position: relative;
+  }
+  .add-account-header h1 {
+    font-size: ${TYPE.display.size};
+    font-weight: ${WEIGHT.bold};
+    letter-spacing: -0.02em;
+  }
+  .add-account-header .icon-button {
+    position: absolute;
+    right: 0;
+  }
+  .onboard-hero .add-account-chooser {
+    align-content: start;
+    display: grid;
+    gap: ${SPACE.sm};
+    padding-block: ${SPACE.xl};
+    text-align: left;
+    width: 100%;
+  }
+  .add-account-option {
+    align-items: center;
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    color: var(--mc-text);
+    display: grid;
+    gap: ${SPACE.md};
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-height: ${SIZE.tile};
+    padding: ${SPACE.md} ${SPACE.lg};
+    text-align: left;
+    width: 100%;
+  }
+  .add-account-option-icon {
+    align-items: center;
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.full};
+    display: inline-flex;
+    height: ${SIZE.mark};
+    justify-content: center;
+    width: ${SIZE.mark};
+  }
+  .add-account-option-icon .icon {
+    height: ${CONTROL.majorIcon};
+    width: ${CONTROL.majorIcon};
+  }
+  .add-account-option-copy { display: grid; gap: ${SPACE.xs}; min-width: 0; }
+  .add-account-option-copy strong { font-size: ${TYPE.title.size}; }
+  .add-account-option-copy span {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+  }
+  .add-account-option-check {
+    align-items: center;
+    background: var(--mc-text);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-bg);
+    display: inline-flex;
+    height: ${SIZE.pill};
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.84);
+    transition:
+      opacity ${MOTION.liftMs}ms var(--ease-out),
+      transform ${MOTION.liftMs}ms var(--ease-out);
+    width: ${SIZE.pill};
+  }
+  .add-account-option-check .icon { height: ${CONTROL.icon}; width: ${CONTROL.icon}; }
+  .add-account-option[aria-pressed="true"] {
+    background: var(--mc-elevated);
+    box-shadow: inset 0 0 0 2px var(--mc-text);
+  }
+  .add-account-option[aria-pressed="true"] .add-account-option-check {
+    opacity: 1;
+    transform: scale(1);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    button.add-account-option:not(:disabled):hover {
+      background: var(--mc-hover);
+      color: var(--mc-text);
+    }
+    button.add-account-option[aria-pressed="true"]:not(:disabled):hover {
+      background: var(--mc-elevated);
+      color: var(--mc-text);
+    }
+  }
   .onboard-actions { display: grid; gap: ${SPACE.sm}; justify-items: stretch; width: 100%; }
   .onboard-actions button { width: 100%; }
   .onboard-actions .ghost { justify-self: center; width: auto; }
@@ -329,4 +425,7 @@ export const STRUCTURE_STYLES = `  /* Receipt: label-left / value-right rows on 
   }
   .select-check { accent-color: var(--mc-accent); flex: none; height: ${SPACE.lg}; width: ${SPACE.lg}; }
   .allowance-row.is-duplicate { opacity: 0.68; }
+  @media (prefers-reduced-motion: reduce) {
+    .add-account-option-check { transition: none; }
+  }
 `;

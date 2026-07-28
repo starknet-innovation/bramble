@@ -105,16 +105,23 @@ export const readTransferNftInput = (
  */
 export const readDiscoverNftsInput = (
   message: unknown,
-): { readonly includeWatched: boolean } | null => {
+): { readonly includeWatched: boolean; readonly multisigId?: string } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["includeWatched", "type"]) ||
+    !hasOnlyKnownKeys(message, ["includeWatched", "multisigId", "type"]) ||
     message["type"] !== "wallet.discoverNfts" ||
-    (message["includeWatched"] !== undefined && typeof message["includeWatched"] !== "boolean")
+    (message["includeWatched"] !== undefined && typeof message["includeWatched"] !== "boolean") ||
+    (message["multisigId"] !== undefined &&
+      (typeof message["multisigId"] !== "string" ||
+        message["multisigId"].length === 0 ||
+        message["multisigId"].length > 200))
   ) {
     return null;
   }
-  return { includeWatched: message["includeWatched"] !== false };
+  return {
+    includeWatched: message["includeWatched"] !== false,
+    ...(typeof message["multisigId"] === "string" ? { multisigId: message["multisigId"] } : {}),
+  };
 };
 
 /**

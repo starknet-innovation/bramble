@@ -6,6 +6,7 @@
  * class, token scope, immutable refs, and event guards), not general YAML shape.
  */
 import { readFile } from "node:fs/promises";
+import { escapeRegExp } from "./regexp";
 
 const RUST_TOOLCHAIN_ACTION = "dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30";
 const GITHUB_EXPRESSION = "$" + "{{";
@@ -28,7 +29,7 @@ type WorkflowSources = Readonly<Record<WorkflowName, string>>;
 
 const jobBody = (workflow: string, job: string): string => {
   const bounded = `${workflow}\n  __workflow_policy_end__:\n`;
-  const escaped = job.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escaped = escapeRegExp(job);
   return (
     bounded.match(new RegExp(`^  ${escaped}:\\n[\\s\\S]*?(?=^  [a-zA-Z0-9_-]+:\\n)`, "m"))?.[0] ??
     ""
@@ -101,6 +102,36 @@ const releaseBuildFailures = (source: string): string[] => {
     build,
     "contents: write",
     "self-hosted release builds must not receive repository write permission",
+  );
+  forbidText(
+    failures,
+    build,
+    "\n          ref:",
+    "self-hosted release builds must not pass caller-controlled refs to checkout",
+  );
+  requireText(
+    failures,
+    build,
+    `RELEASE_COMMIT: ${GITHUB_EXPRESSION} inputs.commit_sha }}`,
+    "release builds must consume an immutable commit input",
+  );
+  requireText(
+    failures,
+    build,
+    '[[ ! "$RELEASE_TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]',
+    "release builds must constrain the release tag before resolving it",
+  );
+  requireText(
+    failures,
+    build,
+    '[[ ! "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]',
+    "release builds must validate the immutable commit input",
+  );
+  requireText(
+    failures,
+    build,
+    'git checkout --detach "$RELEASE_COMMIT"',
+    "release builds must detach onto the verified immutable commit",
   );
   requireText(
     failures,
@@ -203,6 +234,12 @@ const nightlyFailures = (source: string): string[] => {
   );
   requireText(
     failures,
+    resolve,
+    `revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_candidate" --jq '.sha')"`,
+    "nightly must resolve the selected branch to an immutable commit",
+  );
+  requireText(
+    failures,
     nightly,
     "permissions:\n      contents: read",
     "self-hosted nightly execution must declare read-only repository permission",
@@ -212,6 +249,30 @@ const nightlyFailures = (source: string): string[] => {
     nightly,
     "issues: write",
     "self-hosted nightly execution must not receive issue write permission",
+  );
+  forbidText(
+    failures,
+    nightly,
+    "\n          ref:",
+    "self-hosted nightly execution must not pass configured refs to checkout",
+  );
+  requireText(
+    failures,
+    nightly,
+    `REVISION: ${GITHUB_EXPRESSION} needs.resolve.outputs.revision }}`,
+    "nightly execution must consume the resolved immutable commit",
+  );
+  requireText(
+    failures,
+    nightly,
+    '[[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]',
+    "nightly execution must validate the resolved immutable commit",
+  );
+  requireText(
+    failures,
+    nightly,
+    'git checkout --detach "$REVISION"',
+    "nightly execution must detach onto the resolved immutable commit",
   );
   requireText(
     failures,

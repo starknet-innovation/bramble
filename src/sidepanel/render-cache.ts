@@ -33,6 +33,10 @@ export type RenderData = {
   multisigsError: boolean;
   multisigSync: "current" | "error" | null;
   multisigClassDeclared: boolean | "error" | null;
+  multisigBalanceId: string | null;
+  multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
+  multisigNftId: string | null;
+  multisigNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
   balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
   chart: readonly number[];
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
@@ -66,6 +70,15 @@ export const emptyNftCache = (): Pick<
 });
 
 /**
+ * Empty account-scoped activity lane used during account/network switches so
+ * transactions and degraded-history state never flash under another account.
+ */
+export const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "transactions"> => ({
+  historyUnavailable: false,
+  transactions: [],
+});
+
+/**
  * Applies a freshly loaded status and clears account-scoped render data when
  * the active account or network changed.
  */
@@ -75,7 +88,18 @@ export const updateRenderScope = (cache: RenderData, status: WalletStatus): void
     cache.status.networkId !== status.networkId;
   Object.assign(cache, {
     status,
-    ...(changed ? { ...emptyNftCache(), multisigSync: null, multisigsError: false } : {}),
+    ...(changed
+      ? {
+          ...emptyActivityCache(),
+          ...emptyNftCache(),
+          multisigBalanceId: null,
+          multisigBalances: { error: "multisig balances unavailable" },
+          multisigNftId: null,
+          multisigNfts: [],
+          multisigSync: null,
+          multisigsError: false,
+        }
+      : {}),
   });
 };
 
@@ -91,11 +115,16 @@ export const emptyRenderCache = (): RenderData => ({
   multisigsError: false,
   multisigSync: null,
   multisigClassDeclared: null,
+  multisigBalanceId: null,
+  multisigBalances: { error: "multisig balances unavailable" },
+  multisigNftId: null,
+  multisigNfts: [],
   balances: { error: "wallet locked" },
   chart: [],
   classHashVerification: null,
   connectedSites: [],
   deployment: null,
+  ...emptyActivityCache(),
   ...emptyNftCache(),
   pending: [],
   changes: {},
@@ -104,8 +133,6 @@ export const emptyRenderCache = (): RenderData => ({
   priceAsOf: null,
   priceStale: false,
   status: emptyStatus(),
-  transactions: [],
-  historyUnavailable: false,
 });
 
 /**

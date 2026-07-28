@@ -39,7 +39,7 @@ export const LEDGER_PAGE_SIZE = 5;
  * Reads the app version (rejecting a below-minimum app with `app-below-minimum`)
  * on every call, then reads the public-key x-coordinate for one page of account
  * indices — `startIndex … startIndex + count - 1` — SILENTLY and one round-trip
- * at a time (WebHID is a serial pipe). Returns the enumerated `(index,
+ * at a time (the browser transport is a serial pipe). Returns the enumerated `(index,
  * publicKeyX)` pairs for {@link LedgerOnboardController} to derive into
  * candidates. Any device/transport failure propagates as a typed
  * {@link LedgerRejection} so the caller aborts cleanly.
@@ -73,10 +73,10 @@ export type LedgerCandidate = {
 };
 
 /**
- * The three routes the add-account chooser can dispatch: derive the next HD
- * account, jump to the raw-key import form, or open the Ledger device subflow.
+ * Routes the add-account chooser can dispatch: derive the next HD account,
+ * import a raw key, open the Ledger subflow, or enter guided Multisig setup.
  */
-export type LedgerOnboardAddKind = "hd" | "import" | "ledger";
+export type LedgerOnboardAddKind = "hd" | "import" | "ledger" | "multisig";
 
 /**
  * The onboarding device-prompt view the binder renders: the add-account
@@ -84,7 +84,7 @@ export type LedgerOnboardAddKind = "hd" | "import" | "ledger";
  * picker (with the currently-selected indices), or a typed error.
  */
 export type LedgerOnboardView =
-  | { readonly kind: "chooser" }
+  | { readonly kind: "chooser"; readonly selected: LedgerOnboardAddKind | null }
   | { readonly kind: "connect" }
   | { readonly kind: "devices"; readonly devices: readonly LedgerDeviceChoice[] }
   | { readonly kind: "reading" }
@@ -131,6 +131,7 @@ export type LedgerOnboardControllerDeps = {
   readonly existingIds: () => ReadonlySet<string>;
   readonly onCancel: () => void;
   readonly openImport: () => void;
+  readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly render: (view: LedgerOnboardView | null) => void;
 };
@@ -145,7 +146,9 @@ export type LedgerOnboardController = {
   readonly choose: (kind: LedgerOnboardAddKind) => void;
   readonly chooseDevice: (deviceId: string) => void;
   readonly connect: () => void;
+  readonly continueChoice: () => void;
   readonly loadMore: () => void;
+  readonly select: (kind: LedgerOnboardAddKind) => void;
   readonly showChooser: () => void;
   readonly start: () => void;
   readonly toggle: (accountIndex: number) => void;
@@ -174,6 +177,7 @@ export const createLedgerOnboardController = (
   const createdIds = new Set<string>();
   let devices: readonly LedgerDeviceChoice[] = [];
   let selectedDeviceId: string | null = null;
+  let selectedAddKind: LedgerOnboardAddKind | null = null;
   const selected = new Set<number>();
   let nextIndex = 0;
   let busy = false;
@@ -185,6 +189,7 @@ export const createLedgerOnboardController = (
     createdIds.clear();
     devices = [];
     selectedDeviceId = null;
+    selectedAddKind = null;
     selected.clear();
     nextIndex = 0;
   };
@@ -239,7 +244,7 @@ export const createLedgerOnboardController = (
   // Reads one page end to end: obtain a session, enumerate the page SILENTLY,
   // release the transport (account state + creation are background ops, no
   // device), derive addresses, append them pending, then fold in on-chain state.
-  // The session owns the WebHID transport so it is closed on every outcome — the
+  // The session owns the browser transport so it is closed on every outcome — the
   // device is never left claimed — and any failure maps to a typed error state.
   const loadPage = async (
     obtain: () => Promise<LedgerDeviceSession>,
@@ -429,9 +434,12 @@ export const createLedgerOnboardController = (
       deps.render({ kind: "connect" });
     } else if (kind === "hd") {
       void runChooseHd();
-    } else {
+    } else if (kind === "import") {
       deps.render(null);
       deps.openImport();
+    } else {
+      deps.render(null);
+      deps.openMultisig();
     }
   };
 
@@ -449,12 +457,21 @@ export const createLedgerOnboardController = (
     connect() {
       startConnect();
     },
+    continueChoice() {
+      if (selectedAddKind) {
+        choose(selectedAddKind);
+      }
+    },
     loadMore() {
       void loadPage(obtainMore, nextIndex, false);
     },
+    select(kind) {
+      selectedAddKind = kind;
+      deps.render({ kind: "chooser", selected: kind });
+    },
     showChooser() {
       resetState();
-      deps.render({ kind: "chooser" });
+      deps.render({ kind: "chooser", selected: null });
     },
     start() {
       resetState();

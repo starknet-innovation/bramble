@@ -4,6 +4,7 @@
  * detail consumers. It shares the exact request/cache entry used by useTokens.
  */
 import { useCallback } from "react";
+import { canonicalAddress } from "../protocols/support/networks";
 import { getJson } from "./cache";
 import { AVNU_MARKETS_BASE } from "./endpoints";
 import type { PriceEntry, PricesData, Resource } from "./types";
@@ -27,7 +28,7 @@ const fetchPrices = async (signal: AbortSignal): Promise<PricesData> => {
   const bySymbol: Record<string, PriceEntry> = {};
   for (const row of rows) {
     const entry: PriceEntry = { usd: row.priceUsd, change24h: row.change24h };
-    byAddress[row.address.toLowerCase()] = entry;
+    byAddress[canonicalAddress(row.address) ?? row.address.toLowerCase()] = entry;
     bySymbol[row.symbol.toUpperCase()] = entry;
   }
   return { byAddress, bySymbol };

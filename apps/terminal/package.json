@@ -8,6 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "build:contract": "bun run scripts/build-punk-contract.ts",
+    "assets:avnu": "bun run scripts/sync-avnu-token-assets.ts",
+    "assets:extended": "bun run scripts/sync-extended-token-assets.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

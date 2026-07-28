@@ -45,9 +45,23 @@ describe("approval takeover views", () => {
     expect(home).toContain('data-approval-action="approve"');
     expect(home).toContain('data-approval-action="deny"');
     expect(home).toContain(`data-approval-later="${pending[0]?.id}"`);
+    expect(home).toContain('data-liquid-dots="approval"');
+    expect(home).toContain('id="mc-liquid-dots-approval"');
     expect(home).not.toContain("wallet-dock");
     expect(quiet).not.toContain("Review request");
     expect(quiet).toContain("wallet-dock");
+  });
+
+  test("a pending request supersedes an in-progress wallet flow", () => {
+    const pending = [
+      { id: "d03e7ff3-75bb-4d9d-83d4-2b2c20f2bb36", origin: "https://swap.example" },
+    ];
+
+    const tokens = dashboard("tokens", status, pending, preferences, { balances: [] });
+
+    expect(tokens).toContain("Review request");
+    expect(tokens).toContain("https://swap.example");
+    expect(tokens).not.toContain("Add a token");
   });
 
   test("snoozed requests release the takeover and stay in Activity", () => {

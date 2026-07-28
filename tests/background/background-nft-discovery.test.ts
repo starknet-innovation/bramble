@@ -12,6 +12,7 @@ import { createUnlockSession } from "../../src/background/session";
 import type { DiscoveredNft } from "../../src/starknet/nft-metadata";
 import type { NftTokenMetadata } from "../../src/starknet/nft-token-metadata";
 import { createMemoryStore } from "../../src/storage/kv";
+import { type MultisigRecord, memoryMultisigStore } from "../../src/storage/multisig-store";
 import { createPreferencesStore } from "../../src/storage/preferences-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
@@ -89,8 +90,11 @@ const makeHandler = (options: {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+  const multisigStore = memoryMultisigStore();
   let indexerCalls = 0;
+  const indexedAddresses: string[] = [];
   const handler = createMessageHandler(walletStub, "extension-id", {
+    multisigStore,
     preferencesStore,
     runtimeRpc: makeRuntimeRpc({
       ...(options.getNftMetadata ? { getNftMetadata: options.getNftMetadata } : {}),
@@ -102,15 +106,22 @@ const makeHandler = (options: {
         return owner;
       },
       nftIndexer: {
-        async listOwnedNfts() {
+        async listOwnedNfts(input) {
           indexerCalls += 1;
+          indexedAddresses.push(input.address);
           return options.candidates;
         },
       },
     }),
     session,
   });
-  return { handler, indexerCalls: () => indexerCalls, preferencesStore };
+  return {
+    handler,
+    indexedAddresses,
+    indexerCalls: () => indexerCalls,
+    multisigStore,
+    preferencesStore,
+  };
 };
 
 describe("NFT auto-discovery messages", () => {
@@ -136,6 +147,35 @@ describe("NFT auto-discovery messages", () => {
       nfts: [],
       ok: true,
     });
+  });
+
+  test("scopes shared-account discovery to a watched multisig address", async () => {
+    const shared: MultisigRecord = {
+      address: "0x456",
+      id: "SN_MAIN:0x456",
+      networkId: "SN_MAIN",
+      quorum: 2,
+      signers: [account.address, "0x789"],
+    };
+    const owned = candidate("5", "0x511a2b3");
+    const { handler, indexedAddresses, multisigStore } = makeHandler({
+      candidates: [owned],
+      owners: { [owned.contract]: shared.address },
+    });
+    await multisigStore.upsertMultisig(shared);
+
+    await expect(
+      handler({ multisigId: shared.id, type: "wallet.discoverNfts" }, sender),
+    ).resolves.toEqual({ nfts: [owned], ok: true });
+    expect(indexedAddresses).toEqual([shared.address]);
+  });
+
+  test("rejects discovery for an unwatched shared account", async () => {
+    const { handler, indexerCalls } = makeHandler({ candidates: [], owners: {} });
+    await expect(
+      handler({ multisigId: "SN_MAIN:0x999", type: "wallet.discoverNfts" }, sender),
+    ).resolves.toEqual({ error: "multisig not found on the active network" });
+    expect(indexerCalls()).toBe(0);
   });
 
   test("discovers and hydrates an owned watch without an indexer", async () => {

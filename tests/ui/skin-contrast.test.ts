@@ -60,6 +60,19 @@ const INKS: readonly SkinToken[] = [
   "--mc-danger",
 ];
 const GROUNDS: readonly SkinToken[] = ["--mc-bg", "--mc-panel", "--mc-elevated", "--mc-sunken"];
+const ACHROMATIC_TOKENS: readonly SkinToken[] = [
+  "--mc-accent",
+  "--mc-accent-text",
+  "--mc-bg",
+  "--mc-border",
+  "--mc-elevated",
+  "--mc-muted",
+  "--mc-panel",
+  "--mc-sunken",
+  "--mc-text",
+];
+const LIGHT_AVATAR_TONES: readonly SkinToken[] = ["--mc-account-avatar-0", "--mc-account-avatar-3"];
+const DARK_AVATAR_TONES: readonly SkinToken[] = ["--mc-account-avatar-1", "--mc-account-avatar-2"];
 
 describe.each([
   ["midnight", darkSkin],
@@ -87,6 +100,19 @@ describe.each([
     expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
+  test("account character features keep non-text contrast against every identity tone", () => {
+    for (const ground of LIGHT_AVATAR_TONES) {
+      expect(
+        contrast(token(skin, "--mc-account-avatar-paper"), token(skin, ground)),
+      ).toBeGreaterThanOrEqual(3);
+    }
+    for (const ground of DARK_AVATAR_TONES) {
+      expect(
+        contrast(token(skin, "--mc-account-avatar-ink"), token(skin, ground)),
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
   test("accent and danger inks meet AA on their derived soft fills", () => {
     // Percentages must match the --mc-accent-soft / --mc-danger-soft
     // definitions in styles-base.ts.
@@ -96,7 +122,22 @@ describe.each([
     expect(contrast(token(skin, "--mc-danger"), dangerSoft)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT);
   });
 
-  test("brand accent and market-positive are distinct tokens", () => {
+  test("interaction and structural roles are strictly achromatic", () => {
+    for (const name of ACHROMATIC_TOKENS) {
+      const [red, green, blue] = token(skin, name);
+      expect(red, `${name} must not carry a hue`).toBe(green);
+      expect(green, `${name} must not carry a hue`).toBe(blue);
+    }
+  });
+
+  test("green and red remain reserved semantic signals", () => {
+    const [positiveRed, positiveGreen, positiveBlue] = token(skin, "--mc-positive");
+    const [dangerRed, dangerGreen, dangerBlue] = token(skin, "--mc-danger");
+    expect(positiveGreen).toBeGreaterThan(positiveRed);
+    expect(positiveGreen).toBeGreaterThan(positiveBlue);
+    expect(dangerRed).toBeGreaterThan(dangerGreen);
+    expect(dangerRed).toBeGreaterThan(dangerBlue);
     expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-positive"]);
+    expect(skin.tokens["--mc-accent"]).not.toBe(skin.tokens["--mc-danger"]);
   });
 });

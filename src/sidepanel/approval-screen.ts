@@ -4,17 +4,20 @@
  * ../background/approval-surface.ts); this screen makes the panel itself
  * proactive — while an unsnoozed request is pending, every dock view renders
  * the request front and centre with its decision controls, exactly where the
- * user lands, instead of parking it behind an Activity badge.
+ * user lands, instead of parking it behind an Activity badge. This supersedes
+ * both dock and in-progress flow screens so external requests cannot hide
+ * behind stale wallet navigation.
  *
  * The user is never trapped: "Not now" snoozes the shown request for this
  * panel session, parking it in the Activity request list (its badge stays),
  * and the wallet becomes fully usable again. New requests re-take the screen.
- * Flow screens (send, receive, …) are never interrupted mid-task — the
- * takeover waits for the next dock view.
+ * A new request always re-takes the screen.
  */
 import type { PendingApproval, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { button } from "../ui/controls";
 import { approvalCard } from "./approval-cards";
+import { liquidDots, liquidDotsFilter } from "./progress-motion";
 
 /**
  * Pending approvals that should take the screen: everything not snoozed this
@@ -54,9 +57,21 @@ export const approvalTakeover = (
   </header>
   <main class="screen flow approval-takeover" id="wallet-screen-approval-takeover" aria-labelledby="approval-title" tabindex="-1">
     <ul class="request-list">${approvalCard(first, status)}</ul>
+    <section class="approval-live" id="approval-live" role="status" aria-live="polite" hidden>
+      <span class="approval-live-mark">${liquidDots("approval", true)}${liquidDotsFilter("approval")}</span>
+      <div>
+        <strong id="approval-live-title">Authorizing request</strong>
+        <p id="approval-live-copy">Keep this wallet open while the request is completed.</p>
+      </div>
+    </section>
     ${queue}
     <div class="takeover-foot">
-      <button class="ghost small" data-approval-later="${escapeHtml(first.id)}" type="button">Review later in Activity</button>
+      ${button({
+        attributes: { "data-approval-later": first.id },
+        label: "Review later in Activity",
+        size: "small",
+        variant: "ghost",
+      })}
     </div>
     <p id="approval-result" role="status"></p>
   </main>`;

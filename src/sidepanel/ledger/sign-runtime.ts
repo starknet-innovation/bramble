@@ -33,6 +33,7 @@ import { ledgerSignScreen } from "./sign-views";
 export type LedgerSignRuntimeDeps = {
   readonly connector: LedgerConnector;
   readonly mount: HTMLElement;
+  readonly onSignatureReported?: () => void;
   readonly status: () => WalletStatus;
   readonly wallet: Pick<SidepanelWallet, "completeLedgerSign" | "loadLedgerSignPending">;
 };
@@ -51,7 +52,7 @@ export type LedgerSignRuntime = {
  * prompt; the overlay is cleared when no request is active.
  */
 export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSignRuntime => {
-  const { connector, mount, status, wallet } = deps;
+  const { connector, mount, onSignatureReported, status, wallet } = deps;
   let controller: LedgerSignController;
 
   const bindControls = (): void => {
@@ -88,7 +89,12 @@ export const createLedgerSignRuntime = (deps: LedgerSignRuntimeDeps): LedgerSign
   controller = createLedgerSignController({
     connector,
     render: renderOverlay,
-    report: (outcome) => wallet.completeLedgerSign(outcome),
+    report: async (outcome) => {
+      await wallet.completeLedgerSign(outcome);
+      if ("r" in outcome) {
+        onSignatureReported?.();
+      }
+    },
   });
 
   return {

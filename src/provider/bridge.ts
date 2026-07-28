@@ -27,6 +27,7 @@ import {
 import { type ProviderDeclare, readProviderDeclare } from "./declare-params";
 import { providerDeploymentResult } from "./deployment-bridge";
 import { type ProviderInvokeCall, providerInvokeCalls } from "./invoke-params";
+import { isProviderMethod, type ProviderMethod } from "./methods";
 import { readProviderParams } from "./request-params";
 import {
   providerStrk20Balances,
@@ -55,26 +56,10 @@ export const MAX_PENDING_PROVIDER_REQUESTS = 100;
  */
 export const toProviderPayload = toProviderPayloadResult;
 
-/** Provider methods exposed to dapp pages.
+/**
+ * Provider method exposed to dapp pages.
  */
-export type ProviderMethod =
-  | "mc_accounts"
-  | "mc_requestAccounts"
-  | "wallet_addDeclareTransaction"
-  | "wallet_addInvokeTransaction"
-  | "wallet_deploymentData"
-  | "wallet_addStarknetChain"
-  | "wallet_getPermissions"
-  | "wallet_requestAccounts"
-  | "wallet_requestChainId"
-  | "wallet_signTypedData"
-  | "wallet_supportedSpecs"
-  | "wallet_supportedWalletApi"
-  | "wallet_strk20Balances"
-  | "wallet_strk20InvokeTransaction"
-  | "wallet_strk20PrepareInvoke"
-  | "wallet_switchStarknetChain"
-  | "wallet_watchAsset";
+export type { ProviderMethod } from "./methods";
 
 /**
  * Page-originated provider request shape.
@@ -241,25 +226,6 @@ export const isTrustedPageMessage = (
   pageWindow: Window,
   origin: string,
 ): boolean => event.source === pageWindow && event.origin === origin;
-
-const isProviderMethod = (value: unknown): value is ProviderMethod =>
-  value === "mc_accounts" ||
-  value === "mc_requestAccounts" ||
-  value === "wallet_addDeclareTransaction" ||
-  value === "wallet_addInvokeTransaction" ||
-  value === "wallet_deploymentData" ||
-  value === "wallet_addStarknetChain" ||
-  value === "wallet_getPermissions" ||
-  value === "wallet_requestAccounts" ||
-  value === "wallet_requestChainId" ||
-  value === "wallet_signTypedData" ||
-  value === "wallet_supportedSpecs" ||
-  value === "wallet_supportedWalletApi" ||
-  value === "wallet_strk20Balances" ||
-  value === "wallet_strk20InvokeTransaction" ||
-  value === "wallet_strk20PrepareInvoke" ||
-  value === "wallet_switchStarknetChain" ||
-  value === "wallet_watchAsset";
 
 /**
  * Checks whether the in-page provider can queue another unresolved request.
@@ -466,6 +432,45 @@ const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
   },
 };
 
+const runtimeBuilderFor = (method: ProviderMethod): RuntimeBuilder => {
+  switch (method) {
+    case "mc_accounts":
+      return RUNTIME_BUILDERS.mc_accounts;
+    case "mc_requestAccounts":
+      return RUNTIME_BUILDERS.mc_requestAccounts;
+    case "wallet_addDeclareTransaction":
+      return RUNTIME_BUILDERS.wallet_addDeclareTransaction;
+    case "wallet_addInvokeTransaction":
+      return RUNTIME_BUILDERS.wallet_addInvokeTransaction;
+    case "wallet_deploymentData":
+      return RUNTIME_BUILDERS.wallet_deploymentData;
+    case "wallet_addStarknetChain":
+      return RUNTIME_BUILDERS.wallet_addStarknetChain;
+    case "wallet_getPermissions":
+      return RUNTIME_BUILDERS.wallet_getPermissions;
+    case "wallet_requestAccounts":
+      return RUNTIME_BUILDERS.wallet_requestAccounts;
+    case "wallet_requestChainId":
+      return RUNTIME_BUILDERS.wallet_requestChainId;
+    case "wallet_signTypedData":
+      return RUNTIME_BUILDERS.wallet_signTypedData;
+    case "wallet_supportedSpecs":
+      return RUNTIME_BUILDERS.wallet_supportedSpecs;
+    case "wallet_supportedWalletApi":
+      return RUNTIME_BUILDERS.wallet_supportedWalletApi;
+    case "wallet_strk20Balances":
+      return RUNTIME_BUILDERS.wallet_strk20Balances;
+    case "wallet_strk20InvokeTransaction":
+      return RUNTIME_BUILDERS.wallet_strk20InvokeTransaction;
+    case "wallet_strk20PrepareInvoke":
+      return RUNTIME_BUILDERS.wallet_strk20PrepareInvoke;
+    case "wallet_switchStarknetChain":
+      return RUNTIME_BUILDERS.wallet_switchStarknetChain;
+    case "wallet_watchAsset":
+      return RUNTIME_BUILDERS.wallet_watchAsset;
+  }
+};
+
 /**
  * Maps supported provider methods to safe background messages.
  */
@@ -474,7 +479,7 @@ export const toRuntimeMessage = (
   origin: string,
 ): RuntimeMessage | null =>
   isProviderMethod(request.method) && isWalletOrigin(origin)
-    ? RUNTIME_BUILDERS[request.method](request.params, origin)
+    ? runtimeBuilderFor(request.method)(request.params, origin)
     : null;
 
 /**

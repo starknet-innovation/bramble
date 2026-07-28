@@ -230,6 +230,14 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   { message: { type: "wallet.generateMnemonic" }, sender: extensionSender },
   {
+    message: {
+      mnemonic: SECRET_MNEMONIC,
+      networkId: "SN_MAIN",
+      type: "wallet.previewAccount",
+    },
+    sender: extensionSender,
+  },
+  {
     message: { accountId: account.id, origin: ORIGIN, type: "wallet.grantOrigin" },
     sender: extensionSender,
   },
@@ -340,6 +348,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   { message: { type: "wallet.multisigs" }, sender: extensionSender },
+  {
+    message: { id: `SN_MAIN:${MULTISIG}`, type: "wallet.multisigBalances" },
+    sender: extensionSender,
+  },
   {
     message: { address: MULTISIG, name: "Treasury", type: "wallet.addMultisig" },
     sender: extensionSender,

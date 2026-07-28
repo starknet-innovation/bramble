@@ -11,6 +11,12 @@ export type WalletTransactionRequest = {
   readonly calls: readonly Call[];
   readonly description: string;
   readonly details?: readonly WalletRequestDetail[];
+  /**
+   * `terminal` adds a second confirmation before opening the wallet. Use
+   * `wallet` only when the initiating screen already presents the material
+   * transaction facts and the connected wallet is the canonical review.
+   */
+  readonly reviewMode?: "terminal" | "wallet";
   readonly title: string;
   readonly warning?: string;
 };

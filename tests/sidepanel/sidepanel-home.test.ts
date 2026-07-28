@@ -1,13 +1,13 @@
 /**
  * Home experience checks: the account-bar header opens a left drawer wired to
- * real accounts, quick actions render as tiles, and the portfolio section is
- * tabbed across Tokens, Collectibles, and Activity with the existing data
- * sources behind each panel.
+ * real accounts, frequent actions render as rounded-square tools, and the
+ * portfolio section switches between Tokens and Collectibles while secondary
+ * actions live in one overflow menu.
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
 import { homeTabs } from "../../src/sidepanel/home-tabs";
-import { TERMINAL_URL } from "../../src/sidepanel/terminal-link";
+import { TERMINAL_PORTFOLIO_URL, TERMINAL_URL } from "../../src/sidepanel/terminal-link";
 import { dashboard } from "../../src/sidepanel/views";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
 import { account, preferences, secondAccount } from "../support/sidepanel-fixtures";
@@ -49,27 +49,25 @@ describe("sidepanel home", () => {
     const header = html.slice(html.indexOf("wallet-header"), html.indexOf("hero"));
 
     expect(header).toContain('data-view="connected-sites"');
-    expect(header).toContain(
-      `id="terminal-button" class="icon-button ghost" href="${TERMINAL_URL}"`,
-    );
+    expect(header).toContain('id="terminal-button"');
+    expect(header).toContain('class="icon-button ghost"');
+    expect(header).toContain(`href="${TERMINAL_URL}"`);
     expect(header).toContain('target="_blank" rel="noopener noreferrer"');
     expect(header).toContain('aria-label="Open trade terminal"');
     expect(header).toContain('id="lock-button"');
   });
 
-  test("quick actions render as borderless icon buttons with send carrying the accent", () => {
-    // The action row is now just Send / Receive as plain borderless icon buttons
-    // (labels beneath, no box treatment). The former third "NFTs" action tile was
-    // removed as redundant with the Collectibles home tab (which already reaches
-    // the NFT gallery + detail views), leaving a centred two-tile pair. The markup
-    // keeps the `action-tile` hook and the `primary` modifier on Send — the box
-    // removal lives in the stylesheet — so Send stays distinguishable via its
-    // accent-tinted icon.
+  test("quick actions expose compact Send, Swap, Receive, and Terminal portfolio tools", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
-    expect(html).toMatch(/class="action-tile primary" data-view="send"/);
+    expect(html).toMatch(/class="action-tile" data-view="send"/);
+    expect(html).toMatch(/class="action-tile" data-view="swap"/);
     expect(html).toMatch(/class="action-tile" data-view="receive"/);
-    // The NFTs action tile is gone; NFT access lives on the Collectibles tab.
+    expect(html).toContain(
+      `class="action-tile" href="${TERMINAL_PORTFOLIO_URL}" target="_blank" rel="noopener noreferrer"`,
+    );
+    expect(html).toContain('aria-label="Open MC Terminal portfolio"');
+    expect(html).toMatch(/Open MC Terminal portfolio[\s\S]*Portfolio/);
     expect(html).not.toMatch(/class="action-tile" data-view="nfts"/);
 
     const noAccounts = dashboard(
@@ -80,25 +78,38 @@ describe("sidepanel home", () => {
       { balances: [] },
     );
     expect(noAccounts).toMatch(/data-view="send"[^>]*disabled/);
+    expect(noAccounts).toMatch(/data-view="swap"[^>]*disabled/);
     expect(noAccounts).toMatch(/data-view="receive"[^>]*disabled/);
   });
 
-  test("portfolio section is tabbed with tokens active by default", () => {
+  test("Terminal CTA opens the trusted webapp in an isolated tab", () => {
+    const html = dashboard("home", status, [], preferences, { balances: [] });
+
+    expect(html).toContain('class="terminal-cta"');
+    expect(html).toContain(`href="${TERMINAL_URL}"`);
+    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
+    expect(html).toContain("Join MC Terminal");
+    expect(html).toContain("Your homebase for all Starknet activity");
+  });
+
+  test("portfolio has two text tabs and one accessible quick-actions menu", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).toMatch(/data-home-tab="tokens"[^>]*aria-selected="true"/);
     expect(html).toMatch(/data-home-tab="collectibles"[^>]*aria-selected="false"/);
-    expect(html).toMatch(/data-home-tab="activity"[^>]*aria-selected="false"/);
-    expect(html).toContain('class="tab-indicator"');
+    expect(html).not.toContain('data-home-tab="activity"');
+    expect(html).not.toContain('class="tab-indicator"');
     expect(html).toMatch(/data-tab-panel="tokens"[^>]*>/);
     expect(html).toMatch(/data-tab-panel="collectibles"[^>]*hidden/);
-    expect(html).toMatch(/data-tab-panel="activity"[^>]*hidden/);
-    const tokensActions = html.slice(
-      html.indexOf('data-tab-actions="tokens"'),
-      html.indexOf('data-tab-actions="collectibles"'),
-    );
-    expect(tokensActions).toContain('id="refresh-button"');
-    expect(tokensActions).toContain('data-view="tokens"');
+    expect(html).not.toContain('data-tab-panel="activity"');
+    const menuTrigger = html.match(/<button[^>]*id="portfolio-menu-trigger"[^>]*>/)?.[0] ?? "";
+    expect(menuTrigger).toContain('aria-haspopup="menu"');
+    expect(menuTrigger).toContain('aria-expanded="false"');
+    expect(html).toContain('id="portfolio-menu" role="menu"');
+    expect(html).toContain('data-view="tokens" role="menuitem"');
+    expect(html).toContain('data-view="nfts" role="menuitem"');
+    expect(html).toContain('data-view="settings" role="menuitem"');
+    expect(html).toContain('id="refresh-button" role="menuitem"');
   });
 
   test("collectibles tab reuses watched NFTs and hides spam", () => {
@@ -124,7 +135,7 @@ describe("sidepanel home", () => {
     const html = dashboard("home", status, [], withNfts, { balances: [] });
     const panel = html.slice(
       html.indexOf('data-tab-panel="collectibles"'),
-      html.indexOf('data-tab-panel="activity"'),
+      html.indexOf("wallet-dock"),
     );
 
     expect(panel).toContain('data-nft-open="SN_MAIN:0xabc:1"');
@@ -145,7 +156,7 @@ describe("sidepanel home", () => {
         },
       ],
     };
-    const html = homeTabs({ balances: [] }, watched, {}, {}, "usd", [], status, false, [
+    const html = homeTabs({ balances: [] }, watched, {}, {}, "usd", status, [
       {
         attributes: [{ traitType: "Catalog", value: "CryptoPunks" }],
         collection: "MC Punks",
@@ -164,7 +175,7 @@ describe("sidepanel home", () => {
     expect(html).toContain("Starknet Test Punk #0");
   });
 
-  test("activity tab shows recent transactions with a jump to the full log", () => {
+  test("Activity stays a top-level dock destination instead of a portfolio tab", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] }, null, [
       {
         accountId: account.id,
@@ -176,17 +187,22 @@ describe("sidepanel home", () => {
         summary: "Send 1.5 ETH to 0x777a…bbcc",
       },
     ]);
-    const panel = html.slice(
-      html.indexOf('data-tab-panel="activity"'),
-      html.indexOf("wallet-dock"),
-    );
+    expect(html).not.toContain('data-home-tab="activity"');
+    expect(html).not.toContain("Send 1.5 ETH to");
+    expect(html).toMatch(/class="nav-item" data-view="activity"/);
 
-    expect(panel).toContain('class="tx-status accepted"');
-    expect(panel).toContain("Send 1.5 ETH to");
-    expect(panel).toContain('data-view="activity"');
-
-    const empty = dashboard("home", status, [], preferences, { balances: [] });
-    expect(empty).toContain("No activity yet.");
+    const activity = dashboard("activity", status, [], preferences, { balances: [] }, null, [
+      {
+        accountId: account.id,
+        hash: "0x7abc1234567890abcdef",
+        kind: "transfer",
+        networkId: "SN_MAIN",
+        status: "accepted",
+        submittedAt: 1000,
+        summary: "Send 1.5 ETH to 0x777a…bbcc",
+      },
+    ]);
+    expect(activity).toContain("Send 1.5 ETH to");
   });
 
   // Positional args after expandedGroupId(20): priceStale(21), priceAsOf(22).
@@ -221,13 +237,13 @@ describe("sidepanel home", () => {
       priceAsOf,
     );
 
-  test("stale cached prices surface a last-saved notice on the hero", () => {
+  test("stale cached prices render without an error-like notice", () => {
     const html = homeWithPrices({ "0x00aa": 5 }, true, 1752501900000);
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
 
-    expect(hero).toContain('class="hero-stale"');
-    expect(hero).toContain("Showing last saved prices");
-    expect(hero).toContain("14 Jul, 14:05 UTC");
+    expect(hero).not.toContain('class="hero-stale"');
+    expect(hero).not.toContain("Showing last saved prices");
+    expect(hero).not.toContain("14 Jul, 14:05 UTC");
     // Cached fiat still renders — the total is not blanked to "—".
     expect(hero).not.toMatch(/class="hero-total">—/);
   });

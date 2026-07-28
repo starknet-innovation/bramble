@@ -3,9 +3,11 @@
  * open a collectible's detail screen, toggle spam-hide, remove, and send
  * through the verified invoke path.
  */
-import type { WalletStatus } from "../popup/responses";
+import type { TransferReviewResponse, WalletStatus } from "../popup/responses";
+import { escapeHtml } from "../shared/html";
 import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "./dom";
+import { icon } from "./icons";
 import type { SidepanelWallet } from "./runtime";
 import { watchDeployment } from "./shell-bindings";
 import { friendlyReviewError, recipientFieldError, reviewPanelHtml } from "./transfer-ui";
@@ -23,6 +25,48 @@ export type NftUiDeps = {
 
 const rerender = async (deps: NftUiDeps): Promise<void> => {
   await deps.render(await deps.wallet.loadStatus());
+};
+
+type NftReviewElements = {
+  readonly form: HTMLFormElement;
+  readonly result: HTMLElement | null | undefined;
+  readonly reviewPanel: HTMLElement | null | undefined;
+  readonly submitButton: HTMLButtonElement | null | undefined;
+};
+
+const renderNftTransferReview = (
+  elements: NftReviewElements,
+  review: TransferReviewResponse["review"],
+  key: string,
+  setReviewedKey: (value: string | null) => void,
+  setRequiresDeployment: (value: boolean) => void,
+): void => {
+  const { form, result, reviewPanel, submitButton } = elements;
+  const feeFailed = review.feeEstimateFailed;
+  const recipientBlocked = review.flags.some((flag) => flag.code === "address-poisoning");
+  setReviewedKey(feeFailed || recipientBlocked ? null : key);
+  setRequiresDeployment(review.requiresDeployment);
+  form.dataset["stage"] = recipientBlocked ? "blocked" : feeFailed ? "fee-failure" : "review";
+  form.removeAttribute("aria-busy");
+  if (reviewPanel) {
+    renderFragment(reviewPanel, reviewPanelHtml(review));
+  }
+  submitButton?.lastChild?.replaceWith(
+    feeFailed || recipientBlocked ? "Review transfer" : "Confirm transfer",
+  );
+  if (result) {
+    result.textContent = recipientBlocked
+      ? "This transfer is blocked. Change the recipient and review it again."
+      : feeFailed
+        ? "Fee estimate failed. Retry the fee estimate before sending."
+        : "Review the details above, then confirm.";
+  }
+  reviewPanel
+    ?.querySelector<HTMLButtonElement>("#review-retry-fee")
+    ?.addEventListener("click", () => {
+      form.requestSubmit();
+    });
+  buttonBusy(submitButton, feeFailed);
 };
 
 const bindAddForm = (deps: NftUiDeps): void => {
@@ -71,10 +115,13 @@ const bindSendForm = (deps: NftUiDeps): void => {
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   let reviewedKey: string | null = null;
   let requiresDeployment = false;
+  form.dataset["stage"] = "recipient";
 
   const resetReview = (): void => {
     reviewedKey = null;
     requiresDeployment = false;
+    form.dataset["stage"] = "recipient";
+    form.removeAttribute("aria-busy");
     recipientInput?.setCustomValidity("");
     if (reviewPanel) {
       renderFragment(reviewPanel, "");
@@ -84,6 +131,16 @@ const bindSendForm = (deps: NftUiDeps): void => {
   };
 
   form.addEventListener("input", resetReview);
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-recipient]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!recipientInput) {
+        return;
+      }
+      recipientInput.value = button.dataset["nftRecipient"] ?? "";
+      recipientInput.dispatchEvent(new Event("input", { bubbles: true }));
+      recipientInput.focus();
+    });
+  });
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -108,36 +165,31 @@ const bindSendForm = (deps: NftUiDeps): void => {
     buttonBusy(submitButton, true);
 
     if (reviewedKey !== key) {
+      form.dataset["stage"] = "reviewing";
+      form.setAttribute("aria-busy", "true");
+      if (result) {
+        result.textContent = "Checking ownership, recipient, transfer details, and fee…";
+      }
       void deps.wallet
         .reviewNftTransfer(fields.contract, fields.tokenId, fields.networkId, fields.recipient)
         .then(
           (review) => {
-            const feeFailed = review.feeEstimateFailed;
-            const recipientBlocked = review.flags.some((flag) => flag.code === "address-poisoning");
-            reviewedKey = feeFailed || recipientBlocked ? null : key;
-            requiresDeployment = review.requiresDeployment;
-            if (reviewPanel) {
-              renderFragment(reviewPanel, reviewPanelHtml(review));
-            }
-            submitButton?.lastChild?.replaceWith(
-              feeFailed || recipientBlocked ? "Review transfer" : "Confirm transfer",
+            renderNftTransferReview(
+              { form, result, reviewPanel, submitButton },
+              review,
+              key,
+              (value) => {
+                reviewedKey = value;
+              },
+              (value) => {
+                requiresDeployment = value;
+              },
             );
-            if (result) {
-              result.textContent = recipientBlocked
-                ? "This transfer is blocked. Change the recipient and review it again."
-                : feeFailed
-                  ? "Fee estimate failed. Retry the fee estimate before sending."
-                  : "Review the details above, then confirm.";
-            }
-            reviewPanel
-              ?.querySelector<HTMLButtonElement>("#review-retry-fee")
-              ?.addEventListener("click", () => {
-                form.requestSubmit();
-              });
-            buttonBusy(submitButton, feeFailed);
           },
           (error: unknown) => {
             const message = friendlyReviewError(error);
+            form.dataset["stage"] = "failed";
+            form.removeAttribute("aria-busy");
             showToast(message, "error");
             if (result) {
               result.textContent = message;
@@ -148,24 +200,48 @@ const bindSendForm = (deps: NftUiDeps): void => {
       return;
     }
 
+    form.dataset["stage"] = "submitting";
+    form.setAttribute("aria-busy", "true");
+    if (result) {
+      result.textContent = "Authorizing and submitting the reviewed transfer…";
+    }
     void deps.wallet
       .transferNft(fields.contract, fields.tokenId, fields.networkId, fields.recipient)
       .then(
         (transactionHash) => {
           showToast("NFT transfer submitted", "success");
+          form.dataset["stage"] = "submitted";
+          form.removeAttribute("aria-busy");
+          if (reviewPanel) {
+            renderFragment(
+              reviewPanel,
+              `<section class="nft-transfer-outcome" role="status">
+                <span class="nft-transfer-mark">${icon("check")}</span>
+                <div>
+                  <strong>Submitted to Starknet</strong>
+                  <p>The transfer is now visible in Activity while the network confirms it.</p>
+                  <code>${escapeHtml(transactionHash)}</code>
+                </div>
+              </section>`,
+            );
+          }
           if (result) {
-            result.textContent = `Submitted ${transactionHash}`;
+            result.textContent = "Transfer submitted. Confirmation is tracked in Activity.";
           }
           if (requiresDeployment) {
             void watchDeployment({ render: deps.render, wallet: deps.wallet });
           }
-          form.reset();
-          resetReview();
+          if (submitButton) {
+            submitButton.disabled = true;
+          }
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "NFT transfer failed"), "error");
+          const message = errorMessage(error, "NFT transfer failed");
+          form.dataset["stage"] = "failed";
+          form.removeAttribute("aria-busy");
+          showToast(message, "error");
           if (result) {
-            result.textContent = errorMessage(error, "NFT transfer failed");
+            result.textContent = `${message} Nothing was submitted; review the recipient and try again.`;
           }
           buttonBusy(submitButton, false);
         },

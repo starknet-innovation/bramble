@@ -3,6 +3,7 @@
  * correction level M, versions 1-6, mask pattern 0. No external dependencies
  * so the extension CSP stays locked to packaged code.
  */
+import { escapeHtml } from "../shared/html";
 
 type VersionSpec = {
   readonly alignment: readonly number[];
@@ -305,7 +306,7 @@ export const qrMatrix = (text: string): readonly (readonly boolean[])[] => {
 /**
  * Renders text as an inline QR SVG drawn in the current skin color.
  */
-export const qrSvg = (text: string): string => {
+export const qrSvg = (text: string, label = "QR code for wallet address"): string => {
   const matrix = qrMatrix(text);
   const size = matrix.length;
   const cells: string[] = [];
@@ -316,5 +317,5 @@ export const qrSvg = (text: string): string => {
       }
     }
   }
-  return `<svg class="qr" viewBox="-4 -4 ${size + 8} ${size + 8}" role="img" aria-label="QR code for wallet address" fill="currentColor" shape-rendering="crispEdges">${cells.join("")}</svg>`;
+  return `<svg class="qr" viewBox="-4 -4 ${size + 8} ${size + 8}" role="img" aria-label="${escapeHtml(label)}" fill="currentColor" shape-rendering="crispEdges">${cells.join("")}</svg>`;
 };

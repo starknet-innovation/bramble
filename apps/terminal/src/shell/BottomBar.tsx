@@ -18,7 +18,7 @@ export const BottomBar = (): ReactNode => {
       </span>
       <div className="right">
         <span>{chainId ?? "Starknet"}</span>
-        <span>AVNU · Extended</span>
+        <span>AVNU · Vesu V2 · Extended</span>
       </div>
     </div>
   );

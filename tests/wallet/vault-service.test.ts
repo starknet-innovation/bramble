@@ -58,6 +58,23 @@ describe("createWalletVaultService", () => {
     expect(JSON.stringify(await store.get(vaultKey))).not.toContain(mnemonic);
   });
 
+  test("previews public account metadata without creating a vault", async () => {
+    const store = createMemoryStore();
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(store, vaultKey),
+      kms: fakeKms(),
+    });
+
+    await expect(
+      service.previewAccount({ mnemonic, networkId: "SN_SEPOLIA" }),
+    ).resolves.toMatchObject({
+      derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+      networkId: "SN_SEPOLIA",
+      publicKeyX: "0xabc",
+    });
+    expect(await store.get(vaultKey)).toBeUndefined();
+  });
+
   test("adds the next derived account on a network from the stored phrase", async () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),

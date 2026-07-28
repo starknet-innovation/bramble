@@ -43,10 +43,22 @@ const hydrateMultisigs = async (
   const ids =
     activeView === "multisigs"
       ? loaded.multisigs.map((record) => record.id)
-      : activeView === "multisig-detail" && selectedMultisigId
+      : (activeView === "multisig-home" ||
+            activeView === "multisig-detail" ||
+            activeView === "multisig-signers" ||
+            activeView === "multisig-track" ||
+            activeView === "multisig-receive") &&
+          selectedMultisigId
         ? [selectedMultisigId]
         : [];
-  if (activeView !== "multisigs" && activeView !== "multisig-detail") {
+  if (
+    activeView !== "multisigs" &&
+    activeView !== "multisig-home" &&
+    activeView !== "multisig-detail" &&
+    activeView !== "multisig-signers" &&
+    activeView !== "multisig-track" &&
+    activeView !== "multisig-receive"
+  ) {
     return { multisigs: loaded, multisigsError: false, multisigSync: null };
   }
   const refreshed = await Promise.all(
@@ -127,13 +139,24 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   };
   if (
     activeView === "home" ||
+    activeView === "send" ||
     activeView === "swap" ||
     activeView === "tokens" ||
-    activeView === "token-detail"
+    activeView === "token-detail" ||
+    activeView === "multisig-home" ||
+    activeView === "multisig-propose"
   ) {
-    fill(wallet.loadBalances(), (value) => {
-      cache.balances = value;
-    });
+    if (
+      activeView === "home" ||
+      activeView === "send" ||
+      activeView === "swap" ||
+      activeView === "tokens" ||
+      activeView === "token-detail"
+    ) {
+      fill(wallet.loadBalances(), (value) => {
+        cache.balances = value;
+      });
+    }
     fill(wallet.loadPrices(), (value) => {
       cache.prices = value.prices;
       cache.changes = value.changes;
@@ -175,7 +198,12 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       cache.allowances = value;
     });
   }
-  if (activeView === "home" || activeView === "nfts" || activeView === "nft-detail") {
+  if (
+    activeView === "home" ||
+    activeView === "nfts" ||
+    activeView === "nft-detail" ||
+    activeView === "nft-send"
+  ) {
     const nftScope = `${status.networkId}:${status.activeAccountId ?? "none"}`;
     // Explicitly watched NFTs take the fast lane: no indexer wait, immediate
     // repaint when their verified metadata lands, and no wait for balances,
@@ -195,7 +223,12 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   }
   if (
     activeView === "multisigs" ||
+    activeView === "multisig-home" ||
     activeView === "multisig-detail" ||
+    activeView === "multisig-signers" ||
+    activeView === "multisig-track" ||
+    activeView === "multisig-receive" ||
+    activeView === "multisig-watch" ||
     activeView === "multisig-propose" ||
     activeView === "multisig-deploy"
   ) {
@@ -206,6 +239,24 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
         }
       }),
     );
+  }
+  if (
+    (activeView === "multisig-home" ||
+      activeView === "multisig-propose" ||
+      activeView === "multisig-receive") &&
+    selectedMultisigId
+  ) {
+    fill(multisig.loadBalances(selectedMultisigId), (value) => {
+      cache.multisigBalanceId = selectedMultisigId;
+      cache.multisigBalances = value;
+    });
+  }
+  if (activeView === "multisig-home" && selectedMultisigId) {
+    const multisigNftScope = `${status.networkId}:${selectedMultisigId}`;
+    stream(wallet.discoverNfts(true, multisigNftScope, selectedMultisigId), (value) => {
+      cache.multisigNftId = selectedMultisigId;
+      cache.multisigNfts = value;
+    });
   }
   if (activeView === "multisig-deploy") {
     fill(multisig.loadClassStatus(), (value) => {

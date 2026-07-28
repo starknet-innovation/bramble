@@ -62,25 +62,28 @@ const pendingTx = {
 };
 
 describe("cluster views", () => {
-  test("pending transactions explain they cannot be sped up or cancelled", () => {
+  test("pending transactions explain immediate refresh and protocol limits", () => {
     const html = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       pendingTx,
     ]);
-    expect(html).toContain("sped up, replaced, or cancelled");
-    expect(html).toContain("protocol limitation");
+    expect(html).toContain("normally confirms quickly");
+    expect(html).toContain("checks immediately");
+    expect(html).toContain("fee-bumped, replaced, or cancelled");
     expect(html).toMatch(/tx-status pending"[^>]*title="/);
 
     const settled = dashboard("activity", status, [], preferences, { balances: [] }, null, [
       { ...pendingTx, status: "accepted" as const },
     ]);
-    expect(settled).not.toContain("protocol limitation");
+    expect(settled).not.toContain("fee-bumped, replaced, or cancelled");
   });
 
   test("home links to the NFT gallery and settings links to allowances", () => {
     const home = dashboard("home", status, [], preferences, { balances: [] });
     expect(home).toContain('data-view="nfts"');
     const settings = dashboard("settings", status, [], preferences, { balances: [] });
-    expect(settings).toContain('data-view="allowances"');
+    expect(settings).toContain('data-view="security"');
+    const security = dashboard("security", status, [], preferences, { balances: [] });
+    expect(security).toContain('data-view="allowances"');
   });
 
   test("allowance flow lists tracked approvals with a revoke control", () => {
@@ -106,18 +109,19 @@ describe("cluster views", () => {
     expect(html).not.toContain("wallet-dock");
   });
 
-  test("NFT gallery grids visible NFTs, hides spam, and offers an add form", () => {
+  test("NFT gallery grids visible NFTs and routes watch and hidden management", () => {
     const html = dashboard("nfts", status, [], nftPrefs, { balances: [] });
     expect(html).toContain('data-nft-open="SN_MAIN:0x511a2b3:5"');
     expect(html).toContain("Punk");
-    expect(html).toContain('id="nft-form"');
+    expect(html).toContain('data-view="nft-watch"');
     expect(html).toContain('data-nft-spam="SN_MAIN:0x511a2b3:5"');
-    expect(html).toContain("Hidden");
-    expect(html).toContain('data-nft-spam-value="false"');
+    expect(html).toContain('data-view="nft-hidden"');
+    const hidden = dashboard("nft-hidden", status, [], nftPrefs, { balances: [] });
+    expect(hidden).toContain('data-nft-spam-value="false"');
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
   });
 
-  test("NFT detail shows identifiers and a send form for the selection", () => {
+  test("NFT detail shows identifiers and routes to a focused send flow", () => {
     const html = dashboard(
       "nft-detail",
       status,
@@ -133,9 +137,25 @@ describe("cluster views", () => {
       [],
       "SN_MAIN:0x511a2b3:5",
     );
-    expect(html).toContain('id="nft-send-form"');
-    expect(html).toContain("0x511a2b3");
+    expect(html).toContain('data-view="nft-send"');
+    expect(html).toContain("0x511a…a2b3");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
+    const send = dashboard(
+      "nft-send",
+      status,
+      [],
+      nftPrefs,
+      { balances: [] },
+      null,
+      [],
+      [],
+      {},
+      [],
+      null,
+      [],
+      "SN_MAIN:0x511a2b3:5",
+    );
+    expect(send).toContain('id="nft-send-form"');
 
     const missing = dashboard(
       "nft-detail",

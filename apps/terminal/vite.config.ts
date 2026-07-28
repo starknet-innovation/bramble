@@ -21,6 +21,7 @@ const extendedRest = EXTENDED_API_BASE; // https://api.starknet.extended.exchang
 const extendedWsTarget = `wss://${new URL(EXTENDED_API_BASE).host}`;
 const extendedRestPrefix = "/proxy/extended";
 const avnuMarketsPrefix = "/proxy/avnu-markets";
+const starkscanPrefix = "/proxy/starkscan";
 const extendedUserAgent = "MC-Wallet-Terminal/0.1";
 
 // Forward market-data GETs with a clean server-side header set. Extended needs
@@ -42,7 +43,8 @@ const marketDataMiddleware = (): Plugin => ({
       const path = request.url ?? "";
       const isExtended = path.startsWith(`${extendedRestPrefix}/`);
       const isAvnuMarkets = path.startsWith(`${avnuMarketsPrefix}/`);
-      if (!isExtended && !isAvnuMarkets) {
+      const isStarkscan = path.startsWith(`${starkscanPrefix}/`);
+      if (!isExtended && !isAvnuMarkets && !isStarkscan) {
         next();
         return;
       }
@@ -55,8 +57,16 @@ const marketDataMiddleware = (): Plugin => ({
 
       void (async (): Promise<void> => {
         try {
-          const prefix = isExtended ? extendedRestPrefix : avnuMarketsPrefix;
-          const target = isExtended ? extendedRest : AVNU_API.impulse;
+          const prefix = isExtended
+            ? extendedRestPrefix
+            : isAvnuMarkets
+              ? avnuMarketsPrefix
+              : starkscanPrefix;
+          const target = isExtended
+            ? extendedRest
+            : isAvnuMarkets
+              ? AVNU_API.impulse
+              : "https://starkscan.co";
           const upstreamPath = path.slice(prefix.length);
           const upstream = new URL(upstreamPath, target);
           const result = await fetch(upstream, {

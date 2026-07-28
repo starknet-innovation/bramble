@@ -1,0 +1,43 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="paint0_linear" x1="27.0629" y1="7.96045" x2="33.5" y2="33" gradientUnits="userSpaceOnUse">
+<stop offset="0.0872481" stop-color="#DF0000"/>
+<stop offset="0.240624" stop-color="#FF6F00"/>
+<stop offset="0.39096" stop-color="#FFCD00"/>
+<stop offset="0.465556" stop-color="#FEEB00"/>
+<stop offset="0.545481" stop-color="#F6F701"/>
+<stop offset="0.82788" stop-color="#2BFFCC"/>
+<stop offset="1" stop-color="#00C0FF"/>
+</linearGradient>
+<linearGradient id="paint1_linear" x1="29" y1="15" x2="26" y2="25" gradientUnits="userSpaceOnUse">
+<stop offset="0.0379614" stop-color="#FF9601"/>
+<stop offset="0.386433" stop-color="#E7FF0F" stop-opacity="0.46"/>
+<stop offset="1" stop-color="#4DFFAA"/>
+</linearGradient>
+<linearGradient id="paint2_linear" x1="16.4727" y1="8.36523" x2="16.4727" y2="40.0304" gradientUnits="userSpaceOnUse">
+<stop offset="0.104981" stop-color="#800000"/>
+<stop offset="0.298249" stop-color="#FF3200"/>
+<stop offset="0.414282" stop-color="#FF7400"/>
+<stop offset="0.603374" stop-color="#D1FF26"/>
+<stop offset="0.719407" stop-color="#61FF96"/>
+<stop offset="0.856928" stop-color="#00A9FF"/>
+<stop offset="1" stop-color="#0000FF"/>
+</linearGradient>
+<linearGradient id="paint3_linear" x1="15" y1="23.5" x2="18.5" y2="35.5" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FFB600"/>
+<stop offset="0.279321" stop-color="#D4FF22"/>
+<stop offset="0.625509" stop-color="#16FCE1"/>
+<stop offset="1" stop-color="#007EFF"/>
+</linearGradient>
+<clipPath id="clip0">
+<rect width="31.7702" height="32" fill="white" transform="translate(9 8)"/>
+</clipPath>
+</defs>
+<circle cx="24" cy="24" r="24" fill="white"/>
+<g clip-path="url(#clip0)">
+<path d="M37 29.5C40 28.0002 41.0091 26.0817 40.5 21.5001C39.5 12.5002 20 6.00022 15.5 8.50012L13.5 22L21.5 33.5C25.8333 32.5 35.0733 30.4633 37 29.5Z" fill="url(#paint0_linear)"/>
+<path d="M30.5 22.4999C28.5 22.9999 24.5 23.4999 21.5 23.4999C18.3333 21.1666 13.9 16.3999 21.5 15.9999C31 15.4999 36 17.5 35 20.4999C34.7764 21.1707 32.5 21.9999 30.5 22.4999Z" fill="url(#paint1_linear)"/>
+<path d="M18.5 40C22.4598 39.4343 24 33 24 28.5C24 23 22.5 17.5 20.5 12C19.8333 10.6666 18.7 7.7 15.5 8.5C11.5 9.5 8.49998 16.5 8.99998 25C9.47058 33 14.5 40.5715 18.5 40Z" fill="url(#paint2_linear)"/>
+<path d="M21 30.5C21 27.5 19 23.0001 16 23C13.2803 22.9999 13.0068 26.5408 13.5 29.5C14 32.5 16.5 37.5 18.5 36.5C20.5 35.5 21 33.5 21 30.5Z" fill="url(#paint3_linear)"/>
+</g>
+</svg>

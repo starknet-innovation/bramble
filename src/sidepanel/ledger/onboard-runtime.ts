@@ -56,6 +56,7 @@ export type LedgerOnboardRuntimeDeps = {
   readonly networkId: () => string;
   readonly onCancel: () => void;
   readonly openImport: () => void;
+  readonly openMultisig: () => void;
   readonly refresh: () => Promise<void>;
   readonly wallet: Pick<SidepanelWallet, "deriveLedgerAccounts">;
 };
@@ -72,7 +73,7 @@ export type LedgerOnboardRuntime = {
 };
 
 const isAddKind = (value: string | undefined): value is LedgerOnboardAddKind =>
-  value === "hd" || value === "import" || value === "ledger";
+  value === "hd" || value === "import" || value === "ledger" || value === "multisig";
 
 /**
  * Creates the DOM-bound Ledger onboarding runtime. The controller persists
@@ -102,10 +103,13 @@ export const createLedgerOnboardRuntime = (
       button.addEventListener("click", () => {
         const kind = button.dataset["addKind"];
         if (isAddKind(kind)) {
-          controller.choose(kind);
+          controller.select(kind);
         }
       });
     }
+    mount
+      .querySelector<HTMLButtonElement>("[data-add-continue]")
+      ?.addEventListener("click", () => controller.continueChoice());
   };
 
   const bindDevices = (): void => {
@@ -139,7 +143,7 @@ export const createLedgerOnboardRuntime = (
 
   const bodyFor = (view: LedgerOnboardView): string => {
     if (view.kind === "chooser") {
-      return addAccountChooser();
+      return addAccountChooser(view.selected);
     }
     if (view.kind === "connect") {
       return ledgerConnectPrompt();
@@ -177,6 +181,7 @@ export const createLedgerOnboardRuntime = (
     existingIds,
     onCancel,
     openImport: () => deps.openImport(),
+    openMultisig: () => deps.openMultisig(),
     refresh,
     render,
   });

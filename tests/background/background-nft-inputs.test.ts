@@ -109,10 +109,20 @@ describe("readDiscoverNftsInput", () => {
     expect(readDiscoverNftsInput({ includeWatched: false, type: "wallet.discoverNfts" })).toEqual({
       includeWatched: false,
     });
+    expect(
+      readDiscoverNftsInput({
+        multisigId: "SN_MAIN:0x456",
+        type: "wallet.discoverNfts",
+      }),
+    ).toEqual({
+      includeWatched: true,
+      multisigId: "SN_MAIN:0x456",
+    });
   });
 
   test("rejects unknown keys and non-boolean modes", () => {
     expect(readDiscoverNftsInput({ extra: true, type: "wallet.discoverNfts" })).toBeNull();
     expect(readDiscoverNftsInput({ includeWatched: "no", type: "wallet.discoverNfts" })).toBeNull();
+    expect(readDiscoverNftsInput({ multisigId: "", type: "wallet.discoverNfts" })).toBeNull();
   });
 });

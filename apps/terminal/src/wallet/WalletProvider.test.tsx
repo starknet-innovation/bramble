@@ -46,6 +46,9 @@ const makeWallet = () => {
     if (type === "wallet_addInvokeTransaction") {
       return invoke();
     }
+    if (type === "wallet_watchAsset") {
+      return true;
+    }
     return null;
   });
   return {
@@ -115,7 +118,9 @@ const DeclareProbe = (): ReactNode => {
   );
 };
 
-const TransactionProbe = (): ReactNode => {
+const TransactionProbe = ({
+  reviewMode,
+}: { readonly reviewMode?: "wallet" } = {}): ReactNode => {
   const wallet = useWallet();
   const [result, setResult] = useState("idle");
   return (
@@ -137,15 +142,37 @@ const TransactionProbe = (): ReactNode => {
               ],
               description: "Move one test asset.",
               details: [{ label: "Recipient", value: "0x2" }],
+              ...(reviewMode === undefined ? {} : { reviewMode }),
               title: "Send test asset",
             })
             .then((value) => setResult(value.transaction_hash))
         }
       >
-        Send
+        {reviewMode === "wallet" ? "Fast send" : "Send"}
       </button>
       <span data-testid="transaction-address">{wallet.address ?? "disconnected"}</span>
       <span data-testid="transaction-result">{result}</span>
+    </div>
+  );
+};
+
+const WatchAssetProbe = (): ReactNode => {
+  const wallet = useWallet();
+  const [result, setResult] = useState("idle");
+  return (
+    <div>
+      <button type="button" onClick={() => void wallet.connect()}>Connect</button>
+      <button
+        type="button"
+        onClick={() =>
+          void wallet
+            .watchAsset({ address: "0x387e8", symbol: "vUSDC" })
+            .then(() => setResult("tracked"))
+        }
+      >
+        Track receipt
+      </button>
+      <span data-testid="watch-result">{result}</span>
     </div>
   );
 };
@@ -236,6 +263,24 @@ describe("WalletProvider", () => {
     });
   });
 
+  test("requests wallet-approved ERC20 tracking with metadata revalidated by the wallet", async () => {
+    const wallet = makeWallet();
+    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    render(
+      <WalletProvider>
+        <WatchAssetProbe />
+      </WalletProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() => expect(wallet.request).toHaveBeenCalledWith({ type: "wallet_requestAccounts" }));
+    fireEvent.click(screen.getByRole("button", { name: "Track receipt" }));
+    await waitFor(() => expect(screen.getByTestId("watch-result").textContent).toBe("tracked"));
+    expect(wallet.request).toHaveBeenLastCalledWith({
+      params: { options: { address: "0x387e8", symbol: "vUSDC" }, type: "ERC20" },
+      type: "wallet_watchAsset",
+    });
+  });
+
   test("reviews calls before execute and supports a safe retry after rejection", async () => {
     const wallet = makeWallet();
     wallet.invoke
@@ -284,5 +329,34 @@ describe("WalletProvider", () => {
       "0",
       "length",
     ]);
+  });
+
+  test("hands an already-reviewed request to the wallet without a duplicate confirmation", async () => {
+    const wallet = makeWallet();
+    let release!: () => void;
+    wallet.invoke.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ transaction_hash: "0xabc" });
+        }),
+    );
+    mocks.waitForInjectedMcWallet.mockResolvedValue(wallet);
+    render(
+      <WalletProvider>
+        <TransactionProbe reviewMode="wallet" />
+      </WalletProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("transaction-address").textContent).toBe("0x1234"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Fast send" }));
+    await waitFor(() => expect(wallet.invoke).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Continue in wallet" })).toBeNull();
+    expect(screen.getByText("Request sent to MC Wallet")).toBeTruthy();
+    await act(async () => release());
+    await waitFor(() =>
+      expect(screen.getByTestId("transaction-result").textContent).toBe("0xabc"),
+    );
   });
 });

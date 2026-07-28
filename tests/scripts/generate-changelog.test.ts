@@ -164,6 +164,14 @@ describe("hasSection / extractSection", () => {
     expect(section).toBe(["## [0.5.0] - 2026-07-15", "", "### Added", "- thing"].join("\n"));
     expect(extractSection(changelog, "0.9.0")).toBeNull();
   });
+
+  test("matches regular-expression metacharacters in versions literally", () => {
+    const unusualVersion = String.raw`0.5\beta+`;
+    const unusualChangelog = `## [${unusualVersion}] - 2026-07-15`;
+
+    expect(hasSection(unusualChangelog, unusualVersion)).toBe(true);
+    expect(hasSection("## [0.5beta] - 2026-07-15", unusualVersion)).toBe(false);
+  });
 });
 
 describe("insertSection", () => {

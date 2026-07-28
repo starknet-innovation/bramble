@@ -30,10 +30,12 @@ import {
 import {
   requestAccounts,
   requestChainId,
+  requestWatchAsset,
   resolveAccount,
   resolveWallet,
   walletNetwork,
   type WalletRequest,
+  type WatchAssetInput,
 } from "./wallet-connection";
 import { WalletRequestDialog } from "./WalletRequestDialog";
 import {
@@ -71,6 +73,8 @@ export type WalletContextValue = {
   readonly requestTransaction: (
     input: WalletTransactionRequest,
   ) => Promise<InvokeFunctionResponse>;
+  /** Requests wallet tracking for an ERC20; the wallet re-reads metadata and requires approval. */
+  readonly watchAsset: (input: WatchAssetInput) => Promise<void>;
   /** Requests an approved Sierra class declaration through the connected wallet. */
   readonly declareContract: (input: ContractDeclaration) => Promise<DeclarationResult>;
   /** Disconnects the current wallet and clears the last-connected hint. */
@@ -107,7 +111,6 @@ type PendingWalletRequest = {
   readonly reject: (reason: Error) => void;
   readonly resolve: (value: unknown) => void;
 };
-
 /**
  * Provides wallet connection state to the tree. Mount once near the root.
  */
@@ -191,33 +194,10 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
 
   const clearError = useCallback(() => setError(null), []);
 
-  const reviewWalletRequest = useCallback(
-    <Result,>(
-      preview: WalletRequestPreview,
-      perform: () => Promise<Result>,
-    ): Promise<Result> => {
-      if (pendingRequestRef.current !== null) {
-        return Promise.reject(new Error("Finish the open wallet request first."));
-      }
-      return new Promise<Result>((resolve, reject) => {
-        pendingRequestRef.current = {
-          perform,
-          reject,
-          resolve: (value) => resolve(value as Result),
-        };
-        setRequestView({ phase: "review", preview });
-      });
-    },
-    [],
-  );
-
-  const performWalletRequest = useCallback(async (): Promise<void> => {
-    const pending = pendingRequestRef.current;
-    const preview = requestView?.preview;
-    if (pending === null || preview === undefined) {
-      return;
-    }
-    setRequestView({ phase: "awaiting", preview });
+  const executeWalletRequest = useCallback(async (
+    pending: PendingWalletRequest,
+    preview: WalletRequestPreview,
+  ): Promise<void> => {
     try {
       const result = await pending.perform();
       const transactionHash = walletTransactionHash(result);
@@ -234,7 +214,42 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
         message: walletRequestError(cause),
       });
     }
-  }, [requestView]);
+  }, []);
+
+  const performWalletRequest = useCallback(async (): Promise<void> => {
+    const pending = pendingRequestRef.current;
+    const preview = requestView?.preview;
+    if (pending === null || preview === undefined) {
+      return;
+    }
+    setRequestView({ phase: "awaiting", preview });
+    await executeWalletRequest(pending, preview);
+  }, [executeWalletRequest, requestView]);
+
+  const queueWalletRequest = useCallback(
+    <Result,>(
+      preview: WalletRequestPreview,
+      perform: () => Promise<Result>,
+      phase: "awaiting" | "review" = "review",
+    ): Promise<Result> => {
+      if (pendingRequestRef.current !== null) {
+        return Promise.reject(new Error("Finish the open wallet request first."));
+      }
+      return new Promise<Result>((resolve, reject) => {
+        const pending: PendingWalletRequest = {
+          perform,
+          reject,
+          resolve: (value) => resolve(value as Result),
+        };
+        pendingRequestRef.current = pending;
+        setRequestView({ phase, preview });
+        if (phase === "awaiting") {
+          void executeWalletRequest(pending, preview);
+        }
+      });
+    },
+    [executeWalletRequest],
+  );
 
   const cancelWalletRequest = useCallback(() => {
     pendingRequestRef.current?.reject(new Error("Wallet request cancelled."));
@@ -252,39 +267,47 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       if (input.calls.length === 0) {
         throw new Error("The terminal refused an empty wallet request.");
       }
-      return reviewWalletRequest<InvokeFunctionResponse>(
-        {
-          callCount: input.calls.length,
-          description: input.description,
-          details: input.details ?? [],
-          kind: "transaction",
-          title: input.title,
-          warning: input.warning,
-        },
-        async () => {
-          const params = walletInvokeParams(input.calls);
-          if (wallet !== null && typeof wallet.request === "function") {
-            const raw = wallet.request as unknown as WalletRequest;
-            const result = await raw({
-              type: "wallet_addInvokeTransaction",
-              params,
-            });
-            const transactionHash = walletTransactionHash(result);
-            if (transactionHash === null) {
-              throw new Error("Wallet returned an invalid transaction hash.");
-            }
-            return { transaction_hash: transactionHash };
+      const preview: WalletRequestPreview = {
+        callCount: input.calls.length,
+        description: input.description,
+        details: input.details ?? [],
+        kind: "transaction",
+        title: input.title,
+        warning: input.warning,
+      };
+      const perform = async (): Promise<InvokeFunctionResponse> => {
+        const params = walletInvokeParams(input.calls);
+        if (wallet !== null && typeof wallet.request === "function") {
+          const raw = wallet.request as unknown as WalletRequest;
+          const result = await raw({
+            type: "wallet_addInvokeTransaction",
+            params,
+          });
+          const transactionHash = walletTransactionHash(result);
+          if (transactionHash === null) {
+            throw new Error("Wallet returned an invalid transaction hash.");
           }
-          const calls = params.invoke_transaction.map((call) => ({
-            calldata: [...call.calldata],
-            contractAddress: call.contract_address,
-            entrypoint: call.entry_point,
-          }));
-          return account.execute(calls);
-        },
+          return { transaction_hash: transactionHash };
+        }
+        const calls = params.invoke_transaction.map((call) => ({
+          calldata: [...call.calldata],
+          contractAddress: call.contract_address,
+          entrypoint: call.entry_point,
+        }));
+        return account.execute(calls);
+      };
+      return queueWalletRequest(
+        preview,
+        perform,
+        input.reviewMode === "wallet" ? "awaiting" : "review",
       );
     },
-    [account, reviewWalletRequest, wallet],
+    [account, queueWalletRequest, wallet],
+  );
+
+  const watchAsset = useCallback(
+    (input: WatchAssetInput): Promise<void> => requestWatchAsset(wallet, input),
+    [wallet],
   );
 
   const declareContract = useCallback(
@@ -293,7 +316,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
         throw new Error("Connect a wallet that supports contract declarations.");
       }
       const raw = wallet.request as unknown as WalletRequest;
-      return reviewWalletRequest<DeclarationResult>(
+      return queueWalletRequest<DeclarationResult>(
         {
           description:
             "Register the audited MC Punks Sierra class on this network before deploying it.",
@@ -329,7 +352,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
         },
       ).then(({ classHash, transactionHash }) => ({ classHash, transactionHash }));
     },
-    [reviewWalletRequest, wallet],
+    [queueWalletRequest, wallet],
   );
 
   // Attempt a silent reconnect if the wallet pre-authorized this origin.
@@ -425,6 +448,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       clearError,
       connect,
       requestTransaction,
+      watchAsset,
       declareContract,
       disconnect,
     }),
@@ -438,6 +462,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       clearError,
       connect,
       requestTransaction,
+      watchAsset,
       declareContract,
       disconnect,
     ],
@@ -462,7 +487,6 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     </WalletContext.Provider>
   );
 };
-
 /**
  * Reads the wallet context. Throws if used outside a `<WalletProvider>`.
  */

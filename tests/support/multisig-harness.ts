@@ -126,6 +126,9 @@ export type MultisigHarnessOptions = {
   readonly classDeclared?: boolean;
   readonly contractAt?: boolean;
   readonly deploymentStatus?: () => boolean;
+  readonly getTokenBalances?: (input: {
+    readonly accountAddress: string;
+  }) => Promise<readonly never[]>;
   readonly loadClass?: () => Promise<unknown>;
   readonly proposalStatus?: () => MultisigProposalStatus;
   readonly signers?: readonly string[];
@@ -144,6 +147,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
   session.unlock("correct horse battery staple");
   const multisigStore = memoryMultisigStore();
   const invokeCalls: (readonly unknown[])[] = [];
+  const balanceReads: string[] = [];
   const declared: unknown[] = [];
   const handler = createMessageHandler(walletStub, "extension-id", {
     ...(options.activity ? { activity: options.activity } : {}),
@@ -159,8 +163,9 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
       async getNftOwner() {
         return harnessAccount.address;
       },
-      async getTokenBalances() {
-        return [];
+      async getTokenBalances(input) {
+        balanceReads.push(input.accountAddress);
+        return options.getTokenBalances?.(input) ?? [];
       },
       async getTokenMetadata() {
         return { decimals: 18, name: "Ether", symbol: "ETH" };
@@ -220,5 +225,5 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     },
     session,
   });
-  return { declared, handler, invokeCalls, multisigStore };
+  return { balanceReads, declared, handler, invokeCalls, multisigStore };
 };

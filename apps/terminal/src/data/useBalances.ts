@@ -13,6 +13,7 @@ import type { RpcProvider } from "starknet";
 import { withRpc } from "./client";
 import { formatTokenAmount } from "./format";
 import { KNOWN_TOKENS, type KnownToken } from "./knownTokens";
+import { fetchStarkscanBalances } from "./starkscan";
 import type { Resource, TokenBalance } from "./types";
 import { useAsyncResource } from "./useAsyncResource";
 
@@ -47,7 +48,7 @@ const readBalance = async (
   return 0n;
 };
 
-const fetchBalances = async (address: string): Promise<readonly TokenBalance[]> =>
+const fetchRpcBalances = async (address: string): Promise<readonly TokenBalance[]> =>
   withRpc(async (provider) =>
     Promise.all(
       KNOWN_TOKENS.map(async (token): Promise<TokenBalance> => {
@@ -66,17 +67,31 @@ const fetchBalances = async (address: string): Promise<readonly TokenBalance[]> 
     ),
   );
 
+const fetchBalances = async (
+  address: string,
+  signal: AbortSignal,
+): Promise<readonly TokenBalance[]> => {
+  try {
+    return await fetchStarkscanBalances(address, signal);
+  } catch {
+    if (signal.aborted) {
+      throw signal.reason;
+    }
+    return fetchRpcBalances(address);
+  }
+};
+
 /**
  * On-chain balances for `address`. Returns an empty list (no error, no loading)
  * when disconnected.
  */
 export const useBalances = (address: string | null): Resource<readonly TokenBalance[]> => {
   const fetcher = useCallback(
-    async (): Promise<readonly TokenBalance[]> => {
+    async (signal: AbortSignal): Promise<readonly TokenBalance[]> => {
       if (address === null) {
         return [];
       }
-      return fetchBalances(address);
+      return fetchBalances(address, signal);
     },
     [address],
   );

@@ -20,12 +20,11 @@
  * starknet-js compiles plain objects depth-first in property order, so the field
  * order below IS the Cairo ABI order.
  *
- * ⚠️ VERIFY BEFORE FUNDS (issue #67): the shapes above are doc/source-verified
- * but NOT runtime-verified against the deployed class ABI on a funded mainnet
- * account. See the per-site TODO(#67) markers. The whole path stays behind the
- * `VESU_LENDING_ENABLED` gate (constants.ts) until that proof lands.
+ * The shapes above have been cross-checked against the deployed V2 mainnet
+ * class ABI. Every builder remains pure and returns reviewable calls only.
  */
 import { CairoCustomEnum, type Call, CallData, cairo } from "starknet";
+import { CAIRO_U256_MAX } from "./support/cairo-integers";
 import { WalletError } from "./support/errors";
 import { isRecord } from "./support/json";
 import { isNonZeroStarkFieldElement } from "./support/networks";
@@ -49,11 +48,10 @@ export type VesuAssetConfig = {
 };
 
 /**
- * A Vesu pool's resolved on-chain anchors: the extension contract (the
- * `singleton()` provider) and the per-collateral-asset vToken/rate table.
+ * A Vesu V2 pool's contract address and per-asset vToken/rate table.
  */
 export type VesuPoolConfig = {
-  readonly extensionAddress: string;
+  readonly poolAddress: string;
   readonly assets: readonly VesuAssetConfig[];
 };
 
@@ -66,7 +64,7 @@ export const parseVesuAmount = (amount: string): bigint => {
     throw new WalletError("Invalid Vesu amount");
   }
   const raw = BigInt(trimmed);
-  if (raw <= 0n) {
+  if (raw <= 0n || raw > CAIRO_U256_MAX) {
     throw new WalletError("Vesu amount must be greater than zero");
   }
   return raw;
@@ -82,13 +80,23 @@ export const parseVesuCollateralAmount = (amount: string): bigint => {
   if (!/^(?:0|[1-9][0-9]*)$/.test(trimmed)) {
     throw new WalletError("Invalid Vesu collateral amount");
   }
-  return BigInt(trimmed);
+  const raw = BigInt(trimmed);
+  if (raw > CAIRO_U256_MAX) {
+    throw new WalletError("Invalid Vesu collateral amount");
+  }
+  return raw;
 };
 
 // Reads a felt-shaped address string off an untrusted record field, returning
 // null when absent or malformed.
 const readAddress = (value: unknown): string | null =>
   typeof value === "string" && isNonZeroStarkFieldElement(value) ? value : null;
+
+const assertPositiveU256 = (value: bigint, label: string): void => {
+  if (value <= 0n || value > CAIRO_U256_MAX) {
+    throw new WalletError(`${label} must be a positive u256`);
+  }
+};
 
 // Parses a Vesu fixed-point rate (`{ value, decimals }`, value in smallest
 // units of a fraction) into integer basis points, or null when malformed. e.g.
@@ -130,23 +138,16 @@ const parseAssetConfig = (entry: unknown): VesuAssetConfig | null => {
 
 /**
  * Parses a Vesu `GET /pools/{poolId}` response body into a {@link VesuPoolConfig}.
- * Tolerates the `{ data: pool }` envelope and resolves the extension address
- * from `extensionContractAddress` (v1) with fallbacks to `extension` / `id`
- * (v2). Returns null when the extension cannot be resolved.
- *
- * ⚠️ v1 vs v2 field names and the vToken/stats shape are transcribed from the
- * recon and must be confirmed against the production API response before funds.
+ * Tolerates the `{ data: pool }` envelope and requires a V2 pool id. Returns
+ * null for a V1 response, a missing pool address, or malformed asset anchors.
  */
 export const parseVesuPool = (body: unknown): VesuPoolConfig | null => {
   const envelope = isRecord(body) && isRecord(body.data) ? body.data : body;
-  if (!isRecord(envelope)) {
+  if (!isRecord(envelope) || envelope.protocolVersion !== "v2") {
     return null;
   }
-  const extensionAddress =
-    readAddress(envelope.extensionContractAddress) ??
-    readAddress(envelope.extension) ??
-    readAddress(envelope.id);
-  if (extensionAddress === null) {
+  const poolAddress = readAddress(envelope.id);
+  if (poolAddress === null) {
     return null;
   }
   const rawAssets = Array.isArray(envelope.assets) ? envelope.assets : [];
@@ -157,7 +158,7 @@ export const parseVesuPool = (body: unknown): VesuPoolConfig | null => {
       assets.push(parsed);
     }
   }
-  return { assets, extensionAddress };
+  return { assets, poolAddress };
 };
 
 /**
@@ -204,6 +205,7 @@ export const buildVesuSupplyCalls = (
   if (!isNonZeroStarkFieldElement(vTokenAddress) || !isNonZeroStarkFieldElement(accountAddress)) {
     throw new WalletError("Invalid Vesu supply address");
   }
+  assertPositiveU256(amountRaw, "Vesu supply amount");
   return [
     buildErc20ApproveCall(assetAddress, vTokenAddress, amountRaw),
     {
@@ -211,6 +213,7 @@ export const buildVesuSupplyCalls = (
       contractAddress: vTokenAddress,
       entrypoint: "deposit",
     },
+    buildErc20ApproveCall(assetAddress, vTokenAddress, 0n),
   ];
 };
 
@@ -227,6 +230,7 @@ export const buildVesuWithdrawCalls = (
   if (!isNonZeroStarkFieldElement(vTokenAddress) || !isNonZeroStarkFieldElement(accountAddress)) {
     throw new WalletError("Invalid Vesu withdraw address");
   }
+  assertPositiveU256(amountRaw, "Vesu withdraw amount");
   return [
     {
       calldata: CallData.compile([cairo.uint256(amountRaw), accountAddress, accountAddress]),
@@ -242,10 +246,6 @@ export const buildVesuWithdrawCalls = (
 // debt); `collateralValue`/`debtValue` are signed `Amount`s in `Assets`
 // denomination (positive = supply/borrow, negative = withdraw/repay).
 //
-// TODO(#67): confirm the entrypoint selector against the deployed V2 ABI on a
-// funded session. The Pool contract reference and vesuxyz/vesu-v2 `IPool` trait
-// name it `modify_position`, but the "Interact" doc pages label the same call
-// `manage_position`; we target `modify_position` (the ABI-level name).
 const buildModifyPositionCall = (
   poolAddress: string,
   collateralAsset: string,
@@ -290,6 +290,10 @@ export const buildVesuBorrowCalls = (
   ) {
     throw new WalletError("Invalid Vesu borrow address");
   }
+  if (collateralAmountRaw < 0n || collateralAmountRaw > CAIRO_U256_MAX) {
+    throw new WalletError("Vesu collateral amount must be a u256");
+  }
+  assertPositiveU256(debtAmountRaw, "Vesu borrow amount");
   const calls: Call[] = [];
   if (collateralAmountRaw > 0n) {
     calls.push(buildErc20ApproveCall(collateralAsset, poolAddress, collateralAmountRaw));
@@ -304,6 +308,9 @@ export const buildVesuBorrowCalls = (
       debtAmountRaw,
     ),
   );
+  if (collateralAmountRaw > 0n) {
+    calls.push(buildErc20ApproveCall(collateralAsset, poolAddress, 0n));
+  }
   return calls;
 };
 
@@ -328,6 +335,7 @@ export const buildVesuRepayCalls = (
   ) {
     throw new WalletError("Invalid Vesu repay address");
   }
+  assertPositiveU256(debtAmountRaw, "Vesu repay amount");
   return [
     buildErc20ApproveCall(debtAsset, poolAddress, debtAmountRaw),
     buildModifyPositionCall(
@@ -338,5 +346,6 @@ export const buildVesuRepayCalls = (
       0n,
       -debtAmountRaw,
     ),
+    buildErc20ApproveCall(debtAsset, poolAddress, 0n),
   ];
 };

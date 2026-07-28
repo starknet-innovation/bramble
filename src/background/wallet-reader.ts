@@ -53,6 +53,9 @@ export const createWalletReader = (
     async importRawKeyAccount(input) {
       return (await required()).importRawKeyAccount(input);
     },
+    async previewAccount(input) {
+      return (await required()).previewAccount(input);
+    },
     async readVault(vaultPassphrase) {
       return (await required()).readVault(vaultPassphrase);
     },
