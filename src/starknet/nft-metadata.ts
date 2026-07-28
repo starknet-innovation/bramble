@@ -222,8 +222,8 @@ export const normalizeImageUrl = (value: unknown): string => {
  * utf8) within the size cap is accepted — remote (`https`/`ipfs`) animations are
  * rejected so an opened collectible can never make a network request. The value
  * is returned verbatim (idempotent, so it round-trips through isDiscoveredNft),
- * and its inertness is guaranteed downstream by the sandbox's opaque origin and
- * egress-blocking CSP, never by inspecting the HTML here.
+ * and its isolation is guaranteed downstream by the manifest sandbox's separate
+ * security principal and egress-blocking CSP, never by inspecting the HTML here.
  */
 export const normalizeAnimationUri = (value: unknown): string => {
   if (typeof value !== "string") {

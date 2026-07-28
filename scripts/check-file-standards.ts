@@ -138,8 +138,9 @@ const HTML_SINK_FILES = new Set([
   "src/sidepanel/swap-ui.ts",
   "src/sidepanel/swap-picker.ts",
   // Collectible animation renderer: document.write of the untrusted on-chain
-  // data:text/html, confined by the manifest sandbox page's opaque origin and
-  // egress-blocking CSP (never executed in a privileged page) — audited 2026-07.
+  // data:text/html, confined by the manifest sandbox page's isolated security
+  // principal and egress-blocking CSP (never executed in a privileged page) —
+  // audited 2026-07.
   "src/sandbox/render.ts",
 ]);
 const HTML_SINK_PATTERN =

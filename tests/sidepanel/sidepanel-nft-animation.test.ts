@@ -152,7 +152,7 @@ describe("NFT home Collectibles-tab animation", () => {
 
   test("surfaces and plays the animation from the home Collectibles tile", () => {
     const app = fromHtml(
-      homeTabs({ balances: [] }, watchedPrefs, {}, {}, "usd", [], status, false, [animated]),
+      homeTabs({ balances: [] }, watchedPrefs, {}, {}, "usd", status, [animated]),
     );
     bind(app);
 
@@ -185,9 +185,7 @@ describe("NFT home Collectibles-tab animation", () => {
         },
       ],
     };
-    const app = fromHtml(
-      homeTabs({ balances: [] }, plainPrefs, {}, {}, "usd", [], status, false, [plain]),
-    );
+    const app = fromHtml(homeTabs({ balances: [] }, plainPrefs, {}, {}, "usd", status, [plain]));
     expect(app.querySelector(".nft-play-tile")).toBeNull();
   });
 });

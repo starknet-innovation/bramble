@@ -267,8 +267,9 @@ const bindImages = (deps: NftUiDeps): void => {
 // Reveals a collectible's on-chain animation only on explicit user action. The
 // untrusted data:text/html URI (carried on the play button) is handed to the
 // manifest-sandboxed sandbox/render.html page through the iframe URL hash — never
-// executed in the privileged side panel. render.html renders it in an opaque
-// origin under an egress-blocking CSP, so it cannot reach the vault or network.
+// executed in the privileged side panel. render.html runs without privileged
+// extension APIs or parent-DOM access under an egress-blocking CSP, so it cannot
+// reach the vault or network.
 const bindAnimation = (deps: NftUiDeps): void => {
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-play]").forEach((button) => {
     button.addEventListener("click", () => {

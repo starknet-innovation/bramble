@@ -388,9 +388,10 @@ export const selectedNftDetail = (
 // The on-chain animation section: shown only when the resolved metadata carries a
 // self-contained data:text/html animation. Nothing renders until the user presses
 // play (preserving the anti-phone-home reveal boundary); on click, nft-ui points
-// the iframe at the manifest-sandboxed sandbox/render.html page (opaque origin, no
-// chrome.*, egress-blocking CSP) which renders the untrusted HTML in isolation.
-// The URI is carried on the button's data-* and escaped into it here.
+// the iframe at the manifest-sandboxed sandbox/render.html page (no privileged
+// extension APIs or parent-DOM access, egress-blocking CSP) which renders the
+// untrusted HTML in isolation. The URI is carried on the button's data-* and
+// escaped into it here.
 const nftAnimationSection = (item: NftGalleryItem): string =>
   item.animationUrl
     ? `<section class="section">

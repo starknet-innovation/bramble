@@ -17,10 +17,11 @@ const expectedBackgroundServiceWorker = "background/index.js";
 const expectedExtensionCsp =
   "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:; frame-src 'self';";
 // CSP for the sandboxed animation renderer (sandbox/render.html). It runs an
-// NFT's untrusted on-chain data:text/html in an opaque origin: `allow-scripts`
-// (no `allow-same-origin`) lets the canvas animate but grants no access to the
-// vault or extension APIs, and `default-src 'none'` (no connect-src/frame-src)
-// blocks all network egress so an opened collectible can never phone home.
+// NFT's untrusted on-chain data:text/html in an isolated security principal:
+// `allow-scripts` (no `allow-same-origin`) lets the canvas animate but grants no
+// privileged extension-API or parent-DOM access, and `default-src 'none'` (no
+// connect-src/frame-src) blocks all network egress so an opened collectible can
+// never phone home.
 const expectedSandboxCsp =
   "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'";
 const expectedSandboxPage = "sandbox/render.html";

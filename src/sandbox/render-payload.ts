@@ -5,7 +5,7 @@
  * and returns the decoded HTML, or null when the URI is malformed, the wrong
  * media type, or oversized. It performs no rendering and confers no trust: the
  * returned HTML is only ever written into the manifest-sandboxed render page,
- * whose opaque origin and egress-blocking CSP are what actually contain it.
+ * whose isolated security principal and egress-blocking CSP contain it.
  */
 
 // Matches MAX_IMAGE_DATA_URI_LENGTH / MAX_DATA_URI_BYTES: the animation can never
