@@ -204,6 +204,7 @@ export const SEND_STYLES = `
     border-radius: ${RADIUS.full};
     flex: none;
     height: ${SPACE.sm};
+    position: relative;
     width: ${SPACE.sm};
   }
   .send-task-list li[data-state="done"] { color: var(--mc-text); }
@@ -212,12 +213,19 @@ export const SEND_STYLES = `
     color: var(--mc-text);
     font-weight: ${WEIGHT.semibold};
   }
-  .send-task-list li[data-state="active"] > span:first-child {
+  .send-task-list li[data-state="active"] > span:first-child { background: var(--mc-accent); }
+  .send-task-list li[data-state="active"] > span:first-child::after {
     animation: send-pulse 1100ms var(--ease-in-out) infinite;
-    background: var(--mc-accent);
+    background: var(--mc-accent-soft);
+    border-radius: inherit;
+    content: "";
+    inset: 0;
+    opacity: 0;
+    position: absolute;
+    transform: scale(1);
   }
   @keyframes send-pulse {
-    50% { box-shadow: 0 0 0 5px var(--mc-accent-soft); transform: scale(0.82); }
+    50% { opacity: 1; transform: scale(2.25); }
   }
 
   .send-success {
@@ -351,7 +359,7 @@ export const SEND_STYLES = `
     html[data-send-transition]::view-transition-old(send-stage),
     html[data-send-transition]::view-transition-new(send-stage),
     .send-working-mark .icon,
-    .send-task-list li[data-state="active"] > span:first-child,
+    .send-task-list li[data-state="active"] > span:first-child::after,
     .send-success-ring,
     .send-success-check,
     .ledger-device-mark .icon { animation: none; }

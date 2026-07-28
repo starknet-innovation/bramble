@@ -41,10 +41,13 @@ const ICONS = {
   plus: '<path d="M12 5v14" /><path d="M5 12h14" />',
   rocket:
     '<path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" /><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" /><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" /><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />',
+  search: '<circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" />',
   shield:
     '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />',
   star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />',
   swap: '<path d="M7 4 3 8l4 4" /><path d="M3 8h14" /><path d="m17 20 4-4-4-4" /><path d="M21 16H7" />',
+  shuffle:
+    '<path d="M3 6h3.5c4.5 0 6.5 12 11 12H21" /><path d="m17 14 4 4-4 4" /><path d="M3 18h3.5c1.8 0 3.1-1.9 4.3-4.2" /><path d="M13.2 8.2C14.4 6.9 15.8 6 17.5 6H21" /><path d="m17 2 4 4-4 4" />',
   terminal:
     '<rect width="18" height="14" x="3" y="5" rx="2" /><path d="m7 9 2 2-2 2" /><path d="M11 13h4" />',
   trendingUp:
@@ -56,7 +59,13 @@ const ICONS = {
     '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z" /><path d="M3 12h18" /><path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18z" />',
   link: '<path d="M9 15 15 9" /><path d="M11 6l1.5-1.5a4 4 0 0 1 5.7 5.7L16.7 11.7" /><path d="M13 18l-1.5 1.5a4 4 0 0 1-5.7-5.7L7.3 12.3" />',
   lock: '<path d="M7 11V8a5 5 0 0 1 10 0v3" /><path d="M6 11h12v9H6z" />',
+  monitor:
+    '<rect x="2.5" y="3" width="19" height="14" rx="2.5" /><path d="M6 7.5h5" /><path d="M6 12.5h7" /><path d="M14 7.5h4" /><path d="M16 12.5h2" /><path d="m9.5 17-2 4" /><path d="m14.5 17 2 4" /><path d="M7.5 21h9" />',
+  moreHorizontal:
+    '<circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" />',
   receive: '<path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" />',
+  qrCode:
+    '<rect x="3" y="3" width="6" height="6" rx="1" /><rect x="15" y="3" width="6" height="6" rx="1" /><rect x="3" y="15" width="6" height="6" rx="1" /><path d="M15 15h2v2h-2zM19 15h2M15 19h2M19 19h2v2h-2z" />',
   refresh: '<path d="M20 11a8 8 0 1 0-.6 4" /><path d="M20 4v6h-6" />',
   send: '<path d="M22 2 11 13" /><path d="m22 2-7 20-4-9-9-4 20-7z" />',
   settings:

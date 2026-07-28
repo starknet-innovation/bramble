@@ -1,9 +1,8 @@
 /**
- * Tabbed portfolio section on the home screen: Tokens, Collectibles, and
- * Activity share one section with a sliding accent indicator and per-tab
- * trailing actions. All three panels render up front so switching tabs never
- * re-renders the shell — the runtime just toggles visibility. Pure templates;
- * bindings live in ./home-ui.ts, styles in ./styles-home.ts.
+ * Tabbed portfolio section on the home screen: Tokens and Collectibles share
+ * one immediate local switcher. Activity remains a top-level dock destination
+ * rather than appearing twice. A single overflow menu progressively discloses
+ * asset management, refresh, and settings actions.
  */
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
@@ -22,7 +21,7 @@ import { balanceRow } from "./token-row";
 /**
  * Tab ids of the home portfolio section, in display order.
  */
-const HOME_TABS = ["tokens", "collectibles", "activity"] as const;
+const HOME_TABS = ["tokens", "collectibles"] as const;
 
 /**
  * One of the home portfolio tabs.
@@ -30,7 +29,6 @@ const HOME_TABS = ["tokens", "collectibles", "activity"] as const;
 export type HomeTab = (typeof HOME_TABS)[number];
 
 const TAB_LABELS: Readonly<Record<HomeTab, string>> = {
-  activity: "Activity",
   collectibles: "Collectibles",
   tokens: "Tokens",
 };
@@ -69,8 +67,8 @@ const PENDING_TX_HINT =
   "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.";
 
 /**
- * Renders one recorded transaction row, shared by the home Activity tab and
- * the activity dock screen.
+ * Renders one recorded transaction row for the account-partitioned Activity
+ * dock and its design-system specimen.
  */
 export const transactionRow = (entry: ActivityEntry): string => `
   <li class="tx-row">
@@ -172,49 +170,13 @@ const collectiblesPanel = (
     })}`;
 };
 
-const RECENT_ACTIVITY_LIMIT = 5;
-
-// Compact degraded line for the home Activity tab when on-chain history could
-// not be reached; the full explanation lives on the Activity dock screen.
-const HISTORY_UNAVAILABLE_HINT =
-  "On-chain history unavailable — showing this device's records only.";
-
 /**
- * Empty-state copy for the merged activity feed, shared by the home Activity
- * tab and the Activity dock screen so the two surfaces can never drift. When
- * on-chain history is unavailable the feed can only be this device's records;
- * otherwise it is the merged local + on-chain feed.
+ * Empty-state copy for the account-partitioned Activity dock.
  */
 export const activityEmptyCopy = (historyUnavailable: boolean): string =>
   historyUnavailable
     ? "No transactions recorded on this device yet."
     : "No activity yet. On-chain transactions for this account, and transactions you submit from this wallet, appear here.";
-
-const activityPanel = (
-  transactions: readonly ActivityEntry[],
-  historyUnavailable: boolean,
-): string => {
-  const recent = transactions.slice(0, RECENT_ACTIVITY_LIMIT);
-  return `${historyUnavailable ? emptyState(HISTORY_UNAVAILABLE_HINT, "status") : ""}
-    ${
-      recent.length === 0
-        ? emptyState(activityEmptyCopy(historyUnavailable))
-        : `<ul class="tx-list">${recent.map(transactionRow).join("")}</ul>`
-    }
-    ${
-      transactions.length > 0
-        ? button({
-            attributes: { "data-view": "activity" },
-            className: "tab-more",
-            icon: "chevronRight",
-            iconPosition: "after",
-            label: "View all activity",
-            size: "small",
-            variant: "ghost",
-          })
-        : ""
-    }`;
-};
 
 const tabButton = (tab: HomeTab): string =>
   `<button class="home-tab" id="home-tab-${tab}" data-home-tab="${tab}" type="button" role="tab" aria-selected="${tab === "tokens"}" aria-controls="home-panel-${tab}">${TAB_LABELS[tab]}</button>`;
@@ -232,49 +194,64 @@ export const homeTabs = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
-  transactions: readonly ActivityEntry[],
   status: WalletStatus,
-  historyUnavailable: boolean,
   discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => `
   <section class="home-tabs" data-active-tab="tokens" aria-label="Portfolio">
     <div class="tab-bar">
       <div class="tab-set" role="tablist" aria-label="Portfolio sections">
         ${HOME_TABS.map(tabButton).join("")}
-        <span class="tab-indicator" aria-hidden="true"></span>
       </div>
-      <div class="tab-actions" data-tab-actions="tokens">
+      <div class="portfolio-actions">
         ${iconButton({
-          attributes: { "data-view": "tokens" },
-          icon: "plus",
-          label: "Manage tokens",
+          attributes: {
+            "aria-controls": "portfolio-menu",
+            "aria-expanded": "false",
+            "aria-haspopup": "menu",
+            id: "portfolio-menu-trigger",
+          },
+          className: "portfolio-menu-trigger",
+          icon: "moreHorizontal",
+          label: "Portfolio actions",
           variant: "ghost",
         })}
-        ${iconButton({
-          attributes: { "data-reload-balances": true, id: "refresh-button" },
-          icon: "refresh",
-          label: "Refresh balances",
-          variant: "ghost",
-        })}
-      </div>
-      <div class="tab-actions" data-tab-actions="collectibles" hidden>
-        ${iconButton({
-          attributes: { "data-view": "nfts" },
-          icon: "plus",
-          label: "Manage collectibles",
-          variant: "ghost",
-        })}
-      </div>
-      <div class="tab-actions" data-tab-actions="activity" hidden>
-        ${iconButton({
-          attributes: { "data-view": "activity" },
-          icon: "activity",
-          label: "Open full activity",
-          variant: "ghost",
-        })}
+        <div class="portfolio-menu" id="portfolio-menu" role="menu" aria-label="Portfolio actions" hidden>
+          ${button({
+            attributes: { "data-view": "tokens", role: "menuitem", tabindex: "-1" },
+            className: "portfolio-menu-item",
+            icon: "coins",
+            label: "Manage tokens",
+            variant: "ghost",
+          })}
+          ${button({
+            attributes: { "data-view": "nfts", role: "menuitem", tabindex: "-1" },
+            className: "portfolio-menu-item",
+            icon: "image",
+            label: "Manage collectibles",
+            variant: "ghost",
+          })}
+          ${button({
+            attributes: { "data-view": "settings", role: "menuitem", tabindex: "-1" },
+            className: "portfolio-menu-item",
+            icon: "settings",
+            label: "Wallet settings",
+            variant: "ghost",
+          })}
+          ${button({
+            attributes: {
+              "data-reload-balances": true,
+              id: "refresh-button",
+              role: "menuitem",
+              tabindex: "-1",
+            },
+            className: "portfolio-menu-item",
+            icon: "refresh",
+            label: "Refresh portfolio",
+            variant: "ghost",
+          })}
+        </div>
       </div>
     </div>
     ${tabPanel("tokens", tokensPanel(state, preferences, prices, changes, currency))}
     ${tabPanel("collectibles", collectiblesPanel(status, preferences, discoveredNfts))}
-    ${tabPanel("activity", activityPanel(transactions, historyUnavailable))}
   </section>`;

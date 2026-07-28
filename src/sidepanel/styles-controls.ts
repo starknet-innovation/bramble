@@ -81,7 +81,7 @@ export const CONTROL_STYLES = `  /* Buttons: pill CTAs and circular icon buttons
     button.danger:not(:disabled):hover { background: var(--mc-danger-soft); }
   }
   button.icon-button, a.icon-button { flex: none; height: ${CONTROL.hit}; min-height: 0; padding: 0; width: ${CONTROL.hit}; }
-  button.icon-button:not(:disabled):active, a.icon-button:active { transform: scale(0.92); }
+  button.icon-button:not(:disabled):active, a.icon-button:active { transform: scale(0.96); }
   button.small { font-size: ${TYPE.label.size}; min-height: ${CONTROL.hitSmall}; padding: 0 ${SPACE.md}; }
   button:disabled, input:disabled, select:disabled, textarea:disabled {
     cursor: not-allowed;

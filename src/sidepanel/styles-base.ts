@@ -10,7 +10,7 @@
  * actions, active states, and focus use high-contrast neutral ink; only
  * positive/success and danger/failure semantics leave the monochrome palette.
  */
-import { CONTROL, FONT, MOTION, RADIUS, SPACE, TRACKING, TYPE, WEIGHT } from "../ui/tokens";
+import { CONTROL, FONT, MOTION, RADIUS, SIZE, SPACE, TRACKING, TYPE, WEIGHT } from "../ui/tokens";
 
 /**
  * Base stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -193,42 +193,26 @@ export const BASE_STYLES = `
   .account-net .dot { height: 6px; width: 6px; }
   .header-actions { align-items: center; display: flex; flex: none; gap: ${SPACE.xs}; }
 
-  /* Portfolio hero: the home screen's focal point. A quiet eyebrow label, the
-     total set as a large optically-sized figure, the 24h delta, then the
-     address chip. Centre-aligned as a single block — the eyebrow, total, delta,
-     and address chip all share one horizontal centre line — so the balance
-     reads as a calm, symmetric focal point with breathing room on both sides
-     (the client asked to move off the hard left edge). Spacing sits on the
-     4/8px grid: the eyebrow, total, and delta read as one tight 4px cluster,
-     with the address chip set apart by a full 8px step so it groups as its own
-     element and the number is given room to breathe. */
+  /* Portfolio hero: only the value and its time-bound change remain. Account
+     identity already lives in the persistent header, so repeating the address
+     and a "Total balance" label here would dilute the number's authority. */
   .hero {
     display: grid;
-    gap: ${SPACE.xs};
+    gap: 6px;
     justify-items: center;
-    padding: ${SPACE.sm} 0 0;
+    padding: ${SPACE.md} 0 0;
     text-align: center;
-  }
-  /* Muted, not fainter: an extra-faded tier fell below WCAG AA (≈2.4:1 on the
-     light skin), so the eyebrow reads quiet through size, weight, and case
-     while keeping the compliant muted ink. */
-  .hero-eyebrow {
-    color: var(--mc-muted);
-    font-size: ${TYPE.micro.size};
-    font-weight: ${WEIGHT.medium};
-    letter-spacing: ${TRACKING.eyebrow};
-    text-transform: uppercase;
   }
   /* The total carries real presence: large, heavy, tightly tracked, optically
      sized, and tabular so digits never jitter as prices stream. */
   .hero-total {
     color: var(--mc-text);
     font-optical-sizing: auto;
-    font-size: ${TYPE.amount.size};
+    font-size: ${TYPE.portfolio.size};
     font-variant-numeric: tabular-nums;
     font-weight: 800;
     letter-spacing: ${TRACKING.amount};
-    line-height: ${TYPE.amount.line};
+    line-height: ${TYPE.portfolio.line};
   }
   /* 24h delta: coloured magnitude (green up / red down) beside a muted
      "percent · 24h" window; tabular so digits never jitter as prices stream. */
@@ -254,62 +238,38 @@ export const BASE_STYLES = `
     gap: 5px;
   }
   .hero-stale .icon { height: 13px; width: 13px; }
-  button.hero-chip {
-    align-items: center;
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-muted);
-    cursor: pointer;
-    display: inline-flex;
-    font-family: var(--mc-font-mono);
-    font-size: ${TYPE.caption.size};
-    gap: 6px;
-    margin-top: ${SPACE.sm};
-    min-height: 0;
-    padding: 6px ${SPACE.md};
-  }
-  @media (hover: hover) and (pointer: fine) {
-    button.hero-chip:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
-  }
-  button.hero-chip:not(:disabled):active { background: var(--mc-soft-press); }
-  .hero-chip .icon { color: var(--mc-muted); height: 14px; width: 14px; }
 
-  /* Action tiles: borderless icon buttons — a plain icon over its label, no
-     box treatment (no fill, no hairline, no elevation, no boxy min-height), so
-     the row reads as clean icons rather than cards and the homepage breathes.
-     The two (Send / Receive) sit as a centred, equal-width pair beneath the
-     centred hero — a content-sized auto-column grid centred in the row rather
-     than stretched edge-to-edge, so removing the former third tile leaves the
-     pair balanced instead of drifting apart. Send stays subtly primary through
-     the accent tint on its icon alone — never a filled box. Feedback is a light
-     press scale plus a hover icon-brighten; the accent focus ring still frames
-     the whole hit target. */
+  /* The frequent money actions are equal rounded-square tools. Their common
+     shape makes the row instantly scannable; distinctive glyph silhouettes,
+     not decorative colour, distinguish the jobs. */
+  .home-actions { display: grid; gap: ${SPACE.md}; }
   .action-row {
-    display: flex;
-    gap: ${SPACE.xl};
-    justify-content: center;
-  }
-  button.action-tile {
-    align-content: start;
-    background: transparent;
-    border-radius: ${RADIUS.md};
-    color: var(--mc-text);
-    flex: 0 0 auto;
-    min-width: 88px;
     display: grid;
     gap: ${SPACE.sm};
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .action-tile {
+    align-content: center;
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.lg};
+    color: var(--mc-text);
+    display: grid;
+    gap: ${SPACE.xs};
     justify-items: center;
+    min-height: ${SIZE.actionTile};
     padding: ${SPACE.sm} ${SPACE.xs};
+    text-decoration: none;
     transition:
       background ${MOTION.pressMs}ms ${MOTION.ease},
       color ${MOTION.pressMs}ms ${MOTION.ease},
       transform ${MOTION.liftMs}ms var(--ease-out);
+    width: 100%;
   }
   @media (hover: hover) and (pointer: fine) {
-    button.action-tile:not(:disabled):hover { background: var(--mc-hover); }
-    button.action-tile:not(:disabled):hover .tile-label { color: var(--mc-text); }
+    .action-tile:not(:disabled):hover { background: var(--mc-hover); transform: translateY(-2px); }
+    .action-tile:not(:disabled):hover .tile-label { color: var(--mc-text); }
   }
-  button.action-tile:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.94); }
+  .action-tile:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.97); }
   button.action-tile:disabled { cursor: not-allowed; opacity: 0.4; }
   .tile-icon {
     align-items: center;
@@ -317,9 +277,45 @@ export const BASE_STYLES = `
     display: inline-flex;
     justify-content: center;
   }
-  button.action-tile.primary .tile-icon { color: var(--mc-accent); }
-  .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: 650; }
-  .tile-icon .icon { height: 24px; width: 24px; }
+  .tile-label { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-weight: ${WEIGHT.semibold}; }
+  .tile-icon .icon { height: ${CONTROL.icon}; stroke-width: 1.85; width: ${CONTROL.icon}; }
+
+  /* MC Terminal is the one promotional surface on Home: a compact, trusted
+     handoff with a real monitor glyph and a quieter explanatory second line. */
+  .terminal-cta {
+    align-items: center;
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.xl};
+    color: var(--mc-text);
+    display: grid;
+    gap: ${SPACE.md};
+    grid-template-columns: 40px minmax(0, 1fr) 20px;
+    min-height: 76px;
+    padding: ${SPACE.md};
+    text-decoration: none;
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      transform ${MOTION.liftMs}ms var(--ease-out);
+  }
+  .terminal-cta-icon {
+    align-items: center;
+    color: var(--mc-text);
+    display: inline-flex;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
+  }
+  .terminal-cta-icon .icon { height: 34px; stroke-width: 1.8; width: 34px; }
+  .terminal-cta-copy { display: grid; gap: 2px; min-width: 0; }
+  .terminal-cta-copy strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.bold}; }
+  .terminal-cta-copy span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
+  .terminal-cta-arrow { color: var(--mc-muted); display: inline-flex; transition: transform ${MOTION.liftMs}ms var(--ease-out); }
+  .terminal-cta-arrow .icon { height: 18px; width: 18px; }
+  @media (hover: hover) and (pointer: fine) {
+    .terminal-cta:hover { background: var(--mc-hover); transform: translateY(-1px); }
+    .terminal-cta:hover .terminal-cta-arrow { color: var(--mc-text); transform: translateX(2px); }
+  }
+  .terminal-cta:active { background: var(--mc-soft-press); transform: scale(0.985); }
 
   /* Bottom dock: an anchored, full-bleed bottom bar — a solid panel drawn to
      the panel edges, separated from scrolling content by a top hairline and
@@ -359,7 +355,7 @@ export const BASE_STYLES = `
        you are already on must never read as leaving it. */
     button.nav-item[aria-selected="true"]:not(:disabled):hover { color: var(--mc-accent); }
   }
-  button.nav-item:not(:disabled):active { background: transparent; transform: scale(0.96); }
+  button.nav-item:not(:disabled):active { background: transparent; transform: scale(0.97); }
   /* Active state is carried by ink alone — the accent tints the icon and its
      label, with inactive items muted — never a filled background pill behind
      it. The dock stays flat: no moving indicator, no accent-soft field. */

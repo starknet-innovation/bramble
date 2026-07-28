@@ -13,8 +13,8 @@ import {
   type MultisigDeployResponse,
   type MultisigsResponse,
 } from "../popup/multisig-responses";
-import { isErrorResponse, isTransferResponse } from "../popup/responses";
-import type { RuntimeApi } from "./runtime";
+import { isBalancesResponse, isErrorResponse, isTransferResponse } from "../popup/responses";
+import type { BalanceState, RuntimeApi } from "./runtime";
 
 const responseError = (response: unknown, fallback: string): Error =>
   new Error(isErrorResponse(response) ? response.error : fallback);
@@ -94,6 +94,15 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       } catch {
         return "error";
       }
+    },
+    async loadBalances(multisigId: string): Promise<BalanceState> {
+      const response = await sendMessage({ id: multisigId, type: "wallet.multisigBalances" });
+      if (isBalancesResponse(response) && response.accountId === multisigId) {
+        return { balances: response.balances };
+      }
+      return {
+        error: isErrorResponse(response) ? response.error : "multisig balances unavailable",
+      };
     },
     async loadMultisigs(): Promise<Pick<MultisigsResponse, "multisigs" | "proposals"> | "error"> {
       try {

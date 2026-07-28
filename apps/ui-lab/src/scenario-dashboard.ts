@@ -87,4 +87,6 @@ export const walletDashboard = (options: DashboardOptions = {}): string =>
     options.snoozed ?? [],
     options.multisigsError ?? false,
     options.multisigSync ?? null,
+    options.balanceState ?? { balances },
+    options.selectedMultisigId ?? null,
   );

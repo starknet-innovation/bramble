@@ -4,7 +4,7 @@ import { flowHeader } from "../../../src/sidepanel/parts";
 import { dockNavigation, menuLink, menuRow, optionRow } from "../../../src/ui/navigation";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
-import { discoveredNft, softwareActivity, statusFor } from "./fixtures";
+import { discoveredNft, statusFor } from "./fixtures";
 import {
   journeyBalances,
   journeyChanges,
@@ -73,9 +73,7 @@ export const TabsAndDock: CatalogStory = {
             journeyPrices,
             journeyChanges,
             "usd",
-            softwareActivity,
             statusFor(),
-            false,
             [discoveredNft],
           ),
         ),

@@ -10,6 +10,7 @@ export default meta;
 
 export const Connect = checkpointStory("Approval · connect", "approvals", "connect");
 export const Invoke = checkpointStory("Approval · transaction", "approvals", "invoke");
+export const Processing = checkpointStory("Approval · authorizing", "approvals", "processing");
 export const TypedData = checkpointStory("Approval · typed data", "approvals", "typed-data");
 export const PrivateInvoke = checkpointStory(
   "Approval · private transaction",
@@ -26,3 +27,4 @@ export const Queue = checkpointStory("Approval · request queue", "approvals", "
 export const Takeover = checkpointStory("Takeover · active request", "dapp", "takeover");
 export const ReceiptToken = checkpointStory("Takeover · receipt token", "dapp", "watch-asset");
 export const ReviewLater = checkpointStory("Takeover · review later", "dapp", "snoozed");
+export const ParkedRequests = checkpointStory("Takeover · parked list", "dapp", "parked-list");

@@ -4,13 +4,13 @@
  * returns through its back control, so journeys never blur into the home
  * screen.
  */
-import type { ConnectedSite, WalletStatus } from "../popup/responses";
+import type { ConnectedSite, TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { knownAccountType } from "../starknet/account-types";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import { isStarknetNetworkId } from "../starknet/networks";
-import type { WalletPreferences } from "../storage/preferences-store";
+import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { receipt } from "../ui/content";
 import { button } from "../ui/controls";
@@ -29,14 +29,23 @@ import {
   flowScreen,
   noAccountEmpty,
   type WalletView,
+  walletMenuRow,
 } from "./parts";
 import { qrSvg } from "./qr";
 import { sendFlow } from "./send-views";
+import {
+  appearanceFlow,
+  backupExportFlow,
+  backupRestoreFlow,
+  requestSettingsFlow,
+  securityFlow,
+} from "./settings-views";
 import { addressBookFlow, connectedSitesFlow } from "./support-flows";
 import { swapFlow } from "./swap-views";
 
 export { sendFlow } from "./send-views";
-export { addressBookFlow, backupFlow, connectedSitesFlow } from "./support-flows";
+export { backupHubFlow as backupFlow } from "./settings-views";
+export { addressBookFlow, connectedSitesFlow } from "./support-flows";
 
 /**
  * Receive flow: show and copy the active account address.
@@ -65,6 +74,36 @@ export const receiveFlow = (status: WalletStatus, account: AccountRef | null): s
           : noAccountEmpty(status)
       }
       <p id="receive-result" role="status"></p>
+    </section>`,
+  );
+
+/**
+ * Renders raw-key import as a dedicated security-sensitive task reached from
+ * the Add account chooser.
+ */
+export const importKeyFlow = (status: WalletStatus): string =>
+  flowHeader("Import private key", status, `Add a standalone account on ${status.network}`) +
+  flowScreen(
+    "import-key",
+    `<section class="section">
+      <p class="review-flag" role="note">Anyone with this key controls the account. Paste it only on a device you trust.</p>
+      <form id="import-key-form" class="stack">
+        ${textareaField({
+          autocomplete: "off",
+          hint: "The key is validated and stored inside the encrypted vault, never in plain settings.",
+          label: "Raw Starknet private key",
+          name: "rawKey",
+          placeholder: "0x…",
+          required: true,
+          spellcheck: false,
+        })}
+        ${button({
+          icon: "wallet",
+          label: "Import account",
+          type: "submit",
+        })}
+        <p id="import-key-result" role="status"></p>
+      </form>
     </section>`,
   );
 
@@ -98,9 +137,8 @@ const endpointDisclosure = (
   </details>`;
 
 /**
- * Network flow: pick the active network up top; custom endpoints (RPC, STRK20
- * prover, NFT indexer) sit behind collapsed disclosures so the expert plumbing
- * never crowds the primary task.
+ * Network flow: choose the active network without mixing infrastructure edits
+ * into the same task. Advanced endpoints are a deliberate second screen.
  */
 export const networkFlow = (status: WalletStatus, preferences: WalletPreferences | null): string =>
   flowHeader("Network", status, "Choose where the wallet operates") +
@@ -126,7 +164,30 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
       <p id="picker-result" role="status"></p>
     </section>
     <section class="section">
-      <p class="eyebrow">Advanced</p>
+      <div class="menu-list">
+        ${walletMenuRow(
+          "advanced-network",
+          "Advanced endpoints",
+          "settings",
+          rpcOverrideFor(status, preferences) ? "Custom RPC" : "Defaults",
+        )}
+      </div>
+    </section>`,
+  );
+
+/**
+ * Renders expert RPC, prover, and NFT-indexer endpoints away from the primary
+ * network picker. Every field preserves its existing privileged binding.
+ */
+export const advancedNetworkFlow = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): string =>
+  flowHeader("Advanced endpoints", status, "Only change infrastructure you trust") +
+  flowScreen(
+    "advanced-network",
+    `<section class="section">
+      <p class="review-flag" role="note">Custom endpoints can observe requests made through them. Leave a field empty to use the wallet default or keep that integration off.</p>
       <div class="disclosure-stack">
         ${endpointDisclosure(
           "rpc",
@@ -287,38 +348,6 @@ export const accountFlow = (
         <p id="picker-result" role="status"></p>
         <p id="new-account-result" role="status"></p>
       </section>
-      <section class="section">
-        <h2>Import private key</h2>
-        <p class="hint">Add a standalone account on ${escapeHtml(status.network)} from a raw Starknet key you already hold. The key is validated and stored in the encrypted vault, never in plain settings.</p>
-        <form id="import-key-form" class="stack">
-          ${textareaField({
-            autocomplete: "off",
-            hint: "Anyone with this key controls the account. Paste it only on a device you trust.",
-            label: "Raw private key",
-            name: "rawKey",
-            placeholder: "0x… (Starknet felt)",
-            required: true,
-            spellcheck: false,
-          })}
-          ${button({
-            icon: "wallet",
-            label: "Import account",
-            type: "submit",
-            variant: "secondary",
-          })}
-          <p id="import-key-result" role="status"></p>
-        </form>
-      </section>
-      <section class="section">
-        <h2>Connect a Ledger</h2>
-        <p class="hint">Add a hardware account on ${escapeHtml(status.network)} from a Ledger device. Its private key never leaves the device; this reads only public keys to build the account list. The account is counterfactual until its first transaction — fund its address with STRK before sending.</p>
-        ${button({
-          attributes: { "data-connect-ledger": true, id: "connect-ledger" },
-          icon: "shield",
-          label: "Connect a Ledger",
-          variant: "secondary",
-        })}
-      </section>
       ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}
       ${
         account
@@ -383,22 +412,36 @@ export const simpleFlowScreen = (
   ctx: {
     readonly account: AccountRef | null;
     readonly allowances: readonly AllowanceView[];
+    readonly balances: readonly TokenBalance[];
+    readonly changes: Readonly<Record<string, number>>;
     readonly classHashVerification: ClassHashVerification | null;
     readonly connectedSites: readonly ConnectedSite[];
+    readonly currency: DisplayCurrency;
     readonly expandedGroupId: string | null;
     readonly preferences: WalletPreferences | null;
+    readonly prices: Readonly<Record<string, number>>;
     readonly status: WalletStatus;
   },
 ): string | null => {
   switch (activeView) {
     case "send":
-      return sendFlow(ctx.status, ctx.account, ctx.preferences);
+      return sendFlow(
+        ctx.status,
+        ctx.account,
+        ctx.preferences,
+        ctx.balances,
+        ctx.prices,
+        ctx.changes,
+        ctx.currency,
+      );
     case "swap":
       return swapFlow(ctx.status, ctx.account);
     case "receive":
       return receiveFlow(ctx.status, ctx.account);
     case "network":
       return networkFlow(ctx.status, ctx.preferences);
+    case "advanced-network":
+      return advancedNetworkFlow(ctx.status, ctx.preferences);
     case "account":
       return accountFlow(
         ctx.status,
@@ -407,12 +450,24 @@ export const simpleFlowScreen = (
         ctx.expandedGroupId,
         ctx.classHashVerification,
       );
+    case "import-key":
+      return importKeyFlow(ctx.status);
     case "address-book":
       return addressBookFlow(ctx.status, ctx.preferences);
     case "connected-sites":
       return connectedSitesFlow(ctx.status, ctx.connectedSites);
     case "allowances":
       return allowancesFlow(ctx.status, ctx.account, ctx.allowances);
+    case "appearance":
+      return appearanceFlow(ctx.status, ctx.preferences);
+    case "request-settings":
+      return requestSettingsFlow(ctx.status, ctx.preferences);
+    case "security":
+      return securityFlow(ctx.status);
+    case "backup-export":
+      return backupExportFlow(ctx.status);
+    case "backup-restore":
+      return backupRestoreFlow(ctx.status);
     default:
       return null;
   }

@@ -1,0 +1,159 @@
+/**
+ * Pure state and field parsing for the Send binding. Keeping this model outside
+ * the DOM orchestration makes stage transitions and confirmation semantics
+ * explicit and independently testable.
+ */
+
+import { isStarkFieldElement, normalizeFeltInput, sameFelt } from "../starknet/networks";
+import type { ActivityEntry } from "../storage/activity-store";
+import { errorMessage } from "./dom";
+
+/**
+ * Friendly validation copy shared by the recipient screen and review failures.
+ */
+export const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
+
+const INVALID_REVIEW_ERRORS = new Set([
+  "invalid nft transfer review request",
+  "invalid transfer review request",
+]);
+
+/**
+ * Returns an inline error for a malformed Starknet address. Normalization keeps
+ * the check aligned with the background and accepts mixed-case hex.
+ */
+export const recipientFieldError = (recipient: string): string | null =>
+  isStarkFieldElement(normalizeFeltInput(recipient)) ? null : INVALID_RECIPIENT_MESSAGE;
+
+/**
+ * Maps a malformed-recipient background error onto the same friendly copy.
+ */
+export const friendlyReviewError = (error: unknown): string => {
+  const message = errorMessage(error, "Transfer review failed");
+  return INVALID_REVIEW_ERRORS.has(message) ? INVALID_RECIPIENT_MESSAGE : message;
+};
+
+/**
+ * Deterministic screens owned by the Send state machine.
+ */
+export type TransferStage =
+  | "asset"
+  | "authorizing"
+  | "broadcasting"
+  | "confirming"
+  | "details"
+  | "failed"
+  | "pending"
+  | "recipient"
+  | "review"
+  | "reviewing"
+  | "submitted";
+
+/**
+ * User-visible transaction fields frozen at review.
+ */
+export type TransferFields = {
+  readonly accountId: string;
+  readonly amount: string;
+  readonly fiatEstimate: string;
+  readonly recipient: string;
+  readonly recipientLabel: string;
+  readonly signer: "ledger" | "software";
+  readonly speed: "fast" | "standard";
+  readonly tokenAddress: string;
+  readonly tokenBalance: string;
+  readonly tokenDecimals: string;
+  readonly tokenFormatted: string;
+  readonly tokenId: string;
+  readonly tokenPrice: string;
+  readonly tokenSymbol: string;
+};
+
+/**
+ * Persisted Send state retained across shell repaints.
+ */
+export type TransferState<Review> = {
+  readonly error: string;
+  readonly fields: TransferFields | null;
+  readonly requiresDeployment: boolean;
+  readonly review: Review | null;
+  readonly reviewedKey: string | null;
+  readonly stage: TransferStage;
+  readonly transactionHash: string | null;
+};
+
+/**
+ * Fresh recipient-first state.
+ */
+export const initialTransferState = <Review>(): TransferState<Review> => ({
+  error: "",
+  fields: null,
+  requiresDeployment: false,
+  review: null,
+  reviewedKey: null,
+  stage: "recipient",
+  transactionHash: null,
+});
+
+/**
+ * Reads the trusted extension form into the transaction snapshot submitted to
+ * the privileged runtime. Hidden presentation fields are retained only so the
+ * exact review can be restored after a shell repaint.
+ */
+export const transferFields = (form: HTMLFormElement): TransferFields => {
+  const data = new FormData(form);
+  return {
+    accountId: String(data.get("accountId") ?? ""),
+    amount: String(data.get("amount") ?? "").trim(),
+    fiatEstimate: String(data.get("fiatEstimate") ?? ""),
+    recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
+    recipientLabel: String(data.get("recipientLabel") ?? "").trim(),
+    signer: form.dataset["signer"] === "ledger" ? "ledger" : "software",
+    speed: data.get("speed") === "fast" ? "fast" : "standard",
+    tokenAddress: String(data.get("tokenAddress") ?? ""),
+    tokenBalance: String(data.get("tokenBalance") ?? "0"),
+    tokenDecimals: String(data.get("tokenDecimals") ?? "0"),
+    tokenFormatted: String(data.get("tokenFormatted") ?? "0"),
+    tokenId: String(data.get("tokenId") ?? ""),
+    tokenPrice: String(data.get("tokenPrice") ?? ""),
+    tokenSymbol: String(data.get("tokenSymbol") ?? "token"),
+  };
+};
+
+/**
+ * Stable review cache key. Presentation-only fiat data is excluded so a price
+ * refresh cannot silently change the transaction being authorized.
+ */
+export const transferKey = (fields: TransferFields): string =>
+  JSON.stringify({
+    accountId: fields.accountId,
+    amount: fields.amount,
+    recipient: fields.recipient,
+    speed: fields.speed,
+    tokenId: fields.tokenId,
+  });
+
+/**
+ * Finds the current chain status for one submitted hash.
+ */
+export const confirmationStatus = (
+  entries: readonly ActivityEntry[],
+  transactionHash: string,
+): ActivityEntry["status"] | null =>
+  entries.find((entry) => sameFelt(entry.hash, transactionHash))?.status ?? null;
+
+/**
+ * Human-readable title for the current Send checkpoint.
+ */
+export const transferStageTitle = (stage: TransferStage): string => {
+  if (stage === "recipient") return "Send to";
+  if (stage === "asset") return "Select an asset";
+  if (stage === "details") return "Send";
+  if (stage === "review" || stage === "reviewing") return "Review send";
+  if (stage === "authorizing") return "Authorize send";
+  if (stage === "broadcasting") return "Sending";
+  if (stage === "confirming") return "Confirming";
+  if (stage === "pending") return "Confirmation pending";
+  if (stage === "submitted") return "Confirmed";
+  return "Send failed";
+};

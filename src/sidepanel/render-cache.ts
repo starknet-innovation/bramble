@@ -33,6 +33,10 @@ export type RenderData = {
   multisigsError: boolean;
   multisigSync: "current" | "error" | null;
   multisigClassDeclared: boolean | "error" | null;
+  multisigBalanceId: string | null;
+  multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
+  multisigNftId: string | null;
+  multisigNfts: Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>;
   balances: Awaited<ReturnType<SidepanelWallet["loadBalances"]>>;
   chart: readonly number[];
   classHashVerification: Awaited<ReturnType<SidepanelWallet["loadClassHashVerification"]>>;
@@ -88,6 +92,10 @@ export const updateRenderScope = (cache: RenderData, status: WalletStatus): void
       ? {
           ...emptyActivityCache(),
           ...emptyNftCache(),
+          multisigBalanceId: null,
+          multisigBalances: { error: "multisig balances unavailable" },
+          multisigNftId: null,
+          multisigNfts: [],
           multisigSync: null,
           multisigsError: false,
         }
@@ -107,6 +115,10 @@ export const emptyRenderCache = (): RenderData => ({
   multisigsError: false,
   multisigSync: null,
   multisigClassDeclared: null,
+  multisigBalanceId: null,
+  multisigBalances: { error: "multisig balances unavailable" },
+  multisigNftId: null,
+  multisigNfts: [],
   balances: { error: "wallet locked" },
   chart: [],
   classHashVerification: null,

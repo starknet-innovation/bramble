@@ -111,55 +111,78 @@ export const HOME_STYLES = `
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(4) { animation-delay: 90ms; }
   .drawer-root.is-opening[data-open="true"] .drawer-list li:nth-child(5) { animation-delay: 120ms; }
 
-  /* Portfolio tabs: text tabs, sliding accent indicator, trailing actions */
+  /* Portfolio navigation: two large text destinations and one overflow menu.
+     Active state is carried by high-contrast type alone — no underline, pill,
+     or duplicated Activity destination. */
   .home-tabs { display: grid; gap: ${SPACE.sm}; }
-  .tab-bar { align-items: center; display: flex; gap: ${SPACE.sm}; min-height: 36px; }
+  .tab-bar { align-items: center; display: flex; gap: ${SPACE.md}; min-height: 44px; }
   .tab-set {
     display: flex;
     flex: 1;
-    gap: 2px;
+    gap: ${SPACE.xl};
     min-width: 0;
-    padding-bottom: 6px;
-    position: relative;
   }
   button.home-tab {
     background: transparent;
-    border-radius: ${RADIUS.sm};
     color: var(--mc-muted);
-    font-size: ${TYPE.body.size};
+    font-size: ${TYPE.title.size};
     font-weight: 700;
-    min-height: 30px;
-    padding: 0 10px;
+    min-height: 40px;
+    padding: 0;
     transition: color ${MOTION.pressMs}ms ${MOTION.ease}, transform ${MOTION.liftMs}ms var(--ease-out);
   }
   @media (hover: hover) and (pointer: fine) {
     button.home-tab:not(:disabled):hover { background: transparent; color: var(--mc-text); }
-    /* The selected tab keeps its high-contrast ink under the pointer (see the dock). */
-    button.home-tab[aria-selected="true"]:not(:disabled):hover { color: var(--mc-accent); }
+    button.home-tab[aria-selected="true"]:not(:disabled):hover { color: var(--mc-text); }
   }
-  button.home-tab:not(:disabled):active { background: transparent; transform: scale(0.95); }
-  /* Active tab: no box/pill fill — a flat text tab that reads as selected via
-     high-contrast neutral ink (matching the sliding .tab-indicator underline
-     and borderless dock highlight). Inactive tabs stay muted; alignment plus
-     contrast carry the state without any background. */
-  button.home-tab[aria-selected="true"] { color: var(--mc-accent); }
-  /* The underline glides between tabs on the snappy spring — critically damped
-     (no overshoot), settling from the current position so rapid tab taps
-     retarget smoothly instead of restarting. */
-  .tab-indicator {
-    background: var(--mc-accent);
-    border-radius: ${RADIUS.full};
-    bottom: 0;
-    height: 3px;
-    left: 0;
+  button.home-tab:not(:disabled):active { background: transparent; transform: scale(0.98); }
+  button.home-tab[aria-selected="true"] { color: var(--mc-text); }
+  .portfolio-actions { flex: none; position: relative; }
+  button.portfolio-menu-trigger { color: var(--mc-muted); height: 40px; width: 40px; }
+  button.portfolio-menu-trigger .icon { height: 21px; width: 21px; }
+  button.portfolio-menu-trigger[aria-expanded="true"] { background: var(--mc-hover); color: var(--mc-text); }
+  .portfolio-menu {
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.lg};
+    box-shadow: var(--mc-elev-lg);
+    display: grid;
+    opacity: 1;
+    padding: 6px;
     position: absolute;
-    transition: transform var(--spring-snappy-ms) var(--spring-snappy), width var(--spring-snappy-ms) var(--spring-snappy);
-    width: 24px;
+    right: 0;
+    top: calc(100% + 6px);
+    transform: translateY(0) scale(1);
+    transform-origin: top right;
+    transition:
+      opacity ${MOTION.liftMs}ms var(--ease-out),
+      transform ${MOTION.liftMs}ms var(--ease-out);
+    width: min(264px, calc(100vw - 32px));
+    z-index: 12;
   }
-  .tab-actions { align-items: center; display: flex; flex: none; gap: 2px; margin-bottom: 6px; }
-  .tab-actions .icon-button { height: 32px; width: 32px; }
+  @starting-style {
+    .portfolio-menu:not([hidden]) {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.98);
+    }
+  }
+  .portfolio-menu[hidden] { display: none; }
+  button.portfolio-menu-item {
+    background: transparent;
+    border-radius: ${RADIUS.md};
+    color: var(--mc-text);
+    font-size: ${TYPE.body.size};
+    font-weight: 500;
+    justify-content: flex-start;
+    min-height: 46px;
+    padding: 0 ${SPACE.md};
+    width: 100%;
+  }
+  button.portfolio-menu-item .icon { color: var(--mc-muted); height: 20px; width: 20px; }
+  @media (hover: hover) and (pointer: fine) {
+    button.portfolio-menu-item:not(:disabled):hover { background: var(--mc-hover); color: var(--mc-text); }
+    button.portfolio-menu-item:not(:disabled):hover .icon { color: var(--mc-text); }
+  }
   .tab-panel { display: grid; gap: ${SPACE.sm}; }
-  .tab-panel.is-entering { animation: panel-enter ${MOTION.enterMs}ms var(--ease-out) both; }
   .panel-error { display: grid; gap: ${SPACE.sm}; justify-items: center; text-align: center; }
   .panel-error .empty { margin: 0; }
   .panel-error button { gap: 4px; }
@@ -179,7 +202,7 @@ export const HOME_STYLES = `
      aligns the tiles. Tapping a tile opens its detail; hover tints the name and
      lifts the art with a soft shadow (no box behind the caption). */
   .collectible-grid { display: grid; gap: ${SPACE.md}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  button.collectible-card {
+  .collectible-card {
     align-content: start;
     background: transparent;
     border-radius: ${RADIUS.md};
@@ -229,8 +252,8 @@ export const HOME_STYLES = `
   .collectible-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
 
   /* Copy confirmation: the glyph flips to a success-green check, then back */
-  button.copy-confirm, .hero-chip.copy-confirm .icon { color: var(--mc-positive); }
-  .copy-confirm .icon { animation: glyph-pop ${MOTION.tabMs}ms ${MOTION.ease} both; }
+  button.copy-confirm { color: var(--mc-positive); }
+  .copy-confirm .icon { animation: glyph-pop ${MOTION.liftMs}ms var(--ease-out) both; }
 
   /* Busy refresh controls spin their glyph until work settles */
   button[data-busy] .icon { animation: none; }
@@ -239,22 +262,11 @@ export const HOME_STYLES = `
   #swap-confirm-button[data-busy] .icon,
   #detect-tokens[data-busy] .icon { animation: spin 800ms linear infinite; }
 
-  /* Motion: scene entrances stagger the hero, tiles, and first rows with the
-     strong ease-out curve; screens enter under the direction-aware view
-     transition, this cascade brings their content in behind it. */
+  /* Motion: the scene owns one small fallback entrance when the View
+     Transitions API is unavailable. Child balances, actions, and rows do not
+     replay their own cascade on ordinary navigation; frequent wallet use must
+     feel immediate rather than staged. */
   .shell-animate .screen { animation: screen-enter ${MOTION.enterMs}ms var(--ease-out) both; }
-  .shell-animate .hero-eyebrow,
-  .shell-animate .hero-total,
-  .shell-animate .hero-change { animation: rise-in ${MOTION.enterMs}ms var(--ease-out) both; }
-  .shell-animate .action-tile { animation: rise-in 240ms var(--ease-out) both; }
-  .shell-animate .action-tile:nth-child(2) { animation-delay: 40ms; }
-  .shell-animate .token-list li { animation: rise-in 260ms var(--ease-out) both; }
-  .shell-animate .token-list li:nth-child(1) { animation-delay: 40ms; }
-  .shell-animate .token-list li:nth-child(2) { animation-delay: 70ms; }
-  .shell-animate .token-list li:nth-child(3) { animation-delay: 100ms; }
-  .shell-animate .token-list li:nth-child(4) { animation-delay: 130ms; }
-  .shell-animate .token-list li:nth-child(5) { animation-delay: 160ms; }
-  .shell-animate .token-list li:nth-child(6) { animation-delay: 190ms; }
   /* Entrances are small, GPU-only (opacity + a few px of translate) and settle
      under 300ms. screen-enter and panel-enter drop their transform in the end
      frame so containers leave nothing lingering; rise-in stays on leaf
@@ -276,24 +288,33 @@ export const HOME_STYLES = `
     to { opacity: 1; transform: translateX(0); }
   }
   @keyframes glyph-pop {
-    from { opacity: 0; transform: scale(0.4); }
+    from { opacity: 0; transform: scale(0.92); }
     to { opacity: 1; transform: scale(1); }
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* Reduced motion: every animation and transition collapses to a cut, and
-     hover lifts and press scales settle to static states */
+  /* Reduced motion removes travel, scale, spin, and drawer movement while
+     retaining a brief opacity/colour response. Feedback still lands; nothing
+     crosses the viewport or changes apparent size. */
   @media (prefers-reduced-motion: reduce) {
-    .shell-animate .screen, .shell-animate .hero-eyebrow, .shell-animate .hero-total,
-    .shell-animate .hero-change, .shell-animate .action-tile,
-    .shell-animate .token-list li, .tab-panel.is-entering,
+    .shell-animate .screen,
     .drawer-root[data-open="true"] .drawer-list li, .copy-confirm .icon,
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
     #detect-tokens[data-busy] .icon,
     #swap-confirm-button[data-busy] .icon { animation: none; }
-    button, input, select, textarea, .tab-indicator, .tab-icon,
+    button, input, select, textarea, .terminal-cta, .terminal-cta-arrow {
+      transition:
+        background ${MOTION.pressMs}ms ${MOTION.ease},
+        color ${MOTION.pressMs}ms ${MOTION.ease},
+        opacity ${MOTION.pressMs}ms ${MOTION.ease};
+    }
     .account-drawer, .drawer-backdrop, .account-name .icon { transition: none; }
+    .portfolio-menu {
+      transform: none;
+      transition: opacity ${MOTION.pressMs}ms ${MOTION.ease};
+    }
     button.collectible-card:not(:disabled):hover,
+    .terminal-cta:hover, .terminal-cta:active, .terminal-cta:hover .terminal-cta-arrow,
     .account-trigger[aria-expanded="true"] .account-name .icon { transform: none; }
     .swap-success-ring, .swap-success-check { animation: none; stroke-dashoffset: 0; }
     .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint { animation: none; }

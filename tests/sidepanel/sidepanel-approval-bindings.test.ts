@@ -30,7 +30,17 @@ describe("bindApprovals", () => {
   test("locks every action and repaints after a consumed approval fails", async () => {
     const id = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
     const host = document.createElement("div");
-    host.innerHTML = `<button data-approval-action="approve" data-approval-id="${id}">Approve</button><button data-approval-action="deny" data-approval-id="${id}">Deny</button><button data-approval-later="${id}">Later</button><p id="approval-result"></p>`;
+    host.innerHTML = `
+      <article class="request-card">
+        <button data-approval-action="approve" data-approval-id="${id}">Approve</button>
+        <button data-approval-action="deny" data-approval-id="${id}">Deny</button>
+      </article>
+      <section id="approval-live" hidden>
+        <strong id="approval-live-title"></strong>
+        <p id="approval-live-copy"></p>
+      </section>
+      <button data-approval-later="${id}">Later</button>
+      <p id="approval-result"></p>`;
     document.body.replaceChildren(host);
     const decisions: boolean[] = [];
     let rejectDecision!: (error: Error) => void;
@@ -65,6 +75,12 @@ describe("bindApprovals", () => {
     expect(approve?.disabled).toBe(true);
     expect(deny?.disabled).toBe(true);
     expect(later?.disabled).toBe(true);
+    expect(host.querySelector<HTMLElement>(".request-card")?.dataset["state"]).toBe("working");
+    expect(host.querySelector<HTMLElement>("#approval-live")?.hidden).toBe(false);
+    expect(host.querySelector("#approval-live-title")?.textContent).toBe("Authorizing request");
+    expect(host.querySelector("#approval-live-copy")?.textContent).toContain(
+      "locked while the wallet signs and submits",
+    );
     expect(host.querySelector("#approval-result")?.textContent).toBe(
       "Approved. Signing and broadcasting…",
     );

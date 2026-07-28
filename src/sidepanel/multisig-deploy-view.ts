@@ -4,32 +4,70 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { sameFelt } from "../starknet/networks";
+import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { pill } from "../ui/content";
+import { emptyState, pill } from "../ui/content";
 import { button } from "../ui/controls";
-import { textareaField, textField } from "../ui/fields";
+import { inputControl, textField } from "../ui/fields";
 import { icon } from "./icons";
-import { accountLabel, flowHeader, flowScreen, hardwareBadge, noAccountEmpty } from "./parts";
+import {
+  accountAvatar,
+  accountDisplayName,
+  accountLabel,
+  flowHeader,
+  flowScreen,
+  hardwareBadge,
+  noAccountEmpty,
+} from "./parts";
 
-// A picker of this wallet's accounts on the active network, each inserting its
-// address into the signers field. It intentionally retains a domain-specific
-// rich button because its code value and hardware badge are compound content.
-const signerPicker = (status: WalletStatus): string => {
-  const accounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
-  if (accounts.length === 0) {
-    return "";
-  }
-  const rows = accounts
-    .map(
-      (stored) =>
-        `<button class="secondary small" data-signer-insert="${escapeHtml(stored.address)}" type="button">${icon("plus")}<code>${escapeHtml(accountLabel(stored.address))}</code>${hardwareBadge(stored)}</button>`,
-    )
-    .join("");
-  return `<div class="stack">
-    <span class="hint">Add a signer from this wallet's accounts:</span>
-    <div class="row wrap">${rows}</div>
-  </div>`;
+type SignerCandidate = {
+  readonly account?: AccountRef;
+  readonly address: string;
+  readonly label: string;
+  readonly source: "Address book" | "My accounts";
 };
+
+const signerCandidates = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): readonly SignerCandidate[] => {
+  const accounts = status.accounts
+    .filter((stored) => stored.networkId === status.networkId)
+    .map((stored) => ({
+      account: stored,
+      address: stored.address,
+      label: accountDisplayName(stored, preferences),
+      source: "My accounts" as const,
+    }));
+  const contacts = (preferences?.addressBook ?? [])
+    .filter(
+      (entry) =>
+        entry.networkId === status.networkId &&
+        !accounts.some((stored) => sameFelt(stored.address, entry.address)),
+    )
+    .map((entry) => ({
+      address: entry.address,
+      label: entry.label,
+      source: "Address book" as const,
+    }));
+  return [...accounts, ...contacts];
+};
+
+const signerOption = (candidate: SignerCandidate, selected: boolean): string => `
+  <button class="multisig-signer-option" type="button"
+    aria-pressed="${selected}"
+    data-signer-insert="${escapeHtml(candidate.address)}"
+    data-signer-toggle="${escapeHtml(candidate.address)}"
+    data-signer-label="${escapeHtml(candidate.label)}"
+    data-signer-search="${escapeHtml(`${candidate.label} ${candidate.address}`.toLowerCase())}">
+    <span class="send-recipient-avatar">${accountAvatar(candidate.address)}</span>
+    <span class="send-recipient-copy">
+      <strong>${escapeHtml(candidate.label)}${candidate.account ? hardwareBadge(candidate.account) : ""}</strong>
+      <span>${escapeHtml(candidate.source)} · <code>${escapeHtml(accountLabel(candidate.address))}</code></span>
+    </span>
+    <span class="multisig-signer-check">${icon("check")}</span>
+  </button>`;
 
 /**
  * Renders the deploy form for a new multisig from the pinned class, including
@@ -39,12 +77,14 @@ export const multisigDeployFlow = (
   status: WalletStatus,
   account: AccountRef | null,
   declared: boolean | "error" | null,
+  preferences: WalletPreferences | null = null,
 ): string => {
   if (!account) {
     return (
       flowHeader("Deploy multisig", status) + flowScreen("multisig-deploy", noAccountEmpty(status))
     );
   }
+  const candidates = signerCandidates(status, preferences);
   return (
     flowHeader("Deploy multisig", status) +
     flowScreen(
@@ -74,43 +114,81 @@ export const multisigDeployFlow = (
               ? '<p class="hint">Checking whether the multisig class is declared on this network…</p>'
               : ""
       }
-      <form id="multisig-deploy-form">
-        ${textareaField({
-          autocomplete: "off",
-          className: "mono",
-          label: "Signer addresses (one per line)",
-          name: "signers",
-          required: true,
-          rows: 4,
-          spellcheck: false,
-          value: account.address,
-        })}
-        ${signerPicker(status)}
-        ${textField({
-          autocomplete: "off",
-          inputmode: "numeric",
-          label: "Quorum (confirmations required)",
-          name: "quorum",
-          required: true,
-          value: "1",
-        })}
-        ${textField({
-          autocomplete: "off",
-          className: "mono",
-          label: "Salt",
-          name: "salt",
-          spellcheck: false,
-          value: "0x0",
-        })}
-        <span class="hint">The contract address is derived from the class, signers, quorum, and salt — the same inputs always produce the same address on every network. Name it after it finalizes, when you add it to your watched multisigs.</span>
-        ${button({
-          disabled: declared !== true,
-          icon: "send",
-          label: "Deploy multisig",
-          type: "submit",
-          variant: "secondary",
-        })}
-        <p id="multisig-deploy-result" role="status"></p>
+      <form id="multisig-deploy-form" data-stage="signers">
+        <input name="signers" type="hidden" value="${escapeHtml(account.address)}" />
+        <section class="multisig-deploy-stage" data-deploy-stage="signers">
+          <div class="proposal-compose-intro">
+            <span class="proposal-compose-mark">${icon("users")}</span>
+            <div><strong>Choose the people who approve</strong><p>Select wallet accounts and saved contacts. You can add another address too.</p></div>
+          </div>
+          <label class="send-search">
+            <span>Find a signer</span>
+            <span class="send-search-control">${icon("search")}${inputControl({
+              ariaLabel: "Search accounts and contacts",
+              attributes: { id: "multisig-signer-search" },
+              autocomplete: "off",
+              placeholder: "Name or address",
+              spellcheck: false,
+              type: "search",
+            })}</span>
+          </label>
+          <div class="multisig-signer-list">
+            ${candidates.length > 0 ? candidates.map((candidate) => signerOption(candidate, sameFelt(candidate.address, account.address))).join("") : emptyState("No accounts or contacts are available.")}
+          </div>
+          <div class="multisig-custom-signer">
+            ${inputControl({
+              ariaLabel: "Custom signer address",
+              attributes: { id: "multisig-custom-signer" },
+              autocomplete: "off",
+              className: "mono",
+              placeholder: "Add another 0x… address",
+              spellcheck: false,
+            })}
+            ${button({
+              attributes: { id: "multisig-custom-signer-add" },
+              icon: "plus",
+              label: "Add",
+              size: "small",
+              variant: "secondary",
+            })}
+          </div>
+          <p class="hint" id="multisig-selected-count">1 signer selected</p>
+          ${button({
+            attributes: { id: "multisig-signers-continue" },
+            label: "Continue to approval rules",
+            variant: "secondary",
+          })}
+        </section>
+        <section class="multisig-deploy-stage" data-deploy-stage="rules" hidden>
+          <button class="proposal-inline-back" id="multisig-signers-back" type="button">${icon("chevronLeft")} Edit signers</button>
+          <div class="multisig-selected-summary" id="multisig-selected-summary"></div>
+          ${textField({
+            autocomplete: "off",
+            inputmode: "numeric",
+            label: "Approvals required",
+            name: "quorum",
+            required: true,
+            value: "1",
+          })}
+          ${textField({
+            autocomplete: "off",
+            className: "mono",
+            label: "Deployment salt",
+            name: "salt",
+            spellcheck: false,
+            value: "0x0",
+          })}
+          <p class="hint">The signer set, approval threshold, class and salt deterministically derive this shared account address.</p>
+          <div id="multisig-deploy-review" aria-live="polite"></div>
+          ${button({
+            disabled: declared !== true,
+            icon: "send",
+            label: "Review deployment",
+            type: "submit",
+            variant: "secondary",
+          })}
+          <p id="multisig-deploy-result" role="status"></p>
+        </section>
       </form>
     </section>`,
     )

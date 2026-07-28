@@ -1,16 +1,11 @@
-import {
-  discoveredNft,
-  ledgerAccount,
-  softwareAccount,
-  softwareActivity,
-  statusFor,
-} from "./fixtures";
+import type { HomeTab } from "../../../src/sidepanel/home-tabs";
+import { bindHomeUi } from "../../../src/sidepanel/home-ui";
+import type { SidepanelWallet } from "../../../src/sidepanel/runtime";
+import { discoveredNft, softwareAccount, statusFor } from "./fixtures";
 import {
   allowances,
-  connectedSites,
   ETH_TOKEN,
   emptyNetworkStatus,
-  importedStatus,
   journeyBalances,
   journeyChanges,
   journeyPreferences,
@@ -20,32 +15,67 @@ import {
 import { walletDashboard } from "./scenario-dashboard";
 import type { FrameContext, WalletScenario } from "./types";
 
+const bindFixtureHome = (context: FrameContext): void => {
+  let tab: HomeTab = context.app.querySelector(
+    '[data-home-tab="collectibles"][aria-selected="true"]',
+  )
+    ? "collectibles"
+    : "tokens";
+  let drawerOpen = context.app.querySelector(".drawer-root")?.getAttribute("data-open") === "true";
+  let drawerGroupFilter: string | null = null;
+  const wallet = {
+    addAccount: async () => softwareAccount.id,
+    loadStatus: async () => statusFor(),
+    setAccountInGroup: async () => undefined,
+    setActiveAccount: async () => undefined,
+  } as unknown as SidepanelWallet;
+  bindHomeUi({
+    app: context.app,
+    drawerGroupFilter: () => drawerGroupFilter,
+    drawerOpen: () => drawerOpen,
+    homeTab: () => tab,
+    networkId: () => "SN_MAIN",
+    render: async () => undefined,
+    setDrawerGroupFilter: (value) => {
+      drawerGroupFilter = value;
+    },
+    setDrawerOpen: (value) => {
+      drawerOpen = value;
+    },
+    setHomeTab: (value) => {
+      tab = value;
+    },
+    wallet,
+  });
+};
+
 const selectHomeTab =
-  (tab: "activity" | "collectibles") =>
+  (tab: "collectibles") =>
   (context: FrameContext): void => {
-    const root = context.app.querySelector<HTMLElement>(".home-tabs");
-    if (!root) {
+    bindFixtureHome(context);
+    const control = context.app.querySelector<HTMLButtonElement>(`[data-home-tab="${tab}"]`);
+    if (!control) {
       throw new Error("Missing production portfolio tabs");
     }
-    root.dataset["activeTab"] = tab;
-    root.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
-      button.setAttribute("aria-selected", String(button.dataset["homeTab"] === tab));
-    });
-    root.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
-      panel.toggleAttribute("hidden", panel.dataset["tabPanel"] !== tab);
-    });
-    root.querySelectorAll<HTMLElement>("[data-tab-actions]").forEach((actions) => {
-      actions.toggleAttribute("hidden", actions.dataset["tabActions"] !== tab);
-    });
+    control.click();
   };
 
 const openDrawer = (context: FrameContext): void => {
-  const drawer = context.app.querySelector<HTMLElement>(".drawer-root");
-  if (!drawer) {
+  bindFixtureHome(context);
+  const trigger = context.app.querySelector<HTMLButtonElement>("#account-trigger");
+  if (!trigger) {
     throw new Error("Missing production account drawer");
   }
-  drawer.dataset["open"] = "true";
-  context.app.querySelector<HTMLElement>("#account-trigger")?.setAttribute("aria-expanded", "true");
+  trigger.click();
+};
+
+const openPortfolioMenu = (context: FrameContext): void => {
+  bindFixtureHome(context);
+  const trigger = context.app.querySelector<HTMLButtonElement>("#portfolio-menu-trigger");
+  if (!trigger) {
+    throw new Error("Missing production portfolio actions");
+  }
+  trigger.click();
 };
 
 export const portfolioScenario: WalletScenario = {
@@ -61,8 +91,42 @@ export const portfolioScenario: WalletScenario = {
       id: "ready",
       label: "Portfolio ready",
       narrative:
-        "Balances, fiat value, change, actions, and tracked assets form the home overview.",
-      state: { assets: 4, pricing: "current", tab: "tokens" },
+        "Balances, fiat value, change, four compact actions, and tracked assets form the home overview.",
+      prepare: bindFixtureHome,
+      state: { actions: 4, assets: 4, pricing: "current", tab: "tokens" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          changes: journeyChanges,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+        }),
+      id: "major-actions",
+      label: "Four major actions",
+      narrative:
+        "Send, Swap, Receive, and the Terminal portfolio share one compact row of 60-pixel square tools.",
+      prepare: bindFixtureHome,
+      state: {
+        actions: ["send", "swap", "receive", "terminal-portfolio"],
+        density: "extra-compact",
+      },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: { balances: journeyBalances },
+          changes: journeyChanges,
+          preferences: journeyPreferences,
+          prices: journeyPrices,
+        }),
+      id: "quick-actions",
+      label: "Portfolio quick actions",
+      narrative:
+        "One overflow menu progressively discloses asset management, settings, and refresh.",
+      prepare: openPortfolioMenu,
+      state: { actions: 4, disclosure: "open" },
     },
     {
       content: () =>
@@ -78,21 +142,6 @@ export const portfolioScenario: WalletScenario = {
       narrative: "The owned collectible appears at useful gallery scale without leaving Home.",
       prepare: selectHomeTab("collectibles"),
       state: { artwork: "ready", tab: "collectibles" },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          activity: softwareActivity,
-          balanceState: { balances: journeyBalances },
-          preferences: journeyPreferences,
-          prices: journeyPrices,
-        }),
-      id: "recent-activity",
-      label: "Recent activity tab",
-      narrative:
-        "Recent account-scoped transactions are accessible without losing portfolio context.",
-      prepare: selectHomeTab("activity"),
-      state: { entries: 2, tab: "activity" },
     },
     {
       content: () =>
@@ -120,6 +169,7 @@ export const portfolioScenario: WalletScenario = {
       label: "Counterfactual account",
       narrative:
         "An undeployed account exposes a precise deploy action before the user tries to send.",
+      prepare: bindFixtureHome,
       state: { accountDeployment: "required", fundsAtRisk: false },
     },
     {
@@ -134,6 +184,7 @@ export const portfolioScenario: WalletScenario = {
       label: "Prices unavailable",
       narrative:
         "Known token balances remain useful while unavailable fiat pricing is stated honestly.",
+      prepare: bindFixtureHome,
       state: { balances: "available", pricing: "unavailable" },
     },
     {
@@ -147,6 +198,7 @@ export const portfolioScenario: WalletScenario = {
       label: "Balance refresh failed",
       narrative:
         "A transport failure presents an explicit retry state instead of an empty portfolio.",
+      prepare: bindFixtureHome,
       state: { balances: "error", recovery: "refresh" },
     },
     {
@@ -161,23 +213,16 @@ export const portfolioScenario: WalletScenario = {
       label: "No account on network",
       narrative:
         "A network without a derived account explains the next action and disables transfers.",
+      prepare: bindFixtureHome,
       state: { account: null, network: "SN_SEPOLIA" },
     },
   ],
   description:
-    "Portfolio content, tabs, account switching, deployment, and honest loading/error/empty states.",
+    "Portfolio hierarchy, quick actions, account switching, deployment, and honest loading/error/empty states.",
   id: "portfolio",
   surface: "sidepanel",
   title: "Home and portfolio",
   views: ["home"],
-};
-
-const openAdvancedEndpoint = (context: FrameContext): void => {
-  const disclosure = context.app.querySelector<HTMLDetailsElement>('[data-disclosure="rpc"]');
-  if (!disclosure) {
-    throw new Error("Missing production RPC disclosure");
-  }
-  disclosure.open = true;
 };
 
 export const assetsScenario: WalletScenario = {
@@ -200,8 +245,23 @@ export const assetsScenario: WalletScenario = {
         }),
       id: "tokens",
       label: "Manage tokens",
-      narrative: "Tracked, hidden, and likely-spam assets remain distinguishable and recoverable.",
+      narrative:
+        "Tracked, hidden, and likely-spam assets remain distinguishable while adding and discovery stay one level deeper.",
       state: { hidden: 1, likelySpam: 1, tracked: 4 },
+    },
+    {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "token-add" }),
+      id: "token-add",
+      label: "Add token by contract",
+      narrative: "Manual token import is a focused contract-identity task.",
+      state: { task: "manual import", view: "token-add" },
+    },
+    {
+      content: () => walletDashboard({ preferences: journeyPreferences, view: "token-discover" }),
+      id: "token-discover",
+      label: "Find held tokens",
+      narrative: "Curated registry discovery is a separate scan with honest spam handling.",
+      state: { source: "curated registry", view: "token-discover" },
     },
     {
       content: () =>
@@ -213,7 +273,7 @@ export const assetsScenario: WalletScenario = {
         }),
       id: "tokens-empty",
       label: "No tracked tokens",
-      narrative: "Token import and curated detection remain available from the empty state.",
+      narrative: "The empty list keeps focused import and discovery routes immediately available.",
       state: { tracked: 0 },
     },
     {
@@ -278,145 +338,13 @@ export const assetsScenario: WalletScenario = {
   id: "assets",
   surface: "sidepanel",
   title: "Assets and permissions",
-  views: ["receive", "tokens", "token-detail", "address-book", "allowances"],
-};
-
-export const settingsScenario: WalletScenario = {
-  checkpoints: [
-    {
-      content: () => walletDashboard({ preferences: journeyPreferences, view: "settings" }),
-      id: "hub",
-      label: "Settings hub",
-      narrative:
-        "Display, request routing, wallet, connections, and security are grouped by intent.",
-      state: { requestSurface: "side-panel", theme: "dark" },
-    },
-    {
-      content: () => walletDashboard({ preferences: journeyPreferences, view: "network" }),
-      id: "network",
-      label: "Choose network",
-      narrative:
-        "Network selection leads while custom infrastructure remains one deliberate level deeper.",
-      state: { networks: 2, rpc: "custom" },
-    },
-    {
-      content: () => walletDashboard({ preferences: journeyPreferences, view: "network" }),
-      id: "advanced-endpoints",
-      label: "Advanced endpoints",
-      narrative:
-        "RPC, privacy prover, and NFT indexer controls include their trust and fallback context.",
-      prepare: openAdvancedEndpoint,
-      state: { disclosure: "rpc", state: "open" },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          classHashVerification: {
-            onChainClassHash: softwareAccount.classHash,
-            status: "verified",
-          },
-          expandedGroupId: "operations",
-          preferences: journeyPreferences,
-          view: "account",
-        }),
-      id: "accounts",
-      label: "Accounts and groups",
-      narrative:
-        "Switching, adding, importing, Ledger, folders, naming, and on-chain identity coexist.",
-      state: { classHash: "verified", group: "operations" },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          classHashVerification: {
-            expectedClassHash: softwareAccount.classHash,
-            onChainClassHash: "0x999",
-            status: "mismatch",
-          },
-          preferences: journeyPreferences,
-          view: "account",
-        }),
-      id: "class-mismatch",
-      label: "Account class mismatch",
-      narrative:
-        "A contract identity mismatch is assertive and never presented as a benign loading error.",
-      state: { classHash: "mismatch", trust: "blocked" },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          connectedSites,
-          preferences: journeyPreferences,
-          view: "connected-sites",
-        }),
-      id: "connected-sites",
-      label: "Connected sites",
-      narrative: "Every active origin shows its granted account count and direct revocation.",
-      state: { origins: 2 },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          connectedSites: [],
-          preferences: journeyPreferences,
-          view: "connected-sites",
-        }),
-      id: "connected-empty",
-      label: "No connected sites",
-      narrative: "The empty state explains exactly how a site will appear here.",
-      state: { origins: 0 },
-    },
-    {
-      content: () => walletDashboard({ preferences: journeyPreferences, view: "backup" }),
-      id: "backup",
-      label: "Mixed-wallet backup",
-      narrative:
-        "Export scope and the separate Ledger recovery boundary are explicit before download.",
-      state: { includesLedger: true, secretsExported: false },
-    },
-    {
-      content: () => walletDashboard({ preferences: journeyPreferences, view: "reveal" }),
-      id: "reveal-software",
-      label: "Software recovery",
-      narrative: "Software secrets require fresh passphrase authentication and remain masked.",
-      state: { accountKind: "software", reauthentication: true },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          preferences: {
-            ...journeyPreferences,
-            accountLabels: {
-              ...journeyPreferences.accountLabels,
-              [importedStatus.activeAccountId ?? ""]: "Imported signer",
-            },
-          },
-          status: importedStatus,
-          view: "reveal",
-        }),
-      id: "reveal-imported",
-      label: "Imported-key recovery",
-      narrative:
-        "The wallet warns that its recovery phrase cannot restore a standalone imported key.",
-      state: { accountKind: "imported", recoveryBoundary: "separate key" },
-    },
-    {
-      content: () =>
-        walletDashboard({
-          preferences: journeyPreferences,
-          status: statusFor(ledgerAccount),
-          view: "reveal",
-        }),
-      id: "reveal-ledger",
-      label: "Ledger recovery",
-      narrative: "Hardware accounts never fabricate a wallet phrase or private-key reveal path.",
-      state: { accountKind: "ledger", keysLeaveDevice: false },
-    },
+  views: [
+    "receive",
+    "tokens",
+    "token-add",
+    "token-discover",
+    "token-detail",
+    "address-book",
+    "allowances",
   ],
-  description:
-    "Settings, networks, accounts/groups, connected origins, backup, and recovery boundaries.",
-  id: "settings-security",
-  surface: "sidepanel",
-  title: "Settings and security",
-  views: ["settings", "network", "account", "backup", "connected-sites", "reveal"],
 };

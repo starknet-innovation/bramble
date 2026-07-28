@@ -11,7 +11,7 @@ import { button, iconButton, iconLink } from "../ui/controls";
 import { dockNavigation } from "../ui/navigation";
 import { type IconName, icon } from "./icons";
 import { accountAvatar, accountDisplayName, type WalletView } from "./parts";
-import { TERMINAL_URL } from "./terminal-link";
+import { TERMINAL_PORTFOLIO_URL, TERMINAL_URL } from "./terminal-link";
 
 /**
  * Renders the unlocked account header and its trusted destinations.
@@ -113,13 +113,31 @@ export const actionTile = (
   view: WalletView,
   label: string,
   name: IconName,
-  primary: boolean,
   enabled: boolean,
 ): string =>
-  `<button class="action-tile${primary ? " primary" : ""}" data-view="${view}" type="button" ${enabled ? "" : "disabled"}>
+  `<button class="action-tile" data-view="${view}" type="button" ${enabled ? "" : "disabled"}>
     <span class="tile-icon">${icon(name)}</span>
     <span class="tile-label">${escapeHtml(label)}</span>
   </button>`;
+
+/**
+ * Renders the external fourth home action that opens the Terminal portfolio.
+ */
+export const terminalPortfolioTile = (): string =>
+  `<a class="action-tile" href="${escapeHtml(TERMINAL_PORTFOLIO_URL)}" target="_blank" rel="noopener noreferrer" aria-label="Open MC Terminal portfolio">
+    <span class="tile-icon">${icon("briefcase")}</span>
+    <span class="tile-label">Portfolio</span>
+  </a>`;
+
+/**
+ * Renders the trusted bridge from the compact wallet into MC Terminal.
+ */
+export const terminalCta = (): string =>
+  `<a class="terminal-cta" href="${escapeHtml(TERMINAL_URL)}" target="_blank" rel="noopener noreferrer" aria-label="Join MC Terminal, your homebase for all Starknet activity">
+    <span class="terminal-cta-icon">${icon("monitor")}</span>
+    <span class="terminal-cta-copy"><strong>Join MC Terminal</strong><span>Your homebase for all Starknet activity</span></span>
+    <span class="terminal-cta-arrow">${icon("chevronRight")}</span>
+  </a>`;
 
 /**
  * Renders the counterfactual-account deployment action when chain state is

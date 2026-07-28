@@ -109,7 +109,7 @@ const labMarkup = (selectedId: string): string => `
           <div class="evidence-grid">
             <div>
               <h3>Event log</h3>
-              <div class="event-log" data-lab-events role="log" aria-live="polite"></div>
+              <div class="event-log" data-lab-events role="log" aria-live="polite" tabindex="0"></div>
             </div>
             <div>
               <h3>State</h3>

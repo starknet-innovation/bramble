@@ -9,8 +9,12 @@ const meta: LabMeta = {
 export default meta;
 
 export const Connect = checkpointStory("Signing · connect", "ledger", "connect");
+export const BrowserChooser = checkpointStory("Signing · browser chooser", "ledger", "connecting");
 export const DeviceChoice = checkpointStory("Signing · device choice", "ledger", "devices");
+export const CheckApp = checkpointStory("Signing · check app", "ledger", "checking");
+export const VerifyAccount = checkpointStory("Signing · verify account", "ledger", "verifying");
 export const Approve = checkpointStory("Signing · approve", "ledger", "confirming");
+export const Finish = checkpointStory("Signing · finish", "ledger", "submitting");
 export const Failure = checkpointStory("Signing · failure", "ledger", "error");
 
 export const ChooseMethod = checkpointStory(

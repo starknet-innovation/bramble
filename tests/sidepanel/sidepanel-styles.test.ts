@@ -6,12 +6,12 @@
  */
 import { describe, expect, test } from "bun:test";
 import { SIDEPANEL_STYLES } from "../../src/sidepanel/styles";
-import { EASE, MOTION, SHADOW } from "../../src/ui/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SHADOW, SIZE } from "../../src/ui/tokens";
 
 describe("sidepanel styles", () => {
   test("press and hover motion stays inside the lift/scale envelope", () => {
     // Feedback transforms are allowed but bounded: press scales stay within
-    // 0.92–1.0 and hover/press lifts within 2px, so controls feel alive
+    // 0.95–1.0 and hover/press lifts within 2px, so controls feel alive
     // without drifting under the pointer. Entrance keyframes are exempt.
     const pressBlocks = [...SIDEPANEL_STYLES.matchAll(/:(?:active|hover)[^{]*\{([^}]*)\}/g)].map(
       (match) => match[1] ?? "",
@@ -21,7 +21,7 @@ describe("sidepanel styles", () => {
     );
     expect(scales.length).toBeGreaterThan(0);
     for (const scale of scales) {
-      expect(scale).toBeGreaterThanOrEqual(0.92);
+      expect(scale).toBeGreaterThanOrEqual(0.95);
       expect(scale).toBeLessThanOrEqual(1);
     }
     const lifts = pressBlocks.flatMap((block) =>
@@ -161,18 +161,15 @@ describe("sidepanel styles", () => {
   });
 
   test("neutral action emphasis is reserved for signal, not every surface", () => {
-    // Restraint check: the achromatic action token drives the active dock item,
-    // portfolio tab indicator, and focus — but resting rows/tiles remain quiet.
-    expect(SIDEPANEL_STYLES).toMatch(/\.tab-indicator \{[^}]*background: var\(--mc-accent\)/s);
+    // The active dock remains high-contrast, while Portfolio tabs use text
+    // contrast alone and deliberately carry no underline indicator.
+    expect(SIDEPANEL_STYLES).not.toContain(".tab-indicator");
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
     );
-    // The active portfolio tab (Tokens/Collectibles/Activity) reads as selected
-    // via high-contrast text plus the underline indicator — a flat text tab,
-    // never a pill/box. The active home-tab declares the action ink and no
-    // home-tab rule paints a background fill.
+    // The active Portfolio tab is plain high-contrast text, never a pill.
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.home-tab\[aria-selected="true"\] \{ color: var\(--mc-accent\)/,
+      /button\.home-tab\[aria-selected="true"\] \{ color: var\(--mc-text\)/,
     );
     expect(SIDEPANEL_STYLES).not.toMatch(
       /button\.home-tab\[aria-selected="true"\][^}]*background:(?! transparent)/,
@@ -232,31 +229,38 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.account-check\[aria-pressed="true"\]:not\(:disabled\):hover \{ background: var\(--mc-accent-soft\)/,
     );
-    // Same guarantee for accent-ink selection: hovering the active dock item
-    // or portfolio tab must never strip its accent back to plain text.
+    // Hovering selected navigation keeps its intended high contrast.
     expect(SIDEPANEL_STYLES).toMatch(
       /button\.nav-item\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-accent\)/,
     );
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-accent\)/,
+      /button\.home-tab\[aria-selected="true"\]:not\(:disabled\):hover \{ color: var\(--mc-text\)/,
     );
   });
 
-  test("home action tiles are borderless icons, not boxes", () => {
-    // The client asked the Send/Receive row (formerly Send/Receive/NFTs, before
-    // the redundant NFTs tile was dropped) to read as plain icons with labels
-    // beneath, so the tile box treatment is gone: the resting tile has a
-    // transparent fill and carries no hairline edge, no elevation shadow, and no
-    // boxy fixed min-height. Primary (Send) stays distinguishable through a
-    // high-contrast icon, never a filled box.
-    expect(SIDEPANEL_STYLES).toMatch(/button\.action-tile \{[^}]*background: transparent/s);
-    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile \{[^}]*box-shadow/s);
-    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile \{[^}]*min-height/s);
-    // No filled primary box — emphasis lives on the icon only.
-    expect(SIDEPANEL_STYLES).not.toMatch(/button\.action-tile\.primary \{/);
+  test("home action tiles are four equal width-filling tools", () => {
     expect(SIDEPANEL_STYLES).toMatch(
-      /button\.action-tile\.primary \.tile-icon \{ color: var\(--mc-accent\)/,
+      /\.action-row \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/s,
     );
+    expect(SIDEPANEL_STYLES).toMatch(/\.action-tile \{[^}]*background: var\(--mc-elevated\)/s);
+    expect(SIDEPANEL_STYLES).toMatch(
+      new RegExp(`\\.action-tile \\{[^}]*border-radius: ${RADIUS.lg}`, "s"),
+    );
+    expect(SIDEPANEL_STYLES).toMatch(
+      new RegExp(`\\.action-tile \\{[^}]*min-height: ${SIZE.actionTile}`, "s"),
+    );
+    expect(SIZE.actionTile).toBe("72px");
+    expect(SIDEPANEL_STYLES).toMatch(
+      new RegExp(`\\.tile-icon \\.icon \\{[^}]*height: ${CONTROL.icon}`, "s"),
+    );
+    expect(SIDEPANEL_STYLES).not.toContain(".action-tile.primary");
+  });
+
+  test("Terminal icon is an unboxed workstation glyph", () => {
+    const iconBlock = SIDEPANEL_STYLES.match(/\.terminal-cta-icon \{([^}]*)\}/)?.[1] ?? "";
+    expect(iconBlock).not.toContain("background:");
+    expect(iconBlock).not.toContain("border-radius:");
+    expect(SIDEPANEL_STYLES).toMatch(/\.terminal-cta-icon \.icon \{ height: 34px/);
   });
 
   test("the active dock item uses neutral emphasis, never a background pill", () => {

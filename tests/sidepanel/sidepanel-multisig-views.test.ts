@@ -5,6 +5,11 @@
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
 import {
+  multisigSignersFlow,
+  multisigTrackFlow,
+  multisigWatchFlow,
+} from "../../src/sidepanel/multisig-management-views";
+import {
   multisigDeployFlow,
   multisigDetailFlow,
   multisigsFlow,
@@ -90,32 +95,65 @@ const render = (
 
 describe("multisig views", () => {
   test("settings links to the multisigs screen", () => {
-    expect(render("settings")).toContain('data-view="multisigs"');
+    expect(render("settings")).toContain('data-view="security"');
+    expect(render("security")).toContain('data-view="multisigs"');
   });
 
-  test("lists watched multisigs with add and deploy entries", () => {
+  test("lists watched multisigs with focused watch and deploy entries", () => {
     const html = render("multisigs");
     expect(html).toContain("Treasury");
     expect(html).toContain("2 of 2 signers");
     expect(html).toContain(`data-multisig-open="${multisig.id}"`);
-    expect(html).toContain('id="multisig-add-form"');
+    expect(html).toContain('data-view="multisig-watch"');
     expect(html).toContain('data-view="multisig-deploy"');
+    expect(multisigWatchFlow(status, account)).toContain('id="multisig-add-form"');
     expect(html).toContain("data-nav-back");
   });
 
-  test("detail shows signers, lifecycle actions, and the track form", () => {
+  test("surfaces shared accounts in the account drawer and opens a dedicated home", () => {
+    const drawer = render("home", [multisig], [proposal]);
+    expect(drawer).toContain("Shared accounts");
+    expect(drawer).toContain("Shared · 2 of 2 · 1 open");
+    expect(drawer).toContain(`data-multisig-open="${multisig.id}"`);
+
+    const home = render("multisig-home", [multisig], [proposal]);
+    expect(home).toContain('id="wallet-screen-multisig-home"');
+    expect(home).toContain('class="hero multisig-portfolio-hero"');
+    expect(home).toContain(">Tokens</button>");
+    expect(home).toContain(">Collectibles</button>");
+    expect(home).toContain("Proposals<span");
+    expect(home).toContain("Join MC Terminal");
+    expect(home).not.toContain("Copy multisig address");
+    expect(home).not.toContain('id="multisig-refresh"');
+    expect(home).not.toContain("Synced from chain");
+    expect(home).toContain('data-view="multisig-propose"');
+    expect(home).toContain('data-view="multisig-receive"');
+    expect(home).toContain('data-ms-home-tab="proposals"');
+  });
+
+  test("detail shows lifecycle actions and routes signer and tracking tasks", () => {
     const html = render("multisig-detail", [multisig], [proposal]);
     expect(html).toContain("Pay vendor");
     expect(html).toContain("Ready to execute");
-    expect(html).toContain("On-chain effect when executed");
+    expect(html).toContain("This proposal will");
+    expect(html).toContain("Call details");
+    expect(html).toContain("Verify elsewhere");
     expect(html).toContain(`data-ms-confirm="${proposal.id}"`);
     expect(html).toContain(`data-ms-execute="${proposal.id}"`);
+    expect(html).toContain('class="allowance-row proposal-row"');
+    expect(html).toContain('class="proposal-actions"');
+    expect(html).toContain('class="proposal-head"');
     expect(html).toMatch(/data-ms-confirm="[^"]+"[^>]*data-ms-action-allowed="false"[^>]*disabled/);
     expect(html).toMatch(/data-ms-revoke="[^"]+"[^>]*data-ms-action-allowed="true"/);
     expect(html).not.toContain("data-ms-requires-ack");
-    expect(html).toContain('id="multisig-track-form"');
+    expect(html).toContain('data-view="multisig-signers"');
+    expect(html).toContain('data-view="multisig-track"');
+    const signers = multisigSignersFlow(status, account, multisig);
+    expect(signers).toContain(account.address);
+    expect(signers).toContain(`data-multisig-remove="${multisig.id}"`);
+    expect(multisigTrackFlow(status, multisig)).toContain('id="multisig-track-form"');
     expect(html).toContain('data-view="multisig-propose"');
-    expect(html).toContain(`data-multisig-remove="${multisig.id}"`);
+    expect(html).not.toContain(`data-multisig-remove="${multisig.id}"`);
   });
 
   test("gates confirmation actions from fresh signer-specific chain state", () => {
@@ -146,10 +184,10 @@ describe("multisig views", () => {
   test("detail hides execute for proposals tracked by id only", () => {
     const html = render("multisig-detail", [multisig], [{ ...proposal, call: null }]);
     expect(html).not.toContain("data-ms-execute");
-    expect(html).toContain("Execute from the wallet that proposed it");
+    expect(html).toContain("Execute from the proposing wallet");
     expect(html).toContain("data-ms-requires-ack");
     expect(html).toContain("data-ms-ack");
-    expect(html).toContain("not verified on-chain");
+    expect(html).toContain("does not include its call");
   });
 
   test("executed proposals render without lifecycle actions", () => {
@@ -161,7 +199,10 @@ describe("multisig views", () => {
   test("propose screen renders the single-call form", () => {
     const html = render("multisig-propose");
     expect(html).toContain('id="multisig-propose-form"');
-    expect(html).toContain("different salt");
+    expect(html).toContain("Who should receive it?");
+    expect(html).toContain("Build an advanced contract call");
+    expect(html).toContain("Proposal options");
+    expect(html).toContain("Choose a token and amount");
   });
 
   test("deploy screen gates on the declared class", () => {

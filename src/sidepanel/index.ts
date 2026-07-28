@@ -1,11 +1,9 @@
 /**
  * Side panel wallet app. This is the primary extension UI.
- *
  * Rendering contract: the whole shell re-renders from status, but screens
- * only animate when the scene actually changes, and keyboard focus is
+ * animate only when the scene changes, and keyboard focus is
  * restored across re-renders so controls never jump under the user.
  */
-
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
 import { applySkin } from "../ui/skin";
@@ -172,7 +170,7 @@ const ledgerOnboard = createLedgerOnboardEntry({
   cache,
   connector: ledgerConnector,
   mount: ledgerOnboardMount,
-  openImport: () => navigate("account"),
+  openImport: () => navigate("import-key"),
   refresh: async () => {
     await render(await wallet.loadStatus());
   },
@@ -221,7 +219,7 @@ const bindAll = (): void => {
   });
   bindReveal({ app, wallet });
   bindActivity({ app, render, wallet });
-  bindTransfer({ app, navigate: (view) => navigate(view), render, wallet });
+  bindTransfer({ app, back: goBack, navigate: (view) => navigate(view), render, wallet });
   const settingsDeps = {
     activeAccountId: () => lastAccountId,
     app,
@@ -298,7 +296,7 @@ const bindAll = (): void => {
     multisig,
     openDetail: (id) => {
       selectedMultisigId = id;
-      navigate("multisig-detail");
+      navigate("multisig-home");
     },
     openList: () => {
       selectedMultisigId = null;
@@ -397,6 +395,10 @@ const paint = (): void => {
               snoozedApprovalIds,
               cache.multisigsError,
               cache.multisigSync,
+              cache.multisigBalances,
+              cache.multisigBalanceId,
+              cache.multisigNfts,
+              cache.multisigNftId,
             );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -493,6 +495,5 @@ window.addEventListener("focus", () => {
 window.addEventListener("pagehide", refreshScheduler.stop, { once: true });
 
 applyTheme();
-// Start before the initial read so a new approval cannot miss the first poll.
 refreshScheduler.start();
 void render(await wallet.loadStatus());

@@ -42,9 +42,10 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
   }
   .deploy-notice { display: grid; gap: 2px; justify-items: start; }
   button.deploy-chip { color: var(--mc-danger); }
-  button.deploy-chip:not(:disabled):hover, button.deploy-chip:not(:disabled):active {
-    background: var(--mc-danger-soft);
+  @media (hover: hover) and (pointer: fine) {
+    button.deploy-chip:not(:disabled):hover { background: var(--mc-danger-soft); }
   }
+  button.deploy-chip:not(:disabled):active { background: var(--mc-danger-soft); }
   .callout-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
   .callout-copy strong { font-size: ${TYPE.body.size}; }
   .callout-copy p { font-size: ${TYPE.caption.size}; }
@@ -301,7 +302,6 @@ ${SIGN_REQUEST_STYLES}
   .nft-actions { display: grid; gap: 6px; grid-template-columns: 1fr 1fr; }
   .nft-actions button { min-width: 0; padding: 0 ${SPACE.sm}; }
   .nft-actions button.danger { background: transparent; }
-  .nft-actions button.danger:not(:disabled):hover { background: var(--mc-danger-soft); }
   /* dApp approval/sign prompts are a solid panel card — a hairline edge plus a
      gentle low shadow lift a consequential request above the request list. */
   .request-card {

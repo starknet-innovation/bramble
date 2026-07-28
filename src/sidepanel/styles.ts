@@ -46,8 +46,11 @@ import { COMPONENT_STYLES } from "./styles-components";
 import { CONTROL_STYLES } from "./styles-controls";
 import { GROUP_STYLES } from "./styles-groups";
 import { HOME_STYLES } from "./styles-home";
+import { JOURNEY_STYLES } from "./styles-journeys";
+import { MULTISIG_STYLES } from "./styles-multisig";
 import { ONBOARDING_STYLES } from "./styles-onboarding";
 import { SEND_STYLES } from "./styles-send";
+import { SEND_COMPOSE_STYLES } from "./styles-send-compose";
 import { STRUCTURE_STYLES } from "./styles-structure";
 import { SWAP_STYLES } from "./styles-swap";
 import { TOKEN_STYLES } from "./styles-tokens";
@@ -56,5 +59,5 @@ import { TRANSITION_STYLES } from "./styles-transitions";
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
-export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${SWAP_STYLES}${SEND_STYLES}${COMPONENT_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
+export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${SWAP_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${COMPONENT_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
 ${HOME_STYLES}${ONBOARDING_STYLES}`;

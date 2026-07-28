@@ -12,7 +12,7 @@ import { emptyState, receipt } from "../ui/content";
 import { button } from "../ui/controls";
 import { textField } from "../ui/fields";
 import { formatFiat, tokenFiatValue } from "./fiat";
-import { accountLabel, flowHeader, flowScreen } from "./parts";
+import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "./parts";
 import { sparklinePath, sparklineTrend } from "./sparkline";
 import { compactAmount, tokenGlyph } from "./token-row";
 
@@ -65,8 +65,8 @@ const trackedRow = (
 };
 
 /**
- * Tokens flow: add a custom token, auto-detect held registry tokens, and
- * manage which tracked tokens show on home.
+ * Tokens flow: review tracked, hidden, and likely-spam assets. Adding and
+ * discovery are separate tasks reached from the compact action list.
  */
 export const tokensFlow = (
   status: WalletStatus,
@@ -80,37 +80,14 @@ export const tokensFlow = (
   );
   const balanceById = new Map(balances.map((balance) => [balance.id, balance]));
   return (
-    flowHeader("Tokens", status, "Add, detect, and hide tokens") +
+    flowHeader("Tokens", status, `${tracked.length} tracked`) +
     flowScreen(
       "tokens",
       `<section class="section">
-        <p class="eyebrow">Add a token</p>
-        <form id="token-add-form">
-          ${textField({
-            autocomplete: "off",
-            className: "mono",
-            hint: "Name, symbol, and decimals are read from the contract.",
-            label: "Contract address",
-            name: "address",
-            placeholder: "0x…",
-            required: true,
-            spellcheck: false,
-          })}
-          ${button({ icon: "check", label: "Add token", type: "submit" })}
-          <p id="token-add-result" role="status"></p>
-        </form>
-      </section>
-      <section class="section">
-        <p class="eyebrow">Auto-detect</p>
-        <p class="hint">Scans a curated list of well-known Starknet tokens for balances you already hold.</p>
-        ${button({
-          attributes: { id: "detect-tokens" },
-          icon: "refresh",
-          label: "Scan for tokens",
-          variant: "secondary",
-        })}
-        <div id="detect-results"></div>
-        <p id="detect-result" role="status"></p>
+        <div class="menu-list" role="group" aria-label="Token actions">
+          ${walletMenuRow("token-add", "Add by contract", "plus")}
+          ${walletMenuRow("token-discover", "Find held tokens", "search")}
+        </div>
       </section>
       <section class="section">
         <p class="eyebrow">Tracked tokens</p>
@@ -134,6 +111,51 @@ export const tokensFlow = (
     )
   );
 };
+
+/**
+ * Renders manual token import as a focused contract-identity task.
+ */
+export const tokenAddFlow = (status: WalletStatus): string =>
+  flowHeader("Add token", status, "Track a token by its contract") +
+  flowScreen(
+    "token-add",
+    `<section class="section">
+      <form id="token-add-form">
+        ${textField({
+          autocomplete: "off",
+          className: "mono",
+          hint: "Name, symbol, and decimals are read from the contract before it is saved.",
+          label: "Contract address",
+          name: "address",
+          placeholder: "0x…",
+          required: true,
+          spellcheck: false,
+        })}
+        ${button({ icon: "check", label: "Read and add token", type: "submit" })}
+        <p id="token-add-result" role="status"></p>
+      </form>
+    </section>`,
+  );
+
+/**
+ * Renders curated token discovery as its own scan-and-review task.
+ */
+export const tokenDiscoverFlow = (status: WalletStatus): string =>
+  flowHeader("Find held tokens", status, "Scan the Starknet token registry") +
+  flowScreen(
+    "token-discover",
+    `<section class="section">
+      <p class="lede">Check well-known Starknet token contracts for balances held by the active account.</p>
+      <p class="hint">Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.</p>
+      ${button({
+        attributes: { id: "detect-tokens" },
+        icon: "refresh",
+        label: "Scan for tokens",
+      })}
+      <div id="detect-results"></div>
+      <p id="detect-result" role="status"></p>
+    </section>`,
+  );
 
 const sparkline = (points: readonly number[]): string => {
   const path = sparklinePath(points, 100, 32);

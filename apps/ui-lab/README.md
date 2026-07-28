@@ -68,7 +68,7 @@ Storybook section.
 
 ## Journey coverage
 
-The lab has 100 deterministic checkpoints across 14 scenario families:
+The lab has 127 deterministic checkpoints across 14 scenario families:
 
 | Family | Review surface |
 | --- | --- |
@@ -79,13 +79,13 @@ The lab has 100 deterministic checkpoints across 14 scenario families:
 | Swap lifecycle | Picker, quote latency, route sanity, frozen review, failure, and submission. |
 | Ledger signing | Connect, device selection, readiness, verification, approval, submission, and recovery. |
 | Ledger account onboarding | Setup method, device grants, enumeration, multi-select, partial add, and errors. |
-| dApp approvals | Every provider approval kind, blocked origin, and queue visibility. |
-| dApp request takeover | Foreground takeover, receipt-token watch, and explicit review-later behavior. |
-| Account-isolated Activity | Account switching, immediate clearing, refresh, and restoration. |
-| Assets and permissions | Receive, token management/detail, address book, and ERC20 allowances. |
-| NFT loading and send | Metadata loading, gallery, detail, guarded transfer, blocking, and submission. |
-| Multisig operations | Watch, detail, propose, declare/deploy, quorum, untracked, executed, and stale data. |
-| Settings and security | Preferences, networks, accounts/groups, sites, backup, and recovery boundaries. |
+| dApp approvals | Every provider approval kind, blocked origin, queue visibility, and live authorization handoff. |
+| dApp request takeover | Foreground takeover, receipt-token watch, explicit review-later behavior, and a dedicated parked-request list. |
+| Account-isolated Activity | Account switching, immediate clearing, refresh, restoration, and separation from dApp decisions. |
+| Assets and permissions | Receive, focused add/detect token journeys, token detail, address book, and ERC20 allowances. |
+| NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, and submission. |
+| Multisig operations | Watch, signers, track, reviewed proposal creation, declare/deploy, quorum, untracked, executed, and stale data. |
+| Settings and security | Focused appearance, request, network/endpoint, account/import, connected-site, backup/export/restore, and security boundaries. |
 
 The `ProductionViewCoverage` interaction test derives its assertion from the production
 `WALLET_VIEWS` constant. A new production view fails the UI Lab suite until at least one scenario

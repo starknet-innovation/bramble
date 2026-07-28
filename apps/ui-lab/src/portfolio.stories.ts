@@ -9,15 +9,20 @@ const meta: LabMeta = {
 export default meta;
 
 export const Ready = checkpointStory("Portfolio ready", "portfolio", "ready");
+export const MajorActions = checkpointStory(
+  "Portfolio · four major actions",
+  "portfolio",
+  "major-actions",
+);
+export const QuickActions = checkpointStory(
+  "Portfolio quick actions",
+  "portfolio",
+  "quick-actions",
+);
 export const Collectibles = checkpointStory(
   "Portfolio tab · collectibles",
   "portfolio",
   "collectibles",
-);
-export const Activity = checkpointStory(
-  "Portfolio tab · recent activity",
-  "portfolio",
-  "recent-activity",
 );
 export const AccountDrawer = checkpointStory("Account drawer", "portfolio", "account-drawer");
 export const Undeployed = checkpointStory("Counterfactual account", "portfolio", "undeployed");

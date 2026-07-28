@@ -349,6 +349,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   { message: { type: "wallet.multisigs" }, sender: extensionSender },
   {
+    message: { id: `SN_MAIN:${MULTISIG}`, type: "wallet.multisigBalances" },
+    sender: extensionSender,
+  },
+  {
     message: { address: MULTISIG, name: "Treasury", type: "wallet.addMultisig" },
     sender: extensionSender,
   },

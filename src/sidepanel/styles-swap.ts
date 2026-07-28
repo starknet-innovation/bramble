@@ -104,7 +104,7 @@ export const SWAP_STYLES = `  .swap-stage { display: grid; gap: ${SPACE.md}; }
   @media (hover: hover) and (pointer: fine) {
     button.swap-flip:not(:disabled):hover { background: var(--mc-hover); }
   }
-  button.swap-flip:not(:disabled):active { transform: translate(-50%, -50%) scale(0.92); }
+  button.swap-flip:not(:disabled):active { transform: translate(-50%, -50%) scale(0.96); }
   .swap-meta {
     align-items: center;
     color: var(--mc-muted);

@@ -121,6 +121,18 @@ const phaseIndex = (view: LedgerSignView): number => {
   return 0;
 };
 
+const phaseLiveness: Readonly<Record<LedgerSignView["phase"]["kind"], string>> = {
+  checking: "Talking to the Starknet app…",
+  confirming: "Waiting for confirmation on the device…",
+  connect: "The transaction is safely paused.",
+  connecting: "Waiting for the browser device chooser…",
+  devices: "No device is contacted until you choose one.",
+  discovering: "Looking for an existing secure session…",
+  error: "The transaction has not been signed or broadcast.",
+  submitting: "Signature received; completing wallet verification…",
+  verifying: "Comparing the device key with this account…",
+};
+
 const ledgerProgress = (view: LedgerSignView): string => {
   const activeIndex = phaseIndex(view);
   const labels = ["Connect", "Verify account", "Approve", "Finish"];
@@ -167,6 +179,16 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
       </div>
       ${ledgerProgress(view)}
       <div class="ledger-phase-body">${phaseBody(view)}</div>
+      <p class="ledger-liveness" role="status">
+        <span class="ledger-liveness-mark">${icon(
+          view.phase.kind === "error"
+            ? "alert"
+            : view.phase.kind === "connect"
+              ? "lock"
+              : "refresh",
+        )}</span>
+        ${escapeHtml(phaseLiveness[view.phase.kind])}
+      </p>
     </section>
     <p id="ledger-sign-result" role="status" aria-live="polite"></p>
   </main>`;

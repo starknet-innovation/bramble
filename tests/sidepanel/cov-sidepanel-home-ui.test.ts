@@ -2,8 +2,8 @@
  * Home bindings behaviour under happy-dom: the account drawer (escape-to-close,
  * account switch success / no-op / failure, folder-filter chips, add-account
  * success and failure), the direct-manipulation dismiss gesture (reduced-motion
- * and animated release), the tabbed portfolio (tab switch drives selection,
- * panels, indicator), and guards that skip binding on non-home markup.
+ * and animated release), the two-tab portfolio, and guards that skip binding
+ * on non-home markup.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
@@ -352,6 +352,7 @@ describe("home portfolio tabs", () => {
     expect(el(h.app, '[data-home-tab="tokens"]').getAttribute("aria-selected")).toBe("false");
     const panel = el(h.app, '[data-tab-panel="collectibles"]');
     expect(panel.hidden).toBe(false);
+    expect(panel.classList.contains("is-entering")).toBe(false);
     expect(el(h.app, '[data-tab-panel="tokens"]').hidden).toBe(true);
   });
 
@@ -460,7 +461,7 @@ describe("home bindings guards on non-home markup", () => {
     expect(calls).toEqual([]);
   });
 
-  test("tab binding tolerates a tabs region with no sliding indicator", () => {
+  test("tab binding tolerates a minimal tabs region", () => {
     const app = document.createElement("div");
     app.id = "app";
     app.append(
@@ -474,8 +475,7 @@ describe("home bindings guards on non-home markup", () => {
     );
     document.body.append(app);
 
-    // No .tab-indicator node: moveIndicator returns at its guard, so binding and
-    // the restore-on-bind applyTab complete without throwing.
+    // A partial specimen with no panels or menu restores its tab without throwing.
     expect(() =>
       bindHomeUi({
         app,

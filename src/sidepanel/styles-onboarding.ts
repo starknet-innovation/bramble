@@ -302,7 +302,7 @@ export const ONBOARDING_STYLES = `
   .onboarding-account-check {
     background: var(--mc-text);
     color: var(--mc-bg);
-    transform: scale(0.78);
+    transform: scale(1);
     transition:
       opacity ${MOTION.liftMs}ms var(--ease-out),
       transform ${MOTION.liftMs}ms var(--ease-out);
@@ -310,7 +310,7 @@ export const ONBOARDING_STYLES = `
   .onboarding-account-check .icon { height: 17px; width: 17px; }
   .onboarding-account[aria-pressed="false"] .onboarding-account-check {
     opacity: 0;
-    transform: scale(0.55);
+    transform: scale(0.92);
   }
   .onboarding-account[aria-pressed="true"] {
     background: var(--mc-soft-press);

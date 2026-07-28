@@ -14,6 +14,7 @@
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { type AccountGroups, accountGroup } from "../storage/account-groups";
+import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { emptyState } from "../ui/content";
@@ -22,6 +23,26 @@ import { menuRow } from "../ui/navigation";
 import { accountGroupsLine, groupFilterChips, groupPickerPanel } from "./group-controls";
 import { icon } from "./icons";
 import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "./parts";
+
+const drawerMultisigRow = (
+  record: MultisigRecord,
+  proposals: readonly MultisigProposalRecord[],
+): string => {
+  const open = proposals.filter(
+    (proposal) => proposal.multisigId === record.id && proposal.state !== "executed",
+  ).length;
+  return `<li class="drawer-account-item">
+    <button class="drawer-account drawer-multisig" data-multisig-open="${escapeHtml(record.id)}" type="button">
+      <span class="option-avatar">${accountAvatar(record.address)}</span>
+      <span class="drawer-copy">
+        <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
+        <code>${escapeHtml(accountLabel(record.address))}</code>
+        <span class="account-groups-line">Shared · ${record.quorum} of ${record.signers.length}${open > 0 ? ` · ${open} open` : ""}</span>
+      </span>
+      <span class="option-mark">${icon("chevronRight")}</span>
+    </button>
+  </li>`;
+};
 
 const drawerAccountRow = (
   stored: AccountRef,
@@ -79,6 +100,8 @@ export const accountDrawer = (
   preferences: WalletPreferences | null,
   groupFilter: string | null = null,
   openAssignId: string | null = null,
+  multisigs: readonly MultisigRecord[] = [],
+  proposals: readonly MultisigProposalRecord[] = [],
 ): string => {
   const groups = preferences?.groups ?? [];
   const accounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
@@ -86,6 +109,7 @@ export const accountDrawer = (
   const visible = activeGroup
     ? accounts.filter((stored) => activeGroup.accountIds.includes(stored.id))
     : accounts;
+  const shared = multisigs.filter((record) => record.networkId === status.networkId);
   return `
   <div class="drawer-root" data-open="false">
     <div class="drawer-backdrop" data-drawer-close></div>
@@ -116,6 +140,14 @@ export const accountDrawer = (
                 drawerAccountRow(stored, account?.id ?? null, preferences, groups, openAssignId),
               )
               .join("")}</ul>`
+      }
+      ${
+        shared.length === 0
+          ? ""
+          : `<section class="drawer-shared">
+              <p class="eyebrow">Shared accounts</p>
+              <ul class="drawer-list">${shared.map((record) => drawerMultisigRow(record, proposals)).join("")}</ul>
+            </section>`
       }
       <div class="drawer-foot">
         ${button({

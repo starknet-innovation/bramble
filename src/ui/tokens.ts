@@ -52,6 +52,7 @@ export const TYPE = {
   label: { line: "1.3", size: "13px" },
   micro: { line: "1.2", size: "11px" },
   mono: { line: "1.5", size: "12px" },
+  portfolio: { line: "1.05", size: "44px" },
   title: { line: "1.2", size: "17px" },
 } as const;
 
@@ -114,6 +115,7 @@ export const TRACKING = {
  * fixed dimension traces back to one place.
  */
 export const SIZE = {
+  actionTile: "72px",
   art: "56px",
   avatar: "36px",
   brand: "64px",

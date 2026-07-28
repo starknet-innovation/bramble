@@ -8,7 +8,9 @@ const meta: LabMeta = {
 
 export default meta;
 
-export const SendDetails = checkpointStory("Send · details", "send", "details");
+export const SendRecipient = checkpointStory("Send · recipient", "send", "recipient");
+export const SendDetails = checkpointStory("Send · amount", "send", "details");
+export const SendAsset = checkpointStory("Send · asset picker", "send", "asset");
 export const SendReview = checkpointStory("Send · review", "send", "review");
 export const SendFeeFailure = checkpointStory("Send · fee failure", "send", "fee-failure");
 export const SendLedgerAuthorization = checkpointStory(
@@ -17,7 +19,10 @@ export const SendLedgerAuthorization = checkpointStory(
   "authorizing",
 );
 export const SendBroadcast = checkpointStory("Send · broadcast", "send", "broadcasting");
-export const SendSuccess = checkpointStory("Send · success", "send", "submitted");
+export const SendConfirming = checkpointStory("Send · confirming", "send", "confirming");
+export const SendPending = checkpointStory("Send · pending", "send", "pending");
+export const SendSuccess = checkpointStory("Send · confirmed", "send", "submitted");
+export const SendFailure = checkpointStory("Send · failure", "send", "failed");
 
 export const SwapEdit = checkpointStory("Swap · edit", "swap", "edit");
 export const SwapPicker = checkpointStory("Swap · token picker", "swap", "picker");

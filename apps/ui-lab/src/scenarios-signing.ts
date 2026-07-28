@@ -4,7 +4,13 @@ import { ledgerSignScreen } from "../../../src/sidepanel/ledger/sign-views";
 import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
 import { sendFlow } from "../../../src/sidepanel/send-views";
 import { bindTransfer, markTransferLedgerAuthorized } from "../../../src/sidepanel/transfer-ui";
-import { ledgerAccount, preferences, RECIPIENT_ADDRESS, statusFor } from "./fixtures";
+import { ledgerAccount, RECIPIENT_ADDRESS, statusFor } from "./fixtures";
+import {
+  journeyBalances,
+  journeyChanges,
+  journeyPreferences,
+  journeyPrices,
+} from "./journey-fixtures";
 import { messageType, nextTurn, updateForm } from "./scenario-runtime";
 import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "./types";
 
@@ -16,13 +22,89 @@ const settleMotionBeat = async (): Promise<void> => {
 };
 
 type SendMode =
+  | "asset"
   | "authorizing"
   | "broadcasting"
+  | "confirming"
   | "details"
+  | "failed"
   | "fee-failure"
+  | "pending"
+  | "recipient"
   | "review"
   | "reviewing"
   | "submitted";
+
+const waitForSendStage = async (
+  form: HTMLFormElement,
+  stage: Exclude<SendMode, "fee-failure">,
+): Promise<void> => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (form.dataset["stage"] === stage) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error(`Send fixture did not reach ${stage}`);
+};
+
+const fixtureReview = async (
+  mode: SendMode,
+  context: FrameContext,
+  unresolved: Promise<never>,
+): Promise<unknown> => {
+  if (mode === "reviewing") return unresolved;
+  await settleMotionBeat();
+  const feeEstimateFailed = mode === "fee-failure";
+  context.emit({
+    detail: feeEstimateFailed ? "fee estimate unavailable" : "decoded calls and fee ready",
+    kind: "response",
+  });
+  return {
+    ok: true,
+    review: {
+      fee: feeEstimateFailed ? null : { overallFee: "2400000000000000", unit: "FRI" },
+      feeEstimateFailed,
+      flags: [],
+      requiresDeployment: false,
+      summaries: ["Transfer 24 ETH", `Recipient ${RECIPIENT_ADDRESS}`],
+    },
+  };
+};
+
+const fixtureTransfer = async (
+  mode: SendMode,
+  context: FrameContext,
+  unresolved: Promise<never>,
+): Promise<unknown> => {
+  if (mode === "failed") return { error: "Fixture network rejected the broadcast" };
+  if (mode === "authorizing" || mode === "broadcasting") return unresolved;
+  await settleMotionBeat();
+  context.emit({ detail: "fixture broadcast received", kind: "response" });
+  return { ok: true, transactionHash: TRANSFER_HASH };
+};
+
+const fixtureActivity = (
+  mode: SendMode,
+  context: FrameContext,
+  unresolved: Promise<never>,
+): Promise<never> | object => {
+  if (mode === "confirming") return unresolved;
+  const status = mode === "submitted" ? "accepted" : "pending";
+  context.emit({ detail: `fixture chain status: ${status}`, kind: "response" });
+  return {
+    activity: [
+      {
+        accountId: ledgerAccount.id,
+        hash: TRANSFER_HASH,
+        kind: "transfer",
+        networkId: "SN_MAIN",
+        status,
+        submittedAt: 1,
+        summary: "Sent 24 ETH",
+      },
+    ],
+    ok: true,
+  };
+};
 
 const prepareSend =
   (mode: SendMode) =>
@@ -33,48 +115,35 @@ const prepareSend =
         const type = messageType(message);
         context.emit({ detail: type ?? "invalid request", kind: "action" });
         if (type === "wallet.reviewTransfer") {
-          if (mode === "reviewing") {
-            return unresolved;
-          }
-          await settleMotionBeat();
-          const feeEstimateFailed = mode === "fee-failure";
-          context.emit({
-            detail: feeEstimateFailed ? "fee estimate unavailable" : "decoded calls and fee ready",
-            kind: "response",
-          });
-          return {
-            ok: true,
-            review: {
-              fee: feeEstimateFailed ? null : { overallFee: "2400000000000000", unit: "FRI" },
-              feeEstimateFailed,
-              flags: [],
-              requiresDeployment: false,
-              summaries: ["Transfer 24 USDC", `Recipient ${RECIPIENT_ADDRESS}`],
-            },
-          };
+          return fixtureReview(mode, context, unresolved);
         }
         if (type === "wallet.transfer") {
-          if (mode === "submitted") {
-            await settleMotionBeat();
-            context.emit({ detail: "fixture broadcast accepted", kind: "response" });
-            return { ok: true, transactionHash: TRANSFER_HASH };
-          }
-          return unresolved;
+          return fixtureTransfer(mode, context, unresolved);
+        }
+        if (type === "wallet.activity") {
+          return fixtureActivity(mode, context, unresolved);
         }
         return { error: "UI Lab blocks non-fixture runtime requests" };
       },
     });
     bindTransfer({
       app: context.app,
+      confirmationDelaysMs: [0],
       render: async () => undefined,
+      waitForConfirmation: async () => undefined,
       wallet,
     });
-    updateForm(context, 'select[name="tokenId"]', preferences.tokens[0]?.id ?? "");
-    updateForm(context, 'input[name="recipient"]', RECIPIENT_ADDRESS);
-    updateForm(context, 'input[name="amount"]', "24");
-    if (mode === "details") {
+    if (mode === "recipient") {
       return;
     }
+    context.app.querySelector<HTMLElement>(`[data-send-recipient="${RECIPIENT_ADDRESS}"]`)?.click();
+    await nextTurn();
+    if (mode === "details") return;
+    if (mode === "asset") {
+      context.app.querySelector<HTMLButtonElement>("#send-token-trigger")?.click();
+      return;
+    }
+    updateForm(context, "#send-amount-input", "24");
     const form = context.app.querySelector<HTMLFormElement>("#transfer-form");
     if (!form) {
       throw new Error("Missing production Send form");
@@ -83,23 +152,30 @@ const prepareSend =
     if (mode === "reviewing") {
       return;
     }
-    await settleMotionBeat();
-    await nextTurn();
+    await waitForSendStage(form, "review");
     if (mode === "review" || mode === "fee-failure") {
       return;
     }
     form.requestSubmit();
-    await settleMotionBeat();
     if (mode === "broadcasting") {
+      await waitForSendStage(form, "authorizing");
       markTransferLedgerAuthorized();
+      await waitForSendStage(form, "broadcasting");
+      return;
     }
-    if (mode === "submitted") {
-      await nextTurn();
-    }
+    await waitForSendStage(form, mode);
   };
 
 const sendCheckpoint = (mode: SendMode, label: string, narrative: string): ScenarioCheckpoint => ({
-  content: () => sendFlow(statusFor(ledgerAccount), ledgerAccount, preferences),
+  content: () =>
+    sendFlow(
+      statusFor(ledgerAccount),
+      ledgerAccount,
+      journeyPreferences,
+      journeyBalances,
+      journeyPrices,
+      journeyChanges,
+    ),
   id: mode,
   label,
   narrative,
@@ -114,7 +190,21 @@ const sendCheckpoint = (mode: SendMode, label: string, narrative: string): Scena
 
 export const sendScenario: WalletScenario = {
   checkpoints: [
-    sendCheckpoint("details", "Details", "A complete form ready for a deliberate review."),
+    sendCheckpoint(
+      "recipient",
+      "Choose recipient",
+      "Accounts and saved contacts establish who will receive funds before amount entry.",
+    ),
+    sendCheckpoint(
+      "details",
+      "Enter amount",
+      "The chosen recipient and network remain visible while token or fiat value is entered.",
+    ),
+    sendCheckpoint(
+      "asset",
+      "Choose asset",
+      "A searchable token list shows logos, balances, fiat values, and daily movement.",
+    ),
     sendCheckpoint(
       "reviewing",
       "Preparing review",
@@ -137,9 +227,24 @@ export const sendScenario: WalletScenario = {
       "Verified device approval advances visibly into the network handoff.",
     ),
     sendCheckpoint(
+      "confirming",
+      "Chain confirmation",
+      "The submitted hash stays visibly live while the wallet polls Starknet acceptance.",
+    ),
+    sendCheckpoint(
+      "pending",
+      "Confirmation delayed",
+      "A durable hash and explicit next actions replace any false success state.",
+    ),
+    sendCheckpoint(
       "submitted",
-      "Success",
-      "The accepted broadcast has a durable receipt and next actions.",
+      "Confirmed",
+      "Only an accepted chain status earns the completed success animation.",
+    ),
+    sendCheckpoint(
+      "failed",
+      "Not sent",
+      "A terminal failure names what happened and offers focused retry or edit actions.",
     ),
   ],
   description:
