@@ -33,7 +33,6 @@ export const TOKEN_STYLES = `
     --ease-out: ${EASE.out};
     --ease-in-out: ${EASE.inOut};
     --ease-drawer: ${EASE.drawer};
-    --ease-pop: ${EASE.pop};
     --spring-default: ${springDefault.easing};
     --spring-default-ms: ${springDefault.durationMs}ms;
     --spring-drawer: ${springDrawer.easing};

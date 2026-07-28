@@ -1,12 +1,11 @@
 /**
  * Side panel stylesheet composed from the shared design-system tokens.
  *
- * DESIGN DIRECTION — "Clean Mono": quiet-luxury minimalism. A near-monochrome
- * neutral palette in both skins with a single restrained cobalt accent used
- * only where it earns attention (primary CTA, active states, focus), while
- * market and status semantics keep their own tokens — green strictly for gains
- * and success, red for losses and danger — so brand never masquerades as
- * signal. Hairline edges, gentle low elevation, generous whitespace, and a
+ * DESIGN DIRECTION — "Clean Mono": quiet-luxury minimalism. Structural and
+ * interactive roles are monochrome in both skins; contrast, weight, space, and
+ * motion carry hierarchy. Green is reserved for positive/success semantics and
+ * red for danger/failure. Hairline edges, gentle low elevation, generous
+ * whitespace, and a
  * crisp, precise type scale. Deliberately FLAT and legible — no glass, no
  * aurora, no backdrop-filter.
  *
@@ -21,7 +20,7 @@
  * 200ms   a newly opened screen slides in along the navigation direction via
  *         the View Transitions API (cross-fade fallback); the hero, action
  *         tiles, and first six token rows follow in a small 30–40ms stagger
- * ~260ms  the cobalt tab underline glides to the active tab on the snappy
+ * ~260ms  the high-contrast tab underline glides to the active tab on the snappy
  *         spring while the incoming panel cross-fades; toasts slide into the
  *         fixed stack above the anchored dock
  * 260ms   the account drawer settles in over a dimmed backdrop, its rows
@@ -45,10 +44,16 @@
 import { BASE_STYLES } from "./styles-base";
 import { COMPONENT_STYLES } from "./styles-components";
 import { CONTROL_STYLES } from "./styles-controls";
+import { DOCK_STYLES } from "./styles-dock";
 import { GROUP_STYLES } from "./styles-groups";
 import { HOME_STYLES } from "./styles-home";
+import { JOURNEY_STYLES } from "./styles-journeys";
+import { MULTISIG_STYLES } from "./styles-multisig";
 import { ONBOARDING_STYLES } from "./styles-onboarding";
+import { ONBOARDING_WELCOME_STYLES } from "./styles-onboarding-welcome";
+import { PROGRESS_STYLES } from "./styles-progress";
 import { SEND_STYLES } from "./styles-send";
+import { SEND_COMPOSE_STYLES } from "./styles-send-compose";
 import { STRUCTURE_STYLES } from "./styles-structure";
 import { SWAP_STYLES } from "./styles-swap";
 import { TOKEN_STYLES } from "./styles-tokens";
@@ -57,5 +62,5 @@ import { TRANSITION_STYLES } from "./styles-transitions";
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
-export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${SWAP_STYLES}${SEND_STYLES}${COMPONENT_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
-${HOME_STYLES}${ONBOARDING_STYLES}`;
+export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${DOCK_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${SWAP_STYLES}${PROGRESS_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${COMPONENT_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
+${HOME_STYLES}${ONBOARDING_STYLES}${ONBOARDING_WELCOME_STYLES}`;

@@ -6,6 +6,8 @@
 import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { normalizeFeltInput } from "../starknet/networks";
+import { emptyState } from "../ui/content";
+import { button } from "../ui/controls";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { SidepanelWallet } from "./runtime";
 import { compactAmount, tokenGlyph } from "./token-row";
@@ -27,7 +29,7 @@ const rerender = async (deps: TokensUiDeps): Promise<void> => {
 
 const suggestionsHtml = (suggestions: readonly TokenBalance[]): string =>
   suggestions.length === 0
-    ? '<p class="empty">No new tokens found in this account.</p>'
+    ? emptyState("No new tokens found in this account.")
     : `<ul class="token-list">${suggestions
         .map(
           (token) => `<li class="token-row">
@@ -36,7 +38,12 @@ const suggestionsHtml = (suggestions: readonly TokenBalance[]): string =>
               <strong>${escapeHtml(token.symbol)}</strong>
               <p>${escapeHtml(compactAmount(token.formatted))} ${escapeHtml(token.symbol)}</p>
             </div>
-            <button class="secondary small" type="button" data-detect-add="${escapeHtml(token.address)}">Add</button>
+            ${button({
+              attributes: { "data-detect-add": token.address },
+              label: "Add",
+              size: "small",
+              variant: "secondary",
+            })}
           </li>`,
         )
         .join("")}</ul>`;

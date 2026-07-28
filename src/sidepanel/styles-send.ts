@@ -4,7 +4,7 @@
  * Motion is reserved for active work and the final submitted receipt, with a
  * complete reduced-motion cut.
  */
-import { CONTROL, EASE, MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "../ui/tokens";
+import { CONTROL, EASE, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens";
 
 /**
  * Send-flow stylesheet fragment consumed by SIDEPANEL_STYLES.
@@ -48,7 +48,7 @@ export const SEND_STYLES = `
     z-index: 0;
   }
   .send-progress li[data-state="done"] + li::before,
-  .send-progress li[data-state="done"]::before { background: var(--mc-accent); }
+  .send-progress li[data-state="done"]::before { background: var(--mc-positive); }
   .send-step-mark {
     align-items: center;
     background: var(--mc-panel);
@@ -70,8 +70,8 @@ export const SEND_STYLES = `
     transform: scale(1.06);
   }
   .send-progress li[data-state="done"] .send-step-mark {
-    background: var(--mc-accent-soft);
-    color: var(--mc-accent);
+    background: var(--mc-positive-soft);
+    color: var(--mc-positive);
   }
   html[data-send-transition]::view-transition-old(root),
   html[data-send-transition]::view-transition-new(root) { animation: none; }
@@ -151,20 +151,12 @@ export const SEND_STYLES = `
   }
   .send-working-mark {
     align-items: center;
-    background: var(--mc-accent-soft);
-    border-radius: ${RADIUS.full};
     color: var(--mc-accent);
     display: inline-flex;
-    height: 64px;
+    height: ${SIZE.brand};
     justify-content: center;
-    width: 64px;
+    width: ${SIZE.brand};
   }
-  .send-working-mark .icon {
-    animation: send-spin 900ms linear infinite;
-    height: ${SPACE.xl};
-    width: ${SPACE.xl};
-  }
-  @keyframes send-spin { to { transform: rotate(360deg); } }
   .send-working-copy { display: grid; gap: ${SPACE.sm}; max-width: 30ch; }
   .send-working-copy h2 { font-size: ${TYPE.title.size}; }
   .send-working-copy p {
@@ -204,6 +196,7 @@ export const SEND_STYLES = `
     border-radius: ${RADIUS.full};
     flex: none;
     height: ${SPACE.sm};
+    position: relative;
     width: ${SPACE.sm};
   }
   .send-task-list li[data-state="done"] { color: var(--mc-text); }
@@ -212,12 +205,19 @@ export const SEND_STYLES = `
     color: var(--mc-text);
     font-weight: ${WEIGHT.semibold};
   }
-  .send-task-list li[data-state="active"] > span:first-child {
+  .send-task-list li[data-state="active"] > span:first-child { background: var(--mc-accent); }
+  .send-task-list li[data-state="active"] > span:first-child::after {
     animation: send-pulse 1100ms var(--ease-in-out) infinite;
-    background: var(--mc-accent);
+    background: var(--mc-accent-soft);
+    border-radius: inherit;
+    content: "";
+    inset: 0;
+    opacity: 0;
+    position: absolute;
+    transform: scale(1);
   }
   @keyframes send-pulse {
-    50% { box-shadow: 0 0 0 5px var(--mc-accent-soft); transform: scale(0.82); }
+    50% { opacity: 1; transform: scale(2.25); }
   }
 
   .send-success {
@@ -332,7 +332,7 @@ export const SEND_STYLES = `
   .ledger-task-list li[data-state="active"] { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; }
   .ledger-task-list li[data-state="active"] .ledger-task-mark { background: var(--mc-accent); color: var(--mc-bg); }
   .ledger-task-list li[data-state="done"] { color: var(--mc-text); }
-  .ledger-task-list li[data-state="done"] .ledger-task-mark { background: var(--mc-accent-soft); color: var(--mc-accent); }
+  .ledger-task-list li[data-state="done"] .ledger-task-mark { background: var(--mc-positive-soft); color: var(--mc-positive); }
   .ledger-phase-body {
     display: grid;
     font-size: ${TYPE.body.size};
@@ -350,8 +350,8 @@ export const SEND_STYLES = `
     html[data-send-transition]::view-transition-group(send-stage),
     html[data-send-transition]::view-transition-old(send-stage),
     html[data-send-transition]::view-transition-new(send-stage),
-    .send-working-mark .icon,
-    .send-task-list li[data-state="active"] > span:first-child,
+    .liquid-dot,
+    .send-task-list li[data-state="active"] > span:first-child::after,
     .send-success-ring,
     .send-success-check,
     .ledger-device-mark .icon { animation: none; }

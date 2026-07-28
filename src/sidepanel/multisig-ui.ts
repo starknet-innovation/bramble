@@ -6,8 +6,10 @@
 import type { WalletStatus } from "../popup/responses";
 import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, showToast } from "./dom";
+import { bindMultisigDeploy } from "./multisig-deploy-ui";
+import { bindMultisigProposalForm } from "./multisig-proposal-ui";
+import { bindMultisigReviewTools } from "./multisig-review-ui";
 import type { MultisigClient } from "./multisig-runtime";
-import { bindSignerInsertButtons } from "./multisig-signers-field";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -81,6 +83,11 @@ const bindListActions = (deps: MultisigUiDeps): void => {
     ?.addEventListener("click", () => {
       void rerender(deps);
     });
+  deps.app
+    ?.querySelector<HTMLButtonElement>("[data-multisig-portfolio-retry]")
+    ?.addEventListener("click", () => {
+      void rerender(deps);
+    });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-multisig-open]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["multisigOpen"];
@@ -120,6 +127,21 @@ const bindListActions = (deps: MultisigUiDeps): void => {
     runAction(deps, refresh, "multisig-detail-result", "Refreshing from chain…", async () => {
       await deps.multisig.refreshMultisig(id);
       return "Refreshed from chain";
+    });
+  });
+};
+
+const bindPortfolioTabs = (deps: MultisigUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const selected = button.dataset["msHomeTab"];
+      deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((tab) => {
+        tab.setAttribute("aria-selected", String(tab.dataset["msHomeTab"] === selected));
+      });
+      deps.app?.querySelectorAll<HTMLElement>("[data-ms-home-panel]").forEach((panel) => {
+        const target = panel;
+        target.hidden = target.dataset["msHomePanel"] !== selected;
+      });
     });
   });
 };
@@ -216,85 +238,32 @@ const bindTrackForm = (deps: MultisigUiDeps): void => {
   });
 };
 
-// Splits a felts textarea on any whitespace or commas, dropping empties. Each
-// entry is normalized so checksummed (mixed-case) `0x` addresses — common for
-// pasted signer and calldata felts — survive the strict field-element check.
-const parseFelts = (raw: string): readonly string[] =>
-  raw
-    .split(/[\s,]+/)
-    .map((felt) => normalizeFeltInput(felt))
-    .filter((felt) => felt.length > 0);
-
-const bindProposeForm = (deps: MultisigUiDeps): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#multisig-propose-form");
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const multisigId = deps.selectedMultisigId();
-    if (!multisigId) {
-      return;
-    }
-    const data = new FormData(form);
-    runAction(deps, submitButton, "multisig-propose-result", "Submitting proposal…", async () => {
-      const transactionHash = await deps.multisig.proposeTransaction({
-        calldata: parseFelts(String(data.get("calldata") ?? "")),
-        entrypoint: String(data.get("entrypoint") ?? "").trim(),
-        multisigId,
-        salt: String(data.get("salt") ?? "").trim(),
-        summary: String(data.get("summary") ?? "").trim(),
-        to: normalizeFeltInput(String(data.get("to") ?? "")),
-      });
-      deps.openDetail(multisigId);
-      return `Proposal submitted: ${transactionHash}`;
-    });
-  });
-};
-
-const bindDeployScreen = (deps: MultisigUiDeps): void => {
-  const declare = deps.app?.querySelector<HTMLButtonElement>("#multisig-declare");
-  declare?.addEventListener("click", () => {
-    runAction(deps, declare, "multisig-declare-result", "Submitting declare…", async () => {
-      const transactionHash = await deps.multisig.declareClass();
-      return `Declare submitted: ${transactionHash}`;
-    });
-  });
-
-  // Re-render re-fetches the class status for the deploy view, so a retry after
-  // a failed status check simply repaints from a fresh read.
-  const retry = deps.app?.querySelector<HTMLButtonElement>("#multisig-class-retry");
-  retry?.addEventListener("click", () => {
-    buttonBusy(retry, true);
-    void rerender(deps).catch(() => buttonBusy(retry, false));
-  });
-
-  const form = deps.app?.querySelector<HTMLFormElement>("#multisig-deploy-form");
-  const signersField = form?.querySelector<HTMLTextAreaElement>('textarea[name="signers"]');
-  bindSignerInsertButtons(deps.app, signersField);
-  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    const quorum = Number(String(data.get("quorum") ?? "").trim());
-    runAction(deps, submitButton, "multisig-deploy-result", "Submitting deployment…", async () => {
-      const result = await deps.multisig.deployMultisig(
-        parseFelts(String(data.get("signers") ?? "")),
-        quorum,
-        String(data.get("salt") ?? "").trim(),
-      );
-      deps.openList();
-      return `Deployment submitted at ${result.address} — watch it once the transaction finalizes`;
-    });
-  });
-};
-
 /**
  * Binds every multisig screen: list, detail, propose, and deploy.
  */
 export const bindMultisigs = (deps: MultisigUiDeps): void => {
   bindAddForm(deps);
   bindListActions(deps);
+  bindPortfolioTabs(deps);
   bindProposalActions(deps);
+  bindMultisigReviewTools(deps.app);
   bindTrackForm(deps);
-  bindProposeForm(deps);
-  bindDeployScreen(deps);
+  bindMultisigProposalForm({
+    app: deps.app,
+    multisig: deps.multisig,
+    openDetail: deps.openDetail,
+    runAction: (button, resultId, pendingMessage, action) =>
+      runAction(deps, button, resultId, pendingMessage, action),
+    selectedMultisigId: deps.selectedMultisigId,
+    setResult: (id, message) => setResult(deps, id, message),
+  });
+  bindMultisigDeploy({
+    app: deps.app,
+    multisig: deps.multisig,
+    openList: deps.openList,
+    rerender: () => rerender(deps),
+    runAction: (button, resultId, pendingMessage, action) =>
+      runAction(deps, button, resultId, pendingMessage, action),
+    setResult: (id, message) => setResult(deps, id, message),
+  });
 };

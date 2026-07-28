@@ -7,8 +7,12 @@
 import type { LedgerSignRequestSummary, WalletStatus } from "../../popup/responses";
 import { escapeHtml } from "../../shared/html";
 import { ledgerAccountIndexOfPath } from "../../starknet/ledger-path";
+import { pill } from "../../ui/content";
+import { button } from "../../ui/controls";
+import { menuRow } from "../../ui/navigation";
 import { icon } from "../icons";
 import { accountLabel } from "../parts";
+import { liquidDots, liquidDotsFilter } from "../progress-motion";
 import type { LedgerSignView } from "./sign-session";
 
 const addressOfAccountId = (accountId: string): string => accountId.split(":")[1] ?? accountId;
@@ -24,7 +28,12 @@ const signerLine = (request: LedgerSignRequestSummary): string => {
 };
 
 const cancelButton = (): string =>
-  '<button class="ghost small" data-ledger-cancel type="button">Cancel transaction</button>';
+  button({
+    attributes: { "data-ledger-cancel": true },
+    label: "Cancel transaction",
+    size: "small",
+    variant: "ghost",
+  });
 
 const phaseBody = (view: LedgerSignView): string => {
   const phase = view.phase;
@@ -34,7 +43,11 @@ const phaseBody = (view: LedgerSignView): string => {
   if (phase.kind === "connect") {
     return `<p>Connect your Ledger, unlock it, and open the Starknet app. Your transaction stays safely paused until the device is ready.</p>
       <div class="ledger-phase-actions">
-        <button class="primary" data-ledger-connect type="button">${icon("shield")}Connect Ledger</button>
+        ${button({
+          attributes: { "data-ledger-connect": true },
+          icon: "shield",
+          label: "Connect Ledger",
+        })}
         ${cancelButton()}
       </div>`;
   }
@@ -57,13 +70,12 @@ const phaseBody = (view: LedgerSignView): string => {
     return `<p>More than one Ledger is connected. Choose the device that holds this account.</p>
       <div class="add-account-chooser" role="group" aria-label="Connected Ledger devices">
         ${phase.devices
-          .map(
-            (device) =>
-              `<button class="menu-row" data-ledger-device="${escapeHtml(device.id)}" type="button">
-                <span class="menu-icon">${icon("shield")}</span>
-                <span class="menu-copy"><strong>${escapeHtml(device.label)}</strong></span>
-                <span class="menu-chevron">${icon("chevronRight")}</span>
-              </button>`,
+          .map((device) =>
+            menuRow({
+              attributes: { "data-ledger-device": device.id },
+              icon: "shield",
+              label: device.label,
+            }),
           )
           .join("")}
       </div>
@@ -71,7 +83,12 @@ const phaseBody = (view: LedgerSignView): string => {
   }
   return `<p class="review-flag" role="alert">${escapeHtml(phase.message)}</p>
     <div class="ledger-phase-actions">
-      <button class="secondary" data-ledger-retry type="button">${icon("refresh")}Try again</button>
+      ${button({
+        attributes: { "data-ledger-retry": true },
+        icon: "refresh",
+        label: "Try again",
+        variant: "secondary",
+      })}
       ${cancelButton()}
     </div>`;
 };
@@ -103,6 +120,28 @@ const phaseIndex = (view: LedgerSignView): number => {
     return 3;
   }
   return 0;
+};
+
+const phaseLiveness: Readonly<Record<LedgerSignView["phase"]["kind"], string>> = {
+  checking: "Talking to the Starknet app…",
+  confirming: "Waiting for confirmation on the device…",
+  connect: "The transaction is safely paused.",
+  connecting: "Waiting for the browser device chooser…",
+  devices: "No device is contacted until you choose one.",
+  discovering: "Looking for an existing secure session…",
+  error: "The transaction has not been signed or broadcast.",
+  submitting: "Signature received; completing wallet verification…",
+  verifying: "Comparing the device key with this account…",
+};
+
+const livenessMark = (view: LedgerSignView): string => {
+  if (view.phase.kind === "error") {
+    return icon("alert");
+  }
+  if (view.phase.kind === "connect") {
+    return icon("lock");
+  }
+  return `${liquidDots("ledger", true)}${liquidDotsFilter("ledger")}`;
 };
 
 const ledgerProgress = (view: LedgerSignView): string => {
@@ -139,7 +178,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
       <h1>Ledger approval</h1>
       <p>Hardware wallet</p>
     </div>
-    <span class="pill"><span class="dot"></span>${escapeHtml(status.network)}</span>
+    ${pill(status.network, { dot: true })}
   </header>
   <main class="screen flow ledger-sign-screen" id="wallet-screen-ledger-sign" tabindex="-1">
     <section class="ledger-progress-card" data-phase="${escapeHtml(view.phase.kind)}">
@@ -151,6 +190,10 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
       </div>
       ${ledgerProgress(view)}
       <div class="ledger-phase-body">${phaseBody(view)}</div>
+      <p class="ledger-liveness" role="status">
+        <span class="ledger-liveness-mark">${livenessMark(view)}</span>
+        ${escapeHtml(phaseLiveness[view.phase.kind])}
+      </p>
     </section>
     <p id="ledger-sign-result" role="status" aria-live="polite"></p>
   </main>`;

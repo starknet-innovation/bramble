@@ -100,7 +100,20 @@ const makeWallet = (overrides: Record<string, unknown> = {}) => {
   const wallet = {
     async loadActivity() {
       calls.loadActivity += 1;
-      return { entries: [], historyUnavailable: false };
+      return {
+        entries: [
+          {
+            accountId: account.id,
+            hash: "0xdeadbeef",
+            kind: "transfer",
+            networkId: "SN_MAIN",
+            status: "accepted",
+            submittedAt: 1,
+            summary: "Sent 1 ETH",
+          },
+        ],
+        historyUnavailable: false,
+      };
     },
     async loadDeploymentStatus() {
       calls.loadDeploymentStatus += 1;
@@ -328,8 +341,9 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(submitCount).toBe(1);
-    expect(resultText(app)).toBe("Not sent — network exploded");
-    expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("failed");
+    expect(app.querySelector("#send-failure-copy")?.textContent).toContain("network exploded");
+    expect(app.querySelector("#send-failure")?.hasAttribute("hidden")).toBe(false);
   });
 
   test("keeps Ledger progress alive across a shell repaint and advances after device signing", async () => {
@@ -374,16 +388,16 @@ describe("bindTransfer", () => {
     expect(app.querySelector("#send-working-title")?.textContent).toBe("Waiting for your Ledger");
 
     markTransferLedgerAuthorized();
-    expect(app.querySelector("#send-working-title")?.textContent).toBe("Device approval verified");
+    expect(app.querySelector("#send-working-title")?.textContent).toBe("Sending to Starknet");
     expect(app.querySelector('[data-send-task="broadcast"]')?.getAttribute("data-state")).toBe(
       "active",
     );
 
-    resolveSubmit("0xsigned");
+    resolveSubmit("0xdeadbeef");
     await flush();
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("submitted");
-    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xsigned");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
   });
 });
 

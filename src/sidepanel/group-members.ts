@@ -19,6 +19,7 @@ import { escapeHtml } from "../shared/html";
 import type { AccountGroup, AccountGroups } from "../storage/account-groups";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { iconButton } from "../ui/controls";
 import { editGroupForm, newGroupForm } from "./group-controls";
 import { CREATE_GROUP_PANEL } from "./group-state";
 import { icon } from "./icons";
@@ -90,7 +91,12 @@ const groupMembersEditor = (
     <div class="group-members" id="group-editor-${escapeHtml(group.id)}"${expanded ? "" : " hidden"}>
       <div class="group-members-head">
         <p class="eyebrow">${count} member${plural}</p>
-        <button class="icon-button danger" type="button" data-remove-group="${escapeHtml(group.id)}" aria-label="Delete ${escapeHtml(group.name)}" title="Delete ${escapeHtml(group.name)}">${icon("x")}</button>
+        ${iconButton({
+          attributes: { "data-remove-group": group.id },
+          icon: "x",
+          label: `Delete ${group.name}`,
+          tone: "danger",
+        })}
       </div>
       ${editGroupForm(group)}
       ${

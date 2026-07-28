@@ -6,9 +6,14 @@
 import { prefersReducedMotion } from "./motion";
 
 const STAGE_ORDER = {
+  asset: 1,
   authorizing: 2,
   broadcasting: 2,
+  confirming: 3,
   details: 0,
+  failed: 3,
+  pending: 3,
+  recipient: -1,
   review: 1,
   reviewing: 1,
   submitted: 3,

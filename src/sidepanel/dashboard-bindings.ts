@@ -65,6 +65,9 @@ export const bindAddressBook = ({ app, render, wallet }: BindingContext): void =
  */
 export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingContext): void => {
   const result = app?.querySelector<HTMLElement>("#approval-result");
+  const live = app?.querySelector<HTMLElement>("#approval-live");
+  const liveTitle = app?.querySelector<HTMLElement>("#approval-live-title");
+  const liveCopy = app?.querySelector<HTMLElement>("#approval-live-copy");
   const deciding = new Set<string>();
   app?.querySelectorAll<HTMLButtonElement>("[data-approval-id]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -74,6 +77,22 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
         return;
       }
       deciding.add(id);
+      const approvalCard = button.closest<HTMLElement>(".request-card");
+      if (approvalCard) {
+        approvalCard.dataset["state"] = "working";
+      }
+      if (live) {
+        live.hidden = false;
+      }
+      if (liveTitle) {
+        liveTitle.textContent = action === "approve" ? "Authorizing request" : "Denying request";
+      }
+      if (liveCopy) {
+        liveCopy.textContent =
+          action === "approve"
+            ? "The reviewed request is locked while the wallet signs and submits it."
+            : "The wallet is returning control to the requesting site.";
+      }
       app
         ?.querySelectorAll<HTMLButtonElement>("[data-approval-id], [data-approval-later]")
         .forEach((control) => {

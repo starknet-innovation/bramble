@@ -11,6 +11,7 @@ import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { isLikelySpam } from "../starknet/token-registry";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
+import { receiptRows } from "../ui/content";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { formatFiat } from "./fiat";
 import { icon } from "./icons";
@@ -231,18 +232,29 @@ const paintSwapStages = (root: Element, figures: SwapFigures): void => {
     return;
   }
   const minReceived = compactAmount((Number(quote.buyAmount) * (1 - SLIPPAGE)).toFixed(8));
-  const deltaRow =
-    valueDelta === null
-      ? ""
-      : `<div class="receipt-row"><dt>Value change</dt><dd${figures.lossPercent >= SWAP_LOSS_WARN_PERCENT ? ' class="swap-delta-bad"' : ""}>${valueDelta > 0 ? "+" : ""}${valueDelta.toFixed(2)}%</dd></div>`;
-  receipt.innerHTML = `
-        <div class="receipt-row"><dt>You sell</dt><dd>${escapeHtml(compactAmount(quote.sellAmount))} ${escapeHtml(sellToken.symbol)}</dd></div>
-        <div class="receipt-row"><dt>You receive (est.)</dt><dd>${escapeHtml(compactAmount(quote.buyAmount))} ${escapeHtml(buyToken.symbol)}</dd></div>
-        <div class="receipt-row"><dt>Minimum received</dt><dd>${escapeHtml(minReceived)} ${escapeHtml(buyToken.symbol)}</dd></div>
-        ${deltaRow}
-        <div class="receipt-row"><dt>Network fee</dt><dd>≈ ${escapeHtml(formatFiat(quote.gasFeesInUsd, "usd"))}</dd></div>
-        <div class="receipt-row"><dt>Slippage cap</dt><dd>0.5%</dd></div>
-        <div class="receipt-row"><dt>Route</dt><dd>AVNU aggregator</dd></div>`;
+  receipt.innerHTML = receiptRows([
+    { label: "You sell", value: `${compactAmount(quote.sellAmount)} ${sellToken.symbol}` },
+    {
+      label: "You receive (est.)",
+      value: `${compactAmount(quote.buyAmount)} ${buyToken.symbol}`,
+    },
+    { label: "Minimum received", value: `${minReceived} ${buyToken.symbol}` },
+    ...(valueDelta === null
+      ? []
+      : [
+          {
+            label: "Value change",
+            value: `${valueDelta > 0 ? "+" : ""}${valueDelta.toFixed(2)}%`,
+            valueTone:
+              figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
+                ? ("danger" as const)
+                : ("default" as const),
+          },
+        ]),
+    { label: "Network fee", value: `≈ ${formatFiat(quote.gasFeesInUsd, "usd")}` },
+    { label: "Slippage cap", value: "0.5%" },
+    { label: "Route", value: "AVNU aggregator" },
+  ]);
   const calls = root.querySelector("#swap-call-review");
   if (calls) {
     const warnings = preparation.flags.map(

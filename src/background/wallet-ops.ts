@@ -13,6 +13,7 @@ import {
   activityForScope,
 } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
+import type { MultisigStore } from "../storage/multisig-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
@@ -34,6 +35,11 @@ export type WalletOpsDeps = {
    * stubs stay valid; a Ledger signing request with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
+  /**
+   * Watched shared-account registry used only to authorize address-scoped,
+   * read-only asset discovery. Signing paths resolve multisigs separately.
+   */
+  readonly multisigStore?: MultisigStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;

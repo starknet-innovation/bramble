@@ -48,6 +48,12 @@ const responses: Readonly<Record<string, unknown>> = {
   "wallet.deployMultisig": { address, ok: true, transactionHash: "0x123" },
   "wallet.executeMultisigProposal": { ok: true, transactionHash: "0x123" },
   "wallet.multisigClassStatus": { declared: true, ok: true },
+  "wallet.multisigBalances": {
+    accountId: multisig.id,
+    balances: [],
+    networkId: "SN_MAIN",
+    ok: true,
+  },
   "wallet.multisigs": { multisigs: [multisig], ok: true, proposals: [proposal] },
   "wallet.proposeMultisigTx": {
     ok: true,
@@ -106,6 +112,7 @@ describe("createMultisigClient", () => {
     });
     expect(await client.executeProposal(proposal.id)).toBe("0x123");
     expect(await client.loadClassStatus()).toBe(true);
+    expect(await client.loadBalances(multisig.id)).toEqual({ balances: [] });
     expect(await client.loadMultisigs()).toEqual({
       multisigs: [multisig],
       proposals: [proposal],
@@ -142,6 +149,7 @@ describe("createMultisigClient", () => {
       type: "wallet.deployMultisig",
     });
     expect(sent).toContainEqual({ id: multisig.id, type: "wallet.refreshMultisig" });
+    expect(sent).toContainEqual({ id: multisig.id, type: "wallet.multisigBalances" });
   });
 
   test("reports list/status errors without replacing them with empty success", async () => {
@@ -151,6 +159,9 @@ describe("createMultisigClient", () => {
       },
     });
     expect(await malformed.loadMultisigs()).toBe("error");
+    expect(await malformed.loadBalances(multisig.id)).toEqual({
+      error: "multisig balances unavailable",
+    });
     expect(await malformed.loadClassStatus()).toBe("error");
 
     const rejected = createMultisigClient({

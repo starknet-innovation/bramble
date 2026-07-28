@@ -8,7 +8,36 @@ const meta: LabMeta = {
 
 export default meta;
 
-export const ChooseSetup = checkpointStory("Choose setup path", "onboarding", "welcome");
+export const ChooseSetup = checkpointStory(
+  "Full-screen setup · choose path",
+  "onboarding",
+  "welcome",
+);
+export const ChooseImportMethod = checkpointStory(
+  "Existing wallet · choose method",
+  "onboarding",
+  "method",
+);
+export const EnterRecoveryPhrase = checkpointStory(
+  "Existing wallet · recovery phrase",
+  "onboarding",
+  "recovery",
+);
+export const CreatePassword = checkpointStory(
+  "Existing wallet · create passphrase",
+  "onboarding",
+  "password",
+);
+export const ChooseAccounts = checkpointStory(
+  "Existing wallet · choose accounts",
+  "onboarding",
+  "accounts",
+);
+export const AccountSelected = checkpointStory(
+  "Existing wallet · account selected",
+  "onboarding",
+  "account-selected",
+);
 export const GeneratedPhrase = checkpointStory(
   "Generated phrase · masked",
   "onboarding",
@@ -19,11 +48,12 @@ export const BackupConfirmed = checkpointStory(
   "onboarding",
   "backup-confirmed",
 );
-export const ImportExisting = checkpointStory(
-  "Import existing wallet",
+export const LedgerPassword = checkpointStory(
+  "Ledger wallet · local passphrase",
   "onboarding",
-  "import-existing",
+  "ledger-password",
 );
+export const SetupComplete = checkpointStory("Setup · complete", "onboarding", "complete");
 export const ReturningLocked = checkpointStory("Returning wallet · locked", "unlock", "locked");
 export const RequestWaiting = checkpointStory(
   "Returning wallet · request waiting",

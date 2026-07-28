@@ -10,7 +10,11 @@ import { registerDom, unregisterDom } from "../support/groups-harness";
 beforeAll(registerDom);
 afterAll(unregisterDom);
 
-const mount = (html: string, render: () => Promise<void> = async () => {}) => {
+const mount = (
+  html: string,
+  render: () => Promise<void> = async () => {},
+  overrides: Partial<MultisigUiDeps> = {},
+) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.append(document.createRange().createContextualFragment(html));
@@ -27,6 +31,7 @@ const mount = (html: string, render: () => Promise<void> = async () => {}) => {
         return {};
       },
     },
+    ...overrides,
   } as unknown as MultisigUiDeps);
   return app;
 };
@@ -58,5 +63,54 @@ describe("bindMultisigs", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(renders).toBe(1);
+  });
+
+  test("requires a stable review before creating a proposal", async () => {
+    const proposals: unknown[] = [];
+    const app = mount(
+      `<form id="multisig-propose-form" data-proposal-mode="advanced">
+        <input name="summary" value="Pay contributor" />
+        <input name="to" value="0x123" />
+        <input name="entrypoint" value="transfer" />
+        <textarea name="calldata">0x456, 0x1</textarea>
+        <input name="salt" value="0x789" />
+        <div id="multisig-propose-review"></div>
+        <button type="submit">Review proposal</button>
+        <p id="multisig-propose-result"></p>
+      </form>`,
+      async () => {},
+      {
+        multisig: {
+          async proposeTransaction(proposal) {
+            proposals.push(proposal);
+            return "0xabc";
+          },
+        } as MultisigUiDeps["multisig"],
+        selectedMultisigId: () => "SN_MAIN:0x999",
+      },
+    );
+    const form = app.querySelector<HTMLFormElement>("#multisig-propose-form");
+    const submit = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+    form?.requestSubmit();
+    expect(proposals).toEqual([]);
+    expect(form?.dataset["proposalStage"]).toBe("review");
+    expect(app.querySelector("#multisig-propose-review")?.textContent).toContain(
+      "Transaction details",
+    );
+    expect(submit?.textContent).toContain("Review proposal");
+
+    form?.requestSubmit();
+    await Promise.resolve();
+    expect(proposals).toEqual([
+      {
+        calldata: ["0x456", "0x1"],
+        entrypoint: "transfer",
+        multisigId: "SN_MAIN:0x999",
+        salt: "0x789",
+        summary: "Pay contributor",
+        to: "0x123",
+      },
+    ]);
   });
 });

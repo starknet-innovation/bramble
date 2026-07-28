@@ -15,9 +15,23 @@ export type NavDirection = "forward" | "back" | "swap";
 // Detail screens sit two levels deep, below the flows reached from a dock
 // screen. Kept beside viewDepth so the depth map lives in one place.
 const DETAIL_VIEWS: readonly WalletView[] = [
+  "advanced-network",
+  "import-key",
+  "backup-export",
+  "backup-restore",
   "token-detail",
+  "token-add",
+  "token-discover",
   "nft-detail",
+  "nft-hidden",
+  "nft-send",
+  "nft-watch",
+  "multisig-home",
   "multisig-detail",
+  "multisig-signers",
+  "multisig-track",
+  "multisig-receive",
+  "multisig-watch",
   "multisig-propose",
   "multisig-deploy",
 ];

@@ -42,22 +42,27 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('data-view="receive"');
     expect(html).toContain('aria-controls="wallet-screen-home"');
     expect(html).toContain('aria-selected="true"');
+    expect(dock).toContain('class="nav-tooltip"');
+    expect(dock).not.toContain('class="tab-label"');
   });
 
-  test("home keeps send, swap, and receive as quick actions, not settings or activity", () => {
+  test("home keeps four frequent actions together, not settings or activity", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
-    const hero = html.slice(html.indexOf("hero"), html.indexOf("wallet-dock"));
+    const actions = html.slice(html.indexOf("action-row"), html.indexOf("terminal-cta"));
 
-    expect(hero).toContain('data-view="send"');
-    // Swap sits between Send and Receive on the action row.
-    expect(hero).toMatch(/data-view="send"[\s\S]*data-view="swap"[\s\S]*data-view="receive"/);
-    expect(hero).toContain('data-view="receive"');
-    expect(hero).not.toContain('data-view="settings"');
+    expect(actions).toContain('data-view="send"');
+    expect(actions).toMatch(
+      /data-view="send"[\s\S]*data-view="swap"[\s\S]*data-view="receive"[\s\S]*Open MC Terminal portfolio/,
+    );
+    expect(actions).toContain('data-view="receive"');
+    expect(actions).toContain(">Portfolio</span>");
+    expect(actions).not.toContain('data-view="settings"');
+    expect(actions).not.toContain('data-view="activity"');
     expect(html).not.toContain('id="wallet-screen-receive"');
-    // Home shows the truncated address and offers copy; the full address is
-    // only a copy affordance (data-copy), never rendered as visible text.
+    // Account identity already lives in the header; the portfolio hero neither
+    // renders nor repeats a copy pill for the address.
     expect(html).not.toContain(`<code>${account.address}`);
-    expect(html).toContain(`data-copy="${account.address}"`);
+    expect(html).not.toContain(`data-copy="${account.address}"`);
   });
 
   test("receive is a dedicated flow screen with back navigation and no dock", () => {
@@ -77,18 +82,22 @@ describe("sidepanel views", () => {
     expect(html).toMatch(/menu-row" data-view="network"[\s\S]*?Network/);
     expect(html).toContain('data-view="account"');
     expect(html).toContain('data-view="address-book"');
-    expect(html).toContain('data-view="backup"');
+    expect(html).toContain('data-view="appearance"');
+    expect(html).toContain('data-view="request-settings"');
+    expect(html).toContain('data-view="security"');
     expect(html).not.toContain('id="active-network"');
     expect(html).not.toContain('id="active-account"');
-    // Theme is a two-way pin (Dark default / Light); the follow-the-browser
-    // "system" option was removed.
-    expect(html).toContain('data-theme-id="dark"');
-    expect(html).toContain('data-theme-id="light"');
+    expect(html).not.toContain('data-theme-id="dark"');
+    expect(html).not.toContain('id="currency-select"');
+    const appearance = dashboard("appearance", status, [], preferences, { balances: [] });
+    expect(appearance).toContain('data-theme-id="dark"');
+    expect(appearance).toContain('data-theme-id="light"');
+    expect(appearance).toContain('id="currency-select"');
+    const requests = dashboard("request-settings", status, [], preferences, { balances: [] });
+    expect(requests).toContain('data-approval-surface="side-panel"');
+    expect(requests).toContain('data-approval-surface="popup"');
+    expect(requests).toMatch(/data-approval-surface="side-panel"[^>]*aria-pressed="true"/);
     expect(html).not.toContain('data-theme-id="system"');
-    expect(html).toContain('id="currency-select"');
-    expect(html).toContain('data-approval-surface="side-panel"');
-    expect(html).toContain('data-approval-surface="popup"');
-    expect(html).toMatch(/data-approval-surface="side-panel"[^>]*aria-pressed="true"/);
     // The dock is a solid anchored bottom bar (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');
   });
@@ -170,6 +179,10 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="review-panel"');
     expect(html).toContain('name="speed"');
     expect(html).toContain("Review send");
+    expect(html).toContain('class="liquid-dots"');
+    expect(html).toContain('data-liquid-dots="send"');
+    expect(html).toContain('id="mc-liquid-dots-send"');
+    expect(html).not.toContain("send-spin");
   });
 
   test("activity lists recorded transactions with status and export controls", () => {
@@ -234,41 +247,25 @@ describe("sidepanel views", () => {
     expect(degraded).toContain("No transactions recorded on this device yet.");
   });
 
-  test("home activity tab shows a degraded hint when on-chain history is unreachable", () => {
-    const reachable = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, false);
-    expect(reachable).not.toContain("On-chain history unavailable");
-
-    const degraded = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, true);
-    expect(degraded).toContain("On-chain history unavailable");
-    expect(degraded).toContain("No transactions recorded on this device yet.");
-  });
-
   test("home Tokens tab renders a retryable error panel when the balance load failed", () => {
     // A failed balance load has no balances to hide, so visibleHomeBalances
     // collapses to an empty list and the panel shows the friendly error plus an
     // in-panel retry button wired to reload balances.
     expect(visibleHomeBalances({ error: "fetch failed" }, preferences)).toEqual([]);
 
-    const html = homeTabs({ error: "fetch failed" }, preferences, {}, {}, "usd", [], status, false);
+    const html = homeTabs({ error: "fetch failed" }, preferences, {}, {}, "usd", status);
     expect(html).toContain("panel-error");
     expect(html).toContain("data-reload-balances");
     expect(html).toContain("Try again");
     expect(html).not.toContain("No tracked balances yet");
   });
 
-  test("home tab and activity dock draw empty-state copy from one shared source", () => {
-    // Both surfaces must render byte-identical empty-state copy so a future
-    // reword of one can never drift from the other.
+  test("activity dock draws reachable and degraded copy from one shared source", () => {
     expect(activityEmptyCopy(true)).toBe("No transactions recorded on this device yet.");
     expect(activityEmptyCopy(false)).toContain("No activity yet.");
 
-    const homeReachable = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, false);
     const dockReachable = dashboard("activity", status, [], preferences, { balances: [] });
-    expect(homeReachable).toContain(activityEmptyCopy(false));
     expect(dockReachable).toContain(activityEmptyCopy(false));
-
-    const homeDegraded = homeTabs({ balances: [] }, preferences, {}, {}, "usd", [], status, true);
-    expect(homeDegraded).toContain(activityEmptyCopy(true));
   });
 
   test("shows account labels and identicons across header and account flow", () => {
@@ -286,18 +283,23 @@ describe("sidepanel views", () => {
     expect(accountFlowHtml).toContain('class="option-avatar"');
   });
 
-  test("avatars are flat single-colour chips from the palette, never gradients", () => {
-    // Clean Mono avatars: one solid --mc-avatar-* fill per account with a glyph
-    // — no <linearGradient>, so the only non-mono field is the flat chip itself.
+  test("avatars are deterministic Beam characters from the identity palette", () => {
+    // Account identity colour stays within the dedicated local tokens—no
+    // gradients, remote imagery, raw colour values, or inset frames.
     const html = dashboard("home", status, [], preferences, { balances: [] });
     expect(html).toContain('class="avatar"');
-    expect(html).toMatch(/fill="var\(--mc-avatar-\d\)"/);
-    expect(html).toContain("var(--mc-avatar-ink)");
+    expect(html).toContain('class="avatar-character"');
+    expect(html).toContain('class="avatar-eyes"');
+    expect(html).toContain('class="avatar-mouth"');
+    expect(html).toMatch(/fill="var\(--mc-account-avatar-\d\)"/);
+    expect(html).toMatch(/var\(--mc-account-avatar-(?:ink|paper)\)/);
+    expect(html).not.toContain('class="avatar-frame"');
     expect(html).not.toContain("linearGradient");
     expect(html).not.toContain("<defs>");
+    expect(html).not.toMatch(/fill="#/);
   });
 
-  test("home hero carries the total-balance label and 24h delta, and no chart", () => {
+  test("home hero carries the value and 24h delta without redundant identity copy", () => {
     const tokenBalance: TokenBalance = {
       address: "0x00aa",
       balance: "10000000000000000000",
@@ -330,9 +332,9 @@ describe("sidepanel views", () => {
       { "0x00aa": 4 },
     );
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("action-row"));
-    // Eyebrow label above the total.
-    expect(hero).toContain('class="hero-eyebrow"');
-    expect(hero).toContain("Total balance");
+    expect(hero).not.toContain('class="hero-eyebrow"');
+    expect(hero).not.toContain("Total balance");
+    expect(hero).not.toContain('data-copy="');
     // 24h delta line: coloured magnitude + a muted "· 24h" window; +4% ⇒ up.
     expect(hero).toContain('class="hero-change"');
     expect(hero).toContain('class="hero-change-amt"');
@@ -343,12 +345,16 @@ describe("sidepanel views", () => {
     expect(hero).not.toContain("7d ago");
   });
 
-  test("backup flow exports and restores non-secret data with back navigation", () => {
+  test("backup hub separates export and restore into focused screens", () => {
     const html = dashboard("backup", status, [], preferences, { balances: [] });
 
-    expect(html).toContain('id="backup-export"');
-    expect(html).toContain('id="backup-import"');
-    expect(html).toContain('id="backup-file"');
+    expect(html).toContain('data-view="backup-export"');
+    expect(html).toContain('data-view="backup-restore"');
+    const backupExport = dashboard("backup-export", status, [], preferences, { balances: [] });
+    expect(backupExport).toContain('id="backup-export"');
+    const backupRestore = dashboard("backup-restore", status, [], preferences, { balances: [] });
+    expect(backupRestore).toContain('id="backup-import"');
+    expect(backupRestore).toContain('id="backup-file"');
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
     expect(html).not.toContain('class="wallet-dock"');
   });
@@ -364,8 +370,10 @@ describe("sidepanel views", () => {
     expect(WALLET_VIEWS).toContain("reveal");
     const html = dashboard("settings", status, [], preferences, { balances: [] });
 
-    expect(html).toContain('data-view="reveal"');
-    expect(html).toContain("Reveal secrets");
+    expect(html).toContain('data-view="security"');
+    const security = dashboard("security", status, [], preferences, { balances: [] });
+    expect(security).toContain('data-view="reveal"');
+    expect(security).toContain("Reveal recovery secrets");
   });
 
   test("reveal flow re-authenticates and masks secrets until tapped", () => {

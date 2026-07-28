@@ -96,6 +96,7 @@ const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> = {}) =>
   let cancels = 0;
   let hdAdds = 0;
   let imports = 0;
+  let multisigs = 0;
   // request() hands back an OWNED session; its close bumps a counter so tests
   // assert the enumeration transport is released on every outcome.
   const connector: LedgerConnector = {
@@ -138,6 +139,9 @@ const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> = {}) =>
     openImport: () => {
       imports += 1;
     },
+    openMultisig: () => {
+      multisigs += 1;
+    },
     refresh: () => {
       refreshed += 1;
       return Promise.resolve();
@@ -152,6 +156,7 @@ const onboardHarness = (overrides: Partial<LedgerOnboardControllerDeps> = {}) =>
     deps,
     hdAdds: () => hdAdds,
     imports: () => imports,
+    multisigs: () => multisigs,
     refreshed: () => refreshed,
     views,
   };
@@ -440,9 +445,22 @@ describe("add-account chooser routing", () => {
     const h = onboardHarness();
     const controller = createLedgerOnboardController(h.deps);
     controller.showChooser();
-    expect(h.views.at(-1)?.kind).toBe("chooser");
+    expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: null });
     controller.choose("ledger");
     expect(h.views.at(-1)?.kind).toBe("connect");
+  });
+
+  test("selection requires Continue and routes Multisig without mutating the wallet", () => {
+    const h = onboardHarness();
+    const controller = createLedgerOnboardController(h.deps);
+    controller.showChooser();
+    controller.select("multisig");
+    expect(h.views.at(-1)).toEqual({ kind: "chooser", selected: "multisig" });
+    expect(h.multisigs()).toBe(0);
+    controller.continueChoice();
+    expect(h.views.at(-1)).toBeNull();
+    expect(h.multisigs()).toBe(1);
+    expect(h.hdAdds()).toBe(0);
   });
 
   test("choose('import') dismisses the overlay and routes to the import form", () => {

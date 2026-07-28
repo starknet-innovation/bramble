@@ -8,7 +8,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
-import { nftDetailFlow, nftGalleryFlow } from "../../src/sidepanel/nft-views";
+import { nftSendFlow } from "../../src/sidepanel/nft-send-view";
+import { nftDetailFlow, nftGalleryFlow, nftHiddenFlow } from "../../src/sidepanel/nft-views";
 import type { DiscoveredNft } from "../../src/starknet/nft-metadata";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
 import { account, preferences } from "../support/sidepanel-fixtures";
@@ -89,7 +90,7 @@ describe("NFT gallery auto-discovery", () => {
   test("shows the indexer-aware empty state when nothing is discovered or watched", () => {
     const html = nftGalleryFlow(status, account, preferences, []);
     expect(html).toContain("NFT indexer");
-    expect(html).toContain('id="nft-form"');
+    expect(html).toContain('data-view="nft-watch"');
     expect(html).toContain("0 shown");
   });
 
@@ -108,23 +109,52 @@ describe("NFT gallery auto-discovery", () => {
     };
     const html = nftGalleryFlow(status, account, withSpam, [discovered]);
     expect(html).not.toContain('data-nft-open="SN_MAIN:0x511a2b3:5"');
-    expect(html).toContain("Hidden");
-    expect(html).toContain('data-nft-spam-value="false"');
+    expect(html).toContain('data-view="nft-hidden"');
+    const hidden = nftHiddenFlow(status, withSpam);
+    expect(hidden).toContain('data-nft-spam-value="false"');
     expect(html).toContain("0 shown");
   });
 
   test("detail opens for a discovered token that is not manually watched", () => {
     const html = nftDetailFlow(status, account, preferences, "SN_MAIN:0x511a2b3:5", [discovered]);
-    expect(html).toContain('id="nft-send-form"');
+    expect(html).toContain('data-view="nft-send"');
     expect(html).toContain("Everai #5");
-    expect(html).toContain("0x511a2b3");
+    expect(html).toContain("0x511a…a2b3");
     expect(html).toContain('<img class="nft-image nft-image--pixelated"');
     expect(html).toContain('loading="eager"');
     expect(html).toContain("A test collectible");
     expect(html).toContain("<h2>Attributes</h2>");
     expect(html).toContain("CryptoPunks");
-    expect(html).toContain('id="nft-review-panel"');
-    expect(html).toContain("Review transfer");
+    const send = nftSendFlow(status, account, preferences, "SN_MAIN:0x511a2b3:5", [discovered]);
+    expect(send).toContain('id="nft-review-panel"');
+    expect(send).toContain("Review transfer");
+  });
+
+  test("send offers matching address-book recipients and disables without an account", () => {
+    const withContacts: WalletPreferences = {
+      ...preferences,
+      addressBook: [
+        {
+          address: "0xabc",
+          id: "SN_MAIN:0xabc",
+          label: "Treasury",
+          networkId: "SN_MAIN",
+        },
+        {
+          address: "0xdef",
+          id: "SN_SEPOLIA:0xdef",
+          label: "Sepolia contact",
+          networkId: "SN_SEPOLIA",
+        },
+      ],
+    };
+    const send = nftSendFlow(status, account, withContacts, discovered.id, [discovered]);
+    expect(send).toContain('data-nft-recipient="0xabc"');
+    expect(send).not.toContain("Sepolia contact");
+
+    const disabled = nftSendFlow(status, null, withContacts, discovered.id, [discovered]);
+    expect(disabled).toContain("No account on Starknet");
+    expect(disabled).toMatch(/type="submit"[^>]*disabled|disabled[^>]*type="submit"/);
   });
 
   test("keeps rich metadata when the selected NFT is also watched", () => {

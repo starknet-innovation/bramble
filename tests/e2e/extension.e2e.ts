@@ -15,39 +15,36 @@ import {
   VAULT_PASSPHRASE,
 } from "./wallet-helpers";
 
-test("loads the built extension and renders side panel onboarding", async ({ extension }) => {
+test("keeps wallet setup out of the side panel", async ({ extension }) => {
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
 
-  await expect(sidepanel.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
-  await expect(sidepanel.getByRole("button", { name: /Generate phrase/ })).toBeEnabled();
-  await expect(sidepanel.locator('select[name="networkId"]')).toHaveValue("SN_MAIN");
+  await expect(sidepanel.getByRole("heading", { name: "Set up in a browser tab" })).toBeVisible();
+  await expect(sidepanel.getByRole("link", { name: "Open full-screen setup" })).toBeVisible();
+  await expect(sidepanel.getByRole("button", { name: "Create a new wallet" })).toHaveCount(0);
 });
 
 test("loads the dedicated full-screen onboarding surface", async ({ extension }) => {
   const onboarding = await extension.openExtensionPage("onboarding.html");
 
   await expect(onboarding.locator("body")).toHaveClass("onboarding-surface");
-  await expect(onboarding.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
-  await expect(onboarding.getByRole("link", { name: "Open full-screen setup" })).toBeHidden();
+  await expect(onboarding.getByRole("button", { name: "Create a new wallet" })).toBeVisible();
+  await expect(onboarding.getByRole("link", { name: "Open full-screen setup" })).toHaveCount(0);
 });
 
 test("completes an imported wallet in full-screen onboarding", async ({ extension }) => {
   const onboarding = await extension.openExtensionPage("onboarding.html");
 
-  await onboarding.locator('textarea[name="mnemonic"]').fill(IMPORT_MNEMONIC);
-  await onboarding.locator('input[name="vaultPassphrase"]').fill(VAULT_PASSPHRASE);
-  await onboarding.locator('input[name="mainnetAck"]').check();
-  await onboarding.getByRole("button", { name: "Create wallet" }).click();
-
-  await expect(onboarding.getByRole("heading", { name: "Your wallet is ready" })).toBeVisible();
-  await expect(onboarding.getByRole("button", { name: "Open wallet" })).toBeVisible();
+  await importWalletFromPhrase(onboarding, IMPORT_MNEMONIC);
+  await expect(onboarding.getByRole("heading", { name: "You’re all set" })).toBeVisible();
+  await expect(onboarding.getByRole("button", { name: "Open MC Wallet" })).toBeVisible();
 });
 
 test("loads the built toolbar popup surface", async ({ extension }) => {
   const popup = await extension.openExtensionPage("popup.html");
 
   await expect(popup.locator("body")).toHaveClass("popup-surface");
-  await expect(popup.getByRole("heading", { name: "Create your wallet" })).toBeVisible();
+  await expect(popup.getByRole("link", { name: "Open full-screen setup" })).toBeVisible();
+  await expect(popup.getByRole("button", { name: "Create a new wallet" })).toHaveCount(0);
 });
 
 test("loads the dedicated Ledger hardware session surface", async ({ extension }) => {

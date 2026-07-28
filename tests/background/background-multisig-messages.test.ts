@@ -48,6 +48,7 @@ describe("multisig messages", () => {
     const { handler } = makeMultisigHarness();
     for (const type of [
       "wallet.multisigs",
+      "wallet.multisigBalances",
       "wallet.addMultisig",
       "wallet.deployMultisig",
       "wallet.proposeMultisigTx",
@@ -76,6 +77,19 @@ describe("multisig messages", () => {
       multisigs: readonly { id: string }[];
     };
     expect(listed.multisigs).toHaveLength(1);
+  });
+  test("loads portfolio balances for the watched contract, not the active signer", async () => {
+    const { balanceReads, handler } = makeMultisigHarness();
+    const watched = (await watch(handler)) as { multisig: { id: string } };
+    await expect(
+      handler({ id: watched.multisig.id, type: "wallet.multisigBalances" }, harnessExtensionSender),
+    ).resolves.toMatchObject({
+      accountId: watched.multisig.id,
+      balances: [],
+      networkId: "SN_MAIN",
+      ok: true,
+    });
+    expect(balanceReads).toEqual([HARNESS_MULTISIG]);
   });
   test("refuses to watch a multisig the active account cannot sign for", async () => {
     const { handler } = makeMultisigHarness({ signers: [HARNESS_OTHER_SIGNER] });

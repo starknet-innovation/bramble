@@ -3,7 +3,12 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance } from "../../src/popup/responses";
-import { balanceRow, compactAmount, tokenGlyph } from "../../src/sidepanel/token-row";
+import {
+  balanceRow,
+  compactAmount,
+  starknetNetworkGlyph,
+  tokenGlyph,
+} from "../../src/sidepanel/token-row";
 
 const token: TokenBalance = {
   address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
@@ -46,6 +51,12 @@ describe("balanceRow", () => {
     const glyph = tokenGlyph("0x1234", "FOO");
     // Letter badges carry a deterministic per-token tint (data-tone).
     expect(glyph).toMatch(/^<span class="token-mark" data-tone="[0-3]">FOO<\/span>$/);
+  });
+
+  test("uses the trusted bundled token mark for Starknet network context", () => {
+    const glyph = starknetNetworkGlyph();
+    expect(glyph).toContain('<svg class="token-logo"');
+    expect(glyph).not.toContain('class="token-mark"');
   });
 
   test("compactAmount groups thousands and trims trailing zeros", () => {

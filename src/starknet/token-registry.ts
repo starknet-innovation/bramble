@@ -8,7 +8,7 @@
  * probe and is never surfaced, and none of this data authorizes a transfer.
  */
 import type { TokenConfig } from "../storage/preferences-store";
-import { type StarknetNetworkId, sameFelt } from "./networks";
+import { STRK_TOKEN_ADDRESS, type StarknetNetworkId, sameFelt } from "./networks";
 
 /**
  * A registry token without its derived preference id.
@@ -37,7 +37,7 @@ const MAINNET_TOKENS: readonly RegistryToken[] = [
     symbol: "ETH",
   },
   {
-    address: "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+    address: STRK_TOKEN_ADDRESS,
     decimals: 18,
     name: "Starknet Token",
     networkId: "SN_MAIN",

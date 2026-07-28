@@ -9,6 +9,8 @@ import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { type AllowanceView, isUnlimitedAllowance } from "../starknet/allowance-discovery";
 import type { AccountRef } from "../storage/vault-schema";
+import { emptyState } from "../ui/content";
+import { button } from "../ui/controls";
 import { accountLabel, flowHeader, flowScreen } from "./parts";
 import { compactAmount } from "./token-row";
 
@@ -27,7 +29,13 @@ const allowanceRow = (allowance: AllowanceView): string => `
       <code>${escapeHtml(accountLabel(allowance.spender))}</code>
       <p class="hint">${escapeHtml(amountLabel(allowance.amount))} of ${escapeHtml(accountLabel(allowance.token))} · ${escapeHtml(sourceLabel(allowance.source))}</p>
     </div>
-    <button class="ghost small danger" data-revoke-allowance="${escapeHtml(allowance.id)}" type="button">Revoke</button>
+    ${button({
+      attributes: { "data-revoke-allowance": allowance.id },
+      label: "Revoke",
+      size: "small",
+      tone: "danger",
+      variant: "ghost",
+    })}
   </li>`;
 
 /**
@@ -50,9 +58,11 @@ export const allowancesFlow = (
         <p class="hint">Outstanding token approvals for this account: those you granted here plus any discovered on-chain for the tokens you track. Revoking sets the spender's allowance to zero. Approvals on tokens you don't track may not appear.</p>
         ${
           account === null
-            ? '<p class="empty">Unlock an account on this network to manage allowances.</p>'
+            ? emptyState("Unlock an account on this network to manage allowances.")
             : scoped.length === 0
-              ? '<p class="empty">No outstanding allowances found for this account. Approvals on tokens you don\'t track are not scanned.</p>'
+              ? emptyState(
+                  "No outstanding allowances found for this account. Approvals on tokens you don't track are not scanned.",
+                )
               : `<ul class="allowance-list">${scoped.map(allowanceRow).join("")}</ul>`
         }
         <p id="allowance-result" role="status"></p>

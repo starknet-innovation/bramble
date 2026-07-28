@@ -15,8 +15,11 @@ import type { NftAttribute } from "../starknet/nft-metadata";
 import type { WatchedNft } from "../storage/nft";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { emptyState, receipt } from "../ui/content";
+import { button, iconButton } from "../ui/controls";
+import { textField } from "../ui/fields";
 import { icon } from "./icons";
-import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "./parts";
+import { accountLabel, flowHeader, flowScreen, noAccountEmpty, walletMenuRow } from "./parts";
 
 /**
  * One display-safe collectible normalized from discovery metadata or a saved
@@ -115,7 +118,7 @@ export const visibleNftItems = (
 // nft-ui when it fails to load. Images are withheld (placeholder only) for
 // unsolicited auto-discovered NFTs until the user explicitly opens that NFT, so
 // an airdropped tile cannot deanonymize the wallet (address -> IP) merely by the
-// gallery painting a remote <img>. Solicited (manually watched) NFTs and the
+// gallery painting a remote image element. Solicited (manually watched) NFTs and the
 // opened detail view reveal immediately.
 /**
  * Renders a resolved NFT image only after the caller has established that the
@@ -135,10 +138,30 @@ const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
 // discovered-only entry is persisted-as-spam by nft-ui using the data-* target.
 const hideButton = (item: NftGalleryItem): string =>
   item.watched
-    ? `<button class="ghost small" data-nft-spam="${escapeHtml(item.id)}" data-nft-spam-value="true" type="button">Hide</button>`
-    : `<button class="ghost small" data-nft-hide="${escapeHtml(item.id)}" data-nft-hide-contract="${escapeHtml(item.contract)}" data-nft-hide-token="${escapeHtml(item.tokenId)}" data-nft-hide-network="${escapeHtml(item.networkId)}" data-nft-hide-name="${escapeHtml(item.title)}" type="button">Hide</button>`;
+    ? button({
+        attributes: { "data-nft-spam": item.id, "data-nft-spam-value": "true" },
+        label: "Hide",
+        size: "small",
+        variant: "ghost",
+      })
+    : button({
+        attributes: {
+          "data-nft-hide": item.id,
+          "data-nft-hide-contract": item.contract,
+          "data-nft-hide-name": item.title,
+          "data-nft-hide-network": item.networkId,
+          "data-nft-hide-token": item.tokenId,
+        },
+        label: "Hide",
+        size: "small",
+        variant: "ghost",
+      });
 
-const nftCard = (item: NftGalleryItem, eager: boolean): string => `
+/**
+ * Renders one production gallery card, including privacy-aware art loading and
+ * watched/hidden actions.
+ */
+export const nftGalleryCard = (item: NftGalleryItem, eager: boolean): string => `
   <li class="nft-card">
     <button class="nft-open" data-nft-open="${escapeHtml(item.id)}" type="button">
       ${nftArt(item, item.watched, eager)}
@@ -151,7 +174,13 @@ const nftCard = (item: NftGalleryItem, eager: boolean): string => `
       ${hideButton(item)}
       ${
         item.watched
-          ? `<button class="ghost small danger" data-remove-nft="${escapeHtml(item.id)}" type="button">Remove</button>`
+          ? button({
+              attributes: { "data-remove-nft": item.id },
+              label: "Remove",
+              size: "small",
+              tone: "danger",
+              variant: "ghost",
+            })
           : ""
       }
     </div>
@@ -163,18 +192,28 @@ const hiddenRow = (nft: WatchedNft): string => `
       <strong>${escapeHtml(watchedTitle(nft))}</strong>
       <code>${escapeHtml(accountLabel(nft.contract))} · #${escapeHtml(nft.tokenId)}</code>
     </div>
-    <button class="secondary small" data-nft-spam="${escapeHtml(nft.id)}" data-nft-spam-value="false" type="button">${icon("check")}Unhide</button>
-    <button class="icon-button danger" data-remove-nft="${escapeHtml(nft.id)}" type="button" aria-label="Remove" title="Remove">${icon("x")}</button>
+    ${button({
+      attributes: { "data-nft-spam": nft.id, "data-nft-spam-value": "false" },
+      icon: "check",
+      label: "Unhide",
+      size: "small",
+      variant: "secondary",
+    })}
+    ${iconButton({
+      attributes: { "data-remove-nft": nft.id },
+      icon: "x",
+      label: "Remove",
+      tone: "danger",
+    })}
   </li>`;
 
 /**
  * NFT gallery flow: an auto-discovered grid of owned collectibles merged with
- * manual watches, a hidden-as-spam section, and the manual add-by-ownership
- * form.
+ * manual watches. Watch and hidden-item management are dedicated screens.
  */
 export const nftGalleryFlow = (
   status: WalletStatus,
-  account: AccountRef | null,
+  _account: AccountRef | null,
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => {
@@ -186,42 +225,106 @@ export const nftGalleryFlow = (
     flowScreen(
       "nfts",
       `<section class="section">
+        <div class="menu-list" role="group" aria-label="Collectible actions">
+          ${walletMenuRow("nft-watch", "Watch by contract", "plus")}
+          ${walletMenuRow("nft-hidden", "Hidden collectibles", "image", String(hidden.length))}
+        </div>
+      </section>
+      <section class="section">
         ${
           visible.length === 0
-            ? '<p class="empty">No collectibles found for this account yet. Watch one you own below, or set an NFT indexer in Network settings to auto-discover them.</p>'
-            : `<ul class="nft-grid">${visible.map((nft, index) => nftCard(nft, index < 4)).join("")}</ul>`
+            ? emptyState(
+                "No collectibles found for this account yet. Watch one you own, or configure an NFT indexer in Advanced endpoints.",
+              )
+            : `<ul class="nft-grid">${visible.map((nft, index) => nftGalleryCard(nft, index < 4)).join("")}</ul>`
         }
-      </section>
-      ${
-        hidden.length === 0
-          ? ""
-          : `<section class="section">
-              <h2>Hidden</h2>
-              <ul class="address-book">${hidden.map(hiddenRow).join("")}</ul>
-            </section>`
-      }
-      <section class="section">
-        <h2>Watch an NFT</h2>
-        ${account ? "" : noAccountEmpty(status)}
-        <form id="nft-form">
-          <input name="networkId" type="hidden" value="${escapeHtml(status.networkId)}" />
-          <label><span>Contract</span><input class="mono" name="contract" placeholder="0x…" required autocomplete="off" spellcheck="false" ${account ? "" : "disabled"} /></label>
-          <label><span>Token id</span><input class="mono" name="tokenId" inputmode="numeric" placeholder="0" required autocomplete="off" ${account ? "" : "disabled"} /></label>
-          <label><span>Label (optional)</span><input name="label" maxlength="64" autocomplete="off" ${account ? "" : "disabled"} /></label>
-          <span class="hint">The active account must own the token; ownership is checked on-chain before it is added.</span>
-          <button type="submit" ${account ? "" : "disabled"}>${icon("check")}Add NFT</button>
-          <p id="nft-result" role="status"></p>
-        </form>
       </section>`,
     )
   );
 };
 
-// Resolves the selected NFT for the detail screen from the rich discovery copy
-// first, using its matching watch only for the label/action state. This avoids
-// discarding fetched metadata for manually watched NFTs. A watch-only fallback
-// still opens when discovery has not completed.
-const selectedDetail = (
+/**
+ * Renders manual NFT watch as an isolated ownership-verification task.
+ */
+export const nftWatchFlow = (status: WalletStatus, account: AccountRef | null): string =>
+  flowHeader("Watch collectible", status, "Add one token you already own") +
+  flowScreen(
+    "nft-watch",
+    `<section class="section">
+      ${account ? "" : noAccountEmpty(status)}
+      <form id="nft-form">
+        <input name="networkId" type="hidden" value="${escapeHtml(status.networkId)}" />
+        ${textField({
+          autocomplete: "off",
+          className: "mono",
+          disabled: account === null,
+          label: "Contract",
+          name: "contract",
+          placeholder: "0x…",
+          required: true,
+          spellcheck: false,
+        })}
+        ${textField({
+          autocomplete: "off",
+          className: "mono",
+          disabled: account === null,
+          inputmode: "numeric",
+          label: "Token id",
+          name: "tokenId",
+          placeholder: "0",
+          required: true,
+        })}
+        ${textField({
+          autocomplete: "off",
+          disabled: account === null,
+          label: "Label (optional)",
+          maxlength: 64,
+          name: "label",
+        })}
+        <p class="hint">Ownership and token metadata are checked on-chain before this collectible is saved.</p>
+        ${button({
+          disabled: account === null,
+          icon: "check",
+          label: "Check and add collectible",
+          type: "submit",
+        })}
+        <p id="nft-result" role="status"></p>
+      </form>
+    </section>`,
+  );
+
+/**
+ * Renders hidden collectible management without crowding the gallery.
+ */
+export const nftHiddenFlow = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): string => {
+  const hidden = (preferences?.nfts ?? []).filter(
+    (nft) => nft.networkId === status.networkId && nft.spam === true,
+  );
+  return (
+    flowHeader("Hidden collectibles", status, `${hidden.length} hidden`) +
+    flowScreen(
+      "nft-hidden",
+      `<section class="section">
+        <p class="hint">Hidden collectibles stay out of the gallery. Unhide only tokens you recognize.</p>
+        ${
+          hidden.length === 0
+            ? emptyState("No collectibles are hidden on this network.")
+            : `<ul class="address-book">${hidden.map(hiddenRow).join("")}</ul>`
+        }
+      </section>`,
+    )
+  );
+};
+
+/**
+ * Resolves one selected collectible from rich discovery metadata first, using
+ * a matching watch only for label and action state. A saved-watch fallback
+ * remains usable while discovery is incomplete.
+ */
+export const selectedNftDetail = (
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[],
   selectedNftId: string | null,
@@ -260,18 +363,9 @@ const selectedDetail = (
     : null;
 };
 
-const attributeRows = (attributes: readonly NftAttribute[]): string =>
-  attributes
-    .map(
-      (attribute) =>
-        `<div class="receipt-row"><dt>${escapeHtml(attribute.traitType)}</dt><dd>${escapeHtml(attribute.value)}</dd></div>`,
-    )
-    .join("");
-
 /**
- * NFT detail flow: image and identifiers plus a send form through the verified
- * invoke path. Falls back to an empty state when the selection is no longer
- * owned or watched.
+ * NFT detail flow: artwork, identifiers, and attributes with one explicit
+ * entry into the guarded send journey.
  */
 export const nftDetailFlow = (
   status: WalletStatus,
@@ -280,42 +374,42 @@ export const nftDetailFlow = (
   selectedNftId: string | null,
   discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => {
-  const nft = selectedDetail(preferences, discoveredNfts, selectedNftId);
+  const nft = selectedNftDetail(preferences, discoveredNfts, selectedNftId);
   return (
     flowHeader("NFT", status, nft ? nft.title : "") +
     flowScreen(
       "nft-detail",
       nft === null
-        ? '<section class="section"><p class="empty">This NFT is no longer watched.</p></section>'
+        ? `<section class="section">${emptyState("This NFT is no longer watched.")}</section>`
         : `<section class="section">
             ${nft.image || nft.collection ? `<div class="nft-hero">${nftArt(nft, true, true)}${nft.collection ? `<p class="eyebrow">${escapeHtml(nft.collection)}</p>` : ""}</div>` : ""}
             ${nft.description ? `<p class="lede">${escapeHtml(nft.description)}</p>` : ""}
-            <dl class="receipt">
-              <div class="receipt-row"><dt>Contract</dt><dd><code>${escapeHtml(accountLabel(nft.contract))}</code></dd></div>
-              <div class="receipt-row"><dt>Token id</dt><dd><code>${escapeHtml(nft.tokenId)}</code></dd></div>
-            </dl>
+            ${receipt([
+              { label: "Contract", value: accountLabel(nft.contract), valueStyle: "code" },
+              { label: "Token id", value: nft.tokenId, valueStyle: "code" },
+            ])}
           </section>
           ${
             nft.attributes.length === 0
               ? ""
               : `<section class="section">
                   <h2>Attributes</h2>
-                  <dl class="receipt">${attributeRows(nft.attributes)}</dl>
+                  ${receipt(
+                    nft.attributes.map((attribute) => ({
+                      label: attribute.traitType,
+                      value: attribute.value,
+                    })),
+                  )}
                 </section>`
           }
           <section class="section">
-            <h2>Send</h2>
             ${account ? "" : noAccountEmpty(status)}
-            <form id="nft-send-form">
-              <input name="contract" type="hidden" value="${escapeHtml(nft.contract)}" />
-              <input name="tokenId" type="hidden" value="${escapeHtml(nft.tokenId)}" />
-              <input name="networkId" type="hidden" value="${escapeHtml(nft.networkId)}" />
-              <label><span>Recipient</span><input class="mono" name="recipient" placeholder="0x…" required autocomplete="off" spellcheck="false" ${account ? "" : "disabled"} /></label>
-              <span class="hint">Ownership and token standard are re-checked on-chain. You will review the exact transfer, recipient, warnings, and fee before confirming.</span>
-              <div id="nft-review-panel" aria-live="polite"></div>
-              <button type="submit" ${account ? "" : "disabled"}>${icon("send")}Review transfer</button>
-              <p id="nft-send-result" role="status"></p>
-            </form>
+            ${button({
+              attributes: { "data-view": "nft-send" },
+              disabled: account === null,
+              icon: "send",
+              label: "Send this collectible",
+            })}
           </section>`,
     )
   );

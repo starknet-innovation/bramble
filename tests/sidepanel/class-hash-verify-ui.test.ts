@@ -101,7 +101,7 @@ describe("classHashVerificationBadge", () => {
     expect(html).not.toContain("Verified on-chain");
   });
 
-  test("marks a verified account with the accent status", () => {
+  test("marks a verified account with the positive status", () => {
     const html = classHashVerificationBadge({ onChainClassHash: ON_CHAIN, status: "verified" });
     expect(html).toContain("verify-status verified");
     expect(html).toContain("Verified on-chain");

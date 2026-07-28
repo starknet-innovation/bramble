@@ -2,8 +2,8 @@
  * Home bindings behaviour under happy-dom: the account drawer (escape-to-close,
  * account switch success / no-op / failure, folder-filter chips, add-account
  * success and failure), the direct-manipulation dismiss gesture (reduced-motion
- * and animated release), the tabbed portfolio (tab switch drives selection,
- * panels, indicator), and guards that skip binding on non-home markup.
+ * and animated release), the two-tab portfolio, and guards that skip binding
+ * on non-home markup.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
@@ -47,7 +47,6 @@ const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0
 type WalletFake = HomeUiDeps["wallet"];
 type MountOptions = {
   readonly switchRejects?: boolean;
-  readonly addRejects?: boolean;
 };
 
 type Handle = {
@@ -57,6 +56,7 @@ type Handle = {
     addAccount: string[];
     setAccountInGroup: Array<readonly [string, string, boolean]>;
     renders: number;
+    startAddAccount: number;
   };
   readonly state: { open: boolean; filter: string | null; tab: HomeTab };
   readonly paint: () => void;
@@ -74,14 +74,13 @@ const mount = (options: MountOptions = {}): Handle => {
     renders: 0,
     setAccountInGroup: [],
     setActiveAccount: [],
+    startAddAccount: 0,
   };
 
   const wallet = {
     addAccount: (networkId: string): Promise<string> => {
       calls.addAccount.push(networkId);
-      return options.addRejects
-        ? Promise.reject(new Error("add failed"))
-        : Promise.resolve(secondAccount.id);
+      return Promise.resolve(secondAccount.id);
     },
     loadStatus: (): Promise<WalletStatus> => Promise.resolve(status),
     setAccountInGroup: (accountId: string, groupId: string, member: boolean): Promise<void> => {
@@ -135,6 +134,9 @@ const mount = (options: MountOptions = {}): Handle => {
       },
       setHomeTab: (t) => {
         state.tab = t;
+      },
+      startAddAccount: () => {
+        calls.startAddAccount += 1;
       },
       wallet,
     });
@@ -218,29 +220,16 @@ describe("home drawer bindings", () => {
     expect(h.calls.renders).toBe(rendersAfterFilter);
   });
 
-  test("add-account creates an account, joins the active folder, and re-renders", async () => {
+  test("add-account closes the drawer and opens the shared account chooser", () => {
     const h = mount();
-    // Activate the Work folder first so the new account joins it.
-    el<HTMLButtonElement>(h.app, `[data-group-filter="${workGroup.id}"]`).click();
-    await tick();
+    h.state.open = true;
+    h.paint();
 
     el<HTMLButtonElement>(h.app, "#drawer-add-account").click();
-    await tick();
 
-    expect(h.calls.addAccount).toEqual(["SN_MAIN"]);
-    expect(h.calls.setAccountInGroup).toEqual([[secondAccount.id, workGroup.id, true]]);
-    expect(document.querySelector(".toast.success")).not.toBeNull();
-  });
-
-  test("a failed add-account surfaces an error toast and un-busies the button", async () => {
-    const h = mount({ addRejects: true });
-    const button = el<HTMLButtonElement>(h.app, "#drawer-add-account");
-    button.click();
-    await tick();
-
-    expect(h.calls.addAccount).toEqual(["SN_MAIN"]);
-    expect(document.querySelector(".toast.error")).not.toBeNull();
-    expect(button.disabled).toBe(false);
+    expect(h.calls.startAddAccount).toBe(1);
+    expect(h.calls.addAccount).toEqual([]);
+    expect(h.state.open).toBe(false);
   });
 });
 
@@ -352,6 +341,7 @@ describe("home portfolio tabs", () => {
     expect(el(h.app, '[data-home-tab="tokens"]').getAttribute("aria-selected")).toBe("false");
     const panel = el(h.app, '[data-tab-panel="collectibles"]');
     expect(panel.hidden).toBe(false);
+    expect(panel.classList.contains("is-entering")).toBe(false);
     expect(el(h.app, '[data-tab-panel="tokens"]').hidden).toBe(true);
   });
 
@@ -460,7 +450,7 @@ describe("home bindings guards on non-home markup", () => {
     expect(calls).toEqual([]);
   });
 
-  test("tab binding tolerates a tabs region with no sliding indicator", () => {
+  test("tab binding tolerates a minimal tabs region", () => {
     const app = document.createElement("div");
     app.id = "app";
     app.append(
@@ -474,8 +464,7 @@ describe("home bindings guards on non-home markup", () => {
     );
     document.body.append(app);
 
-    // No .tab-indicator node: moveIndicator returns at its guard, so binding and
-    // the restore-on-bind applyTab complete without throwing.
+    // A partial specimen with no panels or menu restores its tab without throwing.
     expect(() =>
       bindHomeUi({
         app,
