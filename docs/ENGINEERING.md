@@ -17,20 +17,20 @@ does not replace those docs — it points at them.
 
 Read these in order before your first change:
 
-1. **[README.md](../README.md)** — what the wallet is, the feature set, quick
+1. **[README.md](https://github.com/starknet-innovation/mc-wallet/blob/main/README.md)** — what the wallet is, the feature set, quick
    start, and the offline-runnable check subset.
-2. **[AGENTS.md](../AGENTS.md)** — the operational engineering guide: setup
+2. **[AGENTS.md](https://github.com/starknet-innovation/mc-wallet/blob/main/AGENTS.md)** — the operational engineering guide: setup
    commands, the `src/` layout, the hard rules enforced by `bun run check`, and
    the "reuse before writing" anti-drift notes.
-3. **[CONTRIBUTING.md](../CONTRIBUTING.md)** — the binding architecture and
+3. **[CONTRIBUTING.md](https://github.com/starknet-innovation/mc-wallet/blob/main/CONTRIBUTING.md)** — the binding architecture and
    security rules, the branch/release/PR workflow, and the taste bar.
-4. **[docs/ARCHITECTURE.md](ARCHITECTURE.md)** — the deep tour: trust
+4. **[docs/ARCHITECTURE.md](../architecture/)** — the deep tour: trust
    boundaries, the pinned account/multisig class hashes, the dApp provider
    surface, storage migrations, and the design system.
-5. **[DEVELOPMENT.md](../DEVELOPMENT.md)** — day-to-day developer workflow.
-6. **[docs/security-audit/](security-audit/)** — threat model, methodology,
+5. **[DEVELOPMENT.md](https://github.com/starknet-innovation/mc-wallet/blob/main/DEVELOPMENT.md)** — day-to-day developer workflow.
+6. **[docs/security-audit/](../security-audit/)** — threat model, methodology,
    findings, and the directory-by-directory reviews.
-7. **[RELEASING.md](../RELEASING.md)** — how a release is cut and promoted.
+7. **[RELEASING.md](https://github.com/starknet-innovation/mc-wallet/blob/main/RELEASING.md)** — how a release is cut and promoted.
 
 For the *why* behind any rule, `CONTRIBUTING.md` and `AGENTS.md` are canonical;
 this page only helps you find them.
@@ -41,7 +41,7 @@ this page only helps you find them.
 
 The `src/` subdirectories form layers with an enforced dependency **direction**.
 The rule is codified in
-[`scripts/check-import-layers.ts`](../scripts/check-import-layers.ts) (run
+[`scripts/check-import-layers.ts`](https://github.com/starknet-innovation/mc-wallet/blob/main/scripts/check-import-layers.ts) (run
 `bun run check:imports`); the diagram below is derived from its
 `FORBIDDEN_TARGETS` table. Arrows point in the **allowed** direction — a module
 may import from layers below it, never above.

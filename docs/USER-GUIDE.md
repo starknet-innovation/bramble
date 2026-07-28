@@ -8,7 +8,7 @@ permalink: /user-guide/
 
 MC Wallet is a Starknet wallet that lives in your browser's **side panel**. This
 guide is for people *using* the wallet. If you are building or contributing to
-it, start with the [engineering onboarding](ENGINEERING.md) instead.
+it, start with the [engineering onboarding](../engineering/) instead.
 
 > **Mainnet moves real funds.** MC Wallet runs on Starknet Mainnet by default.
 > Starknet Sepolia (testnet) and a local devnet are also available from the
@@ -20,43 +20,46 @@ it, start with the [engineering onboarding](ENGINEERING.md) instead.
 
 ### Install
 
-MC Wallet is a Manifest V3 browser extension. Install it from your browser's
-extension store, or load a build you produced yourself (see the
-[README](../README.md) quick start) via `chrome://extensions` → **Load unpacked**.
+MC Wallet is a Manifest V3 browser extension. Download a published extension
+archive from the
+[GitHub Releases page](https://github.com/starknet-innovation/mc-wallet/releases),
+verify it against the accompanying `.sha256` file, extract it, then open
+`chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and
+select the extracted directory. Contributors can instead build `dist/` locally;
+see the [README](https://github.com/starknet-innovation/mc-wallet#quick-start).
 
 ### First run
 
-1. Click the MC Wallet toolbar icon. The **side panel** opens on the right.
-2. On a fresh profile (no wallet yet) the panel shows the **"Create your wallet"**
-   screen. From this one screen you either create a new wallet or restore an
-   existing one.
-
-There is no popup and no separate onboarding tab — the side panel is the whole
-wallet.
+On a fresh installation, MC Wallet opens a dedicated full-browser onboarding
+tab. It is used only for setup; normal wallet activity remains in the browser
+side panel. If you close the onboarding tab, click the toolbar icon and use
+**Open full-screen setup** to return to it.
 
 ### Create a new wallet
 
-1. Press **Generate phrase**. A fresh recovery phrase (seed phrase) is generated
-   and shown **masked**.
-2. Press **Tap to show phrase** to reveal it. Write it down on paper and store it
-   offline. Anyone with this phrase controls your funds.
+1. Choose **Create a new wallet**. A fresh recovery phrase (seed phrase) is
+   generated and shown **masked**.
+2. Press **Show recovery phrase** to reveal it. Write it down on paper and store
+   it offline. Anyone with this phrase controls your funds.
 3. Confirm your backup: the wallet asks you to re-type the words at specific
    positions (**3, 7, and 11**). This is case-insensitive and trimmed. You cannot
    create the wallet until the words match.
 4. Set a **vault passphrase** of at least **12 characters**. This encrypts the
    wallet on *this* device; it is not your recovery phrase.
-5. On Mainnet, tick the **real-funds acknowledgement**.
-6. Press **Create wallet**. You land on the dashboard (Home), unlocked.
+5. Review and explicitly select the derived account. Setup defaults to Starknet
+   Mainnet, so tick the **real-funds acknowledgement**.
+6. Press **Add selected account**, then open the side-panel wallet from the
+   completion screen.
 
 ### Restore an existing wallet
 
-1. On the "Create your wallet" screen, **paste** your existing 12- or 24-word
-   recovery phrase into the recovery-phrase field (do not press "Generate
-   phrase"). Pasted phrases are not masked and need no word-verification.
-2. Set a vault passphrase (≥ 12 characters) and accept the Mainnet
-   acknowledgement if applicable.
-3. Press **Create wallet**. An invalid phrase is rejected ("Invalid mnemonic")
-   and you stay on the screen to correct it.
+1. Choose **Add an existing wallet**, then **Recovery phrase**.
+2. Enter the 12 or 24 words individually, or paste the complete phrase into the
+   first field.
+3. Set and confirm a vault passphrase of at least 12 characters.
+4. Review and select the derived account, accept the Mainnet real-funds
+   acknowledgement, and press **Add selected account**. Invalid recovery data
+   fails closed and remains on the current step for correction.
 
 ### Unlocking later
 
@@ -65,9 +68,10 @@ unlock screen. Enter your vault passphrase to reach the dashboard.
 
 ### Set up with a Ledger
 
-The first-run screen also offers **"Set up with a Ledger"**. Ledger accounts are
-keyless in MC Wallet — the private key never leaves the device, and recovery is
-handled by the Ledger's own recovery phrase, not by an MC Wallet seed phrase.
+Choose **Add an existing wallet**, then **Ledger hardware wallet**. Ledger
+accounts are keyless in MC Wallet: the private key never leaves the device, and
+recovery is handled by the Ledger's own recovery phrase, not by an MC Wallet
+software recovery phrase.
 
 ---
 
@@ -154,6 +158,6 @@ keys.
 
 ### Reporting a security issue
 
-Please report vulnerabilities privately — see
-[SECURITY.md](https://github.com/starknet-innovation/mc-wallet/blob/main/SECURITY.md).
+Please report vulnerabilities privately — see the
+[security policy](https://github.com/starknet-innovation/mc-wallet/blob/main/SECURITY.md).
 Do not open a public issue for a security problem.
