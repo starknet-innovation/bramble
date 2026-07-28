@@ -103,7 +103,7 @@ export const errorForMessage = (message: string): WalletRpcError => {
   if (/privacy leak|would leak/i.test(message)) {
     return privacyLeak();
   }
-  if (/^invalid\b|malformed|origin mismatch/i.test(message)) {
+  if (/^invalid\b/i.test(message) || /malformed|origin mismatch/i.test(message)) {
     return invalidRequestPayload();
   }
   return unknownError();

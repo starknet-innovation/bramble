@@ -18,12 +18,11 @@ type AvnuToken = {
 };
 
 type AssetKind = {
-  readonly extension: "jpg" | "png" | "svg" | "webp";
+  readonly extension: "jpg" | "png" | "webp";
   readonly mime: string;
 };
 
 const ASSET_KINDS: readonly AssetKind[] = [
-  { extension: "svg", mime: "image/svg+xml" },
   { extension: "png", mime: "image/png" },
   { extension: "jpg", mime: "image/jpeg" },
   { extension: "webp", mime: "image/webp" },
@@ -50,28 +49,6 @@ const highFidelityUri = (uri: string): string =>
 
 const assetKind = (contentType: string | null): AssetKind | null =>
   ASSET_KINDS.find((kind) => contentType?.toLowerCase().startsWith(kind.mime) === true) ?? null;
-
-const isSafeSvg = (bytes: Uint8Array): boolean => {
-  const svg = new TextDecoder().decode(bytes).trim().toLowerCase();
-  const svgStart = svg.indexOf("<svg");
-  const preamble =
-    svgStart < 0
-      ? svg
-      : svg
-          .slice(0, svgStart)
-          .replace(/<\?xml[\s\S]*?\?>/g, "")
-          .replace(/<!--[\s\S]*?-->/g, "")
-          .trim();
-  return (
-    svgStart >= 0 &&
-    preamble === "" &&
-    !/<script(?:\s|>)/.test(svg) &&
-    !/<foreignobject(?:\s|>)/.test(svg) &&
-    !/javascript\s*:/.test(svg) &&
-    !/\son[a-z]+\s*=/.test(svg) &&
-    !/<!entity(?:\s|>)/.test(svg)
-  );
-};
 
 const hasRasterSignature = (kind: AssetKind, bytes: Uint8Array): boolean => {
   if (kind.extension === "png") {
@@ -113,7 +90,7 @@ const download = async (
   try {
     const response = await fetch(highFidelityUri(token.logoUri), {
       headers: {
-        accept: "image/avif,image/webp,image/svg+xml,image/png,image/jpeg",
+        accept: "image/webp,image/png,image/jpeg",
         "accept-encoding": "identity",
         referer: "https://app.avnu.fi/",
         "user-agent": "Mozilla/5.0 MC-Wallet-Token-Asset-Sync",
@@ -129,7 +106,7 @@ const download = async (
     if (
       bytes.length === 0 ||
       bytes.length > MAX_ASSET_BYTES ||
-      (kind.extension === "svg" ? !isSafeSvg(bytes) : !hasRasterSignature(kind, bytes))
+      !hasRasterSignature(kind, bytes)
     ) {
       return null;
     }
