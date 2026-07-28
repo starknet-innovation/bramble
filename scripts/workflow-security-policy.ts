@@ -235,7 +235,7 @@ const nightlyFailures = (source: string): string[] => {
   requireText(
     failures,
     resolve,
-    `revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/$candidate" --jq '.sha')"`,
+    `revision="$(gh api "repos/$GITHUB_REPOSITORY/commits/$encoded_candidate" --jq '.sha')"`,
     "nightly must resolve the selected branch to an immutable commit",
   );
   requireText(

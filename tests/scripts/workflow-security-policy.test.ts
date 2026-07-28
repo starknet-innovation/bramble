@@ -66,8 +66,9 @@ describe("workflow security policy", () => {
     {
       name: "rejects caller-controlled release checkout refs",
       workflow: "releaseBuild",
-      search: "with:\n          fetch-depth: 0\n      - name: Check out immutable release commit",
-      replacement: `with:\n          ref: ${GITHUB_EXPRESSION} inputs.commit_sha }}\n          fetch-depth: 0\n      - name: Check out immutable release commit`,
+      search:
+        "with:\n          fetch-depth: 0\n          fetch-tags: true\n      - name: Check out immutable release commit",
+      replacement: `with:\n          ref: ${GITHUB_EXPRESSION} inputs.commit_sha }}\n          fetch-depth: 0\n          fetch-tags: true\n      - name: Check out immutable release commit`,
       failure: "self-hosted release builds must not pass caller-controlled refs to checkout",
     },
     {
