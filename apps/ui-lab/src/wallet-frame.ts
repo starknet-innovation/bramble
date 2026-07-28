@@ -6,7 +6,7 @@ import type { LabSurface, LabTheme } from "./types";
 const DESIGN_CONTRACT = `
 <!--
 THESIS: A precise review bench makes wallet state, motion, and trust boundaries inspectable.
-OWN-WORLD: MC Wallet Clean Mono; deep neutral surfaces, cobalt action, honest status colour.
+OWN-WORLD: MC Wallet Clean Mono; achromatic interaction, honest success and failure colour.
 STORY: Choose a scenario, inspect the wallet, step through its state machine, then leave feedback.
 FIRST VIEWPORT: The wallet frame and current checkpoint lead; controls and evidence sit beside it.
 FORM: A workbench, not a marketing page. Dense enough for review, quiet enough for concentration.
@@ -28,17 +28,23 @@ const reducedMotionCss = (reducedMotion: boolean): string =>
 const surfaceClass = (surface: LabSurface): string =>
   surface === "popup" ? "popup-surface" : surface === "fullpage" ? "onboarding-surface" : "";
 
-const frameHtml = (
+/**
+ * Builds an isolated document with the exact production wallet skin and
+ * stylesheet. Content and extra CSS must be trusted fixture/catalog constants;
+ * no live wallet or RPC data reaches this UI Lab boundary.
+ */
+export const walletFrameDocument = (
   content: string,
   surface: LabSurface,
   theme: LabTheme,
   reducedMotion: boolean,
+  extraStyles = "",
 ): string => `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>${skinCss(theme)}${SIDEPANEL_STYLES}${reducedMotionCss(reducedMotion)}</style>
+  <style>${skinCss(theme)}${SIDEPANEL_STYLES}${reducedMotionCss(reducedMotion)}${extraStyles}</style>
 </head>
 <body class="${surfaceClass(surface)}">
   ${DESIGN_CONTRACT}
@@ -52,6 +58,15 @@ export type LoadedWalletFrame = {
   readonly document: Document;
 };
 
+export type PreparedWalletFrame = LoadedWalletFrame & {
+  readonly commit: () => HTMLIFrameElement;
+  readonly discard: () => void;
+};
+
+type TransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => unknown;
+};
+
 export const loadWalletFrame = async (
   frame: HTMLIFrameElement,
   content: string,
@@ -63,7 +78,7 @@ export const loadWalletFrame = async (
   const loaded = new Promise<void>((resolve) => {
     walletFrame.addEventListener("load", () => resolve(), { once: true });
   });
-  walletFrame.srcdoc = frameHtml(content, surface, theme, reducedMotion);
+  walletFrame.srcdoc = walletFrameDocument(content, surface, theme, reducedMotion);
   await loaded;
   const document = walletFrame.contentDocument;
   const app = document?.querySelector<HTMLElement>("#app");
@@ -71,4 +86,70 @@ export const loadWalletFrame = async (
     throw new Error("UI Lab wallet frame failed to initialize");
   }
   return { app, document };
+};
+
+/**
+ * Builds and prepares a checkpoint in a transparent sibling frame. The old
+ * checkpoint stays visible until fixture setup is complete, preventing default
+ * or terminal states from flashing during playback.
+ */
+export const prepareWalletFrame = async (
+  current: HTMLIFrameElement,
+  content: string,
+  surface: LabSurface,
+  theme: LabTheme,
+  reducedMotion: boolean,
+): Promise<PreparedWalletFrame> => {
+  const parent = current.parentElement;
+  if (!parent) {
+    throw new Error("UI Lab wallet frame has no device mount");
+  }
+  const next = current.cloneNode(false) as HTMLIFrameElement;
+  next.removeAttribute("data-lab-frame");
+  next.classList.add("is-preparing");
+  next.dataset["reducedMotion"] = String(reducedMotion);
+  parent.insertBefore(next, current.nextSibling);
+  const loaded = await loadWalletFrame(next, content, surface, theme, reducedMotion).catch(
+    (error: unknown) => {
+      next.remove();
+      throw error;
+    },
+  );
+  const transitionDocument = loaded.document as TransitionDocument;
+  const transitionDescriptor = Object.getOwnPropertyDescriptor(
+    transitionDocument,
+    "startViewTransition",
+  );
+  Object.defineProperty(transitionDocument, "startViewTransition", {
+    configurable: true,
+    value: undefined,
+  });
+  let settled = false;
+  return {
+    ...loaded,
+    commit: () => {
+      if (settled) {
+        return next;
+      }
+      settled = true;
+      current.removeAttribute("data-lab-frame");
+      current.classList.add("is-leaving");
+      next.setAttribute("data-lab-frame", "");
+      next.classList.remove("is-preparing");
+      next.classList.add("is-active");
+      if (transitionDescriptor) {
+        Object.defineProperty(transitionDocument, "startViewTransition", transitionDescriptor);
+      } else {
+        Reflect.deleteProperty(transitionDocument, "startViewTransition");
+      }
+      globalThis.setTimeout(() => current.remove(), 220);
+      return next;
+    },
+    discard: () => {
+      if (!settled) {
+        settled = true;
+        next.remove();
+      }
+    },
+  };
 };

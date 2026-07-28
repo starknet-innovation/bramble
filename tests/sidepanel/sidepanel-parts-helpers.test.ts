@@ -53,13 +53,28 @@ describe("accountDisplayName", () => {
 });
 
 describe("accountAvatar", () => {
-  test("chooses a palette tone from the address", () => {
-    expect(accountAvatar("0x2")).toContain("var(--mc-avatar-2)");
+  test("is stable across equivalent address spellings", () => {
+    expect(accountAvatar("0x1234")).toBe(accountAvatar("0x001234"));
   });
 
-  test("falls back to tone 0 for an unparseable address", () => {
-    // The BigInt catch drops to bits = 0n, so tone 0 renders instead of throwing.
-    expect(accountAvatar("not-hex")).toContain("var(--mc-avatar-0)");
+  test("gives representative addresses distinct Beam characters", () => {
+    const avatars = ["0x1", "0x2", "0x3", "0x4", "0x100", "0x200"].map(accountAvatar);
+    expect(new Set(avatars).size).toBe(avatars.length);
+    for (const avatar of avatars) {
+      expect(avatar).toContain('class="avatar-character"');
+      expect(avatar).toContain('class="avatar-head"');
+      expect(avatar).toContain('class="avatar-eyes"');
+      expect(avatar).toContain('class="avatar-mouth"');
+      expect(avatar).toMatch(/fill="var\(--mc-account-avatar-\d\)"/);
+      expect(avatar).not.toContain('class="avatar-frame"');
+    }
+  });
+
+  test("falls back safely without reflecting malformed input into markup", () => {
+    const fallback = accountAvatar("not-hex<script>");
+    expect(fallback).toBe(accountAvatar("0x0"));
+    expect(fallback).toBe(accountAvatar("-1"));
+    expect(fallback).not.toContain("script");
   });
 });
 

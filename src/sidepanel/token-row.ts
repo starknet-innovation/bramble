@@ -4,6 +4,7 @@
  */
 import type { TokenBalance } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { STRK_TOKEN_ADDRESS } from "../starknet/networks";
 import { tokenLogoSvg } from "../starknet/token-logos-svg";
 import type { DisplayCurrency } from "../storage/preferences-store";
 import { formatFiat, tokenFiatValue } from "./fiat";
@@ -30,6 +31,12 @@ export const tokenGlyph = (address: string, symbol: string): string => {
   }
   return `<span class="token-mark" data-tone="${tone}">${escapeHtml(symbol.slice(0, 3))}</span>`;
 };
+
+/**
+ * Renders the trusted bundled Starknet mark for network context. The mark is
+ * decorative and never uses network- or dapp-supplied image data.
+ */
+export const starknetNetworkGlyph = (): string => tokenGlyph(STRK_TOKEN_ADDRESS, "STRK");
 
 const groupThousands = (whole: string): string => whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 

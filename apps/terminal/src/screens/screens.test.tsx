@@ -8,7 +8,7 @@
  */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { MAINNET_TOKEN_ADDRESSES } from "../protocols";
+import { EKUBO_API_BASE, MAINNET_TOKEN_ADDRESSES } from "../protocols";
 
 const rpc = vi.hoisted(() => ({ balances: new Map<string, bigint>() }));
 const wallet = vi.hoisted(() => ({
@@ -368,7 +368,7 @@ beforeEach(() => {
     if (url.includes("avnu.fi")) {
       return respond(AVNU_TOKENS);
     }
-    if (url.includes("ekubo.org") && url.includes("/events")) {
+    if (new URL(url).origin === EKUBO_API_BASE && url.includes("/events")) {
       return respond({
         data: [
           {
@@ -382,7 +382,7 @@ beforeEach(() => {
         ],
       });
     }
-    if (url.includes("ekubo.org")) {
+    if (new URL(url).origin === EKUBO_API_BASE) {
       return respond([]);
     }
     if (url.includes("/info/markets")) {

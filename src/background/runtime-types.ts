@@ -14,6 +14,7 @@ import type { ActivityEntry } from "../storage/activity-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef, LedgerAccountRef, Vault } from "../storage/vault-schema";
+import type { AccountDerivationInput } from "../wallet/accounts";
 import type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
@@ -466,9 +467,7 @@ export type WalletStatusReader = {
   /** Stores a keyless Ledger account; optional only for partial test stubs. */
   readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
   readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
-  /**
-   * Creates a mnemonic-less Ledger vault; fails closed over an existing vault.
-   */
+  /** Creates a mnemonic-less Ledger vault; fails closed over an existing vault. */
   readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
   /** Derives Ledger picker candidates; optional only for partial test stubs. */
   readonly deriveLedgerAccounts?: (
@@ -482,16 +481,15 @@ export type WalletStatusReader = {
    * provides it.
    */
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
+  /** Derives public metadata without writing; optional only for partial test stubs. */
+  readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,
   ) => Promise<readonly AccountRef[]>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
-  /**
-   * Removes an origin's grants. Optional on this narrow dispatch type so
-   * partial test stubs stay valid; the wired vault service always provides it.
-   */
+  /** Removes origin grants; optional only for partial test stubs. */
   readonly revokeOrigin?: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;

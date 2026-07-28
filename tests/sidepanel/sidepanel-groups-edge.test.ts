@@ -54,12 +54,12 @@ describe("account drawer quick picker edge cases", () => {
 
     click(harness.container.querySelector(`[data-assign-toggle="${acctA.id}"]`));
     await harness.tick();
-    // The account starts filed under Work: its row shows the folder icon line
-    // and the Work option is the selected pick.
+    // The account starts filed under Work. The drawer omits the redundant
+    // metadata icon below the address; the Work option remains selected.
     let row = harness.container
       .querySelector(`[data-switch-account="${acctA.id}"]`)
       ?.closest(".drawer-account-item");
-    expect(row?.querySelector(".account-groups-line")).not.toBeNull();
+    expect(row?.querySelector(".account-groups-line")).toBeNull();
     expect(
       harness.container
         .querySelector(`[data-group-pick="work"][data-account="${acctA.id}"]`)
@@ -71,8 +71,7 @@ describe("account drawer quick picker edge cases", () => {
 
     expect(harness.calls.setAccountInGroup).toEqual([[acctA.id, "work", false]]);
     expect(harness.groups()[0]?.accountIds).not.toContain(acctA.id);
-    // None is now the selected pick, the row's icon line is gone, and the picker
-    // is still open.
+    // None is now the selected pick and the picker is still open.
     expect(
       harness.container
         .querySelector(`[data-group-pick="none"][data-account="${acctA.id}"]`)

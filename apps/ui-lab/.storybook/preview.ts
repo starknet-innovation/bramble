@@ -1,4 +1,5 @@
 import type { Preview } from "@storybook/html-vite";
+import { darkSkin } from "../../../src/ui/dark-skin";
 
 const preview: Preview = {
   parameters: {
@@ -8,7 +9,10 @@ const preview: Preview = {
     backgrounds: {
       default: "review bench",
       options: {
-        "review bench": { name: "Review bench", value: "#090c12" },
+        "review bench": {
+          name: "Review bench",
+          value: darkSkin.tokens["--mc-bg"],
+        },
       },
     },
     controls: {
@@ -18,6 +22,16 @@ const preview: Preview = {
     options: {
       storySort: {
         order: [
+          "Design system",
+          [
+            "01 Foundations",
+            "02 Controls",
+            "03 Feedback",
+            "04 Data display",
+            "05 Cards",
+            "06 Navigation",
+            "07 Assets",
+          ],
           "Wallet journeys",
           [
             "01 Onboarding",

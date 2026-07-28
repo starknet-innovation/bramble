@@ -39,6 +39,18 @@ describe("wallet_rpc error envelope", () => {
     expect(toProviderPayload({ error: "connection rejected" })).toEqual({ error: userRefusedOp() });
   });
 
+  test("malformed and invalid messages map to INVALID_REQUEST_PAYLOAD (114)", () => {
+    expect(toProviderPayload({ error: "Invalid transaction payload" })).toEqual({
+      error: invalidRequestPayload(),
+    });
+    expect(toProviderPayload({ error: "Request is malformed" })).toEqual({
+      error: invalidRequestPayload(),
+    });
+    expect(toProviderPayload({ error: "Request origin mismatch" })).toEqual({
+      error: invalidRequestPayload(),
+    });
+  });
+
   test("the content-script unsupported-method path emits a spec error object", () => {
     // src/content/index.ts posts providerResponse(request, { error: invalidRequestPayload() }).
     const response = providerResponse(request, { error: invalidRequestPayload() });

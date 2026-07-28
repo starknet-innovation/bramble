@@ -9,11 +9,11 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
-import { accountFlow } from "../../src/sidepanel/flows";
+import { importKeyFlow } from "../../src/sidepanel/flows";
 import { bindImportKey } from "../../src/sidepanel/import-key-ui";
 import type { SettingsUiDeps } from "../../src/sidepanel/settings-ui";
 import { registerDom, unregisterDom } from "../support/groups-harness";
-import { account, preferences } from "../support/sidepanel-fixtures";
+import { account } from "../support/sidepanel-fixtures";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
@@ -40,7 +40,7 @@ type Harness = {
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-// Mounts the account flow (which now carries the import-key form) and wires the
+// Mounts the dedicated import-key flow and wires the
 // real binding against a recording fake wallet whose importAccount can be told
 // to resolve or reject.
 const mount = (importAccount: (networkId: string, key: string) => Promise<string>): Harness => {
@@ -61,7 +61,7 @@ const mount = (importAccount: (networkId: string, key: string) => Promise<string
 
   const paint = (): void => {
     container.replaceChildren(
-      document.createRange().createContextualFragment(accountFlow(status, account, preferences)),
+      document.createRange().createContextualFragment(importKeyFlow(status)),
     );
     const deps: SettingsUiDeps = {
       activeAccountId: () => account.id,

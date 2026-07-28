@@ -182,7 +182,7 @@ describe("repository sources", () => {
 
   test("the checked-in hotfix version advances the v0.7 release line", async () => {
     const packageJson = await readJson("package.json");
-    expect(packageJson["version"]).toBe("0.7.1");
+    expect(packageJson["version"]).toBe("0.7.2");
   });
 });
 
@@ -204,15 +204,15 @@ describe("main (CLI over the real repository sources)", () => {
   test("writes release/version/tag/kind to GITHUB_OUTPUT for this hotfix promotion", async () => {
     const outPath = await outputPath();
     const code = await main({
-      HEAD_REF: "hotfix/starkscan-wallet-data",
-      EXISTING_TAGS: "v0.7.0",
+      HEAD_REF: "hotfix/v0.7.2",
+      EXISTING_TAGS: "v0.7.0 v0.7.1",
       GITHUB_OUTPUT: outPath,
     });
     expect(code).toBe(0);
     const output = await readFile(outPath, "utf8");
     expect(output).toContain("release=true");
-    expect(output).toContain("version=0.7.1");
-    expect(output).toContain("tag=v0.7.1");
+    expect(output).toContain("version=0.7.2");
+    expect(output).toContain("tag=v0.7.2");
     expect(output).toContain("kind=hotfix");
   });
 

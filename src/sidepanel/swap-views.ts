@@ -9,6 +9,9 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import type { AccountRef } from "../storage/vault-schema";
+import { emptyState, receipt } from "../ui/content";
+import { button, iconButton } from "../ui/controls";
+import { inputControl } from "../ui/fields";
 import { icon } from "./icons";
 import { flowHeader, flowScreen, noAccountEmpty } from "./parts";
 
@@ -20,7 +23,16 @@ const swapPanel = (side: "buy" | "sell", disabled: boolean): string => `
     <div class="swap-main">
       ${
         side === "sell"
-          ? `<input id="swap-sell-amount" class="swap-amount" inputmode="decimal" placeholder="0" autocomplete="off" spellcheck="false" aria-label="Amount to sell" ${disabled ? "disabled" : ""} />`
+          ? inputControl({
+              ariaLabel: "Amount to sell",
+              attributes: { id: "swap-sell-amount" },
+              autocomplete: "off",
+              className: "swap-amount",
+              disabled,
+              inputmode: "decimal",
+              placeholder: "0",
+              spellcheck: false,
+            })
           : `<output id="swap-buy-amount" class="swap-amount is-output" aria-live="polite">0</output>`
       }
       <button id="swap-${side}-token" class="swap-token" type="button" aria-haspopup="listbox" aria-label="Choose ${side} token" ${disabled ? "disabled" : ""}>
@@ -60,21 +72,42 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
       <div id="swap-picker" class="swap-sheet" role="dialog" aria-modal="true" aria-label="Choose token" hidden>
         <header class="swap-sheet-head">
           <h2 id="swap-picker-title">Receive</h2>
-          <button id="swap-picker-close" class="icon-button ghost" type="button" aria-label="Close token picker">${icon("x")}</button>
+          ${iconButton({
+            attributes: { id: "swap-picker-close" },
+            icon: "x",
+            label: "Close token picker",
+            variant: "ghost",
+          })}
         </header>
-        <input id="swap-picker-search" class="swap-search" placeholder="Token name or address" autocomplete="off" spellcheck="false" aria-label="Token name or address" />
+        ${inputControl({
+          ariaLabel: "Token name or address",
+          attributes: { id: "swap-picker-search" },
+          autocomplete: "off",
+          className: "swap-search",
+          placeholder: "Token name or address",
+          spellcheck: false,
+          type: "search",
+        })}
         <div id="swap-picker-chips" class="swap-chips"></div>
         <div id="swap-picker-list" class="swap-sheet-list" role="listbox" aria-label="Tokens"></div>
-        <p id="swap-picker-status" class="empty" role="status" hidden></p>
+        ${emptyState("", "status", { hidden: true, id: "swap-picker-status" })}
       </div>
       <section class="swap-stage" id="swap-confirm" hidden>
         <p class="eyebrow">Confirm swap</p>
-        <dl class="receipt" id="swap-confirm-receipt"></dl>
+        ${receipt([], { id: "swap-confirm-receipt" })}
         <div id="swap-call-review"></div>
         <p class="hint">These exact calls were built and frozen before this screen. Confirm submits them once; the route cannot change after review.</p>
         <div class="swap-actions">
-          <button id="swap-confirm-button" type="button">${icon("check")}Confirm swap</button>
-          <button id="swap-back-button" class="secondary" type="button">Back</button>
+          ${button({
+            attributes: { id: "swap-confirm-button" },
+            icon: "check",
+            label: "Confirm swap",
+          })}
+          ${button({
+            attributes: { id: "swap-back-button" },
+            label: "Back",
+            variant: "secondary",
+          })}
         </div>
       </section>
       <section class="swap-stage swap-success" id="swap-success" role="status" hidden>

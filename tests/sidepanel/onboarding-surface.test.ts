@@ -7,6 +7,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   bindOnboardingCompletion,
   onboardingComplete,
+  onboardingLaunch,
 } from "../../src/sidepanel/onboarding-surface";
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
@@ -36,6 +37,15 @@ describe("full-page onboarding completion", () => {
     await Promise.resolve();
 
     expect(opened).toEqual([-2]);
+  });
+
+  test("keeps first-run setup out of compact wallet surfaces", () => {
+    const markup = onboardingLaunch();
+    expect(markup).toContain("Set up in a browser tab");
+    expect(markup).toContain('href="onboarding.html"');
+    expect(markup).toContain('target="_blank"');
+    expect(markup).not.toContain("create-form");
+    expect(markup).not.toContain("vaultPassphrase");
   });
 
   test("keeps a toolbar fallback when the side-panel API is unavailable", () => {

@@ -297,6 +297,29 @@ const removeMultisig: MultisigOpsHandler = async (deps, message) => {
   return { ok: true };
 };
 
+const loadMultisigBalances: MultisigOpsHandler = async (deps, message) => {
+  const input = readMultisigIdInput(message, "wallet.multisigBalances");
+  if (!input) {
+    return { error: "invalid multisig balances request" };
+  }
+  const resolved = await multisigContext(deps, input.id);
+  if ("error" in resolved) {
+    return { error: resolved.error };
+  }
+  const preferences = await deps.preferencesStore.read();
+  const balances = await deps.runtimeRpc.getTokenBalances({
+    accountAddress: resolved.record.address,
+    rpcUrls: resolved.rpcUrls,
+    tokens: preferences.tokens.filter((token) => token.networkId === resolved.record.networkId),
+  });
+  return {
+    accountId: resolved.record.id,
+    balances,
+    networkId: resolved.record.networkId,
+    ok: true,
+  };
+};
+
 const refreshMultisig: MultisigOpsHandler = async (deps, message) => {
   const input = readMultisigIdInput(message, "wallet.refreshMultisig");
   if (!input) {
@@ -370,6 +393,7 @@ const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
 // single map lookup and unknown types fall through to null.
 const OPS_HANDLERS: Record<string, MultisigOpsHandler> = {
   "wallet.addMultisig": addMultisig,
+  "wallet.multisigBalances": loadMultisigBalances,
   "wallet.multisigs": listMultisigs,
   "wallet.refreshMultisig": refreshMultisig,
   "wallet.removeMultisig": removeMultisig,

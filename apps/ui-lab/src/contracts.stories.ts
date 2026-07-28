@@ -29,12 +29,14 @@ export const ProductionViewCoverage: LabStory = {
 };
 
 export const GuidedSendWalkthrough: LabStory = {
-  args: { checkpointId: "details", scenarioId: "send" },
+  args: { checkpointId: "asset", scenarioId: "send" },
   name: "Step through Send",
   play: async ({ canvasElement, step }) => {
     await assertCheckpointReady(canvasElement);
     const canvas = within(canvasElement);
-    await expect(await canvas.findByRole("heading", { level: 2, name: "Details" })).toBeVisible();
+    await expect(
+      await canvas.findByRole("heading", { level: 2, name: "Choose asset" }),
+    ).toBeVisible();
     await step("Advance into deterministic review latency", async () => {
       await userEvent.click(canvas.getByRole("button", { name: "Step" }));
       await assertCheckpointReady(canvasElement);

@@ -53,11 +53,11 @@ export const readAddMultisigInput = (
     : null;
 
 /**
- * Parses an id-only multisig request (`remove` and `refresh`).
+ * Parses an id-only multisig request (`balances`, `remove`, and `refresh`).
  */
 export const readMultisigIdInput = (
   message: unknown,
-  type: "wallet.refreshMultisig" | "wallet.removeMultisig",
+  type: "wallet.multisigBalances" | "wallet.refreshMultisig" | "wallet.removeMultisig",
 ): { readonly id: string } | null =>
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["id", "type"]) &&

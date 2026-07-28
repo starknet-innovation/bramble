@@ -101,9 +101,10 @@ describe("dashboard umbrella-merge seam", () => {
     expect(reachable).not.toContain("load on-chain history");
   });
 
-  test("threads historyUnavailable through the Home screen activity tab", () => {
+  test("keeps activity history state out of Home while preserving the Activity destination", () => {
     const degradedHome = renderSeam("home", { historyUnavailable: true });
-    expect(degradedHome).toContain("On-chain history unavailable");
+    expect(degradedHome).not.toContain("On-chain history unavailable");
+    expect(degradedHome).toMatch(/class="nav-item" data-view="activity"/);
 
     const reachableHome = renderSeam("home", { historyUnavailable: false });
     expect(reachableHome).not.toContain("On-chain history unavailable");

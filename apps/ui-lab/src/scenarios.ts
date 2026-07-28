@@ -1,20 +1,12 @@
-import {
-  multisigDeployFlow,
-  multisigDetailFlow,
-  multisigProposeFlow,
-  multisigsFlow,
-} from "../../../src/sidepanel/multisig-views";
+import { nftSendFlow } from "../../../src/sidepanel/nft-send-view";
 import { bindNfts } from "../../../src/sidepanel/nft-ui";
 import { nftDetailFlow, nftGalleryFlow } from "../../../src/sidepanel/nft-views";
 import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
-import type { MultisigProposalRecord } from "../../../src/storage/multisig-store";
 import {
   discoveredNft,
   invokeApproval,
-  multisig,
   NFT_CONTRACT,
   nftId,
-  pendingProposal,
   preferences,
   RECIPIENT_ADDRESS,
   secondAccount,
@@ -27,15 +19,17 @@ import {
 import { walletDashboard } from "./scenario-dashboard";
 import { messageType, nextTurn, updateForm } from "./scenario-runtime";
 import { approvalsScenario } from "./scenarios-approvals";
+import { multisigScenario } from "./scenarios-multisig";
 import {
   ledgerOnboardingScenario,
   onboardingScenario,
   unlockScenario,
 } from "./scenarios-onboarding";
+import { settingsScenario } from "./scenarios-settings";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
-import { assetsScenario, portfolioScenario, settingsScenario } from "./scenarios-wallet";
-import type { FrameContext, ScenarioCheckpoint, WalletScenario } from "./types";
+import { assetsScenario, portfolioScenario } from "./scenarios-wallet";
+import type { FrameContext, WalletScenario } from "./types";
 
 const NFT_HASH = `0x02${"b".repeat(62)}`;
 
@@ -79,12 +73,25 @@ const dappScenario: WalletScenario = {
       narrative: "Snoozing returns control while keeping the request visible in Activity.",
       state: { foreground: "activity", pending: 1, snoozed: 1 },
     },
+    {
+      content: () =>
+        walletDashboard({
+          pending: [invokeApproval],
+          snoozed: [invokeApproval.id],
+          view: "requests",
+        }),
+      id: "parked-list",
+      label: "Parked request list",
+      narrative: "Parked decisions live one level below account-scoped transaction activity.",
+      state: { foreground: "requests", pending: 1, snoozed: 1 },
+    },
   ],
   description:
     "External requests preempt stale wallet navigation, remain reviewable, and can be explicitly parked.",
   id: "dapp",
-  surface: "popup",
+  surface: "sidepanel",
   title: "dApp request takeover",
+  views: ["requests"],
 };
 
 const activityScenario: WalletScenario = {
@@ -215,12 +222,32 @@ const nftScenario: WalletScenario = {
         nftDetailFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
       id: "detail",
       label: "NFT detail",
-      narrative: "Artwork, attributes, identifiers, and the guarded Send entry share one view.",
+      narrative: "Artwork, attributes, and identifiers lead to a dedicated guarded Send journey.",
       state: { attributes: 3, owner: softwareAccount.id, tokenId: "342" },
     },
     {
-      content: () =>
-        nftDetailFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      content: () => walletDashboard({ preferences, view: "nft-watch" }),
+      id: "watch",
+      label: "Watch by contract",
+      narrative: "Manual collectible tracking is isolated around ownership verification.",
+      state: { ownershipCheck: true, view: "nft-watch" },
+    },
+    {
+      content: () => walletDashboard({ preferences, view: "nft-hidden" }),
+      id: "hidden",
+      label: "Hidden collectibles",
+      narrative: "Spam and hidden-token recovery no longer crowds the gallery.",
+      state: { task: "hidden management", view: "nft-hidden" },
+    },
+    {
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      id: "recipient",
+      label: "Choose recipient",
+      narrative: "Collection identity, address entry, and saved recipients define who receives it.",
+      state: { stage: "recipient", tokenId: "342" },
+    },
+    {
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
       id: "review",
       label: "Transfer review",
       narrative: "The real NFT binding requires a decoded review before confirmation.",
@@ -228,8 +255,7 @@ const nftScenario: WalletScenario = {
       state: { contract: NFT_CONTRACT, review: "ready", tokenId: "342" },
     },
     {
-      content: () =>
-        nftDetailFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
       id: "blocked",
       label: "Recipient blocked",
       narrative: "An address-poisoning flag prevents the confirmation state.",
@@ -237,8 +263,7 @@ const nftScenario: WalletScenario = {
       state: { blocked: true, reason: "address-poisoning", tokenId: "342" },
     },
     {
-      content: () =>
-        nftDetailFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
       id: "submitted",
       label: "Transfer submitted",
       narrative: "Confirmation returns a transaction hash and never bypasses review.",
@@ -251,170 +276,7 @@ const nftScenario: WalletScenario = {
   id: "nft",
   surface: "sidepanel",
   title: "NFT loading and send",
-  views: ["nfts", "nft-detail"],
-};
-
-const multisigCheckpoint = (
-  id: string,
-  label: string,
-  narrative: string,
-  content: () => string,
-  state: Readonly<Record<string, unknown>>,
-): ScenarioCheckpoint => ({ content, id, label, narrative, state });
-
-const confirmedProposal: MultisigProposalRecord = {
-  ...pendingProposal,
-  confirmations: 2,
-  confirmedBySigner: true,
-  state: "confirmed",
-};
-
-const untrackedProposal: MultisigProposalRecord = {
-  ...pendingProposal,
-  call: null,
-  confirmations: 0,
-  confirmedBySigner: false,
-  id: `${multisig.id}:0x902`,
-  summary: "Shared proposal — verify on explorer",
-  txId: "0x902",
-};
-
-const executedProposal: MultisigProposalRecord = {
-  ...confirmedProposal,
-  confirmations: 2,
-  id: `${multisig.id}:0x903`,
-  state: "executed",
-  summary: "Completed research payment",
-  txId: "0x903",
-};
-
-const multisigScenario: WalletScenario = {
-  checkpoints: [
-    multisigCheckpoint(
-      "list",
-      "Watched multisigs",
-      "The overview exposes quorum and open work before navigation.",
-      () =>
-        multisigsFlow(
-          statusFor(),
-          softwareAccount,
-          [multisig],
-          [pendingProposal],
-          false,
-          "current",
-        ),
-      { openProposals: 1, quorum: 2, sync: "current" },
-    ),
-    multisigCheckpoint(
-      "proposal",
-      "Proposal detail",
-      "Exact calldata, signer state, and confirmation progress stay together.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [pendingProposal],
-          false,
-          "current",
-        ),
-      { confirmations: 1, proposalId: pendingProposal.txId, state: "pending" },
-    ),
-    multisigCheckpoint(
-      "ready",
-      "Ready to execute",
-      "Reaching quorum changes the next action without hiding the reviewed call.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [confirmedProposal],
-          false,
-          "current",
-        ),
-      { confirmations: 2, proposalId: pendingProposal.txId, state: "confirmed" },
-    ),
-    multisigCheckpoint(
-      "sync-error",
-      "Refresh failed",
-      "Cached public data remains visible with an honest retry path.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [pendingProposal],
-          true,
-          "error",
-        ),
-      { cached: true, sync: "error" },
-    ),
-    multisigCheckpoint(
-      "propose",
-      "Create proposal",
-      "Contract, entrypoint, calldata, salt, and note form the exact single-call proposal.",
-      () => multisigProposeFlow(statusFor(), multisig),
-      { calldata: "explicit", view: "multisig-propose" },
-    ),
-    multisigCheckpoint(
-      "deploy-checking",
-      "Check deploy class",
-      "Deployment remains disabled until the pinned class status resolves.",
-      () => multisigDeployFlow(statusFor(), softwareAccount, null),
-      { class: "checking", view: "multisig-deploy" },
-    ),
-    multisigCheckpoint(
-      "deploy-declare",
-      "Declare before deploy",
-      "A missing class exposes the one-time declaration and its fee-bearing boundary.",
-      () => multisigDeployFlow(statusFor(), softwareAccount, false),
-      { class: "missing", deployEnabled: false },
-    ),
-    multisigCheckpoint(
-      "deploy-ready",
-      "Deploy ready",
-      "Signer, quorum, deterministic salt, and local hardware badges are ready for review.",
-      () => multisigDeployFlow(statusFor(), softwareAccount, true),
-      { class: "declared", deployEnabled: true },
-    ),
-    multisigCheckpoint(
-      "shared-untracked",
-      "Untracked proposal",
-      "A pasted proposal id requires explicit external verification before signing.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [untrackedProposal],
-          false,
-          "current",
-        ),
-      { call: "unavailable", verificationAcknowledgement: true },
-    ),
-    multisigCheckpoint(
-      "executed",
-      "Executed proposal",
-      "Final state remains readable and removes actions that no longer apply.",
-      () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [executedProposal],
-          false,
-          "current",
-        ),
-      { actionsAvailable: false, state: "executed" },
-    ),
-  ],
-  description:
-    "Watched multisig overview, decoded proposal detail, quorum transition, and degraded refresh state.",
-  id: "multisig",
-  surface: "sidepanel",
-  title: "Multisig operations",
-  views: ["multisigs", "multisig-detail", "multisig-propose", "multisig-deploy"],
+  views: ["nfts", "nft-watch", "nft-hidden", "nft-detail", "nft-send"],
 };
 
 export const walletScenarios: readonly WalletScenario[] = [

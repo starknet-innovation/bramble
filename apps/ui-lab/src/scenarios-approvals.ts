@@ -1,8 +1,28 @@
 import type { PendingApproval } from "../../../src/popup/responses";
+import { bindApprovals } from "../../../src/sidepanel/dashboard-bindings";
+import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
 import { invokeApproval, watchAssetApproval } from "./fixtures";
 import { approvalFixtures } from "./journey-fixtures";
 import { walletDashboard } from "./scenario-dashboard";
-import type { WalletScenario } from "./types";
+import { nextTurn } from "./scenario-runtime";
+import type { FrameContext, WalletScenario } from "./types";
+
+const prepareApprovalProcessing = async (context: FrameContext): Promise<void> => {
+  const wallet = createSidepanelRuntime({
+    sendMessage: async () => new Promise<never>(() => undefined),
+  });
+  bindApprovals({
+    app: context.app,
+    render: async () => undefined,
+    wallet,
+  });
+  const approve = context.app.querySelector<HTMLButtonElement>('[data-approval-action="approve"]');
+  if (!approve) {
+    throw new Error("Missing production approval action");
+  }
+  approve.click();
+  await nextTurn();
+};
 
 const requiredApproval = (key: keyof typeof approvalFixtures): PendingApproval => {
   const approval = approvalFixtures[key];
@@ -44,6 +64,15 @@ export const approvalsScenario: WalletScenario = {
       "Decoded calls, account, network, digest, and risks supersede the interrupted wallet flow.",
       invokeApproval,
     ),
+    {
+      content: () => walletDashboard({ pending: [invokeApproval], view: "send" }),
+      id: "processing",
+      label: "Authorizing request",
+      narrative:
+        "After approval, a persistent live status names authorization and keeps the reviewed request locked.",
+      prepare: prepareApprovalProcessing,
+      state: { foreground: "approval", liveness: "authorizing", locked: true },
+    },
     approvalCheckpoint(
       "typed-data",
       "Typed-data signature",
@@ -101,6 +130,6 @@ export const approvalsScenario: WalletScenario = {
   description:
     "Every dApp-facing approval kind, proactive takeover, blocked-origin handling, and queue visibility.",
   id: "approvals",
-  surface: "popup",
+  surface: "sidepanel",
   title: "dApp approvals",
 };

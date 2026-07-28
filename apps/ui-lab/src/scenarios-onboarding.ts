@@ -8,16 +8,18 @@ import {
   ledgerOnboardError,
   ledgerReadingPrompt,
 } from "../../../src/sidepanel/ledger/onboard-views";
+import { onboardingComplete } from "../../../src/sidepanel/onboarding-surface";
 import { bindOnboarding, bindUnlock } from "../../../src/sidepanel/onboarding-ui";
 import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "../../../src/starknet/ledger-path";
 import type { LedgerAccountRef } from "../../../src/storage/vault-schema";
-import { invokeApproval, ledgerAccount } from "./fixtures";
+import { invokeApproval, ledgerAccount, softwareAccount } from "./fixtures";
 import { emptyWalletStatus, lockedStatus } from "./journey-fixtures";
 import { messageType, nextTurn, updateForm } from "./scenario-runtime";
 import type { FrameContext, WalletScenario } from "./types";
 
 const FIXTURE_WORDS = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu";
+const FIXTURE_PASSPHRASE = "fixture vault passphrase";
 
 const onboardingWallet = (context: FrameContext) =>
   createSidepanelRuntime({
@@ -27,6 +29,12 @@ const onboardingWallet = (context: FrameContext) =>
       if (type === "wallet.generateMnemonic") {
         return { mnemonic: FIXTURE_WORDS, ok: true };
       }
+      if (type === "wallet.previewAccount" || type === "wallet.createAccount") {
+        return { account: softwareAccount, ok: true };
+      }
+      if (type === "wallet.status") {
+        return emptyWalletStatus;
+      }
       if (type === "wallet.unlock") {
         return { error: "Vault passphrase is incorrect" };
       }
@@ -34,39 +42,74 @@ const onboardingWallet = (context: FrameContext) =>
     },
   });
 
-const generatePhrase =
-  (reveal: boolean, verified: boolean) =>
-  async (context: FrameContext): Promise<void> => {
-    bindOnboarding({
-      app: context.app,
-      render: async () => undefined,
-      wallet: onboardingWallet(context),
-    });
-    context.app.querySelector<HTMLButtonElement>("#generate-button")?.click();
-    await nextTurn();
-    if (reveal) {
-      context.app.querySelector<HTMLButtonElement>("#phrase-toggle")?.click();
-    }
-    if (!verified) {
-      return;
-    }
-    updateForm(context, 'input[name="vaultPassphrase"]', "fixture-passphrase");
-    updateForm(context, 'input[name="verify-0"]', "gamma");
-    updateForm(context, 'input[name="verify-1"]', "eta");
-    updateForm(context, 'input[name="verify-2"]', "lambda");
-    const acknowledgement = context.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
-    acknowledgement?.click();
-  };
-
-const prepareImported = (context: FrameContext): void => {
+const bindFixtureOnboarding = (context: FrameContext): void => {
   bindOnboarding({
     app: context.app,
     render: async () => undefined,
     wallet: onboardingWallet(context),
   });
-  updateForm(context, 'textarea[name="mnemonic"]', FIXTURE_WORDS);
-  updateForm(context, 'input[name="vaultPassphrase"]', "fixture-passphrase");
-  context.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]')?.click();
+};
+
+const press = (context: FrameContext, selector: string): void => {
+  const control = context.app.querySelector<HTMLButtonElement>(selector);
+  if (!control) {
+    throw new Error(`Missing fixture action ${selector}`);
+  }
+  control.click();
+};
+
+const prepareMethod = (context: FrameContext): void => {
+  bindFixtureOnboarding(context);
+  press(context, "#add-existing-button");
+};
+
+const prepareRecovery = (context: FrameContext): void => {
+  prepareMethod(context);
+  press(context, "#recovery-method-button");
+};
+
+const preparePassword = (context: FrameContext): void => {
+  prepareRecovery(context);
+  updateForm(context, 'input[name="import-word-0"]', FIXTURE_WORDS);
+  press(context, "#recovery-continue");
+};
+
+const prepareAccountSelection =
+  (selected: boolean) =>
+  async (context: FrameContext): Promise<void> => {
+    preparePassword(context);
+    updateForm(context, 'input[name="vaultPassphrase"]', FIXTURE_PASSPHRASE);
+    updateForm(context, 'input[name="vaultPassphraseConfirm"]', FIXTURE_PASSPHRASE);
+    press(context, "#review-account-button");
+    await nextTurn();
+    if (!selected) {
+      return;
+    }
+    press(context, "#account-preview");
+    context.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]')?.click();
+  };
+
+const prepareGenerated =
+  (reveal: boolean, confirm: boolean) =>
+  async (context: FrameContext): Promise<void> => {
+    bindFixtureOnboarding(context);
+    press(context, "#create-new-button");
+    await nextTurn();
+    if (reveal || confirm) {
+      press(context, "#phrase-toggle");
+    }
+    if (!confirm) {
+      return;
+    }
+    press(context, "#generated-continue");
+    updateForm(context, 'input[name="verify-0"]', "gamma");
+    updateForm(context, 'input[name="verify-1"]', "eta");
+    updateForm(context, 'input[name="verify-2"]', "lambda");
+  };
+
+const prepareLedger = (context: FrameContext): void => {
+  prepareMethod(context);
+  press(context, "#ledger-method-button");
 };
 
 const prepareUnlockFailure = async (context: FrameContext): Promise<void> => {
@@ -86,50 +129,91 @@ export const onboardingScenario: WalletScenario = {
       content: () => onboarding(emptyWalletStatus),
       id: "welcome",
       label: "Choose a setup path",
-      narrative:
-        "First run offers recovery-phrase and Ledger setup without mixing their security models.",
+      narrative: "A decisive first screen offers creation and existing-wallet paths.",
+      prepare: bindFixtureOnboarding,
       state: { gate: "first-run", network: "mainnet", secrets: "fixture only" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "method",
+      label: "Choose import method",
+      narrative: "Recovery phrase and Ledger remain explicit, separate security models.",
+      prepare: prepareMethod,
+      state: { choices: 2, path: "existing wallet" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "recovery",
+      label: "Enter recovery phrase",
+      narrative: "Twelve visible word slots accept sequential entry or one complete paste.",
+      prepare: prepareRecovery,
+      state: { words: 12, path: "recovery phrase" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "password",
+      label: "Create vault passphrase",
+      narrative:
+        "Local encryption is a dedicated step with confirmation and live requirement status.",
+      prepare: preparePassword,
+      state: { accountWritten: false, credential: "local vault passphrase" },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "accounts",
+      label: "Choose accounts",
+      narrative:
+        "The exact public account is derived without writing a vault and awaits selection.",
+      prepare: prepareAccountSelection(false),
+      state: { persisted: false, selected: 0, visibleAccounts: 1 },
+    },
+    {
+      content: () => onboarding(emptyWalletStatus),
+      id: "account-selected",
+      label: "Account selected",
+      narrative: "Selection and real-funds acknowledgement visibly activate the final action.",
+      prepare: prepareAccountSelection(true),
+      state: { mainnetAcknowledged: true, selected: 1 },
     },
     {
       content: () => onboarding(emptyWalletStatus),
       id: "generated-masked",
       label: "Generated phrase masked",
-      narrative:
-        "The real onboarding binding masks newly generated words and opens backup verification.",
-      prepare: generatePhrase(false, false),
-      state: { phrase: "masked", verification: "required" },
-    },
-    {
-      content: () => onboarding(emptyWalletStatus),
-      id: "generated-revealed",
-      label: "Phrase deliberately revealed",
-      narrative: "A deliberate toggle exposes the fixture phrase for an offline backup check.",
-      prepare: generatePhrase(true, false),
-      state: { phrase: "visible fixture", verification: "required" },
+      narrative: "New recovery words stay blurred until the user deliberately asks to reveal them.",
+      prepare: prepareGenerated(false, false),
+      state: { phrase: "masked fixture", verification: "required" },
     },
     {
       content: () => onboarding(emptyWalletStatus),
       id: "backup-confirmed",
-      label: "Backup confirmed",
+      label: "Confirm generated backup",
       narrative:
-        "Requested words, passphrase strength, and the Mainnet acknowledgement unlock creation together.",
-      prepare: generatePhrase(false, true),
-      state: { createEnabled: true, mainnetAcknowledged: true, verification: "passed" },
+        "Requested fixture words prove the offline backup before password setup can continue.",
+      prepare: prepareGenerated(true, true),
+      state: { phrase: "visible fixture", verification: "passed" },
     },
     {
       content: () => onboarding(emptyWalletStatus),
-      id: "import-existing",
-      label: "Import existing wallet",
+      id: "ledger-password",
+      label: "Protect the Ledger registry",
       narrative:
-        "Pasted recovery words use the import path and do not masquerade as a newly generated backup.",
-      prepare: prepareImported,
-      state: { mode: "import", verification: "not generated" },
+        "Ledger setup receives a local vault passphrase without generating recovery words.",
+      prepare: prepareLedger,
+      state: { hardware: "Ledger", mnemonicGenerated: false },
+    },
+    {
+      content: onboardingComplete,
+      id: "complete",
+      label: "Setup complete",
+      narrative: "A clear handoff confirms local encryption and opens the wallet side panel.",
+      state: { handoff: "side panel", persisted: true },
     },
   ],
-  description: "Full-page first run, generated-backup verification, and existing-wallet import.",
+  description:
+    "Full-screen setup from path selection through credentials, account selection, Ledger, and completion.",
   id: "onboarding",
   surface: "fullpage",
-  title: "Full-page onboarding",
+  title: "Full-screen onboarding",
 };
 
 export const unlockScenario: WalletScenario = {
@@ -190,11 +274,20 @@ const ledgerCandidate = (
 export const ledgerOnboardingScenario: WalletScenario = {
   checkpoints: [
     {
-      content: addAccountChooser,
+      content: () => addAccountChooser(),
       id: "method",
       label: "Choose account method",
-      narrative: "Software derivation, raw-key import, and hardware setup remain explicit routes.",
-      state: { choices: 3, secretBoundary: "visible" },
+      narrative:
+        "Standard, Ledger, private-key, and shared accounts remain explicit signer models.",
+      state: { choices: 4, secretBoundary: "visible", selected: null },
+    },
+    {
+      content: () => addAccountChooser("multisig"),
+      id: "method-multisig",
+      label: "Choose Multisig account",
+      narrative:
+        "Selection is visible before Continue routes into create or add-existing shared accounts.",
+      state: { choices: 4, selected: "multisig" },
     },
     {
       content: ledgerConnectPrompt,
@@ -287,7 +380,7 @@ export const ledgerOnboardingScenario: WalletScenario = {
     },
   ],
   description:
-    "Add-account method choice, device selection, enumeration, account selection, partial recovery, and errors.",
+    "Unified account-type choice, Ledger device selection, enumeration, account selection, partial recovery, and errors.",
   id: "ledger-onboarding",
   surface: "sidepanel",
   title: "Ledger account onboarding",

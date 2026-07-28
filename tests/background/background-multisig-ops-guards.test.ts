@@ -50,6 +50,12 @@ describe("registry multisig handler guards", () => {
       handler({ type: "wallet.refreshMultisig" }, harnessExtensionSender),
     ).resolves.toEqual({ error: "invalid refresh multisig request" });
   });
+  test("rejects an id-less multisig balance request", async () => {
+    const { handler } = makeMultisigHarness();
+    await expect(
+      handler({ type: "wallet.multisigBalances" }, harnessExtensionSender),
+    ).resolves.toEqual({ error: "invalid multisig balances request" });
+  });
 
   test("rejects a malformed track-proposal request", async () => {
     const { handler } = makeMultisigHarness();

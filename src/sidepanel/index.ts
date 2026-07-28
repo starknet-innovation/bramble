@@ -1,11 +1,9 @@
 /**
  * Side panel wallet app. This is the primary extension UI.
- *
  * Rendering contract: the whole shell re-renders from status, but screens
- * only animate when the scene actually changes, and keyboard focus is
+ * animate only when the scene changes, and keyboard focus is
  * restored across re-renders so controls never jump under the user.
  */
-
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
 import { applySkin } from "../ui/skin";
@@ -36,6 +34,7 @@ import {
   bindOnboardingCompletion,
   type OnboardingCompletionBrowser,
   onboardingComplete,
+  onboardingLaunch,
 } from "./onboarding-surface";
 import { bindOnboarding, bindUnlock } from "./onboarding-ui";
 import { createRefreshScheduler } from "./refresh-scheduler";
@@ -159,7 +158,6 @@ const ledgerSign = createLedgerSignRuntime({
   wallet,
 });
 
-// Shared repaint-surviving Ledger overlay for first-run and add-account flows.
 const ledgerOnboardMount = document.createElement("div");
 ledgerOnboardMount.className = "ledger-onboard-overlay";
 ledgerOnboardMount.hidden = true;
@@ -172,7 +170,8 @@ const ledgerOnboard = createLedgerOnboardEntry({
   cache,
   connector: ledgerConnector,
   mount: ledgerOnboardMount,
-  openImport: () => navigate("account"),
+  openImport: () => navigate("import-key"),
+  openMultisig: () => navigate("multisig-add"),
   refresh: async () => {
     await render(await wallet.loadStatus());
   },
@@ -217,11 +216,12 @@ const bindAll = (): void => {
     setHomeTab: (tab) => {
       homeTab = tab;
     },
+    startAddAccount: ledgerOnboard.startAddAccount,
     wallet,
   });
   bindReveal({ app, wallet });
   bindActivity({ app, render, wallet });
-  bindTransfer({ app, navigate: (view) => navigate(view), render, wallet });
+  bindTransfer({ app, back: goBack, navigate: (view) => navigate(view), render, wallet });
   const settingsDeps = {
     activeAccountId: () => lastAccountId,
     app,
@@ -240,7 +240,6 @@ const bindAll = (): void => {
     setOpenAssign: (id: string | null) => {
       openAssignId = id;
     },
-    // "Add account" opens the type chooser (New HD / Import / Connect a Ledger).
     startAddAccount: ledgerOnboard.startAddAccount,
     wallet,
   };
@@ -298,7 +297,7 @@ const bindAll = (): void => {
     multisig,
     openDetail: (id) => {
       selectedMultisigId = id;
-      navigate("multisig-detail");
+      navigate("multisig-home");
     },
     openList: () => {
       selectedMultisigId = null;
@@ -310,7 +309,6 @@ const bindAll = (): void => {
   });
 };
 
-// Resolve the theme while keeping native-control color scheme pinned.
 const applyTheme = (): void => {
   const choice = cache.preferences?.theme ?? "dark";
   const skin = skinForChoice(choice);
@@ -321,7 +319,6 @@ const applyTheme = (): void => {
   }
 };
 
-// Paint cached state synchronously, then let hydrate() stream fresh data.
 const paint = (): void => {
   const { status } = cache;
   lastNetworkId = status.networkId;
@@ -364,7 +361,9 @@ const paint = (): void => {
     fullPageOnboarding && status.hasVault
       ? onboardingComplete()
       : !status.hasVault
-        ? onboarding(status)
+        ? fullPageOnboarding
+          ? onboarding(status)
+          : onboardingLaunch()
         : status.locked
           ? locked(status, cache.pending)
           : dashboard(
@@ -397,6 +396,10 @@ const paint = (): void => {
               snoozedApprovalIds,
               cache.multisigsError,
               cache.multisigSync,
+              cache.multisigBalances,
+              cache.multisigBalanceId,
+              cache.multisigNfts,
+              cache.multisigNftId,
             );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -462,7 +465,6 @@ const navigate = (view: WalletView): void => {
   paint();
   void wallet.loadStatus().then(render);
 };
-
 // Return to the prior view with reverse-transition direction.
 const goBack = (): void => {
   const popped = popView(viewHistory);
@@ -493,7 +495,5 @@ window.addEventListener("focus", () => {
 window.addEventListener("pagehide", refreshScheduler.stop, { once: true });
 
 applyTheme();
-// Start before the initial status read so an approval queued while Chrome is
-// opening the panel cannot fall into the ambient-poll interval.
 refreshScheduler.start();
 void render(await wallet.loadStatus());

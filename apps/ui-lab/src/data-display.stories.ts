@@ -1,0 +1,86 @@
+import type { Meta } from "@storybook/html-vite";
+import { transactionRow } from "../../../src/sidepanel/home-tabs";
+import { balanceRow } from "../../../src/sidepanel/token-row";
+import { receipt } from "../../../src/ui/content";
+import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
+import { catalogGroup, catalogSample } from "./catalog-markup";
+import { balances, softwareActivity } from "./fixtures";
+
+const meta = {
+  ...CATALOG_META,
+  title: "Design system/04 Data display",
+} satisfies Meta<CatalogArgs>;
+
+export default meta;
+
+const balance = balances[0];
+const accepted = softwareActivity[0];
+if (!balance || !accepted) {
+  throw new Error("Missing UI Lab data-display fixtures");
+}
+
+export const Receipts: CatalogStory = {
+  render: (args) =>
+    catalogFrame(
+      "Receipts",
+      "Review facts align labels and values on one calm surface so amounts, recipients, fees, and identifiers can be checked quickly.",
+      catalogGroup(
+        "Transaction facts",
+        "Values are escaped and identifiers deliberately use the mono voice.",
+        `<div class="catalog-card-limit">${receipt([
+          { label: "Amount", value: "24 USDC" },
+          {
+            action: {
+              attributes: { "data-copy": "0x031075ef90ad626d" },
+              icon: "copy",
+              label: "Copy recipient",
+            },
+            label: "Recipient",
+            value: "0x031075ef…3755b9",
+            valueStyle: "code",
+          },
+          { label: "Network fee", value: "≈ 0.0018 STRK" },
+          { label: "Value change", value: "−4.2%", valueTone: "danger" },
+        ])}</div>`,
+      ),
+      args.theme,
+    ),
+};
+
+export const TokenRows: CatalogStory = {
+  name: "Token rows",
+  render: (args) =>
+    catalogFrame(
+      "Token rows",
+      "A token row keeps identity, owned amount, fiat value, and directional change aligned without a card per asset.",
+      catalogGroup(
+        "Balance row",
+        "This is the production home-row renderer with deterministic fixture data.",
+        catalogSample(
+          "Tracked token",
+          `<ul class="token-list">${balanceRow(balance, 1, 0.01, "usd")}</ul>`,
+          "catalog-card-limit",
+        ),
+      ),
+      args.theme,
+    ),
+};
+
+export const ActivityRows: CatalogStory = {
+  name: "Activity rows",
+  render: (args) =>
+    catalogFrame(
+      "Activity rows",
+      "Activity is account-partitioned in data and concise in presentation: action summary, hash, liveness state, and copy affordance.",
+      catalogGroup(
+        "Accepted transaction",
+        "The production row receives an activity entry already scoped to the active account.",
+        catalogSample(
+          "Accepted",
+          `<ul class="tx-list">${transactionRow(accepted)}</ul>`,
+          "catalog-card-limit",
+        ),
+      ),
+      args.theme,
+    ),
+};

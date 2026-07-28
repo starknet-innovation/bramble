@@ -1,6 +1,6 @@
 /**
  * Bindings for the home experience: the account drawer (open/close, switch,
- * add) and the tabbed portfolio section (tab switching, sliding indicator).
+ * add), the tabbed portfolio section, and its overflow quick-actions menu.
  * Both re-apply persisted state synchronously after each re-render — before
  * the frame paints — so the drawer and active tab survive repaints without
  * replaying their animations.
@@ -26,10 +26,9 @@ export type HomeUiDeps = {
   readonly setHomeTab: (tab: HomeTab) => void;
   readonly networkId: () => string;
   readonly render: (status: WalletStatus) => Promise<void>;
+  readonly startAddAccount?: () => void;
   readonly wallet: SidepanelWallet;
 };
-
-const INDICATOR_INSET = 10;
 
 // Settle spring shared by the drawer's release animation and its CSS transitions
 // (the iOS sheet spring, damping 0.8 / response 0.3 — see ../ui/tokens SPRING).
@@ -256,31 +255,98 @@ const bindDrawer = (deps: HomeUiDeps): void => {
 
   const addButton = root.querySelector<HTMLButtonElement>("#drawer-add-account");
   addButton?.addEventListener("click", () => {
-    buttonBusy(addButton, true);
-    // When a specific folder chip is active, the new account joins it; on "All"
-    // (no filter) it stays ungrouped. The filter is captured before the async
-    // hop so a concurrent repaint cannot change which folder is targeted.
-    const targetGroup = deps.drawerGroupFilter();
-    void deps.wallet
-      .addAccount(deps.networkId())
-      .then(async (accountId) => {
-        if (targetGroup) {
-          await deps.wallet.setAccountInGroup(accountId, targetGroup, true);
-        }
-      })
-      .then(
-        async () => {
-          showToast("Account added", "success");
-          await deps.render(await deps.wallet.loadStatus());
-        },
-        (error: unknown) => {
-          showToast(errorMessage(error, "Add account failed"), "error");
-          buttonBusy(addButton, false);
-        },
-      );
+    deps.setDrawerOpen(false);
+    deps.startAddAccount?.();
   });
 
   bindDrawerDrag(root, deps.drawerOpen, () => setOpen(false, false));
+};
+
+const portfolioMenuApps = new WeakSet<Element>();
+
+const setPortfolioMenuOpen = (app: Element, open: boolean, focusItem = false): void => {
+  const trigger = app.querySelector<HTMLButtonElement>("#portfolio-menu-trigger");
+  const menu = app.querySelector<HTMLElement>("#portfolio-menu");
+  if (!trigger || !menu) {
+    return;
+  }
+  trigger.setAttribute("aria-expanded", String(open));
+  menu.hidden = !open;
+  if (open && focusItem) {
+    menu.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+  }
+};
+
+const bindPortfolioMenu = (deps: HomeUiDeps): void => {
+  const app = deps.app;
+  const root = app?.querySelector<HTMLElement>(".portfolio-actions");
+  const trigger = root?.querySelector<HTMLButtonElement>("#portfolio-menu-trigger");
+  const menu = root?.querySelector<HTMLElement>("#portfolio-menu");
+  const items = menu ? [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')] : [];
+  if (!app || !root || !trigger || !menu) {
+    return;
+  }
+
+  const isOpen = (): boolean => !menu.hidden;
+  const close = (returnFocus = false): void => {
+    setPortfolioMenuOpen(app, false);
+    if (returnFocus) {
+      trigger.focus({ preventScroll: true });
+    }
+  };
+
+  trigger.addEventListener("click", () => setPortfolioMenuOpen(app, !isOpen()));
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+      return;
+    }
+    event.preventDefault();
+    setPortfolioMenuOpen(app, true, event.key === "ArrowDown");
+    if (event.key === "ArrowUp") {
+      items.at(-1)?.focus({ preventScroll: true });
+    }
+  });
+
+  menu.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close(true);
+      return;
+    }
+    const current = items.indexOf(menu.ownerDocument.activeElement as HTMLButtonElement);
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : event.key === "ArrowDown"
+            ? (current + 1) % items.length
+            : event.key === "ArrowUp"
+              ? (current - 1 + items.length) % items.length
+              : -1;
+    if (next >= 0) {
+      event.preventDefault();
+      items[next]?.focus({ preventScroll: true });
+    }
+  });
+  items.forEach((item) => {
+    item.addEventListener("click", () => close());
+  });
+  root.addEventListener("focusout", (event) => {
+    if (!event.relatedTarget || !root.contains(event.relatedTarget as Node)) {
+      close();
+    }
+  });
+
+  if (!portfolioMenuApps.has(app)) {
+    app.addEventListener("pointerdown", (event) => {
+      const currentRoot = app.querySelector<HTMLElement>(".portfolio-actions");
+      if (currentRoot && event.target && !currentRoot.contains(event.target as Node)) {
+        setPortfolioMenuOpen(app, false);
+      }
+    });
+    portfolioMenuApps.add(app);
+  }
 };
 
 const bindTabs = (deps: HomeUiDeps): void => {
@@ -288,57 +354,21 @@ const bindTabs = (deps: HomeUiDeps): void => {
   if (!tabsRoot) {
     return;
   }
-  const indicator = tabsRoot.querySelector<HTMLElement>(".tab-indicator");
 
-  const moveIndicator = (animate: boolean): void => {
-    const active = tabsRoot.querySelector<HTMLElement>('.home-tab[aria-selected="true"]');
-    if (!active || !indicator) {
-      return;
-    }
-    const width = `${Math.max(active.offsetWidth - INDICATOR_INSET * 2, 12)}px`;
-    const offset = `translateX(${active.offsetLeft + INDICATOR_INSET}px)`;
-    if (animate) {
-      indicator.style.width = width;
-      indicator.style.transform = offset;
-      return;
-    }
-    // On a data re-render the indicator element is fresh at its resting spot, so
-    // snap it into place with the transition suppressed — streaming balance and
-    // price updates must never make the underline glide. Restore the transition
-    // next frame so an explicit tab change still slides.
-    indicator.style.transition = "none";
-    indicator.style.width = width;
-    indicator.style.transform = offset;
-    requestAnimationFrame(() => {
-      indicator.style.transition = "";
-    });
-  };
-
-  const applyTab = (tab: HomeTab, animate: boolean): void => {
+  const applyTab = (tab: HomeTab): void => {
     tabsRoot.setAttribute("data-active-tab", tab);
     tabsRoot.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
       button.setAttribute("aria-selected", String(button.dataset["homeTab"] === tab));
     });
-    tabsRoot.querySelectorAll<HTMLElement>("[data-tab-actions]").forEach((actions) => {
-      const target = actions;
-      target.hidden = target.dataset["tabActions"] !== tab;
-    });
     tabsRoot.querySelectorAll<HTMLElement>("[data-tab-panel]").forEach((panel) => {
       const target = panel;
       const on = target.dataset["tabPanel"] === tab;
-      if (on && animate) {
-        // Re-runs the enter animation: the panel was display:none, so the
-        // animation restarts when it becomes visible again.
-        target.classList.add("is-entering");
-      }
       target.hidden = !on;
     });
-    moveIndicator(animate);
   };
 
-  // Restore the remembered tab before first paint; the indicator is measured
-  // against final layout so it lands without a glide.
-  applyTab(deps.homeTab(), false);
+  // Restore the remembered tab before first paint.
+  applyTab(deps.homeTab());
 
   tabsRoot.querySelectorAll<HTMLButtonElement>("[data-home-tab]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -347,7 +377,7 @@ const bindTabs = (deps: HomeUiDeps): void => {
         return;
       }
       deps.setHomeTab(tab);
-      applyTab(tab, true);
+      applyTab(tab);
     });
   });
 };
@@ -359,4 +389,5 @@ const bindTabs = (deps: HomeUiDeps): void => {
 export const bindHomeUi = (deps: HomeUiDeps): void => {
   bindDrawer(deps);
   bindTabs(deps);
+  bindPortfolioMenu(deps);
 };

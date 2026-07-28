@@ -148,6 +148,7 @@ export type Calls = {
   removeGroup: string[];
   setAccountInGroup: Array<readonly [string, string, boolean]>;
   addAccount: string[];
+  startAddAccount: number;
 };
 
 export type Harness = {
@@ -224,6 +225,7 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
     setGroupIcon: [],
     removeGroup: [],
     setAccountInGroup: [],
+    startAddAccount: 0,
   };
   const state: UiState = {
     expandedGroupId: null,
@@ -268,6 +270,9 @@ export const mount = (initialGroups: AccountGroups, view: "drawer" | "account"):
     },
     setDrawerOpen: () => undefined,
     setHomeTab: () => undefined,
+    startAddAccount: () => {
+      calls.startAddAccount += 1;
+    },
     wallet: wallet as unknown as HomeUiDeps["wallet"],
   };
 

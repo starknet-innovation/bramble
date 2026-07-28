@@ -64,9 +64,11 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
     async discoverNfts(
       includeWatched = true,
       scopeKey = "current",
+      multisigId?: string,
     ): Promise<readonly DiscoveredNft[]> {
-      return loadNfts(`discover:${scopeKey}:${includeWatched}`, {
+      return loadNfts(`discover:${scopeKey}:${includeWatched}:${multisigId ?? "account"}`, {
         ...(includeWatched ? {} : { includeWatched: false }),
+        ...(multisigId ? { multisigId } : {}),
         type: "wallet.discoverNfts",
       });
     },

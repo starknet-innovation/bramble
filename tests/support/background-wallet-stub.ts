@@ -77,6 +77,9 @@ export const createWallet = (
   async importRawKeyAccount() {
     return account;
   },
+  async previewAccount() {
+    return account;
+  },
   async getGrantedAccounts(origin: string) {
     return origin === "https://example.com" ? [account] : [];
   },

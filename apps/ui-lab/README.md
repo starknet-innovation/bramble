@@ -30,6 +30,27 @@ shorthand. Stop the local server with <kbd>Control</kbd>+<kbd>C</kbd>.
 The static UI Lab from `main` is hosted on the repository's access-controlled GitHub Pages site at
 <https://effective-adventure-qwr464j.pages.github.io/>.
 
+## Review the design system
+
+Open **Design system** first when changing shared interface code. The catalog is grouped into
+Foundations, Controls, Feedback, Data display, Cards, Navigation, and Assets. It renders the real
+production skins, styles, renderers, and domain components—never Storybook-only replicas.
+
+The source of truth lives in `src/ui/`:
+
+- `tokens.ts`, `skin.ts`, `default-skin.ts`, and `dark-skin.ts` own foundations.
+- `controls.ts`, `fields.ts`, `content.ts`, `navigation.ts`, and `icons.ts` own reusable
+  components.
+- `catalog.ts` is the authoritative inventory. `tests/ui/design-system.test.ts` fails when an
+  inventory item lacks Storybook coverage, a renderer stops escaping dynamic content, or a
+  side-panel template bypasses shared fields and structural primitives.
+- Wallet-specific cards and rows remain close to their domain in `src/sidepanel/`, but their
+  Storybook stories import those production renderers directly.
+
+When adding a shared component, grep for an existing pattern first, extend the library in place,
+use it from the production surface, add it to `catalog.ts`, and add its states to the matching
+Storybook section.
+
 ## Review a flow
 
 1. Open **Wallet journeys** in Storybook's sidebar and follow the numbered product journey from
@@ -38,7 +59,8 @@ The static UI Lab from `main` is hosted on the repository's access-controlled Gi
 2. Select a direct checkpoint or use **Play**, **Pause**, **Step**, **Replay**, and **Reset** to
    inspect the complete sequence.
 3. Adjust speed, theme, reduced motion, and the 960 × 800 onboarding-tab, 400 × 760 side-panel,
-   or 380 × 600 popup surface.
+   or 380 × 600 popup surface. Wallet scenarios default to the side panel; full-screen onboarding
+   keeps the onboarding-tab preset. The popup remains an explicit responsive-layout check.
 4. Read the event/state log beside the wallet frame. Add local feedback notes and export them as
    Markdown when a review needs to leave the browser.
 5. Use the Canvas for motion review and the Interactions panel to rewind or step through story play
@@ -46,24 +68,24 @@ The static UI Lab from `main` is hosted on the repository's access-controlled Gi
 
 ## Journey coverage
 
-The lab has 100 deterministic checkpoints across 14 scenario families:
+The lab has 127 deterministic checkpoints across 14 scenario families:
 
 | Family | Review surface |
 | --- | --- |
-| Full-page onboarding | First run, generated-backup verification, and import in the expanded tab. |
+| Full-screen onboarding | Welcome, import method, phrase entry, local passphrase, account selection, generated-backup verification, Ledger protection, and completion. |
 | Returning unlock | Locked, request-waiting, and failed-authentication side-panel states. |
 | Home and portfolio | Ready, tabs, account drawer, undeployed, offline, error, and empty-network states. |
 | Send lifecycle | Details, review latency, fee failure, signing, broadcast, and receipt. |
 | Swap lifecycle | Picker, quote latency, route sanity, frozen review, failure, and submission. |
 | Ledger signing | Connect, device selection, readiness, verification, approval, submission, and recovery. |
 | Ledger account onboarding | Setup method, device grants, enumeration, multi-select, partial add, and errors. |
-| dApp approvals | Every provider approval kind, blocked origin, and queue visibility. |
-| dApp request takeover | Foreground takeover, receipt-token watch, and explicit review-later behavior. |
-| Account-isolated Activity | Account switching, immediate clearing, refresh, and restoration. |
-| Assets and permissions | Receive, token management/detail, address book, and ERC20 allowances. |
-| NFT loading and send | Metadata loading, gallery, detail, guarded transfer, blocking, and submission. |
-| Multisig operations | Watch, detail, propose, declare/deploy, quorum, untracked, executed, and stale data. |
-| Settings and security | Preferences, networks, accounts/groups, sites, backup, and recovery boundaries. |
+| dApp approvals | Every provider approval kind, blocked origin, queue visibility, and live authorization handoff. |
+| dApp request takeover | Foreground takeover, receipt-token watch, explicit review-later behavior, and a dedicated parked-request list. |
+| Account-isolated Activity | Account switching, immediate clearing, refresh, restoration, and separation from dApp decisions. |
+| Assets and permissions | Receive, focused add/detect token journeys, token detail, address book, and ERC20 allowances. |
+| NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, and submission. |
+| Multisig operations | Watch, signers, track, reviewed proposal creation, declare/deploy, quorum, untracked, executed, and stale data. |
+| Settings and security | Focused appearance, request, network/endpoint, account/import, connected-site, backup/export/restore, and security boundaries. |
 
 The `ProductionViewCoverage` interaction test derives its assertion from the production
 `WALLET_VIEWS` constant. A new production view fails the UI Lab suite until at least one scenario

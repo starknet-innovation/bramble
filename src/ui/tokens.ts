@@ -52,33 +52,38 @@ export const TYPE = {
   label: { line: "1.3", size: "13px" },
   micro: { line: "1.2", size: "11px" },
   mono: { line: "1.5", size: "12px" },
+  portfolio: { line: "1.05", size: "44px" },
   title: { line: "1.2", size: "17px" },
 } as const;
 
 /**
  * Motion durations in ms and the shared easing curves. `ease` settles
- * decisively; `pop` carries a slight overshoot reserved for press-release and
- * entrance moments. Feedback transforms stay within a 2px lift or a 0.96–1.0
- * scale so controls feel alive without drifting under the pointer.
+ * decisively. Feedback transforms stay within a 2px lift or a 0.96–1.0 scale
+ * so controls feel alive without drifting under the pointer.
  */
 export const MOTION = {
   drawerMs: 260,
   ease: "cubic-bezier(0.2, 0.7, 0.3, 1)",
   enterMs: 200,
   liftMs: 160,
-  pop: "cubic-bezier(0.34, 1.3, 0.4, 1)",
+  onboardingPulseMs: 3200,
   pressMs: 90,
+  pulseStaggerMs: 1050,
   tabMs: 220,
   toastMs: 220,
+  waitLoopMs: 2000,
 } as const;
 
 /**
  * Control metrics that keep hit targets and icons consistent.
  */
 export const CONTROL = {
+  dockIcon: "24px",
+  dockItem: "44px",
   hit: "40px",
   hitSmall: "32px",
   icon: "18px",
+  majorIcon: "22.5px",
   nav: "52px",
 } as const;
 
@@ -116,6 +121,7 @@ export const TRACKING = {
  * fixed dimension traces back to one place.
  */
 export const SIZE = {
+  actionTile: "72px",
   art: "56px",
   avatar: "36px",
   brand: "64px",
@@ -130,21 +136,21 @@ export const SIZE = {
 
 /**
  * Elevation / shadow scale for the "Clean Mono" look: gentle, low, near-diffuse
- * shadows cast in a fixed cool-slate ink. Shadows are always darker than the
- * surface beneath them — a background-tinted shadow reads as a white glow on a
- * light ground, i.e. no elevation at all — so the ink is a deep slate at a low
- * alpha that deepens dark surfaces and grounds light ones equally. Elevation is
+ * shadows cast in neutral black ink. Shadows are always darker than the surface
+ * beneath them — a background-tinted shadow reads as a white glow on a light
+ * ground, i.e. no elevation at all — so black at a low alpha deepens dark
+ * surfaces and grounds light ones equally. Elevation is
  * deliberately restrained — cards lift by a hair, floating chrome (dock,
  * drawer) by a little more — so the interface stays flat and calm rather than
  * glossy. Structure is carried mostly by hairline edges; these shadows only
  * add the softest separation. `up` is the dock's upward cast.
  */
 export const SHADOW = {
-  lg: "0 24px 60px hsl(222 40% 4% / 0.36)",
-  md: "0 12px 30px hsl(222 40% 4% / 0.24)",
-  sm: "0 4px 14px hsl(222 40% 4% / 0.16)",
-  up: "0 -8px 24px hsl(222 40% 4% / 0.10)",
-  xs: "0 1px 2px hsl(222 40% 4% / 0.12)",
+  lg: "0 24px 60px hsl(0 0% 0% / 0.36)",
+  md: "0 12px 30px hsl(0 0% 0% / 0.24)",
+  sm: "0 4px 14px hsl(0 0% 0% / 0.16)",
+  up: "0 -8px 24px hsl(0 0% 0% / 0.10)",
+  xs: "0 1px 2px hsl(0 0% 0% / 0.12)",
 } as const;
 
 /**
@@ -152,13 +158,12 @@ export const SHADOW = {
  * these carry the intentional punch the design bar demands. `out` for
  * enter/exit (instant, responsive), `inOut` for on-screen moves, `drawer` for
  * sheets. Never use `ease-in` on UI — it delays the frame the user watches
- * most. `standard`/`pop` mirror the legacy `MOTION` curves for continuity.
+ * most. `standard` mirrors the legacy `MOTION` curve for continuity.
  */
 export const EASE = {
   drawer: "cubic-bezier(0.32, 0.72, 0, 1)",
   inOut: "cubic-bezier(0.77, 0, 0.175, 1)",
   out: "cubic-bezier(0.23, 1, 0.32, 1)",
-  pop: "cubic-bezier(0.34, 1.3, 0.4, 1)",
   standard: "cubic-bezier(0.2, 0.7, 0.3, 1)",
 } as const;
 

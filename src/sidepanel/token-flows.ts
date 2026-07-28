@@ -8,9 +8,11 @@ import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { isLikelySpam } from "../starknet/token-registry";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
+import { emptyState, receipt } from "../ui/content";
+import { button } from "../ui/controls";
+import { textField } from "../ui/fields";
 import { formatFiat, tokenFiatValue } from "./fiat";
-import { icon } from "./icons";
-import { accountLabel, copyButton, flowHeader, flowScreen } from "./parts";
+import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "./parts";
 import { sparklinePath, sparklineTrend } from "./sparkline";
 import { compactAmount, tokenGlyph } from "./token-row";
 
@@ -39,7 +41,15 @@ const trackedRow = (
   const fiat = balance ? tokenFiatValue(balance.formatted, price) : null;
   const toggle = spam
     ? '<span class="token-flag">Likely spam</span>'
-    : `<button class="secondary small" type="button" data-token-toggle="${escapeHtml(token.id)}" data-token-hidden="${isHidden ? "true" : "false"}">${isHidden ? "Show" : "Hide"}</button>`;
+    : button({
+        attributes: {
+          "data-token-hidden": String(isHidden),
+          "data-token-toggle": token.id,
+        },
+        label: isHidden ? "Show" : "Hide",
+        size: "small",
+        variant: "secondary",
+      });
   return `<li class="token-row${isHidden ? " token-hidden" : ""}">
     ${tokenGlyph(token.address, token.symbol)}
     <div class="token-copy">
@@ -55,8 +65,8 @@ const trackedRow = (
 };
 
 /**
- * Tokens flow: add a custom token, auto-detect held registry tokens, and
- * manage which tracked tokens show on home.
+ * Tokens flow: review tracked, hidden, and likely-spam assets. Adding and
+ * discovery are separate tasks reached from the compact action list.
  */
 export const tokensFlow = (
   status: WalletStatus,
@@ -70,32 +80,20 @@ export const tokensFlow = (
   );
   const balanceById = new Map(balances.map((balance) => [balance.id, balance]));
   return (
-    flowHeader("Tokens", status, "Add, detect, and hide tokens") +
+    flowHeader("Tokens", status, `${tracked.length} tracked`) +
     flowScreen(
       "tokens",
       `<section class="section">
-        <p class="eyebrow">Add a token</p>
-        <form id="token-add-form">
-          <label><span>Contract address</span>
-            <input class="mono" name="address" placeholder="0x…" required autocomplete="off" spellcheck="false" />
-            <span class="hint">Name, symbol, and decimals are read from the contract.</span>
-          </label>
-          <button type="submit">${icon("check")}Add token</button>
-          <p id="token-add-result" role="status"></p>
-        </form>
-      </section>
-      <section class="section">
-        <p class="eyebrow">Auto-detect</p>
-        <p class="hint">Scans a curated list of well-known Starknet tokens for balances you already hold.</p>
-        <button id="detect-tokens" class="secondary" type="button">${icon("refresh")}Scan for tokens</button>
-        <div id="detect-results"></div>
-        <p id="detect-result" role="status"></p>
+        <div class="menu-list" role="group" aria-label="Token actions">
+          ${walletMenuRow("token-add", "Add by contract", "plus")}
+          ${walletMenuRow("token-discover", "Find held tokens", "search")}
+        </div>
       </section>
       <section class="section">
         <p class="eyebrow">Tracked tokens</p>
         ${
           tracked.length === 0
-            ? '<p class="empty">No tokens tracked on this network yet.</p>'
+            ? emptyState("No tokens tracked on this network yet.")
             : `<ul class="token-list">${tracked
                 .map((token) =>
                   trackedRow(
@@ -114,10 +112,55 @@ export const tokensFlow = (
   );
 };
 
+/**
+ * Renders manual token import as a focused contract-identity task.
+ */
+export const tokenAddFlow = (status: WalletStatus): string =>
+  flowHeader("Add token", status, "Track a token by its contract") +
+  flowScreen(
+    "token-add",
+    `<section class="section">
+      <form id="token-add-form">
+        ${textField({
+          autocomplete: "off",
+          className: "mono",
+          hint: "Name, symbol, and decimals are read from the contract before it is saved.",
+          label: "Contract address",
+          name: "address",
+          placeholder: "0x…",
+          required: true,
+          spellcheck: false,
+        })}
+        ${button({ icon: "check", label: "Read and add token", type: "submit" })}
+        <p id="token-add-result" role="status"></p>
+      </form>
+    </section>`,
+  );
+
+/**
+ * Renders curated token discovery as its own scan-and-review task.
+ */
+export const tokenDiscoverFlow = (status: WalletStatus): string =>
+  flowHeader("Find held tokens", status, "Scan the Starknet token registry") +
+  flowScreen(
+    "token-discover",
+    `<section class="section">
+      <p class="lede">Check well-known Starknet token contracts for balances held by the active account.</p>
+      <p class="hint">Nothing is added until the scan identifies a balance. Likely-spam tokens remain hidden from Home.</p>
+      ${button({
+        attributes: { id: "detect-tokens" },
+        icon: "refresh",
+        label: "Scan for tokens",
+      })}
+      <div id="detect-results"></div>
+      <p id="detect-result" role="status"></p>
+    </section>`,
+  );
+
 const sparkline = (points: readonly number[]): string => {
   const path = sparklinePath(points, 100, 32);
   if (path.length === 0) {
-    return '<p class="empty">Price history unavailable.</p>';
+    return emptyState("Price history unavailable.");
   }
   return `<svg class="sparkline sparkline-${sparklineTrend(points)}" viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true"><polyline points="${path}" /></svg>`;
 };
@@ -155,12 +198,21 @@ export const tokenDetailFlow = (
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>
-        <dl class="receipt">
-          <div class="receipt-row"><dt>Address</dt><dd><code>${escapeHtml(accountLabel(token.address))}</code>${copyButton(token.address, "Copy token address")}</dd></div>
-          <div class="receipt-row"><dt>Symbol</dt><dd>${escapeHtml(token.symbol)}</dd></div>
-          <div class="receipt-row"><dt>Decimals</dt><dd>${token.decimals}</dd></div>
-          <div class="receipt-row"><dt>Network</dt><dd>${escapeHtml(status.network)}</dd></div>
-        </dl>
+        ${receipt([
+          {
+            action: {
+              attributes: { "data-copy": token.address },
+              icon: "copy",
+              label: "Copy token address",
+            },
+            label: "Address",
+            value: accountLabel(token.address),
+            valueStyle: "code",
+          },
+          { label: "Symbol", value: token.symbol },
+          { label: "Decimals", value: String(token.decimals) },
+          { label: "Network", value: status.network },
+        ])}
       </section>`,
     )
   );

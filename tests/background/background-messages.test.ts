@@ -70,6 +70,23 @@ describe("createMessageHandler", () => {
     });
   });
 
+  test("previews only public account metadata for extension pages", async () => {
+    const handler = createMessageHandler(createWallet(), "extension-id");
+    const message = {
+      mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+      networkId: "SN_SEPOLIA",
+      type: "wallet.previewAccount",
+    };
+
+    await expect(handler(message, sender)).resolves.toEqual({ account, ok: true });
+    await expect(handler(message, contentSender)).resolves.toEqual({
+      error: "privileged sender required",
+    });
+    await expect(handler({ ...message, vaultPassphrase }, sender)).resolves.toEqual({
+      error: "invalid account preview request",
+    });
+  });
+
   test("handles provider chain id and gates dapp invoke submission", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
