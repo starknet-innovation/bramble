@@ -144,12 +144,20 @@ describe("guided Multisig actions", () => {
 
   test("selects wallet contacts, then requires stable deployment review", async () => {
     const deployments: unknown[] = [];
-    const app = mount(multisigDeployFlow(status, account, true, preferences), {
-      async deployMultisig(signers, quorum, salt) {
-        deployments.push({ quorum, salt, signers });
-        return { address: "0x777", transactionHash: "0x888" };
-      },
-    } as MultisigUiDeps["multisig"]);
+    const app = mount(
+      multisigDeployFlow(
+        status,
+        account,
+        { declarationPending: false, declared: true },
+        preferences,
+      ),
+      {
+        async deployMultisig(signers, quorum, salt) {
+          deployments.push({ quorum, salt, signers });
+          return { address: "0x777", transactionHash: "0x888" };
+        },
+      } as MultisigUiDeps["multisig"],
+    );
     const contact = [...app.querySelectorAll<HTMLButtonElement>("[data-signer-toggle]")].find(
       (button) => button.dataset["signerLabel"] === "Research treasury",
     );

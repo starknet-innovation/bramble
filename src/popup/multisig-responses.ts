@@ -83,8 +83,16 @@ export const isMultisigProposalResponse = (value: unknown): value is MultisigPro
  */
 export type MultisigClassStatusResponse = {
   readonly declared: boolean;
+  readonly declarationPending: boolean;
   readonly ok: true;
+  readonly transactionHash?: string;
 };
+
+/**
+ * Public declaration state rendered by the deploy flow after the response
+ * envelope has been validated.
+ */
+export type MultisigClassState = Omit<MultisigClassStatusResponse, "ok">;
 
 /**
  * Checks class-status responses before rendering the deploy screen.
@@ -94,9 +102,15 @@ export const isMultisigClassStatusResponse = (
 ): value is MultisigClassStatusResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["declared", "ok"]) &&
+  hasOnlyKnownKeys(value, ["declarationPending", "declared", "ok", "transactionHash"]) &&
   value["ok"] === true &&
-  typeof value["declared"] === "boolean";
+  typeof value["declared"] === "boolean" &&
+  typeof value["declarationPending"] === "boolean" &&
+  (value["transactionHash"] === undefined ||
+    (value["declarationPending"] === true &&
+      typeof value["transactionHash"] === "string" &&
+      isStarkFieldElement(value["transactionHash"]))) &&
+  !(value["declared"] && value["declarationPending"]);
 
 /**
  * Deploy submission accepted from the background boundary with the predicted

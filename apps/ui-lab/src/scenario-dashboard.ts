@@ -4,6 +4,7 @@ import type {
   PendingApproval,
   WalletStatus,
 } from "../../../src/popup/responses";
+import type { MultisigClassState } from "../../../src/popup/multisig-responses";
 import type { BalanceState } from "../../../src/sidepanel/runtime";
 import { dashboard, type WalletView } from "../../../src/sidepanel/views";
 import type { AllowanceView } from "../../../src/starknet/allowance-discovery";
@@ -32,7 +33,7 @@ export type DashboardOptions = {
   readonly discoveredNfts?: readonly DiscoveredNft[];
   readonly expandedGroupId?: string | null;
   readonly historyUnavailable?: boolean;
-  readonly multisigClassDeclared?: boolean | "error" | null;
+  readonly multisigClassDeclared?: MultisigClassState | "error" | null;
   readonly multisigProposals?: readonly MultisigProposalRecord[];
   readonly multisigSync?: "current" | "error" | null;
   readonly multisigs?: readonly MultisigRecord[];

@@ -5,6 +5,7 @@
  * it is safe to reset to the locked/empty state whenever the vault is locked.
  */
 
+import type { MultisigClassState } from "../popup/multisig-responses";
 import type { WalletStatus } from "../popup/responses";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { WalletPreferences } from "../storage/preferences-store";
@@ -32,7 +33,7 @@ export type RenderData = {
   multisigs: LoadedMultisigs;
   multisigsError: boolean;
   multisigSync: "current" | "error" | null;
-  multisigClassDeclared: boolean | "error" | null;
+  multisigClassDeclared: MultisigClassState | "error" | null;
   multisigBalanceId: string | null;
   multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
   multisigNftId: string | null;
@@ -94,6 +95,7 @@ export const updateRenderScope = (cache: RenderData, status: WalletStatus): void
           ...emptyNftCache(),
           multisigBalanceId: null,
           multisigBalances: { error: "multisig balances unavailable" },
+          multisigClassDeclared: null,
           multisigNftId: null,
           multisigNfts: [],
           multisigSync: null,

@@ -10,6 +10,7 @@ import {
   isMultisigResponse,
   isMultisigsResponse,
   isOkResponse,
+  type MultisigClassState,
   type MultisigDeployResponse,
   type MultisigsResponse,
 } from "../popup/multisig-responses";
@@ -87,10 +88,16 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     // rejects, so the deploy screen can tell "still loading" (null in the
     // cache) apart from "checked and failed" and offer a retry instead of
     // hanging on the checking state.
-    async loadClassStatus(): Promise<boolean | "error"> {
+    async loadClassStatus(): Promise<MultisigClassState | "error"> {
       try {
         const response = await sendMessage({ type: "wallet.multisigClassStatus" });
-        return isMultisigClassStatusResponse(response) ? response.declared : "error";
+        return isMultisigClassStatusResponse(response)
+          ? {
+              declarationPending: response.declarationPending,
+              declared: response.declared,
+              ...(response.transactionHash ? { transactionHash: response.transactionHash } : {}),
+            }
+          : "error";
       } catch {
         return "error";
       }

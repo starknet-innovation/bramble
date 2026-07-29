@@ -47,7 +47,7 @@ const responses: Readonly<Record<string, unknown>> = {
   "wallet.declareMultisigClass": { ok: true, transactionHash: "0x123" },
   "wallet.deployMultisig": { address, ok: true, transactionHash: "0x123" },
   "wallet.executeMultisigProposal": { ok: true, transactionHash: "0x123" },
-  "wallet.multisigClassStatus": { declared: true, ok: true },
+  "wallet.multisigClassStatus": { declarationPending: false, declared: true, ok: true },
   "wallet.multisigBalances": {
     accountId: multisig.id,
     balances: [],
@@ -81,6 +81,21 @@ describe("multisig response guards", () => {
     expect(isMultisigResponse({ multisig: { ...multisig, quorum: 0 }, ok: true })).toBe(false);
     expect(isMultisigProposalResponse({ ok: true, proposal, transactionHash: "bad" })).toBe(false);
     expect(isMultisigClassStatusResponse({ declared: "yes", ok: true })).toBe(false);
+    expect(
+      isMultisigClassStatusResponse({
+        declarationPending: true,
+        declared: false,
+        ok: true,
+        transactionHash: "0x123",
+      }),
+    ).toBe(true);
+    expect(
+      isMultisigClassStatusResponse({
+        declarationPending: true,
+        declared: true,
+        ok: true,
+      }),
+    ).toBe(false);
     expect(isMultisigDeployResponse({ address: "bad", ok: true, transactionHash: "0x1" })).toBe(
       false,
     );
@@ -111,7 +126,10 @@ describe("createMultisigClient", () => {
       transactionHash: "0x123",
     });
     expect(await client.executeProposal(proposal.id)).toBe("0x123");
-    expect(await client.loadClassStatus()).toBe(true);
+    expect(await client.loadClassStatus()).toEqual({
+      declarationPending: false,
+      declared: true,
+    });
     expect(await client.loadBalances(multisig.id)).toEqual({ balances: [] });
     expect(await client.loadMultisigs()).toEqual({
       multisigs: [multisig],

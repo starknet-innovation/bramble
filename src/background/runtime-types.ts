@@ -383,7 +383,9 @@ export type MultisigProposalResponse = {
  */
 export type MultisigClassStatusResponse = {
   readonly declared: boolean;
+  readonly declarationPending: boolean;
   readonly ok: true;
+  readonly transactionHash?: string;
 };
 
 /**

@@ -3,6 +3,7 @@
  * detail lifecycle actions, and the declare-first deploy gate.
  */
 import { describe, expect, test } from "bun:test";
+import type { MultisigClassState } from "../../src/popup/multisig-responses";
 import type { WalletStatus } from "../../src/popup/responses";
 import {
   multisigAddFlow,
@@ -72,7 +73,7 @@ const render = (
   view: Parameters<typeof dashboard>[0],
   multisigs: readonly MultisigRecord[] = [multisig],
   proposals: readonly MultisigProposalRecord[] = [],
-  declared: boolean | "error" | null = null,
+  declared: MultisigClassState | "error" | null = null,
 ): string =>
   dashboard(
     view,
@@ -229,10 +230,16 @@ describe("multisig views", () => {
   });
 
   test("deploy screen gates on the declared class", () => {
-    const gated = render("multisig-deploy", [], [], false);
+    const gated = render("multisig-deploy", [], [], {
+      declarationPending: false,
+      declared: false,
+    });
     expect(gated).toContain('id="multisig-declare"');
     expect(gated).toContain("disabled");
-    const ready = render("multisig-deploy", [], [], true);
+    const ready = render("multisig-deploy", [], [], {
+      declarationPending: false,
+      declared: true,
+    });
     expect(ready).not.toContain('id="multisig-declare"');
     expect(ready).toContain('id="multisig-deploy-form"');
     // Deploy is enabled once the class is confirmed declared.
@@ -248,6 +255,19 @@ describe("multisig views", () => {
     expect(errored).toContain("disabled");
   });
 
+  test("deploy screen preserves a pending declaration across refreshes", () => {
+    const pending = render("multisig-deploy", [], [], {
+      declarationPending: true,
+      declared: false,
+      transactionHash: "0xdec",
+    });
+    expect(pending).toContain("Declaration in progress");
+    expect(pending).toContain("Waiting for confirmation");
+    expect(pending).toContain("0xdec");
+    expect(pending).not.toContain('id="multisig-declare"');
+    expect(pending).toContain("disabled");
+  });
+
   test("deploy screen shows the loading state before the status resolves", () => {
     const loading = render("multisig-deploy", [], [], null);
     expect(loading).toContain("Checking whether");
@@ -256,12 +276,17 @@ describe("multisig views", () => {
   });
 
   test("deploy form no longer collects a name", () => {
-    expect(render("multisig-deploy", [], [], true)).not.toContain('name="name"');
+    expect(
+      render("multisig-deploy", [], [], { declarationPending: false, declared: true }),
+    ).not.toContain('name="name"');
   });
 
   test("deploy explains the missing-account state instead of showing a silent disabled form", () => {
     const noAccount = { ...status, accountCount: 0, accounts: [], activeAccountId: null };
-    const html = multisigDeployFlow(noAccount, null, true);
+    const html = multisigDeployFlow(noAccount, null, {
+      declarationPending: false,
+      declared: true,
+    });
     expect(html).toContain("No account on Starknet");
     expect(html).not.toContain('id="multisig-deploy-form"');
   });

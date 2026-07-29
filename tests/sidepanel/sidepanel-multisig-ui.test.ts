@@ -65,6 +65,45 @@ describe("bindMultisigs", () => {
     expect(renders).toBe(1);
   });
 
+  test("the declare control submits once and exposes immediate progress", async () => {
+    let declarations = 0;
+    let renders = 0;
+    let finish: ((transactionHash: string) => void) | undefined;
+    const submitted = new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+    const app = mount(
+      `<button id="multisig-declare" type="button">Declare multisig class</button>
+       <p id="multisig-declare-result" role="status"></p>`,
+      async () => {
+        renders += 1;
+      },
+      {
+        multisig: {
+          async declareClass() {
+            declarations += 1;
+            return submitted;
+          },
+        } as MultisigUiDeps["multisig"],
+      },
+    );
+    const declareButton = app.querySelector<HTMLButtonElement>("#multisig-declare");
+    declareButton?.click();
+    declareButton?.click();
+    await Promise.resolve();
+
+    expect(declarations).toBe(1);
+    expect(declareButton?.disabled).toBe(true);
+    expect(declareButton?.hasAttribute("data-busy")).toBe(true);
+    expect(app.querySelector("#multisig-declare-result")?.textContent).toBe("Submitting declare…");
+
+    finish?.("0xdec");
+    for (let turn = 0; turn < 6; turn += 1) {
+      await Promise.resolve();
+    }
+    expect(renders).toBe(1);
+  });
+
   test("requires a stable review before creating a proposal", async () => {
     const proposals: unknown[] = [];
     const app = mount(

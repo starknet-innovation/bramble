@@ -8,6 +8,7 @@
  * from ./home-tabs.ts.
  */
 
+import type { MultisigClassState } from "../popup/multisig-responses";
 import type {
   ConnectedSite,
   DiscoveredNft,
@@ -153,7 +154,7 @@ type JourneyContext = {
   readonly chart: readonly number[];
   readonly currency: DisplayCurrency;
   readonly discoveredNfts: readonly DiscoveredNft[];
-  readonly multisigClassDeclared: boolean | "error" | null;
+  readonly multisigClassDeclared: MultisigClassState | "error" | null;
   readonly multisigPortfolio: MultisigPortfolioData;
   readonly multisigProposals: readonly MultisigProposalRecord[];
   readonly multisigSync: "current" | "error" | null;
@@ -333,7 +334,7 @@ export const dashboard = (
   multisigs: readonly MultisigRecord[] = [],
   multisigProposals: readonly MultisigProposalRecord[] = [],
   selectedMultisigId: string | null = null,
-  multisigClassDeclared: boolean | "error" | null = null,
+  multisigClassDeclared: MultisigClassState | "error" | null = null,
   drawerGroupFilter: string | null = null,
   expandedGroupId: string | null = null,
   priceStale = false,

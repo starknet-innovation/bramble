@@ -12,6 +12,7 @@ import {
   requireMultisigContractClass,
 } from "../starknet/multisig-deploy";
 import { STARKNET_NETWORKS } from "../starknet/networks";
+import { multisigOperationId } from "../storage/multisig-store";
 import { readTypeOnlyInput } from "./message-inputs";
 import { readDeployMultisigInput } from "./multisig-inputs";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-ops";
@@ -39,7 +40,37 @@ const multisigClassStatus: MultisigDeployHandler = async (deps, message) => {
   const declared = await multisigRpc(deps).isClassDeclared({
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
   });
-  return { declared, ok: true };
+  const operationId = multisigOperationId(
+    "declare",
+    context.networkId,
+    context.account.id,
+    MULTISIG_CLASS_HASH,
+  );
+  if (declared) {
+    if (operationId) {
+      await releaseMultisigOperation(deps, operationId);
+    }
+    return { declarationPending: false, declared: true, ok: true };
+  }
+  const operation = operationId ? await deps.multisigStore.getOperation(operationId) : null;
+  if (operation?.transactionHash) {
+    const activity = (await deps.activity.list().catch(() => [])).find(
+      (entry) =>
+        entry.accountId === context.account.id &&
+        entry.networkId === context.networkId &&
+        entry.hash === operation.transactionHash,
+    );
+    if (activity?.status === "rejected" || activity?.status === "reverted") {
+      await releaseMultisigOperation(deps, operation.id);
+      return { declarationPending: false, declared: false, ok: true };
+    }
+  }
+  return {
+    declarationPending: operation !== null,
+    declared: false,
+    ok: true,
+    ...(operation?.transactionHash ? { transactionHash: operation.transactionHash } : {}),
+  };
 };
 
 const declareMultisigClass: MultisigDeployHandler = async (deps, message) => {

@@ -331,18 +331,53 @@ export const multisigScenario: WalletScenario = {
       "deploy-declare",
       "Declare before deploy",
       "A missing class exposes the one-time declaration and its fee-bearing boundary.",
-      () => multisigDeployFlow(statusFor(), softwareAccount, false, preferences),
+      () =>
+        multisigDeployFlow(
+          statusFor(),
+          softwareAccount,
+          { declarationPending: false, declared: false },
+          preferences,
+      ),
       { class: "missing", deployEnabled: false },
+    ),
+    multisigCheckpoint(
+      "deploy-declaration-pending",
+      "Declaration pending",
+      "The submitted transaction stays visible and deployment remains locked until the pinned class is confirmed on-chain.",
+      () =>
+        multisigDeployFlow(
+          statusFor(),
+          softwareAccount,
+          {
+            declarationPending: true,
+            declared: false,
+            transactionHash: "0xdec",
+          },
+          preferences,
+        ),
+      { class: "pending", deployEnabled: false, transactionHash: "0xdec" },
     ),
     multisigCheckpoint(
       "deploy-ready",
       "Deploy ready",
       "Wallet accounts and contacts form a staged signer picker before quorum and deterministic salt review.",
-      () => multisigDeployFlow(statusFor(), softwareAccount, true, preferences),
+      () =>
+        multisigDeployFlow(
+          statusFor(),
+          softwareAccount,
+          { declarationPending: false, declared: true },
+          preferences,
+        ),
       { class: "declared", deployEnabled: true, signerSources: ["wallet", "address-book"] },
     ),
     {
-      content: () => multisigDeployFlow(statusFor(), softwareAccount, true, preferences),
+      content: () =>
+        multisigDeployFlow(
+          statusFor(),
+          softwareAccount,
+          { declarationPending: false, declared: true },
+          preferences,
+        ),
       id: "deploy-rules",
       label: "Review signer rules",
       narrative:
