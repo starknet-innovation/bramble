@@ -3,7 +3,10 @@
  * before they reach the preferences store.
  */
 import { describe, expect, test } from "bun:test";
-import { readSetDisplayInput } from "../../src/background/preference-inputs";
+import {
+  readSetDisplayInput,
+  readSetStrk20NetworkConfigInput,
+} from "../../src/background/preference-inputs";
 
 describe("readSetDisplayInput", () => {
   test("reads a well-formed display-settings message", () => {
@@ -31,5 +34,57 @@ describe("readSetDisplayInput", () => {
     ).toBeNull();
     expect(readSetDisplayInput({ displayCurrency: "jpy", type: "wallet.setDisplay" })).toBeNull();
     expect(readSetDisplayInput({ theme: "solarized", type: "wallet.setDisplay" })).toBeNull();
+  });
+});
+
+describe("readSetStrk20NetworkConfigInput", () => {
+  const config = {
+    discoveryUrl: "https://privacy.example/discovery",
+    ohttpRelayUrl: "https://privacy.example/ohttp",
+    paymaster: { feeToken: "0x5", url: "https://privacy.example/paymaster" },
+    poolAddress: "0x2",
+    proverUrl: "https://privacy.example/prover",
+    subaccountAnonymizerAddress: "0x3",
+  };
+
+  test("accepts only complete, per-network public service routing", () => {
+    expect(
+      readSetStrk20NetworkConfigInput({
+        config,
+        networkId: "SN_MAIN",
+        type: "wallet.setStrk20NetworkConfig",
+      }),
+    ).toEqual({ config, networkId: "SN_MAIN" });
+    expect(
+      readSetStrk20NetworkConfigInput({
+        config: null,
+        networkId: "SN_MAIN",
+        type: "wallet.setStrk20NetworkConfig",
+      }),
+    ).toEqual({ config: null, networkId: "SN_MAIN" });
+  });
+
+  test("rejects partial routing, credentials, and insecure remote URLs", () => {
+    expect(
+      readSetStrk20NetworkConfigInput({
+        config: { discoveryUrl: config.discoveryUrl },
+        networkId: "SN_MAIN",
+        type: "wallet.setStrk20NetworkConfig",
+      }),
+    ).toBeNull();
+    expect(
+      readSetStrk20NetworkConfigInput({
+        config: { ...config, apiKey: "secret" },
+        networkId: "SN_MAIN",
+        type: "wallet.setStrk20NetworkConfig",
+      }),
+    ).toBeNull();
+    expect(
+      readSetStrk20NetworkConfigInput({
+        config: { ...config, proverUrl: "http://privacy.example/prover" },
+        networkId: "SN_MAIN",
+        type: "wallet.setStrk20NetworkConfig",
+      }),
+    ).toBeNull();
   });
 });

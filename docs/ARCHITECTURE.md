@@ -268,7 +268,12 @@ frozen and installed as a non-configurable global.
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
-`wallet_watchAsset`.
+`wallet_watchAsset`. The STRK20 extension adds `wallet_strk20Balances`,
+`wallet_strk20PrepareInvoke`, `wallet_strk20InvokeTransaction`, and
+`wallet_strk20SubaccountCommitment`; all use the same origin-grant and phishing gates. Private
+balance, proof-preparation, and sub-account-commitment requests also require a dedicated held
+approval bound to the exact account, network, and private payload digest; a general connection
+grant never authorizes disclosure of private state.
 
 Grants and provider events are isolated per origin: each origin reads only its own accounts
 (`wallet.getGrantedAccounts`) and each content script derives page events from its own history
@@ -335,6 +340,18 @@ and reputation signals before a connection is approved:
   `src/storage/origin-history.ts` (key `mc-wallet:origin-history`) using an
   injected clock. Approval cards show first-seen, prior-connection, risky-TLD,
   and lookalike insights prominently before the user grants access.
+
+## STRK20 privacy
+
+MC Wallet implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
+Privacy SDK browser bundle. The source revision and emitted bundle digest are both pinned; run
+`bun run vendor:privacy` to build it and `bun run check:privacy` to verify the exact reviewed
+artifact. The privileged design derives viewing keys only inside the encrypted-vault boundary,
+freezes actions and relay fees before approval, and produces no signature, proof, private-balance
+response, or sub-account commitment until the corresponding dedicated approval. Execution requires
+the configured pool's `apply_actions` result and has no fallback prover, signer, or public
+broadcast. See [STRK20 privacy integration](STRK20_PRIVACY.md) for the complete service contract,
+data flow, trust boundaries, limitations, and operator checklist.
 
 ## Krusty KMS
 
@@ -455,8 +472,9 @@ Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen
 lockfile, `wasm-pack 0.13.1`, scarb `2.18.0` (enforced by
 `scripts/vendor-multisig.ts`) with exact OpenZeppelin versions in
 `contracts/multisig/Scarb.toml`, GitHub Actions by commit SHA, and the Krusty
-KMS source at the commit recorded in `scripts/vendor-krusty.ts`. To reproduce a
-release, run the Commands section above on those versions and compare
+KMS source at the commit recorded in `scripts/vendor-krusty.ts`. The official
+Privacy SDK source revision and browser-bundle SHA-256 are pinned separately by
+the privacy vendor/check scripts. To reproduce a release, run the Commands section above and compare
 `artifacts/*.zip.sha256` against the CI artifact checksum:
 
 ```bash

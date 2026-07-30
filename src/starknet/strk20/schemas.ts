@@ -5,7 +5,7 @@
  * validated here so a single source of truth backs both the provider bridge and
  * the background handler. These guards are pure and never touch secret material.
  *
- * The action shapes track the canonical Wallet-API 0.10.3 STRK20 definitions
+ * The action shapes track the canonical Wallet-API 0.10.4-rc.0 STRK20 definitions
  * (starkware-libs/starknet-specs wallet-api/wallet_rpc.json): actions are
  * discriminated by a `type` field; withdraw carries a required `recipient`;
  * transfer accepts either a FELT amount or the literal string "OPEN" (an open
@@ -38,6 +38,7 @@ export const STRK20_LIMITS = {
   proofDataCharacters: 512 * 1024,
   proofFacts: 4_096,
   proofOutputFelts: 4_096,
+  subaccountCalls: 16,
   tokens: 64,
 } as const;
 
@@ -53,7 +54,7 @@ const withinField = (value: string): boolean => {
  * Checks whether an untrusted value is a spec FELT: `0x` + hex, within the
  * Stark field.
  */
-const isStrk20Felt = (value: unknown): value is string =>
+export const isStrk20Felt = (value: unknown): value is string =>
   typeof value === "string" &&
   value.length <= 66 &&
   HEX_FELT_PATTERN.test(value) &&
@@ -163,12 +164,34 @@ export type Strk20InvokeAction = {
 };
 
 /**
- * STRK20_ACTION: the discriminated union of the four privacy actions, keyed on
+ * How a sub-account invocation collects each open note created in the same
+ * transaction.
+ */
+export type Strk20CollectPolicy =
+  | { readonly type: "all" }
+  | { readonly type: "diff" }
+  | { readonly amount: string; readonly type: "exact" };
+
+/**
+ * STRK20_SUBACCOUNT_INVOKE_ACTION: executes calls through the dapp-scoped
+ * anonymizer and settles their proceeds into open notes in the same batch.
+ */
+export type Strk20SubaccountInvokeAction = {
+  readonly calls: readonly Strk20InvokeCall[];
+  readonly collect_policy: Strk20CollectPolicy;
+  readonly dapp_name: string;
+  readonly nonce: string;
+  readonly type: "subaccount_invoke";
+};
+
+/**
+ * STRK20_ACTION: the discriminated union of the five privacy actions, keyed on
  * the `type` field.
  */
 export type Strk20Action =
   | Strk20DepositAction
   | Strk20InvokeAction
+  | Strk20SubaccountInvokeAction
   | Strk20TransferAction
   | Strk20WithdrawAction;
 
@@ -214,6 +237,56 @@ const readInvokeAction = (value: Record<string, unknown>): Strk20InvokeAction | 
     ? { calldata: [...value["calldata"]], contract: value["contract"], type: "invoke" }
     : null;
 
+const isAsciiDappName = (value: string): boolean =>
+  value.length > 0 && value.length <= 31 && /^[\x20-\x7e]+$/.test(value);
+
+/**
+ * Checks a STRK20 dapp name: either one felt or a non-empty printable ASCII
+ * Cairo short string no longer than 31 bytes.
+ */
+export const isStrk20DappName = (value: unknown): value is string =>
+  typeof value === "string" && (isStrk20Felt(value) || isAsciiDappName(value));
+
+const readCollectPolicy = (value: unknown): Strk20CollectPolicy | null => {
+  if (!isRecord(value) || typeof value["type"] !== "string") {
+    return null;
+  }
+  if ((value["type"] === "all" || value["type"] === "diff") && hasOnlyKnownKeys(value, ["type"])) {
+    return { type: value["type"] };
+  }
+  return value["type"] === "exact" &&
+    hasOnlyKnownKeys(value, ["amount", "type"]) &&
+    isStrk20Amount(value["amount"])
+    ? { amount: value["amount"], type: "exact" }
+    : null;
+};
+
+const readSubaccountInvokeAction = (
+  value: Record<string, unknown>,
+): Strk20SubaccountInvokeAction | null => {
+  if (
+    !hasOnlyKnownKeys(value, ["calls", "collect_policy", "dapp_name", "nonce", "type"]) ||
+    !isStrk20DappName(value["dapp_name"]) ||
+    !isStrk20Felt(value["nonce"]) ||
+    !Array.isArray(value["calls"]) ||
+    value["calls"].length === 0 ||
+    value["calls"].length > STRK20_LIMITS.subaccountCalls
+  ) {
+    return null;
+  }
+  const calls = value["calls"].map(readStrk20InvokeCall);
+  const collectPolicy = readCollectPolicy(value["collect_policy"]);
+  return calls.every((call): call is Strk20InvokeCall => call !== null) && collectPolicy
+    ? {
+        calls,
+        collect_policy: collectPolicy,
+        dapp_name: value["dapp_name"],
+        nonce: value["nonce"],
+        type: "subaccount_invoke",
+      }
+    : null;
+};
+
 /**
  * Strictly parses one STRK20_ACTION by its `type` discriminant, rejecting any
  * variant carrying unexpected keys or malformed fields.
@@ -234,6 +307,9 @@ export const readStrk20Action = (value: unknown): Strk20Action | null => {
   if (value["type"] === "invoke") {
     return readInvokeAction(value);
   }
+  if (value["type"] === "subaccount_invoke") {
+    return readSubaccountInvokeAction(value);
+  }
   return null;
 };
 
@@ -250,10 +326,11 @@ export const readStrk20Actions = (value: unknown): readonly Strk20Action[] | nul
 };
 
 /**
- * Parses a non-empty ADDRESS list used by the balances query.
+ * Parses an ADDRESS list used by the balances query. The canonical API uses an
+ * empty array to request every shielded token balance.
  */
 export const readStrk20Tokens = (value: unknown): readonly string[] | null => {
-  if (!Array.isArray(value) || value.length === 0 || value.length > STRK20_LIMITS.tokens) {
+  if (!Array.isArray(value) || value.length > STRK20_LIMITS.tokens) {
     return null;
   }
   return value.every(isStrk20Address) ? [...value] : null;
@@ -271,18 +348,27 @@ export type Strk20Proof = {
 /**
  * Narrows an untrusted value to a spec STRK20_PROOF.
  */
-export const isStrk20Proof = (value: unknown): value is Strk20Proof =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["data", "output", "proof_facts"]) &&
-  typeof value["data"] === "string" &&
-  value["data"].length > 0 &&
-  value["data"].length <= STRK20_LIMITS.proofDataCharacters &&
-  Array.isArray(value["output"]) &&
-  value["output"].length <= STRK20_LIMITS.proofOutputFelts &&
-  value["output"].every(isStrk20Felt) &&
-  Array.isArray(value["proof_facts"]) &&
-  value["proof_facts"].length <= STRK20_LIMITS.proofFacts &&
-  value["proof_facts"].every(isStrk20Felt);
+export const isStrk20Proof = (value: unknown): value is Strk20Proof => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["data", "output", "proof_facts"]) ||
+    typeof value["data"] !== "string" ||
+    value["data"].length > STRK20_LIMITS.proofDataCharacters ||
+    !Array.isArray(value["output"]) ||
+    value["output"].length > STRK20_LIMITS.proofOutputFelts ||
+    !value["output"].every(isStrk20Felt) ||
+    !Array.isArray(value["proof_facts"]) ||
+    value["proof_facts"].length > STRK20_LIMITS.proofFacts ||
+    !value["proof_facts"].every(isStrk20Felt)
+  ) {
+    return false;
+  }
+  const empty =
+    value["data"].length === 0 && value["output"].length === 0 && value["proof_facts"].length === 0;
+  const proved =
+    value["data"].length > 0 && value["output"].length > 0 && value["proof_facts"].length > 0;
+  return empty || proved;
+};
 
 /**
  * STRK20_CALL_AND_PROOF: the invoke call paired with its privacy proof.

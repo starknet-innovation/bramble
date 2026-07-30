@@ -7,7 +7,7 @@
  * background-strk20-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { type Call, ec } from "starknet";
+import { ec } from "starknet";
 import type { LedgerSignQueue } from "../../src/background/ledger-sign-queue";
 import { createMessageHandler } from "../../src/background/messages";
 import type { RuntimeRpc } from "../../src/background/runtime-rpc";
@@ -26,9 +26,6 @@ import type { SignHashInput, WalletStatus } from "../../src/wallet/vault-service
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const origin = "https://example.com";
 const vaultPassphrase = "correct horse battery staple";
-const heldCalls: readonly Call[] = [
-  { calldata: ["0x1"], contractAddress: token, entrypoint: "shielded_execute" },
-];
 
 const account: AccountRef = {
   address: "0xabcabcdef",
@@ -129,20 +126,33 @@ const walletStub = (
 });
 
 const strk20Service: Strk20Service = {
+  async prepare() {
+    return callAndProof;
+  },
   async privateBalances({ tokens }) {
     return tokens.map((entry) => ({ balance: "0x64", token: entry }));
   },
-  proving: {
-    async prove() {
-      return callAndProof;
-    },
+  async quoteActions() {
+    return {
+      feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" },
+    };
   },
-  async registered() {
-    return true;
+  async subaccountCommitment() {
+    return "0x123";
+  },
+  async submitActions(input) {
+    await input.signHash("0xabc123");
+    return { transactionHash: "0x123" };
+  },
+  async submitPrepared() {
+    return { transactionHash: "0x123" };
   },
 };
 
-const rpcStub = (submit?: RuntimeRpc["submitInvokeTransaction"]): RuntimeRpc => ({
+const rpcStub = (
+  submit?: RuntimeRpc["submitInvokeTransaction"],
+  privacyService: Strk20Service = strk20Service,
+): RuntimeRpc => ({
   async estimateInvokeFee() {
     return { overallFee: "1", unit: "FRI" };
   },
@@ -172,7 +182,7 @@ const rpcStub = (submit?: RuntimeRpc["submitInvokeTransaction"]): RuntimeRpc => 
   async submitDeclareTransaction() {
     return { classHash: "0x1", transactionHash: "0x1" };
   },
-  strk20: strk20Service,
+  strk20: privacyService,
 });
 
 const blockAllGuard: OriginGuard = {
@@ -317,8 +327,8 @@ describe("executeStrk20InvokeApproval", () => {
     await expect(
       executeStrk20InvokeApproval(deps, {
         actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
-        calls: heldCalls,
         origin,
+        plan: { feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" } },
       }),
     ).resolves.toEqual({ error: "wallet locked" });
   });
@@ -339,12 +349,15 @@ describe("executeStrk20InvokeApproval", () => {
           return { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
         },
       },
-      runtimeRpc: rpcStub(async (input: InvokeInput) => {
-        // Drive the signer so the device round-trip and verify gate run before
-        // "broadcast"; a verification failure throws here, before onSubmit.
-        await input.signHash("0xabc123");
-        onSubmit();
-        return { calls: input.calls, transactionHash: "0x123" };
+      runtimeRpc: rpcStub(undefined, {
+        ...strk20Service,
+        async submitActions(input) {
+          // Drive the signer so the device round-trip and verify gate run
+          // before "broadcast"; a verification failure throws first.
+          await input.signHash("0xabc123");
+          onSubmit();
+          return { transactionHash: "0x123" };
+        },
       }),
       session,
       // signHash must never run for a Ledger account (it has no vault key).
@@ -360,8 +373,8 @@ describe("executeStrk20InvokeApproval", () => {
       }),
       {
         actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
-        calls: heldCalls,
         origin,
+        plan: { feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" } },
       },
     );
     expect(result).toEqual({ ok: true, transactionHash: "0x123" });
@@ -376,8 +389,8 @@ describe("executeStrk20InvokeApproval", () => {
       }),
       {
         actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
-        calls: heldCalls,
         origin,
+        plan: { feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" } },
       },
     );
     expect(result).toEqual({ error: "Ledger signature verification failed" });
@@ -392,8 +405,8 @@ describe("executeStrk20InvokeApproval", () => {
       }),
       {
         actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
-        calls: heldCalls,
         origin,
+        plan: { feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" } },
       },
     );
     expect(result).toEqual({ error: "Ledger signing unavailable" });
@@ -405,11 +418,14 @@ describe("executeStrk20InvokeApproval", () => {
     session.unlock(vaultPassphrase);
     const signInputs: SignHashInput[] = [];
     const submittedHashes: string[] = [];
-    const runtimeRpc = rpcStub(async (input: InvokeInput) => {
-      // Drive the injected signer so the strk20-ops signHash callback runs.
-      await input.signHash("0xabc123");
-      submittedHashes.push("0xabc123");
-      return { calls: input.calls, transactionHash: "0x123" };
+    const runtimeRpc = rpcStub(undefined, {
+      ...strk20Service,
+      async submitActions(input) {
+        // Drive the injected signer so the strk20-ops signHash callback runs.
+        await input.signHash("0xabc123");
+        submittedHashes.push("0xabc123");
+        return { transactionHash: "0x123" };
+      },
     });
     const activity = memoryActivityLog(() => 42);
     const deps = {
@@ -427,8 +443,8 @@ describe("executeStrk20InvokeApproval", () => {
 
     const result = await executeStrk20InvokeApproval(deps, {
       actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
-      calls: [{ calldata: ["0x1"], contractAddress: token, entrypoint: "shielded_execute" }],
       origin,
+      plan: { feeAction: { amount: "0x1", recipient: token, token, type: "withdraw" } },
     });
 
     expect(result).toEqual({ ok: true, transactionHash: "0x123" });

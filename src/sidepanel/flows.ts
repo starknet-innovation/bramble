@@ -10,6 +10,7 @@ import { knownAccountType } from "../starknet/account-types";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import { isStarknetNetworkId } from "../starknet/networks";
+import type { Strk20NetworkConfig } from "../starknet/strk20/config";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { receipt } from "../ui/content";
@@ -31,6 +32,7 @@ import {
   type WalletView,
   walletMenuRow,
 } from "./parts";
+import { strk20ServicesForm } from "./privacy-settings-view";
 import { qrSvg } from "./qr";
 import { sendFlow } from "./send-views";
 import {
@@ -112,8 +114,13 @@ const rpcOverrideFor = (status: WalletStatus, preferences: WalletPreferences | n
     ? (preferences.rpcOverrides?.[status.networkId] ?? "")
     : "";
 
-const strk20ProverUrlFor = (preferences: WalletPreferences | null): string =>
-  preferences?.strk20ProverUrl ?? "";
+const strk20ConfigFor = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): Strk20NetworkConfig | null =>
+  preferences && isStarknetNetworkId(status.networkId)
+    ? (preferences.strk20Networks?.[status.networkId] ?? null)
+    : null;
 
 const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
   preferences?.nftIndexerUrl ?? "";
@@ -182,11 +189,13 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
 export const advancedNetworkFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
-): string =>
-  flowHeader("Advanced endpoints", status, "Only change infrastructure you trust") +
-  flowScreen(
-    "advanced-network",
-    `<section class="section">
+): string => {
+  const privacy = strk20ConfigFor(status, preferences);
+  return (
+    flowHeader("Advanced endpoints", status, "Only change infrastructure you trust") +
+    flowScreen(
+      "advanced-network",
+      `<section class="section">
       <p class="review-flag" role="note">Custom endpoints can observe requests made through them. Leave a field empty to use the wallet default or keep that integration off.</p>
       <div class="disclosure-stack">
         ${endpointDisclosure(
@@ -215,29 +224,10 @@ export const advancedNetworkFlow = (
           </form>`,
         )}
         ${endpointDisclosure(
-          "strk20-prover",
-          "STRK20 prover",
-          strk20ProverUrlFor(preferences) ? "Configured" : "Off",
-          `<form id="strk20-prover-form">
-            ${textField({
-              autocomplete: "off",
-              className: "mono",
-              hint: "Where the wallet requests STRK20 proofs. Leave empty to keep privacy features off.",
-              label: "Privacy prover endpoint",
-              name: "proverUrl",
-              placeholder: "https://…",
-              spellcheck: false,
-              type: "url",
-              value: strk20ProverUrlFor(preferences),
-            })}
-            ${button({
-              icon: "check",
-              label: "Save prover",
-              type: "submit",
-              variant: "secondary",
-            })}
-            <p id="strk20-prover-result" role="status"></p>
-          </form>`,
+          "strk20-services",
+          "STRK20 privacy services",
+          privacy ? "Configured" : "Off",
+          strk20ServicesForm(status.network, privacy),
         )}
         ${endpointDisclosure(
           "nft-indexer",
@@ -266,7 +256,9 @@ export const advancedNetworkFlow = (
         )}
       </div>
     </section>`,
+    )
   );
+};
 
 /**
  * Renders the on-chain class-hash verification state shown beneath the account's

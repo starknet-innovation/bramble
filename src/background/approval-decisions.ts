@@ -22,7 +22,11 @@ import type { RuntimeRpc } from "./runtime-rpc";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
-import { executeStrk20InvokeApproval } from "./strk20-ops";
+import {
+  matchesStrk20DisclosureKind,
+  type Strk20DisclosureApprovalKind,
+} from "./strk20-approval-types";
+import { executeStrk20DisclosureApproval, executeStrk20InvokeApproval } from "./strk20-ops";
 
 /**
  * Dependencies for resolving a queued approval into its settled result.
@@ -105,7 +109,7 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }) => {
 };
 
 const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) => {
-  if (!payload?.actions || !payload.calls) {
+  if (!payload?.actions || !payload.strk20Plan) {
     return reject(NOT_FOUND);
   }
   const result = await executeStrk20InvokeApproval(
@@ -119,9 +123,38 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
     },
     {
       actions: payload.actions,
-      calls: payload.calls,
       ...(approval.context === undefined ? {} : { context: approval.context }),
       origin: approval.origin,
+      plan: payload.strk20Plan,
+    },
+  );
+  return settleExecutor(result);
+};
+
+const isStrk20DisclosureKind = (kind: ApprovalKind): kind is Strk20DisclosureApprovalKind =>
+  kind === "strk20-balances" || kind === "strk20-prepare" || kind === "strk20-subaccount";
+
+const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }) => {
+  if (
+    !payload?.strk20Request ||
+    !isStrk20DisclosureKind(approval.kind) ||
+    !matchesStrk20DisclosureKind(approval.kind, payload.strk20Request)
+  ) {
+    return reject(NOT_FOUND);
+  }
+  const result = await executeStrk20DisclosureApproval(
+    {
+      activity: deps.activity,
+      preferencesStore: deps.preferencesStore,
+      runtimeRpc: deps.runtimeRpc,
+      session: deps.session,
+      wallet: deps.wallet,
+      ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+    },
+    {
+      ...(approval.context === undefined ? {} : { context: approval.context }),
+      origin: approval.origin,
+      request: payload.strk20Request,
     },
   );
   return settleExecutor(result);
@@ -225,7 +258,10 @@ const APPROVE_APPLIERS: Record<ApprovalKind, ApproveApplier> = {
   declare: applyDeclare,
   invoke: applyInvoke,
   "sign-typed-data": applySignTypedData,
+  "strk20-balances": applyStrk20Disclosure,
   "strk20-invoke": applyStrk20Invoke,
+  "strk20-prepare": applyStrk20Disclosure,
+  "strk20-subaccount": applyStrk20Disclosure,
   "switch-chain": applySwitchChain,
   "watch-asset": applyWatchAsset,
 };

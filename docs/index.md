@@ -16,6 +16,8 @@ boundaries, release controls, and security posture.
   [runbook](https://github.com/starknet-innovation/mc-wallet/tree/main/apps/ui-lab) covers local
   setup, testing, static builds, review controls, and safety boundaries.
 - [Architecture and internals](architecture/) explains the runtime and data model.
+- [STRK20 privacy integration](strk20-privacy/) documents the pinned SDK, service contract,
+  privileged data flow, failure boundaries, and deployment inputs.
 - [Security audit](security-audit/) tracks the directory-by-directory review of the current
   released baseline.
 - [Source package audit](security-audit/src-package-audit/) aggregates the completed review of all

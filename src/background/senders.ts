@@ -95,6 +95,7 @@ export const DAPP_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.strk20Balances",
   "wallet.strk20InvokeTransaction",
   "wallet.strk20PrepareInvoke",
+  "wallet.strk20SubaccountCommitment",
   "wallet.supportedSpecs",
   "wallet.supportedWalletApi",
   "wallet.switchChain",
@@ -112,7 +113,10 @@ export const APPROVAL_SURFACE_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.addStarknetChain",
   "wallet.requestAccounts",
   "wallet.signTypedData",
+  "wallet.strk20Balances",
   "wallet.strk20InvokeTransaction",
+  "wallet.strk20PrepareInvoke",
+  "wallet.strk20SubaccountCommitment",
   "wallet.switchChain",
   "wallet.watchAsset",
 ]);

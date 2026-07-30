@@ -87,7 +87,8 @@ describe("spec-exact dapp shapes", () => {
     expect(/^0x0[0-8][0-9a-f]{62}$/.test(hash)).toBe(true);
   });
 
-  test("accepts a spec-conforming invoke carrying the optional proof param", () => {
+  test("preserves a spec-conforming invoke proof for reviewed private submission", () => {
+    const proof = { data: "proof", output: ["0x1"], proof_facts: ["0x2"] };
     expect(
       toRuntimeMessage(
         {
@@ -97,12 +98,17 @@ describe("spec-exact dapp shapes", () => {
             invoke_transaction: [
               { calldata: ["0x1"], contract_address: "0x123", entry_point: "transfer" },
             ],
-            proof: { data: "proof" },
+            proof,
           },
         },
         "https://a.test",
       ),
-    ).toEqual({ calls: [call], origin: "https://a.test", type: "wallet.addInvokeTransaction" });
+    ).toEqual({
+      calls: [call],
+      origin: "https://a.test",
+      proof,
+      type: "wallet.addInvokeTransaction",
+    });
   });
 
   test("accepts wallet_switchStarknetChain with the optional silent_mode param", () => {

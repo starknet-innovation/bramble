@@ -133,6 +133,26 @@ describe("createWalletVaultService", () => {
     expect(secrets).toEqual({ mnemonic, privateKey: "0x123456" });
   });
 
+  test("derives a STRK20 viewing key inside the encrypted vault boundary", async () => {
+    let privateKeySeen = "";
+    const service = createWalletVaultService({
+      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
+      kms: {
+        ...fakeKms(),
+        async deriveStrk20ViewingKey(privateKey) {
+          privateKeySeen = privateKey;
+          return "0x654321";
+        },
+      },
+    });
+    const account = await service.createAccount({ mnemonic, vaultPassphrase });
+
+    await expect(
+      service.deriveStrk20ViewingKey({ accountId: account.id, vaultPassphrase }),
+    ).resolves.toBe("0x654321");
+    expect(privateKeySeen).toBe("0x123456");
+  });
+
   test("grants origins access only to selected accounts", async () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),

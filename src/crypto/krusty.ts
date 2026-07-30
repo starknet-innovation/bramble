@@ -31,6 +31,12 @@ export type KrustyKms = {
     classHash: string,
     salt?: string,
   ) => Promise<string>;
+  /**
+   * Derives the domain-separated STRK20 viewing key from account signing
+   * material. The result is returned only to privileged privacy middleware and
+   * must never be persisted or exposed through extension messages.
+   */
+  readonly deriveStrk20ViewingKey: (privateKey: string) => Promise<string>;
   readonly deriveStarknetKeypair: (
     mnemonic: string,
     addressIndex: number,
@@ -134,6 +140,7 @@ export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
     typeof init === "function" ? Promise.resolve((init as Callable)()) : Promise.resolve();
 
   const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
+  const deriveStrk20ViewingKey = requireFunction(module, "deriveStrk20ViewingKey");
   const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
   const generateMnemonic = requireFunction(module, "generateMnemonic");
   const getAccountClassHashes = requireFunction(module, "getAccountClassHashes");
@@ -154,6 +161,17 @@ export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
       const result = await deriveOzAccountAddress(publicKeyX, classHash, salt);
       if (typeof result !== "string" || !isStarkFieldElement(result)) {
         throw new WalletError("Krusty KMS returned an invalid account address");
+      }
+      return result;
+    },
+    async deriveStrk20ViewingKey(privateKey) {
+      await ready;
+      if (!isNonZeroStarkFieldElement(privateKey)) {
+        throw new WalletError("Invalid STRK20 viewing-key input");
+      }
+      const result = await deriveStrk20ViewingKey(privateKey);
+      if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
+        throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
       }
       return result;
     },

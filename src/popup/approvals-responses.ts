@@ -74,7 +74,10 @@ export type PendingApproval = {
     | "declare"
     | "invoke"
     | "sign-typed-data"
+    | "strk20-balances"
     | "strk20-invoke"
+    | "strk20-prepare"
+    | "strk20-subaccount"
     | "switch-chain"
     | "watch-asset";
   readonly origin: string;
@@ -219,7 +222,10 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value["kind"] !== "declare" &&
       value["kind"] !== "invoke" &&
       value["kind"] !== "sign-typed-data" &&
+      value["kind"] !== "strk20-balances" &&
       value["kind"] !== "strk20-invoke" &&
+      value["kind"] !== "strk20-prepare" &&
+      value["kind"] !== "strk20-subaccount" &&
       value["kind"] !== "switch-chain" &&
       value["kind"] !== "watch-asset") ||
     (value["blocked"] !== undefined && typeof value["blocked"] !== "boolean") ||
@@ -240,7 +246,10 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "declare" ||
     value["kind"] === "invoke" ||
     value["kind"] === "sign-typed-data" ||
-    value["kind"] === "strk20-invoke";
+    value["kind"] === "strk20-balances" ||
+    value["kind"] === "strk20-invoke" ||
+    value["kind"] === "strk20-prepare" ||
+    value["kind"] === "strk20-subaccount";
   const declarationValid =
     value["kind"] === "declare"
       ? isDeclarationReview(value["declaration"])

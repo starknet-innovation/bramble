@@ -38,6 +38,9 @@ export const createWalletReader = (
     async deriveLedgerAccounts(input) {
       return (await required()).deriveLedgerAccounts(input);
     },
+    async deriveStrk20ViewingKey(input) {
+      return (await required()).deriveStrk20ViewingKey(input);
+    },
     async ensureNetworkAccount(input) {
       return (await required()).ensureNetworkAccount(input);
     },

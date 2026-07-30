@@ -225,6 +225,29 @@ describe("popup response validators", () => {
     expect(isPendingApprovalsResponse({ ok: true, pending: [null] })).toBe(false);
   });
 
+  test("requires an account/network/payload binding on STRK20 disclosure approvals", () => {
+    const context = {
+      accountId: account.id,
+      chainId: "0x534e5f5345504f4c4941",
+      networkId: "SN_SEPOLIA",
+      payloadDigest: `sha256:${"a".repeat(64)}`,
+    };
+    for (const kind of ["strk20-balances", "strk20-prepare", "strk20-subaccount"] as const) {
+      expect(
+        isPendingApprovalsResponse({
+          ok: true,
+          pending: [{ context, id: approvalId, kind, origin: "https://example.com" }],
+        }),
+      ).toBe(true);
+      expect(
+        isPendingApprovalsResponse({
+          ok: true,
+          pending: [{ id: approvalId, kind, origin: "https://example.com" }],
+        }),
+      ).toBe(false);
+    }
+  });
+
   test("validates watch-asset pending approvals and shared-origin prompts", () => {
     const token = {
       address: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",

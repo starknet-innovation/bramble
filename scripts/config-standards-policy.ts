@@ -48,6 +48,7 @@ export const PINNED_RUNTIME_FILES = [
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
   "vendor/multisig/multisig.contract_class.json",
+  "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;
 
 export const EXPECTED_GITIGNORE_ENTRIES = [
@@ -59,6 +60,7 @@ export const EXPECTED_GITIGNORE_ENTRIES = [
   "test-results/",
   "vendor/krusty-kms/",
   "vendor/multisig/",
+  "vendor/starknet-privacy/",
 ] as const;
 
 export const EXPECTED_README_SECTIONS = ["## Features", "## Quick start", "## Docs"] as const;
@@ -92,7 +94,7 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run scripts/build-extension.ts",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun test ./tests",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun test ./tests",
   "check:audit": "bun audit --audit-level=high",
   "check:coverage": "bun run scripts/check-coverage.ts",
   "check:cycles": "madge --circular --extensions ts src",
@@ -104,6 +106,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
   "check:lint": "biome check .",
   "check:multisig": "bun run scripts/check-multisig-class.ts",
+  "check:privacy": "bun run scripts/check-privacy-sdk.ts",
   "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
   changelog: "bun run scripts/generate-changelog.ts",
@@ -116,6 +119,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e:install": "playwright install chromium",
   "vendor:krusty": "bun run scripts/vendor-krusty.ts",
   "vendor:multisig": "bun run scripts/vendor-multisig.ts",
+  "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts",
 };
 
 export const REQUIRED_BIOME_LINTER_DOMAINS: Readonly<Record<string, string>> = {

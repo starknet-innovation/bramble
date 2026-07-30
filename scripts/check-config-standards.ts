@@ -23,6 +23,7 @@ import {
   SEMVER,
 } from "./config-standards-policy";
 import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
+import { vendorPinFailures } from "./vendor-pin-policy";
 import { workflowSecurityFailures } from "./workflow-security-policy";
 
 const failures: string[] = [];
@@ -53,7 +54,7 @@ const buildScript = await readFile("scripts/build-extension.ts", "utf8");
 const ciWorkflow = await readFile(".github/workflows/ci.yml", "utf8");
 const packageScript = await readFile("scripts/package-extension.ts", "utf8");
 const vendorKrustyScript = await readFile("scripts/vendor-krusty.ts", "utf8");
-
+const vendorPrivacyScript = await readFile("scripts/vendor-privacy-sdk.ts", "utf8");
 failures.push(...(await workflowSecurityFailures()));
 
 if (
@@ -363,13 +364,14 @@ if (
   }
 }
 
-if (!/const KRUSTY_KMS_REVISION = "[0-9a-f]{40}";/.test(vendorKrustyScript)) {
-  failures.push("scripts/vendor-krusty.ts must pin a Krusty KMS commit");
-}
-
-if (vendorKrustyScript.includes('"pull"')) {
-  failures.push("scripts/vendor-krusty.ts must not follow a moving Krusty KMS branch");
-}
+failures.push(
+  ...vendorPinFailures(vendorKrustyScript, "scripts/vendor-krusty.ts", "KRUSTY_KMS_REVISION"),
+  ...vendorPinFailures(
+    vendorPrivacyScript,
+    "scripts/vendor-privacy-sdk.ts",
+    "PRIVACY_SDK_REVISION",
+  ),
+);
 
 if (EXPECTED_RUNTIME_FILES.join("\n") !== PINNED_RUNTIME_FILES.join("\n")) {
   failures.push("scripts/extension-runtime-files.ts must keep the pinned runtime file set");
@@ -382,6 +384,7 @@ const ciCommands = [
   "bun run check:files",
   "bun run vendor:krusty",
   "bun run vendor:multisig",
+  "bun run vendor:privacy",
   "bun run check",
   "bun run check:coverage",
   "bun run build",
@@ -415,20 +418,23 @@ if (
 ) {
   failures.push(".github/workflows/ci.yml must upload the release zip and SHA-256 checksum");
 }
-
 const buildExtensionCheck = buildScript.indexOf('await run(["bun", "run", "check:extension"]);');
 const buildKrustyCheck = buildScript.indexOf('await run(["bun", "run", "check:krusty"]);');
+const buildPrivacyCheck = buildScript.indexOf('await run(["bun", "run", "check:privacy"]);');
 const buildDistClear = buildScript.indexOf("await rm(outdir");
 if (
   buildExtensionCheck === -1 ||
   buildKrustyCheck === -1 ||
+  buildPrivacyCheck === -1 ||
   buildDistClear === -1 ||
   buildExtensionCheck > buildDistClear ||
-  buildKrustyCheck > buildDistClear
+  buildKrustyCheck > buildDistClear ||
+  buildPrivacyCheck > buildDistClear
 ) {
-  failures.push("scripts/build-extension.ts must check manifest and Krusty before building");
+  failures.push(
+    "scripts/build-extension.ts must check manifest and vendored runtimes before building",
+  );
 }
-
 const packageTouch = packageScript.indexOf('await run(["touch", "-t", reproducibleZipTime');
 const packageZip = packageScript.indexOf('await run(["zip", "-X", "-q", zipPath');
 const packageRuntimeImport = packageScript.indexOf(
@@ -448,7 +454,6 @@ if (
 ) {
   failures.push("scripts/package-extension.ts must package only the pinned runtime files");
 }
-
 const packageZipNamePrefix = packageScript.indexOf("const zipName = `mc-wallet-");
 const packageZipNameVersion = packageScript.indexOf('manifest["version"]', packageZipNamePrefix);
 const packageZipNameSuffix = packageScript.indexOf(".zip`;", packageZipNameVersion);

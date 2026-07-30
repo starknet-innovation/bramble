@@ -17,6 +17,7 @@ const PROVIDER_METHODS = [
   "wallet_strk20Balances",
   "wallet_strk20InvokeTransaction",
   "wallet_strk20PrepareInvoke",
+  "wallet_strk20SubaccountCommitment",
   "wallet_switchStarknetChain",
   "wallet_watchAsset",
 ] as const;

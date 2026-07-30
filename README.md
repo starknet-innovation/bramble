@@ -21,6 +21,8 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
 - **NFT gallery** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`.
 - **Multisig** — watch, propose, confirm, and execute on OpenZeppelin multisig accounts.
+- **STRK20 privacy** — read shielded balances, prepare and submit private action batches, and derive
+  dapp-scoped sub-account commitments through the pinned official Privacy SDK.
 - **Anti-phishing** — domain blocklist plus lookalike / punycode detection and per-origin connection history.
 - **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap.
 - **Liquid Glass UI** — Apple-style glass surfaces, spring motion, and View Transitions, with full reduced-motion support.
@@ -33,6 +35,7 @@ Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also ava
 bun install
 bun run vendor:krusty     # Krusty KMS crypto core (WASM)
 bun run vendor:multisig   # pinned multisig contract artifacts
+bun run vendor:privacy    # pinned official Starknet Privacy SDK browser bundle
 bun run build             # -> dist/
 ```
 
@@ -57,14 +60,15 @@ launch Chromium:
 bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun test ./tests && bun run check:coverage
 ```
 
-The full `bun run check` additionally verifies the vendored Krusty and multisig outputs. Generate
-those first with `bun run vendor:krusty` (network, Rust, and `wasm-pack 0.13.1`) and
-`bun run vendor:multisig` (`scarb 2.18.0`). `build`, packaging, and browser E2E also require those
+The full `bun run check` additionally verifies the vendored Krusty, multisig, and official Privacy
+SDK outputs. Generate those first with `bun run vendor:krusty` (network, Rust, and
+`wasm-pack 0.13.1`), `bun run vendor:multisig` (`scarb 2.18.0`), and
+`bun run vendor:privacy` (Node.js 24 + npm). `build`, packaging, and browser E2E also require those
 vendored outputs; Playwright needs its Chromium install once per machine.
 
 ## Built with
 
-Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · Biome · Krusty KMS (WASM) · Ledger Web Bluetooth/WebUSB/WebHID · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
+Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) · [Starknet Privacy SDK](https://github.com/starkware-libs/starknet-privacy) · Biome · Krusty KMS (WASM) · Ledger Web Bluetooth/WebUSB/WebHID · Chrome Manifest V3 side panel. No framework and no bundler magic, just a custom `Bun.build` step.
 
 ## Architecture
 
@@ -75,7 +79,7 @@ src/background              privileged state, approvals, unlock sessions, vault 
 src/content + src/provider  page <-> background bridge (signing never exposed to pages)
 src/storage                encrypted persistence, permissions, schema migrations
 src/crypto                 Krusty KMS boundary (validates every WASM input/output)
-src/starknet               RPC, networks, token registry, prices
+src/starknet               RPC, networks, token registry, prices, STRK20 privacy adapter
 src/security               phishing blocklist and lookalike heuristics
 src/sidepanel + src/ui      full-page onboarding, side-panel app, Ledger boundary, and design system
 contracts/multisig         the pinned OpenZeppelin multisig shell (Cairo)

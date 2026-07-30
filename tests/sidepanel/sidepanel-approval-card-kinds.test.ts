@@ -115,6 +115,49 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${ID}"`);
   });
 
+  for (const input of [
+    {
+      action: "Share balances",
+      hint: "reveals the selected private token balances",
+      kind: "strk20-balances",
+      title: "Private balance request",
+    },
+    {
+      action: "Authorize",
+      hint: "site can submit a returned proof",
+      kind: "strk20-prepare",
+      title: "Private proof request",
+    },
+    {
+      action: "Share commitment",
+      hint: "may link sessions for this site",
+      kind: "strk20-subaccount",
+      title: "Private identity request",
+    },
+  ] as const) {
+    test(`${input.kind} explains the disclosure and binds the approval context`, () => {
+      const approval: PendingApproval = {
+        context: {
+          accountId: account.id,
+          chainId: "0x534e5f4d41494e",
+          networkId: "SN_MAIN",
+          payloadDigest: `sha256:${"a".repeat(64)}`,
+        },
+        id: ID,
+        kind: input.kind,
+        origin: ORIGIN,
+        summaries: ["Exact private request"],
+      };
+      const html = approvalCard(approval, status);
+
+      expect(html).toContain(input.title);
+      expect(html).toContain(input.hint);
+      expect(html).toContain("Exact private request");
+      expect(html).toContain("Technical request identity");
+      expect(html).toContain(input.action);
+    });
+  }
+
   test("switch-chain request shows the network-switch copy", () => {
     const approval: PendingApproval = {
       id: ID,

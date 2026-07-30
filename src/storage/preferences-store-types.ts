@@ -2,6 +2,7 @@
  * Public schema and capability types for the plain preferences store.
  */
 import type { StarknetNetworkId } from "../starknet/networks";
+import type { Strk20NetworkConfig, Strk20NetworkConfigs } from "../starknet/strk20/config";
 import type { AccountGroupIcon, AccountGroups } from "./account-groups";
 import type { CustomNetwork } from "./custom-network";
 import type { WatchedNft } from "./nft";
@@ -32,6 +33,8 @@ export type WalletPreferences = {
   readonly nfts?: readonly WatchedNft[];
   readonly rpcOverrides?: RpcOverrides;
   readonly schemaVersion: 1;
+  readonly strk20Networks?: Strk20NetworkConfigs;
+  /** @deprecated Legacy incomplete prover-only setting retained for backup compatibility. */
   readonly strk20ProverUrl?: string;
   readonly theme?: ThemeChoice;
   readonly tokens: readonly TokenConfig[];
@@ -85,7 +88,10 @@ export type WalletPreferencesStore = {
     readonly networkId: StarknetNetworkId;
     readonly rpcUrl: string;
   }) => Promise<WalletPreferences>;
-  readonly setStrk20ProverUrl: (input: { readonly url: string }) => Promise<WalletPreferences>;
+  readonly setStrk20NetworkConfig: (input: {
+    readonly config: Strk20NetworkConfig | null;
+    readonly networkId: StarknetNetworkId;
+  }) => Promise<WalletPreferences>;
   readonly setTokenHidden: (input: {
     readonly hidden: boolean;
     readonly tokenId: string;

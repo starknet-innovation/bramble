@@ -1,143 +1,219 @@
 /**
- * STRK20 service checks prove the prepare pipeline enforces registration,
- * balances, and the leak guard, and never fabricates a proof.
+ * STRK20 wallet-level policy tests around balance and privacy checks.
  */
 import { describe, expect, test } from "bun:test";
-import { errorForMessage } from "../../../src/shared/rpc-errors";
-import { unconfiguredProvingBackend } from "../../../src/starknet/strk20/proving-backend";
-import type { Strk20CallAndProof } from "../../../src/starknet/strk20/schemas";
 import {
   prepareStrk20CallAndProof,
+  quoteStrk20Actions,
   readStrk20Balances,
+  STRK20_INSUFFICIENT_BALANCE,
+  STRK20_PRIVACY_LEAK,
+  STRK20_SERVICE_UNAVAILABLE,
+  type Strk20AccountContext,
   type Strk20Service,
+  submitStrk20Actions,
+  summarizeStrk20Action,
   unavailableStrk20Service,
 } from "../../../src/starknet/strk20/service";
 import type { AccountRef } from "../../../src/storage/vault-schema";
 
-const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-const recipient = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-const account = { id: "SN_SEPOLIA:0x1", networkId: "SN_SEPOLIA" } as unknown as AccountRef;
-const rpcUrls = ["https://rpc.example"];
-const callAndProof: Strk20CallAndProof = {
-  call: { calldata: ["0x1"], contract_address: token, entry_point: "run" },
-  proof: { data: "p", output: ["0x1"], proof_facts: ["0x2"] },
+const account: AccountRef = {
+  address: "0x1",
+  classHash: "0x2",
+  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+  id: "SN_MAIN:0x1",
+  networkId: "SN_MAIN",
+  publicKeyX: "0x3",
+  publicKeyY: "0x4",
 };
+const context: Strk20AccountContext = {
+  account,
+  config: null,
+  rpcUrls: ["https://rpc.example"],
+  async signHash() {
+    return { publicKey: "0x3", r: "0x1", s: "0x2" };
+  },
+  async viewingKey() {
+    return "0x5";
+  },
+};
+const callAndProof = {
+  call: { calldata: ["0x1"], contract_address: "0x10", entry_point: "apply_actions" },
+  proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+} as const;
+const plan = {
+  feeAction: { amount: "0x1", recipient: "0x5", token: "0x6", type: "withdraw" },
+} as const;
 
-const service = (over: Partial<Strk20Service>): Strk20Service => ({
+const service = (over: Partial<Strk20Service> = {}): Strk20Service => ({
+  async prepare() {
+    return callAndProof;
+  },
   async privateBalances({ tokens }) {
-    return tokens.map((entry) => ({ balance: "0x64", token: entry }));
+    return tokens.map((token) => ({ balance: "0x64", token }));
   },
-  proving: {
-    async prove() {
-      return callAndProof;
-    },
+  async quoteActions() {
+    return plan;
   },
-  async registered() {
-    return true;
+  async subaccountCommitment() {
+    return "0x7";
+  },
+  async submitActions() {
+    return { transactionHash: "0x8" };
+  },
+  async submitPrepared() {
+    return { transactionHash: "0x9" };
   },
   ...over,
 });
 
-const codeOf = async (run: () => Promise<unknown>): Promise<number> => {
-  try {
-    await run();
-  } catch (error) {
-    return errorForMessage(error instanceof Error ? error.message : "").code;
-  }
-  throw new Error("expected a rejection");
-};
-
-describe("strk20 service", () => {
-  test("the unavailable default reports the account as not registered (118)", async () => {
-    expect(
-      await codeOf(() =>
-        readStrk20Balances(unavailableStrk20Service, {
-          account,
-          proverUrl: null,
-          rpcUrls,
-          tokens: [token],
-        }),
-      ),
-    ).toBe(118);
-    expect(unavailableStrk20Service.proving).toBe(unconfiguredProvingBackend);
+describe("STRK20 wallet policy", () => {
+  test("passes empty all-token balance queries through", async () => {
+    expect(await readStrk20Balances(service(), { ...context, tokens: [] })).toEqual([]);
   });
 
-  test("builds a call-and-proof for a valid, sufficient batch", async () => {
+  test("prepares a sufficient action batch", async () => {
     await expect(
-      prepareStrk20CallAndProof(service({}), {
-        account,
-        actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
-        proverUrl: null,
-        rpcUrls,
+      prepareStrk20CallAndProof(service(), {
+        ...context,
+        actions: [{ amount: "0x10", recipient: "0x9", token: "0x8", type: "transfer" }],
         simulate: false,
       }),
     ).resolves.toEqual(callAndProof);
   });
 
-  test("maps each guard to its spec code", async () => {
-    expect(
-      await codeOf(() =>
-        prepareStrk20CallAndProof(
-          service({
-            async registered() {
-              return false;
-            },
-          }),
-          {
-            account,
-            actions: [{ amount: "0x1", token, type: "deposit" }],
-            proverUrl: null,
-            rpcUrls,
-            simulate: false,
+  test("rejects insufficient private balance before proving", async () => {
+    await expect(
+      prepareStrk20CallAndProof(
+        service({
+          async privateBalances({ tokens }) {
+            return tokens.map((token) => ({ balance: "0x1", token }));
           },
-        ),
-      ),
-    ).toBe(118);
-    expect(
-      await codeOf(() =>
-        prepareStrk20CallAndProof(
-          service({
-            async privateBalances() {
-              return [{ balance: "0x1", token }];
-            },
-          }),
-          {
-            account,
-            actions: [{ amount: "0x3e8", recipient, token, type: "withdraw" }],
-            proverUrl: null,
-            rpcUrls,
-            simulate: false,
-          },
-        ),
-      ),
-    ).toBe(119);
-    expect(
-      await codeOf(() =>
-        prepareStrk20CallAndProof(service({}), {
-          account,
-          actions: [
-            { amount: "0x05", token, type: "deposit" },
-            { amount: "0x05", recipient, token, type: "withdraw" },
-          ],
-          proverUrl: null,
-          rpcUrls,
-          simulate: false,
         }),
+        {
+          ...context,
+          actions: [{ amount: "0x2", recipient: "0x9", token: "0x8", type: "withdraw" }],
+          simulate: false,
+        },
       ),
-    ).toBe(120);
+    ).rejects.toThrow(STRK20_INSUFFICIENT_BALANCE);
   });
 
-  test("refuses with UNKNOWN_ERROR (163) when a registered account has no prover", async () => {
+  test("rejects a correlated public deposit and withdrawal", async () => {
+    await expect(
+      prepareStrk20CallAndProof(service(), {
+        ...context,
+        actions: [
+          { amount: "0x1", token: "0x8", type: "deposit" },
+          { amount: "0x1", recipient: "0x9", token: "0x8", type: "withdraw" },
+        ],
+        simulate: false,
+      }),
+    ).rejects.toThrow(STRK20_PRIVACY_LEAK);
+  });
+
+  test("submits the reviewed plan only after the same policy checks", async () => {
+    await expect(
+      submitStrk20Actions(service(), {
+        ...context,
+        actions: [{ amount: "OPEN", recipient: "0x9", token: "0x8", type: "transfer" }],
+        plan,
+      }),
+    ).resolves.toEqual({ transactionHash: "0x8" });
+  });
+
+  test("rejects an unaffordable relay fee before approval and before submission", async () => {
+    let quoted = false;
+    let submitted = false;
+    const insufficientFeeService = service({
+      async privateBalances({ tokens }) {
+        return tokens.map((token) => ({ balance: token === "0x6" ? "0x1" : "0x64", token }));
+      },
+      async quoteActions() {
+        quoted = true;
+        return {
+          feeAction: { amount: "0x2", recipient: "0x5", token: "0x6", type: "withdraw" },
+        };
+      },
+      async submitActions() {
+        submitted = true;
+        return { transactionHash: "0x8" };
+      },
+    });
+    const actions = [{ amount: "0x1", recipient: "0x9", token: "0x8", type: "withdraw" }] as const;
+
+    await expect(
+      quoteStrk20Actions(insufficientFeeService, { ...context, actions }),
+    ).rejects.toThrow(STRK20_INSUFFICIENT_BALANCE);
+    expect(quoted).toBe(true);
+    await expect(
+      submitStrk20Actions(insufficientFeeService, {
+        ...context,
+        actions,
+        plan: {
+          feeAction: { amount: "0x2", recipient: "0x5", token: "0x6", type: "withdraw" },
+        },
+      }),
+    ).rejects.toThrow(STRK20_INSUFFICIENT_BALANCE);
+    expect(submitted).toBe(false);
+  });
+
+  test("counts same-token private spend and relay fee together", async () => {
+    const sameTokenPlan = {
+      feeAction: { amount: "0x2", recipient: "0x5", token: "0x8", type: "withdraw" },
+    } as const;
+    const actions = [{ amount: "0x3", recipient: "0x9", token: "0x8", type: "withdraw" }] as const;
+    const limited = service({
+      async privateBalances({ tokens }) {
+        return tokens.map((token) => ({ balance: "0x4", token }));
+      },
+      async quoteActions() {
+        return sameTokenPlan;
+      },
+    });
+
+    await expect(quoteStrk20Actions(limited, { ...context, actions })).rejects.toThrow(
+      STRK20_INSUFFICIENT_BALANCE,
+    );
+  });
+
+  test("the unavailable implementation fails every operation closed", async () => {
+    await expect(
+      unavailableStrk20Service.privateBalances({ ...context, tokens: [] }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+    await expect(
+      unavailableStrk20Service.prepare({ ...context, actions: [], simulate: true }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+    await expect(
+      unavailableStrk20Service.quoteActions({ ...context, actions: [] }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+    await expect(
+      unavailableStrk20Service.subaccountCommitment({ ...context, dappName: "test" }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+    await expect(
+      unavailableStrk20Service.submitActions({ ...context, actions: [], plan }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+    await expect(
+      unavailableStrk20Service.submitPrepared({
+        ...context,
+        call: { calldata: [], contractAddress: "0x1", entrypoint: "apply_actions" },
+        proof: callAndProof.proof,
+      }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+  });
+
+  test("summaries cover private invoke variants without exposing secrets", () => {
     expect(
-      await codeOf(() =>
-        prepareStrk20CallAndProof(service({ proving: unconfiguredProvingBackend }), {
-          account,
-          actions: [{ calldata: ["0x1"], contract: token, type: "invoke" }],
-          proverUrl: null,
-          rpcUrls,
-          simulate: false,
-        }),
-      ),
-    ).toBe(163);
+      summarizeStrk20Action({
+        calls: [{ calldata: [], contract_address: "0x8", entry_point: "swap" }],
+        collect_policy: { type: "all" },
+        dapp_name: "terminal",
+        nonce: "0x1",
+        type: "subaccount_invoke",
+      }),
+    ).toContain("terminal");
+    expect(
+      summarizeStrk20Action({ calldata: [], contract: "0x123456789", type: "invoke" }),
+    ).toContain("Private invoke");
   });
 });

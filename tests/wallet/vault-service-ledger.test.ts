@@ -103,6 +103,20 @@ describe("createLedgerVault", () => {
       service.addDerivedAccount({ networkId: "SN_MAIN", vaultPassphrase }),
     ).rejects.toThrow("No recovery phrase stored for this wallet");
   });
+
+  test("a keyless Ledger account cannot derive a STRK20 viewing key", async () => {
+    const { service } = makeService();
+    const account = await service.createLedgerVault({
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: "0xdef123",
+      vaultPassphrase,
+    });
+
+    await expect(
+      service.deriveStrk20ViewingKey({ accountId: account.id, vaultPassphrase }),
+    ).rejects.toThrow("STRK20 is unavailable for keyless accounts");
+  });
 });
 
 describe("ensureNetworkAccount for a keyless Ledger account", () => {

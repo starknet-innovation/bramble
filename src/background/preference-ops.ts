@@ -16,7 +16,7 @@ import {
   readSetDisplayInput,
   readSetGroupIconInput,
   readSetRpcOverrideInput,
-  readSetStrk20ProverUrlInput,
+  readSetStrk20NetworkConfigInput,
   readTypeOnlyInput,
 } from "./message-inputs";
 import { readRemoveNftInput, readSetNftIndexerUrlInput, readSetNftSpamInput } from "./nft-inputs";
@@ -117,10 +117,10 @@ const PREFERENCE_HANDLERS: Readonly<Record<string, PreferenceHandler>> = {
     "invalid rpc override request",
     (store, input) => store.setRpcOverride(input),
   ),
-  "wallet.setStrk20ProverUrl": parseThen(
-    readSetStrk20ProverUrlInput,
-    "invalid prover endpoint request",
-    (store, input) => store.setStrk20ProverUrl(input),
+  "wallet.setStrk20NetworkConfig": parseThen(
+    readSetStrk20NetworkConfigInput,
+    "invalid strk20 service configuration",
+    (store, input) => store.setStrk20NetworkConfig(input),
   ),
 };
 

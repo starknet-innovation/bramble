@@ -4,24 +4,13 @@
  * Follows the built-in network model in starknet/networks.ts.
  */
 import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "../shared/json";
+import { isServiceUrl } from "../shared/service-url";
 import { isCanonicalChainId } from "../starknet/networks";
-
-const isLoopbackHost = (host: string): boolean => host === "localhost" || host === "127.0.0.1";
 
 /**
  * Checks a user-provided RPC endpoint: https anywhere, http only on loopback.
  */
-export const isCustomRpcUrl = (value: unknown): value is string => {
-  if (typeof value !== "string" || value.length === 0 || value.length > 2048) {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHost(url.hostname));
-  } catch {
-    return false;
-  }
-};
+export const isCustomRpcUrl = isServiceUrl;
 
 /**
  * A custom Starknet chain a dapp added. `chainId` is the CHAIN_ID felt used to

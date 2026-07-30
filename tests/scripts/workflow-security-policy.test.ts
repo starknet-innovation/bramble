@@ -57,6 +57,20 @@ describe("workflow security policy", () => {
       failure: ".github/workflows/ci.yml must pin Rust toolchain 1.96.1",
     },
     {
+      name: "rejects release builds without the pinned privacy SDK",
+      workflow: "releaseBuild",
+      search: "- run: bun run vendor:privacy",
+      replacement: "- run: echo privacy-sdk-skipped",
+      failure: ".github/workflows/release-build.yml must vendor the pinned privacy SDK",
+    },
+    {
+      name: "rejects a moving privacy SDK build runtime",
+      workflow: "nightly",
+      search: "node-version: 24",
+      replacement: "node-version: latest",
+      failure: ".github/workflows/nightly.yml must pin Node.js 24 for privacy SDK vendoring",
+    },
+    {
       name: "rejects write permission in the self-hosted release build",
       workflow: "releaseBuild",
       search: "build-release:\n    permissions:\n      contents: read",

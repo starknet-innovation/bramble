@@ -37,7 +37,11 @@ describe("strk20 bridge params", () => {
         type: "wallet.strk20Balances",
       },
     );
-    expect(toRuntimeMessage(request("wallet_strk20Balances", { tokens: [] }), origin)).toBeNull();
+    expect(toRuntimeMessage(request("wallet_strk20Balances", { tokens: [] }), origin)).toEqual({
+      origin,
+      tokens: [],
+      type: "wallet.strk20Balances",
+    });
   });
 
   test("maps prepare params with a default simulate flag", () => {

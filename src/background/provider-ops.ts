@@ -5,9 +5,11 @@
  * verifies the claimed origin and re-checks the phishing blocklist — a blocked
  * origin gets nothing back even if it still holds an old connection grant.
  */
+import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { walletErrorMessage } from "../shared/errors";
 import { STARKNET_NETWORKS } from "../starknet/networks";
+import { unavailableStrk20Service } from "../starknet/strk20/service";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
@@ -199,15 +201,22 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   if ("error" in resolved) {
     return resolved;
   }
+  if (input.proof && input.calls.length !== 1) {
+    return { error: "invalid invoke request" };
+  }
   const report = verifyCalls(
     input.calls,
     verificationContext(resolved.account, resolved.preferences),
   );
   const approval = deps.approvals.requestInvoke({
     calls: input.calls,
-    context: await createApprovalContext(resolved.account, { calls: input.calls }),
+    context: await createApprovalContext(resolved.account, {
+      calls: input.calls,
+      ...(input.proof === undefined ? {} : { proof: input.proof }),
+    }),
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     origin: input.origin,
+    ...(input.proof === undefined ? {} : { proof: input.proof }),
     summaries: report.calls.map((call) => call.summary),
   });
   notifyApprovalsChanged();
@@ -263,6 +272,10 @@ export const executeInvokeApproval = async (
     return resolved;
   }
   const { account, passphrase, preferences } = resolved;
+  const preparedCall = calls.length === 1 ? calls[0] : undefined;
+  if (approval.payload.proof && !preparedCall) {
+    return { error: "invalid prepared strk20 invocation" };
+  }
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam the wallet-initiated
   // paths use. A device rejection/timeout/verify-failure, or a Ledger account
@@ -271,12 +284,30 @@ export const executeInvokeApproval = async (
   // settles the held dapp request with the real reason instead of leaving it to
   // hang on an unhandled throw. Fails closed — nothing is submitted on error.
   try {
-    const result = await runtimeRpc.submitInvokeTransaction({
-      account,
-      calls,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-      signHash: accountHashSigner(deps, account, passphrase),
-    });
+    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
+    const signHash = accountHashSigner(deps, account, passphrase);
+    const result = approval.payload.proof
+      ? await (runtimeRpc.strk20 ?? unavailableStrk20Service).submitPrepared({
+          account,
+          call: preparedCall as Call,
+          config: preferences.strk20Networks?.[account.networkId] ?? null,
+          proof: approval.payload.proof,
+          rpcUrls,
+          signHash,
+          viewingKey: async () => {
+            const derive = deps.wallet.deriveStrk20ViewingKey;
+            if (!derive) {
+              throw new Error("strk20 services unavailable");
+            }
+            return derive({ accountId: account.id, vaultPassphrase: passphrase });
+          },
+        })
+      : await runtimeRpc.submitInvokeTransaction({
+          account,
+          calls,
+          rpcUrls,
+          signHash,
+        });
     await activity.record({
       accountId: account.id,
       hash: result.transactionHash,

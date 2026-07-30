@@ -315,12 +315,18 @@ describe("token and preference wrappers", () => {
     );
   });
 
-  test("setStrk20ProverUrl resolves on preferences and throws otherwise", async () => {
+  test("setStrk20NetworkConfig resolves on preferences and throws otherwise", async () => {
+    const config = {
+      discoveryUrl: "https://discovery.example",
+      poolAddress: "0x1",
+      proverUrl: "https://prover.example",
+      subaccountAnonymizerAddress: "0x2",
+    };
     await expect(
-      runtimeReturning(preferencesResponse).setStrk20ProverUrl("https://p"),
+      runtimeReturning(preferencesResponse).setStrk20NetworkConfig("SN_MAIN", config),
     ).resolves.toBeUndefined();
-    await expect(runtimeReturning({}).setStrk20ProverUrl("https://p")).rejects.toThrow(
-      "prover endpoint update failed",
+    await expect(runtimeReturning({}).setStrk20NetworkConfig("SN_MAIN", config)).rejects.toThrow(
+      "privacy service configuration failed",
     );
   });
 

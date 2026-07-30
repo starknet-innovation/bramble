@@ -20,7 +20,7 @@ impact, remediation, and retest condition.
 | [MCW-CI-005](../reviews/01-github-workflows/#mcw-ci-005--server-side-repository-rules-did-not-match-the-documented-model) | Medium | Resolved | Repository rules | Required checks, reviews, SHA pins, and secret scanning are enforced server-side |
 | [MCW-CI-006](../reviews/01-github-workflows/#mcw-ci-006--rust-action-followed-a-moving-toolchain-channel) | Low | Resolved | Toolchain | Rust action and compiler version are both immutable |
 | [MCW-SRC-001](../src-package-audit/#mcw-src-001) | High | Resolved | Swap execution | Execution uses a one-time call bundle frozen before confirmation |
-| [MCW-SRC-002](../src-package-audit/#mcw-src-002) | High | Resolved | STRK20 execution | Execution uses the exact prover call frozen before approval |
+| [MCW-SRC-002](../src-package-audit/#mcw-src-002) | High | Resolved | STRK20 execution | Frozen intent and fee are proved through a call-set-bound signer only after approval |
 | [MCW-SRC-003](../src-package-audit/#mcw-src-003) | Medium | Resolved | RPC submission | Write failover stops before submission begins |
 | [MCW-SRC-004](../src-package-audit/#mcw-src-004) | Medium | Resolved | Approvals | Sensitive approvals carry immutable account, network, chain, and payload context |
 | [MCW-SRC-005](../src-package-audit/#mcw-src-005) | Medium | Resolved | Approvals | Execution atomically claims a pending approval before awaited work |

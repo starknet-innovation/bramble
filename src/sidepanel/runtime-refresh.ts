@@ -39,7 +39,7 @@ const MUTATING_MESSAGES: ReadonlySet<string> = new Set([
   "wallet.setNftIndexerUrl",
   "wallet.setNftSpam",
   "wallet.setRpcOverride",
-  "wallet.setStrk20ProverUrl",
+  "wallet.setStrk20NetworkConfig",
   "wallet.setTokenHidden",
   "wallet.transfer",
   "wallet.transferNft",

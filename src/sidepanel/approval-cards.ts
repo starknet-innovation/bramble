@@ -184,6 +184,27 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
     ${decisionRow(approval, "Approve", status.locked)}
   </li>`;
 
+const strk20DisclosureCard = (
+  approval: PendingApproval,
+  status: WalletStatus,
+  copy: {
+    readonly action: string;
+    readonly hint: string;
+    readonly lockedHint: string;
+    readonly title: string;
+  },
+): string => `
+  <li class="request-card">
+    <div class="request-copy">
+      ${requestIdentity(approval.origin, copy.title)}
+      <p class="hint">${status.locked ? copy.lockedHint : copy.hint}</p>
+      ${reviewCallsList(approval.summaries ?? [])}
+      ${contextDisclosure(approval)}
+    </div>
+    ${reviewPanel(approval.insights ?? [])}
+    ${decisionRow(approval, copy.action, status.locked)}
+  </li>`;
+
 const switchCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -229,8 +250,29 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
       return invokeCard(approval, status);
     case "sign-typed-data":
       return signCard(approval, status);
+    case "strk20-balances":
+      return strk20DisclosureCard(approval, status, {
+        action: "Share balances",
+        hint: "This reveals the selected private token balances to this site. It does not move funds.",
+        lockedHint: "Unlock the wallet to review this private balance request.",
+        title: "Private balance request",
+      });
     case "strk20-invoke":
       return strk20Card(approval, status);
+    case "strk20-prepare":
+      return strk20DisclosureCard(approval, status, {
+        action: "Authorize",
+        hint: "This may generate a proof that authorizes the exact private actions below. The site can submit a returned proof.",
+        lockedHint: "Unlock the wallet to review this private proof request.",
+        title: "Private proof request",
+      });
+    case "strk20-subaccount":
+      return strk20DisclosureCard(approval, status, {
+        action: "Share commitment",
+        hint: "This reveals a deterministic, site-scoped private identity commitment that may link sessions for this site.",
+        lockedHint: "Unlock the wallet to review this private identity request.",
+        title: "Private identity request",
+      });
     case "switch-chain":
       return switchCard(approval, status);
     case "add-chain":

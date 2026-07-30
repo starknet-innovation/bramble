@@ -10,7 +10,8 @@ rules and `README.md` the feature-level docs. Treat every change as security-sen
 bun install --frozen-lockfile
 bun run vendor:krusty        # required once before check/build (clones + wasm-pack builds Krusty KMS)
 bun run vendor:multisig      # required once before check/build (scarb-builds contracts/multisig)
-bun run check                # types + lint + file/config standards + manifest + krusty/multisig pins + tests
+bun run vendor:privacy       # required once before check/build (builds pinned official privacy SDK)
+bun run check                # types + lint + standards + manifest + vendored pins + tests
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
 bun run build                # writes dist/ (loadable as an unpacked Chrome extension)
 bun run test:e2e             # Playwright extension E2E (requires dist/)
@@ -19,8 +20,9 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 
 - `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
   `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class hash pin in
-  `src/starknet/multisig-deploy.ts` is only reproducible on that version). Without the vendored
-  outputs, `check:krusty`/`check:multisig` and `build` fail — that is expected in offline
+  `src/starknet/multisig-deploy.ts` is only reproducible on that version); and
+  `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,
+  `check:krusty`/`check:multisig`/`check:privacy` and `build` fail — that is expected in offline
   sandboxes; run the rest of the gates and say so.
 - Narrower loops while iterating: `bun test tests/<module>/<name>.test.ts`, `bun run check:types`,
   `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the
@@ -35,7 +37,7 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 - `src/content` + `src/provider` — page ↔ background bridge; injected `window.starknet_mcWallet`.
 - `src/storage` — encrypted persistence, permission checks, schema validation, migrations.
 - `src/crypto` — Krusty KMS WASM adapter; validates all inputs/outputs at the boundary.
-- `src/starknet` — RPC, token registry, prices, deployment/derivation config.
+- `src/starknet` — RPC, tokens, prices, deployment config, and STRK20 privacy SDK adapter.
 - `src/security` — phishing blocklist and lookalike heuristics.
 - `src/sidepanel` + `src/ui` — side-panel UI; pure view templates + skin/scale tokens.
 - `scripts/` — build, packaging, vendoring, and the custom standards checks.
@@ -61,6 +63,8 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
   skin/scale tokens (`src/ui/skin.ts`, `src/ui/tokens.ts`), no hard-coded colors.
 - Exported APIs need doc comments explaining trust boundaries and failure behavior (checked).
 - New dependencies: pinned exact, justified in the PR, used immediately. Prefer zero.
+- Never expose or persist an STRK20 viewing key. Privacy-service responses are untrusted, and only
+  the configured pool's `apply_actions` call may carry a prepared proof into submission.
 
 ## Schema migrations
 

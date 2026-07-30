@@ -82,9 +82,9 @@ const cases: ReadonlyArray<{ error: string; message: Record<string, unknown>; ty
     type: "wallet.setNftIndexerUrl",
   },
   {
-    error: "invalid prover endpoint request",
-    message: { type: "wallet.setStrk20ProverUrl" },
-    type: "wallet.setStrk20ProverUrl",
+    error: "invalid strk20 service configuration",
+    message: { type: "wallet.setStrk20NetworkConfig" },
+    type: "wallet.setStrk20NetworkConfig",
   },
   {
     error: "invalid preferences backup",
@@ -123,6 +123,32 @@ describe("handlePreferenceOps input validation", () => {
     });
     expect(response).toMatchObject({ ok: true });
     expect((await preferencesStore.read()).rpcOverrides?.SN_MAIN).toBe("https://rpc.example.com");
+  });
+
+  test("applies and clears complete STRK20 network routing", async () => {
+    const preferencesStore = store();
+    const config = {
+      discoveryUrl: "https://privacy.example/discovery",
+      paymaster: { feeToken: "0x5", url: "https://privacy.example/paymaster" },
+      poolAddress: "0x2",
+      proverUrl: "https://privacy.example/prover",
+      subaccountAnonymizerAddress: "0x3",
+    };
+    await expect(
+      handlePreferenceOps(preferencesStore, "wallet.setStrk20NetworkConfig", {
+        config,
+        networkId: "SN_MAIN",
+        type: "wallet.setStrk20NetworkConfig",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    expect((await preferencesStore.read()).strk20Networks?.SN_MAIN).toEqual(config);
+
+    await handlePreferenceOps(preferencesStore, "wallet.setStrk20NetworkConfig", {
+      config: null,
+      networkId: "SN_MAIN",
+      type: "wallet.setStrk20NetworkConfig",
+    });
+    expect((await preferencesStore.read()).strk20Networks?.SN_MAIN).toBeUndefined();
   });
 
   test("imports a well-formed preferences backup and returns the merged state", async () => {

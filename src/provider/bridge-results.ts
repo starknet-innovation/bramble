@@ -10,10 +10,18 @@ import { errorForMessage, unknownError, type WalletRpcError } from "../shared/rp
 import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
 import { isAccountRef } from "../storage/vault-schema";
 
-export { type ProviderInvokeCall, providerInvokeCalls } from "./invoke-params";
+export {
+  type ProviderInvokeCall,
+  providerInvokeCalls,
+  providerInvokeRequest,
+} from "./invoke-params";
 
 import type { ProviderMethod } from "./methods";
-import { providerStrk20Balances, providerStrk20CallAndProof } from "./strk20-bridge";
+import {
+  providerStrk20Balances,
+  providerStrk20CallAndProof,
+  providerStrk20Commitment,
+} from "./strk20-bridge";
 
 /**
  * Page-facing account view: only the already-public address and network id.
@@ -49,9 +57,11 @@ export type ProviderDeploymentData = {
 };
 
 /**
- * API_VERSION pattern accepted from dapps (`major.minor` with optional patch).
+ * API_VERSION pattern accepted from dapps (semantic version, including a
+ * prerelease suffix used by published Wallet-API release candidates).
  */
-export const API_VERSION_PATTERN = /^[0-9]+\.[0-9]+(\.[0-9]+)?$/;
+export const API_VERSION_PATTERN =
+  /^[0-9]+\.[0-9]+(?:\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)?$/;
 
 /**
  * Spec declare result carried to the page (`{ transaction_hash, class_hash }`),
@@ -394,6 +404,8 @@ const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
   wallet_strk20Balances: (result) => okFieldPayload(result, "balances", providerStrk20Balances),
   wallet_strk20PrepareInvoke: (result) =>
     okFieldPayload(result, "callAndProof", providerStrk20CallAndProof),
+  wallet_strk20SubaccountCommitment: (result) =>
+    okFieldPayload(result, "commitment", providerStrk20Commitment),
 };
 
 const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
@@ -428,6 +440,8 @@ const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
       return RESULT_MAPPERS.wallet_strk20InvokeTransaction;
     case "wallet_strk20PrepareInvoke":
       return RESULT_MAPPERS.wallet_strk20PrepareInvoke;
+    case "wallet_strk20SubaccountCommitment":
+      return RESULT_MAPPERS.wallet_strk20SubaccountCommitment;
     case "wallet_switchStarknetChain":
       return RESULT_MAPPERS.wallet_switchStarknetChain;
     case "wallet_watchAsset":

@@ -449,7 +449,16 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   {
-    message: { type: "wallet.setStrk20ProverUrl", url: "https://prover.example" },
+    message: {
+      config: {
+        discoveryUrl: "https://discovery.example",
+        poolAddress: "0x1",
+        proverUrl: "https://prover.example",
+        subaccountAnonymizerAddress: "0x2",
+      },
+      networkId: "SN_MAIN",
+      type: "wallet.setStrk20NetworkConfig",
+    },
     sender: extensionSender,
   },
   {
@@ -463,6 +472,14 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   {
     message: { origin: ORIGIN, params: {}, type: "wallet.strk20PrepareInvoke" },
+    sender: contentSender,
+  },
+  {
+    message: {
+      dappName: "mc-terminal",
+      origin: ORIGIN,
+      type: "wallet.strk20SubaccountCommitment",
+    },
     sender: contentSender,
   },
   { message: { origin: ORIGIN, type: "wallet.supportedSpecs" }, sender: contentSender },
