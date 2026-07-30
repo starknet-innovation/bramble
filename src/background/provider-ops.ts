@@ -8,7 +8,7 @@
 import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { walletErrorMessage } from "../shared/errors";
-import { STARKNET_NETWORKS } from "../starknet/networks";
+import { canonicalFelt, STARKNET_NETWORKS } from "../starknet/networks";
 import { unavailableStrk20Service } from "../starknet/strk20/service";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
@@ -296,10 +296,17 @@ export const executeInvokeApproval = async (
           signHash,
           viewingKey: async () => {
             const derive = deps.wallet.deriveStrk20ViewingKey;
-            if (!derive) {
+            const config = preferences.strk20Networks?.[account.networkId] ?? null;
+            const poolAddress = config ? canonicalFelt(config.poolAddress) : null;
+            if (!derive || !poolAddress) {
               throw new Error("strk20 services unavailable");
             }
-            return derive({ accountId: account.id, vaultPassphrase: passphrase });
+            return derive({
+              accountId: account.id,
+              chainId: STARKNET_NETWORKS[account.networkId].chainId,
+              poolAddress,
+              vaultPassphrase: passphrase,
+            });
           },
         })
       : await runtimeRpc.submitInvokeTransaction({

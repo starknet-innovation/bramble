@@ -51,6 +51,7 @@ import { JOURNEY_STYLES } from "./styles-journeys";
 import { MULTISIG_STYLES } from "./styles-multisig";
 import { ONBOARDING_STYLES } from "./styles-onboarding";
 import { ONBOARDING_WELCOME_STYLES } from "./styles-onboarding-welcome";
+import { PRIVACY_STYLES } from "./styles-privacy";
 import { PROGRESS_STYLES } from "./styles-progress";
 import { SEND_STYLES } from "./styles-send";
 import { SEND_COMPOSE_STYLES } from "./styles-send-compose";
@@ -62,5 +63,5 @@ import { TRANSITION_STYLES } from "./styles-transitions";
 /**
  * Skin-token-only stylesheet injected by the side panel entrypoint.
  */
-export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${DOCK_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${SWAP_STYLES}${PROGRESS_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${COMPONENT_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
+export const SIDEPANEL_STYLES = `${TOKEN_STYLES}${BASE_STYLES}${DOCK_STYLES}${CONTROL_STYLES}${STRUCTURE_STYLES}${SWAP_STYLES}${PROGRESS_STYLES}${PRIVACY_STYLES}${SEND_STYLES}${SEND_COMPOSE_STYLES}${COMPONENT_STYLES}${JOURNEY_STYLES}${MULTISIG_STYLES}${TRANSITION_STYLES}${GROUP_STYLES}
 ${HOME_STYLES}${ONBOARDING_STYLES}${ONBOARDING_WELCOME_STYLES}`;

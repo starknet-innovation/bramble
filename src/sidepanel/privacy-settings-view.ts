@@ -67,7 +67,7 @@ export const strk20ServicesForm = (
   ${textField({
     autocomplete: "off",
     className: "mono",
-    hint: "Required for wallet submission. Leave both paymaster fields empty for prepare-only mode.",
+    hint: "Required for private transfer, withdrawal, and invoke relay. Registration and deposit-only shielding can use the selected account.",
     label: "Private paymaster",
     name: "paymasterUrl",
     placeholder: "https://paymaster.example",

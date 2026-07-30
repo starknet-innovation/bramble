@@ -5,5 +5,6 @@
  */
 declare module "*starknet-sdk.min.js" {
   export const Open: unique symbol;
+  export const SetupRequirement: unknown;
   export const createPrivateTransfers: unknown;
 }

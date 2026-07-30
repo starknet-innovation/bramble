@@ -14,6 +14,7 @@ import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
 } from "../starknet/strk20/official-sdk-service";
+import { unavailableStrk20Service } from "../starknet/strk20/service";
 import { createActivityLog, systemClock } from "../storage/activity-store";
 import { createAllowanceStore } from "../storage/allowance-store";
 import {
@@ -28,6 +29,7 @@ import {
   type ApprovalSurfacePreference,
   createPreferencesStore,
 } from "../storage/preferences-store";
+import { createStrk20MaturityStore } from "../storage/strk20-maturity-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { setApprovalNotifier } from "./approval-notifier";
 import {
@@ -215,11 +217,22 @@ const loadMultisigClass = async (): Promise<unknown> => {
   }
   return response.json();
 };
+const strk20MaturityStore = (() => {
+  try {
+    return createStrk20MaturityStore(createBrowserSessionStore());
+  } catch {
+    return undefined;
+  }
+})();
 const runtimeRpc = {
   ...defaultRuntimeRpc,
-  strk20: createOfficialStrk20Service({
-    sdk: privacySdkModule as unknown as PrivacySdkRuntime,
-  }),
+  strk20: strk20MaturityStore
+    ? createOfficialStrk20Service({
+        maturityStore: strk20MaturityStore,
+        nowSeconds: () => Math.floor(systemClock() / 1_000),
+        sdk: privacySdkModule as unknown as PrivacySdkRuntime,
+      })
+    : unavailableStrk20Service,
 };
 const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.id ?? "", {
   approvals,

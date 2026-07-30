@@ -40,6 +40,7 @@ export const WALLET_VIEWS = [
   "token-add",
   "token-discover",
   "token-detail",
+  "privacy",
   "allowances",
   "multisigs",
   "multisig-add",

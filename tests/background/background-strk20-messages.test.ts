@@ -48,6 +48,24 @@ describe("background strk20 messages", () => {
     });
   });
 
+  test("describes an empty token list as disclosure of every private balance", async () => {
+    const handler = buildHandler();
+    const held = handler({ origin, tokens: [], type: "wallet.strk20Balances" }, contentSender);
+    await flushHeld();
+    const listed = await waitForPendingApprovals<{
+      readonly id: string;
+      readonly kind?: string;
+      readonly summaries?: readonly string[];
+    }>(handler, sender);
+    expect(listed.at(-1)).toMatchObject({
+      kind: "strk20-balances",
+      summaries: ["Share all private token balances"],
+    });
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    await held;
+  });
+
   test("maps an unregistered account to NOT_REGISTERED (118)", async () => {
     const handler = buildHandler({ registered: false });
     const result = await approveHeld(
@@ -195,8 +213,9 @@ describe("background strk20 messages", () => {
 
   test("holds the invoke until approval, then submits a padded hash", async () => {
     const invoked: InvokeInput[] = [];
+    const balanceCalls = { value: 0 };
     const proveCalls = { value: 0 };
-    const handler = buildHandler({ invoked, proveCalls });
+    const handler = buildHandler({ balanceCalls, invoked, proveCalls });
     const held = handler(
       {
         actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
@@ -219,6 +238,7 @@ describe("background strk20 messages", () => {
       summaries: expect.arrayContaining([expect.stringContaining("Private relay fee")]),
     });
     expect(invoked).toHaveLength(0);
+    expect(balanceCalls.value).toBe(0);
     expect(proveCalls.value).toBe(0);
 
     const id = await latestApprovalId(handler, sender);
@@ -232,6 +252,7 @@ describe("background strk20 messages", () => {
       result: { transaction_hash: `0x${"123".padStart(64, "0")}` },
     });
     expect(invoked).toHaveLength(0);
+    expect(balanceCalls.value).toBeGreaterThan(0);
     expect(proveCalls.value).toBe(1);
   });
 

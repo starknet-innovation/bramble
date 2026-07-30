@@ -21,8 +21,10 @@ Send, sign, and connect to Starknet dapps without leaving the tab. Keys stay enc
 - **Tokens & prices** — auto-detects ETH / STRK / USDC / USDT / DAI / WBTC, live CoinGecko prices with a 7-day sparkline, and spam-token filtering.
 - **NFT gallery** — watch ERC-721 and ERC-1155 collectibles with on-chain ownership proof, then read their name, image, description, and attributes from `token_uri` / `uri`.
 - **Multisig** — watch, propose, confirm, and execute on OpenZeppelin multisig accounts.
-- **STRK20 privacy** — read shielded balances, prepare and submit private action batches, and derive
-  dapp-scoped sub-account commitments through the pinned official Privacy SDK.
+- **STRK20 privacy** — explicitly activate private balances, shield tracked ERC-20 assets through a
+  reviewed public deposit, read private note totals on demand, submit private action batches, and
+  derive chain/pool-scoped viewing identities and dapp-scoped sub-account commitments through the
+  pinned official Privacy SDK.
 - **Anti-phishing** — domain blocklist plus lookalike / punycode detection and per-origin connection history.
 - **Allowance manager** — see every ERC-20 approval you've granted and revoke it in one tap.
 - **Liquid Glass UI** — Apple-style glass surfaces, spring motion, and View Transitions, with full reduced-motion support.

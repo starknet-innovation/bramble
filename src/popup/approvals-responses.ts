@@ -7,6 +7,12 @@ import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord, type Json } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import { isStarkFieldElement, isStarknetNetworkId, STARKNET_NETWORKS } from "../starknet/networks";
+import {
+  readStrk20Action,
+  readStrk20Actions,
+  type Strk20Action,
+  type Strk20WithdrawAction,
+} from "../starknet/strk20/schemas";
 import { isAccountId } from "../storage/vault-schema";
 
 /**
@@ -62,6 +68,7 @@ export type ApprovalContext = {
  * carry phishing and site-reputation signals.
  */
 export type PendingApproval = {
+  readonly actionReviews?: readonly Strk20Action[];
   readonly blocked?: boolean;
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
@@ -81,6 +88,7 @@ export type PendingApproval = {
     | "switch-chain"
     | "watch-asset";
   readonly origin: string;
+  readonly relayFeeAction?: Strk20WithdrawAction;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
   readonly typedData?: Json;
@@ -199,6 +207,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   if (
     !isRecord(value) ||
     !hasOnlyKnownKeys(value, [
+      "actionReviews",
       "blocked",
       "context",
       "declaration",
@@ -207,6 +216,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "insights",
       "kind",
       "origin",
+      "relayFeeAction",
       "summaries",
       "token",
       "typedData",
@@ -254,7 +264,18 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "declare"
       ? isDeclarationReview(value["declaration"])
       : value["declaration"] === undefined;
+  const needsActionReview = value["kind"] === "strk20-invoke" || value["kind"] === "strk20-prepare";
+  const actionReviewValid = needsActionReview
+    ? readStrk20Actions(value["actionReviews"]) !== null
+    : value["actionReviews"] === undefined;
+  const relayFeeAction =
+    value["relayFeeAction"] === undefined ? undefined : readStrk20Action(value["relayFeeAction"]);
+  const relayFeeValid =
+    relayFeeAction === undefined ||
+    (value["kind"] === "strk20-invoke" && relayFeeAction?.type === "withdraw");
   return (
+    actionReviewValid &&
+    relayFeeValid &&
     tokenValid &&
     declarationValid &&
     (needsContext ? isApprovalContext(value["context"]) : value["context"] === undefined)

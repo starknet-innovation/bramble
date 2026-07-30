@@ -37,6 +37,14 @@ export const JOURNEY_STYLES = `
     transition: opacity ${MOTION.pressMs}ms ${MOTION.ease};
   }
   .request-technical .request-detail { margin-top: 0; }
+  .strk20-action-review,
+  .strk20-action-call {
+    display: grid;
+    gap: ${SPACE.sm};
+    min-width: 0;
+  }
+  .strk20-action-review + .strk20-action-review { margin-top: ${SPACE.sm}; }
+  .strk20-action-call { margin-left: ${SPACE.sm}; }
 
   .ledger-liveness {
     align-items: center;

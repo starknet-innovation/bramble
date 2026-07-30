@@ -161,6 +161,8 @@ export type WalletVaultService = {
    */
   readonly deriveStrk20ViewingKey: (input: {
     readonly accountId: string;
+    readonly chainId: string;
+    readonly poolAddress: string;
     readonly vaultPassphrase: string;
   }) => Promise<string>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;

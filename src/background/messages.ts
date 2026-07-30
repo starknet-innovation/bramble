@@ -24,11 +24,7 @@ import { handleDeclareOps } from "./declare-ops";
 import { handleDiscoveryOps } from "./discovery-ops";
 import { readImportAccountInput } from "./import-inputs";
 import { handleLedgerOps } from "./ledger-ops";
-import {
-  createLedgerSignQueue,
-  type LedgerSignQueue,
-  type LedgerSignQueueTimeout,
-} from "./ledger-sign-queue";
+import type { LedgerSignQueue } from "./ledger-sign-queue";
 import {
   readAddAccountInput,
   readGetGrantedAccountsInput,
@@ -48,6 +44,7 @@ import { handleOnboardingOps } from "./onboarding-ops";
 import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
 import { handleProviderOps } from "./provider-ops";
+import { runtimeLedgerSignQueue } from "./runtime-ledger-sign-queue";
 import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
 import { statusResponse, switchActiveNetwork, unavailablePreferencesStore } from "./runtime-state";
 import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
@@ -60,6 +57,11 @@ import {
 import { createUnlockSession, type UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
 import { handleStrk20Ops } from "./strk20-ops";
+import { handleStrk20WalletOps } from "./strk20-wallet-ops";
+import {
+  createStrk20WalletPreparationStore,
+  type Strk20WalletPreparationStore,
+} from "./strk20-wallet-preparations";
 import { handleSwapOps } from "./swap-ops";
 import { createSwapPreparationStore, type SwapPreparationStore } from "./swap-preparations";
 import { handleTokenOps } from "./token-ops";
@@ -83,6 +85,7 @@ type RouterContext = {
   readonly session: UnlockSession;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
+  readonly strk20Preparations: Strk20WalletPreparationStore;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
 };
@@ -366,6 +369,15 @@ const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message, sender) => handleAddChainOps(ctx, messageType, message, sender),
   (ctx, messageType, message, sender) => handleDeclareOps(ctx, messageType, message, sender),
   (ctx, messageType, message, sender) => handleStrk20Ops(ctx, messageType, message, sender),
+  (ctx, messageType, message) =>
+    handleStrk20WalletOps(
+      {
+        ...buildOpsDeps(ctx),
+        strk20Preparations: ctx.strk20Preparations,
+      },
+      messageType,
+      message,
+    ),
   (ctx, messageType, message) => handleOriginOps(ctx, messageType, message),
   (ctx, messageType, message) => handleTokenOps(ctx, messageType, message),
   handleCreateAccount,
@@ -440,25 +452,12 @@ export type MessageHandlerOptions = {
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
   readonly swapPreparations?: SwapPreparationStore;
+  readonly strk20Preparations?: Strk20WalletPreparationStore;
 };
 
-// Abandon a parked sign after a generous timeout interval.
-const LEDGER_SIGN_TIMEOUT: LedgerSignQueueTimeout = {
-  ms: 300_000,
-  schedule: (onElapsed, ms) => {
-    const handle = setTimeout(onElapsed, ms);
-    return () => clearTimeout(handle);
-  },
-};
-
-const runtimeLedgerSignQueue = (
-  provided: LedgerSignQueue | undefined,
-  session: UnlockSession,
-): LedgerSignQueue =>
-  provided ??
-  createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, () =>
-    session.isUnlocked() ? session.generation() : null,
-  );
+const strk20PreparationsFor = (
+  provided: Strk20WalletPreparationStore | undefined,
+): Strk20WalletPreparationStore => provided ?? createStrk20WalletPreparationStore();
 
 /**
  * Creates the trusted background runtime message dispatcher.
@@ -486,6 +485,7 @@ export const createMessageHandler = (
     session,
     swap: options.swap ?? unavailableSwapService,
     swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
+    strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
     waiters: createSignatureWaiters(),
     wallet,
   };

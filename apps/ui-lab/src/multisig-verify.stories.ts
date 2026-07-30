@@ -10,7 +10,7 @@ import {
 const meta: LabMeta = {
   ...LAB_META,
   args: { checkpointId: "verify-elsewhere-entry", scenarioId: "multisig" },
-  title: "Wallet journeys/08 Multisig/Verify elsewhere",
+  title: "Wallet journeys/09 Multisig/Verify elsewhere",
 };
 
 export default meta;

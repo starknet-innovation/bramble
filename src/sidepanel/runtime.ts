@@ -38,6 +38,7 @@ import type { AccountGroupIcon } from "../storage/account-groups";
 import type { AccountRef } from "../storage/vault-schema";
 import { createLedgerRuntimeClient } from "./ledger/runtime-client";
 import { createNftRuntimeClient } from "./nft-runtime";
+import { createPrivacyRuntimeClient } from "./privacy-runtime";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -89,6 +90,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   return {
     ...createLedgerRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
+    ...createPrivacyRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {

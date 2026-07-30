@@ -8,11 +8,12 @@
 import type { Call } from "starknet";
 import { CallData, hash } from "starknet";
 import { WalletError } from "../../shared/errors";
-import { isJson, isRecord } from "../../shared/json";
+import { isRecord } from "../../shared/json";
 import { isNonZeroStarkFieldElement, isStarkFieldElement, sameFelt } from "../networks";
 import type { Strk20PaymasterConfig } from "./config";
+import { bindPaymasterTypedData, isPaymasterAuthorizationLive } from "./paymaster-typed-data";
 import type { Strk20Proof } from "./schemas";
-import { STRK20_SUBMISSION_UNAVAILABLE, type Strk20SubmissionPlan } from "./service";
+import { STRK20_SUBMISSION_UNAVAILABLE, type Strk20PrivateRelayPlan } from "./service";
 
 type PaymasterCall = {
   readonly calldata: readonly string[];
@@ -72,7 +73,7 @@ const rpc = async (
   return body["result"];
 };
 
-const readFeeAction = (value: unknown): Strk20SubmissionPlan["feeAction"] | null =>
+const readFeeAction = (value: unknown): Strk20PrivateRelayPlan["feeAction"] | null =>
   isRecord(value) &&
   value["type"] === "withdraw" &&
   typeof value["amount"] === "string" &&
@@ -96,10 +97,12 @@ const readFeeAction = (value: unknown): Strk20SubmissionPlan["feeAction"] | null
 export const buildStrk20PaymasterPlan = async (input: {
   readonly accountAddress: string;
   readonly approveCalls: readonly Call[];
+  readonly chainId: string;
   readonly config: Strk20PaymasterConfig;
   readonly http?: PaymasterHttp;
+  readonly nowSeconds: number;
   readonly poolAddress: string;
-}): Promise<Strk20SubmissionPlan> => {
+}): Promise<Strk20PrivateRelayPlan> => {
   const hasApprovals = input.approveCalls.length > 0;
   const result = await rpc(input.http ?? fetch, input.config.url, "paymaster_buildTransaction", {
     parameters: { ...PARAMETERS, fee_mode: feeMode(input.config) },
@@ -121,17 +124,34 @@ export const buildStrk20PaymasterPlan = async (input: {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   const feeAction = readFeeAction(result["fee_action"]);
+  const boundTypedData = hasApprovals
+    ? bindPaymasterTypedData({
+        accountAddress: input.accountAddress,
+        calls: input.approveCalls,
+        chainId: input.chainId,
+        nowSeconds: input.nowSeconds,
+        value: result["typed_data"],
+      })
+    : undefined;
   if (
     !feeAction ||
     !sameFelt(feeAction.token, input.config.feeToken) ||
-    (hasApprovals && !isJson(result["typed_data"]))
+    (hasApprovals && !boundTypedData)
   ) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   if (!hasApprovals) {
-    return { feeAction };
+    return { feeAction, mode: "private-relay" };
   }
-  return { feeAction, typedData: result["typed_data"] };
+  if (!boundTypedData) {
+    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
+  return {
+    authorization: boundTypedData.review,
+    feeAction,
+    mode: "private-relay",
+    typedData: boundTypedData.typedData,
+  };
 };
 
 /**
@@ -143,17 +163,31 @@ export const submitStrk20PaymasterPlan = async (input: {
   readonly call: Call;
   readonly config: Strk20PaymasterConfig;
   readonly http?: PaymasterHttp;
-  readonly plan: Strk20SubmissionPlan;
+  readonly nowSeconds: number;
+  readonly plan: Strk20PrivateRelayPlan;
   readonly proof: Strk20Proof;
   readonly signTypedData: (typedData: unknown) => Promise<readonly string[]>;
 }): Promise<{ readonly transactionHash: string }> => {
-  const invoke = input.plan.typedData
-    ? {
-        signature: await input.signTypedData(input.plan.typedData),
-        typed_data: input.plan.typedData,
-        user_address: input.accountAddress,
+  let invoke:
+    | {
+        readonly signature: readonly string[];
+        readonly typed_data: unknown;
+        readonly user_address: string;
       }
-    : undefined;
+    | undefined;
+  if (input.plan.typedData) {
+    if (
+      !input.plan.authorization ||
+      !isPaymasterAuthorizationLive(input.plan.authorization, input.nowSeconds, 10n)
+    ) {
+      throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    }
+    invoke = {
+      signature: await input.signTypedData(input.plan.typedData),
+      typed_data: input.plan.typedData,
+      user_address: input.accountAddress,
+    };
+  }
   const result = await rpc(input.http ?? fetch, input.config.url, "paymaster_executeTransaction", {
     parameters: { ...PARAMETERS, fee_mode: feeMode(input.config) },
     transaction: {

@@ -12,6 +12,7 @@ import {
   type StarkHashSigner,
   withRpcFallback,
 } from "./provider";
+import { decodeUint256Response } from "./rpc-assets";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
 
 /**
@@ -71,8 +72,6 @@ export {
   type InvokeSubmission,
   submitInvokeTransaction,
 } from "./rpc-submit";
-
-const UINT_128_SHIFT = 128n;
 
 /**
  * Token balance returned to the side panel.
@@ -171,17 +170,11 @@ export const formatTokenAmount = (raw: bigint, decimals: number): string => {
 };
 
 const parseUint256Response = (response: readonly string[]): bigint => {
-  const low = response[0];
-  const high = response[1];
-  if (
-    typeof low !== "string" ||
-    typeof high !== "string" ||
-    !isStarkFieldElement(low) ||
-    !isStarkFieldElement(high)
-  ) {
+  const value = decodeUint256Response(response);
+  if (value === null) {
     throw new WalletError("Invalid token balance response");
   }
-  return BigInt(low) + (BigInt(high) << UINT_128_SHIFT);
+  return value;
 };
 
 /**

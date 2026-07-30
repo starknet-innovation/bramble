@@ -13,6 +13,7 @@ import { button } from "../ui/controls";
 import { textField } from "../ui/fields";
 import { formatFiat, tokenFiatValue } from "./fiat";
 import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "./parts";
+import type { PrivacyDisclosureState } from "./privacy-model";
 import { sparklinePath, sparklineTrend } from "./sparkline";
 import { compactAmount, tokenGlyph } from "./token-row";
 
@@ -177,8 +178,16 @@ export const tokenDetailFlow = (
   chart: readonly number[],
   price: number | null,
   currency: DisplayCurrency,
+  privacy: PrivacyDisclosureState = {
+    enabled: false,
+    error: null,
+    loading: false,
+    value: null,
+  },
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
+  const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
+  const registered = privacy.value?.registration === "registered";
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(
@@ -195,6 +204,17 @@ export const tokenDetailFlow = (
           <span class="token-amount">${escapeHtml(balance ? `${compactAmount(balance.formatted)} ${token.symbol}` : `0 ${token.symbol}`)}</span>
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
+        ${
+          privacy.enabled && registered
+            ? `<div class="privacy-callout"><span class="privacy-toggle-copy"><strong>Private balance</strong><span>Discovered from shielded notes</span></span><strong>${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong></div>`
+            : ""
+        }
+        ${button({
+          attributes: { "data-privacy-open": token.id },
+          icon: "shield",
+          label: registered ? `Shield ${token.symbol}` : "Go private",
+        })}
+        ${privacy.error ? `<p class="hint">${escapeHtml(privacy.error)}</p>` : ""}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>

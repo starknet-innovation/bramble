@@ -9,7 +9,7 @@ import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
 import type { DeclareFeeEstimate } from "../starknet/declare";
 import type { StarknetNetworkId } from "../starknet/networks";
-import type { Strk20Action, Strk20Proof } from "../starknet/strk20/schemas";
+import type { Strk20Action, Strk20Proof, Strk20WithdrawAction } from "../starknet/strk20/schemas";
 import type { Strk20SubmissionPlan } from "../starknet/strk20/service";
 import type { ApprovalContext } from "./approval-context";
 import {
@@ -80,6 +80,7 @@ export type DeclarationReview = {
  * is listed to the UI — the queue itself never sets them.
  */
 export type PendingApproval = {
+  readonly actionReviews?: readonly Strk20Action[];
   readonly blocked?: boolean;
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
@@ -88,6 +89,7 @@ export type PendingApproval = {
   readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
   readonly origin: string;
+  readonly relayFeeAction?: Strk20WithdrawAction;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
   readonly typedData?: unknown;
@@ -168,6 +170,9 @@ export type ApprovalQueue = {
 };
 
 const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
+  ...(approval.actionReviews === undefined
+    ? {}
+    : { actionReviews: cloneApprovalValue(approval.actionReviews) }),
   ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
   ...(approval.declaration === undefined
     ? {}
@@ -183,6 +188,9 @@ const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
   id: approval.id,
   kind: approval.kind,
   origin: approval.origin,
+  ...(approval.relayFeeAction === undefined
+    ? {}
+    : { relayFeeAction: cloneApprovalValue(approval.relayFeeAction) }),
   ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
@@ -342,6 +350,9 @@ export const createApprovalQueue = (): ApprovalQueue => {
         throw new WalletError("Invalid STRK20 approval");
       }
       return enqueue({
+        ...(request.type === "prepare"
+          ? { actionReviews: cloneApprovalValue(request.actions) }
+          : {}),
         context: { ...context },
         id: crypto.randomUUID(),
         kind,
@@ -356,11 +367,13 @@ export const createApprovalQueue = (): ApprovalQueue => {
       }
 
       return enqueue({
+        actionReviews: cloneApprovalValue(actions),
         actions: cloneApprovalValue(actions),
         context: { ...context },
         id: crypto.randomUUID(),
         kind: "strk20-invoke",
         origin,
+        ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
         strk20Plan: cloneApprovalValue(plan),
         summaries: [...summaries],
       });

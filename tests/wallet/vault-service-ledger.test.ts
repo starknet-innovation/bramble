@@ -114,7 +114,12 @@ describe("createLedgerVault", () => {
     });
 
     await expect(
-      service.deriveStrk20ViewingKey({ accountId: account.id, vaultPassphrase }),
+      service.deriveStrk20ViewingKey({
+        accountId: account.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "0x123",
+        vaultPassphrase,
+      }),
     ).rejects.toThrow("STRK20 is unavailable for keyless accounts");
   });
 });

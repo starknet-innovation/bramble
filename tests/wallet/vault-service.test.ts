@@ -134,25 +134,28 @@ describe("createWalletVaultService", () => {
   });
 
   test("derives a STRK20 viewing key inside the encrypted vault boundary", async () => {
-    let privateKeySeen = "";
+    let derivationSeen: readonly string[] = [];
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
       kms: {
         ...fakeKms(),
-        async deriveStrk20ViewingKey(privateKey) {
-          privateKeySeen = privateKey;
+        async deriveStrk20ViewingKey(privateKey, chainId, poolAddress) {
+          derivationSeen = [privateKey, chainId, poolAddress];
           return "0x654321";
         },
       },
     });
     const account = await service.createAccount({ mnemonic, vaultPassphrase });
-
     await expect(
-      service.deriveStrk20ViewingKey({ accountId: account.id, vaultPassphrase }),
+      service.deriveStrk20ViewingKey({
+        accountId: account.id,
+        chainId: "0x534e5f5345504f4c4941",
+        poolAddress: "0x123",
+        vaultPassphrase,
+      }),
     ).resolves.toBe("0x654321");
-    expect(privateKeySeen).toBe("0x123456");
+    expect(derivationSeen).toEqual(["0x123456", "0x534e5f5345504f4c4941", "0x123"]);
   });
-
   test("grants origins access only to selected accounts", async () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),

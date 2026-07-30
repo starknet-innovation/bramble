@@ -14,9 +14,10 @@ import { button, iconButton } from "../ui/controls";
 import { menuRow } from "../ui/navigation";
 import { icon } from "./icons";
 import { type NftGalleryItem, nftImageMarkup, visibleNftItems } from "./nft-views";
+import type { PrivacyDisclosureState } from "./privacy-model";
 import type { BalanceState } from "./runtime";
 import { isHiddenFromHome } from "./token-flows";
-import { balanceRow } from "./token-row";
+import { balanceRow, compactAmount, tokenGlyph } from "./token-row";
 
 /**
  * Tab ids of the home portfolio section, in display order.
@@ -56,6 +57,33 @@ export const visibleHomeBalances = (
   return state.balances.filter((balance) => {
     const token = trackedById.get(balance.id);
     return !token || !isHiddenFromHome(token, preferences);
+  });
+};
+
+/**
+ * Private balances shown on the home portfolio, using the same user-hidden and
+ * spam filtering rules as the public token list.
+ */
+export const visiblePrivateHomeBalances = (
+  privacy: PrivacyDisclosureState,
+  preferences: WalletPreferences | null,
+): readonly TokenBalance[] => {
+  if (
+    !privacy.enabled ||
+    privacy.loading ||
+    privacy.error ||
+    privacy.value?.registration !== "registered"
+  ) {
+    return [];
+  }
+  const trackedById = new Map<string, TokenConfig>(
+    (preferences?.tokens ?? []).map((token) => [token.id, token]),
+  );
+  return privacy.value.balances.flatMap((entry) => {
+    const token = trackedById.get(entry.tokenId);
+    return !token || isHiddenFromHome(token, preferences)
+      ? []
+      : [{ ...token, balance: entry.balance, formatted: entry.formatted }];
   });
 };
 
@@ -105,10 +133,11 @@ const tokensPanel = (
   prices: Readonly<Record<string, number>>,
   changes: Readonly<Record<string, number>>,
   currency: DisplayCurrency,
+  privacy: PrivacyDisclosureState,
 ): string => {
   const visible = visibleHomeBalances(state, preferences);
   const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
-  return `${
+  const publicBody =
     "error" in state
       ? tokensErrorPanel(state.error)
       : visible.length === 0
@@ -117,10 +146,12 @@ const tokensPanel = (
             .map((token) =>
               balanceRow(token, prices[token.address], changes[token.address], currency),
             )
-            .join("")}</ul>`
-  }
+            .join("")}</ul>`;
+  const privateBody = privateBalancesPanel(privacy, preferences);
+  return `${privacyToggle(privacy)}
+    ${privacy.enabled ? privateBody : publicBody}
     ${
-      hiddenCount > 0
+      !privacy.enabled && hiddenCount > 0
         ? menuRow({
             attributes: { "data-view": "tokens" },
             icon: "coins",
@@ -130,6 +161,50 @@ const tokensPanel = (
         : ""
     }
     <p id="panel-result" role="status"></p>`;
+};
+
+const privacyToggle = (privacy: PrivacyDisclosureState): string => `
+  <div class="privacy-toggle-row">
+    <span class="privacy-toggle-copy">
+      <strong>${privacy.enabled ? "Private balances" : "Public balances"}</strong>
+      <span>${privacy.enabled ? "Visible only inside this wallet" : "Read directly from Starknet"}</span>
+    </span>
+    <button class="privacy-switch" data-privacy-toggle type="button" role="switch" aria-checked="${privacy.enabled}" aria-label="Show private balances"></button>
+  </div>`;
+
+const privateBalancesPanel = (
+  privacy: PrivacyDisclosureState,
+  preferences: WalletPreferences | null,
+): string => {
+  if (privacy.loading) {
+    return `<div class="privacy-callout" role="status"><strong>Discovering private notes…</strong><p>Reading the privacy indexer for this account.</p></div>`;
+  }
+  if (privacy.error) {
+    return `<div class="privacy-callout" role="alert"><strong>Private balances unavailable</strong><p>${escapeHtml(privacy.error)}</p>${button({ attributes: { "data-privacy-retry": true }, label: "Try again", size: "small", variant: "secondary" })}</div>`;
+  }
+  if (!privacy.value) {
+    return `<div class="privacy-callout"><strong>Private balances are off</strong><p>Enable the toggle to discover shielded assets for this account.</p></div>`;
+  }
+  if (privacy.value.registration === "unregistered") {
+    return `<div class="privacy-callout"><strong>Activate private balances</strong><p>Register this account with the privacy pool before shielding an asset.</p>${button({ attributes: { "data-privacy-register": true }, icon: "shield", label: "Review activation", size: "small" })}</div>`;
+  }
+  const rows = privacy.value.balances
+    .filter((entry) => {
+      const token = preferences?.tokens.find((candidate) => candidate.id === entry.tokenId);
+      return entry.tokenId.length > 0 && (!token || !isHiddenFromHome(token, preferences));
+    })
+    .map(
+      (entry) => `<li>
+        <button class="private-token-row" data-token-detail="${escapeHtml(entry.tokenId)}" type="button">
+          ${tokenGlyph(entry.token, entry.symbol)}
+          <span class="private-token-copy"><strong>${escapeHtml(entry.symbol)}</strong><span>Private</span></span>
+          <span class="private-token-amount">${escapeHtml(compactAmount(entry.formatted))}</span>
+        </button>
+      </li>`,
+    );
+  return rows.length > 0
+    ? `<ul class="token-list">${rows.join("")}</ul>`
+    : `<div class="privacy-callout"><strong>No private balances yet</strong><p>Open an asset and choose Go private to shield part of its public balance.</p></div>`;
 };
 
 /**
@@ -196,6 +271,12 @@ export const homeTabs = (
   currency: DisplayCurrency,
   status: WalletStatus,
   discoveredNfts: readonly DiscoveredNft[] = [],
+  privacy: PrivacyDisclosureState = {
+    enabled: false,
+    error: null,
+    loading: false,
+    value: null,
+  },
 ): string => `
   <section class="home-tabs" data-active-tab="tokens" aria-label="Portfolio">
     <div class="tab-bar">
@@ -252,6 +333,6 @@ export const homeTabs = (
         </div>
       </div>
     </div>
-    ${tabPanel("tokens", tokensPanel(state, preferences, prices, changes, currency))}
+    ${tabPanel("tokens", tokensPanel(state, preferences, prices, changes, currency, privacy))}
     ${tabPanel("collectibles", collectiblesPanel(status, preferences, discoveredNfts))}
   </section>`;

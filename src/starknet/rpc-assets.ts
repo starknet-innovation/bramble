@@ -117,7 +117,11 @@ export const getNftOwner = async ({
 
 const UINT128_LIMIT = 1n << 128n;
 
-const decodeUint256 = (response: readonly string[]): bigint | null => {
+/**
+ * Decodes a canonical two-limb Cairo uint256 response, returning null for
+ * malformed or out-of-range limbs.
+ */
+export const decodeUint256Response = (response: readonly string[]): bigint | null => {
   try {
     const low = BigInt(response[0] ?? "");
     const high = BigInt(response[1] ?? "");
@@ -140,7 +144,7 @@ const tryBalanceEntrypoint = async (
   calldata: Calldata,
 ): Promise<bigint | null> => {
   try {
-    return decodeUint256(
+    return decodeUint256Response(
       await provider.callContract({ calldata, contractAddress, entrypoint }, "latest"),
     );
   } catch (error) {

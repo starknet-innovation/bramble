@@ -57,7 +57,7 @@ describe("createKrustyKms", () => {
   test("returns field-element account derivation results", async () => {
     const kms = createKrustyKms(createModule());
 
-    await expect(kms.deriveStrk20ViewingKey("0x123")).resolves.toBe("0x456");
+    await expect(kms.deriveStrk20ViewingKey("0x123", "0x1", "0x2")).resolves.toBe("0x456");
     await expect(kms.deriveStarknetKeypair("seed words", 0, 0)).resolves.toEqual({
       privateKey: "0x123",
       publicKeyX: "0xabc",
@@ -100,7 +100,10 @@ describe("createKrustyKms", () => {
     await expect(kms.deriveStarknetKeypair("   ", 0, 0)).rejects.toThrow(
       "Invalid Stark derivation input",
     );
-    await expect(kms.deriveStrk20ViewingKey("0x0")).rejects.toThrow(
+    await expect(kms.deriveStrk20ViewingKey("0x0", "0x1", "0x2")).rejects.toThrow(
+      "Invalid STRK20 viewing-key input",
+    );
+    await expect(kms.deriveStrk20ViewingKey("0x1", "0x0", "0x2")).rejects.toThrow(
       "Invalid STRK20 viewing-key input",
     );
     expect(addressDerived).toBe(false);
@@ -147,7 +150,7 @@ describe("createKrustyKms", () => {
         deriveStrk20ViewingKey() {
           return "0x0";
         },
-      }).deriveStrk20ViewingKey("0x123"),
+      }).deriveStrk20ViewingKey("0x123", "0x1", "0x2"),
     ).rejects.toThrow("Krusty KMS returned an invalid STRK20 viewing key");
   });
 

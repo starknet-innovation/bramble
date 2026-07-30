@@ -9,6 +9,7 @@ import type { StarkSignature } from "../../crypto/krusty";
 import { WalletError } from "../../shared/errors";
 import type { AccountRef } from "../../storage/vault-schema";
 import type { Strk20NetworkConfig } from "./config";
+import type { PaymasterAuthorizationReview } from "./paymaster-typed-data";
 import type {
   Strk20Action,
   Strk20BalanceEntry,
@@ -79,15 +80,31 @@ export type Strk20PreparedSubmissionInput = Strk20AccountContext & {
  * approval UI. The user authorizes these exact values before any signature or
  * proof is produced.
  */
-export type Strk20SubmissionPlan = {
+export type Strk20PrivateRelayPlan = {
+  readonly authorization?: PaymasterAuthorizationReview;
   readonly feeAction: {
     readonly amount: string;
     readonly recipient: string;
     readonly token: string;
     readonly type: "withdraw";
   };
+  readonly mode?: "private-relay";
   readonly typedData?: unknown;
 };
+
+/**
+ * Public account submission is permitted only for registration and
+ * deposit-only batches. It exists so a fresh account can enter the pool before
+ * it owns a private note with which to pay a relay fee.
+ */
+export type Strk20AccountPlan = {
+  readonly mode: "account";
+};
+
+/**
+ * Frozen submission route shown before protected proving or authorization.
+ */
+export type Strk20SubmissionPlan = Strk20PrivateRelayPlan | Strk20AccountPlan;
 
 /**
  * Injectable official-SDK adapter. Implementations must validate every SDK and
@@ -96,6 +113,12 @@ export type Strk20SubmissionPlan = {
 export type Strk20Service = {
   readonly privateBalances: (input: Strk20BalancesInput) => Promise<readonly Strk20BalanceEntry[]>;
   readonly prepare: (input: Strk20PrepareInput) => Promise<Strk20CallAndProof>;
+  readonly registrationStatus?: (
+    input: Strk20AccountContext & { readonly token: string },
+  ) => Promise<"registered" | "unregistered">;
+  readonly register?: (
+    input: Strk20AccountContext,
+  ) => Promise<{ readonly transactionHash: string }>;
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
@@ -128,6 +151,12 @@ export const unavailableStrk20Service: Strk20Service = {
     return unavailable();
   },
   async quoteActions() {
+    return unavailable();
+  },
+  async register() {
+    return unavailable();
+  },
+  async registrationStatus() {
     return unavailable();
   },
   async subaccountCommitment() {
@@ -177,6 +206,9 @@ const assertFeeBalance = async (
     readonly plan: Strk20SubmissionPlan;
   },
 ): Promise<void> => {
+  if (input.plan.mode === "account") {
+    return;
+  }
   const feeAction = input.plan.feeAction;
   const balances = await service.privateBalances({ ...input, tokens: [feeAction.token] });
   const sameTokenSpend = input.actions.filter(
@@ -186,6 +218,14 @@ const assertFeeBalance = async (
   );
   assertSufficientPrivateBalance([...sameTokenSpend, feeAction], balances);
 };
+
+const isDepositOnly = (actions: readonly Strk20Action[]): boolean =>
+  actions.length > 0 && actions.every((action) => action.type === "deposit");
+
+const isPrivateBalanceShortfall = (error: unknown): boolean =>
+  error instanceof WalletError &&
+  (error.message === STRK20_INSUFFICIENT_BALANCE ||
+    error.message === STRK20_SUBMISSION_UNAVAILABLE);
 
 const assertNoPrivacyLeak = (actions: readonly Strk20Action[]): void => {
   const deposits = new Set<bigint>();
@@ -239,15 +279,35 @@ export const prepareStrk20CallAndProof = async (
 };
 
 /**
- * Validates a dapp action batch, obtains the exact private relay fee plan, and
- * confirms the plan remains payable before anything is shown for approval.
+ * Performs only public/pure pre-approval validation and obtains the frozen
+ * relay plan. It deliberately does not discover private balances; callers must
+ * run the complete checks only after explicit user approval.
+ */
+export const quoteStrk20Plan = async (
+  service: Strk20Service,
+  input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
+): Promise<Strk20SubmissionPlan> => {
+  assertNoPrivacyLeak(input.actions);
+  try {
+    return await service.quoteActions(input);
+  } catch (error) {
+    if (isDepositOnly(input.actions) && isPrivateBalanceShortfall(error)) {
+      return { mode: "account" };
+    }
+    throw error;
+  }
+};
+
+/**
+ * Obtains a frozen plan for an explicit wallet-owned journey and confirms its
+ * private spend and fee remain affordable.
  */
 export const quoteStrk20Actions = async (
   service: Strk20Service,
   input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
 ): Promise<Strk20SubmissionPlan> => {
   await assertActionBatch(service, input);
-  const plan = await service.quoteActions(input);
+  const plan = await quoteStrk20Plan(service, input);
   await assertFeeBalance(service, { ...input, plan });
   return plan;
 };
@@ -263,8 +323,41 @@ export const submitStrk20Actions = async (
   },
 ): Promise<{ readonly transactionHash: string }> => {
   await assertActionBatch(service, input);
+  if (input.plan.mode === "account" && !isDepositOnly(input.actions)) {
+    throw new WalletError(STRK20_PRIVACY_LEAK);
+  }
   await assertFeeBalance(service, input);
   return service.submitActions(input);
+};
+
+/**
+ * Discovers whether the active account has registered its viewing key with the
+ * configured pool. The token scopes the SDK preflight request only; setup of a
+ * token channel is not treated as account registration.
+ */
+export const readStrk20RegistrationStatus = (
+  service: Strk20Service,
+  input: Strk20AccountContext & { readonly token: string },
+): Promise<"registered" | "unregistered"> => {
+  if (!service.registrationStatus) {
+    return Promise.reject(new WalletError(STRK20_SERVICE_UNAVAILABLE));
+  }
+  return service.registrationStatus(input);
+};
+
+/**
+ * Generates and submits the one-time pool registration using the account's
+ * public Starknet transaction path. Callers must present and approve this
+ * operation before invoking this boundary.
+ */
+export const registerStrk20Account = (
+  service: Strk20Service,
+  input: Strk20AccountContext,
+): Promise<{ readonly transactionHash: string }> => {
+  if (!service.register) {
+    return Promise.reject(new WalletError(STRK20_SERVICE_UNAVAILABLE));
+  }
+  return service.register(input);
 };
 
 const shortAddress = (value: string): string =>
@@ -289,6 +382,21 @@ export const summarizeStrk20Action = (action: Strk20Action): string => {
   }
   return `Private invoke on ${shortAddress(action.contract)}`;
 };
+
+/**
+ * Describes the fee route without exposing a private relay plan's typed data.
+ */
+export const summarizeStrk20Plan = (plan: Strk20SubmissionPlan): string =>
+  plan.mode === "account"
+    ? "Public account fee — first deposits are linked to this wallet"
+    : [
+        `Private relay fee ${plan.feeAction.amount} (${plan.feeAction.token})`,
+        ...(plan.authorization
+          ? [
+              `outside execution by ${shortAddress(plan.authorization.caller)} from ${plan.authorization.executeAfter} until ${plan.authorization.executeBefore} for ${plan.authorization.publicCallCount} public approval call${plan.authorization.publicCallCount === 1 ? "" : "s"}`,
+            ]
+          : []),
+      ].join(" · ");
 
 /**
  * Converts a wire INVOKE_CALL into the starknet.js call shape.

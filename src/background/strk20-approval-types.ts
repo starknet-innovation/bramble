@@ -1,7 +1,7 @@
 /**
  * Private STRK20 requests held inside the background approval queue. These
- * payloads never cross into the approval UI; only display-safe summaries and a
- * digest binding are exposed.
+ * execution payloads stay in background memory; the approval UI receives only
+ * a cloned action review, display-safe summaries, and the digest binding.
  */
 import type { Strk20Action } from "../starknet/strk20/schemas";
 

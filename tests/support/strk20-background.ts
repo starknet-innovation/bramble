@@ -46,6 +46,7 @@ export type Strk20HarnessOptions = {
   readonly invoked?: InvokeInput[];
   readonly preferences?: WalletPreferences;
   readonly proveCalls?: { value: number };
+  readonly publicBalance?: string;
   readonly registered?: boolean;
   readonly strk20?: Strk20Service;
   readonly subaccountCalls?: { value: number };
@@ -112,6 +113,17 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       },
     },
     runtimeRpc: makeRuntimeRpc({
+      ...(options.publicBalance === undefined
+        ? {}
+        : {
+            async getTokenBalances({ tokens }) {
+              return tokens.map((token) => ({
+                ...token,
+                balance: options.publicBalance ?? "0",
+                formatted: options.publicBalance ?? "0",
+              }));
+            },
+          }),
       async submitInvokeTransaction(input) {
         options.invoked?.push(input);
         return { calls: input.calls, transactionHash: "0x123" };

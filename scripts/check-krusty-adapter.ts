@@ -26,13 +26,19 @@ const { account, privateKey } = await deriveAccount(kms, {
   networkId: DEFAULT_NETWORK.id,
 });
 const signature = await kms.signStarkHash(privateKey, "0x1");
-const viewingKey = await kms.deriveStrk20ViewingKey(privateKey);
+const viewingKey = await kms.deriveStrk20ViewingKey(privateKey, "0x534e5f5345504f4c4941", "0x123");
+const referenceViewingKey = await kms.deriveStrk20ViewingKey(
+  "0x1",
+  "0x534e5f5345504f4c4941",
+  "0x123",
+);
 
 if (
   account.networkId !== DEFAULT_NETWORK.id ||
   !isStarkFieldElement(account.address) ||
   !isStarkFieldElement(viewingKey) ||
   BigInt(viewingKey) === 0n ||
+  referenceViewingKey !== "0x27cae3ff78010cbec0f29c0c94420cc4d41ca326d664e510cca4dcc6082beb3" ||
   ![signature.publicKey, signature.r, signature.s].every(isStarkFieldElement)
 ) {
   throw new Error("Krusty KMS returned an invalid Stark signature");

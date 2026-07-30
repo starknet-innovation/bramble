@@ -201,7 +201,7 @@ describe("createApprovalQueue payload discrimination", () => {
 
   test("reconstructs strk20 actions", () => {
     const queue = createApprovalQueue();
-    const actions = [{ amount: "1", kind: "transfer", to: "0x2", token: "0x3" }] as never;
+    const actions = [{ amount: "0x1", recipient: "0x2", token: "0x3", type: "transfer" as const }];
     const plan = {
       feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" as const },
     };
@@ -213,6 +213,8 @@ describe("createApprovalQueue payload discrimination", () => {
       summaries: ["Send"],
     });
     expect(queue.payload(id)).toEqual({ actions, strk20Plan: plan });
+    expect(queue.get(id)?.actionReviews).toEqual(actions);
+    expect(queue.get(id)?.relayFeeAction).toEqual(plan.feeAction);
   });
 
   for (const input of [
@@ -245,6 +247,9 @@ describe("createApprovalQueue payload discrimination", () => {
       const payload = queue.payload(id);
 
       expect(payload).toEqual({ strk20Request: input.request });
+      expect(queue.get(id)?.actionReviews).toEqual(
+        input.kind === "strk20-prepare" ? input.request.actions : undefined,
+      );
       (payload?.strk20Request as { type: string }).type = "changed";
       expect(queue.payload(id)).toEqual({ strk20Request: input.request });
     });

@@ -67,6 +67,7 @@ const createPrivateTransfers = runtime["createPrivateTransfers"];
 if (
   typeof createPrivateTransfers !== "function" ||
   typeof runtime["Open"] !== "symbol" ||
+  !runtime["SetupRequirement"] ||
   typeof runtime["IndexerDiscoveryProvider"] !== "function" ||
   typeof runtime["ProvingService"] !== "function"
 ) {
@@ -91,8 +92,14 @@ if (
   typeof transfers.build !== "function" ||
   !("discoverNotes" in transfers) ||
   typeof transfers.discoverNotes !== "function" ||
+  !("discoverRequirement" in transfers) ||
+  typeof transfers.discoverRequirement !== "function" ||
   !("executeWithInvocation" in transfers) ||
   typeof transfers.executeWithInvocation !== "function"
 ) {
   throw new Error("Privacy SDK factory no longer exposes the reviewed transfer interface");
+}
+const builder = transfers.build();
+if (typeof builder !== "object" || builder === null || typeof builder.register !== "function") {
+  throw new Error("Privacy SDK builder no longer exposes reviewed account registration");
 }

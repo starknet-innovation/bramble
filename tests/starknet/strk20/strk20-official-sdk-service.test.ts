@@ -4,81 +4,23 @@
  * depend on live prover, discovery, or chain services.
  */
 import { describe, expect, test } from "bun:test";
-import type { Call, RpcProvider } from "starknet";
+import type { Call } from "starknet";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
 } from "../../../src/starknet/strk20/official-sdk-service";
 import type { Strk20Action } from "../../../src/starknet/strk20/schemas";
-import type { Strk20AccountContext } from "../../../src/starknet/strk20/service";
-
-const poolAddress = "0x123";
-const token = "0x456";
-const account = {
-  address: "0xabc",
-  classHash: "0xdef",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },
-  id: "SN_SEPOLIA:0xabc" as const,
-  networkId: "SN_SEPOLIA" as const,
-  publicKeyX: "0x1",
-  publicKeyY: "0x2",
-};
-const context: Strk20AccountContext = {
-  account,
-  config: {
-    discoveryUrl: "https://discovery.example",
-    poolAddress,
-    proverUrl: "https://prover.example",
-    subaccountAnonymizerAddress: "0x789",
-  },
-  rpcUrls: ["https://rpc.example"],
-  signHash: async () => ({ publicKey: "0x1", r: "0x2", s: "0x3" }),
-  viewingKey: async () => "0x55",
-};
-
-const providerFor = (): RpcProvider =>
-  ({ getBlockNumber: async () => 20 }) as unknown as RpcProvider;
-
-type SdkInput = {
-  readonly viewingKeyProvider: { readonly getViewingKey: () => Promise<string> };
-};
-
-const runtime = (
-  create: (input: SdkInput) => ReturnType<PrivacySdkRuntime["createPrivateTransfers"]>,
-): PrivacySdkRuntime => ({
-  Open: Symbol("OPEN"),
-  createPrivateTransfers: (input) => create(input as SdkInput),
-});
-
-type OfficialBuilder = ReturnType<ReturnType<PrivacySdkRuntime["createPrivateTransfers"]>["build"]>;
-
-const builder = (result: unknown, proofInvocation: unknown = { warnings: [] }): OfficialBuilder => {
-  const self = {
-    createProofInvocation: async () => proofInvocation,
-    invoke: () => self,
-    simulate: async () => result,
-    subaccounts: () => ({
-      commitment: async () => 0x123n,
-      invoke: () => self,
-      partialCommitment: async () => 0x456n,
-    }),
-    with: () => ({
-      deposit: () => ({ done: () => self }),
-      done: () => self,
-      transfer: () => ({ done: () => self }),
-      withdraw: () => ({ done: () => self }),
-    }),
-  };
-  return self as unknown as OfficialBuilder;
-};
-
-const executeResult = (warnings: readonly unknown[] = []) => ({
-  callAndProof: {
-    call: { calldata: ["0x1"], contractAddress: poolAddress, entrypoint: "apply_actions" },
-    proof: { data: "proof", output: ["0x1"], proofFacts: ["0x2"] },
-  },
-  warnings,
-});
+import {
+  STRK20_SDK_ACCOUNT as account,
+  officialBuilder as builder,
+  STRK20_SDK_CONTEXT as context,
+  executeResult,
+  type OfficialBuilder,
+  STRK20_POOL_ADDRESS as poolAddress,
+  providerFor,
+  sdkRuntime as runtime,
+  STRK20_SDK_TOKEN as token,
+} from "../../support/strk20-official-sdk";
 
 describe("official STRK20 SDK adapter", () => {
   test("routes the vault-only viewing key into discovery and preserves requested token order", async () => {
@@ -419,5 +361,125 @@ describe("official STRK20 SDK adapter", () => {
       }),
     ).rejects.toThrow("strk20 private submission unavailable");
     expect(submitted).toHaveLength(1);
+  });
+
+  test("discovers account registration using the SDK setup requirement enum", async () => {
+    let requirement = 0;
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      async discoverRequirement(recipient, selectedToken) {
+        expect(recipient).toBe(account.address);
+        expect(selectedToken).toBe(token);
+        return requirement;
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({ providerFor, sdk });
+
+    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("unregistered");
+    requirement = 3;
+    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
+  });
+
+  test("registers through the SDK builder and submits only the reviewed pool proof", async () => {
+    let registerCalls = 0;
+    const submitted: unknown[] = [];
+    const sdk = runtime(() => {
+      const base = builder(executeResult());
+      const instrumented = {
+        ...base,
+        register() {
+          registerCalls += 1;
+          return instrumented;
+        },
+      } as unknown as OfficialBuilder;
+      return {
+        build: () => instrumented,
+        async discoverNotes() {
+          return { notes: new Map() };
+        },
+        executeWithInvocation: async () => executeResult(),
+      };
+    });
+    const service = createOfficialStrk20Service({
+      providerFor,
+      sdk,
+      async submitInvoke(input) {
+        submitted.push(input);
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    expect(registerCalls).toBe(1);
+    expect(submitted).toEqual([
+      {
+        account,
+        calls: [
+          {
+            calldata: ["0x1"],
+            contractAddress: poolAddress,
+            entrypoint: "apply_actions",
+          },
+        ],
+        proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+        rpcUrls: context.rpcUrls,
+        signHash: expect.any(Function),
+      },
+    ]);
+  });
+
+  test("first deposits grant only exact aggregate approval before pool submission", async () => {
+    const submitted: (readonly Call[])[] = [];
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({
+      providerFor,
+      sdk,
+      async submitInvoke(input) {
+        submitted.push(input.calls);
+        return { calls: input.calls, transactionHash: "0xdef" };
+      },
+    });
+
+    await expect(
+      service.submitActions({
+        ...context,
+        actions: [
+          { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
+          { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
+        ],
+        plan: { mode: "account" },
+      }),
+    ).resolves.toEqual({ transactionHash: "0xdef" });
+    expect(submitted).toEqual([
+      [
+        {
+          calldata: ["291", "0", "1"],
+          contractAddress: token,
+          entrypoint: "approve",
+        },
+        {
+          calldata: ["0x1"],
+          contractAddress: poolAddress,
+          entrypoint: "apply_actions",
+        },
+      ],
+    ]);
+    await expect(
+      service.submitActions({
+        ...context,
+        actions: [{ amount: "0x1", recipient: "0x999", token, type: "withdraw" }],
+        plan: { mode: "account" },
+      }),
+    ).rejects.toThrow("strk20 privacy leak");
   });
 });

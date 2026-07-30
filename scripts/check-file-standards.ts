@@ -29,6 +29,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/ledger/grant-window.ts",
+  "src/sidepanel/scene-renderer.ts",
   "src/sidepanel/settings-ui.ts",
   "src/sidepanel/transfer-ui.ts",
   "src/storage/browser-storage.ts",
@@ -61,7 +62,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/messages.ts",
   "src/background/provider-ops.ts",
   "src/background/origins-ops.ts",
+  "src/background/strk20-account-context.ts",
   "src/background/strk20-ops.ts",
+  "src/background/strk20-wallet-ops.ts",
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
   "src/background/session.ts",
@@ -141,6 +144,9 @@ const HTML_SINK_FILES = new Set([
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
   "src/sidepanel/swap-ui.ts",
   "src/sidepanel/swap-picker.ts",
+  // Shell replacement extracted from the sidepanel entrypoint; it receives
+  // fully escaped production templates and owns no dynamic template content.
+  "src/sidepanel/scene-renderer.ts",
 ]);
 const HTML_SINK_PATTERN =
   /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML)\b/;

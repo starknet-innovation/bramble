@@ -12,7 +12,7 @@ import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { createDeploymentCache } from "./deployment-cache";
 import { bindDisclosures } from "./disclosures";
-import { bindCopyButtons, captureRepaintFocus, restoreRepaintFocus, showToast } from "./dom";
+import { bindCopyButtons, showToast } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
@@ -24,8 +24,6 @@ import { bindLedgerFirstRun } from "./ledger/first-run";
 import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
 import { ledgerConnector } from "./ledger/sign-connector";
 import { createLedgerSignRuntime } from "./ledger/sign-runtime";
-import { animateLiveValueChanges, captureLiveValues } from "./live-updates";
-import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
@@ -37,6 +35,7 @@ import {
   onboardingLaunch,
 } from "./onboarding-surface";
 import { bindOnboarding, bindUnlock } from "./onboarding-ui";
+import { createPrivacyController } from "./privacy-controller";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import {
   emptyRenderCache,
@@ -47,6 +46,7 @@ import {
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { createMutationRuntime } from "./runtime-refresh";
+import { createSceneRenderer } from "./scene-renderer";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -56,7 +56,6 @@ import {
   bindGroups,
 } from "./settings-ui";
 import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
-import { SIDEPANEL_STYLES } from "./styles";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
 import { bindActivity, bindTransfer, markTransferLedgerAuthorized } from "./transfer-ui";
@@ -92,11 +91,6 @@ let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 let snoozedApprovalIds: readonly string[] = [];
 
-type ViewTransition = { readonly finished: Promise<void> };
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => void) => ViewTransition;
-};
-
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -115,36 +109,11 @@ const bindBack = (): void => {
   });
 };
 
-const renderShell = (content: string, animate: boolean): void => {
-  if (!app) {
-    return;
-  }
-  const focus = captureRepaintFocus();
-  const liveValues = captureLiveValues(app);
-  app.innerHTML = `<style>${SIDEPANEL_STYLES}</style><section class="shell${animate ? " shell-animate" : ""}">${content}</section>`;
-  restoreRepaintFocus(app, focus);
-  animateLiveValueChanges(app, liveValues);
-};
-
-const renderScene = (content: string, animate: boolean, direction: NavDirection): void => {
-  const doc = document as ViewTransitionDocument;
-  if (!animate || prefersReducedMotion() || typeof doc.startViewTransition !== "function") {
-    renderShell(content, animate);
-    bindAll();
-    return;
-  }
-  document.documentElement.dataset["navDirection"] = direction;
-  const transition = doc.startViewTransition(() => {
-    renderShell(content, false);
-    bindAll();
-  });
-  void transition.finished.finally(() => {
-    delete document.documentElement.dataset["navDirection"];
-  });
-};
+const renderScene = createSceneRenderer(app, () => bindAll());
 
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
+let privacy: ReturnType<typeof createPrivacyController>;
 
 const ledgerSignMount = document.createElement("div");
 ledgerSignMount.className = "ledger-sign-overlay";
@@ -292,6 +261,7 @@ const bindAll = (): void => {
     render,
     wallet,
   });
+  privacy.bind();
   bindMultisigs({
     app,
     multisig,
@@ -400,6 +370,8 @@ const paint = (): void => {
               cache.multisigBalanceId,
               cache.multisigNfts,
               cache.multisigNftId,
+              privacy.disclosure(),
+              privacy.journey(),
             );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -408,10 +380,29 @@ const paint = (): void => {
   lastContent = content;
   renderScene(content, animate, direction);
 };
+privacy = createPrivacyController({
+  app,
+  balances: () => cache.balances,
+  navigate: (view) => navigate(view),
+  openToken: (tokenId) => {
+    selectedTokenId = tokenId;
+    navigate("token-detail");
+  },
+  paint,
+  preferences: () => cache.preferences,
+  status: () => cache.status,
+  wallet,
+});
 let renderGeneration = 0;
 const render = async (status: WalletStatus): Promise<void> => {
   const generation = ++renderGeneration;
   const isCurrent = (): boolean => generation === renderGeneration;
+  if (
+    cache.status.activeAccountId !== status.activeAccountId ||
+    cache.status.networkId !== status.networkId
+  ) {
+    privacy.reset();
+  }
   updateRenderScope(cache, status);
   const [pending, nextPreferences] = await Promise.all([
     wallet.loadPendingApprovals(),
@@ -425,6 +416,7 @@ const render = async (status: WalletStatus): Promise<void> => {
   cache.pending = pending;
   cache.preferences = nextPreferences;
   if (!status.hasVault || status.locked) {
+    privacy.reset();
     // Reset every view-scoped field from one source so stale state cannot leak
     // across a lock; preserve the status/pending/preferences just refreshed.
     Object.assign(cache, emptyRenderCache(), {

@@ -329,7 +329,13 @@ export const createWalletVaultService = ({
     },
     async deriveStrk20ViewingKey(input) {
       const vault = await readVault(input.vaultPassphrase);
-      return deriveVaultStrk20ViewingKey(kms, vault, input.accountId);
+      return deriveVaultStrk20ViewingKey(
+        kms,
+        vault,
+        input.accountId,
+        input.chainId,
+        input.poolAddress,
+      );
     },
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);

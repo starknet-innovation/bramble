@@ -346,12 +346,21 @@ and reputation signals before a connection is approved:
 MC Wallet implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. The source revision and emitted bundle digest are both pinned; run
 `bun run vendor:privacy` to build it and `bun run check:privacy` to verify the exact reviewed
-artifact. The privileged design derives viewing keys only inside the encrypted-vault boundary,
-freezes actions and relay fees before approval, and produces no signature, proof, private-balance
-response, or sub-account commitment until the corresponding dedicated approval. Execution requires
-the configured pool's `apply_actions` result and has no fallback prover, signer, or public
-broadcast. See [STRK20 privacy integration](STRK20_PRIVACY.md) for the complete service contract,
-data flow, trust boundaries, limitations, and operator checklist.
+artifact. The privileged design derives chain-and-pool-scoped viewing keys only inside the
+encrypted-vault boundary, freezes actions and relay fees before approval, and exposes exact action
+parameters alongside their digest. It produces no signature, proof, private-balance response, or
+sub-account commitment until the corresponding dedicated approval. Execution requires the
+configured pool's `apply_actions` result and has no fallback prover or signer. The extension
+also owns an opt-in private-balance disclosure, explicit public registration, and reviewed
+public-to-private shielding journey. Within those wallet-owned journeys and the STRK20 action
+API, direct account broadcast is restricted to registration and deposit-only batches; private
+transfers, withdrawals, and invokes remain relayer-only. The separately reviewed
+`wallet_addInvokeTransaction` prepared-proof route can submit one validated pool
+`apply_actions` call from the selected account. Privacy writes are serialized and reserved in
+session storage before broadcast; new proofs use a ten-block historical base and wait for the
+relevant account/token state to be visible there. See
+[STRK20 privacy integration](STRK20_PRIVACY.md) for the complete service contract, data flow, trust
+boundaries, limitations, and operator checklist.
 
 ## Krusty KMS
 

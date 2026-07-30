@@ -14,6 +14,8 @@ export const deriveVaultStrk20ViewingKey = async (
   kms: KrustyKms,
   vault: Vault,
   accountId: string,
+  chainId: string,
+  poolAddress: string,
 ): Promise<string> => {
   const account = findVaultAccount(vault, accountId);
   if (isKeylessAccount(account)) {
@@ -23,5 +25,5 @@ export const deriveVaultStrk20ViewingKey = async (
   if (!signingKey) {
     throw new WalletError("Signing key unavailable");
   }
-  return kms.deriveStrk20ViewingKey(signingKey.privateKey);
+  return kms.deriveStrk20ViewingKey(signingKey.privateKey, chainId, poolAddress);
 };

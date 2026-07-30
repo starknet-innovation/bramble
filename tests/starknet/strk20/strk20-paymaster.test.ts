@@ -3,18 +3,27 @@
  * must be the same fee action and typed data later submitted.
  */
 import { describe, expect, test } from "bun:test";
-import type { Call } from "starknet";
+import { type Call, OutsideExecutionVersion, outsideExecution, type TypedData } from "starknet";
 import {
   buildStrk20PaymasterPlan,
   submitStrk20PaymasterPlan,
 } from "../../../src/starknet/strk20/paymaster";
 
 const config = { feeToken: "0x3", url: "https://paymaster.example" };
+const chainId = "0x534e5f5345504f4c4941";
 const call: Call = {
   calldata: ["0x1"],
   contractAddress: "0x2",
   entrypoint: "apply_actions",
 };
+const outsideTypedData = (calls: readonly Call[] = [call]): TypedData =>
+  outsideExecution.getTypedData(
+    chainId,
+    { caller: "0x99", execute_after: "0x1", execute_before: "0x100" },
+    "0x5",
+    [...calls],
+    OutsideExecutionVersion.V2,
+  );
 
 const response = (result: unknown): Response =>
   new Response(JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", result }), {
@@ -28,14 +37,16 @@ describe("STRK20 paymaster boundary", () => {
     const plan = await buildStrk20PaymasterPlan({
       accountAddress: "0x1",
       approveCalls: [call],
+      chainId,
       config,
       http: async (_url, init) => {
         requests.push(JSON.parse(String(init?.body)));
         return response({
           fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
-          typed_data: { domain: {}, message: {}, primaryType: "Outside", types: {} },
+          typed_data: outsideTypedData(),
         });
       },
+      nowSeconds: 2,
       poolAddress: "0x2",
     });
     expect(plan.feeAction).toEqual({
@@ -45,6 +56,12 @@ describe("STRK20 paymaster boundary", () => {
       type: "withdraw",
     });
     expect(plan.typedData).toBeDefined();
+    expect(plan.authorization).toEqual({
+      caller: "0x99",
+      executeAfter: "0x1",
+      executeBefore: "0x100",
+      publicCallCount: 1,
+    });
     expect(requests[0]?.["method"]).toBe("paymaster_buildTransaction");
   });
 
@@ -53,15 +70,91 @@ describe("STRK20 paymaster boundary", () => {
       buildStrk20PaymasterPlan({
         accountAddress: "0x1",
         approveCalls: [],
+        chainId,
         config,
         http: async () =>
           response({
             fee_action: { amount: "0x5", recipient: "0x4", token: "0x99", type: "withdraw" },
           }),
+        nowSeconds: 2,
         poolAddress: "0x2",
       }),
     ).rejects.toThrow("strk20 private submission unavailable");
   });
+
+  test("rejects substituted outside-execution calls before signing", async () => {
+    await expect(
+      buildStrk20PaymasterPlan({
+        accountAddress: "0x1",
+        approveCalls: [call],
+        chainId,
+        config,
+        http: async () =>
+          response({
+            fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+            typed_data: outsideTypedData([
+              { calldata: ["0xdead"], contractAddress: "0x77", entrypoint: "transfer" },
+            ]),
+          }),
+        nowSeconds: 2,
+        poolAddress: "0x2",
+      }),
+    ).rejects.toThrow("strk20 private submission unavailable");
+  });
+
+  test("rejects an invalid outside-execution window before signing", async () => {
+    await expect(
+      buildStrk20PaymasterPlan({
+        accountAddress: "0x1",
+        approveCalls: [call],
+        chainId,
+        config,
+        http: async () =>
+          response({
+            fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+            typed_data: outsideExecution.getTypedData(
+              chainId,
+              { caller: "0x99", execute_after: "0x100", execute_before: "0x100" },
+              "0x5",
+              [call],
+              OutsideExecutionVersion.V2,
+            ),
+          }),
+        nowSeconds: 2,
+        poolAddress: "0x2",
+      }),
+    ).rejects.toThrow("strk20 private submission unavailable");
+  });
+
+  for (const [label, executeAfter, executeBefore, nowSeconds] of [
+    ["expired", "0x1", "0x100", 256],
+    ["not yet live", "0x2", "0x100", 2],
+    ["outside u64", "0x1", "0x10000000000000000", 2],
+  ] as const) {
+    test(`rejects an ${label} outside-execution window`, async () => {
+      await expect(
+        buildStrk20PaymasterPlan({
+          accountAddress: "0x1",
+          approveCalls: [call],
+          chainId,
+          config,
+          http: async () =>
+            response({
+              fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+              typed_data: outsideExecution.getTypedData(
+                chainId,
+                { caller: "0x99", execute_after: executeAfter, execute_before: executeBefore },
+                "0x5",
+                [call],
+                OutsideExecutionVersion.V2,
+              ),
+            }),
+          nowSeconds,
+          poolAddress: "0x2",
+        }),
+      ).rejects.toThrow("strk20 private submission unavailable");
+    });
+  }
 
   test("submits the frozen proof and validates the returned transaction hash", async () => {
     const requests: Record<string, unknown>[] = [];
@@ -73,6 +166,7 @@ describe("STRK20 paymaster boundary", () => {
         requests.push(JSON.parse(String(init?.body)));
         return response({ transaction_hash: "0x123" });
       },
+      nowSeconds: 2,
       plan: {
         feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
       },
@@ -86,7 +180,7 @@ describe("STRK20 paymaster boundary", () => {
   });
 
   test("signs exactly the frozen typed data for public token approvals", async () => {
-    const typedData = { domain: {}, message: { nonce: "0x1" }, primaryType: "Outside", types: {} };
+    const typedData = outsideTypedData();
     let signed: unknown;
     let submitted: Record<string, unknown> | undefined;
     await submitStrk20PaymasterPlan({
@@ -97,7 +191,14 @@ describe("STRK20 paymaster boundary", () => {
         submitted = JSON.parse(String(init?.body));
         return response({ transaction_hash: "0x123" });
       },
+      nowSeconds: 2,
       plan: {
+        authorization: {
+          caller: "0x99",
+          executeAfter: "0x1",
+          executeBefore: "0x100",
+          publicCallCount: 1,
+        },
         feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
         typedData,
       },
@@ -116,6 +217,40 @@ describe("STRK20 paymaster boundary", () => {
     });
   });
 
+  test("rejects a plan that expires after quote without signing or submitting", async () => {
+    let signed = false;
+    let submitted = false;
+    await expect(
+      submitStrk20PaymasterPlan({
+        accountAddress: "0x1",
+        call,
+        config,
+        http: async () => {
+          submitted = true;
+          return response({ transaction_hash: "0x123" });
+        },
+        nowSeconds: 250,
+        plan: {
+          authorization: {
+            caller: "0x99",
+            executeAfter: "0x1",
+            executeBefore: "0x100",
+            publicCallCount: 1,
+          },
+          feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+          typedData: outsideTypedData(),
+        },
+        proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+        signTypedData: async () => {
+          signed = true;
+          return ["0x6", "0x7"];
+        },
+      }),
+    ).rejects.toThrow("strk20 private submission unavailable");
+    expect(signed).toBe(false);
+    expect(submitted).toBe(false);
+  });
+
   test("rejects malformed JSON-RPC envelopes and transaction hashes", async () => {
     await expect(
       submitStrk20PaymasterPlan({
@@ -123,6 +258,7 @@ describe("STRK20 paymaster boundary", () => {
         call,
         config,
         http: async () => response({ transaction_hash: "not-a-hash" }),
+        nowSeconds: 2,
         plan: {
           feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
         },
@@ -155,6 +291,7 @@ describe("STRK20 paymaster boundary", () => {
           call,
           config,
           http,
+          nowSeconds: 2,
           plan,
           proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
           signTypedData: async () => [],

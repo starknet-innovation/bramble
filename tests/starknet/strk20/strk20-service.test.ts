@@ -2,17 +2,23 @@
  * STRK20 wallet-level policy tests around balance and privacy checks.
  */
 import { describe, expect, test } from "bun:test";
+import { WalletError } from "../../../src/shared/errors";
 import {
   prepareStrk20CallAndProof,
   quoteStrk20Actions,
+  quoteStrk20Plan,
   readStrk20Balances,
+  readStrk20RegistrationStatus,
+  registerStrk20Account,
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_PRIVACY_LEAK,
   STRK20_SERVICE_UNAVAILABLE,
+  STRK20_SUBMISSION_UNAVAILABLE,
   type Strk20AccountContext,
   type Strk20Service,
   submitStrk20Actions,
   summarizeStrk20Action,
+  summarizeStrk20Plan,
   unavailableStrk20Service,
 } from "../../../src/starknet/strk20/service";
 import type { AccountRef } from "../../../src/storage/vault-schema";
@@ -122,6 +128,24 @@ describe("STRK20 wallet policy", () => {
     ).resolves.toEqual({ transactionHash: "0x8" });
   });
 
+  test("quotes a dapp invoke without reading private balances before approval", async () => {
+    let privateReads = 0;
+    const quoted = service({
+      async privateBalances() {
+        privateReads += 1;
+        throw new Error("private state must remain untouched");
+      },
+    });
+
+    await expect(
+      quoteStrk20Plan(quoted, {
+        ...context,
+        actions: [{ amount: "0x1", recipient: "0x9", token: "0x8", type: "withdraw" }],
+      }),
+    ).resolves.toEqual(plan);
+    expect(privateReads).toBe(0);
+  });
+
   test("rejects an unaffordable relay fee before approval and before submission", async () => {
     let quoted = false;
     let submitted = false;
@@ -177,6 +201,58 @@ describe("STRK20 wallet policy", () => {
     );
   });
 
+  test("uses the public account route only for deposit-only entry into the pool", async () => {
+    const noRelay = service({
+      async quoteActions() {
+        throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+      },
+    });
+    const deposit = [{ amount: "0x3", token: "0x8", type: "deposit" }] as const;
+
+    await expect(quoteStrk20Actions(noRelay, { ...context, actions: deposit })).resolves.toEqual({
+      mode: "account",
+    });
+    await expect(
+      submitStrk20Actions(noRelay, {
+        ...context,
+        actions: deposit,
+        plan: { mode: "account" },
+      }),
+    ).resolves.toEqual({ transactionHash: "0x8" });
+    await expect(
+      submitStrk20Actions(noRelay, {
+        ...context,
+        actions: [{ amount: "0x1", recipient: "0x9", token: "0x8", type: "transfer" }],
+        plan: { mode: "account" },
+      }),
+    ).rejects.toThrow(STRK20_PRIVACY_LEAK);
+    expect(summarizeStrk20Plan({ mode: "account" })).toContain("Public account fee");
+  });
+
+  test("delegates registration status and execution only when the adapter supports them", async () => {
+    const ready = service({
+      async register() {
+        return { transactionHash: "0xa" };
+      },
+      async registrationStatus() {
+        return "registered";
+      },
+    });
+
+    await expect(readStrk20RegistrationStatus(ready, { ...context, token: "0x8" })).resolves.toBe(
+      "registered",
+    );
+    await expect(registerStrk20Account(ready, context)).resolves.toEqual({
+      transactionHash: "0xa",
+    });
+    await expect(
+      readStrk20RegistrationStatus(service(), { ...context, token: "0x8" }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+    await expect(registerStrk20Account(service(), context)).rejects.toThrow(
+      STRK20_SERVICE_UNAVAILABLE,
+    );
+  });
+
   test("the unavailable implementation fails every operation closed", async () => {
     await expect(
       unavailableStrk20Service.privateBalances({ ...context, tokens: [] }),
@@ -187,6 +263,12 @@ describe("STRK20 wallet policy", () => {
     await expect(
       unavailableStrk20Service.quoteActions({ ...context, actions: [] }),
     ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+    await expect(
+      unavailableStrk20Service.registrationStatus?.({ ...context, token: "0x8" }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+    await expect(unavailableStrk20Service.register?.(context)).rejects.toThrow(
+      STRK20_SERVICE_UNAVAILABLE,
+    );
     await expect(
       unavailableStrk20Service.subaccountCommitment({ ...context, dappName: "test" }),
     ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);

@@ -35,6 +35,8 @@ import type {
   Strk20BalancesResponse,
   Strk20PrepareResponse,
   Strk20SubaccountCommitmentResponse,
+  Strk20WalletPreparationResponse,
+  Strk20WalletStateResponse,
 } from "./runtime-strk20-types";
 import type { SwapPreparationReview } from "./swap-preparations";
 
@@ -439,6 +441,8 @@ export type RuntimeResponse =
   | Strk20BalancesResponse
   | Strk20PrepareResponse
   | Strk20SubaccountCommitmentResponse
+  | Strk20WalletPreparationResponse
+  | Strk20WalletStateResponse
   | SwapQuoteResponse
   | SwapPreparationResponse
   | SwapTokensResponse
@@ -462,13 +466,12 @@ export type WalletStatusReader = {
   readonly deriveLedgerAccounts?: (
     input: DeriveLedgerAccountsInput,
   ) => Promise<readonly LedgerAccountRef[]>;
-  /**
-   * Privileged STRK20 viewing-key derivation. Optional only for partial test
-   * stubs; production wiring always supplies it and privacy operations fail
-   * closed when it is absent.
-   */
+  /** Privileged, scoped STRK20 viewing-key derivation. Production fails closed
+   * when this optional-for-test-stubs boundary is absent. */
   readonly deriveStrk20ViewingKey?: (input: {
     readonly accountId: string;
+    readonly chainId: string;
+    readonly poolAddress: string;
     readonly vaultPassphrase: string;
   }) => Promise<string>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;

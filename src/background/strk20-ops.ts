@@ -17,18 +17,16 @@ import {
 } from "../starknet/strk20/schemas";
 import {
   prepareStrk20CallAndProof,
-  quoteStrk20Actions,
+  quoteStrk20Plan,
   readStrk20Balances,
-  type Strk20Service,
   type Strk20SubmissionPlan,
   submitStrk20Actions,
   summarizeStrk20Action,
-  unavailableStrk20Service,
+  summarizeStrk20Plan,
 } from "../starknet/strk20/service";
 import type { ActivityLog } from "../storage/activity-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
-import { accountHashSigner } from "./account-hash-signer";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalQueue } from "./approvals";
@@ -39,6 +37,7 @@ import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
+import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
 import type {
   Strk20DisclosureApprovalKind,
   Strk20DisclosureRequest,
@@ -82,9 +81,6 @@ type ResolvedAccount = {
   readonly rpcUrls: readonly string[];
 };
 
-const strk20Service = (runtimeRpc: RuntimeRpc): Strk20Service =>
-  runtimeRpc.strk20 ?? unavailableStrk20Service;
-
 // Known STRK20 errors carry a stable message that maps to a spec code on the
 // wire; anything else collapses to a generic failure (UNKNOWN_ERROR).
 const strk20ErrorMessage = (error: unknown): string =>
@@ -122,31 +118,6 @@ const resolveAccount = async (
     passphrase,
     preferences,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-  };
-};
-
-const accountContext = (
-  deps: {
-    readonly ledgerSignQueue?: LedgerSignQueue;
-    readonly wallet: WalletStatusReader;
-  },
-  resolved: ResolvedAccount,
-) => {
-  const deriveViewingKey = deps.wallet.deriveStrk20ViewingKey;
-  return {
-    account: resolved.account,
-    config: resolved.preferences.strk20Networks?.[resolved.account.networkId] ?? null,
-    rpcUrls: resolved.rpcUrls,
-    signHash: accountHashSigner(deps, resolved.account, resolved.passphrase),
-    viewingKey: async () => {
-      if (!deriveViewingKey) {
-        throw new WalletError("strk20 services unavailable");
-      }
-      return deriveViewingKey({
-        accountId: resolved.account.id,
-        vaultPassphrase: resolved.passphrase,
-      });
-    },
   };
 };
 
@@ -289,10 +260,13 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
     kind: "strk20-balances",
     origin: input.origin,
     request: { tokens: input.tokens, type: "balances" },
-    summaries: [
-      `Share private balances for ${input.tokens.length} token${input.tokens.length === 1 ? "" : "s"}`,
-      ...input.tokens.map((token) => `Token ${token}`),
-    ],
+    summaries:
+      input.tokens.length === 0
+        ? ["Share all private token balances"]
+        : [
+            `Share private balances for ${input.tokens.length} token${input.tokens.length === 1 ? "" : "s"}`,
+            ...input.tokens.map((token) => `Token ${token}`),
+          ],
   });
 };
 
@@ -336,8 +310,8 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
     return resolved;
   }
   try {
-    const plan = await quoteStrk20Actions(strk20Service(deps.runtimeRpc), {
-      ...accountContext(deps, resolved),
+    const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
+      ...strk20AccountContext(deps, resolved),
       actions: input.actions,
     });
     const payload = { actions: input.actions, strk20Plan: plan };
@@ -346,10 +320,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
       context: await createApprovalContext(resolved.account, payload),
       origin: input.origin,
       plan,
-      summaries: [
-        ...input.actions.map(summarizeStrk20Action),
-        `Private relay fee ${plan.feeAction.amount} (${plan.feeAction.token})`,
-      ],
+      summaries: [...input.actions.map(summarizeStrk20Action), summarizeStrk20Plan(plan)],
     });
     notifyApprovalsChanged();
     return deps.waiters.register(approval.id);
@@ -429,24 +400,27 @@ export const executeStrk20DisclosureApproval = async (
   if ("error" in resolved) {
     return resolved;
   }
-  const context = accountContext(deps, resolved);
+  const context = strk20AccountContext(deps, resolved);
   try {
     if (approval.request.type === "balances") {
-      const balances = await readStrk20Balances(strk20Service(deps.runtimeRpc), {
+      const balances = await readStrk20Balances(strk20ServiceForRuntime(deps.runtimeRpc), {
         ...context,
         tokens: approval.request.tokens,
       });
       return { balances, ok: true };
     }
     if (approval.request.type === "prepare") {
-      const callAndProof = await prepareStrk20CallAndProof(strk20Service(deps.runtimeRpc), {
-        ...context,
-        actions: approval.request.actions,
-        simulate: approval.request.simulate,
-      });
+      const callAndProof = await prepareStrk20CallAndProof(
+        strk20ServiceForRuntime(deps.runtimeRpc),
+        {
+          ...context,
+          actions: approval.request.actions,
+          simulate: approval.request.simulate,
+        },
+      );
       return { callAndProof, ok: true };
     }
-    const commitment = await strk20Service(deps.runtimeRpc).subaccountCommitment({
+    const commitment = await strk20ServiceForRuntime(deps.runtimeRpc).subaccountCommitment({
       ...context,
       dappName: approval.request.dappName,
       ...(approval.request.nonce === undefined ? {} : { nonce: approval.request.nonce }),
@@ -477,8 +451,8 @@ export const executeStrk20InvokeApproval = async (
     return resolved;
   }
   try {
-    const result = await submitStrk20Actions(strk20Service(deps.runtimeRpc), {
-      ...accountContext(deps, resolved),
+    const result = await submitStrk20Actions(strk20ServiceForRuntime(deps.runtimeRpc), {
+      ...strk20AccountContext(deps, resolved),
       actions: approval.actions,
       plan: approval.plan,
     });

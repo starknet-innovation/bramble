@@ -36,7 +36,11 @@ export type KrustyKms = {
    * material. The result is returned only to privileged privacy middleware and
    * must never be persisted or exposed through extension messages.
    */
-  readonly deriveStrk20ViewingKey: (privateKey: string) => Promise<string>;
+  readonly deriveStrk20ViewingKey: (
+    privateKey: string,
+    chainId: string,
+    poolAddress: string,
+  ) => Promise<string>;
   readonly deriveStarknetKeypair: (
     mnemonic: string,
     addressIndex: number,
@@ -164,12 +168,16 @@ export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
       }
       return result;
     },
-    async deriveStrk20ViewingKey(privateKey) {
+    async deriveStrk20ViewingKey(privateKey, chainId, poolAddress) {
       await ready;
-      if (!isNonZeroStarkFieldElement(privateKey)) {
+      if (
+        !isNonZeroStarkFieldElement(privateKey) ||
+        !isNonZeroStarkFieldElement(chainId) ||
+        !isNonZeroStarkFieldElement(poolAddress)
+      ) {
         throw new WalletError("Invalid STRK20 viewing-key input");
       }
-      const result = await deriveStrk20ViewingKey(privateKey);
+      const result = await deriveStrk20ViewingKey(privateKey, chainId, poolAddress);
       if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
         throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
       }

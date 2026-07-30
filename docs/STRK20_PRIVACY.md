@@ -8,7 +8,8 @@ permalink: /strk20-privacy/
 
 MC Wallet implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
 Privacy SDK browser bundle. It supports shielded balance discovery, action preparation, private
-submission, and dapp-scoped sub-account commitments.
+submission, dapp-scoped sub-account commitments, explicit account registration, and reviewed
+public-to-private token deposits.
 
 ## Pinned runtime
 
@@ -40,37 +41,93 @@ These values contain no credentials and live in normal preferences. An extension
 shared service secret, so authenticated deployments must put authentication behind a
 wallet-controlled relay. Partial routing is rejected; an unconfigured network fails closed.
 
+The Discovery Service and Transaction Prover are required for live registration, balance
+discovery, and shielding. The paymaster is optional for entering the pool: registration and a
+deposit-only batch can use the selected account's ordinary Starknet transaction path. A private
+paymaster is required for wallet-API transfers, withdrawals, invokes, and unlinkable relay fees.
+
+## Wallet journey
+
+Private state is never read during the ordinary portfolio refresh. The user must enable the
+**Private balances** switch for the current account and network. That disclosure is ephemeral and
+is reset on lock, account switch, network switch, side-panel reload, or extension restart.
+
+1. Enabling the switch asks the SDK whether the account is registered and, only when registered,
+   discovers private note totals for tracked tokens on the active network.
+2. An unregistered account gets an **Activate private balances** action. Its immutable review
+   identifies the network, pool, public account route, and public link between the wallet address
+   and its viewing-key commitment. No registration is silent.
+3. After activation, each tracked asset detail has a **Shield SYMBOL** action. The composer keeps
+   token identity, public balance, amount shortcuts, and destination network together.
+4. The shielding review freezes the amount, token metadata, pool, actions, submission route, and
+   payload digest. It explicitly states that the deposit is public even though the resulting notes
+   can later be spent privately.
+5. Confirmation consumes that preparation once, revalidates account, network, configuration,
+   token metadata, registration, public balance, and digest, then generates the proof and requests
+   account authorization. Progress names proof generation, authorization, broadcast, and
+   discovery; failures never retry automatically.
+
+The UI Lab contains deterministic checkpoints under **Wallet journeys / 04 Private balances** for
+disclosure off, discovery, registration, empty notes, asset entry, compose, public shielding,
+Wallet API private-relay review, proving, success, service failure, missing configuration, and the
+unsupported Ledger boundary. Fixtures never call a real vault, SDK service, RPC, or hardware
+device.
+
 ## Privileged data flow
 
 1. The content/provider bridge strictly parses bounded actions, token lists, proof envelopes, and
    dapp-scoped sub-account requests. A connected origin sees only its granted active account.
-2. Private balance reads, proof preparation (including simulation), and sub-account commitments
-   each create a dedicated approval. The queue retains the exact private request and exposes only
-   review summaries plus an account/network/payload digest. Denial returns `USER_REFUSED_OP`;
-   account, network, grant, or payload changes invalidate the request.
+2. Dapp-requested private balance reads, proof preparation (including simulation), and sub-account
+   commitments each create a dedicated approval. The queue retains the exact private request and
+   exposes display-safe summaries plus the exact action parameters and an account/network/payload
+   digest. Invoke calldata, sub-account call targets and entry points, nonce, and collect policy
+   remain expandable in the approval. A private-relay review also lists the relayer-fee withdrawal
+   as a separately labelled action with its exact token, amount, and recipient. Denial returns
+   `USER_REFUSED_OP`; account, network, grant, or payload changes invalidate the request.
 3. Only after approval does the background lazily derive a domain-separated viewing key through
-   Krusty from the selected account's encrypted signing key. The key is never persisted, logged,
-   or returned through a browser message. Keyless Ledger accounts cannot currently use STRK20 and
-   fail closed.
+   Krusty from the selected account's encrypted signing key. The derivation matches the pinned SDK
+   reference: deterministic Stark ECDSA over the canonical `chainId:poolAddress`, Poseidon of
+   `(r,s)`, and the privacy pool's lower-half curve-order fold. This produces a distinct identity
+   for every chain and pool. The key is never persisted, logged, or returned through a browser
+   message. Keyless Ledger accounts cannot currently use STRK20 and fail closed.
 4. The SDK performs note discovery, transaction assembly, and proving. `USER_LINKAGE` warnings map
    to the Wallet API privacy-leak error; every other non-empty or malformed warning fails closed.
-5. Before an invoke approval appears, the wallet validates private balances, rejects a
-   deposit/withdraw correlation, requests and freezes the relayer fee action and any typed data,
-   verifies the configured fee token, and checks that the combined user spend plus fee is
-   affordable. No proof or signature is produced before approval.
-6. After approval, the wallet repeats the balance checks, asks the SDK to prove the exact frozen
-   action batch plus fee action, requires the configured pool's `apply_actions` call, signs any
-   frozen outside-execution typed data, and submits once through the configured private paymaster.
-   The SDK signer binds account, chain, and complete call set using the protocol SNIP-12 hash.
+5. Before a dapp invoke approval appears, the wallet runs only public/pure action checks, rejects a
+   deposit/withdraw correlation, and requests and freezes the relayer fee action and any typed
+   data. It never discovers private balances, generates a proof, or signs before approval.
+6. After approval, the wallet reads and validates the required private balances, checks the
+   combined user spend plus relay fee, and asks the SDK to prove the exact frozen action batch plus
+   fee action. Any paymaster outside-execution envelope is reconstructed from the exact public
+   approval calls and bound to the active account and chain; substituted calls or an invalid
+   execution window fail before signing. The SNIP-9 timestamps must fit `u64`, be live at quote
+   time, and retain at least ten seconds when revalidated immediately before signing. Its caller,
+   execution window, call count, fee, account, network, and payload digest are visible in review.
+7. The wallet requires the configured pool's `apply_actions` call and submits once through the
+   configured private paymaster. The SDK signer binds account, chain, and complete call set using
+   the protocol SNIP-12 hash. Every accepted privacy write is recorded in browser-session storage;
+   a later proof waits until that accepted block is older than the SDK's historical proving block.
+   Writes for the same account, network, and pool are serialized across proof, submission, and
+   receipt acceptance. A `submitting` reservation is persisted immediately before broadcast; it
+   is replaced by the returned hash before receipt polling. An indeterminate broadcast or receipt
+   keeps the scope blocked, while only a receipt-proven rejection clears it. Production privacy
+   operations fail closed if that restart-safe session store is unavailable.
+8. The proof base is ten blocks behind the finalized RPC head. Registration polls until the
+   account contract exists at that exact historical block, and deposits poll until every
+   aggregate ERC20 amount is visible there. This automatically covers freshly deployed and
+   recently funded accounts instead of producing a knowingly stale proof.
 
 The Wallet API allows a dapp to submit the result of `wallet_strk20PrepareInvoke`; therefore a
 non-simulated prepare request does not sign or generate that submittable proof until the user
 approves its exact action list. Private balances and the deterministic, origin-scoped sub-account
 commitment are likewise never disclosed under the general account connection grant alone.
 
-Registration is not performed silently. If the privacy account has not been registered, the
-wallet returns the Wallet API `NOT_REGISTERED` error so the caller can drive an explicit,
-reviewable registration flow.
+The dapp Wallet API still returns `NOT_REGISTERED` when a site requests an operation before
+registration. Registration itself is extension-owned and cannot be initiated through the page or
+content-script bridge.
+
+The wallet-owned side-panel journey currently exposes registration and deposit-only shielding.
+Private transfer, withdrawal, generic invoke, proof preparation, and sub-account commitment remain
+Wallet API/dapp approval journeys; they do not appear as standalone portfolio actions yet.
 
 The generic `wallet_addInvokeTransaction` path also preserves an optional prepared proof. Such a
 request must contain exactly one call, receives the normal decoded approval review, and can submit
@@ -79,11 +136,18 @@ included in the approval digest and are never silently converted into an ordinar
 
 ## Failure and trust boundaries
 
-The wallet has no fallback proving, discovery, signing, or direct public broadcast for built-in
-STRK20 action submission. SDK, discovery, prover, paymaster, OHTTP, RPC, and contract responses are
-untrusted and validated at their boundaries. Unknown or malformed privacy warnings, an unexpected
-fee token, insufficient fee balance, a mismatched pool or entry point, an empty proof, a changed
-approval context, or unavailable services all fail closed.
+The wallet has no fallback proving, discovery, or signing. Direct public broadcast is narrowly
+available for explicit registration and deposit-only action batches because a new account has no
+private note with which to pay a relay fee. A public deposit grants the configured pool only the
+exact aggregate reviewed token amount, includes the SDK proof, and submits the pool's validated
+`apply_actions` call in the same account transaction. Transfer, withdrawal, invoke, mixed, or empty
+batches can never use this route.
+
+SDK, discovery, prover, paymaster, OHTTP, RPC, and contract responses are untrusted and validated
+at their boundaries. Unknown or malformed privacy warnings, an unexpected fee token, insufficient
+fee balance, a mismatched pool or entry point, an empty proof, changed account/network/token
+metadata, a stale or reused preparation, a changed registration state, or unavailable services all
+fail closed.
 
 The upstream SDK and remote service implementations are external trust dependencies. Their pinned
 artifact integrity and wallet-facing behavior are checked here; their internal cryptography and
@@ -92,11 +156,17 @@ production deployments require their own audits and operations monitoring.
 ## Operator checklist
 
 - Supply Discovery Service, Transaction Prover, pool, and anonymizer values for each network.
-- Supply a private paymaster/relayer and fee token to enable submission.
+- Supply a private paymaster/relayer and fee token to enable private transfers, withdrawals,
+  invokes, and private relay-fee submission. Registration and deposit-only entry remain available
+  without it.
 - Put credentials, quotas, and abuse controls behind a wallet-owned HTTPS relay; never add a shared
   API key to the extension.
 - Supply an OHTTP relay when the prover deployment requires it.
 - Verify service health and network/contract alignment before enabling the configuration.
+- The adapter automatically waits for recently deployed or funded accounts at the SDK's safe
+  historical block (currently ten blocks behind the RPC head), waits for each submitted privacy
+  transaction to reach a successful receipt, and prevents a dependent proof until that accepted
+  block is older than the next proving block.
 - Run `bun run check`, `bun run build`, `bun run test:e2e`, and `bun run package:extension`.
 
 Fixture tests intentionally use no real vault, private notes, signing material, hardware, or

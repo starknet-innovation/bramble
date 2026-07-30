@@ -87,8 +87,7 @@ export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
   return handled;
 };
 
-/**
- * One request per handled message type. Payloads are best-effort valid so
+/** One request per handled message type. Payloads are best-effort valid so
  * responses exercise real handler paths; even rejected inputs are scanned,
  * since error strings must not echo secret material either.
  */
@@ -481,6 +480,19 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
       type: "wallet.strk20SubaccountCommitment",
     },
     sender: contentSender,
+  },
+  { message: { type: "wallet.strk20State" }, sender: extensionSender },
+  { message: { type: "wallet.strk20PrepareRegistration" }, sender: extensionSender },
+  {
+    message: { amount: "1", tokenId: "SN_MAIN:0x1", type: "wallet.strk20PrepareDeposit" },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      preparationId: `sha256:${"0".repeat(64)}`,
+      type: "wallet.strk20Execute",
+    },
+    sender: extensionSender,
   },
   { message: { origin: ORIGIN, type: "wallet.supportedSpecs" }, sender: contentSender },
   { message: { origin: ORIGIN, type: "wallet.supportedWalletApi" }, sender: contentSender },
