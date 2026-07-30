@@ -40,6 +40,12 @@ const proposal: MultisigProposalRecord = {
   summary: "Shared proposal",
   txId: "0xabc",
 };
+const importedCall = {
+  calldata: ["0x1"],
+  contractAddress: address,
+  entrypoint: "transfer",
+  salt: "0x0",
+} as const;
 
 const responses: Readonly<Record<string, unknown>> = {
   "wallet.addMultisig": { multisig, ok: true },
@@ -148,7 +154,7 @@ describe("createMultisigClient", () => {
     await client.refreshMultisig(multisig.id);
     await client.removeMultisig(multisig.id);
     expect(await client.revokeConfirmation(proposal.id, true)).toBe("0x123");
-    await client.trackProposal(multisig.id, proposal.txId, "Shared");
+    await client.trackProposal(multisig.id, proposal.txId, "Shared", importedCall);
 
     expect(sent).toContainEqual({
       address,
@@ -168,6 +174,13 @@ describe("createMultisigClient", () => {
     });
     expect(sent).toContainEqual({ id: multisig.id, type: "wallet.refreshMultisig" });
     expect(sent).toContainEqual({ id: multisig.id, type: "wallet.multisigBalances" });
+    expect(sent).toContainEqual({
+      call: importedCall,
+      multisigId: multisig.id,
+      summary: "Shared",
+      txId: proposal.txId,
+      type: "wallet.trackMultisigProposal",
+    });
   });
 
   test("reports list/status errors without replacing them with empty success", async () => {

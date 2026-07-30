@@ -8,6 +8,7 @@ import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
 import type { MultisigProposalStatus } from "../../src/starknet/multisig";
 import { MULTISIG_CLASS_HASH } from "../../src/starknet/multisig-deploy";
+import type { MultisigProposalDiscovery } from "../../src/starknet/multisig-discovery";
 import type { ActivityLog, ActivityStatus } from "../../src/storage/activity-store";
 import { memoryMultisigStore } from "../../src/storage/multisig-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
@@ -130,6 +131,7 @@ export type MultisigHarnessOptions = {
     readonly accountAddress: string;
   }) => Promise<readonly never[]>;
   readonly loadClass?: () => Promise<unknown>;
+  readonly proposalDiscovery?: () => MultisigProposalDiscovery;
   readonly proposalStatus?: () => MultisigProposalStatus;
   readonly signers?: readonly string[];
   readonly submitInvoke?: (
@@ -177,6 +179,13 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
         async computeTransactionId() {
           return HARNESS_TX_ID;
         },
+        ...(options.proposalDiscovery
+          ? {
+              async discoverProposalIds() {
+                return options.proposalDiscovery?.() ?? { complete: true, ids: [] };
+              },
+            }
+          : {}),
         async getConfig() {
           return {
             quorum: 2,

@@ -17,6 +17,11 @@ export const AccountDrawer = checkpointStory("Shared account drawer", "multisig"
 export const Receive = checkpointStory("Receive to shared account", "multisig", "receive");
 export const Signers = checkpointStory("Signers and quorum", "multisig", "signers");
 export const Track = checkpointStory("Track shared proposal", "multisig", "track");
+export const ImportReviewPackage = checkpointStory(
+  "Import review package",
+  "multisig",
+  "track-package",
+);
 export const Ready = checkpointStory("Ready to execute", "multisig", "ready");
 export const ReadyProposal = checkpointStory("Ready proposal detail", "multisig", "ready-proposal");
 export const SyncFailure = checkpointStory("Refresh failed", "multisig", "sync-error");

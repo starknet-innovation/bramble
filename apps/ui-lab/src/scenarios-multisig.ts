@@ -5,6 +5,7 @@ import {
   multisigTrackFlow,
   multisigWatchFlow,
 } from "../../../src/sidepanel/multisig-management-views";
+import { serializeMultisigReviewPackage } from "../../../src/sidepanel/multisig-model";
 import { bindMultisigProposalForm } from "../../../src/sidepanel/multisig-proposal-ui";
 import { createMultisigClient } from "../../../src/sidepanel/multisig-runtime";
 import {
@@ -118,6 +119,13 @@ const showSharedCollectibles = (context: FrameContext): void =>
 
 const showSharedProposals = (context: FrameContext): void => showSharedTab(context, "proposals");
 
+const showImportedReviewPackage = (context: FrameContext): void => {
+  const input = context.app.querySelector<HTMLTextAreaElement>('textarea[name="reviewPackage"]');
+  if (input) {
+    input.value = serializeMultisigReviewPackage(multisig, pendingProposal);
+  }
+};
+
 const portfolio = {
   balances: { balances },
   changes: { [USDC_ADDRESS]: 0.42 },
@@ -226,10 +234,23 @@ export const multisigScenario: WalletScenario = {
     multisigCheckpoint(
       "track",
       "Track shared proposal",
-      "A pasted id and its off-chain-note warning form one focused task.",
+      "A pasted id remains call-less and requires explicit independent verification before signing.",
       () => multisigTrackFlow(statusFor(), multisig),
       { noteTrust: "local only", view: "multisig-track" },
     ),
+    {
+      content: () => multisigTrackFlow(statusFor(), multisig),
+      id: "track-package",
+      label: "Import review package",
+      narrative:
+        "A secret-free package restores the exact public call only after the background re-hashes it through the selected multisig contract.",
+      prepare: showImportedReviewPackage,
+      state: {
+        callTrust: "contract-derived id match",
+        networkRequests: "hash_transaction and proposal views",
+        packageSecrets: 0,
+      },
+    },
     multisigCheckpoint(
       "ready",
       "Ready to execute",
@@ -337,7 +358,7 @@ export const multisigScenario: WalletScenario = {
           softwareAccount,
           { declarationPending: false, declared: false },
           preferences,
-      ),
+        ),
       { class: "missing", deployEnabled: false },
     ),
     multisigCheckpoint(

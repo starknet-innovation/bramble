@@ -4,7 +4,9 @@
  * controls rehydrate instead of leaving a false empty state.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { serializeMultisigReviewPackage } from "../../src/sidepanel/multisig-model";
 import { bindMultisigs, type MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
+import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
 import { registerDom, unregisterDom } from "../support/groups-harness";
 
 beforeAll(registerDom);
@@ -151,5 +153,56 @@ describe("bindMultisigs", () => {
         to: "0x123",
       },
     ]);
+  });
+
+  test("imports a review package into the selected multisig tracking flow", async () => {
+    const multisig: MultisigRecord = {
+      address: "0x999",
+      id: "SN_MAIN:0x999",
+      networkId: "SN_MAIN",
+      quorum: 1,
+      signers: ["0x123"],
+    };
+    const proposal: MultisigProposalRecord = {
+      call: {
+        calldata: ["0x1"],
+        contractAddress: "0x456",
+        entrypoint: "transfer",
+        salt: "0x2",
+      },
+      confirmations: 0,
+      id: `${multisig.id}:0x789`,
+      multisigId: multisig.id,
+      state: "pending",
+      summary: "Pay contributor",
+      txId: "0x789",
+    };
+    const tracked: unknown[] = [];
+    const app = mount(
+      `<form id="multisig-track-form">
+        <input name="txId" />
+        <input name="summary" />
+        <textarea name="reviewPackage"></textarea>
+        <button type="submit">Track</button>
+        <p id="multisig-track-result"></p>
+      </form>`,
+      async () => {},
+      {
+        multisig: {
+          async trackProposal(...args: unknown[]) {
+            tracked.push(args);
+          },
+        } as unknown as MultisigUiDeps["multisig"],
+        selectedMultisigId: () => multisig.id,
+      },
+    );
+    const packageInput = app.querySelector<HTMLTextAreaElement>('textarea[name="reviewPackage"]');
+    if (packageInput) {
+      packageInput.value = serializeMultisigReviewPackage(multisig, proposal);
+    }
+    app.querySelector<HTMLFormElement>("#multisig-track-form")?.requestSubmit();
+    await Promise.resolve();
+
+    expect(tracked).toEqual([[multisig.id, proposal.txId, proposal.summary, proposal.call]]);
   });
 });

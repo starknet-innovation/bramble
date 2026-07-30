@@ -1,10 +1,10 @@
+import type { MultisigClassState } from "../../../src/popup/multisig-responses";
 import type {
   ConnectedSite,
   DiscoveredNft,
   PendingApproval,
   WalletStatus,
 } from "../../../src/popup/responses";
-import type { MultisigClassState } from "../../../src/popup/multisig-responses";
 import type { BalanceState } from "../../../src/sidepanel/runtime";
 import { dashboard, type WalletView } from "../../../src/sidepanel/views";
 import type { AllowanceView } from "../../../src/starknet/allowance-discovery";

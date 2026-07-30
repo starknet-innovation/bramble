@@ -15,6 +15,7 @@ import {
   type MultisigsResponse,
 } from "../popup/multisig-responses";
 import { isBalancesResponse, isErrorResponse, isTransferResponse } from "../popup/responses";
+import type { MultisigProposalCall } from "../storage/multisig-store";
 import type { BalanceState, RuntimeApi } from "./runtime";
 
 const responseError = (response: unknown, fallback: string): Error =>
@@ -166,8 +167,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "revoke failed");
     },
-    async trackProposal(multisigId: string, txId: string, summary: string): Promise<void> {
+    async trackProposal(
+      multisigId: string,
+      txId: string,
+      summary: string,
+      call?: MultisigProposalCall,
+    ): Promise<void> {
       const response = await sendMessage({
+        ...(call ? { call } : {}),
         multisigId,
         ...(summary ? { summary } : {}),
         txId,

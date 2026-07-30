@@ -31,6 +31,8 @@ import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import type { WalletOpsDeps } from "./wallet-ops";
 
+const MAX_NEW_PROPOSALS_PER_REFRESH = 20;
+
 /**
  * Dependencies for multisig operations: the shared wallet-ops bundle plus
  * the multisig registry and, for the declare flow, a loader for the bundled
@@ -243,6 +245,46 @@ const refreshProposals = async (
   );
 };
 
+// Adds event-discovered IDs as untrusted, call-less records. The subsequent
+// refresh reads each proposal through the contract views before the UI can
+// enable an action; discovery never supplies executable call data.
+const discoverProposals = async (
+  deps: MultisigOpsDeps,
+  record: MultisigRecord,
+  rpcUrls: readonly string[],
+): Promise<boolean> => {
+  const discover = multisigRpc(deps).discoverProposalIds;
+  if (!discover) {
+    return true;
+  }
+  const result = await discover({ address: record.address, rpcUrls });
+  const existing = new Set(
+    (await deps.multisigStore.listProposals())
+      .filter((proposal) => proposal.multisigId === record.id)
+      .map((proposal) => proposal.txId),
+  );
+  const missing = result.ids
+    .filter((txId) => !existing.has(txId))
+    .slice(0, MAX_NEW_PROPOSALS_PER_REFRESH);
+  for (const txId of missing) {
+    const id = multisigProposalId(record.id, txId);
+    if (id) {
+      await deps.multisigStore.upsertProposal({
+        call: null,
+        confirmations: 0,
+        id,
+        multisigId: record.id,
+        state: "pending",
+        summary: "Discovered on-chain proposal",
+        txId,
+      });
+    }
+  }
+  return (
+    result.complete && missing.length === result.ids.filter((txId) => !existing.has(txId)).length
+  );
+};
+
 type MultisigOpsHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
 const listMultisigs: MultisigOpsHandler = async (deps, message) => {
@@ -339,12 +381,24 @@ const refreshMultisig: MultisigOpsHandler = async (deps, message) => {
     signers: config.signers,
   };
   await deps.multisigStore.upsertMultisig(record);
+  let discoveryComplete = true;
+  try {
+    discoveryComplete = await discoverProposals(deps, record, resolved.rpcUrls);
+  } catch {
+    discoveryComplete = false;
+  }
   const proposals = await refreshProposals(
     deps,
     record,
     resolved.account.account.address,
     resolved.rpcUrls,
   );
+  if (!discoveryComplete) {
+    return {
+      error:
+        "proposal discovery is incomplete — existing proposals were refreshed; retry to continue",
+    };
+  }
   return { multisig: record, ok: true, proposals };
 };
 
@@ -366,13 +420,24 @@ const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
   if (status.state === "not-found") {
     return { error: "no proposal with that id exists on this multisig" };
   }
+  if (input.call) {
+    const computedId = await multisigRpc(deps).computeTransactionId({
+      address: resolved.record.address,
+      call: input.call,
+      rpcUrls: resolved.rpcUrls,
+      salt: input.call.salt,
+    });
+    if (!sameFelt(computedId, input.txId)) {
+      return { error: "review package call does not match this on-chain proposal id" };
+    }
+  }
   const id = multisigProposalId(resolved.record.id, input.txId);
   if (!id) {
     return { error: "invalid track proposal request" };
   }
   const existing = (await deps.multisigStore.listProposals()).find((p) => p.id === id);
   const proposal: MultisigProposalRecord = {
-    call: existing?.call ?? null,
+    call: input.call ?? existing?.call ?? null,
     confirmations: status.confirmations,
     confirmedBySigner: status.confirmedBySigner,
     confirmedBySignerAddress: resolved.account.account.address,

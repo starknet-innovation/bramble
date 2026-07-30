@@ -7,6 +7,7 @@ import type { WalletStatus } from "../popup/responses";
 import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
+import { parseMultisigReviewPackage } from "./multisig-model";
 import { bindMultisigProposalForm } from "./multisig-proposal-ui";
 import { bindMultisigReviewTools } from "./multisig-review-ui";
 import type { MultisigClient } from "./multisig-runtime";
@@ -228,12 +229,27 @@ const bindTrackForm = (deps: MultisigUiDeps): void => {
     }
     const data = new FormData(form);
     runAction(deps, submitButton, "multisig-track-result", "Checking on-chain…", async () => {
+      const packageText = String(data.get("reviewPackage") ?? "").trim();
+      const reviewPackage = packageText ? parseMultisigReviewPackage(packageText) : null;
+      if (packageText && !reviewPackage) {
+        throw new Error("Review package format is invalid");
+      }
+      if (reviewPackage && reviewPackage.multisig.id !== multisigId) {
+        throw new Error("Review package belongs to a different multisig");
+      }
+      const txId = reviewPackage?.proposal.txId ?? String(data.get("txId") ?? "").trim();
+      if (!txId) {
+        throw new Error("Enter a proposal id or paste a review package");
+      }
       await deps.multisig.trackProposal(
         multisigId,
-        String(data.get("txId") ?? "").trim(),
-        String(data.get("summary") ?? "").trim(),
+        txId,
+        String(data.get("summary") ?? "").trim() || reviewPackage?.proposal.summary || "",
+        reviewPackage?.proposal.call ?? undefined,
       );
-      return "Proposal tracked";
+      return reviewPackage?.proposal.call
+        ? "Proposal call verified and tracked"
+        : "Proposal tracked";
     });
   });
 };

@@ -227,6 +227,7 @@ describe("multisig messages", () => {
     );
     expect(execute).toMatchObject({ error: expect.stringContaining("tracked by id only") });
   });
+
   test("rejects tracking an id the contract does not know", async () => {
     const { handler } = makeMultisigHarness({ proposalStatus: staticStatus("not-found") });
     const watched = (await watch(handler)) as { multisig: { id: string } };
