@@ -10,19 +10,20 @@ import type {
   PrivacyPreparation,
   PrivateBalanceView,
 } from "../../../src/sidepanel/privacy-runtime";
+import { STRK20_MAINNET_POOL } from "../../../src/starknet/strk20/config";
 import { softwareAccount, statusFor } from "./fixtures";
 import { ETH_TOKEN, journeyBalances, journeyPreferences, journeyPrices } from "./journey-fixtures";
 import { walletDashboard } from "./scenario-dashboard";
+import { privacyDappCheckpoints } from "./scenarios-privacy-dapp";
 import type { WalletScenario } from "./types";
 
 const digest = `sha256:${"d".repeat(64)}`;
-const poolAddress = "0x04f53a62c20f7dfc5406c6f8704cf18ac78f313641988d12fb6efb79893e813";
 
 const activation: PrivacyPreparation = {
   id: digest,
   kind: "register",
   payloadDigest: digest,
-  poolAddress,
+  poolAddress: STRK20_MAINNET_POOL,
   route: "public-account",
   summaries: [
     "Register this account with the privacy pool",
@@ -37,7 +38,7 @@ const deposit: PrivacyPreparation = {
   id: digest,
   kind: "deposit",
   payloadDigest: digest,
-  poolAddress,
+  poolAddress: STRK20_MAINNET_POOL,
   route: "public-account",
   summaries: [
     "Shield 0.5 ETH",
@@ -255,53 +256,6 @@ export const privacyScenario: WalletScenario = {
     },
     {
       content: () =>
-        walletDashboard({
-          balanceState: { balances: journeyBalances },
-          pending: [
-            {
-              actionReviews: [
-                {
-                  amount: "0x2386f26fc10000",
-                  recipient: "0x031075ef90ad626dc13fb97cdc7e04499ee5fa1007f2c4e1a9439b22fc3755b9",
-                  token: ETH_TOKEN.address,
-                  type: "transfer",
-                },
-              ],
-              context: {
-                accountId: softwareAccount.id,
-                chainId: "0x534e5f4d41494e",
-                networkId: "SN_MAIN",
-                payloadDigest: digest,
-              },
-              id: "8db96ddc-e9c8-4e07-9da0-d2d91d8d6270",
-              kind: "strk20-invoke",
-              origin: "https://terminal.example",
-              relayFeeAction: {
-                amount: "0x1",
-                recipient: "0x99",
-                token: ETH_TOKEN.address,
-                type: "withdraw",
-              },
-              summaries: [
-                "Transfer 0.25 privately to 0x031075…755b9 (0x049d…4dc7)",
-                "Private relay fee 0x1 (0x049d…4dc7) · outside execution by 0x0000…0099 from 1 until 3600 for 1 public approval call",
-              ],
-            },
-          ],
-          preferences: journeyPreferences,
-          prices: journeyPrices,
-          privacy: privateReady,
-          status: statusFor(),
-          view: "requests",
-        }),
-      id: "private-relay-review",
-      label: "Wallet API private relay",
-      narrative:
-        "Transfers, withdrawals, and invokes remain dapp/API journeys: their exact actions, fee, outside-execution capability, account, network, and digest are reviewed before private reads, proving, or signing.",
-      state: { route: "private-relay", stage: "approval", surface: "wallet-api" },
-    },
-    {
-      content: () =>
         privacyDashboard(
           privateReady,
           {
@@ -354,11 +308,12 @@ export const privacyScenario: WalletScenario = {
         "Failure is explicit, never auto-retries, and keeps retry or return choices close to the task.",
       state: { autoRetry: false, stage: "failure" },
     },
+    ...privacyDappCheckpoints,
   ],
   description:
-    "Opt-in private disclosure, account registration, public-to-private shielding, liveness, success, and fail-closed recovery.",
+    "Opt-in disclosure, registration, shielding, dapp approvals, private transfer and withdrawal, dapp anonymizers, AVNU private swap, sub-accounts, and fail-closed recovery.",
   id: "privacy",
   surface: "sidepanel",
-  title: "Private balances and shielding",
+  title: "Private balances and actions",
   views: ["home", "token-detail", "privacy", "requests"],
 };
