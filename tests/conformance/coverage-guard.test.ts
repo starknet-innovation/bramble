@@ -39,6 +39,7 @@ const REQUIRED_SPEC_METHODS: readonly ProviderMethod[] = [
 const METHOD_CLASSIFICATION: Record<ProviderMethod, "legacy" | "spec"> = {
   mc_accounts: "legacy",
   mc_requestAccounts: "legacy",
+  mc_strk20Register: "legacy",
   wallet_addDeclareTransaction: "spec",
   wallet_addInvokeTransaction: "spec",
   wallet_addStarknetChain: "spec",
@@ -63,6 +64,7 @@ const METHOD_CLASSIFICATION: Record<ProviderMethod, "legacy" | "spec"> = {
 const RESULT_METHOD_CLASSIFICATION: Record<ProviderResultMethod, "legacy" | "spec"> = {
   mc_accounts: "legacy",
   mc_requestAccounts: "legacy",
+  mc_strk20Register: "legacy",
   wallet_addDeclareTransaction: "spec",
   wallet_addInvokeTransaction: "spec",
   wallet_addStarknetChain: "spec",

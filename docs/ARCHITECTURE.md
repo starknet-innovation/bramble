@@ -355,7 +355,10 @@ also owns an opt-in private-balance disclosure, explicit public registration, an
 public-to-private shielding journey. Within those wallet-owned journeys and the STRK20 action
 API, direct account broadcast is restricted to registration and deposit-only batches; private
 transfers, withdrawals, and invokes remain relayer-only. The separately reviewed
-`wallet_addInvokeTransaction` prepared-proof route can submit one validated pool
+MC-namespaced `mc_strk20Register` provider capability lets Terminal request that same explicit
+registration without presenting it as a standard Wallet API method; it remains origin-, account-,
+network-, pool-, token-, and digest-bound in the approval queue. The
+`wallet_addInvokeTransaction` prepared-proof route separately submits one validated pool
 `apply_actions` call from the selected account. Privacy writes are serialized and reserved in
 session storage before broadcast; new proofs use a ten-block historical base and wait for the
 relevant account/token state to be visible there. See

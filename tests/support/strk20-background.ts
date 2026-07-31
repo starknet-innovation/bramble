@@ -47,6 +47,7 @@ export type Strk20HarnessOptions = {
   readonly preferences?: WalletPreferences;
   readonly proveCalls?: { value: number };
   readonly publicBalance?: string;
+  readonly registerCalls?: { value: number };
   readonly registered?: boolean;
   readonly strk20?: Strk20Service;
   readonly subaccountCalls?: { value: number };
@@ -58,11 +59,20 @@ export type Strk20HarnessOptions = {
 export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
+  const defaults = defaultWalletPreferences();
+  const mainnetStrk20 = defaults.strk20Networks?.SN_MAIN;
+  if (!mainnetStrk20) {
+    throw new Error("missing default STRK20 test config");
+  }
   const preferences = options.preferences ?? {
-    ...defaultWalletPreferences(),
+    ...defaults,
     activeNetworkId: "SN_SEPOLIA" as const,
+    strk20Networks: {
+      ...defaults.strk20Networks,
+      SN_SEPOLIA: mainnetStrk20,
+    },
   };
-  const { balanceCalls, proveCalls, subaccountCalls } = options;
+  const { balanceCalls, proveCalls, registerCalls, subaccountCalls } = options;
   const strk20: Strk20Service = options.strk20 ?? {
     async prepare() {
       if (proveCalls) {
@@ -88,6 +98,15 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
           type: "withdraw",
         },
       };
+    },
+    async register() {
+      if (registerCalls) {
+        registerCalls.value += 1;
+      }
+      return { transactionHash: "0x123" };
+    },
+    async registrationStatus() {
+      return options.registered === false ? "unregistered" : "registered";
     },
     async subaccountCommitment() {
       if (subaccountCalls) {

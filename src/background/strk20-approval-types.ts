@@ -12,6 +12,7 @@ import type { Strk20Action } from "../starknet/strk20/schemas";
 export type Strk20DisclosureApprovalKind =
   | "strk20-balances"
   | "strk20-prepare"
+  | "strk20-register"
   | "strk20-subaccount";
 
 /**
@@ -20,6 +21,11 @@ export type Strk20DisclosureApprovalKind =
  * after the user reviews its digest and summaries.
  */
 export type Strk20DisclosureRequest =
+  | {
+      readonly poolAddress: string;
+      readonly token: string;
+      readonly type: "register";
+    }
   | {
       readonly tokens: readonly string[];
       readonly type: "balances";
@@ -45,4 +51,5 @@ export const matchesStrk20DisclosureKind = (
 ): boolean =>
   (kind === "strk20-balances" && request.type === "balances") ||
   (kind === "strk20-prepare" && request.type === "prepare") ||
+  (kind === "strk20-register" && request.type === "register") ||
   (kind === "strk20-subaccount" && request.type === "subaccount");

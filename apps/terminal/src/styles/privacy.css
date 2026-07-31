@@ -226,6 +226,119 @@
   justify-self: start;
 }
 
+.privacy-registration {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px 16px;
+  max-width: 720px;
+  margin: auto;
+  padding: 20px;
+  align-items: start;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-2);
+}
+
+.registration-mark {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border: 1px solid var(--border-2);
+  border-radius: 50%;
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.registration-mark svg {
+  width: 22px;
+  height: 22px;
+}
+
+.registration-mark.active {
+  color: var(--green);
+}
+
+.registration-copy span {
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.registration-copy h3 {
+  margin-top: 4px;
+  font-size: 22px;
+}
+
+.registration-copy p,
+.registration-boundary p {
+  margin-top: 7px;
+  color: var(--text-2);
+}
+
+.privacy-registration dl,
+.registration-boundary,
+.privacy-registration > .privacy-primary {
+  grid-column: 1 / -1;
+}
+
+.privacy-registration dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+}
+
+.privacy-registration dl div {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.privacy-registration dt {
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.privacy-registration dd {
+  min-width: 0;
+  font-weight: 650;
+}
+
+.privacy-registration code {
+  display: block;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.registration-boundary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.registration-boundary svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  color: var(--text-2);
+}
+
+.privacy-registration > .privacy-primary {
+  width: 100%;
+}
+
+.registration-boundary p {
+  margin-top: 0;
+}
+
 .privacy-compose-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.75fr);

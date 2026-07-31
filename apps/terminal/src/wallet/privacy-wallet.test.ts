@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { PRIVACY_POOL_ADDRESS } from "../../shared/privacy";
 import {
+  isPrivateRegistrationRequired,
   requestPrivateBalances,
   requestPrivateInvoke,
   requestPrivateProof,
+  requestPrivateRegistration,
   validatedPrivateActions,
 } from "./privacy-wallet";
 
@@ -78,5 +80,21 @@ describe("Terminal STRK20 wallet boundary", () => {
     await expect(requestPrivateInvoke({ request }, actions)).rejects.toThrow(
       "invalid private transaction hash",
     );
+  });
+
+  it("uses the MC registration capability and validates its transaction hash", async () => {
+    const request = vi.fn(async () => ({ transaction_hash: transactionHash }));
+    await expect(requestPrivateRegistration({ request })).resolves.toBe(transactionHash);
+    expect(request).toHaveBeenCalledWith({ type: "mc_strk20Register" });
+    request.mockResolvedValueOnce({ transaction_hash: "0x123" });
+    await expect(requestPrivateRegistration({ request })).rejects.toThrow(
+      "invalid registration transaction hash",
+    );
+  });
+
+  it("recognizes only the Wallet-API registration-required code", () => {
+    expect(isPrivateRegistrationRequired({ code: 118 })).toBe(true);
+    expect(isPrivateRegistrationRequired(new Error("not registered"))).toBe(false);
+    expect(isPrivateRegistrationRequired({ code: 113 })).toBe(false);
   });
 });

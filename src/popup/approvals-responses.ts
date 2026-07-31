@@ -84,6 +84,7 @@ export type PendingApproval = {
     | "strk20-balances"
     | "strk20-invoke"
     | "strk20-prepare"
+    | "strk20-register"
     | "strk20-subaccount"
     | "switch-chain"
     | "watch-asset";
@@ -235,6 +236,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       value["kind"] !== "strk20-balances" &&
       value["kind"] !== "strk20-invoke" &&
       value["kind"] !== "strk20-prepare" &&
+      value["kind"] !== "strk20-register" &&
       value["kind"] !== "strk20-subaccount" &&
       value["kind"] !== "switch-chain" &&
       value["kind"] !== "watch-asset") ||
@@ -259,6 +261,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "strk20-balances" ||
     value["kind"] === "strk20-invoke" ||
     value["kind"] === "strk20-prepare" ||
+    value["kind"] === "strk20-register" ||
     value["kind"] === "strk20-subaccount";
   const declarationValid =
     value["kind"] === "declare"

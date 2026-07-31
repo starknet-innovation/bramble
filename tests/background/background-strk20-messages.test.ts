@@ -32,6 +32,34 @@ const buildHandler = buildStrk20Handler;
 const approveHeld = approveHeldStrk20;
 
 describe("background strk20 messages", () => {
+  test("registers only after an account, network, pool, and token-bound approval", async () => {
+    const registerCalls = { value: 0 };
+    const handler = buildHandler({ registerCalls, registered: false });
+    const result = await approveHeld(
+      handler,
+      { origin, type: "wallet.strk20Register" },
+      "strk20-register",
+      () => expect(registerCalls.value).toBe(0),
+    );
+    expect(result).toEqual({ ok: true, transactionHash: "0x123" });
+    expect(registerCalls.value).toBe(1);
+    expect(toProviderPayload(result, "mc_strk20Register")).toEqual({
+      result: { transaction_hash: `0x${"123".padStart(64, "0")}` },
+    });
+  });
+
+  test("does not submit registration when the user denies activation", async () => {
+    const registerCalls = { value: 0 };
+    const handler = buildHandler({ registerCalls, registered: false });
+    const held = handler({ origin, type: "wallet.strk20Register" }, contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    const result = await held;
+    expect(toProviderPayload(result, "mc_strk20Register").error?.code).toBe(113);
+    expect(registerCalls.value).toBe(0);
+  });
+
   test("reads private balances only after approval", async () => {
     const balanceCalls = { value: 0 };
     const handler = buildHandler({ balanceCalls });

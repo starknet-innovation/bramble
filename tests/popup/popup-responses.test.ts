@@ -232,7 +232,12 @@ describe("popup response validators", () => {
       networkId: "SN_SEPOLIA",
       payloadDigest: `sha256:${"a".repeat(64)}`,
     };
-    for (const kind of ["strk20-balances", "strk20-prepare", "strk20-subaccount"] as const) {
+    for (const kind of [
+      "strk20-balances",
+      "strk20-prepare",
+      "strk20-register",
+      "strk20-subaccount",
+    ] as const) {
       const actionReviews =
         kind === "strk20-prepare"
           ? [{ calldata: ["0x1"], contract: "0x2", type: "invoke" }]

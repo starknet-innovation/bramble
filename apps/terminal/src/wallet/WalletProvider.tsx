@@ -50,6 +50,7 @@ import {
   requestPrivateBalances,
   requestPrivateInvoke,
   requestPrivateProof,
+  requestPrivateRegistration,
 } from "./privacy-wallet";
 
 /**
@@ -84,6 +85,8 @@ export type WalletContextValue = {
   readonly preparePrivateInvoke: (actions: readonly unknown[]) => Promise<PrivateCallAndProof>;
   /** Proves and submits STRK20 actions through the wallet approval path. */
   readonly invokePrivate: (actions: readonly unknown[]) => Promise<string>;
+  /** Requests the wallet's explicit one-time private-pool registration approval. */
+  readonly registerPrivate: () => Promise<string>;
   /** Requests wallet tracking for an ERC20; the wallet re-reads metadata and requires approval. */
   readonly watchAsset: (input: WatchAssetInput) => Promise<void>;
   /** Requests an approved Sierra class declaration through the connected wallet. */
@@ -336,6 +339,8 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     [wallet],
   );
 
+  const registerPrivate = useCallback(() => requestPrivateRegistration(wallet), [wallet]);
+
   const declareContract = useCallback(
     async (input: ContractDeclaration): Promise<DeclarationResult> => {
       if (wallet === null || typeof wallet.request !== "function") {
@@ -474,6 +479,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       invokePrivate,
       preparePrivateInvoke,
       privateBalances,
+      registerPrivate,
       requestTransaction,
       watchAsset,
       declareContract,
@@ -491,6 +497,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       invokePrivate,
       preparePrivateInvoke,
       privateBalances,
+      registerPrivate,
       requestTransaction,
       watchAsset,
       declareContract,

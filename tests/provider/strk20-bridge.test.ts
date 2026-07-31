@@ -29,6 +29,14 @@ const callAndProof = {
 };
 
 describe("strk20 bridge params", () => {
+  test("maps the MC registration capability without accepting parameters", () => {
+    expect(toRuntimeMessage(request("mc_strk20Register"), origin)).toEqual({
+      origin,
+      type: "wallet.strk20Register",
+    });
+    expect(toRuntimeMessage(request("mc_strk20Register", {}), origin)).toBeNull();
+  });
+
   test("maps balances params to a runtime message", () => {
     expect(toRuntimeMessage(request("wallet_strk20Balances", { tokens: [token] }), origin)).toEqual(
       {
@@ -131,6 +139,11 @@ describe("strk20 bridge results", () => {
       { ok: true, transactionHash: "0x123" },
       "wallet_strk20InvokeTransaction",
     );
+    expect(payload.result).toEqual({ transaction_hash: `0x${"123".padStart(64, "0")}` });
+  });
+
+  test("pads the registration transaction hash", () => {
+    const payload = toProviderPayload({ ok: true, transactionHash: "0x123" }, "mc_strk20Register");
     expect(payload.result).toEqual({ transaction_hash: `0x${"123".padStart(64, "0")}` });
   });
 

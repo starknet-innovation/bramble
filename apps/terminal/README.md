@@ -28,9 +28,16 @@ privacy pool:
 `0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`
 
 It reads a minimal typed pool view (`version`, fee, fee collector, and proof
-validity), requests aggregate private balances from MC Wallet, and supports
-shield, withdraw, private transfer, and AVNU private swap flows. Notes, viewing
-keys, signing material, and proof generation remain inside the wallet.
+validity), provides the explicit one-time **Activate private balances** flow,
+requests aggregate private balances from MC Wallet, and supports shield,
+withdraw, private transfer, and AVNU private swap flows. Notes, viewing keys,
+signing material, and proof generation remain inside the wallet.
+
+Activation uses the MC-namespaced `mc_strk20Register` capability because the
+standard Wallet API defines `NOT_REGISTERED` but no registration RPC. MC Wallet
+holds that request for an explicit review and binds it to the origin, account,
+network, configured pool, tracked token, and payload digest before submitting
+the public one-time transaction.
 
 AVNU private swap is deliberately split:
 

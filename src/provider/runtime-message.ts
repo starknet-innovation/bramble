@@ -15,6 +15,10 @@ import type { ProviderWatchAsset } from "./watch-asset-params";
  */
 export type RuntimeMessage =
   | {
+      readonly origin: string;
+      readonly type: "wallet.strk20Register";
+    }
+  | {
       readonly chain: ProviderChain;
       readonly origin: string;
       readonly type: "wallet.addStarknetChain";

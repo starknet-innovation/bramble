@@ -101,8 +101,10 @@ device.
 
 1. The content/provider bridge strictly parses bounded actions, token lists, proof envelopes, and
    dapp-scoped sub-account requests. A connected origin sees only its granted active account.
-2. Dapp-requested private balance reads, proof preparation (including simulation), and sub-account
-   commitments each create a dedicated approval. The queue retains the exact private request and
+2. Dapp-requested registration, private balance reads, proof preparation (including simulation),
+   and sub-account commitments each create a dedicated approval. Registration uses the explicitly
+   MC-namespaced `mc_strk20Register` capability because the Wallet API has no registration RPC. The
+   queue retains the exact private request and
    exposes display-safe summaries plus the exact action parameters and an account/network/payload
    digest. Invoke calldata, sub-account call targets and entry points, nonce, and collect policy
    remain expandable in the approval. A private-relay review also lists the relayer-fee withdrawal
@@ -145,9 +147,11 @@ non-simulated prepare request does not sign or generate that submittable proof u
 approves its exact action list. Private balances and the deterministic, origin-scoped sub-account
 commitment are likewise never disclosed under the general account connection grant alone.
 
-The dapp Wallet API still returns `NOT_REGISTERED` when a site requests an operation before
-registration. Registration itself is extension-owned and cannot be initiated through the page or
-content-script bridge.
+The standard dapp Wallet API still returns `NOT_REGISTERED` when a site requests an operation
+before registration. The Terminal can initiate registration only through the MC-specific
+`mc_strk20Register` capability. It enters the same content-script trust boundary as other dapp
+requests, opens the wallet approval surface immediately, and cannot derive a viewing key or submit
+until the user approves the account/network/pool/token-bound payload.
 
 The wallet-owned side-panel journey currently exposes registration and deposit-only shielding.
 Private transfer, withdrawal, generic invoke, proof preparation, and sub-account commitment remain

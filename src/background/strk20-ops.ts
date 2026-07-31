@@ -5,20 +5,14 @@
 
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { WalletError } from "../shared/errors";
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
-import { normalizeWalletOrigin } from "../shared/origin";
-import { STARKNET_NETWORKS } from "../starknet/networks";
-import {
-  isStrk20DappName,
-  isStrk20Felt,
-  readStrk20Actions,
-  readStrk20Tokens,
-  type Strk20Action,
-} from "../starknet/strk20/schemas";
+import { STARKNET_NETWORKS, sameFelt } from "../starknet/networks";
+import type { Strk20Action } from "../starknet/strk20/schemas";
 import {
   prepareStrk20CallAndProof,
   quoteStrk20Plan,
   readStrk20Balances,
+  readStrk20RegistrationStatus,
+  registerStrk20Account,
   type Strk20SubmissionPlan,
   submitStrk20Actions,
   summarizeStrk20Action,
@@ -42,6 +36,13 @@ import type {
   Strk20DisclosureApprovalKind,
   Strk20DisclosureRequest,
 } from "./strk20-approval-types";
+import {
+  readStrk20BalancesMessage,
+  readStrk20InvokeMessage,
+  readStrk20PrepareMessage,
+  readStrk20RegisterMessage,
+  readStrk20SubaccountMessage,
+} from "./strk20-provider-inputs";
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.
@@ -121,82 +122,6 @@ const resolveAccount = async (
   };
 };
 
-const readBalancesMessage = (
-  message: unknown,
-): { readonly origin: string; readonly tokens: readonly string[] } | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["origin", "tokens", "type"]) ||
-    message["type"] !== "wallet.strk20Balances"
-  ) {
-    return null;
-  }
-  const origin = normalizeWalletOrigin(message["origin"]);
-  const tokens = readStrk20Tokens(message["tokens"]);
-  return origin && tokens ? { origin, tokens } : null;
-};
-
-const readPrepareMessage = (
-  message: unknown,
-): {
-  readonly actions: readonly Strk20Action[];
-  readonly origin: string;
-  readonly simulate: boolean;
-} | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["actions", "origin", "simulate", "type"]) ||
-    message["type"] !== "wallet.strk20PrepareInvoke" ||
-    typeof message["simulate"] !== "boolean"
-  ) {
-    return null;
-  }
-  const origin = normalizeWalletOrigin(message["origin"]);
-  const actions = readStrk20Actions(message["actions"]);
-  return origin && actions ? { actions, origin, simulate: message["simulate"] } : null;
-};
-
-const readInvokeMessage = (
-  message: unknown,
-): { readonly actions: readonly Strk20Action[]; readonly origin: string } | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["actions", "origin", "type"]) ||
-    message["type"] !== "wallet.strk20InvokeTransaction"
-  ) {
-    return null;
-  }
-  const origin = normalizeWalletOrigin(message["origin"]);
-  const actions = readStrk20Actions(message["actions"]);
-  return origin && actions ? { actions, origin } : null;
-};
-
-const readSubaccountMessage = (
-  message: unknown,
-): {
-  readonly dappName: string;
-  readonly nonce?: string;
-  readonly origin: string;
-} | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["dappName", "nonce", "origin", "type"]) ||
-    message["type"] !== "wallet.strk20SubaccountCommitment" ||
-    !isStrk20DappName(message["dappName"]) ||
-    (message["nonce"] !== undefined && !isStrk20Felt(message["nonce"]))
-  ) {
-    return null;
-  }
-  const origin = normalizeWalletOrigin(message["origin"]);
-  return origin
-    ? {
-        dappName: message["dappName"],
-        ...(message["nonce"] === undefined ? {} : { nonce: message["nonce"] }),
-        origin,
-      }
-    : null;
-};
-
 const gateOrigin = (
   deps: Strk20OpsDeps,
   origin: string,
@@ -243,8 +168,44 @@ const queueDisclosure = async (
   }
 };
 
+const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => {
+  const input = readStrk20RegisterMessage(message);
+  if (!input) {
+    return { error: "invalid strk20 registration request" };
+  }
+  const gate = gateOrigin(deps, input.origin, sender);
+  if (gate) {
+    return gate;
+  }
+  const resolved = await resolveAccount(deps, input.origin);
+  if ("error" in resolved) {
+    return resolved;
+  }
+  if (resolved.account.derivation.kind === "ledger") {
+    return { error: "Private balances are not available for Ledger accounts" };
+  }
+  const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
+  const token = resolved.preferences.tokens.find(
+    (candidate) => candidate.networkId === resolved.account.networkId,
+  );
+  if (!config || !token) {
+    return { error: "strk20 services unavailable" };
+  }
+  return queueDisclosure(deps, resolved, {
+    kind: "strk20-register",
+    origin: input.origin,
+    request: { poolAddress: config.poolAddress, token: token.address, type: "register" },
+    summaries: [
+      "Activate private balances for this account",
+      `Privacy pool ${config.poolAddress}`,
+      `Registration preflight token ${token.address}`,
+      "Publishes a viewing-key commitment, never the viewing key",
+    ],
+  });
+};
+
 const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readBalancesMessage(message);
+  const input = readStrk20BalancesMessage(message);
   if (!input) {
     return { error: "invalid strk20 balances request" };
   }
@@ -271,7 +232,7 @@ const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => 
 };
 
 const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readPrepareMessage(message);
+  const input = readStrk20PrepareMessage(message);
   if (!input) {
     return { error: "invalid strk20 prepare request" };
   }
@@ -297,7 +258,7 @@ const handleStrk20PrepareInvoke: Strk20OpsHandler = async (deps, message, sender
 };
 
 const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readInvokeMessage(message);
+  const input = readStrk20InvokeMessage(message);
   if (!input) {
     return { error: "invalid strk20 invoke request" };
   }
@@ -330,7 +291,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
 };
 
 const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message, sender) => {
-  const input = readSubaccountMessage(message);
+  const input = readStrk20SubaccountMessage(message);
   if (!input) {
     return { error: "invalid strk20 subaccount request" };
   }
@@ -365,6 +326,7 @@ const STRK20_OPS_HANDLERS: Readonly<Record<string, Strk20OpsHandler>> = {
   "wallet.strk20Balances": handleStrk20Balances,
   "wallet.strk20InvokeTransaction": handleStrk20InvokeTransaction,
   "wallet.strk20PrepareInvoke": handleStrk20PrepareInvoke,
+  "wallet.strk20Register": handleStrk20Register,
   "wallet.strk20SubaccountCommitment": handleStrk20SubaccountCommitment,
 };
 
@@ -402,6 +364,41 @@ export const executeStrk20DisclosureApproval = async (
   }
   const context = strk20AccountContext(deps, resolved);
   try {
+    if (approval.request.type === "register") {
+      const registration = approval.request;
+      const config = context.config;
+      const token = resolved.preferences.tokens.find(
+        (candidate) =>
+          candidate.networkId === resolved.account.networkId &&
+          sameFelt(candidate.address, registration.token),
+      );
+      if (
+        resolved.account.derivation.kind === "ledger" ||
+        !config ||
+        !sameFelt(config.poolAddress, registration.poolAddress) ||
+        !token
+      ) {
+        return { error: "approval context changed" };
+      }
+      const service = strk20ServiceForRuntime(deps.runtimeRpc);
+      if (
+        (await readStrk20RegistrationStatus(service, {
+          ...context,
+          token: registration.token,
+        })) === "registered"
+      ) {
+        return { error: "Private balances are already active" };
+      }
+      const result = await registerStrk20Account(service, context);
+      await deps.activity.record({
+        accountId: resolved.account.id,
+        hash: result.transactionHash,
+        kind: "invoke",
+        networkId: resolved.account.networkId,
+        summary: `${approval.origin} activated private balances`,
+      });
+      return { ok: true, transactionHash: result.transactionHash };
+    }
     if (approval.request.type === "balances") {
       const balances = await readStrk20Balances(strk20ServiceForRuntime(deps.runtimeRpc), {
         ...context,

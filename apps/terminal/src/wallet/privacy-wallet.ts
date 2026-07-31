@@ -97,6 +97,10 @@ export type PrivateCallAndProof = {
   };
 };
 
+/** Returns true only for the Wallet-API NOT_REGISTERED error. */
+export const isPrivateRegistrationRequired = (cause: unknown): boolean =>
+  (cause as { readonly code?: unknown } | null | undefined)?.code === 118;
+
 const readBalances = (value: unknown): readonly PrivateBalance[] | null => {
   if (!Array.isArray(value) || value.length > 64) {
     return null;
@@ -192,6 +196,26 @@ export const requestPrivateBalances = async (
     throw new Error("Wallet returned invalid private balances.");
   }
   return balances;
+};
+
+/**
+ * Requests MC Wallet's approval-gated one-time pool registration. This is an
+ * MC-namespaced capability because the standard STRK20 API defines the
+ * NOT_REGISTERED error but no registration method.
+ */
+export const requestPrivateRegistration = async (
+  wallet: { readonly request?: unknown } | null,
+): Promise<string> => {
+  const result = await requestFrom(wallet)({ type: "mc_strk20Register" });
+  if (
+    !isRecord(result) ||
+    !hasOnlyKeys(result, ["transaction_hash"]) ||
+    typeof result["transaction_hash"] !== "string" ||
+    !TRANSACTION_HASH.test(result["transaction_hash"])
+  ) {
+    throw new Error("Wallet returned an invalid registration transaction hash.");
+  }
+  return result["transaction_hash"];
 };
 
 /**

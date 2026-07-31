@@ -36,6 +36,7 @@ describe("approval surface", () => {
     for (const type of [
       "wallet.strk20Balances",
       "wallet.strk20PrepareInvoke",
+      "wallet.strk20Register",
       "wallet.strk20SubaccountCommitment",
     ]) {
       requestApprovalSurface(
@@ -57,7 +58,7 @@ describe("approval surface", () => {
       );
     }
 
-    expect(opened).toEqual([42, 42, 42]);
+    expect(opened).toEqual([42, 42, 42, 42]);
   });
 
   test("does not open for non-approval messages or untrusted senders", () => {

@@ -1,9 +1,8 @@
 /**
- * Key-boundary scan catalog: one request payload per handled background
- * message type, plus a source-derived list of every wallet.* type the
+ * Key-boundary scan catalog: one request payload per handled background message
+ * type, plus a source-derived list of every wallet.* type the
  * background actually handles. The key-boundary suite asserts the catalog
- * covers the derived list, so a new message type cannot ship without entering
- * the secret-leak scan — the list can never silently go stale again.
+ * covers the derived list, so new message types cannot bypass the secret scan.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -465,6 +464,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   { message: { origin: ORIGIN, type: "wallet.strk20Balances" }, sender: contentSender },
+  { message: { origin: ORIGIN, type: "wallet.strk20Register" }, sender: contentSender },
   {
     message: { origin: ORIGIN, params: {}, type: "wallet.strk20InvokeTransaction" },
     sender: contentSender,

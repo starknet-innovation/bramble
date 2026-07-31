@@ -1,4 +1,11 @@
-import { ArrowDownToLine, ArrowUpFromLine, LockKeyhole, RefreshCw, Send } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  LockKeyhole,
+  RefreshCw,
+  Send,
+  ShieldCheck,
+} from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { avnuTokenArtwork } from "../assets/avnu-token-assets";
 import { TokenIcon } from "../components";
@@ -19,10 +26,13 @@ import {
   buildPrivacyWithdraw,
 } from "../protocols/privacy";
 import { useWallet } from "../wallet/WalletProvider";
+import { isPrivateRegistrationRequired } from "../wallet/privacy-wallet";
 import type { ScreenId } from "../shell/screens";
+import { PrivateBalanceGrid } from "./privacy/PrivateBalanceGrid";
+import { PrivacyRegistration } from "./privacy/PrivacyRegistration";
 
 type PrivacyProps = { readonly onNavigate: (screen: ScreenId) => void };
-type Mode = "balances" | "deposit" | "swap" | "transfer" | "withdraw";
+type Mode = "balances" | "deposit" | "register" | "swap" | "transfer" | "withdraw";
 type TokenOption = {
   readonly address: string;
   readonly decimals: number;
@@ -68,6 +78,7 @@ const formatRaw = (raw: string, decimals: number): string => {
 const modeLabel: Readonly<Record<Mode, string>> = {
   balances: "Private balances",
   deposit: "Shield",
+  register: "Activate",
   swap: "Private swap",
   transfer: "Private transfer",
   withdraw: "Withdraw",
@@ -93,6 +104,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
     isConnecting,
     preparePrivateInvoke,
     privateBalances,
+    registerPrivate,
   } = useWallet();
   const [mode, setMode] = useState<Mode>("balances");
   const [token, setToken] = useState<TokenOption>(TOKENS[0] as TokenOption);
@@ -104,6 +116,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
   const [status, setStatus] = useState("Connect MC Wallet to inspect private balances.");
   const [busy, setBusy] = useState(false);
   const [swapReview, setSwapReview] = useState<SwapReview | null>(null);
+  const [registration, setRegistration] = useState<"active" | "required" | "unknown">("unknown");
 
   useEffect(() => {
     let cancelled = false;
@@ -125,6 +138,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
     chainId === "SN_MAIN" || chainId?.toLowerCase() === "0x534e5f4d41494e";
   const actionSummary = useMemo(() => {
     if (mode === "deposit") return "Move a public ERC20 balance into private notes.";
+    if (mode === "register") return "Complete the one-time public registration for this account.";
     if (mode === "withdraw") return "Return a private balance to a public Starknet address.";
     if (mode === "transfer") return "Send notes privately to a registered pool recipient.";
     if (mode === "swap") return "Trade through AVNU while settling inputs and output as private notes.";
@@ -137,9 +151,31 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
     try {
       const rows = await privateBalances(TOKENS.map((item) => item.address));
       setBalances(new Map(rows.map((row) => [BigInt(row.token), row.balance])));
+      setRegistration("active");
       setStatus("Private balances are current.");
     } catch (cause) {
+      if (isPrivateRegistrationRequired(cause)) {
+        setRegistration("required");
+        setMode("register");
+        setStatus("Activate this account before requesting private balances.");
+        return;
+      }
       setStatus(cause instanceof Error ? cause.message : "Private balances are unavailable.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const activatePrivateBalances = async (): Promise<void> => {
+    setBusy(true);
+    setStatus("Opening MC Wallet for one-time registration review…");
+    try {
+      const transactionHash = await registerPrivate();
+      setRegistration("active");
+      setMode("balances");
+      setStatus(`Registration accepted on Starknet · ${short(transactionHash)}`);
+    } catch (cause) {
+      setStatus(cause instanceof Error ? cause.message : "Private activation failed.");
     } finally {
       setBusy(false);
     }
@@ -255,6 +291,7 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
               type="button"
             >
               {item === "balances" ? <RefreshCw /> : null}
+              {item === "register" ? <ShieldCheck /> : null}
               {item === "deposit" ? <ArrowDownToLine /> : null}
               {item === "withdraw" ? <ArrowUpFromLine /> : null}
               {item === "transfer" ? <Send /> : null}
@@ -292,33 +329,24 @@ export default function Privacy({ onNavigate }: PrivacyProps): ReactNode {
               <h3>Switch to Starknet Mainnet</h3>
               <p>This audited pool address is bound to Mainnet. No request was sent.</p>
             </div>
+          ) : mode === "register" ? (
+            <PrivacyRegistration
+              active={registration === "active"}
+              busy={busy}
+              onActivate={() => void activatePrivateBalances()}
+              poolAddress={pool?.address ?? "0x040337…812a"}
+            />
           ) : mode === "balances" ? (
-            <div className="private-balance-grid">
-              {TOKENS.map((item) => {
-                const balance = balances.get(BigInt(item.address)) ?? "0x0";
-                return (
-                  <article key={item.address}>
-                    <TokenIcon
-                      logoUri={item.logoUri}
-                      name={item.symbol}
-                      size={34}
-                      symbol={item.symbol}
-                    />
-                    <span>{item.symbol}</span>
-                    <strong>{formatRaw(balance, item.decimals)}</strong>
-                    <small>Private balance</small>
-                  </article>
-                );
-              })}
-              <button
-                className="privacy-primary"
-                disabled={busy}
-                onClick={() => void refreshBalances()}
-                type="button"
-              >
-                <RefreshCw size={15} /> {busy ? "Reading wallet…" : "Refresh balances"}
-              </button>
-            </div>
+            <PrivateBalanceGrid
+              busy={busy}
+              items={TOKENS.map((item) => ({
+                address: item.address,
+                balance: formatRaw(balances.get(BigInt(item.address)) ?? "0x0", item.decimals),
+                logoUri: item.logoUri,
+                symbol: item.symbol,
+              }))}
+              onRefresh={() => void refreshBalances()}
+            />
           ) : (
             <div className="privacy-compose-grid">
               <div className="privacy-form">

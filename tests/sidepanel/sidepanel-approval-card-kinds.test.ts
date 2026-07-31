@@ -157,6 +157,12 @@ describe("approvalCard renders each approval kind", () => {
       title: "Private proof request",
     },
     {
+      action: "Activate",
+      hint: "publishes a viewing-key commitment",
+      kind: "strk20-register",
+      title: "Activate private balances",
+    },
+    {
       action: "Share commitment",
       hint: "may link sessions for this site",
       kind: "strk20-subaccount",

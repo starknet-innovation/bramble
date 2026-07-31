@@ -322,6 +322,13 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
         lockedHint: "Unlock the wallet to review this private proof request.",
         title: "Private proof request",
       });
+    case "strk20-register":
+      return strk20DisclosureCard(approval, status, {
+        action: "Activate",
+        hint: "This submits a public, one-time registration transaction. It publishes a viewing-key commitment, never the viewing key or private notes.",
+        lockedHint: "Unlock the wallet to review this private-balance activation.",
+        title: "Activate private balances",
+      });
     case "strk20-subaccount":
       return strk20DisclosureCard(approval, status, {
         action: "Share commitment",

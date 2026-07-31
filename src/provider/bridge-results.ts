@@ -386,6 +386,7 @@ const switchChainPayload: ResultMapper = (result) =>
 const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
   mc_accounts: chainIdOr(accountsViewPayload),
   mc_requestAccounts: chainIdOr(accountsViewPayload),
+  mc_strk20Register: chainIdOr(invokeTxPayload),
   wallet_requestAccounts: chainIdOr(accountsAddressesPayload),
   wallet_requestChainId: chainIdOr(accountsViewPayload),
   wallet_switchStarknetChain: switchChainPayload,
@@ -414,6 +415,8 @@ const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
       return RESULT_MAPPERS.mc_accounts;
     case "mc_requestAccounts":
       return RESULT_MAPPERS.mc_requestAccounts;
+    case "mc_strk20Register":
+      return RESULT_MAPPERS.mc_strk20Register;
     case "wallet_addDeclareTransaction":
       return RESULT_MAPPERS.wallet_addDeclareTransaction;
     case "wallet_addInvokeTransaction":

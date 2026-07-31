@@ -4,6 +4,7 @@
 const PROVIDER_METHODS = [
   "mc_accounts",
   "mc_requestAccounts",
+  "mc_strk20Register",
   "wallet_addDeclareTransaction",
   "wallet_addInvokeTransaction",
   "wallet_deploymentData",

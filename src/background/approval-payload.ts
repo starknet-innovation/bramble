@@ -97,6 +97,7 @@ const READERS: Readonly<Record<ApprovalKind, PayloadReader>> = {
   "strk20-balances": readStrk20Disclosure,
   "strk20-invoke": readStrk20Invoke,
   "strk20-prepare": readStrk20Disclosure,
+  "strk20-register": readStrk20Disclosure,
   "strk20-subaccount": readStrk20Disclosure,
   "switch-chain": readSwitch,
   "watch-asset": empty,

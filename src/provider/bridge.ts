@@ -298,6 +298,8 @@ const requestAccountsMessage: RuntimeBuilder = (params, origin) => {
 const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
   mc_accounts: (_params, origin) => ({ origin, type: "wallet.getGrantedAccounts" }),
   mc_requestAccounts: requestAccountsMessage,
+  mc_strk20Register: (params, origin) =>
+    params === undefined ? { origin, type: "wallet.strk20Register" } : null,
   wallet_requestAccounts: requestAccountsMessage,
   wallet_getPermissions: (params, origin) =>
     readApiVersionParam(params) === null ? null : { origin, type: "wallet.getPermissions" },
@@ -378,6 +380,8 @@ const runtimeBuilderFor = (method: ProviderMethod): RuntimeBuilder => {
       return RUNTIME_BUILDERS.mc_accounts;
     case "mc_requestAccounts":
       return RUNTIME_BUILDERS.mc_requestAccounts;
+    case "mc_strk20Register":
+      return RUNTIME_BUILDERS.mc_strk20Register;
     case "wallet_addDeclareTransaction":
       return RUNTIME_BUILDERS.wallet_addDeclareTransaction;
     case "wallet_addInvokeTransaction":
