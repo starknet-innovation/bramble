@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { authorizeOrigin, serviceUrl } from "../../api/_lib/security";
-import gatewayHandler from "../../api/strk20/[...route]";
+import gatewayHandler from "../../api/strk20/gateway";
+import vercelConfig from "../../vercel.json";
 
 const originalExtensionOrigins = process.env.MC_WALLET_EXTENSION_ORIGINS;
 const originalDiscoveryUpstream = process.env.STRK20_DISCOVERY_UPSTREAM;
@@ -52,6 +53,23 @@ const response = (): {
 };
 
 describe("privacy gateway security configuration", () => {
+  it("keeps API functions outside the SPA fallback", () => {
+    expect(vercelConfig.rewrites).toContainEqual({
+      destination: "/api/strk20/gateway?service=:service",
+      source: "/api/strk20/:service",
+    });
+    expect(vercelConfig.rewrites).toContainEqual({
+      destination: "/api/strk20/gateway?service=:service&path=:path",
+      source: "/api/strk20/:service/:path*",
+    });
+    const fallback = vercelConfig.rewrites.at(-1);
+    expect(fallback?.destination).toBe("/index.html");
+    const matchesFallback = new RegExp(`^${fallback?.source}$`);
+    expect(matchesFallback.test("/privacy")).toBe(true);
+    expect(matchesFallback.test("/api/strk20/discovery/health")).toBe(false);
+    expect(matchesFallback.test("/api/private-swap/quote")).toBe(false);
+  });
+
   it("fails closed without a released extension origin", () => {
     delete process.env.MC_WALLET_EXTENSION_ORIGINS;
     const target = response();
@@ -116,7 +134,7 @@ describe("privacy gateway security configuration", () => {
       {
         headers: { origin },
         method: "GET",
-        query: { route: ["discovery", "health"] },
+        query: { path: "health", service: "discovery" },
       } as unknown as VercelRequest,
       target.value,
     );

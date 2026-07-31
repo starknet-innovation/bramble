@@ -44,7 +44,15 @@
       "destination": "https://starkscan.co/:path*"
     },
     {
-      "source": "/:path*",
+      "source": "/api/strk20/:service",
+      "destination": "/api/strk20/gateway?service=:service"
+    },
+    {
+      "source": "/api/strk20/:service/:path*",
+      "destination": "/api/strk20/gateway?service=:service&path=:path"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

@@ -24,7 +24,7 @@ import {
   readJsonBody,
   reject,
   serviceUrl,
-} from "../_lib/security";
+} from "../_lib/security.js";
 
 export const config = { maxDuration: 120 };
 const MAX_BODY_BYTES = 4 * 1024 * 1024;

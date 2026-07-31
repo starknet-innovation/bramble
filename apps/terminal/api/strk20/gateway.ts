@@ -7,7 +7,7 @@ import {
   PRIVACY_POOL_ADDRESS,
   reject,
   serviceUrl,
-} from "../_lib/security";
+} from "../_lib/security.js";
 
 export const config = {
   api: { bodyParser: false },
@@ -29,9 +29,9 @@ const DISCOVERY_PATHS = new Set([
 ]);
 
 const readRoute = (request: VercelRequest): { path: string; service: Service } | null => {
-  const route = request.query.route;
-  const parts = Array.isArray(route) ? route : typeof route === "string" ? [route] : [];
-  const [service, ...pathParts] = parts;
+  const service = request.query.service;
+  const path = request.query.path;
+  const pathParts = Array.isArray(path) ? path : typeof path === "string" ? [path] : [];
   if (service !== "discovery" && service !== "paymaster" && service !== "prover") {
     return null;
   }

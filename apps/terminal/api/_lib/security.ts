@@ -3,7 +3,7 @@ export {
   AVNU_PAYMASTER_URL,
   PRIVATE_SWAP_FEE_TOKEN,
   PRIVACY_POOL_ADDRESS,
-} from "../../shared/privacy";
+} from "../../shared/privacy.js";
 
 const HTTPS_PROTOCOL = "https:";
 const LOCAL_ORIGINS = new Set([
