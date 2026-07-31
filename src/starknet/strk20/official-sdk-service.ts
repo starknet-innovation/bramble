@@ -6,25 +6,24 @@
 import type { Signature, TypedData } from "starknet";
 import { num, RpcProvider, typedData } from "starknet";
 import { WalletError } from "../../shared/errors";
-import { isJson, isRecord } from "../../shared/json";
+import { isJson } from "../../shared/json";
 import { STARKNET_NETWORKS, sameFelt } from "../networks";
 import { submitInvokeTransaction } from "../rpc-submit";
 import { Strk20CallSetSigner } from "./call-set-signer";
-import type { Strk20NetworkConfig } from "./config";
 import type { Strk20MaturityScope, Strk20MaturityStore } from "./maturity";
 import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
-import { mapStrk20ProtocolError } from "./official-sdk-errors";
+import {
+  mapStrk20ProtocolError,
+  mapStrk20StageError,
+  type Strk20FailureStage,
+} from "./official-sdk-errors";
 import { createStrk20MaturityRuntime, type Strk20MaturityRuntime } from "./official-sdk-maturity";
 import { areHistoricalDepositsReady, isHistoricalAccountReady } from "./official-sdk-readiness";
-import type {
-  PrivacySdkRuntime,
-  SdkBuilder,
-  SdkTransfers,
-  SdkWarning,
-} from "./official-sdk-runtime";
+import { assertNoSdkWarnings, readCallAndProof } from "./official-sdk-results";
+import type { PrivacySdkRuntime, SdkBuilder, SdkTransfers } from "./official-sdk-runtime";
 import { approveCalls, balancesFrom, requireStrk20Config } from "./official-sdk-values";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "./paymaster";
-import { isStrk20CallAndProof, STRK20_LIMITS, type Strk20CallAndProof } from "./schemas";
+import type { Strk20CallAndProof } from "./schemas";
 import {
   STRK20_PRIVACY_LEAK,
   STRK20_SERVICE_UNAVAILABLE,
@@ -104,82 +103,29 @@ const transfersFor = (sdk: PrivacySdkRuntime, context: Strk20AccountContext): Sd
   });
 };
 
-const assertNoSdkWarnings = (value: unknown): void => {
-  if (!isRecord(value) || !Array.isArray(value["warnings"])) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  const warnings = value["warnings"] as readonly SdkWarning[];
-  if (warnings.length > STRK20_LIMITS.sdkWarnings) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  if (warnings.some((warning) => isRecord(warning) && warning["code"] === "USER_LINKAGE")) {
-    throw new WalletError(STRK20_PRIVACY_LEAK);
-  }
-  if (
-    warnings.length > 0 ||
-    !warnings.every(
-      (warning) =>
-        isRecord(warning) &&
-        typeof warning["code"] === "string" &&
-        warning["code"].length <= 64 &&
-        typeof warning["message"] === "string" &&
-        warning["message"].length <= 512,
-    )
-  ) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-};
-
 const maturityScope = (input: Strk20AccountContext, poolAddress: string) => ({
   accountId: input.account.id,
   networkId: input.account.networkId,
   poolAddress,
 });
 
-const readCallAndProof = (
-  value: unknown,
-  config: Strk20NetworkConfig,
-  simulate: boolean,
-): Strk20CallAndProof => {
-  const source = isRecord(value) && isRecord(value["callAndProof"]) ? value["callAndProof"] : null;
-  if (!source || !isRecord(source["call"]) || !isRecord(source["proof"])) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+// Discovery-provider construction and builder assembly ran outside any mapping,
+// so an SDK throw here reached the message boundary unmapped and lost its cause.
+const discoverWith = (
+  sdk: PrivacySdkRuntime,
+  input: Strk20PrepareInput,
+  stage: Strk20FailureStage,
+  builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
+): { readonly builder: SdkBuilder; readonly transfers: SdkTransfers } => {
+  try {
+    const transfers = transfersFor(sdk, input);
+    return {
+      builder: builderForTransfers?.(transfers) ?? strk20BuilderFor(sdk, transfers, input.actions),
+      transfers,
+    };
+  } catch (error) {
+    return mapStrk20StageError(stage, error);
   }
-  const call = source["call"];
-  const proof = source["proof"];
-  if (
-    !Array.isArray(call["calldata"]) ||
-    call["calldata"].length > STRK20_LIMITS.invokeCalldataFelts ||
-    !call["calldata"].every((item) => typeof item === "string") ||
-    !Array.isArray(proof["output"]) ||
-    proof["output"].length > STRK20_LIMITS.proofOutputFelts ||
-    !Array.isArray(proof["proofFacts"]) ||
-    proof["proofFacts"].length > STRK20_LIMITS.proofFacts
-  ) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  const candidate = {
-    call: {
-      calldata: [...call["calldata"]],
-      contract_address: call["contractAddress"],
-      entry_point: call["entrypoint"],
-    },
-    proof: simulate
-      ? { data: "", output: [], proof_facts: [] }
-      : {
-          data: proof["data"],
-          output: proof["output"],
-          proof_facts: proof["proofFacts"],
-        },
-  };
-  if (
-    !isStrk20CallAndProof(candidate) ||
-    !sameFelt(candidate.call.contract_address, config.poolAddress) ||
-    candidate.call.entry_point !== "apply_actions"
-  ) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  return candidate;
 };
 
 const prepareWith = async (
@@ -201,9 +147,12 @@ const prepareWith = async (
   if (!nodeUrl) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
-  const transfers = transfersFor(sdk, input);
-  const builder =
-    builderForTransfers?.(transfers) ?? strk20BuilderFor(sdk, transfers, input.actions);
+  const { builder, transfers } = discoverWith(
+    sdk,
+    input,
+    historicalState === "registration" ? "registration-preparation" : "discovery",
+    builderForTransfers,
+  );
   try {
     const provider = providerFor(nodeUrl);
     const readinessKind =
@@ -236,7 +185,7 @@ const prepareWith = async (
     assertNoSdkWarnings(result);
     return readCallAndProof(result, config, input.simulate);
   } catch (error) {
-    return mapStrk20ProtocolError(error);
+    return mapStrk20StageError("proving", error);
   }
 };
 
@@ -309,24 +258,32 @@ export const createOfficialStrk20Service = ({
             strk20RegistrationBuilderFor,
             "registration",
           ),
+        // The broadcast ran unmapped, so a pool rejection of apply_actions
+        // reached the message boundary as a raw starknet.js error and its revert
+        // reason was replaced by a generic failure. Map it with the submission
+        // stage so the on-chain reason survives, sanitized, to the user.
         async (callAndProof) => {
-          const result = await submitInvoke({
-            account: input.account,
-            calls: [
-              {
-                calldata: [...callAndProof.call.calldata],
-                contractAddress: config.poolAddress,
-                entrypoint: "apply_actions",
+          try {
+            const result = await submitInvoke({
+              account: input.account,
+              calls: [
+                {
+                  calldata: [...callAndProof.call.calldata],
+                  contractAddress: config.poolAddress,
+                  entrypoint: "apply_actions",
+                },
+              ],
+              proof: callAndProof.proof,
+              rpcUrls: input.rpcUrls,
+              signHash: async (messageHash) => {
+                const signature = await input.signHash(messageHash);
+                return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
               },
-            ],
-            proof: callAndProof.proof,
-            rpcUrls: input.rpcUrls,
-            signHash: async (messageHash) => {
-              const signature = await input.signHash(messageHash);
-              return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
-            },
-          });
-          return { transactionHash: result.transactionHash };
+            });
+            return { transactionHash: result.transactionHash };
+          } catch (error) {
+            return mapStrk20StageError("submission", error);
+          }
         },
       );
     },

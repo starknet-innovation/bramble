@@ -7,6 +7,7 @@
 import type { RpcProvider } from "starknet";
 import { WalletError } from "../../shared/errors";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "../networks";
+import { isTransportRpcError } from "../provider";
 import {
   memoryStrk20MaturityStore,
   type Strk20MaturityScope,
@@ -185,8 +186,20 @@ export const createStrk20MaturityRuntime = ({
   ): Promise<T> =>
     serializeSubmission(scope, async () => {
       const prepared = await prepare();
+      const previous = await store.read(scope);
       await store.write(scope, { state: "submitting" });
-      const result = await broadcast(prepared);
+      // A structured RPC rejection is determinate: the sequencer refused the
+      // transaction, so no write is in flight and the scope must be released or
+      // every later attempt on it fails with a stale `submitting` guard.
+      // Transport and unknown failures stay indeterminate — the transaction may
+      // have been accepted after the response was lost — so those keep the scope
+      // closed rather than risk proving against state a landed write invalidates.
+      const result = await broadcast(prepared).catch(async (error: unknown) => {
+        if (!isTransportRpcError(error)) {
+          await store.write(scope, previous);
+        }
+        throw error;
+      });
       await recordSubmission(provider, scope, result.transactionHash);
       return result;
     });

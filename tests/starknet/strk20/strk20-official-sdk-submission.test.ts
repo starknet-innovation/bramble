@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { Call } from "starknet";
+import { memoryStrk20MaturityStore } from "../../../src/starknet/strk20/maturity";
 import { createOfficialStrk20Service } from "../../../src/starknet/strk20/official-sdk-service";
 import {
   STRK20_SDK_ACCOUNT as account,
@@ -16,6 +17,12 @@ import {
   sdkRuntime as runtime,
   STRK20_SDK_TOKEN as token,
 } from "../../support/strk20-official-sdk";
+
+const scope = {
+  accountId: account.id,
+  networkId: account.networkId,
+  poolAddress,
+};
 
 describe("official STRK20 SDK submission boundary", () => {
   test("submits only a non-empty proof to the configured apply_actions call", async () => {
@@ -171,5 +178,44 @@ describe("official STRK20 SDK submission boundary", () => {
         plan: { mode: "account" },
       }),
     ).rejects.toThrow("strk20 privacy leak");
+  });
+
+  test("surfaces a pool rejection of registration and frees the scope for a retry", async () => {
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const maturityStore = memoryStrk20MaturityStore();
+    let attempts = 0;
+    const service = createOfficialStrk20Service({
+      maturityStore,
+      providerFor,
+      sdk,
+      async submitInvoke(input) {
+        attempts += 1;
+        if (attempts === 1) {
+          throw Object.assign(new Error("RPC: starknet_addInvokeTransaction with params {...}"), {
+            baseError: {
+              code: 41,
+              data: { execution_error: "pool/registration-closed" },
+              message: "Transaction execution error",
+            },
+          });
+        }
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    // The revert reason reaches the caller instead of a bare generic failure.
+    await expect(service.register?.(context)).rejects.toThrow(
+      "(submission/execution-reverted): 41 Transaction execution error pool/registration-closed",
+    );
+    // And the scope is not left stuck on `submitting`, so the retry proceeds.
+    expect(await maturityStore.read(scope)).toBeNull();
+    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    expect(attempts).toBe(2);
   });
 });

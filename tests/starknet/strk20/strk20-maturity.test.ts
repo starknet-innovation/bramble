@@ -215,4 +215,107 @@ describe("STRK20 proof maturity", () => {
       "strk20 services unavailable",
     );
   });
+
+  test("uses the built-in receipt wait when no override is injected", async () => {
+    const store = memoryStrk20MaturityStore();
+    const receiptFor = (receipt: { block_number: unknown; isSuccess: () => boolean }) =>
+      ({
+        getBlockNumber: async () => 30,
+        waitForTransaction: async () => receipt,
+      }) as unknown as RpcProvider;
+
+    // Accepted receipt: the default wait reads the block straight off it.
+    await createStrk20MaturityRuntime({ store }).recordSubmission(
+      receiptFor({ block_number: 12, isSuccess: () => true }),
+      scope,
+      "0x456",
+    );
+    expect(await store.read(scope)).toEqual({
+      acceptedBlock: 12,
+      state: "submitted",
+      transactionHash: "0x456",
+    });
+
+    // A reverted receipt clears the scope so a retry is not blocked by it.
+    await expect(
+      createStrk20MaturityRuntime({ store }).recordSubmission(
+        receiptFor({ block_number: 12, isSuccess: () => false }),
+        scope,
+        "0x789",
+      ),
+    ).rejects.toThrow("strk20 services unavailable");
+    expect(await store.read(scope)).toBeNull();
+
+    // An unusable block number fails closed rather than being trusted.
+    await expect(
+      createStrk20MaturityRuntime({ store }).recordSubmission(
+        receiptFor({ block_number: Number.NaN, isSuccess: () => true }),
+        scope,
+        "0xabc",
+      ),
+    ).rejects.toThrow("strk20 services unavailable");
+  });
+
+  test("rejects a submission hash that is not a non-zero field element", async () => {
+    const runtime = createStrk20MaturityRuntime({ store: memoryStrk20MaturityStore() });
+    await expect(runtime.recordSubmission(providerWith([]), scope, "0x0")).rejects.toThrow(
+      "strk20 services unavailable",
+    );
+  });
+
+  test("releases the scope when the sequencer determinately rejects the broadcast", async () => {
+    const store = memoryStrk20MaturityStore();
+    const runtime = createStrk20MaturityRuntime({ store });
+    const rejected = Object.assign(new Error("RPC: starknet_addInvokeTransaction"), {
+      baseError: { code: 41, data: { execution_error: "argent/invalid-owner-sig" }, message: "x" },
+    });
+
+    await expect(
+      runtime.submitAccepted(
+        providerWith([]),
+        scope,
+        async () => "prepared",
+        async () => {
+          throw rejected;
+        },
+      ),
+      // The maturity layer rethrows untouched; the service adapter is what maps
+      // the rejection into a staged, sanitized wallet error.
+    ).rejects.toThrow("RPC: starknet_addInvokeTransaction");
+
+    // The scope must not stay stuck on `submitting`, or every later retry would
+    // report a stale guard instead of the actual rejection.
+    expect(await store.read(scope)).toBeNull();
+    await expect(runtime.provingBlock(providerWith([30]), scope)).resolves.toBe(20);
+  });
+
+  test("keeps an earlier accepted write when a later broadcast is rejected", async () => {
+    const store = memoryStrk20MaturityStore();
+    const runtime = createStrk20MaturityRuntime({
+      store,
+      waitForAccepted: async () => 25,
+    });
+    await runtime.recordSubmission(providerWith([]), scope, "0x456");
+
+    await expect(
+      runtime.submitAccepted(
+        providerWith([]),
+        scope,
+        async () => "prepared",
+        async () => {
+          throw Object.assign(new Error("rejected"), {
+            baseError: { code: 55, data: "insufficient max fee", message: "y" },
+          });
+        },
+      ),
+    ).rejects.toThrow("rejected");
+
+    // Releasing the scope must not forget the write a later proof has to age
+    // past, so the prior accepted record is restored rather than cleared.
+    expect(await store.read(scope)).toEqual({
+      acceptedBlock: 25,
+      state: "submitted",
+      transactionHash: "0x456",
+    });
+  });
 });
