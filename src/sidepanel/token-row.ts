@@ -8,6 +8,7 @@ import { STRK_TOKEN_ADDRESS } from "../starknet/networks";
 import { tokenLogoSvg } from "../starknet/token-logos-svg";
 import type { DisplayCurrency } from "../storage/preferences-store";
 import { formatFiat, tokenFiatValue } from "./fiat";
+import { icon } from "./icons";
 
 /**
  * Renders a token's bundled logo when one is known, else a letter badge from
@@ -96,6 +97,7 @@ export const balanceRow = (
   price: number | undefined,
   change: number | undefined,
   currency: DisplayCurrency,
+  options: { readonly private?: boolean } = {},
 ): string => {
   const fiat = tokenFiatValue(token.formatted, price);
   return `<li class="token-row">
@@ -103,7 +105,7 @@ export const balanceRow = (
       ${tokenGlyph(token.address, token.symbol)}
       <div class="token-copy">
         <strong>${escapeHtml(token.symbol)}</strong>
-        <p data-live-key="token:${escapeHtml(token.id)}:balance" data-live-value="${escapeHtml(token.formatted)}">${escapeHtml(compactAmount(token.formatted))}</p>
+        <p data-live-key="token:${escapeHtml(token.id)}:balance" data-live-value="${escapeHtml(token.formatted)}">${escapeHtml(compactAmount(token.formatted))}${options.private ? `<span class="private-balance-mark" aria-label="Private balance">${icon("lock")}</span>` : ""}</p>
       </div>
       <div class="token-side">
         <span class="token-amount" data-live-key="token:${escapeHtml(token.id)}:fiat" data-live-value="${fiat === null ? "unknown" : fiat}">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>

@@ -39,6 +39,14 @@ describe("balanceRow", () => {
     expect(html).not.toContain("token-change");
   });
 
+  test("marks a private balance without changing the public row structure", () => {
+    const html = balanceRow(token, 2000, 1.53, "usd", { private: true });
+
+    expect(html).toContain('class="token-open"');
+    expect(html).toContain('class="private-balance-mark" aria-label="Private balance"');
+    expect(html).toContain("$1,684.00");
+  });
+
   // Logos moved from 128px raster <img> to inline vector <svg> so they stay
   // crisp on high-DPI displays; unknown tokens still fall back to a letter badge.
   test("renders a bundled token logo as an inline vector svg", () => {

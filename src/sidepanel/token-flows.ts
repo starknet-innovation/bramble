@@ -12,6 +12,7 @@ import { emptyState, receipt } from "../ui/content";
 import { button } from "../ui/controls";
 import { textField } from "../ui/fields";
 import { formatFiat, tokenFiatValue } from "./fiat";
+import { icon } from "./icons";
 import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "./parts";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import { sparklinePath, sparklineTrend } from "./sparkline";
@@ -187,6 +188,9 @@ export const tokenDetailFlow = (
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
   const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
+  const privateFiat = privateBalance
+    ? tokenFiatValue(privateBalance.formatted, price ?? undefined)
+    : null;
   const registered = privacy.value?.registration === "registered";
   return (
     flowHeader(token.symbol, status, token.name) +
@@ -206,7 +210,13 @@ export const tokenDetailFlow = (
         </div>
         ${
           privacy.enabled && registered
-            ? `<div class="privacy-callout"><span class="privacy-toggle-copy"><strong>Private balance</strong><span>Discovered from shielded notes</span></span><strong>${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong></div>`
+            ? `<div class="private-balance-summary">
+                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="token-side">
+                  <strong class="token-amount">${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong>
+                  ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
+                </span>
+              </div>`
             : ""
         }
         ${button({

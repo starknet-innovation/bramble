@@ -143,7 +143,7 @@ const working = (journey: Extract<PrivacyJourneyState, { readonly stage: "workin
 
 const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "success" }>): string => `
   <section class="privacy-outcome privacy-success" role="status" aria-live="polite">
-    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="m7 14.5 4.5 4.5L21 9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"/></svg></span>
+    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg></span>
     <h2>${journey.kind === "register" ? "Activation accepted" : `${escapeHtml(journey.symbol)} shielding accepted`}</h2>
     <p>${journey.kind === "register" ? "Starknet accepted the registration. Check its indexer status before shielding a tracked token." : "Starknet accepted the deposit. Your private balance will appear after the privacy indexer catches up."}</p>
     <code>${escapeHtml(shortAddress(journey.hash))}</code>
@@ -156,7 +156,7 @@ const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "succes
 
 const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failure" }>): string => `
   <section class="privacy-outcome privacy-failure" role="alert" aria-live="assertive">
-    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 28 28"><path d="m8 8 12 12m0-12L8 20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2.5"/></svg></span>
+    <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-failure-ring" cx="28" cy="28" r="25" /><path class="send-failure-mark" d="m20 20 16 16m0-16L20 36" /></svg></span>
     <h2>Private transaction not completed</h2>
     <p>${escapeHtml(journey.error)}</p>
     <p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>

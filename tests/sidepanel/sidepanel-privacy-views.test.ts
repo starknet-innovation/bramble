@@ -148,6 +148,8 @@ describe("privacy journey templates", () => {
       tokenId: token.id,
     });
     expect(registered).toContain("Activation accepted");
+    expect(registered).toContain('class="send-success-ring"');
+    expect(registered).toContain('class="send-success-check"');
     expect(registered).toContain('id="privacy-check-activation"');
 
     const shielded = privacyFlow(status, preferences, [balance], {
@@ -168,6 +170,8 @@ describe("privacy journey templates", () => {
     });
     expect(failed).toContain("&lt;prover unavailable&gt;");
     expect(failed).toContain("No retry was submitted automatically");
+    expect(failed).toContain('class="send-failure-ring"');
+    expect(failed).toContain('class="send-failure-mark"');
     expect(failed).toContain('id="privacy-retry"');
 
     expect(privacyFlow(status, preferences, [balance], { stage: "idle" })).toContain(

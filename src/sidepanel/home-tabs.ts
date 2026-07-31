@@ -17,7 +17,7 @@ import { type NftGalleryItem, nftImageMarkup, visibleNftItems } from "./nft-view
 import type { PrivacyDisclosureState } from "./privacy-model";
 import type { BalanceState } from "./runtime";
 import { isHiddenFromHome } from "./token-flows";
-import { balanceRow, compactAmount, tokenGlyph } from "./token-row";
+import { balanceRow } from "./token-row";
 
 /**
  * Tab ids of the home portfolio section, in display order.
@@ -147,7 +147,7 @@ const tokensPanel = (
               balanceRow(token, prices[token.address], changes[token.address], currency),
             )
             .join("")}</ul>`;
-  const privateBody = privateBalancesPanel(privacy, preferences);
+  const privateBody = privateBalancesPanel(privacy, preferences, prices, changes, currency);
   return `${privacyToggle(privacy)}
     ${privacy.enabled ? privateBody : publicBody}
     ${
@@ -175,6 +175,9 @@ const privacyToggle = (privacy: PrivacyDisclosureState): string => `
 const privateBalancesPanel = (
   privacy: PrivacyDisclosureState,
   preferences: WalletPreferences | null,
+  prices: Readonly<Record<string, number>>,
+  changes: Readonly<Record<string, number>>,
+  currency: DisplayCurrency,
 ): string => {
   if (privacy.loading) {
     return `<div class="privacy-callout" role="status"><strong>Discovering private notes…</strong><p>Reading the privacy indexer for this account.</p></div>`;
@@ -188,20 +191,9 @@ const privateBalancesPanel = (
   if (privacy.value.registration === "unregistered") {
     return `<div class="privacy-callout"><strong>Activate private balances</strong><p>Register this account with the privacy pool before shielding an asset.</p>${button({ attributes: { "data-privacy-register": true }, icon: "shield", label: "Review activation", size: "small" })}</div>`;
   }
-  const rows = privacy.value.balances
-    .filter((entry) => {
-      const token = preferences?.tokens.find((candidate) => candidate.id === entry.tokenId);
-      return entry.tokenId.length > 0 && (!token || !isHiddenFromHome(token, preferences));
-    })
-    .map(
-      (entry) => `<li>
-        <button class="private-token-row" data-token-detail="${escapeHtml(entry.tokenId)}" type="button">
-          ${tokenGlyph(entry.token, entry.symbol)}
-          <span class="private-token-copy"><strong>${escapeHtml(entry.symbol)}</strong><span>Private</span></span>
-          <span class="private-token-amount">${escapeHtml(compactAmount(entry.formatted))}</span>
-        </button>
-      </li>`,
-    );
+  const rows = visiblePrivateHomeBalances(privacy, preferences).map((token) =>
+    balanceRow(token, prices[token.address], changes[token.address], currency, { private: true }),
+  );
   return rows.length > 0
     ? `<ul class="token-list">${rows.join("")}</ul>`
     : `<div class="privacy-callout"><strong>No private balances yet</strong><p>Open an asset and choose Go private to shield part of its public balance.</p></div>`;

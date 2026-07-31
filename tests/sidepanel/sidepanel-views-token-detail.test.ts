@@ -4,7 +4,9 @@
  * looks the token up and threads its chart-derived price into tokenDetailFlow.
  */
 import { describe, expect, test } from "bun:test";
-import type { WalletStatus } from "../../src/popup/responses";
+import type { TokenBalance, WalletStatus } from "../../src/popup/responses";
+import type { PrivacyDisclosureState } from "../../src/sidepanel/privacy-model";
+import { tokenDetailFlow } from "../../src/sidepanel/token-flows";
 import { dashboard } from "../../src/sidepanel/views";
 import type { TokenConfig, WalletPreferences } from "../../src/storage/preferences-store";
 import { account } from "../support/sidepanel-fixtures";
@@ -36,6 +38,12 @@ const preferences: WalletPreferences = {
   addressBook: [],
   schemaVersion: 1,
   tokens: [token],
+};
+
+const balance: TokenBalance = {
+  ...token,
+  balance: "1250000000000000000",
+  formatted: "1.25",
 };
 
 describe("dashboard token-detail arm", () => {
@@ -74,5 +82,35 @@ describe("dashboard token-detail arm", () => {
     );
 
     expect(html).not.toContain('id="wallet-screen-token-detail"');
+  });
+
+  test("private entry uses the public balance hierarchy with a restrained marker", () => {
+    const privacy: PrivacyDisclosureState = {
+      enabled: true,
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [
+          {
+            balance: "0x6f05b59d3b20000",
+            formatted: "0.5",
+            symbol: token.symbol,
+            token: token.address,
+            tokenId: token.id,
+          },
+        ],
+        networkId: "SN_MAIN",
+        registration: "registered",
+      },
+    };
+
+    const html = tokenDetailFlow(status, token, balance, [10, 20, 30], 2_000, "usd", privacy);
+
+    expect(html).toContain('class="private-balance-summary"');
+    expect(html).toContain('class="private-balance-label"');
+    expect(html).toContain("0.5 ETH");
+    expect(html).toContain("$1,000.00");
+    expect(html).not.toContain("Discovered from shielded notes");
   });
 });

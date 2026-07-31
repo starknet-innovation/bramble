@@ -109,7 +109,9 @@ describe("private portfolio scope", () => {
     expect(hero).not.toContain("$2,500.00");
     expect(hero).toContain("Private portfolio");
     expect(hero).not.toContain("24h");
-    expect(html).toMatch(/private-token-copy[\s\S]*<strong>ETH<\/strong><span>Private<\/span>/);
+    expect(html).toContain('class="token-open"');
+    expect(html).toContain('class="private-balance-mark" aria-label="Private balance"');
+    expect(html).toContain('class="token-amount"');
   });
 
   test("private discovery clears the previous public hero instead of leaking stale state", () => {
