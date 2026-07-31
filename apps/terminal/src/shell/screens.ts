@@ -30,6 +30,17 @@ export const SCREEN_TABS: readonly ScreenTab[] = [
 ];
 
 /**
+ * Resolves a same-page Terminal hash to a known screen, falling back to the
+ * default Discover workspace for missing or untrusted values.
+ */
+export const screenFromHash = (hash: string): ScreenId => {
+  const candidate = hash.replace(/^#/, "");
+  return SCREEN_TABS.some((screen) => screen.id === candidate)
+    ? (candidate as ScreenId)
+    : "discover";
+};
+
+/**
  * Formats a Starknet address as the mockup's `0x04a1…8f2c` short form.
  */
 export const shortenAddress = (address: string): string =>

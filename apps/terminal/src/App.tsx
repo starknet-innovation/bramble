@@ -13,7 +13,7 @@ import Portfolio from "./screens/Portfolio";
 import Privacy from "./screens/Privacy";
 import Tokens from "./screens/Tokens";
 import { BottomBar } from "./shell/BottomBar";
-import { type ScreenId } from "./shell/screens";
+import { type ScreenId, screenFromHash } from "./shell/screens";
 import { TopNav } from "./shell/TopNav";
 import { useWallet } from "./wallet/WalletProvider";
 
@@ -30,12 +30,16 @@ const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
 };
 
 export const App = (): ReactNode => {
-  const [active, setActive] = useState<ScreenId>("discover");
+  const [active, setActive] = useState<ScreenId>(() => screenFromHash(window.location.hash));
   const { clearError, error: walletError } = useWallet();
   const Screen = SCREENS[active];
+  const navigate = (screen: ScreenId): void => {
+    setActive(screen);
+    window.history.replaceState(null, "", `#${screen}`);
+  };
   return (
     <>
-      <TopNav active={active} onNavigate={setActive} />
+      <TopNav active={active} onNavigate={navigate} />
       {walletError ? (
         <div className="wallet-notice" role="alert">
           <span>{walletError}</span>
@@ -45,7 +49,7 @@ export const App = (): ReactNode => {
         </div>
       ) : null}
       <main>
-        <Screen onNavigate={setActive} />
+        <Screen onNavigate={navigate} />
       </main>
       <BottomBar />
     </>
