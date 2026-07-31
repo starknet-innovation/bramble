@@ -21,7 +21,7 @@ export type GatewayAudience = "extension" | "terminal";
 
 type OriginDecision =
   | { readonly allowed: false }
-  | { readonly allowed: true; readonly origin: string };
+  | { readonly allowed: true; readonly origin?: string };
 
 const configuredOrigins = (name: string): readonly string[] =>
   (process.env[name] ?? "")
@@ -66,8 +66,23 @@ const expectedOrigins = (audience: GatewayAudience): ReadonlySet<string> => {
     : new Set();
 };
 
+// Chrome omits Origin and Referer from privileged extension fetches, including
+// MV3 workers and extension pages. Fetch Metadata remains browser-controlled:
+// requiring this exact non-navigation shape blocks website fetches, forms, and
+// address-bar navigations. It is not software attestation; non-browser clients
+// can spoof HTTP headers, so deployment rate limits remain mandatory.
+const isPrivilegedExtensionFetch = (request: VercelRequest): boolean =>
+  request.headers.origin === undefined &&
+  request.headers.referer === undefined &&
+  request.headers["sec-fetch-site"] === "none" &&
+  request.headers["sec-fetch-mode"] === "cors" &&
+  request.headers["sec-fetch-dest"] === "empty";
+
 const originDecision = (request: VercelRequest, audience: GatewayAudience): OriginDecision => {
   const origin = request.headers.origin;
+  if (audience === "extension" && isPrivilegedExtensionFetch(request)) {
+    return { allowed: true };
+  }
   if (typeof origin !== "string" || !expectedOrigins(audience).has(origin)) {
     return { allowed: false };
   }
@@ -106,7 +121,9 @@ export const authorizeOrigin = (
     reject(response, 403, "origin_not_allowed");
     return false;
   }
-  response.setHeader("Access-Control-Allow-Origin", decision.origin);
+  if (decision.origin) {
+    response.setHeader("Access-Control-Allow-Origin", decision.origin);
+  }
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "content-type");
   response.setHeader("Access-Control-Max-Age", "600");

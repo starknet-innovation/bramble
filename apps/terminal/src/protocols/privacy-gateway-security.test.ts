@@ -105,6 +105,45 @@ describe("privacy gateway security configuration", () => {
     ).toBe(false);
   });
 
+  it("accepts Chrome's originless privileged extension fetch shape", () => {
+    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    const target = response();
+    expect(
+      authorizeOrigin(
+        {
+          headers: {
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "none",
+          },
+          method: "GET",
+        } as VercelRequest,
+        target.value,
+        "extension",
+      ),
+    ).toBe(true);
+    expect(target.headers.has("Access-Control-Allow-Origin")).toBe(false);
+  });
+
+  it("rejects originless websites and navigation-shaped requests", () => {
+    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    for (const headers of [
+      {},
+      { "sec-fetch-dest": "empty", "sec-fetch-mode": "cors", "sec-fetch-site": "cross-site" },
+      { "sec-fetch-dest": "document", "sec-fetch-mode": "navigate", "sec-fetch-site": "none" },
+      {
+        referer: "https://attacker.example/",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "none",
+      },
+    ]) {
+      expect(
+        authorizeOrigin({ headers, method: "GET" } as VercelRequest, response().value, "extension"),
+      ).toBe(false);
+    }
+  });
+
   it("accepts only credential-free HTTPS upstream configuration", () => {
     process.env.TEST_PRIVACY_UPSTREAM = "https://private.example/service/";
     expect(serviceUrl("TEST_PRIVACY_UPSTREAM")).toBe("https://private.example/service");
