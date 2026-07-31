@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { type ApprovalContext, createApprovalContext } from "../../src/background/approval-context";
 import {
   createStrk20WalletPreparationStore,
+  type Strk20DepositPreparation,
   type Strk20RegistrationPreparation,
   strk20WalletPreparationPayload,
 } from "../../src/background/strk20-wallet-preparations";
@@ -26,6 +27,35 @@ const registration = async (suffix = ""): Promise<Strk20RegistrationPreparation>
     kind: "register" as const,
     poolAddress: `0x123${suffix}`,
     summaries: ["Register private balances"],
+    token,
+  };
+  const context = await createApprovalContext(account, strk20WalletPreparationPayload(unsigned));
+  return { ...unsigned, context, id: context.payloadDigest };
+};
+
+const privateDeposit = async (): Promise<Strk20DepositPreparation> => {
+  const unsigned = {
+    actions: [{ amount: "0x1", token: token.address, type: "deposit" as const }],
+    amount: "1",
+    amountRaw: "1",
+    kind: "deposit" as const,
+    plan: {
+      authorization: {
+        caller: "0x99",
+        executeAfter: "0x1",
+        executeBefore: "0x100",
+        publicCallCount: 1,
+      },
+      feeAction: {
+        amount: "0x2",
+        recipient: "0x3",
+        token: "0x4",
+        type: "withdraw" as const,
+      },
+      mode: "private-relay" as const,
+    },
+    poolAddress: "0x123",
+    summaries: ["Shield 1 ETH"],
     token,
   };
   const context = await createApprovalContext(account, strk20WalletPreparationPayload(unsigned));
@@ -66,6 +96,24 @@ describe("STRK20 wallet preparation store", () => {
     expect(() => store.put({ ...value, context: badContext })).toThrow(
       "Invalid privacy preparation commitment",
     );
+  });
+
+  test("exposes the exact relay fee and public authorization capability", async () => {
+    const store = createStrk20WalletPreparationStore();
+    const value = await privateDeposit();
+    if (!("feeAction" in value.plan)) {
+      throw new Error("private relay fixture expected");
+    }
+
+    expect(store.put(value)).toMatchObject({
+      authorization: value.plan.authorization,
+      relayFee: {
+        amount: value.plan.feeAction.amount,
+        recipient: value.plan.feeAction.recipient,
+        token: value.plan.feeAction.token,
+      },
+      route: "private-relay",
+    });
   });
 
   test("evicts the oldest preparation after the bounded capacity", async () => {

@@ -62,6 +62,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
     const data = new FormData(form);
     const field = (name: string): string => String(data.get(name) ?? "").trim();
     const discoveryUrl = field("discoveryUrl");
+    const ohttpEnabled = data.get("ohttpEnabled") === "on";
     const proverUrl = field("proverUrl");
     const poolAddress = field("poolAddress");
     const subaccountAnonymizerAddress = field("subaccountAnonymizerAddress");
@@ -81,9 +82,10 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
       ? null
       : {
           discoveryUrl,
+          ...(ohttpEnabled ? { ohttpEnabled: true } : {}),
           poolAddress,
           proverUrl,
-          subaccountAnonymizerAddress,
+          ...(subaccountAnonymizerAddress ? { subaccountAnonymizerAddress } : {}),
           ...(ohttpRelayUrl ? { ohttpRelayUrl } : {}),
           ...(paymasterUrl || feeToken ? { paymaster: { feeToken, url: paymasterUrl } } : {}),
         };

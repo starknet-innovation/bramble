@@ -9,8 +9,19 @@ import { isServiceUrl } from "../../shared/service-url";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
+  STRK_TOKEN_ADDRESS,
   type StarknetNetworkId,
 } from "../networks";
+
+/**
+ * Public same-origin gateway exposed to released wallet builds.
+ */
+export const STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
+/**
+ * Canonical Starknet Mainnet privacy-pool address.
+ */
+export const STRK20_MAINNET_POOL =
+  "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a";
 
 /**
  * Sponsored-private paymaster configuration. The fee token funds the
@@ -26,11 +37,16 @@ export type Strk20PaymasterConfig = {
  */
 export type Strk20NetworkConfig = {
   readonly discoveryUrl: string;
+  readonly ohttpEnabled?: boolean;
   readonly ohttpRelayUrl?: string;
   readonly paymaster?: Strk20PaymasterConfig;
   readonly poolAddress: string;
   readonly proverUrl: string;
-  readonly subaccountAnonymizerAddress: string;
+  /**
+   * Optional SDK sub-account module used only by `subaccount_invoke`. Dapp
+   * anonymizers/executors are separate reviewed invoke targets.
+   */
+  readonly subaccountAnonymizerAddress?: string;
 };
 
 /**
@@ -55,6 +71,7 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
     "discoveryUrl",
+    "ohttpEnabled",
     "ohttpRelayUrl",
     "paymaster",
     "poolAddress",
@@ -63,6 +80,7 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
   ]) &&
   typeof value["discoveryUrl"] === "string" &&
   isServiceUrl(value["discoveryUrl"]) &&
+  (value["ohttpEnabled"] === undefined || typeof value["ohttpEnabled"] === "boolean") &&
   (value["ohttpRelayUrl"] === undefined ||
     (typeof value["ohttpRelayUrl"] === "string" && isServiceUrl(value["ohttpRelayUrl"]))) &&
   (value["paymaster"] === undefined || isPaymasterConfig(value["paymaster"])) &&
@@ -70,8 +88,27 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
   typeof value["proverUrl"] === "string" &&
   isServiceUrl(value["proverUrl"]) &&
-  typeof value["subaccountAnonymizerAddress"] === "string" &&
-  isNonZeroStarkFieldElement(value["subaccountAnonymizerAddress"]);
+  (value["subaccountAnonymizerAddress"] === undefined ||
+    (typeof value["subaccountAnonymizerAddress"] === "string" &&
+      isNonZeroStarkFieldElement(value["subaccountAnonymizerAddress"])));
+
+/**
+ * Bundled mainnet routing uses the Terminal gateway so private upstream
+ * service URLs and paymaster credentials never enter the extension bundle.
+ * OHTTP additionally hides discovery/proving request contents from the relay.
+ */
+export const DEFAULT_STRK20_NETWORKS: Strk20NetworkConfigs = {
+  SN_MAIN: {
+    discoveryUrl: `${STRK20_GATEWAY_BASE}/discovery`,
+    ohttpEnabled: true,
+    paymaster: {
+      feeToken: STRK_TOKEN_ADDRESS,
+      url: `${STRK20_GATEWAY_BASE}/paymaster`,
+    },
+    poolAddress: STRK20_MAINNET_POOL,
+    proverUrl: `${STRK20_GATEWAY_BASE}/prover`,
+  },
+};
 
 /**
  * Validates the sparse per-network STRK20 routing map.

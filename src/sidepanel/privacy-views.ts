@@ -41,6 +41,38 @@ const preparationDetails = (
         value:
           preparation.route === "private-relay" ? "Private relay" : "Public account transaction",
       },
+      ...(preparation.relayFee
+        ? [
+            {
+              label: "Relay fee",
+              value: `${shortAddress(preparation.relayFee.amount)} · token ${shortAddress(preparation.relayFee.token)}`,
+              valueStyle: "code" as const,
+            },
+            {
+              label: "Fee recipient",
+              value: shortAddress(preparation.relayFee.recipient),
+              valueStyle: "code" as const,
+            },
+          ]
+        : []),
+      ...(preparation.authorization
+        ? [
+            {
+              label: "Public approval calls",
+              value: String(preparation.authorization.publicCallCount),
+            },
+            {
+              label: "Authorization window",
+              value: `${shortAddress(preparation.authorization.executeAfter)} → ${shortAddress(preparation.authorization.executeBefore)}`,
+              valueStyle: "code" as const,
+            },
+            {
+              label: "Authorization caller",
+              value: shortAddress(preparation.authorization.caller),
+              valueStyle: "code" as const,
+            },
+          ]
+        : []),
       { label: "Privacy pool", value: shortAddress(preparation.poolAddress), valueStyle: "code" },
     ])}
     <ul class="privacy-facts">

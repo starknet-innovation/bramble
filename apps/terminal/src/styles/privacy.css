@@ -1,0 +1,451 @@
+.privacy-screen {
+  min-height: 100%;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 78% -10%, rgba(255, 255, 255, 0.07), transparent 28rem),
+    var(--bg);
+}
+
+.privacy-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 36px;
+  max-width: 1240px;
+  margin: 0 auto 24px;
+  align-items: end;
+}
+
+.privacy-hero h1 {
+  max-width: 700px;
+  font-size: clamp(30px, 4vw, 48px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.privacy-hero > div > p {
+  max-width: 700px;
+  margin-top: 14px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.privacy-pool-status {
+  display: flex;
+  gap: 12px;
+  min-height: 94px;
+  padding: 16px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(18, 19, 23, 0.86);
+}
+
+.privacy-pool-status div {
+  display: grid;
+  gap: 4px;
+}
+
+.privacy-pool-status small,
+.privacy-workspace-heading span,
+.privacy-review-card > span {
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.privacy-pool-status code {
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.pool-dot,
+.status-pulse {
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+.pool-dot.live {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(72, 199, 142, 0.12);
+}
+
+.privacy-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  max-width: 1240px;
+  min-height: 570px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.privacy-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 14px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.privacy-nav > button {
+  display: flex;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 11px;
+  align-items: center;
+  border-radius: 8px;
+  color: var(--text-2);
+  font-weight: 600;
+  text-align: left;
+}
+
+.privacy-nav > button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.privacy-nav > button:hover,
+.privacy-nav > button.active {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.privacy-trust {
+  display: grid;
+  gap: 4px;
+  margin-top: auto;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.privacy-trust small,
+.privacy-trust span {
+  color: var(--text-3);
+  font-size: 10px;
+}
+
+.privacy-workspace {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.privacy-workspace-heading {
+  display: flex;
+  min-height: 78px;
+  padding: 16px 20px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.privacy-workspace-heading h2 {
+  margin-top: 2px;
+  font-size: 21px;
+}
+
+.privacy-workspace-heading p {
+  max-width: 450px;
+  color: var(--text-2);
+  text-align: right;
+}
+
+.privacy-connect {
+  display: grid;
+  min-height: 420px;
+  place-content: center;
+  justify-items: center;
+  gap: 9px;
+  color: var(--text-2);
+  text-align: center;
+}
+
+.privacy-connect h3 {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.privacy-connect button,
+.privacy-primary {
+  display: inline-flex;
+  min-height: 40px;
+  padding: 0 16px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  color: var(--bg);
+  background: var(--text);
+  font-weight: 750;
+}
+
+.privacy-connect button:disabled,
+.privacy-primary:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.private-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 20px;
+}
+
+.private-balance-grid article {
+  display: grid;
+  min-height: 150px;
+  padding: 16px;
+  align-content: start;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-2);
+}
+
+.private-balance-grid article strong {
+  margin-top: 8px;
+  font-size: 22px;
+}
+
+.private-balance-grid article small {
+  color: var(--text-3);
+}
+
+.private-balance-grid .privacy-primary {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.privacy-compose-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.75fr);
+  gap: 18px;
+  padding: 20px;
+}
+
+.privacy-form,
+.privacy-review-card {
+  display: flex;
+  min-width: 0;
+  padding: 18px;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg-2);
+}
+
+.privacy-form > label {
+  margin: 15px 0 7px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.privacy-form > label:first-child {
+  margin-top: 0;
+}
+
+.privacy-form > small {
+  margin-top: 6px;
+  color: var(--text-3);
+}
+
+.privacy-token-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.privacy-token-options button {
+  display: flex;
+  min-width: 78px;
+  height: 38px;
+  padding: 0 9px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-2);
+  background: var(--surface);
+  font-weight: 700;
+}
+
+.privacy-token-options button:hover,
+.privacy-token-options button.active {
+  color: var(--text);
+  border-color: var(--border-2);
+  background: var(--surface-3);
+}
+
+.privacy-amount-input {
+  display: flex;
+  height: 58px;
+  padding: 0 14px;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-2);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.privacy-amount-input input {
+  min-width: 0;
+  flex: 1;
+  color: var(--text);
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 27px;
+  font-weight: 650;
+}
+
+.privacy-amount-input span {
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+.privacy-address-input {
+  height: 42px;
+  padding: 0 12px;
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.privacy-form .privacy-primary {
+  width: 100%;
+  margin-top: 18px;
+}
+
+.privacy-review-card {
+  gap: 12px;
+}
+
+.privacy-review-card h3 {
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.privacy-review-card > p {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.privacy-review-card dl {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.privacy-review-card dl div {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 1.2fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.privacy-review-card dt {
+  color: var(--text-3);
+}
+
+.privacy-review-card dd {
+  min-width: 0;
+  text-align: right;
+}
+
+.privacy-review-card code {
+  color: var(--text-2);
+  font-size: 10px;
+}
+
+.privacy-live-status {
+  display: flex;
+  min-height: 42px;
+  margin-top: auto;
+  padding: 0 20px;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-2);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.privacy-live-status button {
+  margin-left: auto;
+  color: var(--text);
+  font-weight: 650;
+}
+
+.status-pulse.active {
+  background: var(--text);
+  animation: privacy-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes privacy-pulse {
+  50% {
+    opacity: 0.25;
+    transform: scale(0.72);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-pulse.active {
+    animation: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .privacy-screen {
+    padding: 16px;
+  }
+  .privacy-hero,
+  .privacy-compose-grid {
+    grid-template-columns: 1fr;
+  }
+  .privacy-layout {
+    grid-template-columns: 1fr;
+  }
+  .privacy-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .privacy-nav > button {
+    flex: none;
+    white-space: nowrap;
+  }
+  .privacy-trust {
+    display: none;
+  }
+  .private-balance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .privacy-workspace-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .privacy-workspace-heading p {
+    text-align: left;
+  }
+  .privacy-live-status {
+    align-items: flex-start;
+    padding-block: 12px;
+  }
+}

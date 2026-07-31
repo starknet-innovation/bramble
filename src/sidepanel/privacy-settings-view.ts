@@ -44,10 +44,16 @@ export const strk20ServicesForm = (
     spellcheck: false,
     value: config?.poolAddress ?? "",
   })}
+  <label class="field checkbox-field">
+    <input ${config?.ohttpEnabled ? "checked" : ""} name="ohttpEnabled" type="checkbox">
+    <span>Encrypt discovery and proving requests with OHTTP</span>
+    <small>Requires OHTTP support at both services. The gateway then sees only encrypted envelopes.</small>
+  </label>
   ${textField({
     autocomplete: "off",
     className: "mono",
-    label: "Sub-account anonymizer",
+    hint: "Optional SDK module for subaccount_invoke. Dapp anonymizers are reviewed transaction targets, not network settings.",
+    label: "SDK sub-account module",
     name: "subaccountAnonymizerAddress",
     placeholder: "0x…",
     spellcheck: false,

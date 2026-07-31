@@ -24,7 +24,7 @@ import type {
 } from "./official-sdk-runtime";
 import { approveCalls, balancesFrom, requireStrk20Config } from "./official-sdk-values";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "./paymaster";
-import { isStrk20CallAndProof, type Strk20CallAndProof } from "./schemas";
+import { isStrk20CallAndProof, STRK20_LIMITS, type Strk20CallAndProof } from "./schemas";
 import {
   STRK20_PRIVACY_LEAK,
   STRK20_SERVICE_UNAVAILABLE,
@@ -70,17 +70,32 @@ const transfersFor = (sdk: PrivacySdkRuntime, context: Strk20AccountContext): Sd
     chainId,
     sign: (messageHash) => signatureFor(context, messageHash),
   });
+  const ohttp =
+    config.ohttpEnabled || config.ohttpRelayUrl
+      ? config.ohttpRelayUrl
+        ? { relayUrl: config.ohttpRelayUrl }
+        : true
+      : undefined;
+  if (ohttp && !sdk.IndexerDiscoveryProvider) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  const discoveryProvider =
+    ohttp && sdk.IndexerDiscoveryProvider
+      ? new sdk.IndexerDiscoveryProvider(config.discoveryUrl, config.poolAddress, { ohttp })
+      : { url: config.discoveryUrl };
   return sdk.createPrivateTransfers({
     account: { address: context.account.address, signer },
-    discoveryProvider: { url: config.discoveryUrl },
+    discoveryProvider,
     poolContractAddress: config.poolAddress,
     provingProvider: {
       chainId,
       nodeUrl,
-      ...(config.ohttpRelayUrl ? { ohttp: { relayUrl: config.ohttpRelayUrl } } : {}),
+      ...(ohttp ? { ohttp } : {}),
       url: config.proverUrl,
     },
-    subAccountAnonymizerAddress: config.subaccountAnonymizerAddress,
+    ...(config.subaccountAnonymizerAddress
+      ? { subAccountAnonymizerAddress: config.subaccountAnonymizerAddress }
+      : {}),
     viewingKeyProvider: {
       async getViewingKey() {
         return context.viewingKey();
@@ -94,6 +109,9 @@ const assertNoSdkWarnings = (value: unknown): void => {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
   const warnings = value["warnings"] as readonly SdkWarning[];
+  if (warnings.length > STRK20_LIMITS.sdkWarnings) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
   if (warnings.some((warning) => isRecord(warning) && warning["code"] === "USER_LINKAGE")) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
   }
@@ -103,7 +121,9 @@ const assertNoSdkWarnings = (value: unknown): void => {
       (warning) =>
         isRecord(warning) &&
         typeof warning["code"] === "string" &&
-        typeof warning["message"] === "string",
+        warning["code"].length <= 64 &&
+        typeof warning["message"] === "string" &&
+        warning["message"].length <= 512,
     )
   ) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
@@ -127,9 +147,20 @@ const readCallAndProof = (
   }
   const call = source["call"];
   const proof = source["proof"];
+  if (
+    !Array.isArray(call["calldata"]) ||
+    call["calldata"].length > STRK20_LIMITS.invokeCalldataFelts ||
+    !call["calldata"].every((item) => typeof item === "string") ||
+    !Array.isArray(proof["output"]) ||
+    proof["output"].length > STRK20_LIMITS.proofOutputFelts ||
+    !Array.isArray(proof["proofFacts"]) ||
+    proof["proofFacts"].length > STRK20_LIMITS.proofFacts
+  ) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
   const candidate = {
     call: {
-      calldata: Array.isArray(call["calldata"]) ? call["calldata"].map(String) : null,
+      calldata: [...call["calldata"]],
       contract_address: call["contractAddress"],
       entry_point: call["entrypoint"],
     },
@@ -160,6 +191,12 @@ const prepareWith = async (
   historicalState?: "deposits" | "registration",
 ): Promise<Strk20CallAndProof> => {
   const config = requireStrk20Config(input);
+  if (
+    input.actions.some((action) => action.type === "subaccount_invoke") &&
+    !config.subaccountAnonymizerAddress
+  ) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
   const nodeUrl = input.rpcUrls[0];
   if (!nodeUrl) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
@@ -312,7 +349,10 @@ export const createOfficialStrk20Service = ({
       });
     },
     async subaccountCommitment(input) {
-      requireStrk20Config(input);
+      const config = requireStrk20Config(input);
+      if (!config.subaccountAnonymizerAddress) {
+        throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+      }
       try {
         const transfers = transfersFor(sdk, input);
         await transfers.discoverNotes();

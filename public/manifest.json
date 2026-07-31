@@ -30,6 +30,7 @@
     "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
+    "https://mc-wallet-terminal.vercel.app/*",
     "https://metamask.github.io/*",
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*"

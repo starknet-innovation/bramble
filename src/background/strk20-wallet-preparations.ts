@@ -5,6 +5,7 @@
  */
 
 import { WalletError } from "../shared/errors";
+import type { PaymasterAuthorizationReview } from "../starknet/strk20/paymaster-typed-data";
 import type { Strk20Action } from "../starknet/strk20/schemas";
 import type { Strk20SubmissionPlan } from "../starknet/strk20/service";
 import type { TokenConfig } from "../storage/preferences-store";
@@ -53,11 +54,17 @@ type UnsignedStrk20WalletPreparation =
  */
 export type Strk20WalletPreparationReview = {
   readonly amount?: string;
+  readonly authorization?: PaymasterAuthorizationReview;
   readonly id: string;
   readonly kind: "deposit" | "register";
   readonly payloadDigest: string;
   readonly poolAddress: string;
   readonly route: "private-relay" | "public-account";
+  readonly relayFee?: {
+    readonly amount: string;
+    readonly recipient: string;
+    readonly token: string;
+  };
   readonly summaries: readonly string[];
   readonly symbol: string;
   readonly tokenId: string;
@@ -89,6 +96,11 @@ export const strk20WalletPreparationPayload = (
 
 const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparationReview => ({
   ...(preparation.kind === "deposit" ? { amount: preparation.amount } : {}),
+  ...(preparation.kind === "deposit" &&
+  preparation.plan.mode !== "account" &&
+  preparation.plan.authorization
+    ? { authorization: preparation.plan.authorization }
+    : {}),
   id: preparation.id,
   kind: preparation.kind,
   payloadDigest: preparation.context.payloadDigest,
@@ -97,6 +109,15 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
     preparation.kind === "deposit" && preparation.plan.mode !== "account"
       ? "private-relay"
       : "public-account",
+  ...(preparation.kind === "deposit" && preparation.plan.mode !== "account"
+    ? {
+        relayFee: {
+          amount: preparation.plan.feeAction.amount,
+          recipient: preparation.plan.feeAction.recipient,
+          token: preparation.plan.feeAction.token,
+        },
+      }
+    : {}),
   summaries: [...preparation.summaries],
   symbol: preparation.token.symbol,
   tokenId: preparation.token.id,

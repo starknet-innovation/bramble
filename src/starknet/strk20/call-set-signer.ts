@@ -16,6 +16,7 @@ import type {
   TypedData,
 } from "starknet";
 import { CallData, ec, hash, num, shortString, typedData } from "starknet";
+import { sameFelt } from "../networks";
 
 const poseidon = ec.starkCurve.poseidonHashMany;
 const toFelt = (value: BigNumberish): bigint => num.toBigInt(value);
@@ -80,6 +81,9 @@ export class Strk20CallSetSigner implements SignerInterface {
   }
 
   async signMessage(message: TypedData, accountAddress: string): Promise<Signature> {
+    if (!sameFelt(accountAddress, this.options.accountAddress)) {
+      throw new Error("STRK20 signer account mismatch");
+    }
     return this.options.sign(typedData.getMessageHash(message, accountAddress));
   }
 

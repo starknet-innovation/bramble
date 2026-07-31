@@ -2,7 +2,14 @@
  * The four top-level screens and their nav metadata. Shared by the shell and
  * the App router so tab ids stay in sync.
  */
-export type ScreenId = "discover" | "tokens" | "lending" | "perps" | "nfts" | "portfolio";
+export type ScreenId =
+  | "discover"
+  | "tokens"
+  | "lending"
+  | "perps"
+  | "privacy"
+  | "nfts"
+  | "portfolio";
 
 export type ScreenTab = {
   readonly id: ScreenId;
@@ -17,6 +24,7 @@ export const SCREEN_TABS: readonly ScreenTab[] = [
   { id: "tokens", label: "Tokens" },
   { id: "lending", label: "Lending" },
   { id: "perps", label: "Perps" },
+  { id: "privacy", label: "Privacy" },
   { id: "nfts", label: "NFT Studio" },
   { id: "portfolio", label: "Portfolio" },
 ];

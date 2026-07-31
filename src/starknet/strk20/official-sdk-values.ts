@@ -5,6 +5,7 @@
 import type { BigNumberish, Call } from "starknet";
 import { num } from "starknet";
 import { WalletError } from "../../shared/errors";
+import { isNonZeroStarkFieldElement, STARK_FIELD_PRIME } from "../networks";
 import { buildErc20ApproveCall } from "../rpc-assets";
 import type { Strk20NetworkConfig } from "./config";
 import type { Strk20Action, Strk20BalanceEntry } from "./schemas";
@@ -31,6 +32,65 @@ export const requireStrk20Config = (context: Strk20AccountContext): Strk20Networ
   return context.config;
 };
 
+const readNoteTotal = (
+  tokenNotes: readonly SdkNote[],
+  initialCount: number,
+): { readonly count: number; readonly total: bigint } => {
+  let total = 0n;
+  let count = initialCount;
+  for (const note of tokenNotes) {
+    count += 1;
+    if (count > STRK20_LIMITS.discoveredNotes) {
+      throw new Error("too many notes");
+    }
+    const amount = BigInt(note.amount);
+    if (amount < 0n || amount >= STARK_FIELD_PRIME || total + amount >= STARK_FIELD_PRIME) {
+      throw new Error("invalid note amount");
+    }
+    total += amount;
+  }
+  return { count, total };
+};
+
+const readNoteTotals = (notes: SdkNoteMap): ReadonlyMap<bigint, bigint> => {
+  const totals = new Map<bigint, bigint>();
+  let discoveredNotes = 0;
+  for (const [token, tokenNotes] of notes.entries()) {
+    if (
+      (!totals.has(token) && totals.size >= STRK20_LIMITS.balances) ||
+      token <= 0n ||
+      token >= STARK_FIELD_PRIME ||
+      !Array.isArray(tokenNotes)
+    ) {
+      throw new Error("invalid token note set");
+    }
+    const tokenTotal = readNoteTotal(tokenNotes, discoveredNotes);
+    discoveredNotes = tokenTotal.count;
+    const nextTotal = (totals.get(token) ?? 0n) + tokenTotal.total;
+    if (nextTotal >= STARK_FIELD_PRIME) {
+      throw new Error("private balance overflow");
+    }
+    totals.set(token, nextTotal);
+  }
+  return totals;
+};
+
+const readRequestedTokens = (requested: readonly string[]): readonly string[] => {
+  if (requested.length > STRK20_LIMITS.tokens) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  const keys = requested.map((token) => {
+    if (!isNonZeroStarkFieldElement(token)) {
+      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    }
+    return BigInt(token);
+  });
+  if (new Set(keys).size !== keys.length) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  return requested;
+};
+
 /**
  * Sums SDK notes into canonical token balances and rejects malformed or
  * oversized SDK output before it reaches wallet state.
@@ -39,25 +99,16 @@ export const balancesFrom = (
   notes: SdkNoteMap,
   requested: readonly string[],
 ): readonly Strk20BalanceEntry[] => {
-  const totals = new Map<bigint, bigint>();
+  let totals: ReadonlyMap<bigint, bigint>;
   try {
-    for (const [token, tokenNotes] of notes.entries()) {
-      let total = 0n;
-      for (const note of tokenNotes) {
-        const amount = BigInt(note.amount);
-        if (amount < 0n) {
-          throw new Error("negative note");
-        }
-        total += amount;
-      }
-      totals.set(token, total);
-    }
+    totals = readNoteTotals(notes);
   } catch {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
+  const requestedTokens = readRequestedTokens(requested);
   const tokens =
-    requested.length > 0
-      ? requested
+    requestedTokens.length > 0
+      ? requestedTokens
       : [...totals.keys()]
           .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
           .map((token) => `0x${token.toString(16)}`);

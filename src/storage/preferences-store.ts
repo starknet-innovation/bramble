@@ -4,7 +4,11 @@
 import { WalletError } from "../shared/errors";
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
 import { DEFAULT_NETWORK, DEFAULT_TOKENS, isStarknetNetworkId } from "../starknet/networks";
-import { isStrk20NetworkConfig, isStrk20NetworkConfigs } from "../starknet/strk20/config";
+import {
+  DEFAULT_STRK20_NETWORKS,
+  isStrk20NetworkConfig,
+  isStrk20NetworkConfigs,
+} from "../starknet/strk20/config";
 import {
   createGroup as createGroupPure,
   isAccountGroups,
@@ -144,6 +148,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   nfts: [],
   rpcOverrides: {},
   schemaVersion: 1,
+  strk20Networks: DEFAULT_STRK20_NETWORKS,
   theme: "dark",
   tokens: DEFAULT_TOKENS.map(withTokenId),
 });
@@ -175,14 +180,23 @@ export const createPreferencesStore = ({
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
     }
+    // Stored preferences created before the bundled gateway existed inherit it
+    // once. Clearing Mainnet later persists an explicit empty map, so the
+    // user's decision to disable privacy routing remains durable.
+    const withPrivacyDefaults =
+      stored.strk20Networks === undefined
+        ? { ...stored, strk20Networks: DEFAULT_STRK20_NETWORKS }
+        : stored;
     // Self-heal legacy multi-group membership on read (the validator stays
     // permissive so old data loads rather than erroring): collapse each account
     // to a single folder so every consumer sees the single-group invariant.
-    if (stored.groups === undefined) {
-      return stored;
+    if (withPrivacyDefaults.groups === undefined) {
+      return withPrivacyDefaults;
     }
-    const groups = normalizeAccountGroups(stored.groups);
-    return groups === stored.groups ? stored : { ...stored, groups };
+    const groups = normalizeAccountGroups(withPrivacyDefaults.groups);
+    return groups === withPrivacyDefaults.groups
+      ? withPrivacyDefaults
+      : { ...withPrivacyDefaults, groups };
   };
 
   return serializeStoreMutations<WalletPreferencesStore>(

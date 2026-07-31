@@ -61,6 +61,17 @@ const registration: PrivacyPreparation = {
   symbol: "ETH",
   tokenId: token.id,
 };
+const relayedDeposit: PrivacyPreparation = {
+  ...deposit,
+  authorization: {
+    caller: "0x99",
+    executeAfter: "0x1",
+    executeBefore: "0x100",
+    publicCallCount: 1,
+  },
+  relayFee: { amount: "0x2", recipient: "0x3", token: "0x4" },
+  route: "private-relay",
+};
 
 describe("privacy journey templates", () => {
   test("compose shows the tracked public balance, shortcuts, network, and linkage warning", () => {
@@ -102,6 +113,20 @@ describe("privacy journey templates", () => {
     expect(html).toContain("Activate private balances");
     expect(html).toContain("Registration is public");
     expect(html).toContain("viewing-key commitment");
+  });
+
+  test("private relay review shows exact fee and authorization capability", () => {
+    const html = privacyFlow(status, preferences, [balance], {
+      preparation: relayedDeposit,
+      stage: "deposit-review",
+      tokenId: token.id,
+    });
+
+    expect(html).toContain("Relay fee");
+    expect(html).toContain("Fee recipient");
+    expect(html).toContain("Public approval calls");
+    expect(html).toContain("Authorization window");
+    expect(html).toContain("Authorization caller");
   });
 
   test("working, success, failure, and empty checkpoints communicate liveness and recovery", () => {

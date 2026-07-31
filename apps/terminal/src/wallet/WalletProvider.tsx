@@ -1,16 +1,14 @@
 /**
  * Wallet connection context for the trade terminal.
  *
- * Wraps get-starknet-core to connect to the injected MC Wallet provider
- * (preferring window.starknet_mcWallet), exposes the connected account and
- * address, and drives the Connect / Disconnect buttons throughout the shell.
+ * Connects directly to the injected MC Wallet provider (preferring
+ * window.starknet_mcWallet), exposes the connected account and address, and
+ * drives the Connect / Disconnect buttons throughout the shell.
  *
  * Screens consume this via the `useWallet()` hook. Protocol calldata is handed
  * to `requestTransaction()` so every action receives the same terminal review,
  * wallet hand-off, rejection, retry, and submission feedback.
  */
-import { getStarknet } from "get-starknet-core";
-import type { StarknetWindowObject } from "get-starknet-core";
 import {
   createContext,
   type ReactNode,
@@ -24,7 +22,7 @@ import {
 import type { AccountInterface, InvokeFunctionResponse } from "starknet";
 import {
   INJECTION_TIMEOUT_MS,
-  pickMcWallet,
+  type StarknetWindowObject,
   waitForInjectedMcWallet,
 } from "./starknet-window";
 import {
@@ -46,6 +44,13 @@ import {
   walletRequestError,
   walletTransactionHash,
 } from "./wallet-request";
+import {
+  type PrivateBalance,
+  type PrivateCallAndProof,
+  requestPrivateBalances,
+  requestPrivateInvoke,
+  requestPrivateProof,
+} from "./privacy-wallet";
 
 /**
  * The wallet state + actions exposed to the app through `useWallet()`.
@@ -73,6 +78,12 @@ export type WalletContextValue = {
   readonly requestTransaction: (
     input: WalletTransactionRequest,
   ) => Promise<InvokeFunctionResponse>;
+  /** Reads aggregate private balances without exposing notes or viewing keys. */
+  readonly privateBalances: (tokens: readonly string[]) => Promise<readonly PrivateBalance[]>;
+  /** Produces a wallet-approved STRK20 proof for external paymaster submission. */
+  readonly preparePrivateInvoke: (actions: readonly unknown[]) => Promise<PrivateCallAndProof>;
+  /** Proves and submits STRK20 actions through the wallet approval path. */
+  readonly invokePrivate: (actions: readonly unknown[]) => Promise<string>;
   /** Requests wallet tracking for an ERC20; the wallet re-reads metadata and requires approval. */
   readonly watchAsset: (input: WatchAssetInput) => Promise<void>;
   /** Requests an approved Sierra class declaration through the connected wallet. */
@@ -185,7 +196,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
 
   const disconnect = useCallback(async () => {
     try {
-      await getStarknet().disconnect({ clearLastWallet: true });
+      await walletRef.current?.disconnect?.();
     } catch {
       // Ignore disconnect failures — we clear local state regardless.
     }
@@ -310,6 +321,21 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     [wallet],
   );
 
+  const privateBalances = useCallback(
+    (tokens: readonly string[]) => requestPrivateBalances(wallet, tokens),
+    [wallet],
+  );
+
+  const preparePrivateInvoke = useCallback(
+    (actions: readonly unknown[]) => requestPrivateProof(wallet, actions),
+    [wallet],
+  );
+
+  const invokePrivate = useCallback(
+    (actions: readonly unknown[]) => requestPrivateInvoke(wallet, actions),
+    [wallet],
+  );
+
   const declareContract = useCallback(
     async (input: ContractDeclaration): Promise<DeclarationResult> => {
       if (wallet === null || typeof wallet.request !== "function") {
@@ -360,9 +386,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     let cancelled = false;
     void (async () => {
       try {
-        const injected = await waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
-        const target =
-          injected ?? pickMcWallet(await getStarknet().getPreAuthorizedWallets());
+        const target = await waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
         if (cancelled || target === null) {
           return;
         }
@@ -447,6 +471,9 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       error,
       clearError,
       connect,
+      invokePrivate,
+      preparePrivateInvoke,
+      privateBalances,
       requestTransaction,
       watchAsset,
       declareContract,
@@ -461,6 +488,9 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       error,
       clearError,
       connect,
+      invokePrivate,
+      preparePrivateInvoke,
+      privateBalances,
       requestTransaction,
       watchAsset,
       declareContract,

@@ -3,6 +3,33 @@
   "framework": "vite",
   "buildCommand": "VITE_AVNU_MARKETS_BASE=/proxy/avnu-markets VITE_EXTENDED_REST_BASE=/proxy/extended/api/v1 VITE_STARKSCAN_BASE=/proxy/starkscan/v1/SN_MAIN bun run build",
   "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; base-uri 'none'; connect-src 'self' https://api.cartridge.gg https://api.vesu.xyz https://prod-api.ekubo.org https://prod-api-quoter.ekubo.org https://starknet.api.avnu.fi https://starknet.impulse.avnu.fi https://starkscan.co https://api.starknet.extended.exchange wss://api.starknet.extended.exchange; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "bluetooth=(), camera=(), geolocation=(), hid=(), microphone=(), usb=()"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "no-referrer"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/proxy/avnu-markets/:path*",

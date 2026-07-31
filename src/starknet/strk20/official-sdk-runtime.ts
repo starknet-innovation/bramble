@@ -75,6 +75,15 @@ export type SdkWarning = {
  * Narrow runtime export set consumed from the vendored official SDK.
  */
 export type PrivacySdkRuntime = {
+  readonly IndexerDiscoveryProvider?: new (
+    url: string,
+    poolAddress: string,
+    options?: {
+      readonly ohttp?:
+        | boolean
+        | { readonly publicKeyConfig?: Uint8Array; readonly relayUrl?: string };
+    },
+  ) => unknown;
   readonly Open: symbol;
   readonly SetupRequirement?: { readonly Register: number };
   readonly createPrivateTransfers: (input: unknown) => SdkTransfers;

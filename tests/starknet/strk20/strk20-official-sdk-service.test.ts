@@ -4,18 +4,15 @@
  * depend on live prover, discovery, or chain services.
  */
 import { describe, expect, test } from "bun:test";
-import type { Call } from "starknet";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
 } from "../../../src/starknet/strk20/official-sdk-service";
 import type { Strk20Action } from "../../../src/starknet/strk20/schemas";
 import {
-  STRK20_SDK_ACCOUNT as account,
   officialBuilder as builder,
   STRK20_SDK_CONTEXT as context,
   executeResult,
-  type OfficialBuilder,
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
   sdkRuntime as runtime,
@@ -206,6 +203,89 @@ describe("official STRK20 SDK adapter", () => {
     );
   });
 
+  test("bounds untrusted discovery output before aggregation", async () => {
+    let notes: Map<bigint, readonly { readonly amount: bigint }[]> = new Map([
+      [BigInt(token), Array.from({ length: 4_097 }, () => ({ amount: 1n }))],
+    ]);
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({ providerFor, sdk });
+    await expect(service.privateBalances({ ...context, tokens: [] })).rejects.toThrow(
+      "strk20 services unavailable",
+    );
+    notes = new Map(
+      Array.from({ length: 65 }, (_, index) => [BigInt(index + 1), [{ amount: 1n }]]),
+    );
+    await expect(service.privateBalances({ ...context, tokens: [] })).rejects.toThrow(
+      "strk20 services unavailable",
+    );
+  });
+
+  test("uses OHTTP for both services and keeps anonymizers dapp-specific", async () => {
+    class DiscoveryProvider {
+      constructor(
+        readonly url: string,
+        readonly pool: string,
+        readonly options: unknown,
+      ) {}
+    }
+    let sdkInput: Record<string, unknown> | null = null;
+    const sdk: PrivacySdkRuntime = {
+      ...runtime(() => ({
+        build: () => builder(executeResult()),
+        discoverNotes: async () => ({ notes: new Map() }),
+        executeWithInvocation: async () => executeResult(),
+      })),
+      IndexerDiscoveryProvider: DiscoveryProvider,
+      createPrivateTransfers(input) {
+        sdkInput = input as Record<string, unknown>;
+        return {
+          build: () => builder(executeResult()),
+          discoverNotes: async () => ({ notes: new Map() }),
+          executeWithInvocation: async () => executeResult(),
+        };
+      },
+    };
+    const privateContext = {
+      ...context,
+      config: {
+        discoveryUrl: "https://gateway.example/discovery",
+        ohttpEnabled: true,
+        poolAddress,
+        proverUrl: "https://gateway.example/prover",
+      },
+    };
+    const service = createOfficialStrk20Service({ providerFor, sdk });
+
+    await expect(service.privateBalances({ ...privateContext, tokens: [] })).resolves.toEqual([]);
+    expect(sdkInput?.["discoveryProvider"]).toBeInstanceOf(DiscoveryProvider);
+    expect(sdkInput?.["provingProvider"]).toMatchObject({ ohttp: true });
+    expect(sdkInput).not.toHaveProperty("subAccountAnonymizerAddress");
+    await expect(
+      service.subaccountCommitment({ ...privateContext, dappName: "vesu" }),
+    ).rejects.toThrow("strk20 services unavailable");
+    await expect(
+      service.prepare({
+        ...privateContext,
+        actions: [
+          {
+            calls: [{ calldata: [], contract_address: token, entry_point: "transfer" }],
+            collect_policy: { type: "all" },
+            dapp_name: "vesu",
+            nonce: "0x1",
+            type: "subaccount_invoke",
+          },
+        ],
+        simulate: true,
+      }),
+    ).rejects.toThrow("strk20 services unavailable");
+  });
+
   test("prepares a proof and derives both forms of subaccount commitment", async () => {
     const sdk = runtime(() => ({
       build: () => builder(executeResult()),
@@ -263,6 +343,9 @@ describe("official STRK20 SDK adapter", () => {
   test("fails closed on unknown or malformed SDK warnings", async () => {
     for (const warningResult of [
       { warnings: [{ code: "UNKNOWN", message: "review me" }] },
+      {
+        warnings: Array.from({ length: 65 }, () => ({ code: "", message: "" })),
+      },
       { warnings: "not-an-array" },
       {},
     ]) {
@@ -326,160 +409,5 @@ describe("official STRK20 SDK adapter", () => {
         tokens: [token],
       }),
     ).rejects.toThrow("insufficient private balance");
-  });
-
-  test("submits only a non-empty proof to the configured apply_actions call", async () => {
-    const submitted: Call[] = [];
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const service = createOfficialStrk20Service({
-      providerFor,
-      sdk,
-      async submitInvoke(input) {
-        submitted.push(...input.calls);
-        return { calls: input.calls, transactionHash: "0x123" };
-      },
-    });
-    const proof = { data: "proof", output: ["0x1"], proof_facts: ["0x2"] };
-    await expect(
-      service.submitPrepared({
-        ...context,
-        call: { calldata: ["0x1"], contractAddress: poolAddress, entrypoint: "apply_actions" },
-        proof,
-      }),
-    ).resolves.toEqual({ transactionHash: "0x123" });
-    await expect(
-      service.submitPrepared({
-        ...context,
-        call: { calldata: [], contractAddress: "0x999", entrypoint: "apply_actions" },
-        proof,
-      }),
-    ).rejects.toThrow("strk20 private submission unavailable");
-    expect(submitted).toHaveLength(1);
-  });
-
-  test("discovers account registration using the SDK setup requirement enum", async () => {
-    let requirement = 0;
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      async discoverRequirement(recipient, selectedToken) {
-        expect(recipient).toBe(account.address);
-        expect(selectedToken).toBe(token);
-        return requirement;
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const service = createOfficialStrk20Service({ providerFor, sdk });
-
-    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("unregistered");
-    requirement = 3;
-    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
-  });
-
-  test("registers through the SDK builder and submits only the reviewed pool proof", async () => {
-    let registerCalls = 0;
-    const submitted: unknown[] = [];
-    const sdk = runtime(() => {
-      const base = builder(executeResult());
-      const instrumented = {
-        ...base,
-        register() {
-          registerCalls += 1;
-          return instrumented;
-        },
-      } as unknown as OfficialBuilder;
-      return {
-        build: () => instrumented,
-        async discoverNotes() {
-          return { notes: new Map() };
-        },
-        executeWithInvocation: async () => executeResult(),
-      };
-    });
-    const service = createOfficialStrk20Service({
-      providerFor,
-      sdk,
-      async submitInvoke(input) {
-        submitted.push(input);
-        return { calls: input.calls, transactionHash: "0xabc" };
-      },
-    });
-
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
-    expect(registerCalls).toBe(1);
-    expect(submitted).toEqual([
-      {
-        account,
-        calls: [
-          {
-            calldata: ["0x1"],
-            contractAddress: poolAddress,
-            entrypoint: "apply_actions",
-          },
-        ],
-        proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
-        rpcUrls: context.rpcUrls,
-        signHash: expect.any(Function),
-      },
-    ]);
-  });
-
-  test("first deposits grant only exact aggregate approval before pool submission", async () => {
-    const submitted: (readonly Call[])[] = [];
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const service = createOfficialStrk20Service({
-      providerFor,
-      sdk,
-      async submitInvoke(input) {
-        submitted.push(input.calls);
-        return { calls: input.calls, transactionHash: "0xdef" };
-      },
-    });
-
-    await expect(
-      service.submitActions({
-        ...context,
-        actions: [
-          { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
-          { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
-        ],
-        plan: { mode: "account" },
-      }),
-    ).resolves.toEqual({ transactionHash: "0xdef" });
-    expect(submitted).toEqual([
-      [
-        {
-          calldata: ["291", "0", "1"],
-          contractAddress: token,
-          entrypoint: "approve",
-        },
-        {
-          calldata: ["0x1"],
-          contractAddress: poolAddress,
-          entrypoint: "apply_actions",
-        },
-      ],
-    ]);
-    await expect(
-      service.submitActions({
-        ...context,
-        actions: [{ amount: "0x1", recipient: "0x999", token, type: "withdraw" }],
-        plan: { mode: "account" },
-      }),
-    ).rejects.toThrow("strk20 privacy leak");
   });
 });

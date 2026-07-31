@@ -161,6 +161,20 @@ describe("createPreferencesStore", () => {
     expect(preferences.strk20ProverUrl).toBeUndefined();
   });
 
+  test("adds the bundled privacy gateway to legacy preferences exactly once", async () => {
+    const store = createMemoryStore();
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["strk20Networks"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+
+    const preferences = createPreferencesStore({ store });
+    const bundled = (await preferences.read()).strk20Networks?.SN_MAIN;
+    expect(bundled?.ohttpEnabled).toBe(true);
+    expect(bundled?.poolAddress).toMatch(/^0x[0-9a-f]+$/);
+    await preferences.setStrk20NetworkConfig({ config: null, networkId: "SN_MAIN" });
+    expect((await preferences.read()).strk20Networks?.SN_MAIN).toBeUndefined();
+  });
+
   test("accepts preferences stored before rpc overrides existed", async () => {
     const store = createMemoryStore();
     const legacy = { ...defaultWalletPreferences() };

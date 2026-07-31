@@ -26,20 +26,44 @@ content-security policy.
 
 ## Required network configuration
 
-Each enabled network needs one complete public configuration:
+Each enabled network needs one complete routing configuration:
 
 - Discovery Service URL implementing `/health`, `/v1/history`,
   `/v1/sync/incoming_state`, `/v1/sync/outgoing_state`, and
   `/v1/sync/preflight_check`.
 - Transaction Prover URL implementing `starknet_specVersion` and
   `starknet_proveTransaction`.
-- STRK20 pool and sub-account anonymizer contract addresses.
-- Optional OHTTP relay URL.
+- STRK20 pool contract address.
+- Optional SDK sub-account anonymizer module, used only by `subaccount_invoke`. Core registration,
+  discovery, shield, withdraw, and transfer operations do not need it.
+- Dapp-specific anonymizers/executors are not global pool configuration. A Vesu, Ekubo, or other
+  integration supplies its audited contract as an explicit invoke target inside the reviewed action
+  plan, where it handles notes according to that dapp's rules.
+- OHTTP enabled at both the discovery and proving services. A separate OHTTP relay URL is optional.
 - Optional private paymaster/relayer URL and its pool fee token.
 
-These values contain no credentials and live in normal preferences. An extension cannot protect a
-shared service secret, so authenticated deployments must put authentication behind a
-wallet-controlled relay. Partial routing is rejected; an unconfigured network fails closed.
+The bundled Mainnet configuration points only at the wallet-owned Terminal gateway and the
+deployed pool
+`0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`.
+The private discovery and prover upstream URLs and any paymaster key are server-only Vercel
+environment variables. They never appear in the extension source, preferences, source maps,
+logs, or browser requests. The public gateway URL is necessarily visible to clients.
+
+An extension cannot protect a shared API secret or prove to a server that its JavaScript came from
+an official build: anything embedded in the bundle is extractable, and a non-browser client can
+spoof HTTP headers. The gateway therefore uses layered controls:
+
+- exact `chrome-extension://<production-id>` Origin allowlisting for browser requests;
+- a fixed method/path/content-type allowlist and fixed Mainnet pool/paymaster fee token;
+- request/response size caps, timeouts, no redirects, generic upstream failures, and no request
+  body logging;
+- OHTTP envelopes so the gateway relays discovery/proving traffic without seeing its contents;
+- Vercel Firewall rate limits and abuse rules at the public edge.
+
+Origin allowlisting is a browser isolation control, not cryptographic build attestation. A
+production deployment must not describe it as attestation. Stronger client authenticity requires
+an external enrollment or platform-attestation system; no generic Chrome Web Store attestation is
+available to this protocol today.
 
 The Discovery Service and Transaction Prover are required for live registration, balance
 discovery, and shielding. The paymaster is optional for entering the pool: registration and a
@@ -155,13 +179,22 @@ production deployments require their own audits and operations monitoring.
 
 ## Operator checklist
 
-- Supply Discovery Service, Transaction Prover, pool, and anonymizer values for each network.
+- Set `STRK20_DISCOVERY_UPSTREAM` and `STRK20_PROVER_UPSTREAM` only in the Terminal deployment
+  environment. Do not use `VITE_` variables for them.
+- Set `MC_WALLET_EXTENSION_ORIGINS` to the exact released extension origin(s). The gateway fails
+  closed when this is absent or malformed.
+- Confirm both services expose OHTTP at `/ohttp-keys` and their service root before enabling the
+  bundled Mainnet route.
+- Configure Vercel Firewall rate limits for `/api/strk20/*` and `/api/private-swap/*`; serverless
+  in-memory counters are not durable rate limiting.
+- Configure the SDK sub-account module only when supporting `subaccount_invoke`; keep each
+  dapp-specific anonymizer/executor in that dapp's reviewed action plan.
 - Supply a private paymaster/relayer and fee token to enable private transfers, withdrawals,
   invokes, and private relay-fee submission. Registration and deposit-only entry remain available
   without it.
 - Put credentials, quotas, and abuse controls behind a wallet-owned HTTPS relay; never add a shared
   API key to the extension.
-- Supply an OHTTP relay when the prover deployment requires it.
+- Supply an OHTTP relay only when the discovery/prover deployment requires a separate relay.
 - Verify service health and network/contract alignment before enabling the configuration.
 - The adapter automatically waits for recently deployed or funded accounts at the SDK's safe
   historical block (currently ten blocks behind the RPC head), waits for each submitted privacy

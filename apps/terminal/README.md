@@ -8,13 +8,85 @@ several public APIs.
 
 ```bash
 bun install
-bun run dev        # dev server on http://localhost:5273 (with the CORS proxy)
+bun run dev        # UI-only Vite server on http://localhost:5273
+bun run dev:full   # Vercel dev server, including privacy gateway/functions
 bun run build      # tsc --noEmit && vite build
 bun run build:contract # rebuild + hash-check the OpenZeppelin Punk class
 bun run typecheck  # tsc --noEmit
 bun run test       # vitest (mocked fetch/RPC — no network needed)
 bun run check:api  # LIVE API smoke test — run on your own machine (see below)
 ```
+
+Use `bun run dev:full` for the Privacy tab. Plain `bun run dev` intentionally
+does not emulate Vercel Functions.
+
+## Privacy pool and AVNU private swap
+
+The **Privacy** tab is a Mainnet-only test surface for the deployed Starknet
+privacy pool:
+
+`0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`
+
+It reads a minimal typed pool view (`version`, fee, fee collector, and proof
+validity), requests aggregate private balances from MC Wallet, and supports
+shield, withdraw, private transfer, and AVNU private swap flows. Notes, viewing
+keys, signing material, and proof generation remain inside the wallet.
+
+AVNU private swap is deliberately split:
+
+1. A same-origin server function asks the pinned AVNU SDK for the exact private
+   route and paymaster fee. The browser receives a bounded action plan and
+   independently validates it.
+2. The Terminal shows sell amount, expected buy amount, slippage, executor,
+   pool fee, and action count.
+3. MC Wallet independently validates the actions, checks private balances and
+   privacy-leak warnings, asks for approval, and generates the proof.
+4. The server submits only that pool-bound proof through AVNU's private
+   paymaster. It returns a validated transaction hash.
+
+The AVNU SDK (`4.2.0`) is imported only by Vercel Functions. It is not included
+in the browser bundle.
+
+### Server-only configuration
+
+Copy `.env.example` to `.env.local` for local development, or add the same
+names with `vercel env add`:
+
+```bash
+STRK20_DISCOVERY_UPSTREAM=
+STRK20_PROVER_UPSTREAM=
+STRK20_PAYMASTER_UPSTREAM=https://starknet.paymaster.avnu.fi
+AVNU_PAYMASTER_API_KEY=
+MC_WALLET_EXTENSION_ORIGINS=chrome-extension://<released-extension-id>
+TERMINAL_ALLOWED_ORIGINS=https://mc-wallet-terminal.vercel.app,http://localhost:3000
+```
+
+Never prefix upstream URLs or the paymaster key with `VITE_`; Vite variables
+are browser-readable. The public gateway URL is visible by design, while the
+upstream discovery/prover URLs stay server-side.
+
+`MC_WALLET_EXTENSION_ORIGINS` accepts only exact Chrome extension origins. This
+blocks other browser origins but is not cryptographic build attestation: a
+standalone HTTP client can spoof an Origin header, and no secret can safely be
+embedded in an extension. Production must additionally apply Vercel Firewall
+rate limits and abuse controls to `/api/strk20/*` and
+`/api/private-swap/*`. The code intentionally does not pretend an in-memory
+serverless counter is durable protection.
+
+The discovery/prover proxy permits only the protocol's required routes,
+methods, and content types; caps request and response sizes; rejects redirects;
+uses bounded timeouts; binds paymaster traffic to the audited pool and STRK fee
+token; strips upstream error bodies; and never logs request content. OHTTP is
+enabled in the bundled wallet configuration, so the gateway sees encrypted
+discovery/proving envelopes when both upstream services support it.
+
+An anonymizer is not a global pool address. It is a dapp-specific adapter that
+handles private notes according to that dapp's rules, so its contract appears
+as an explicit target in that dapp's reviewed action plan. AVNU private swap
+uses AVNU's private executor, while Vesu or another dapp uses its own audited
+adapter. Core pool operations do not configure one. The wallet's optional
+`subaccountAnonymizerAddress` setting is a separate SDK module used only for
+generic `subaccount_invoke` actions.
 
 ## NFT Studio
 

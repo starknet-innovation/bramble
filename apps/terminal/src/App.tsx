@@ -10,6 +10,7 @@ import NftStudio from "./screens/NftStudio";
 import Lending from "./screens/Lending";
 import Perps from "./screens/Perps";
 import Portfolio from "./screens/Portfolio";
+import Privacy from "./screens/Privacy";
 import Tokens from "./screens/Tokens";
 import { BottomBar } from "./shell/BottomBar";
 import { type ScreenId } from "./shell/screens";
@@ -25,6 +26,7 @@ const SCREENS: Record<ScreenId, ComponentType<ScreenProps>> = {
   tokens: Tokens,
   perps: Perps,
   portfolio: Portfolio,
+  privacy: Privacy,
 };
 
 export const App = (): ReactNode => {

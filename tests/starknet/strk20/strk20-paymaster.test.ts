@@ -276,6 +276,11 @@ describe("STRK20 paymaster boundary", () => {
       async () => new Response("unavailable", { status: 503 }),
       async () => new Response("not json", { status: 200 }),
       async () =>
+        new Response("{}", {
+          headers: { "content-length": String(1024 * 1024 + 1) },
+          status: 200,
+        }),
+      async () =>
         new Response(
           JSON.stringify({
             error: { code: -32_000, message: "failed" },

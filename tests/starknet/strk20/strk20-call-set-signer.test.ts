@@ -3,7 +3,14 @@
  * A drift here would make every private proof authorization fail on-chain.
  */
 import { describe, expect, test } from "bun:test";
-import { type Call, ec, type InvocationsSignerDetails, num, shortString } from "starknet";
+import {
+  type Call,
+  ec,
+  type InvocationsSignerDetails,
+  num,
+  shortString,
+  type TypedData,
+} from "starknet";
 import {
   computeStrk20CallSetHash,
   Strk20CallSetSigner,
@@ -57,5 +64,6 @@ describe("STRK20 CallSet authorization", () => {
     await expect(signer.signDeployAccountTransaction({} as never)).rejects.toThrow(
       "does not deploy accounts",
     );
+    await expect(signer.signMessage({} as TypedData, "0x999")).rejects.toThrow("account mismatch");
   });
 });

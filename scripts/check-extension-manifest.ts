@@ -28,6 +28,9 @@ const expectedHostPermissions = [
   // policy-checked in src/background/swap-ops.ts before anything is signed.
   "https://starknet.api.avnu.fi/*",
   "https://sepolia.api.avnu.fi/*",
+  // Wallet-owned STRK20 gateway. Private discovery/prover upstream URLs and
+  // paymaster credentials remain deployment-only environment variables.
+  "https://mc-wallet-terminal.vercel.app/*",
   // Maintained web3 phishing feed (issue #34): the default source for the live
   // malicious-origin blocklist. Configurable per deployment via the feed's
   // `source` option; pinned here so the manifest stays an explicit allowlist.

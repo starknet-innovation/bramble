@@ -8,7 +8,7 @@
 import type { Call } from "starknet";
 import { CallData, hash } from "starknet";
 import { WalletError } from "../../shared/errors";
-import { isRecord } from "../../shared/json";
+import { hasOnlyKnownKeys, isRecord } from "../../shared/json";
 import { isNonZeroStarkFieldElement, isStarkFieldElement, sameFelt } from "../networks";
 import type { Strk20PaymasterConfig } from "./config";
 import { bindPaymasterTypedData, isPaymasterAuthorizationLive } from "./paymaster-typed-data";
@@ -23,6 +23,8 @@ type PaymasterCall = {
 
 type PaymasterHttp = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 const PARAMETERS = { version: "0x1" } as const;
+const PAYMASTER_TIMEOUT_MS = 30_000;
+const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
 
 const paymasterCall = (call: Call): PaymasterCall => ({
   calldata: CallData.compile(call.calldata ?? []).map(String),
@@ -36,6 +38,47 @@ const feeMode = (config: Strk20PaymasterConfig) => ({
   tip: "normal",
 });
 
+const readBoundedResponse = async (response: Response): Promise<string | null> => {
+  const declaredLength = response.headers.get("content-length");
+  if (
+    declaredLength !== null &&
+    (!/^[0-9]+$/.test(declaredLength) || Number(declaredLength) > MAX_PAYMASTER_RESPONSE_BYTES)
+  ) {
+    return null;
+  }
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return null;
+  }
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      length += value.byteLength;
+      if (length > MAX_PAYMASTER_RESPONSE_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+};
+
 const rpc = async (
   http: PaymasterHttp,
   url: string,
@@ -48,6 +91,7 @@ const rpc = async (
       body: JSON.stringify({ id: "mc-wallet-strk20", jsonrpc: "2.0", method, params }),
       headers: { "content-type": "application/json" },
       method: "POST",
+      signal: AbortSignal.timeout(PAYMASTER_TIMEOUT_MS),
     });
   } catch {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
@@ -57,12 +101,17 @@ const rpc = async (
   }
   let body: unknown;
   try {
-    body = await response.json();
+    const text = await readBoundedResponse(response);
+    if (text === null) {
+      throw new Error("invalid response");
+    }
+    body = JSON.parse(text);
   } catch {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   if (
     !isRecord(body) ||
+    !hasOnlyKnownKeys(body, ["error", "id", "jsonrpc", "result"]) ||
     body["jsonrpc"] !== "2.0" ||
     body["id"] !== "mc-wallet-strk20" ||
     body["error"] !== undefined ||
@@ -75,6 +124,7 @@ const rpc = async (
 
 const readFeeAction = (value: unknown): Strk20PrivateRelayPlan["feeAction"] | null =>
   isRecord(value) &&
+  hasOnlyKnownKeys(value, ["amount", "recipient", "token", "type"]) &&
   value["type"] === "withdraw" &&
   typeof value["amount"] === "string" &&
   isStarkFieldElement(value["amount"]) &&
@@ -120,7 +170,7 @@ export const buildStrk20PaymasterPlan = async (input: {
           type: "apply_action",
         },
   });
-  if (!isRecord(result)) {
+  if (!isRecord(result) || !hasOnlyKnownKeys(result, ["fee_action", "typed_data"])) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   const feeAction = readFeeAction(result["fee_action"]);
@@ -202,6 +252,7 @@ export const submitStrk20PaymasterPlan = async (input: {
   });
   if (
     !isRecord(result) ||
+    !hasOnlyKnownKeys(result, ["transaction_hash"]) ||
     typeof result["transaction_hash"] !== "string" ||
     !isNonZeroStarkFieldElement(result["transaction_hash"])
   ) {

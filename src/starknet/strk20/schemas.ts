@@ -34,10 +34,12 @@ export const STRK20_LIMITS = {
   actionCalldataItems: 4_096,
   actions: 32,
   balances: 64,
+  discoveredNotes: 4_096,
   invokeCalldataFelts: 4_096,
   proofDataCharacters: 512 * 1024,
   proofFacts: 4_096,
   proofOutputFelts: 4_096,
+  sdkWarnings: 64,
   subaccountCalls: 16,
   tokens: 64,
 } as const;
