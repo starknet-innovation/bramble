@@ -1,6 +1,6 @@
 /**
  * Watched NFT metadata kept in plain preferences: contract, token id, network,
- * an optional label, and a spam-hide flag. Pure helpers so the preferences
+ * the owning account, an optional label, and a spam-hide flag. Pure helpers so the preferences
  * store and its validators share one definition. Ownership is proven over RPC
  * before an NFT is watched; this module only shapes and validates the data.
  */
@@ -22,6 +22,8 @@ export type WatchedNft = {
   readonly id: string;
   readonly label?: string;
   readonly networkId: StarknetNetworkId;
+  /** Canonical owner address. Absent only on records written before account scoping. */
+  readonly owner?: string;
   readonly spam?: boolean;
   readonly tokenId: string;
 };
@@ -39,12 +41,14 @@ const isNftLabel = (value: unknown): value is string =>
  */
 export const isWatchedNft = (value: unknown): value is WatchedNft =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["contract", "id", "label", "networkId", "spam", "tokenId"]) &&
+  hasOnlyKnownKeys(value, ["contract", "id", "label", "networkId", "owner", "spam", "tokenId"]) &&
   typeof value["contract"] === "string" &&
   isNonZeroStarkFieldElement(value["contract"]) &&
   typeof value["id"] === "string" &&
   (value["label"] === undefined || isNftLabel(value["label"])) &&
   isStarknetNetworkId(value["networkId"]) &&
+  (value["owner"] === undefined ||
+    (typeof value["owner"] === "string" && isNonZeroStarkFieldElement(value["owner"]))) &&
   (value["spam"] === undefined || typeof value["spam"] === "boolean") &&
   isTokenId(value["tokenId"]) &&
   value["id"] === nftId(value["networkId"], value["contract"], value["tokenId"]);
@@ -61,6 +65,7 @@ export const withNftId = (input: Omit<WatchedNft, "id">): WatchedNft => {
     ...(input.label === undefined ? {} : { label: input.label.trim() }),
     id: nftId(input.networkId, contract, tokenId),
     networkId: input.networkId,
+    ...(input.owner === undefined ? {} : { owner: `0x${BigInt(input.owner).toString(16)}` }),
     ...(input.spam === undefined ? {} : { spam: input.spam }),
     tokenId,
   };

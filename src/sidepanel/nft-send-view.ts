@@ -25,7 +25,12 @@ export const nftSendFlow = (
   selectedNftId: string | null,
   discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => {
-  const nft = selectedNftDetail(preferences, discoveredNfts, selectedNftId);
+  const nft = selectedNftDetail(
+    preferences,
+    discoveredNfts,
+    selectedNftId,
+    account?.address ?? null,
+  );
   if (!nft) {
     return (
       flowHeader("Send collectible", status) +

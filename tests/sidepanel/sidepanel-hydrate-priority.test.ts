@@ -34,6 +34,12 @@ const flush = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+const emptyMultisigClient = {
+  async loadMultisigs() {
+    return { multisigs: [], proposals: [] };
+  },
+};
+
 describe("home hydration priority", () => {
   test("paints critical balances and prices before deferred home data", async () => {
     const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
@@ -48,7 +54,7 @@ describe("home hydration priority", () => {
       activeView: "home",
       cache,
       deployment: { load: () => deployment.promise },
-      multisig: {},
+      multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
       },
@@ -85,7 +91,7 @@ describe("home hydration priority", () => {
       activeView: "home",
       cache,
       deployment: { load: async () => true },
-      multisig: {},
+      multisig: emptyMultisigClient,
       paint: () => undefined,
       selectedMultisigId: null,
       selectedTokenId: null,
@@ -123,7 +129,7 @@ describe("home hydration priority", () => {
       activeView: "home",
       cache,
       deployment: { load: async () => true },
-      multisig: {},
+      multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
       },
@@ -170,7 +176,7 @@ describe("home hydration priority", () => {
       cache,
       deployment: {},
       isCurrent: () => current,
-      multisig: {},
+      multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
       },
@@ -209,6 +215,7 @@ describe("home hydration priority", () => {
     const cache = emptyRenderCache();
     let signerBalanceReads = 0;
     const sharedBalanceReads: string[] = [];
+    const sharedActivityReads: (string | undefined)[] = [];
     const sharedNftReads: unknown[][] = [];
     const record = {
       address: "0x7123",
@@ -253,11 +260,16 @@ describe("home hydration priority", () => {
           signerBalanceReads += 1;
           return { balances: [] };
         },
+        loadActivity: async (accountId?: string) => {
+          sharedActivityReads.push(accountId);
+          return { entries: [], historyUnavailable: false };
+        },
         loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
       },
     } as never);
 
     expect(sharedBalanceReads).toEqual([multisigId]);
+    expect(sharedActivityReads).toEqual([multisigId]);
     expect(signerBalanceReads).toBe(0);
     expect(cache.multisigBalanceId).toBe(multisigId);
     expect(cache.multisigBalances).toEqual(sharedBalances);

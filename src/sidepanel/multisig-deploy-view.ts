@@ -2,6 +2,7 @@
  * Multisig declaration and deployment screen, split from the list/detail
  * templates so each security-sensitive renderer stays directly auditable.
  */
+import type { MultisigClassState } from "../popup/multisig-responses";
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { sameFelt } from "../starknet/networks";
@@ -69,6 +70,52 @@ const signerOption = (candidate: SignerCandidate, selected: boolean): string => 
     <span class="multisig-signer-check">${icon("check")}</span>
   </button>`;
 
+const classDeclarationGate = (
+  status: WalletStatus,
+  state: MultisigClassState | "error" | null,
+): string => {
+  if (state === null) {
+    return '<p class="hint">Checking whether the multisig class is declared on this network…</p>';
+  }
+  if (state === "error") {
+    return `<div class="row">${pill("Status unavailable")}</div>
+      <p class="hint">Could not check whether the multisig class is declared on ${escapeHtml(status.network)} — the network may be unreachable.</p>
+      ${button({
+        attributes: { id: "multisig-class-retry" },
+        icon: "refresh",
+        label: "Retry",
+        variant: "secondary",
+      })}`;
+  }
+  if (state.declared) {
+    return "";
+  }
+  if (state.declarationPending) {
+    const progress = state.transactionHash
+      ? `Declaration ${accountLabel(state.transactionHash)} was submitted. Waiting for ${escapeHtml(status.network)} to confirm the class before deployment is enabled.`
+      : "The declaration is waiting for your authorization. Complete the wallet or Ledger prompt to submit it.";
+    return `<div class="row">${pill("Declaration in progress")}</div>
+      <p class="hint">${progress}</p>
+      ${button({
+        attributes: { id: "multisig-declare-pending" },
+        disabled: true,
+        icon: "send",
+        label: state.transactionHash ? "Waiting for confirmation" : "Waiting for authorization",
+        variant: "secondary",
+      })}
+      <p id="multisig-declare-result" role="status" aria-live="polite">${progress}</p>`;
+  }
+  return `<div class="row">${pill("Class not declared")}</div>
+    <p class="hint">The multisig class is not declared on ${escapeHtml(status.network)} yet. Declaring is a one-time, fee-paying transaction from your account; afterwards anyone can deploy from the same class.</p>
+    ${button({
+      attributes: { id: "multisig-declare" },
+      icon: "send",
+      label: "Declare multisig class",
+      variant: "secondary",
+    })}
+    <p id="multisig-declare-result" role="status" aria-live="polite"></p>`;
+};
+
 /**
  * Renders the deploy form for a new multisig from the pinned class, including
  * the declare-first path when the class is missing on the active network.
@@ -76,7 +123,7 @@ const signerOption = (candidate: SignerCandidate, selected: boolean): string => 
 export const multisigDeployFlow = (
   status: WalletStatus,
   account: AccountRef | null,
-  declared: boolean | "error" | null,
+  classState: MultisigClassState | "error" | null,
   preferences: WalletPreferences | null = null,
 ): string => {
   if (!account) {
@@ -85,35 +132,13 @@ export const multisigDeployFlow = (
     );
   }
   const candidates = signerCandidates(status, preferences);
+  const classReady = classState !== null && classState !== "error" && classState.declared;
   return (
     flowHeader("Deploy multisig", status) +
     flowScreen(
       "multisig-deploy",
       `<section class="section">
-      ${
-        declared === false
-          ? `<div class="row">${pill("Class not declared")}</div>
-             <p class="hint">The multisig class is not declared on ${escapeHtml(status.network)} yet. Declaring is a one-time, fee-paying transaction from your account; afterwards anyone can deploy from the same class.</p>
-             ${button({
-               attributes: { id: "multisig-declare" },
-               icon: "send",
-               label: "Declare multisig class",
-               variant: "secondary",
-             })}
-             <p id="multisig-declare-result" role="status"></p>`
-          : declared === "error"
-            ? `<div class="row">${pill("Status unavailable")}</div>
-               <p class="hint">Could not check whether the multisig class is declared on ${escapeHtml(status.network)} — the network may be unreachable.</p>
-               ${button({
-                 attributes: { id: "multisig-class-retry" },
-                 icon: "refresh",
-                 label: "Retry",
-                 variant: "secondary",
-               })}`
-            : declared === null
-              ? '<p class="hint">Checking whether the multisig class is declared on this network…</p>'
-              : ""
-      }
+      ${classDeclarationGate(status, classState)}
       <form id="multisig-deploy-form" data-stage="signers">
         <input name="signers" type="hidden" value="${escapeHtml(account.address)}" />
         <section class="multisig-deploy-stage" data-deploy-stage="signers">
@@ -181,7 +206,7 @@ export const multisigDeployFlow = (
           <p class="hint">The signer set, approval threshold, class and salt deterministically derive this shared account address.</p>
           <div id="multisig-deploy-review" aria-live="polite"></div>
           ${button({
-            disabled: declared !== true,
+            disabled: !classReady,
             icon: "send",
             label: "Review deployment",
             type: "submit",

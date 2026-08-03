@@ -5,8 +5,10 @@ import {
   multisigTrackFlow,
   multisigWatchFlow,
 } from "../../../src/sidepanel/multisig-management-views";
+import { serializeMultisigReviewPackage } from "../../../src/sidepanel/multisig-model";
 import { bindMultisigProposalForm } from "../../../src/sidepanel/multisig-proposal-ui";
 import { createMultisigClient } from "../../../src/sidepanel/multisig-runtime";
+import { bindMultisigs, type MultisigUiDeps } from "../../../src/sidepanel/multisig-ui";
 import {
   multisigDeployFlow,
   multisigDetailFlow,
@@ -43,6 +45,13 @@ const confirmedProposal: MultisigProposalRecord = {
   confirmations: 2,
   confirmedBySigner: true,
   state: "confirmed",
+};
+
+const awaitingOwnedSigner: MultisigProposalRecord = {
+  ...pendingProposal,
+  confirmedBySigner: true,
+  confirmedBySignerAddress: softwareAccount.address,
+  confirmedSignerAddresses: [softwareAccount.address],
 };
 
 const untrackedProposal: MultisigProposalRecord = {
@@ -118,6 +127,35 @@ const showSharedCollectibles = (context: FrameContext): void =>
 
 const showSharedProposals = (context: FrameContext): void => showSharedTab(context, "proposals");
 
+const showConfirmationReview = (context: FrameContext): void => {
+  bindMultisigs({
+    app: context.app,
+    multisig: {
+      async confirmProposal() {
+        throw new Error("UI Lab blocks transaction submission");
+      },
+    },
+    openDetail: () => undefined,
+    openList: () => undefined,
+    render: async () => undefined,
+    selectedMultisigId: () => multisig.id,
+    wallet: {
+      loadStatus: async () => statusFor(),
+      setActiveAccount: async () => undefined,
+    },
+  } as unknown as MultisigUiDeps);
+  showSharedProposals(context);
+  context.app.querySelector<HTMLButtonElement>("[data-ms-confirm-open]")?.click();
+  context.emit({ detail: "Confirmation review opened", kind: "action" });
+};
+
+const showImportedReviewPackage = (context: FrameContext): void => {
+  const input = context.app.querySelector<HTMLTextAreaElement>('textarea[name="reviewPackage"]');
+  if (input) {
+    input.value = serializeMultisigReviewPackage(multisig, pendingProposal);
+  }
+};
+
 const portfolio = {
   balances: { balances },
   changes: { [USDC_ADDRESS]: 0.42 },
@@ -162,32 +200,84 @@ export const multisigScenario: WalletScenario = {
       "Multisig home",
       "Shared value, quorum context, compact actions, and open work follow the familiar portfolio hierarchy.",
       () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [pendingProposal],
-          false,
-          "current",
-          preferences,
-          "multisig-home",
-          portfolio,
-        ),
+        walletDashboard({
+          balanceState: portfolio.balances,
+          changes: portfolio.changes,
+          multisigNfts: portfolio.nfts ?? [],
+          multisigProposals: [pendingProposal],
+          multisigSync: "current",
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "multisig-home",
+        }),
       { confirmations: 1, proposalId: pendingProposal.txId, state: "pending" },
+    ),
+    multisigCheckpoint(
+      "proposal-search-recent",
+      "Recent proposal search",
+      "Fresh signer and quorum state remains usable while bounded event discovery is labelled separately.",
+      () =>
+        walletDashboard({
+          balanceState: portfolio.balances,
+          multisigProposals: [pendingProposal],
+          multisigSync: "proposal-discovery-recent",
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "multisig-home",
+        }),
+      { config: "current", proposalDiscovery: "recent" },
     ),
     {
       content: () =>
-        multisigDetailFlow(
-          statusFor(),
-          softwareAccount,
-          multisig,
-          [pendingProposal],
-          false,
-          "current",
-          preferences,
-          "multisig-home",
-          portfolio,
-        ),
+        walletDashboard({
+          activity: [
+            {
+              accountId: multisig.id,
+              hash: "0x904",
+              kind: "invoke",
+              networkId: "SN_MAIN",
+              status: "accepted",
+              submittedAt: 1_785_171_200_000,
+              summary: "Propose: Pay 100 USDC to research treasury",
+            },
+          ],
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "activity",
+        }),
+      id: "shared-activity",
+      label: "Shared account activity",
+      narrative:
+        "The dock, header, export boundary, and transaction feed remain scoped to the shared account rather than the current signer.",
+      state: { accountScope: multisig.id, signerBleed: false, view: "activity" },
+    },
+    multisigCheckpoint(
+      "configuration-unavailable",
+      "Configuration unavailable",
+      "A fixed support code identifies the failed RPC lane without leaking endpoint details.",
+      () =>
+        walletDashboard({
+          balanceState: portfolio.balances,
+          multisigProposals: [pendingProposal],
+          multisigSync: "configuration-unavailable",
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "multisig-home",
+        }),
+      { config: "unavailable", supportCode: "MC-MS-CONFIG-RPC" },
+    ),
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: portfolio.balances,
+          changes: portfolio.changes,
+          multisigNfts: portfolio.nfts ?? [],
+          multisigProposals: [pendingProposal],
+          multisigSync: "current",
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "multisig-home",
+        }),
       id: "collectibles",
       label: "Shared collectibles",
       narrative:
@@ -200,15 +290,40 @@ export const multisigScenario: WalletScenario = {
         walletDashboard({
           multisigProposals: [pendingProposal],
           multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "multisig-home",
         }),
       id: "drawer",
       label: "Shared account in drawer",
       narrative:
-        "Multisigs are visually separated from single-signer accounts with threshold and open-work heuristics.",
+        "Multisigs sit alongside single-signer accounts with explicit account type, threshold, and open-work heuristics.",
       prepare: openSharedAccountDrawer,
       state: { accountType: "shared", openProposals: 1, quorum: 2 },
     },
     ...multisigReviewCheckpoints(portfolio),
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: portfolio.balances,
+          changes: portfolio.changes,
+          multisigNfts: portfolio.nfts ?? [],
+          multisigProposals: [awaitingOwnedSigner],
+          multisigSync: "current",
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "multisig-home",
+        }),
+      id: "confirm-owned-signer",
+      label: "Confirm with an owned signer",
+      narrative:
+        "The wallet intersects on-chain signer rules with locally-owned accounts, excludes a signer already confirmed, and requires a focused review before signing.",
+      prepare: showConfirmationReview,
+      state: {
+        alreadyConfirmed: softwareAccount.id,
+        eligibleSigners: 2,
+        reviewRequired: true,
+      },
+    },
     multisigCheckpoint(
       "receive",
       "Receive to shared account",
@@ -226,10 +341,23 @@ export const multisigScenario: WalletScenario = {
     multisigCheckpoint(
       "track",
       "Track shared proposal",
-      "A pasted id and its off-chain-note warning form one focused task.",
+      "A pasted id remains call-less and requires explicit independent verification before signing.",
       () => multisigTrackFlow(statusFor(), multisig),
       { noteTrust: "local only", view: "multisig-track" },
     ),
+    {
+      content: () => multisigTrackFlow(statusFor(), multisig),
+      id: "track-package",
+      label: "Import review package",
+      narrative:
+        "A secret-free package restores the exact public call only after the background re-hashes it through the selected multisig contract.",
+      prepare: showImportedReviewPackage,
+      state: {
+        callTrust: "contract-derived id match",
+        networkRequests: "hash_transaction and proposal views",
+        packageSecrets: 0,
+      },
+    },
     multisigCheckpoint(
       "ready",
       "Ready to execute",
@@ -269,9 +397,9 @@ export const multisigScenario: WalletScenario = {
       state: { confirmations: 2, proposalId: pendingProposal.txId, tab: "proposals" },
     },
     multisigCheckpoint(
-      "sync-error",
-      "Refresh failed",
-      "Cached public data remains visible with an honest retry path.",
+      "registry-unavailable",
+      "Registry unavailable",
+      "Cached public data remains visible with a fixed background-registry support code and retry path.",
       () =>
         multisigDetailFlow(
           statusFor(),
@@ -279,12 +407,12 @@ export const multisigScenario: WalletScenario = {
           multisig,
           [pendingProposal],
           true,
-          "error",
+          "background-unavailable",
           preferences,
           "multisig-home",
           portfolio,
         ),
-      { cached: true, sync: "error" },
+      { cached: true, sync: "background-unavailable" },
     ),
     multisigCheckpoint(
       "propose",
@@ -331,18 +459,53 @@ export const multisigScenario: WalletScenario = {
       "deploy-declare",
       "Declare before deploy",
       "A missing class exposes the one-time declaration and its fee-bearing boundary.",
-      () => multisigDeployFlow(statusFor(), softwareAccount, false, preferences),
+      () =>
+        multisigDeployFlow(
+          statusFor(),
+          softwareAccount,
+          { declarationPending: false, declared: false },
+          preferences,
+        ),
       { class: "missing", deployEnabled: false },
+    ),
+    multisigCheckpoint(
+      "deploy-declaration-pending",
+      "Declaration pending",
+      "The submitted transaction stays visible and deployment remains locked until the pinned class is confirmed on-chain.",
+      () =>
+        multisigDeployFlow(
+          statusFor(),
+          softwareAccount,
+          {
+            declarationPending: true,
+            declared: false,
+            transactionHash: "0xdec",
+          },
+          preferences,
+        ),
+      { class: "pending", deployEnabled: false, transactionHash: "0xdec" },
     ),
     multisigCheckpoint(
       "deploy-ready",
       "Deploy ready",
       "Wallet accounts and contacts form a staged signer picker before quorum and deterministic salt review.",
-      () => multisigDeployFlow(statusFor(), softwareAccount, true, preferences),
+      () =>
+        multisigDeployFlow(
+          statusFor(),
+          softwareAccount,
+          { declarationPending: false, declared: true },
+          preferences,
+        ),
       { class: "declared", deployEnabled: true, signerSources: ["wallet", "address-book"] },
     ),
     {
-      content: () => multisigDeployFlow(statusFor(), softwareAccount, true, preferences),
+      content: () =>
+        multisigDeployFlow(
+          statusFor(),
+          softwareAccount,
+          { declarationPending: false, declared: true },
+          preferences,
+        ),
       id: "deploy-rules",
       label: "Review signer rules",
       narrative:

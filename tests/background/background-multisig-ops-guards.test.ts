@@ -17,7 +17,9 @@ import {
 } from "../../src/background/multisig-ops";
 import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
 import {
+  HARNESS_MULTISIG,
   HARNESS_TARGET,
+  harnessAccount,
   harnessExtensionSender,
   makeMultisigHarness,
 } from "../support/multisig-harness";
@@ -72,6 +74,27 @@ describe("registry multisig handler guards", () => {
         harnessExtensionSender,
       ),
     ).resolves.toEqual({ error: "multisig not found" });
+  });
+
+  test("returns a safe configuration diagnostic when the chain read fails", async () => {
+    let fail = false;
+    const { handler } = makeMultisigHarness({
+      multisigConfig() {
+        if (fail) {
+          throw new Error("raw provider detail must not cross the boundary");
+        }
+        return { quorum: 1, signers: [harnessAccount.address] };
+      },
+    });
+    const added = (await handler(
+      { address: HARNESS_MULTISIG, type: "wallet.addMultisig" },
+      harnessExtensionSender,
+    )) as { multisig: { id: string } };
+    fail = true;
+
+    await expect(
+      handler({ id: added.multisig.id, type: "wallet.refreshMultisig" }, harnessExtensionSender),
+    ).resolves.toEqual({ error: "multisig configuration unavailable" });
   });
 
   test("asks the user to switch networks for a multisig on another network", async () => {

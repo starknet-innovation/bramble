@@ -151,9 +151,13 @@ const collectiblesPanel = (
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[],
 ): string => {
-  const nfts = visibleNftItems(preferences?.nfts ?? [], discoveredNfts, status.networkId).filter(
-    (nft) => nft.watched,
-  );
+  const owner = status.accounts.find((account) => account.id === status.activeAccountId)?.address;
+  const nfts = visibleNftItems(
+    preferences?.nfts ?? [],
+    discoveredNfts,
+    status.networkId,
+    owner ?? null,
+  ).filter((nft) => nft.watched);
   return `${
     nfts.length === 0
       ? emptyState("No collectibles watched on this network yet. Add one you own from the gallery.")
