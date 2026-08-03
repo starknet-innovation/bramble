@@ -25,6 +25,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/content/index.ts",
   "src/ledger-grant/index.ts",
   "src/provider/inpage.ts",
+  "src/sandbox/render.ts",
   "src/sidepanel/dom.ts",
   "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
@@ -139,9 +140,14 @@ const HTML_SINK_FILES = new Set([
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
   "src/sidepanel/swap-ui.ts",
   "src/sidepanel/swap-picker.ts",
+  // Collectible animation renderer: document.write of the untrusted on-chain
+  // data:text/html, confined by the manifest sandbox page's isolated security
+  // principal and egress-blocking CSP (never executed in a privileged page) —
+  // audited 2026-07.
+  "src/sandbox/render.ts",
 ]);
 const HTML_SINK_PATTERN =
-  /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML)\b/;
+  /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML|srcdoc)\b/;
 const VAULT_SERVICE_WIRING_FILES = new Set([
   "src/background/index.ts",
   "src/wallet/vault-service.ts",

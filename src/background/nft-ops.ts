@@ -4,7 +4,7 @@
  * verification + invoke path. Removing and spam-hiding watched NFTs are plain
  * preference mutations handled in preference-ops.ts.
  */
-import { STARKNET_NETWORKS } from "../starknet/networks";
+import { STARKNET_NETWORKS, sameFelt } from "../starknet/networks";
 import { buildErc721TransferCall, buildErc1155TransferCall } from "../starknet/nft";
 import { unavailableNftIndexer } from "../starknet/nft-indexer";
 import type { DiscoveredNft } from "../starknet/nft-metadata";
@@ -110,9 +110,15 @@ const filterOwnedNfts = async (
 const watchedCandidates = (
   preferences: Awaited<ReturnType<WalletOpsDeps["preferencesStore"]["read"]>>,
   networkId: string,
+  ownerAddress: string,
 ): readonly DiscoveredNft[] =>
   (preferences.nfts ?? [])
-    .filter((nft) => nft.networkId === networkId && nft.spam !== true)
+    .filter(
+      (nft) =>
+        nft.networkId === networkId &&
+        nft.spam !== true &&
+        (nft.owner === undefined || sameFelt(nft.owner, ownerAddress)),
+    )
     .map((nft) => ({
       collection: "",
       contract: nft.contract,
@@ -155,6 +161,7 @@ const enrichWatchedNft = async (
       ? nft
       : {
           ...nft,
+          ...(metadata.animationUrl ? { animationUrl: metadata.animationUrl } : {}),
           attributes: metadata.attributes,
           collection: metadata.collection || nft.collection,
           description: metadata.description,
@@ -191,7 +198,7 @@ const loadWatchedNfts = async (
   accountAddress: string,
   rpcUrls: readonly string[],
 ): Promise<DiscoveredNft[]> => {
-  const watched = watchedCandidates(preferences, networkId);
+  const watched = watchedCandidates(preferences, networkId, accountAddress);
   const owned = await filterOwnedNfts(deps, watched, accountAddress, rpcUrls);
   return enrichWatchedNfts(deps, owned, new Set(watched.map((nft) => nft.id)), rpcUrls);
 };
@@ -220,6 +227,7 @@ const handleAddNft = async (deps: WalletOpsDeps, message: unknown): Promise<Runt
       contract: input.contract,
       ...(input.label === undefined ? {} : { label: input.label }),
       networkId: input.networkId,
+      owner: context.account.address,
       tokenId: input.tokenId,
     }),
   };
@@ -371,7 +379,7 @@ const handleDiscoverNfts = async (
     indexerUrl: preferences.nftIndexerUrl ?? null,
     networkId: context.networkId,
   });
-  const watched = watchedCandidates(preferences, context.networkId);
+  const watched = watchedCandidates(preferences, context.networkId, owner);
   const watchedIds = new Set(watched.map((nft) => nft.id));
   const candidatesToVerify = input.includeWatched
     ? mergeNftCandidates(candidates, watched)

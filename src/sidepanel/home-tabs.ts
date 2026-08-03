@@ -13,7 +13,7 @@ import { emptyState } from "../ui/content";
 import { button, iconButton } from "../ui/controls";
 import { menuRow } from "../ui/navigation";
 import { icon } from "./icons";
-import { type NftGalleryItem, nftImageMarkup, visibleNftItems } from "./nft-views";
+import { type NftGalleryItem, nftImageMarkup, nftTilePlay, visibleNftItems } from "./nft-views";
 import type { BalanceState } from "./runtime";
 import { isHiddenFromHome } from "./token-flows";
 import { balanceRow } from "./token-row";
@@ -157,7 +157,7 @@ const tokensPanel = (
  * Renders one compact collectible card for the home portfolio tab.
  */
 export const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
-  <li>
+  <li class="collectible-tile">
     <button class="collectible-card" data-nft-open="${escapeHtml(nft.id)}" type="button">
       <span class="collectible-art">${nftImageMarkup(nft, true, eager)}${icon("image")}</span>
       <span class="collectible-copy">
@@ -165,6 +165,7 @@ export const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => 
         <code>#${escapeHtml(nft.tokenId)}</code>
       </span>
     </button>
+    ${nftTilePlay(nft)}
   </li>`;
 
 const collectiblesPanel = (
@@ -172,9 +173,13 @@ const collectiblesPanel = (
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[],
 ): string => {
-  const nfts = visibleNftItems(preferences?.nfts ?? [], discoveredNfts, status.networkId).filter(
-    (nft) => nft.watched,
-  );
+  const owner = status.accounts.find((account) => account.id === status.activeAccountId)?.address;
+  const nfts = visibleNftItems(
+    preferences?.nfts ?? [],
+    discoveredNfts,
+    status.networkId,
+    owner ?? null,
+  ).filter((nft) => nft.watched);
   return `${
     nfts.length === 0
       ? emptyState("No collectibles watched on this network yet. Add one you own from the gallery.")

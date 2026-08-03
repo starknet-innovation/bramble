@@ -157,6 +157,8 @@ export const activeAccountContext = async (
   | { readonly error: string }
   | {
       readonly account: AccountRef;
+      /** Public account metadata available to privileged wallet operations. */
+      readonly accounts: readonly AccountRef[];
       readonly error?: never;
       readonly networkId: StarknetNetworkId;
       readonly vaultPassphrase: string;
@@ -172,7 +174,12 @@ export const activeAccountContext = async (
   if (!account) {
     return { error: "no account for selected network" };
   }
-  return { account, networkId: preferences.activeNetworkId, vaultPassphrase };
+  return {
+    account,
+    accounts: vault.accounts,
+    networkId: preferences.activeNetworkId,
+    vaultPassphrase,
+  };
 };
 
 /**

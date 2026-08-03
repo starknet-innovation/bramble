@@ -193,6 +193,13 @@ export const SEND_COMPOSE_STYLES = `
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
+  .send-recipient-copy small {
+    color: var(--mc-muted);
+    font-size: ${TYPE.micro.size};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
   #send-recipient-continue { width: 100%; }
 
   .send-amount-card {

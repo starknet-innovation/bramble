@@ -97,6 +97,30 @@ describe("sendFlow list callbacks", () => {
     expect(html).toContain("No tokens are tracked on this network yet");
     expect(html).toMatch(/id="send-token-trigger"[^>]*disabled/);
   });
+
+  test("lists watched multisigs with account recipients on the active network", () => {
+    const html = sendFlow(status, account, preferences, [], {}, {}, "usd", [
+      {
+        address: "0x999",
+        id: "SN_MAIN:0x999",
+        name: "Operations",
+        networkId: "SN_MAIN",
+        quorum: 2,
+        signers: ["0x1", "0x2", "0x3"],
+      },
+      {
+        address: "0x888",
+        id: "SN_SEPOLIA:0x888",
+        networkId: "SN_SEPOLIA",
+        quorum: 1,
+        signers: ["0x1"],
+      },
+    ]);
+    expect(html).toContain('data-send-recipient="0x999"');
+    expect(html).toContain("Operations");
+    expect(html).toContain("2 of 3 signers required");
+    expect(html).not.toContain('data-send-recipient="0x888"');
+  });
 });
 
 describe("backupFlow Ledger recovery warning", () => {

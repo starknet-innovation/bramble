@@ -11,8 +11,9 @@ import {
   predictMultisigAddress,
   requireMultisigContractClass,
 } from "../starknet/multisig-deploy";
-import { STARKNET_NETWORKS } from "../starknet/networks";
+import { canonicalFelt, STARKNET_NETWORKS } from "../starknet/networks";
 import { isUnresolvedActivityStatus } from "../storage/activity-store";
+import { type MultisigRecord, multisigId, multisigOperationId } from "../storage/multisig-store";
 import { readTypeOnlyInput } from "./message-inputs";
 import { readDeployMultisigInput } from "./multisig-inputs";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-ops";
@@ -40,7 +41,37 @@ const multisigClassStatus: MultisigDeployHandler = async (deps, message) => {
   const declared = await multisigRpc(deps).isClassDeclared({
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
   });
-  return { declared, ok: true };
+  const operationId = multisigOperationId(
+    "declare",
+    context.networkId,
+    context.account.id,
+    MULTISIG_CLASS_HASH,
+  );
+  if (declared) {
+    if (operationId) {
+      await releaseMultisigOperation(deps, operationId);
+    }
+    return { declarationPending: false, declared: true, ok: true };
+  }
+  const operation = operationId ? await deps.multisigStore.getOperation(operationId) : null;
+  if (operation?.transactionHash) {
+    const activity = (await deps.activity.list().catch(() => [])).find(
+      (entry) =>
+        entry.accountId === context.account.id &&
+        entry.networkId === context.networkId &&
+        entry.hash === operation.transactionHash,
+    );
+    if (activity?.status === "rejected" || activity?.status === "reverted") {
+      await releaseMultisigOperation(deps, operation.id);
+      return { declarationPending: false, declared: false, ok: true };
+    }
+  }
+  return {
+    declarationPending: operation !== null,
+    declared: false,
+    ok: true,
+    ...(operation?.transactionHash ? { transactionHash: operation.transactionHash } : {}),
+  };
 };
 
 const declareMultisigClass: MultisigDeployHandler = async (deps, message) => {
@@ -126,6 +157,18 @@ const deployMultisig: MultisigDeployHandler = async (deps, message) => {
   }
   const config = { quorum: input.quorum, salt: input.salt, signers: input.signers };
   const address = predictMultisigAddress(config);
+  const canonicalAddress = canonicalFelt(address);
+  const id = multisigId(context.networkId, address);
+  if (!canonicalAddress || !id) {
+    return { error: "could not derive a valid multisig address" };
+  }
+  const record: MultisigRecord = {
+    address: canonicalAddress,
+    id,
+    networkId: context.networkId,
+    quorum: input.quorum,
+    signers: input.signers.map((signer) => canonicalFelt(signer) ?? signer),
+  };
   const operationKey = {
     accountId: context.account.id,
     kind: "deploy" as const,
@@ -185,7 +228,15 @@ const deployMultisig: MultisigDeployHandler = async (deps, message) => {
     networkId: context.networkId,
     summary: `Deploy multisig (${input.quorum} of ${input.signers.length})${deployMarker}`,
   });
-  return { address, ok: true, transactionHash: result.transactionHash };
+  // The predicted address and constructor configuration are deterministic, so
+  // the wallet can watch the submitted deployment immediately. This is local
+  // bookkeeping only: every signer-gated action still re-reads the contract
+  // on-chain and fails closed until deployment is actually available.
+  const tracked = await deps.multisigStore.upsertMultisig(record).then(
+    () => true,
+    () => false,
+  );
+  return { address: canonicalAddress, ok: true, tracked, transactionHash: result.transactionHash };
 };
 
 const DEPLOY_HANDLERS: Readonly<Record<string, MultisigDeployHandler>> = {

@@ -43,7 +43,10 @@ const status: WalletStatus = {
 
 describe("multisig deploy signer picker", () => {
   test("lists this wallet's accounts with an insert control and badges Ledger ones", () => {
-    const html = multisigDeployFlow(status, account, true);
+    const html = multisigDeployFlow(status, account, {
+      declarationPending: false,
+      declared: true,
+    });
     expect(html).toContain(`data-signer-insert="${account.address}"`);
     expect(html).toContain(`data-signer-insert="${ledgerSigner.address}"`);
     // Exactly one hardware badge in the picker — the Ledger account.
