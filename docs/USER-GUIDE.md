@@ -100,21 +100,26 @@ out.
 
 ### NFT gallery (collectibles)
 
-Add an ERC-721 or ERC-1155 collection to watch it. MC Wallet verifies on-chain
-ownership, then reads the name, image, description, and attributes from the
-token's `token_uri` / `uri`.
+Add an ERC-721 or ERC-1155 collectible by contract address and token ID. MC
+Wallet proves that the active account owns it on-chain before saving it, then
+reads the name, image, description, and attributes from the token's `token_uri`
+/ `uri`. Automatic discovery is also ownership-checked before an item appears.
 
 ### Multisig
 
-For OpenZeppelin multisig accounts you can **watch** an account, **propose** a
-transaction, **confirm** others' proposals, and **execute** once the threshold is
-met.
+For OpenZeppelin multisig accounts you can create and deploy a new account or
+watch an existing address. The wallet reads its signer and quorum rules from
+chain, identifies signers held by this wallet, and lets an eligible local or
+Ledger account **propose**, **confirm**, and **execute** transactions through a
+review flow. Execution is available only after the on-chain threshold is met.
 
 ### Allowance manager
 
-The allowance manager lists every ERC-20 approval you have granted and lets you
-**revoke** any of them in one tap. Reviewing allowances periodically limits how
-much a compromised dApp contract can move.
+The allowance manager lists approvals submitted through MC Wallet plus live
+approvals it can discover on-chain for tokens you track, and lets you **revoke**
+one by setting that spender's allowance to zero. Approvals for untracked tokens
+may not appear, so this view is not a complete chain index. Reviewing detected
+allowances periodically limits how much a compromised dApp contract can move.
 
 ---
 
@@ -148,8 +153,8 @@ keys.
 ### FAQ
 
 - **I closed the panel mid-setup — did I lose anything?** No. If you had not
-  pressed "Create wallet" successfully, no wallet was written. Reopen and start
-  again; no draft phrase or passphrase is kept.
+  pressed **Add selected account** successfully, no wallet was written. Reopen
+  and start again; no draft phrase or passphrase is kept.
 - **Why is my new account "not deployed"?** Deployment is a separate on-chain
   step from the dashboard, done when you choose — creating the wallet does not
   spend gas.
