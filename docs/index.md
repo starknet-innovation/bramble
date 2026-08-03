@@ -11,6 +11,11 @@ boundaries, release controls, and security posture.
 
 ## Start here
 
+- [User guide](user-guide/) is for people using the wallet: install, first run,
+  creating/backing up/restoring a wallet, the main features, and a safety FAQ.
+- [Start here for engineers](engineering/) is the contributor onboarding entry: a
+  reading order plus the import-layer module map and the untrusted-message
+  data-flow diagram.
 - [UI Lab](https://effective-adventure-qwr464j.pages.github.io/) hosts deterministic Storybook
   scenarios for production wallet UI and Chromatic review. Its
   [runbook](https://github.com/starknet-innovation/mc-wallet/tree/main/apps/ui-lab) covers local
