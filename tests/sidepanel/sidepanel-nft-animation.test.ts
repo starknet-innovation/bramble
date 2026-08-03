@@ -80,6 +80,8 @@ describe("NFT detail animation", () => {
     expect(play).not.toBeNull();
     expect(frame?.hidden).toBe(true);
     expect(frame?.getAttribute("src")).toBeNull();
+    expect(frame?.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(frame?.referrerPolicy).toBe("no-referrer");
 
     play?.click();
 

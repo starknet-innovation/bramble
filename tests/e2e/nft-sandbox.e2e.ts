@@ -40,7 +40,11 @@ const startProbeServer = async (): Promise<ProbeServer> => {
     throw new Error("NFT sandbox probe did not receive a TCP address");
   }
   return {
-    close: () => closeServer(server),
+    close: () => {
+      const closing = closeServer(server);
+      server.closeAllConnections();
+      return closing;
+    },
     requests: () => requestCount,
     url: `http://127.0.0.1:${address.port}/probe`,
   };
@@ -68,6 +72,9 @@ const animationUri = (probeUrl: string): string => {
           image.onload = () => { document.body.dataset.image = "allowed"; };
           image.onerror = () => { document.body.dataset.image = "blocked"; };
           image.src = ${JSON.stringify(probeUrl)};
+          setTimeout(() => {
+            window.location.assign(${JSON.stringify(probeUrl)});
+          }, 1_000);
         </script>
       </body>
     </html>`;
@@ -95,10 +102,58 @@ test("confines an NFT animation to an isolated, egress-blocked sandbox", async (
     await expect(sidepanel.locator("body")).not.toHaveAttribute("data-sandbox-breach", "yes");
     await expect(body).toHaveAttribute("data-fetch", "blocked");
     await expect(body).toHaveAttribute("data-image", "blocked");
+    await sidepanel.waitForTimeout(1_250);
     expect(probe.requests()).toBe(0);
   } finally {
     await probe.close();
   }
+});
+
+test("runs an animation through the embedding iframe sandbox", async ({ extension }) => {
+  const html = `<!doctype html><html><body><script>
+    parent.postMessage({
+      marker: "mc-nft-sandbox-ready",
+      runtime: typeof globalThis.chrome?.runtime,
+    }, "*");
+  </script></body></html>`;
+  const uri = `data:text/html;base64,${Buffer.from(html).toString("base64")}`;
+  const sidepanel = await extension.openExtensionPage("sidepanel.html");
+  const sandboxUrl = `chrome-extension://${extension.extensionId}/sandbox/render.html#${encodeURIComponent(uri)}`;
+
+  const result = await sidepanel.evaluate(
+    (url) =>
+      new Promise<{ readonly runtime: string }>((resolve, reject) => {
+        const frame = document.createElement("iframe");
+        frame.sandbox.add("allow-scripts");
+        frame.referrerPolicy = "no-referrer";
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener("message", onMessage);
+          frame.remove();
+          reject(new Error("sandbox animation did not start"));
+        }, 5_000);
+        const onMessage = (event: MessageEvent<unknown>): void => {
+          if (
+            event.source !== frame.contentWindow ||
+            typeof event.data !== "object" ||
+            event.data === null ||
+            (event.data as { marker?: unknown }).marker !== "mc-nft-sandbox-ready"
+          ) {
+            return;
+          }
+          window.clearTimeout(timeout);
+          window.removeEventListener("message", onMessage);
+          const runtime = (event.data as { runtime?: unknown }).runtime;
+          frame.remove();
+          resolve({ runtime: typeof runtime === "string" ? runtime : "invalid" });
+        };
+        window.addEventListener("message", onMessage);
+        frame.src = url;
+        document.body.append(frame);
+      }),
+    sandboxUrl,
+  );
+
+  expect(result.runtime).toBe("undefined");
 });
 
 test("renders a static SVG data URI without scripts or remote subresources", async ({

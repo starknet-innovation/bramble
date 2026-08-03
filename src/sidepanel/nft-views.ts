@@ -150,7 +150,7 @@ const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
 export const nftTilePlay = (item: NftGalleryItem): string =>
   item.animationUrl
     ? `<button class="nft-play-tile" data-nft-play="${escapeHtml(item.animationUrl)}" type="button" aria-label="Play animation">${icon("gamepad")}<span>Play animation</span></button>
-      <iframe class="nft-animation nft-animation--tile" title="Collectible animation" hidden></iframe>`
+      <iframe class="nft-animation nft-animation--tile" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>`
     : "";
 
 // The Hide control: a watched entry toggles its stored spam flag; a
@@ -398,7 +398,7 @@ const nftAnimationSection = (item: NftGalleryItem): string =>
         <h2>Animation</h2>
         <span class="hint">This collectible renders its own animation on-chain. It runs isolated in a sandbox with no network access — nothing loads until you press play.</span>
         <button class="secondary small" data-nft-play="${escapeHtml(item.animationUrl)}" type="button">${icon("gamepad")}Play animation</button>
-        <iframe class="nft-animation" title="Collectible animation" hidden></iframe>
+        <iframe class="nft-animation" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
       </section>`
     : "";
 
