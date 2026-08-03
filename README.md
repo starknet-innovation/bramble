@@ -39,9 +39,9 @@ Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also ava
 | [Scarb](https://docs.swmansion.com/scarb/) | 2.18.0 **exactly** | `asdf install scarb 2.18.0` (pinned in `.tool-versions`) | `vendor:multisig` |
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run vendor:krusty     # Krusty KMS crypto core (WASM) — needs Rust + wasm-pack
-bun run vendor:multisig   # pinned multisig contract artifacts — needs scarb (version denoted in .tool-versions)
+bun run vendor:multisig   # pinned multisig contract artifacts — needs Scarb 2.18.0 exactly
 bun run build             # -> dist/
 ```
 
