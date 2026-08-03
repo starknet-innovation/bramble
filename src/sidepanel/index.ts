@@ -1,8 +1,6 @@
 /**
- * Side panel wallet app. This is the primary extension UI.
- * Rendering contract: the whole shell re-renders from status, but screens
- * animate only when the scene changes, and keyboard focus is
- * restored across re-renders so controls never jump under the user.
+ * Primary side-panel UI. The shell re-renders from status, but screens animate
+ * only on scene changes and restore keyboard focus across repaints.
  */
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
@@ -59,7 +57,7 @@ import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
-import { bindActivity, bindTransfer, markTransferLedgerAuthorized } from "./transfer-ui";
+import * as transfer from "./transfer-bindings";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {
@@ -153,7 +151,7 @@ document.body.append(ledgerSignMount);
 const ledgerSign = createLedgerSignRuntime({
   connector: ledgerConnector,
   mount: ledgerSignMount,
-  onSignatureReported: markTransferLedgerAuthorized,
+  onSignatureReported: transfer.markTransferLedgerAuthorized,
   status: () => cache.status,
   wallet,
 });
@@ -220,8 +218,8 @@ const bindAll = (): void => {
     wallet,
   });
   bindReveal({ app, wallet });
-  bindActivity({ app, render, wallet });
-  bindTransfer({ app, back: goBack, navigate: (view) => navigate(view), render, wallet });
+  transfer.bindActivity({ app, render, wallet });
+  transfer.bindTransfer({ app, back: goBack, navigate: (view) => navigate(view), render, wallet });
   const settingsDeps = {
     activeAccountId: () => lastAccountId,
     app,
@@ -357,6 +355,7 @@ const paint = (): void => {
   snoozedApprovalIds = snoozedApprovalIds.filter((id) =>
     cache.pending.some((approval) => approval.id === id),
   );
+  if (transfer.preserveSend(app, activeView, status, cache.pending, snoozedApprovalIds)) return;
   const content =
     fullPageOnboarding && status.hasVault
       ? onboardingComplete()

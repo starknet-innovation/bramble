@@ -177,6 +177,9 @@ describe("multisig views", () => {
     expect(receive).toContain("QR code for multisig address");
     expect(receive).toContain("Copy multisig address");
     expect(receive).toContain("2-of-2 approval rule");
+    expect(receive).toContain('class="stack receive-address-view"');
+    expect(receive).toContain('class="qr-card"');
+    expect(receive).not.toContain('class="section receive-card"');
 
     expect(multisigReceiveFlow(status, null)).toContain("no longer watched");
     expect(multisigSignersFlow(status, account, null)).toContain("no longer watched");

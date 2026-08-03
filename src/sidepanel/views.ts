@@ -249,7 +249,12 @@ const collectibleJourneyScreen = (
     return nftWatchFlow(context.status, context.account);
   }
   if (activeView === "nft-hidden") {
-    return nftHiddenFlow(context.status, context.preferences);
+    return nftHiddenFlow(
+      context.status,
+      context.preferences,
+      context.account,
+      context.discoveredNfts,
+    );
   }
   if (activeView === "nft-detail") {
     return nftDetailFlow(
@@ -403,6 +408,7 @@ export const dashboard = (
     connectedSites,
     currency,
     expandedGroupId,
+    multisigs,
     preferences,
     prices,
     status,

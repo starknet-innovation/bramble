@@ -3,6 +3,7 @@
  * and deployment signer choices remain stable through mandatory review.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { readProposeMultisigInput } from "../../src/background/multisig-inputs";
 import type { WalletStatus } from "../../src/popup/responses";
 import { multisigDeployFlow } from "../../src/sidepanel/multisig-deploy-view";
 import { multisigProposeFlow } from "../../src/sidepanel/multisig-propose-view";
@@ -130,16 +131,25 @@ describe("guided Multisig actions", () => {
       "0x555",
       parseTokenAmount("1.25", token.decimals),
     );
-    expect(proposals).toEqual([
-      {
-        calldata: call.calldata,
-        entrypoint: "transfer",
-        multisigId: record.id,
-        salt: "0x0",
-        summary: `Send 1.25 ${token.symbol} to Research treasury`,
-        to: canonicalFelt(token.address),
-      },
-    ]);
+    const calldata = Array.isArray(call.calldata)
+      ? call.calldata.map((felt) => canonicalFelt(String(felt)))
+      : [];
+    const to = canonicalFelt(token.address);
+    if (to === null || calldata.some((felt) => felt === null)) {
+      throw new Error("Canonical proposal fixture failed");
+    }
+    const expected = {
+      calldata: calldata.filter((felt): felt is string => felt !== null),
+      entrypoint: "transfer",
+      multisigId: record.id,
+      salt: "0x0",
+      summary: `Send 1.25 ${token.symbol} to Research treasury`,
+      to,
+    };
+    expect(proposals).toEqual([expected]);
+    expect(readProposeMultisigInput({ ...expected, type: "wallet.proposeMultisigTx" })).toEqual(
+      expected,
+    );
   });
 
   test("selects wallet contacts, then requires stable deployment review", async () => {

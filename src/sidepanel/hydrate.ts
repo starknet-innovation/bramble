@@ -201,6 +201,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   if (
     activeView === "home" ||
     activeView === "nfts" ||
+    activeView === "nft-hidden" ||
     activeView === "nft-detail" ||
     activeView === "nft-send"
   ) {
@@ -225,6 +226,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     activeView === "home" ||
     activeView === "activity" ||
     activeView === "settings" ||
+    activeView === "send" ||
     activeView === "multisigs" ||
     activeView === "multisig-home" ||
     activeView === "multisig-detail" ||

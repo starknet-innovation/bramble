@@ -4,7 +4,6 @@
  * has one task and one security boundary to understand.
  */
 import type { WalletStatus } from "../popup/responses";
-import { escapeHtml } from "../shared/html";
 import type { MultisigRecord } from "../storage/multisig-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { emptyState, receipt } from "../ui/content";
@@ -12,8 +11,8 @@ import { button } from "../ui/controls";
 import { textareaField, textField } from "../ui/fields";
 import { menuRow } from "../ui/navigation";
 import { multisigDisplayName, multisigSignerRow } from "./multisig-views";
-import { accountLabel, copyButton, flowHeader, flowScreen, noAccountEmpty } from "./parts";
-import { qrSvg } from "./qr";
+import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "./parts";
+import { receiveAddressView } from "./receive-view";
 
 /**
  * Renders the shared-account gateway reached from Add account. Creating
@@ -155,12 +154,15 @@ export const multisigReceiveFlow = (
     flowHeader("Receive", status, multisigDisplayName(record)) +
     flowScreen(
       "multisig-receive",
-      `<section class="section receive-card">
-        <p class="eyebrow">Shared account</p>
-        <h2>${escapeHtml(multisigDisplayName(record))}</h2>
-        <div class="receive-qr">${qrSvg(record.address, "QR code for multisig address")}</div>
-        <div class="receive-address"><code>${record.address}</code>${copyButton(record.address, "Copy multisig address")}</div>
-        <p class="hint">Send only Starknet assets on ${escapeHtml(status.network)}. This address is controlled by the multisig's ${record.quorum}-of-${record.signers.length} approval rule.</p>
+      `<section class="section">
+        ${receiveAddressView({
+          address: record.address,
+          copyLabel: "Copy multisig address",
+          eyebrow: "Shared account",
+          hint: `Send only Starknet assets on ${status.network}. This address is controlled by the multisig's ${record.quorum}-of-${record.signers.length} approval rule.`,
+          qrLabel: "QR code for multisig address",
+          title: multisigDisplayName(record),
+        })}
       </section>`,
     )
   );
