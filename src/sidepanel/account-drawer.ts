@@ -1,6 +1,7 @@
 /**
  * Left slide-in account drawer opened from the header avatar. Kept lean: it
- * lists this network's accounts with identicons and names, marks the active one,
+ * lists this network's single-signer and multisig accounts with identicons and
+ * names, marks the selected one,
  * filters by folder/group chips, lets each account be filed into a single
  * folder from the row's inline quick picker,
  * offers "Add account", and links to the dedicated "Manage accounts & groups"
@@ -13,6 +14,7 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { sameFelt } from "../starknet/networks";
 import { type AccountGroups, accountGroup } from "../storage/account-groups";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { WalletPreferences } from "../storage/preferences-store";
@@ -27,19 +29,20 @@ import { accountAvatar, accountDisplayName, accountLabel, hardwareBadge } from "
 const drawerMultisigRow = (
   record: MultisigRecord,
   proposals: readonly MultisigProposalRecord[],
+  selectedId: string | null,
 ): string => {
   const open = proposals.filter(
     (proposal) => proposal.multisigId === record.id && proposal.state !== "executed",
   ).length;
   return `<li class="drawer-account-item">
-    <button class="drawer-account drawer-multisig" data-multisig-open="${escapeHtml(record.id)}" type="button">
+    <button class="drawer-account drawer-multisig" data-multisig-select="${escapeHtml(record.id)}" type="button" aria-pressed="${record.id === selectedId}">
       <span class="option-avatar">${accountAvatar(record.address)}</span>
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
         <code>${escapeHtml(accountLabel(record.address))}</code>
-        <span class="account-groups-line">Shared · ${record.quorum} of ${record.signers.length}${open > 0 ? ` · ${open} open` : ""}</span>
+        <span class="account-groups-line">Multisig · ${record.quorum} of ${record.signers.length} signers required${open > 0 ? ` · ${open} open` : ""}</span>
       </span>
-      <span class="option-mark">${icon("chevronRight")}</span>
+      <span class="option-mark">${icon(record.id === selectedId ? "check" : "chevronRight")}</span>
     </button>
   </li>`;
 };
@@ -47,9 +50,11 @@ const drawerMultisigRow = (
 const drawerAccountRow = (
   stored: AccountRef,
   activeId: string | null,
+  singleSignerSelected: boolean,
   preferences: WalletPreferences | null,
   groups: AccountGroups,
   openAssignId: string | null,
+  selectedMultisig: MultisigRecord | null,
 ): string => {
   const folder = accountGroup(groups, stored.id);
   const assignOpen = stored.id === openAssignId;
@@ -58,16 +63,19 @@ const drawerAccountRow = (
   const rowGlyph = folder ? folder.icon : "folder";
   const pickerLabel = folder ? `Folder: ${folder.name}` : "No folder — choose one";
   const name = accountDisplayName(stored, preferences);
+  const selectedMultisigSigner =
+    selectedMultisig?.signers.some((signer) => sameFelt(signer, stored.address)) ?? false;
   return `
   <li class="drawer-account-item">
     <div class="drawer-account-row">
-      <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === activeId}">
+      <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" data-active-signer="${stored.id === activeId}"${selectedMultisigSigner ? ' data-selected-multisig-signer="true"' : ""} type="button" aria-pressed="${singleSignerSelected && stored.id === activeId}">
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
           <code>${accountLabel(stored.address)}</code>
+          ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.name ?? "selected multisig")}</span>` : ""}
         </span>
-        ${stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
+        ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>
       ${iconButton({
         attributes: {
@@ -101,6 +109,7 @@ export const accountDrawer = (
   openAssignId: string | null = null,
   multisigs: readonly MultisigRecord[] = [],
   proposals: readonly MultisigProposalRecord[] = [],
+  selectedMultisigId: string | null = null,
 ): string => {
   const groups = preferences?.groups ?? [];
   const accounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
@@ -108,7 +117,11 @@ export const accountDrawer = (
   const visible = activeGroup
     ? accounts.filter((stored) => activeGroup.accountIds.includes(stored.id))
     : accounts;
-  const shared = multisigs.filter((record) => record.networkId === status.networkId);
+  const shared = groupFilter
+    ? []
+    : multisigs.filter((record) => record.networkId === status.networkId);
+  const selectedMultisig = shared.find((record) => record.id === selectedMultisigId) ?? null;
+  const hasVisibleAccounts = visible.length > 0 || shared.length > 0;
   return `
   <div class="drawer-root" data-open="false">
     <div class="drawer-backdrop" data-drawer-close></div>
@@ -128,7 +141,7 @@ export const accountDrawer = (
       </header>
       ${groupFilterChips(groups, groupFilter)}
       ${
-        visible.length === 0
+        !hasVisibleAccounts
           ? emptyState(
               activeGroup
                 ? "No accounts in this group yet. Open an account's folder button to add it."
@@ -136,17 +149,19 @@ export const accountDrawer = (
             )
           : `<ul class="drawer-list">${visible
               .map((stored) =>
-                drawerAccountRow(stored, account?.id ?? null, preferences, groups, openAssignId),
+                drawerAccountRow(
+                  stored,
+                  account?.id ?? null,
+                  selectedMultisigId === null,
+                  preferences,
+                  groups,
+                  openAssignId,
+                  selectedMultisig,
+                ),
               )
+              .join("")}${shared
+              .map((record) => drawerMultisigRow(record, proposals, selectedMultisigId))
               .join("")}</ul>`
-      }
-      ${
-        shared.length === 0
-          ? ""
-          : `<section class="drawer-shared">
-              <p class="eyebrow">Shared accounts</p>
-              <ul class="drawer-list">${shared.map((record) => drawerMultisigRow(record, proposals)).join("")}</ul>
-            </section>`
       }
       <div class="drawer-foot">
         ${button({

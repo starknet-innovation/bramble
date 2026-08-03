@@ -11,8 +11,13 @@ import { createMessageHandler } from "../../src/background/messages";
 import { createUnlockSession } from "../../src/background/session";
 import type { MultisigProposalState } from "../../src/starknet/multisig";
 import { MULTISIG_CLASS_HASH } from "../../src/starknet/multisig-deploy";
+import { memoryActivityLog } from "../../src/storage/activity-store";
 import type { MultisigProposalRecord } from "../../src/storage/multisig-store";
-import { type MultisigStore, memoryMultisigStore } from "../../src/storage/multisig-store";
+import {
+  type MultisigStore,
+  memoryMultisigStore,
+  multisigOperationId,
+} from "../../src/storage/multisig-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
 import {
   HARNESS_MULTISIG,
@@ -147,7 +152,7 @@ describe("multisig class-status and declare guards", () => {
     const { handler } = makeMultisigHarness({ classDeclared: true });
     await expect(
       handler({ type: "wallet.multisigClassStatus" }, harnessExtensionSender),
-    ).resolves.toEqual({ declared: true, ok: true });
+    ).resolves.toEqual({ declarationPending: false, declared: true, ok: true });
   });
 
   test("multisigClassStatus surfaces the account-context error when locked", async () => {
@@ -160,6 +165,77 @@ describe("multisig class-status and declare guards", () => {
     await expect(
       handler({ type: "wallet.multisigClassStatus" }, harnessExtensionSender),
     ).resolves.toEqual({ error: "wallet locked" });
+  });
+
+  test("multisigClassStatus preserves an unresolved declaration across UI refreshes", async () => {
+    const activity = memoryActivityLog(() => 1);
+    const harness = makeMultisigHarness({ activity, classDeclared: false });
+    const operationId =
+      multisigOperationId(
+        "declare",
+        harnessAccount.networkId,
+        harnessAccount.id,
+        MULTISIG_CLASS_HASH,
+      ) ?? "";
+    await harness.multisigStore.claimOperation({
+      accountId: harnessAccount.id,
+      id: operationId,
+      kind: "declare",
+      networkId: harnessAccount.networkId,
+      target: MULTISIG_CLASS_HASH,
+    });
+    await expect(
+      harness.handler({ type: "wallet.multisigClassStatus" }, harnessExtensionSender),
+    ).resolves.toEqual({ declarationPending: true, declared: false, ok: true });
+
+    await harness.multisigStore.setOperationHash(operationId, "0xdec");
+    await expect(
+      harness.handler({ type: "wallet.multisigClassStatus" }, harnessExtensionSender),
+    ).resolves.toEqual({
+      declarationPending: true,
+      declared: false,
+      ok: true,
+      transactionHash: "0xdec",
+    });
+
+    await activity.record({
+      accountId: harnessAccount.id,
+      hash: "0xdec",
+      kind: "invoke",
+      networkId: harnessAccount.networkId,
+      summary: "Declare multisig class",
+    });
+    await activity.updateStatuses(
+      { "0xdec": "rejected" },
+      { accountId: harnessAccount.id, networkId: harnessAccount.networkId },
+    );
+    await expect(
+      harness.handler({ type: "wallet.multisigClassStatus" }, harnessExtensionSender),
+    ).resolves.toEqual({ declarationPending: false, declared: false, ok: true });
+    expect(await harness.multisigStore.getOperation(operationId)).toBeNull();
+  });
+
+  test("multisigClassStatus clears a declaration claim once the class exists", async () => {
+    const harness = makeMultisigHarness({ classDeclared: true });
+    const operationId =
+      multisigOperationId(
+        "declare",
+        harnessAccount.networkId,
+        harnessAccount.id,
+        MULTISIG_CLASS_HASH,
+      ) ?? "";
+    await harness.multisigStore.claimOperation({
+      accountId: harnessAccount.id,
+      id: operationId,
+      kind: "declare",
+      networkId: harnessAccount.networkId,
+      target: MULTISIG_CLASS_HASH,
+    });
+
+    await expect(
+      harness.handler({ type: "wallet.multisigClassStatus" }, harnessExtensionSender),
+    ).resolves.toEqual({ declarationPending: false, declared: true, ok: true });
+    expect(await harness.multisigStore.getOperation(operationId)).toBeNull();
   });
 
   test("declareMultisigClass fails when no class artifact loader is wired", async () => {

@@ -46,7 +46,10 @@ export const bindActivity = ({ app, render, wallet }: ActivityUiDeps): void => {
 
   exportButton?.addEventListener("click", () => {
     buttonBusy(exportButton, true);
-    void wallet.loadActivity().then(
+    const accountId = app?.querySelector<HTMLElement>("[data-activity-account-id]")?.dataset[
+      "activityAccountId"
+    ];
+    void wallet.loadActivity(accountId).then(
       ({ entries, historyUnavailable }) => {
         const blob = new Blob([activityToCsv(entries)], { type: "text/csv" });
         const url = URL.createObjectURL(blob);

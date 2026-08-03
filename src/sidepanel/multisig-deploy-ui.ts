@@ -89,7 +89,9 @@ const submitDeployment = (event: SubmitEvent): void => {
     async () => {
       const result = await state.deps.multisig.deployMultisig(signers, quorum, salt);
       state.deps.openList();
-      return `Deployment submitted at ${result.address} — watch it once the transaction finalizes`;
+      return result.tracked
+        ? `Deployment submitted at ${result.address} and added to watched multisigs`
+        : `Deployment submitted at ${result.address}, but automatic tracking failed — watch this address manually`;
     },
   );
 };
@@ -99,9 +101,11 @@ const submitDeployment = (event: SubmitEvent): void => {
  * deployment. Exact signer/quorum/salt values must be reviewed unchanged.
  */
 export const bindMultisigDeploy = (deps: MultisigDeployUiDeps): void => {
-  const declare = deps.app?.querySelector<HTMLButtonElement>("#multisig-declare");
-  declare?.addEventListener("click", () => {
-    deps.runAction(declare, "multisig-declare-result", "Submitting declare…", async () => {
+  // Do not shorten this binding to `declare`: Bun 1.3.3 treats that
+  // TypeScript contextual keyword specially and drops the listener in output.
+  const declareButton = deps.app?.querySelector<HTMLButtonElement>("#multisig-declare");
+  declareButton?.addEventListener("click", () => {
+    deps.runAction(declareButton, "multisig-declare-result", "Submitting declare…", async () => {
       const transactionHash = await deps.multisig.declareClass();
       return `Declare submitted: ${transactionHash}`;
     });

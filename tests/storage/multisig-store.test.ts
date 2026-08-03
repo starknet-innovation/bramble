@@ -83,8 +83,18 @@ describe("multisig store", () => {
         ...proposal,
         confirmedBySigner: true,
         confirmedBySignerAddress: SIGNER_A,
+        confirmedSignerAddresses: [SIGNER_A],
       }),
     ).toBe(true);
+    expect(
+      isMultisigProposalRecord({
+        ...proposal,
+        confirmedSignerAddresses: [SIGNER_A, `0x0${SIGNER_A.slice(2)}`],
+      }),
+    ).toBe(false);
+    expect(isMultisigProposalRecord({ ...proposal, confirmedSignerAddresses: ["invalid"] })).toBe(
+      false,
+    );
     expect(isMultisigProposalRecord({ ...proposal, submitTransactionHash: "0x1234" })).toBe(true);
     expect(isMultisigProposalRecord({ ...proposal, submitTransactionHash: "not-a-hash" })).toBe(
       false,

@@ -3,6 +3,7 @@
  * responses.ts so that file stays within the size budget.
  */
 import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
+import { isMultisigSyncWarning, type MultisigSyncWarning } from "../shared/multisig-sync";
 import { isStarkFieldElement } from "../starknet/networks";
 import {
   isMultisigProposalRecord,
@@ -41,6 +42,7 @@ export type MultisigResponse = {
   readonly multisig: MultisigRecord;
   readonly ok: true;
   readonly proposals?: readonly MultisigProposalRecord[];
+  readonly warnings?: readonly MultisigSyncWarning[];
 };
 
 /**
@@ -49,11 +51,15 @@ export type MultisigResponse = {
 export const isMultisigResponse = (value: unknown): value is MultisigResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["multisig", "ok", "proposals"]) &&
+  hasOnlyKnownKeys(value, ["multisig", "ok", "proposals", "warnings"]) &&
   value["ok"] === true &&
   isMultisigRecord(value["multisig"]) &&
   (value["proposals"] === undefined ||
-    (Array.isArray(value["proposals"]) && value["proposals"].every(isMultisigProposalRecord)));
+    (Array.isArray(value["proposals"]) && value["proposals"].every(isMultisigProposalRecord))) &&
+  (value["warnings"] === undefined ||
+    (Array.isArray(value["warnings"]) &&
+      value["warnings"].length <= 2 &&
+      value["warnings"].every(isMultisigSyncWarning)));
 
 /**
  * One tracked proposal accepted from the background boundary, with the
@@ -83,8 +89,16 @@ export const isMultisigProposalResponse = (value: unknown): value is MultisigPro
  */
 export type MultisigClassStatusResponse = {
   readonly declared: boolean;
+  readonly declarationPending: boolean;
   readonly ok: true;
+  readonly transactionHash?: string;
 };
+
+/**
+ * Public declaration state rendered by the deploy flow after the response
+ * envelope has been validated.
+ */
+export type MultisigClassState = Omit<MultisigClassStatusResponse, "ok">;
 
 /**
  * Checks class-status responses before rendering the deploy screen.
@@ -94,9 +108,15 @@ export const isMultisigClassStatusResponse = (
 ): value is MultisigClassStatusResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["declared", "ok"]) &&
+  hasOnlyKnownKeys(value, ["declarationPending", "declared", "ok", "transactionHash"]) &&
   value["ok"] === true &&
-  typeof value["declared"] === "boolean";
+  typeof value["declared"] === "boolean" &&
+  typeof value["declarationPending"] === "boolean" &&
+  (value["transactionHash"] === undefined ||
+    (value["declarationPending"] === true &&
+      typeof value["transactionHash"] === "string" &&
+      isStarkFieldElement(value["transactionHash"]))) &&
+  !(value["declared"] && value["declarationPending"]);
 
 /**
  * Deploy submission accepted from the background boundary with the predicted
@@ -105,6 +125,7 @@ export const isMultisigClassStatusResponse = (
 export type MultisigDeployResponse = {
   readonly address: string;
   readonly ok: true;
+  readonly tracked: boolean;
   readonly transactionHash: string;
 };
 
@@ -114,10 +135,11 @@ export type MultisigDeployResponse = {
 export const isMultisigDeployResponse = (value: unknown): value is MultisigDeployResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["address", "ok", "transactionHash"]) &&
+  hasOnlyKnownKeys(value, ["address", "ok", "tracked", "transactionHash"]) &&
   value["ok"] === true &&
   typeof value["address"] === "string" &&
   isStarkFieldElement(value["address"]) &&
+  typeof value["tracked"] === "boolean" &&
   typeof value["transactionHash"] === "string" &&
   isStarkFieldElement(value["transactionHash"]);
 
