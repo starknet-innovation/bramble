@@ -156,6 +156,11 @@ describe("updateRenderScope", () => {
       discoveredNfts: [nft],
       historyUnavailable: true,
       indexedNfts: [nft],
+      multisigClassDeclared: {
+        declarationPending: true,
+        declared: false,
+        transactionHash: "0xdec",
+      },
       status: { ...cache.status, activeAccountId: ACCOUNT_ID, networkId: "SN_MAIN" as const },
       transactions: [transaction],
       watchedNfts: [nft],
@@ -165,6 +170,11 @@ describe("updateRenderScope", () => {
     expect(cache.discoveredNfts).toEqual([nft]);
     expect(cache.transactions).toEqual([transaction]);
     expect(cache.historyUnavailable).toBe(true);
+    expect(cache.multisigClassDeclared).toEqual({
+      declarationPending: true,
+      declared: false,
+      transactionHash: "0xdec",
+    });
 
     updateRenderScope(cache, { ...cache.status, activeAccountId: OTHER_ACCOUNT_ID });
     expect(cache.discoveredNfts).toEqual([]);
@@ -172,5 +182,6 @@ describe("updateRenderScope", () => {
     expect(cache.watchedNfts).toEqual([]);
     expect(cache.transactions).toEqual([]);
     expect(cache.historyUnavailable).toBe(false);
+    expect(cache.multisigClassDeclared).toBeNull();
   });
 });

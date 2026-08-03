@@ -4,7 +4,11 @@
  * the advanced path reviews; only the reviewed shape can be submitted.
  */
 import { escapeHtml } from "../shared/html";
-import { isNonZeroStarkFieldElement, normalizeFeltInput } from "../starknet/networks";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  normalizeFeltInput,
+} from "../starknet/networks";
 import { buildErc20TransferCall, parseTokenAmount } from "../starknet/rpc";
 import { buttonBusy, errorMessage, renderFragment, showToast } from "./dom";
 import { formatFiat } from "./fiat";
@@ -268,6 +272,15 @@ const parseFelts = (raw: string): readonly string[] =>
     .map((felt) => normalizeFeltInput(felt))
     .filter((felt) => felt.length > 0);
 
+const canonicalCallCalldata = (calldata: unknown): readonly string[] => {
+  if (!Array.isArray(calldata)) return [];
+  const felts = calldata.map((felt) => canonicalFelt(String(felt)));
+  if (felts.some((felt) => felt === null)) {
+    throw new Error("Could not build token transfer calldata");
+  }
+  return felts.filter((felt): felt is string => felt !== null);
+};
+
 const proposalFields = (form: HTMLFormElement): ProposalFields => {
   const data = new FormData(form);
   const salt = normalizeFeltInput(String(data.get("salt") ?? ""));
@@ -293,7 +306,10 @@ const proposalFields = (form: HTMLFormElement): ProposalFields => {
   const recipientLabel = form.dataset["recipientLabel"] || accountLabel(recipient);
   return {
     amount,
-    calldata: Array.isArray(call.calldata) ? call.calldata.map(String) : [],
+    // starknet.js compiles uint256 calldata as decimal strings, while the
+    // extension message boundary accepts only canonical Starknet felts. Keep
+    // the guided path aligned with the advanced path before review and submit.
+    calldata: canonicalCallCalldata(call.calldata),
     entrypoint: call.entrypoint,
     mode: "send",
     recipientLabel,

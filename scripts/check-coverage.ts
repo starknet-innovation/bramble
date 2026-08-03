@@ -16,7 +16,7 @@ import process from "node:process";
 const MIN_FUNCTION_PERCENT = 95;
 const MIN_LINE_PERCENT = 95;
 
-const child = Bun.spawn(["bun", "test", "tests", "--coverage"], {
+const child = Bun.spawn(["bun", "test", "./tests", "--coverage"], {
   stderr: "pipe",
   stdout: "pipe",
 });

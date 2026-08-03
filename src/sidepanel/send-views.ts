@@ -6,6 +6,7 @@
  */
 import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import type { MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { emptyState } from "../ui/content";
@@ -13,6 +14,7 @@ import { button, iconButton } from "../ui/controls";
 import { inputControl } from "../ui/fields";
 import { formatFiat, tokenFiatValue } from "./fiat";
 import { icon } from "./icons";
+import { multisigDisplayName } from "./multisig-views";
 import {
   accountAvatar,
   accountDisplayName,
@@ -86,12 +88,31 @@ const addressBookRow = (entry: NonNullable<WalletPreferences["addressBook"]>[num
     ${icon("chevronRight")}
   </button>`;
 
+const multisigRecipientRow = (record: MultisigRecord): string => {
+  const name = multisigDisplayName(record);
+  return `
+  <button class="send-recipient-row" type="button"
+    data-send-recipient="${escapeHtml(record.address)}"
+    data-send-recipient-label="${escapeHtml(name)}"
+    data-send-search="${escapeHtml(`${name} multisig ${record.address}`.toLowerCase())}">
+    <span class="send-recipient-avatar">${accountAvatar(record.address)}</span>
+    <span class="send-recipient-copy">
+      <strong>${escapeHtml(name)}</strong>
+      <code>${escapeHtml(accountLabel(record.address))}</code>
+      <small>Multisig · ${record.quorum} of ${record.signers.length} signers required</small>
+    </span>
+    ${icon("chevronRight")}
+  </button>`;
+};
+
 const recipientStage = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
+  multisigs: readonly MultisigRecord[],
 ): string => {
   const accounts = sendRecipientAccounts(status.accounts, status.networkId, account?.id ?? null);
+  const sharedAccounts = multisigs.filter((record) => record.networkId === status.networkId);
   const contacts =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return `<section class="send-stage send-recipient-stage" id="send-recipient-stage">
@@ -117,7 +138,12 @@ const recipientStage = (
     </div>
     <div class="send-recipient-list" data-send-recipient-panel="accounts">
       <div class="send-list-heading">${icon("wallet")}<strong>My accounts</strong></div>
-      ${accounts.length > 0 ? accounts.map((stored) => recipientAccountRow(stored, preferences)).join("") : emptyState("No other accounts are available on this network.")}
+      ${
+        accounts.length > 0 || sharedAccounts.length > 0
+          ? accounts.map((stored) => recipientAccountRow(stored, preferences)).join("") +
+            sharedAccounts.map(multisigRecipientRow).join("")
+          : emptyState("No other accounts are available on this network.")
+      }
     </div>
     <div class="send-recipient-list" data-send-recipient-panel="contacts" hidden>
       <div class="send-list-heading">${icon("book")}<strong>Address book</strong></div>
@@ -310,6 +336,7 @@ export const sendFlow = (
   prices: Readonly<Record<string, number>> = {},
   changes: Readonly<Record<string, number>> = {},
   currency: DisplayCurrency = preferences?.displayCurrency ?? "usd",
+  multisigs: readonly MultisigRecord[] = [],
 ): string => {
   const assets = sendAssets(status.networkId, preferences, balances, prices, changes);
   const asset = assets[0];
@@ -343,7 +370,7 @@ export const sendFlow = (
           <input name="tokenSymbol" type="hidden" value="${escapeHtml(asset?.symbol ?? "token")}" />
           ${sendProgress()}
           <div class="send-stage-frame" data-initial-fiat="${escapeHtml(initialFiat)}">
-            ${recipientStage(status, account, preferences)}
+            ${recipientStage(status, account, preferences, multisigs)}
             ${amountStage(status, account, asset, currency, preferences)}
             ${assetStage(assets, currency)}
             <section class="send-stage send-review-stage" id="send-review-stage" hidden>

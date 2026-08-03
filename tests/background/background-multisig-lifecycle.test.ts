@@ -170,7 +170,10 @@ describe("unmined proposal protection", () => {
     expect((await listedProposals(handler))[0]?.state).toBe("pending");
 
     submitStatus = "rejected";
-    await handler({ type: "wallet.activity" }, harnessExtensionSender);
+    await handler(
+      { accountId: watched.multisig.id, type: "wallet.activity" },
+      harnessExtensionSender,
+    );
     await handler(
       { id: watched.multisig.id, type: "wallet.refreshMultisig" },
       harnessExtensionSender,

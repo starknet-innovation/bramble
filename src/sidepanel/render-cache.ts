@@ -5,10 +5,12 @@
  * it is safe to reset to the locked/empty state whenever the vault is locked.
  */
 
+import type { MultisigClassState } from "../popup/multisig-responses";
 import type { WalletStatus } from "../popup/responses";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { MultisigClient } from "./multisig-runtime";
+import type { MultisigSyncState } from "./multisig-sync";
 import { emptyStatus, type SidepanelWallet } from "./runtime";
 
 // The price snapshot as the runtime client returns it; the cache's price fields
@@ -31,8 +33,8 @@ export type RenderData = {
   allowances: Awaited<ReturnType<SidepanelWallet["loadAllowances"]>>;
   multisigs: LoadedMultisigs;
   multisigsError: boolean;
-  multisigSync: "current" | "error" | null;
-  multisigClassDeclared: boolean | "error" | null;
+  multisigSync: MultisigSyncState;
+  multisigClassDeclared: MultisigClassState | "error" | null;
   multisigBalanceId: string | null;
   multisigBalances: Awaited<ReturnType<MultisigClient["loadBalances"]>>;
   multisigNftId: string | null;
@@ -80,9 +82,10 @@ export const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "t
 
 /**
  * Applies a freshly loaded status and clears account-scoped render data when
- * the active account or network changed.
+ * the active signer or network changed. Returns whether the render scope
+ * changed so callers can leave any selected contract-account portfolio.
  */
-export const updateRenderScope = (cache: RenderData, status: WalletStatus): void => {
+export const updateRenderScope = (cache: RenderData, status: WalletStatus): boolean => {
   const changed =
     cache.status.activeAccountId !== status.activeAccountId ||
     cache.status.networkId !== status.networkId;
@@ -94,6 +97,7 @@ export const updateRenderScope = (cache: RenderData, status: WalletStatus): void
           ...emptyNftCache(),
           multisigBalanceId: null,
           multisigBalances: { error: "multisig balances unavailable" },
+          multisigClassDeclared: null,
           multisigNftId: null,
           multisigNfts: [],
           multisigSync: null,
@@ -101,6 +105,7 @@ export const updateRenderScope = (cache: RenderData, status: WalletStatus): void
         }
       : {}),
   });
+  return changed;
 };
 
 /**

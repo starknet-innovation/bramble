@@ -1,9 +1,11 @@
+import type { MultisigClassState } from "../../../src/popup/multisig-responses";
 import type {
   ConnectedSite,
   DiscoveredNft,
   PendingApproval,
   WalletStatus,
 } from "../../../src/popup/responses";
+import type { MultisigSyncState } from "../../../src/sidepanel/multisig-sync";
 import type { BalanceState } from "../../../src/sidepanel/runtime";
 import { dashboard, type WalletView } from "../../../src/sidepanel/views";
 import type { AllowanceView } from "../../../src/starknet/allowance-discovery";
@@ -32,9 +34,10 @@ export type DashboardOptions = {
   readonly discoveredNfts?: readonly DiscoveredNft[];
   readonly expandedGroupId?: string | null;
   readonly historyUnavailable?: boolean;
-  readonly multisigClassDeclared?: boolean | "error" | null;
+  readonly multisigClassDeclared?: MultisigClassState | "error" | null;
   readonly multisigProposals?: readonly MultisigProposalRecord[];
-  readonly multisigSync?: "current" | "error" | null;
+  readonly multisigSync?: MultisigSyncState;
+  readonly multisigNfts?: readonly DiscoveredNft[];
   readonly multisigs?: readonly MultisigRecord[];
   readonly multisigsError?: boolean;
   readonly openAssignId?: string | null;
@@ -88,5 +91,7 @@ export const walletDashboard = (options: DashboardOptions = {}): string =>
     options.multisigsError ?? false,
     options.multisigSync ?? null,
     options.balanceState ?? { balances },
+    options.selectedMultisigId ?? null,
+    options.multisigNfts ?? [],
     options.selectedMultisigId ?? null,
   );

@@ -4,6 +4,7 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import type { MultisigRecord } from "../storage/multisig-store";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { callout } from "../ui/content";
@@ -20,18 +21,24 @@ export const walletHeader = (
   status: WalletStatus,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
+  multisig: MultisigRecord | null = null,
 ): string => {
-  const name = account ? accountDisplayName(account, preferences) : "MC Wallet";
+  const name = multisig
+    ? (multisig.name ?? "Multisig account")
+    : account
+      ? accountDisplayName(account, preferences)
+      : "MC Wallet";
+  const address = multisig?.address ?? account?.address;
   const network = status.network
     .replace(/^Starknet Mainnet$/, "Starknet")
     .replace(/^Starknet\s+/, "");
   return `
   <header class="wallet-header">
     <button id="account-trigger" class="account-trigger" type="button" aria-haspopup="dialog" aria-expanded="false" title="Manage accounts">
-      <span class="brand-mark">${account ? accountAvatar(account.address) : icon("wallet")}</span>
+      <span class="brand-mark">${address ? accountAvatar(address) : icon("wallet")}</span>
       <span class="account-meta">
         <span class="account-name"><strong>${escapeHtml(name)}</strong>${icon("chevronDown")}</span>
-        <span class="account-net"><span class="dot"></span>${escapeHtml(network)}</span>
+        <span class="account-net"><span class="dot"></span>${escapeHtml(network)}${multisig ? ` · Multisig ${multisig.quorum} of ${multisig.signers.length}` : ""}</span>
       </span>
     </button>
     <div class="header-actions">
@@ -62,14 +69,18 @@ export const walletHeader = (
 /**
  * Renders the persistent three-destination wallet dock.
  */
-export const walletDock = (activeView: WalletView, pendingCount: number): string =>
+export const walletDock = (
+  activeView: WalletView,
+  pendingCount: number,
+  sharedAccount = false,
+): string =>
   dockNavigation([
     {
-      attributes: { "data-view": "home" },
+      attributes: { "data-view": sharedAccount ? "multisig-home" : "home" },
       controls: "wallet-screen-home",
       icon: "home",
       label: "Home",
-      selected: activeView === "home",
+      selected: activeView === "home" || activeView === "multisig-home",
     },
     {
       attributes: { "data-view": "activity" },
