@@ -180,9 +180,9 @@ describe("repository sources", () => {
     expect(result.ok).toBe(true);
   });
 
-  test("the checked-in hotfix version advances the v0.7 release line", async () => {
+  test("the checked-in version matches the v0.8 release line", async () => {
     const packageJson = await readJson("package.json");
-    expect(packageJson["version"]).toBe("0.7.2");
+    expect(packageJson["version"]).toBe("0.8.0");
   });
 });
 
@@ -201,19 +201,18 @@ describe("main (CLI over the real repository sources)", () => {
     return join(dir, "github_output");
   };
 
-  test("writes release/version/tag/kind to GITHUB_OUTPUT for this hotfix promotion", async () => {
+  test("writes release/version/tag/kind to GITHUB_OUTPUT for this release promotion", async () => {
     const outPath = await outputPath();
     const code = await main({
-      HEAD_REF: "hotfix/v0.7.2",
-      EXISTING_TAGS: "v0.7.0 v0.7.1",
+      HEAD_REF: "release/v0.8",
       GITHUB_OUTPUT: outPath,
     });
     expect(code).toBe(0);
     const output = await readFile(outPath, "utf8");
     expect(output).toContain("release=true");
-    expect(output).toContain("version=0.7.2");
-    expect(output).toContain("tag=v0.7.2");
-    expect(output).toContain("kind=hotfix");
+    expect(output).toContain("version=0.8.0");
+    expect(output).toContain("tag=v0.8.0");
+    expect(output).toContain("kind=release");
   });
 
   test("treats an empty HEAD_REF as no promotion (release=false)", async () => {

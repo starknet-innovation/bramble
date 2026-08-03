@@ -31,7 +31,7 @@ changes are reviewed in versioned release follow-ups rather than rewriting the h
 - [Consolidated source package audit](src-package-audit/)
 - [v0.6 Ledger and multisig release audit](releases/v0.6/)
 - [v0.7 NFT and approval-surface release assurance](releases/v0.7/)
-- [v0.8 on-chain animation sandbox (implementation pass complete, pending independent review)](releases/v0.8/)
+- [v0.8 on-chain animation sandbox (independent security review complete)](releases/v0.8/)
 - [Directory review log](reviews/)
 
 ## Review sequence
