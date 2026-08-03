@@ -8,8 +8,7 @@
  * and malformed RPC responses throw rather than degrade.
  */
 
-import type { Call } from "starknet";
-import { hash } from "starknet";
+import { type Call, hash, RpcProvider, type RpcProviderOptions } from "starknet";
 import { WalletError } from "../shared/errors";
 import {
   isNonZeroStarkFieldElement,
@@ -36,6 +35,16 @@ export const MULTISIG_LIMITS = {
 
 const MAX_CALLDATA_FELTS = MULTISIG_LIMITS.calldataFelts;
 const MAX_SIGNERS = MULTISIG_LIMITS.signers;
+const MULTISIG_READ_TIMEOUT_MS = 6_000;
+
+// Multisig verification is an interactive read and must not leave the wallet
+// parked behind starknet.js's unbounded default fetch. The timeout aborts the
+// current endpoint so withRpcFallback can try the next configured RPC.
+const timedMultisigFetch: NonNullable<RpcProviderOptions["baseFetch"]> = (input, init) =>
+  fetch(input, { ...init, signal: AbortSignal.timeout(MULTISIG_READ_TIMEOUT_MS) });
+
+const multisigReadProvider = (nodeUrl: string): RpcProvider =>
+  new RpcProvider({ baseFetch: timedMultisigFetch, nodeUrl });
 
 /**
  * One inner call a multisig proposal will execute, using the entrypoint name
@@ -247,32 +256,45 @@ export const getMultisigConfig = async ({
   rpcUrls,
 }: MultisigConfigInput): Promise<MultisigConfig> => {
   const multisig = requireAddress(address);
-  return withRpcFallback(rpcUrls, async (provider) => {
-    const [quorumResponse, signersResponse] = await Promise.all([
-      provider.callContract(
-        { calldata: [], contractAddress: multisig, entrypoint: "get_quorum" },
-        "latest",
-      ),
-      provider.callContract(
-        { calldata: [], contractAddress: multisig, entrypoint: "get_signers" },
-        "latest",
-      ),
-    ]);
-    const quorum = smallNumberAt(quorumResponse, 0, "quorum");
-    const count = smallNumberAt(signersResponse, 0, "signers");
-    if (
-      quorum === 0 ||
-      count === 0 ||
-      count > MAX_SIGNERS ||
-      signersResponse.length !== count + 1
-    ) {
-      throw new WalletError("Invalid multisig signers response");
-    }
-    const signers = Array.from({ length: count }, (_, index) =>
-      canonicalFelt(`0x${feltAt(signersResponse, index + 1, "signers").toString(16)}`),
+  try {
+    return await withRpcFallback(
+      rpcUrls,
+      async (provider) => {
+        const [quorumResponse, signersResponse] = await Promise.all([
+          provider.callContract(
+            { calldata: [], contractAddress: multisig, entrypoint: "get_quorum" },
+            "latest",
+          ),
+          provider.callContract(
+            { calldata: [], contractAddress: multisig, entrypoint: "get_signers" },
+            "latest",
+          ),
+        ]);
+        const quorum = smallNumberAt(quorumResponse, 0, "quorum");
+        const count = smallNumberAt(signersResponse, 0, "signers");
+        if (
+          quorum === 0 ||
+          count === 0 ||
+          count > MAX_SIGNERS ||
+          signersResponse.length !== count + 1
+        ) {
+          throw new WalletError("Invalid multisig signers response");
+        }
+        const signers = Array.from({ length: count }, (_, index) =>
+          canonicalFelt(`0x${feltAt(signersResponse, index + 1, "signers").toString(16)}`),
+        );
+        return { quorum, signers };
+      },
+      multisigReadProvider,
     );
-    return { quorum, signers };
-  });
+  } catch (error) {
+    if (error instanceof Error && /abort|timeout/i.test(`${error.name} ${error.message}`)) {
+      throw new WalletError(
+        "Multisig verification took too long. Check the RPC endpoint and retry.",
+      );
+    }
+    throw error;
+  }
 };
 
 /**

@@ -11,6 +11,7 @@
  */
 import type { DiscoveredNft, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { sameFelt } from "../starknet/networks";
 import type { NftAttribute } from "../starknet/nft-metadata";
 import type { WatchedNft } from "../storage/nft";
 import type { WalletPreferences } from "../storage/preferences-store";
@@ -68,11 +69,16 @@ export const visibleNftItems = (
   watched: readonly WatchedNft[],
   discovered: readonly DiscoveredNft[],
   networkId: string,
+  ownerAddress?: string | null,
 ): readonly NftGalleryItem[] => {
-  const onNetwork = watched.filter((nft) => nft.networkId === networkId);
+  const onNetwork = watched.filter(
+    (nft) =>
+      nft.networkId === networkId &&
+      (ownerAddress === undefined ||
+        (ownerAddress !== null && (nft.owner === undefined || sameFelt(nft.owner, ownerAddress)))),
+  );
   const watchedById = new Map(onNetwork.map((nft) => [nft.id, nft]));
   const spamIds = new Set(onNetwork.filter((nft) => nft.spam === true).map((nft) => nft.id));
-  const discoveredIds = new Set(discovered.map((nft) => nft.id));
   const items: NftGalleryItem[] = [];
   for (const nft of discovered) {
     if (nft.networkId !== networkId || spamIds.has(nft.id)) {
@@ -94,25 +100,10 @@ export const visibleNftItems = (
       watched: watchedById.has(nft.id),
     });
   }
-  for (const nft of onNetwork) {
-    if (nft.spam === true || discoveredIds.has(nft.id)) {
-      continue;
-    }
-    items.push({
-      animationUrl: "",
-      attributes: [],
-      collection: "",
-      contract: nft.contract,
-      description: "",
-      id: nft.id,
-      image: "",
-      networkId: nft.networkId,
-      pixelated: false,
-      title: watchedTitle(nft),
-      tokenId: nft.tokenId,
-      watched: true,
-    });
-  }
+  // Saved preferences are never rendered as ownership evidence. The
+  // background must first return the token through its account-scoped,
+  // on-chain ownership proof; this prevents one account's saved watch from
+  // appearing in every other account while retaining its label/action state.
   return items;
 };
 
@@ -227,19 +218,40 @@ const hiddenRow = (nft: WatchedNft): string => `
     })}
   </li>`;
 
+const hiddenNftsForAccount = (
+  watched: readonly WatchedNft[],
+  discovered: readonly DiscoveredNft[],
+  networkId: string,
+  account: AccountRef | null,
+): readonly WatchedNft[] => {
+  if (!account) return [];
+  const verifiedIds = new Set(discovered.map((nft) => nft.id));
+  return watched.filter(
+    (nft) =>
+      nft.networkId === networkId &&
+      nft.spam === true &&
+      (nft.owner === undefined ? verifiedIds.has(nft.id) : sameFelt(nft.owner, account.address)),
+  );
+};
+
 /**
  * NFT gallery flow: an auto-discovered grid of owned collectibles merged with
  * manual watches. Watch and hidden-item management are dedicated screens.
  */
 export const nftGalleryFlow = (
   status: WalletStatus,
-  _account: AccountRef | null,
+  account: AccountRef | null,
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => {
   const watched = preferences?.nfts ?? [];
-  const visible = visibleNftItems(watched, discoveredNfts, status.networkId);
-  const hidden = watched.filter((nft) => nft.networkId === status.networkId && nft.spam === true);
+  const visible = visibleNftItems(
+    watched,
+    discoveredNfts,
+    status.networkId,
+    account?.address ?? null,
+  );
+  const hidden = hiddenNftsForAccount(watched, discoveredNfts, status.networkId, account);
   return (
     flowHeader("NFTs", status, `${visible.length} shown`) +
     flowScreen(
@@ -319,9 +331,14 @@ export const nftWatchFlow = (status: WalletStatus, account: AccountRef | null): 
 export const nftHiddenFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
+  account: AccountRef | null,
+  discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => {
-  const hidden = (preferences?.nfts ?? []).filter(
-    (nft) => nft.networkId === status.networkId && nft.spam === true,
+  const hidden = hiddenNftsForAccount(
+    preferences?.nfts ?? [],
+    discoveredNfts,
+    status.networkId,
+    account,
   );
   return (
     flowHeader("Hidden collectibles", status, `${hidden.length} hidden`) +
@@ -348,8 +365,14 @@ export const selectedNftDetail = (
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[],
   selectedNftId: string | null,
+  ownerAddress?: string | null,
 ): NftGalleryItem | null => {
-  const watched = (preferences?.nfts ?? []).find((nft) => nft.id === selectedNftId);
+  const watched = (preferences?.nfts ?? []).find(
+    (nft) =>
+      nft.id === selectedNftId &&
+      (ownerAddress === undefined ||
+        (ownerAddress !== null && (nft.owner === undefined || sameFelt(nft.owner, ownerAddress)))),
+  );
   const discovered = discoveredNfts.find((nft) => nft.id === selectedNftId);
   if (discovered) {
     return {
@@ -367,22 +390,7 @@ export const selectedNftDetail = (
       watched: watched !== undefined,
     };
   }
-  return watched
-    ? {
-        animationUrl: "",
-        attributes: [],
-        collection: "",
-        contract: watched.contract,
-        description: "",
-        id: watched.id,
-        image: "",
-        networkId: watched.networkId,
-        pixelated: false,
-        title: watchedTitle(watched),
-        tokenId: watched.tokenId,
-        watched: true,
-      }
-    : null;
+  return null;
 };
 
 // The on-chain animation section: shown only when the resolved metadata carries a
@@ -413,7 +421,12 @@ export const nftDetailFlow = (
   selectedNftId: string | null,
   discoveredNfts: readonly DiscoveredNft[] = [],
 ): string => {
-  const nft = selectedNftDetail(preferences, discoveredNfts, selectedNftId);
+  const nft = selectedNftDetail(
+    preferences,
+    discoveredNfts,
+    selectedNftId,
+    account?.address ?? null,
+  );
   return (
     flowHeader("NFT", status, nft ? nft.title : "") +
     flowScreen(

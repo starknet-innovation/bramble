@@ -22,13 +22,13 @@ import { readMultisigProposalActionInput, readProposeMultisigInput } from "./mul
 import {
   buildMultisigProposalRecord,
   defaultSummary,
-  isProposalSubmitPending,
   type MultisigContext,
   type MultisigOpsDeps,
   multisigContext,
   multisigRpc,
   refreshSignerMembership,
 } from "./multisig-ops";
+import { confirmedSignersAfterStatus, isProposalSubmitPending } from "./multisig-proposal-status";
 import { recordSubmittedActivity } from "./multisig-submission";
 import type { RuntimeResponse } from "./runtime-types";
 import { signerForContext } from "./wallet-ops";
@@ -77,7 +77,7 @@ const submitAndRecord = async (
     signHash: signerForContext(deps, resolved.account),
   });
   await recordSubmittedActivity(deps.activity, {
-    accountId: resolved.account.account.id,
+    accountId: resolved.record.id,
     hash: result.transactionHash,
     kind: "invoke",
     networkId: resolved.account.networkId,
@@ -128,6 +128,11 @@ const persistFreshStatus = async (
     confirmations: status.confirmations,
     confirmedBySigner: status.confirmedBySigner,
     confirmedBySignerAddress: signer,
+    confirmedSignerAddresses: confirmedSignersAfterStatus(
+      proposal,
+      signer,
+      status.confirmedBySigner,
+    ),
     state: status.state,
   });
 };

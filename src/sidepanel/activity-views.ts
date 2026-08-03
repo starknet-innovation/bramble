@@ -4,7 +4,9 @@
  * deeper so monitoring and approval are never mixed into one long screen.
  */
 import type { PendingApproval, WalletStatus } from "../popup/responses";
+import { escapeHtml } from "../shared/html";
 import type { ActivityEntry } from "../storage/activity-store";
+import type { MultisigRecord } from "../storage/multisig-store";
 import { emptyState } from "../ui/content";
 import { iconButton } from "../ui/controls";
 import { approvalCard } from "./approval-cards";
@@ -22,13 +24,14 @@ export const activityScreen = (
   status: WalletStatus,
   transactions: readonly ActivityEntry[],
   historyUnavailable: boolean,
+  multisig: MultisigRecord | null = null,
 ): string =>
   dockScreen(
     "activity",
-    `<div class="section-head">
+    `<div class="section-head"${multisig ? ` data-activity-account-id="${escapeHtml(multisig.id)}"` : ""}>
       <div>
         <h2>Activity</h2>
-        <p class="hint">Only ${status.network} activity for the active account.</p>
+        <p class="hint">Only ${escapeHtml(status.network)} activity for ${multisig ? escapeHtml(multisig.name ?? "this multisig") : "the active account"}.</p>
       </div>
       <div class="header-actions">
         ${iconButton({

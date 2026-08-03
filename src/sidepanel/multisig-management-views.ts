@@ -4,16 +4,15 @@
  * has one task and one security boundary to understand.
  */
 import type { WalletStatus } from "../popup/responses";
-import { escapeHtml } from "../shared/html";
 import type { MultisigRecord } from "../storage/multisig-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { emptyState, receipt } from "../ui/content";
 import { button } from "../ui/controls";
-import { textField } from "../ui/fields";
+import { textareaField, textField } from "../ui/fields";
 import { menuRow } from "../ui/navigation";
 import { multisigDisplayName, multisigSignerRow } from "./multisig-views";
-import { accountLabel, copyButton, flowHeader, flowScreen, noAccountEmpty } from "./parts";
-import { qrSvg } from "./qr";
+import { accountLabel, flowHeader, flowScreen, noAccountEmpty } from "./parts";
+import { receiveAddressView } from "./receive-view";
 
 /**
  * Renders the shared-account gateway reached from Add account. Creating
@@ -155,12 +154,15 @@ export const multisigReceiveFlow = (
     flowHeader("Receive", status, multisigDisplayName(record)) +
     flowScreen(
       "multisig-receive",
-      `<section class="section receive-card">
-        <p class="eyebrow">Shared account</p>
-        <h2>${escapeHtml(multisigDisplayName(record))}</h2>
-        <div class="receive-qr">${qrSvg(record.address, "QR code for multisig address")}</div>
-        <div class="receive-address"><code>${record.address}</code>${copyButton(record.address, "Copy multisig address")}</div>
-        <p class="hint">Send only Starknet assets on ${escapeHtml(status.network)}. This address is controlled by the multisig's ${record.quorum}-of-${record.signers.length} approval rule.</p>
+      `<section class="section">
+        ${receiveAddressView({
+          address: record.address,
+          copyLabel: "Copy multisig address",
+          eyebrow: "Shared account",
+          hint: `Send only Starknet assets on ${status.network}. This address is controlled by the multisig's ${record.quorum}-of-${record.signers.length} approval rule.`,
+          qrLabel: "QR code for multisig address",
+          title: multisigDisplayName(record),
+        })}
       </section>`,
     )
   );
@@ -185,7 +187,7 @@ export const multisigTrackFlow = (status: WalletStatus, record: MultisigRecord |
     flowScreen(
       "multisig-track",
       `<section class="section">
-        <p class="review-flag" role="note">A pasted proposal id proves only that the proposal exists on-chain. Notes are local and never verify what the call does.</p>
+        <p class="review-flag" role="note">A proposal id proves only that a proposal exists. An imported review package is re-hashed through the multisig contract before its call is trusted.</p>
         <form id="multisig-track-form">
           ${textField({
             autocomplete: "off",
@@ -193,7 +195,15 @@ export const multisigTrackFlow = (status: WalletStatus, record: MultisigRecord |
             label: "Proposal id",
             name: "txId",
             placeholder: "0x…",
-            required: true,
+            spellcheck: false,
+          })}
+          ${textareaField({
+            autocomplete: "off",
+            className: "mono",
+            hint: "Optional. Paste the secret-free package copied by another signer to import and independently verify the exact call.",
+            label: "Review package",
+            name: "reviewPackage",
+            rows: 4,
             spellcheck: false,
           })}
           ${textField({
@@ -202,7 +212,7 @@ export const multisigTrackFlow = (status: WalletStatus, record: MultisigRecord |
             maxlength: 120,
             name: "summary",
           })}
-          <p class="hint">Verify the proposal id with the proposer or a block explorer before confirming it.</p>
+          <p class="hint">Without a package, the proposal remains call-less and requires explicit independent verification before confirmation.</p>
           ${button({
             icon: "check",
             label: "Verify and track",
