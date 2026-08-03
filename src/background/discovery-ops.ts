@@ -16,9 +16,10 @@ import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Re-exported from the single-source versions module so callers importing them

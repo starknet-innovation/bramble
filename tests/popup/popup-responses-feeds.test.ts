@@ -9,7 +9,12 @@ import {
   isActivityResponse,
   isAllowancesResponse,
   isDeploymentStatusResponse,
+  isTransactionAlertsResponse,
 } from "../../src/popup/responses";
+import {
+  MAX_TRANSACTION_ALERT_CHARACTERS,
+  MAX_TRANSACTION_ALERTS_PER_DRAIN,
+} from "../../src/shared/transaction-alerts";
 
 const activityEntry = {
   accountId: "SN_MAIN:0x123",
@@ -84,6 +89,24 @@ describe("isDeploymentStatusResponse", () => {
     ).toBe(false);
     expect(
       isDeploymentStatusResponse({ accountId: "SN_MAIN:0x123", deployed: true, ok: false }),
+    ).toBe(false);
+  });
+});
+
+describe("isTransactionAlertsResponse", () => {
+  test("accepts a bounded list and rejects oversized payloads", () => {
+    expect(isTransactionAlertsResponse({ alerts: ["Transaction reverted"], ok: true })).toBe(true);
+    expect(
+      isTransactionAlertsResponse({
+        alerts: Array.from({ length: MAX_TRANSACTION_ALERTS_PER_DRAIN + 1 }, () => "failure"),
+        ok: true,
+      }),
+    ).toBe(false);
+    expect(
+      isTransactionAlertsResponse({
+        alerts: ["x".repeat(MAX_TRANSACTION_ALERT_CHARACTERS + 1)],
+        ok: true,
+      }),
     ).toBe(false);
   });
 });

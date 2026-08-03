@@ -81,13 +81,15 @@ Accounts use the OpenZeppelin `AccountUpgradeable` preset, pinned by Krusty KMS.
 
 ### Verification
 
-Verified DECLARED on both networks with `starknet_getClass` against the Cartridge
-endpoints on 2026-07-07 (RPC spec `0.10.2` mainnet, `0.9.0` sepolia); the class
-resolved with the `UpgradeableImpl` + `AccountMixinImpl` ABI on both. Re-run:
+Verified DECLARED on both networks with `starknet_getClass` against the
+Cartridge endpoints the wallet used at the time, on 2026-07-07 (RPC spec
+`0.10.2` mainnet, `0.9.0` sepolia); the class resolved with the
+`UpgradeableImpl` + `AccountMixinImpl` ABI on both. The wallet has since moved
+to the Starknet Foundation public nodes, so re-run against those:
 
 ```bash
 for NET in mainnet sepolia; do
-  curl -s -X POST "https://api.cartridge.gg/x/starknet/$NET" \
+  curl -s -X POST "https://$NET.nodes.starknet.org/rpc/v0_10" \
     -H 'content-type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"starknet_getClass","params":{"block_id":"latest","class_hash":"0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"}}' \
     | head -c 80; echo " <- $NET";

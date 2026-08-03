@@ -1,6 +1,7 @@
 /** Privileged read-only first-run account derivation. */
 import { readPreviewAccountInput } from "./account-creation-inputs";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Handles read-only public account preview. Returns null for unrelated

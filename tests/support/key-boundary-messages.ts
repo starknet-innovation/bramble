@@ -288,6 +288,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   { message: { type: "wallet.allowances" }, sender: extensionSender },
   { message: { type: "wallet.activity" }, sender: extensionSender },
+  { message: { type: "wallet.transactionAlerts" }, sender: extensionSender },
   {
     message: {
       options: { address: account.classHash, decimals: 18, symbol: "TKN" },

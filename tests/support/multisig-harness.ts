@@ -164,6 +164,10 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.loadClass ? { loadMultisigClass: options.loadClass } : {}),
     multisigStore,
+    // The default in-memory activity log stamps entries at epoch 0, so the
+    // reconciliation clock must agree or every harness transaction reads as
+    // long past its observation window.
+    now: () => 0,
     runtimeRpc: {
       async estimateInvokeFee() {
         return { overallFee: "1", unit: "FRI" };
@@ -182,7 +186,12 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
         return { decimals: 18, name: "Ether", symbol: "ETH" };
       },
       async getTransactionStatuses() {
-        return options.transactionStatuses?.() ?? {};
+        return Object.fromEntries(
+          Object.entries(options.transactionStatuses?.() ?? {}).map(([hash, status]) => [
+            hash,
+            { finalizedOnL1: false, found: true, status },
+          ]),
+        );
       },
       multisig: {
         async computeTransactionId() {

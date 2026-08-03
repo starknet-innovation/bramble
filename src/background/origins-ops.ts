@@ -5,8 +5,9 @@
  */
 import { connectedSitesFromVault } from "../wallet/vault-service";
 import { readRevokeOriginInput, readTypeOnlyInput } from "./message-inputs";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import type { UnlockSession } from "./session";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Dependencies shared by the connected-sites handlers.
