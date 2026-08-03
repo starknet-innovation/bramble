@@ -66,7 +66,7 @@ export const visibleHomeBalances = (
  * pre-confirmed means the proposer has executed it and consensus has not
  * committed its block yet.
  */
-const PROVISIONAL_TX_HINT: Readonly<Record<string, string>> = {
+const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
   pending:
     "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.",
   preconfirmed:
@@ -77,7 +77,9 @@ const PROVISIONAL_TX_HINT: Readonly<Record<string, string>> = {
  * Display label for a status. Pre-confirmed reads as "PRE-CONFIRMED" rather
  * than the storage spelling.
  */
-const STATUS_LABEL: Readonly<Record<string, string>> = { preconfirmed: "pre-confirmed" };
+const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
+  preconfirmed: "pre-confirmed",
+};
 
 /**
  * Renders one recorded transaction row for the account-partitioned Activity

@@ -19,7 +19,7 @@ import {
   type ActivityScope,
   activityForScope,
 } from "../storage/activity-store";
-import type { WalletPreferencesStore } from "../storage/preferences-store";
+import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import {
@@ -28,6 +28,7 @@ import {
   isObservedAt,
   type ObservationTier,
   reconciledOutcome,
+  retiredOutcome,
 } from "./tx-observation";
 
 /**
@@ -44,10 +45,10 @@ export type ReconcileDeps = {
 
 const byNetwork = (
   entries: readonly ActivityEntry[],
-): ReadonlyMap<StarknetNetworkId, readonly string[]> => {
-  const grouped = new Map<StarknetNetworkId, readonly string[]>();
+): ReadonlyMap<StarknetNetworkId, readonly ActivityEntry[]> => {
+  const grouped = new Map<StarknetNetworkId, readonly ActivityEntry[]>();
   for (const entry of entries) {
-    grouped.set(entry.networkId, [...(grouped.get(entry.networkId) ?? []), entry.hash]);
+    grouped.set(entry.networkId, [...(grouped.get(entry.networkId) ?? []), entry]);
   }
   return grouped;
 };
@@ -63,22 +64,38 @@ const byScope = (entries: readonly ActivityEntry[]): readonly ActivityScope[] =>
   return [...scopes.values()];
 };
 
-// Retiring an entry that never resolved leaves its status alone — the wallet
-// does not know the outcome — and only records the notice it owes the user.
 const expiredOutcomes = (
   entries: readonly ActivityEntry[],
   nowMs: number,
 ): Readonly<Record<string, ActivityOutcome>> =>
   Object.fromEntries(
-    expiredObservations(entries, nowMs).map((entry) => [
-      entry.hash,
-      { failureNotice: "pending", status: entry.status } as const,
-    ]),
+    expiredObservations(entries, nowMs).map((entry) => [entry.hash, retiredOutcome(entry)]),
   );
 
-// Reads the chain for the given entries. A network whose status query fails
-// contributes nothing, so its transactions simply stay under observation rather
-// than being misread as gone.
+// Reads one network's transactions. A failed status query contributes nothing,
+// so those transactions simply stay under observation rather than being misread
+// as gone.
+const networkOutcomes = async (
+  deps: ReconcileDeps,
+  preferences: WalletPreferences,
+  networkId: StarknetNetworkId,
+  entries: readonly ActivityEntry[],
+): Promise<readonly (readonly [string, ActivityOutcome])[]> => {
+  const reports: Readonly<Record<string, TransactionStatusReport>> = await deps.runtimeRpc
+    .getTransactionStatuses({
+      hashes: entries.map((entry) => entry.hash),
+      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
+    })
+    .catch(() => ({}));
+  return entries.flatMap((entry) => {
+    const report = reports[entry.hash];
+    return report === undefined ? [] : [[entry.hash, reconciledOutcome(entry, report)] as const];
+  });
+};
+
+// Reads the chain for the given entries, one query per network. Networks are
+// independent endpoints, so their reads overlap rather than adding up their
+// round-trips.
 const chainOutcomes = async (
   deps: ReconcileDeps,
   entries: readonly ActivityEntry[],
@@ -87,22 +104,12 @@ const chainOutcomes = async (
     return {};
   }
   const preferences = await deps.preferencesStore.read();
-  let outcomes: Record<string, ActivityOutcome> = {};
-  for (const [networkId, hashes] of byNetwork(entries)) {
-    const reports: Readonly<Record<string, TransactionStatusReport>> = await deps.runtimeRpc
-      .getTransactionStatuses({
-        hashes,
-        rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
-      })
-      .catch(() => ({}));
-    for (const entry of entries) {
-      const report = reports[entry.hash];
-      if (entry.networkId === networkId && report !== undefined) {
-        outcomes = { ...outcomes, [entry.hash]: reconciledOutcome(entry, report) };
-      }
-    }
-  }
-  return outcomes;
+  const perNetwork = await Promise.all(
+    [...byNetwork(entries)].map(([networkId, group]) =>
+      networkOutcomes(deps, preferences, networkId, group),
+    ),
+  );
+  return Object.fromEntries(perNetwork.flat());
 };
 
 /**

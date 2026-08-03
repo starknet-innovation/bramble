@@ -86,12 +86,20 @@ export const isObserved = (entry: ActivityEntry, nowMs: number): boolean =>
   isObservedAt(entry, "fast", nowMs) || isObservedAt(entry, "slow", nowMs);
 
 /**
+ * What to persist for a retired entry: the notice it owes the user, and its
+ * status deliberately left untouched — the wallet genuinely does not know the
+ * outcome, and claiming a terminal state it never observed would be a lie.
+ */
+export const retiredOutcome = (entry: ActivityEntry): ActivityOutcome => ({
+  failureNotice: "pending",
+  status: entry.status,
+});
+
+/**
  * Selects the entries that have outlived their observation window without ever
  * resolving. These are retired: the wallet stops polling them and owes the user
  * one notice, since it advanced the send journey on a pre-confirmation that
- * never became final. Their status is deliberately left untouched — the wallet
- * genuinely does not know the outcome, and claiming a terminal state it never
- * observed would be a lie.
+ * never became final.
  */
 export const expiredObservations = (
   entries: readonly ActivityEntry[],

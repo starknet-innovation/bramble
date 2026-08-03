@@ -46,9 +46,26 @@ const PERIOD_MINUTES: Readonly<Record<ObservationTier, number>> = {
  */
 export type AlarmsApi = {
   readonly create: (name: string, info: { readonly periodInMinutes: number }) => void;
+  readonly get: (name: string) => Promise<{ readonly name: string } | undefined>;
   readonly onAlarm: {
     readonly addListener: (listener: (alarm: { readonly name: string }) => void) => void;
   };
+};
+
+// Creates an alarm only when it is missing. `alarms.create` on a name that
+// already exists REPLACES that alarm and restarts its period, and this module
+// re-runs on every worker wake — a dapp message, a side-panel poll, any of
+// which can arrive more often than once a minute. Re-creating unconditionally
+// would therefore keep pushing the fast alarm's deadline forward and it would
+// never fire, which is precisely the case this schedule exists to cover.
+const ensureAlarm = async (
+  alarms: AlarmsApi,
+  name: string,
+  tier: ObservationTier,
+): Promise<void> => {
+  if ((await alarms.get(name)) === undefined) {
+    alarms.create(name, { periodInMinutes: PERIOD_MINUTES[tier] });
+  }
 };
 
 /**
@@ -61,11 +78,13 @@ export type TxMonitorBrowser = {
 /**
  * Starts background reconciliation.
  *
- * Registers both cadence alarms and the listener that services them. Returns
- * false when the runtime exposes no alarms API, so the caller can tell "not
- * scheduled" from "scheduled"; reconciliation still runs on every activity
- * request in that case. Individual runs never reject: a failed poll leaves the
- * transaction under observation for the next tick.
+ * Registers the listener that services the cadence alarms, and creates any
+ * alarm that does not already exist — existing ones are left alone so their
+ * schedule survives a worker restart. Returns false when the runtime exposes no
+ * alarms API, so the caller can tell "not scheduled" from "scheduled";
+ * reconciliation still runs on every activity request in that case. Individual
+ * runs never reject: a failed poll leaves the transaction under observation for
+ * the next tick.
  */
 export const startTransactionMonitor = ({
   browser,
@@ -81,7 +100,7 @@ export const startTransactionMonitor = ({
     return false;
   }
   for (const [name, tier] of Object.entries(ALARM_TIERS)) {
-    alarms.create(name, { periodInMinutes: PERIOD_MINUTES[tier] });
+    void ensureAlarm(alarms, name, tier).catch(() => undefined);
   }
   alarms.onAlarm.addListener((alarm) => {
     const tier = ALARM_TIERS[alarm.name];
