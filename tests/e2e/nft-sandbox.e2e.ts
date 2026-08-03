@@ -110,11 +110,12 @@ test("confines an NFT animation to an isolated, egress-blocked sandbox", async (
 });
 
 test("runs an animation through the embedding iframe sandbox", async ({ extension }) => {
+  const parentOrigin = `chrome-extension://${extension.extensionId}`;
   const html = `<!doctype html><html><body><script>
     parent.postMessage({
       marker: "mc-nft-sandbox-ready",
       runtime: typeof globalThis.chrome?.runtime,
-    }, "*");
+    }, ${JSON.stringify(parentOrigin)});
   </script></body></html>`;
   const uri = `data:text/html;base64,${Buffer.from(html).toString("base64")}`;
   const sidepanel = await extension.openExtensionPage("sidepanel.html");
