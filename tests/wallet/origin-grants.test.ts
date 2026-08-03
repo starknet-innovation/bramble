@@ -1,7 +1,7 @@
 /**
- * Origin-grant policy checks: a stored grant only exposes accounts while the
- * wallet's active account is one of them, and it always leads the list. These
- * pin the pure rule behind `getGrantedAccounts` without touching storage.
+ * Origin-grant policy checks: a stored grant exposes the wallet's active
+ * account and nothing else, however many accounts it has accumulated. These pin
+ * the pure rule behind `getGrantedAccounts` without touching storage.
  */
 import { describe, expect, test } from "bun:test";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
@@ -48,19 +48,15 @@ describe("grantedAccountIdsFor", () => {
     expect(grantedAccountIdsFor(vaultWith(second.id, [first.id]), ORIGIN)).toEqual([]);
   });
 
-  test("puts the active account first in a multi-account grant", () => {
+  test("exposes only the active account from a multi-account grant", () => {
+    // Approving the same site again on another account unions ids into the
+    // stored grant. The site must still only ever see the one active account —
+    // otherwise re-approving would widen exposure and let the page correlate
+    // two of the user's addresses.
     const granted = [first.id, second.id, third.id];
 
-    expect(grantedAccountIdsFor(vaultWith(first.id, granted), ORIGIN)).toEqual([
-      first.id,
-      second.id,
-      third.id,
-    ]);
-    expect(grantedAccountIdsFor(vaultWith(third.id, granted), ORIGIN)).toEqual([
-      third.id,
-      first.id,
-      second.id,
-    ]);
+    expect(grantedAccountIdsFor(vaultWith(first.id, granted), ORIGIN)).toEqual([first.id]);
+    expect(grantedAccountIdsFor(vaultWith(third.id, granted), ORIGIN)).toEqual([third.id]);
   });
 
   test("hides a grant whose accounts exclude the active account", () => {
@@ -85,6 +81,27 @@ describe("connectedSitesFromVault", () => {
     expect(connectedSitesFromVault(vault)).toEqual([
       { accountCount: 1, origin: "https://alpha.example" },
       { accountCount: 2, origin: "https://zeta.example" },
+    ]);
+  });
+
+  test("orders by code unit and stays total on equal origins", () => {
+    // Plain `<`/`>`, not localeCompare: the rendered order must not depend on
+    // the browser's locale. "Z" sorts before "a" in code units, where a
+    // locale-aware compare would put "alpha" first. Equal origins compare
+    // equal, so the comparator stays total even on a malformed grant list.
+    const vault: Vault = {
+      ...vaultWith(first.id, null),
+      originGrants: [
+        { accountIds: [first.id], origin: "https://alpha.example" },
+        { accountIds: [second.id], origin: "https://alpha.example" },
+        { accountIds: [first.id], origin: "https://Zeta.example" },
+      ],
+    };
+
+    expect(connectedSitesFromVault(vault).map((site) => site.origin)).toEqual([
+      "https://Zeta.example",
+      "https://alpha.example",
+      "https://alpha.example",
     ]);
   });
 });

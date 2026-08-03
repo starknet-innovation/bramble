@@ -7,13 +7,12 @@ import { describe, expect, test } from "bun:test";
 import { createApprovalQueue } from "../../src/background/approvals";
 import { createMessageHandler } from "../../src/background/messages";
 import { createUnlockSession } from "../../src/background/session";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
-import { grantedAccountIdsFor } from "../../src/wallet/origin-grants";
 import type { CreateVaultAccountInput, OriginGrantInput } from "../../src/wallet/vault-service";
 import {
   account,
   contentSender,
   createWallet,
+  secondAccount,
   extensionSender as sender,
   vaultPassphrase,
 } from "../support/background-wallet-stub";
@@ -23,7 +22,7 @@ describe("createMessageHandler", () => {
   test("validates create account messages", async () => {
     let captured: CreateVaultAccountInput | null = null;
     const handler = createMessageHandler(
-      createWallet((input) => (captured = input)),
+      createWallet({ captureCreate: (input) => (captured = input) }),
       "extension-id",
     );
 
@@ -36,7 +35,7 @@ describe("createMessageHandler", () => {
   test("creates accounts through the wallet service only", async () => {
     const captured: CreateVaultAccountInput[] = [];
     const handler = createMessageHandler(
-      createWallet((input) => captured.push(input)),
+      createWallet({ captureCreate: (input) => captured.push(input) }),
       "extension-id",
     );
 
@@ -115,7 +114,7 @@ describe("createMessageHandler", () => {
   test("validates origin grant messages", async () => {
     const captured: OriginGrantInput[] = [];
     const handler = createMessageHandler(
-      createWallet(undefined, undefined, (input) => captured.push(input)),
+      createWallet({ captureGrant: (input) => captured.push(input) }),
       "extension-id",
     );
 
@@ -135,7 +134,7 @@ describe("createMessageHandler", () => {
   test("grants normalized origins through the wallet service only", async () => {
     const captured: OriginGrantInput[] = [];
     const handler = createMessageHandler(
-      createWallet(undefined, undefined, (input) => captured.push(input)),
+      createWallet({ captureGrant: (input) => captured.push(input) }),
       "extension-id",
     );
 
@@ -235,26 +234,12 @@ describe("createMessageHandler", () => {
     // account two in the wallet, reconnect. The stored grant still names only
     // account one, so the site must be re-approved instead of silently getting
     // account one back — and switching back reconnects it with no prompt.
-    const second: AccountRef = { ...account, id: "SN_SEPOLIA:0xfeedface" };
-    const accounts = [account, second];
-    let activeAccountId = second.id;
-    const vault = (): Vault => ({
-      accounts,
-      activeAccountId,
-      mnemonic: null,
-      originGrants: [{ accountIds: [account.id], origin: "https://example.com" }],
-      schemaVersion: 3,
-      signingKeys: [],
-    });
+    let activeAccountId = secondAccount.id;
     const handler = createMessageHandler(
-      {
-        ...createWallet(),
-        async getGrantedAccounts(origin: string) {
-          return grantedAccountIdsFor(vault(), origin).flatMap((id) =>
-            accounts.filter((stored) => stored.id === id),
-          );
-        },
-      },
+      createWallet({
+        accounts: [account, secondAccount],
+        activeAccountId: () => activeAccountId,
+      }),
       "extension-id",
       { session: createUnlockSession() },
     );
@@ -309,7 +294,7 @@ describe("createMessageHandler", () => {
     const pending = approvals.request("https://example.com");
     const session = createUnlockSession();
     const handler = createMessageHandler(
-      createWallet(undefined, undefined, (input) => captured.push(input)),
+      createWallet({ captureGrant: (input) => captured.push(input) }),
       "extension-id",
       { approvals, session },
     );
@@ -339,10 +324,7 @@ describe("createMessageHandler", () => {
       accounts: [account],
       ok: true,
     });
-    // The applier names the account it is granting rather than relying on
-    // grantOrigin's active-account fallback.
     expect(captured[0]).toEqual({
-      accountId: account.id,
       origin: "https://example.com",
       vaultPassphrase,
     });

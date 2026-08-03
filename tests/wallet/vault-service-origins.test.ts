@@ -79,7 +79,9 @@ describe("createWalletVaultService origin grants", () => {
       service.getGrantedAccounts("https://example.com", vaultPassphrase),
     ).resolves.toEqual([first]);
 
-    // Once both are granted, the active one always leads the list.
+    // Approving the site on the second account too unions both ids into the
+    // stored grant, but the site still only ever sees the active one — a second
+    // approval must never widen the view to both addresses at once.
     await service.grantOrigin({
       accountId: second.id,
       origin: "https://example.com",
@@ -87,11 +89,17 @@ describe("createWalletVaultService origin grants", () => {
     });
     await expect(
       service.getGrantedAccounts("https://example.com", vaultPassphrase),
-    ).resolves.toEqual([first, second]);
+    ).resolves.toEqual([first]);
     await service.setActiveAccount({ accountId: second.id, vaultPassphrase });
     await expect(
       service.getGrantedAccounts("https://example.com", vaultPassphrase),
-    ).resolves.toEqual([second, first]);
+    ).resolves.toEqual([second]);
+    // The stored grant still records both, so the connected-sites manager keeps
+    // showing the real history and one revoke clears all of it.
+    const vault = await service.readVault(vaultPassphrase);
+    expect(vault.originGrants).toEqual([
+      { accountIds: [first.id, second.id], origin: "https://example.com" },
+    ]);
   });
 
   test("rejects insecure origin grants", async () => {

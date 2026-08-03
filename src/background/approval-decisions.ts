@@ -201,17 +201,9 @@ const applyConnect: ApproveApplier = async (deps, { approval }) => {
   if (!passphrase) {
     return reject({ error: "wallet locked" });
   }
-  // Name the account being granted instead of leaning on grantOrigin's active
-  // account fallback — the same explicitness the switch-chain applier uses, and
-  // it keeps the grant tied to the account the approval card showed.
-  const { activeAccountId } = await deps.wallet.readVault(passphrase);
-  if (!activeAccountId) {
-    return reject({ error: "no account selected" });
-  }
   // Deliver the granted accounts back through the dapp's held requestAccounts
   // channel (if any) so enable() resolves after approval.
   const accounts = await deps.wallet.grantOrigin({
-    accountId: activeAccountId,
     origin: approval.origin,
     vaultPassphrase: passphrase,
   });
