@@ -244,6 +244,8 @@ export const handleChainOps = async (
 /**
  * Applies a user-approved chain switch: sets the active network, keeps the
  * origin's grant on the new network, and returns the new chain id for the dapp.
+ * Refuses with `origin not connected` when the origin is not connected at
+ * approval time, so an approved card can never reconnect a disconnected site.
  */
 export const executeSwitchChainApproval = async (
   deps: Pick<ChainOpsDeps, "preferencesStore" | "session" | "wallet">,
@@ -253,6 +255,16 @@ export const executeSwitchChainApproval = async (
   const passphrase = session.getPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
+  }
+  // A switch-chain approval carries no account context, so the shared claim
+  // validator skips it and this is the only place the grant is re-checked.
+  // Read it BEFORE switching: the switch re-selects the active account, and the
+  // auto-grant below would otherwise hand the origin a fresh account — silently
+  // reconnecting a site the user disconnected by switching accounts, with no
+  // connect prompt. A revoked or disconnected origin is refused instead.
+  const connected = await wallet.getGrantedAccounts(input.origin, passphrase);
+  if (connected.length === 0) {
+    return { error: "origin not connected" };
   }
   const account = await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
   const granted = await wallet.getGrantedAccounts(input.origin, passphrase);

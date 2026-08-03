@@ -1,8 +1,14 @@
 /**
  * Broadcast decision checks: which wallet events follow each runtime
- * mutation, and which responses must stay silent.
+ * mutation, and which responses must stay silent. Includes the enforced-derived
+ * rule that every vault mutation which re-selects the active account is
+ * announced — an origin only ever sees the active account, so a silent change
+ * would leave a connected page holding an address the wallet no longer signs
+ * for.
  */
+
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { walletEventBroadcasts } from "../../src/background/events";
 
 const MAIN_CHAIN_ID = "0x534e5f4d41494e";
@@ -14,6 +20,44 @@ const networkChanged = (chainId: string) =>
     event: "networkChanged",
     type: "wallet.event",
   }) as const;
+
+// Members of the vault service object literal start at four-space indent.
+const SERVICE_MEMBER = /^ {4}(?:async )?([a-zA-Z0-9]+)[(:,]/gm;
+
+// Vault-service methods that persist a new activeAccountId, read out of the
+// source rather than listed by hand — the list can never silently go stale.
+const activeAccountMutators = async (): Promise<readonly string[]> => {
+  const source = await readFile("src/wallet/vault-service.ts", "utf8");
+  const members = [...source.matchAll(SERVICE_MEMBER)].map((match) => ({
+    at: match.index ?? 0,
+    name: match[1] ?? "",
+  }));
+  return members
+    .filter(({ at }, position) => {
+      const body = source.slice(at, members[position + 1]?.at ?? source.length);
+      return body.includes("writeVault(") && body.includes("activeAccountId:");
+    })
+    .map(({ name }) => name)
+    .sort();
+};
+
+// The message types that reach each of those mutators. switchActiveNetwork
+// re-selects the target network's account, which is why the network switches
+// (and the switch-chain approval that runs through approveOrigin) appear here.
+const MUTATOR_MESSAGE_TYPES: Readonly<Record<string, readonly string[]>> = {
+  addDerivedAccount: ["wallet.addAccount"],
+  addLedgerAccount: ["wallet.addLedgerAccount"],
+  createAccount: ["wallet.createAccount"],
+  createLedgerVault: ["wallet.createLedgerVault"],
+  ensureNetworkAccount: ["wallet.approveOrigin", "wallet.setActiveNetwork", "wallet.switchChain"],
+  importRawKeyAccount: ["wallet.importAccount"],
+  setActiveAccount: [
+    "wallet.approveOrigin",
+    "wallet.setActiveAccount",
+    "wallet.setActiveNetwork",
+    "wallet.switchChain",
+  ],
+};
 
 describe("walletEventBroadcasts", () => {
   test("stays silent for malformed messages, errors, and read-only requests", () => {
@@ -71,12 +115,27 @@ describe("walletEventBroadcasts", () => {
     ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
   });
 
-  test("stays silent after importing a raw key, so the pasted key never rides a broadcast", () => {
-    // Importing a raw key adds an account and makes it active, but grants it to
-    // no origin — dapps' visible sets are unchanged, so (like wallet.addAccount)
-    // it broadcasts nothing. Critically, the raw import message carries the
-    // private key, and background/index.ts feeds that message into this decision
-    // before dispatching to every tab; returning [] keeps the key off the wire.
+  test("announces the new account after an add, import, or Ledger attach", () => {
+    // These all select the account they create, and an origin only ever sees
+    // the active account — so without a broadcast a connected page keeps
+    // showing an address the wallet has already stopped signing for.
+    for (const type of [
+      "wallet.addAccount",
+      "wallet.addLedgerAccount",
+      "wallet.createLedgerVault",
+      "wallet.importAccount",
+    ]) {
+      expect(
+        walletEventBroadcasts({ type }, { account: { networkId: "SN_MAIN" }, ok: true }),
+      ).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
+    }
+  });
+
+  test("keeps a pasted raw key off the wire when the import broadcasts", () => {
+    // The raw import message carries the private key, and background/index.ts
+    // feeds that message into this decision before dispatching to every tab.
+    // Broadcasts are derived from the response's networkId only, never echoed
+    // from the request, so the key cannot ride along.
     const events = walletEventBroadcasts(
       {
         networkId: "SN_MAIN",
@@ -85,8 +144,26 @@ describe("walletEventBroadcasts", () => {
       },
       { account: { networkId: "SN_MAIN" }, ok: true },
     );
-    expect(events).toEqual([]);
+    expect(events).toEqual([accountsChanged, networkChanged(MAIN_CHAIN_ID)]);
     expect(JSON.stringify(events)).not.toContain("7e57ab1e");
+  });
+
+  test("announces every vault mutation that re-selects the active account", async () => {
+    // Derived from src/wallet/vault-service.ts: a new method that persists an
+    // activeAccountId must be mapped to the message types that reach it, and
+    // each of those must broadcast accountsChanged. Skipping that is the bug
+    // where "Add account" silently disconnects every connected site.
+    expect(await activeAccountMutators()).toEqual(Object.keys(MUTATOR_MESSAGE_TYPES).sort());
+
+    const response = {
+      account: { networkId: "SN_MAIN" },
+      chainId: MAIN_CHAIN_ID,
+      networkId: "SN_MAIN",
+      ok: true,
+    };
+    for (const type of new Set(Object.values(MUTATOR_MESSAGE_TYPES).flat())) {
+      expect(walletEventBroadcasts({ type }, response)).toContainEqual(accountsChanged);
+    }
   });
 
   test("announces lock and unlock so pages drop or regain accounts", () => {

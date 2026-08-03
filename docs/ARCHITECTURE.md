@@ -263,8 +263,8 @@ The injected `window.starknet_mcWallet` object follows the get-starknet/starknet
 `StarknetWindowObject` shape: `id`, `name`, `version`, an inline `data:` URI `icon`, `isConnected`,
 `selectedAddress`, `on`/`off`, `enable`, and `request`. `chainId` is initialized lazily from
 `wallet_requestChainId` after `enable` and kept current from `networkChanged` events;
-`isPreauthorized()` resolves `true` when the origin already holds an account grant. The object is
-frozen and installed as a non-configurable global.
+`isPreauthorized()` resolves `true` when the origin's grant covers the wallet's active account. The
+object is frozen and installed as a non-configurable global.
 
 `request` accepts these methods, mapped to safe background messages by `src/provider/bridge.ts`:
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
@@ -275,6 +275,22 @@ frozen and installed as a non-configurable global.
 Grants and provider events are isolated per origin: each origin reads only its own accounts
 (`wallet.getGrantedAccounts`) and each content script derives page events from its own history
 (`pageEventsFor`), so multiple connected sites never observe each other's state.
+
+A grant records which accounts a site was ever approved for; the active account decides which single
+one of them it may see right now (`grantedAccountIdsFor` in `src/wallet/origin-grants.ts`).
+`wallet.getGrantedAccounts` returns the active account when the grant covers it and `[]` otherwise —
+no grant, no active account, or an active account the grant does not name. So an origin whose grant
+misses the active account reads as disconnected: the page receives `accountsChanged([])`, and
+reconnecting queues a fresh approval instead of silently handing back the previously connected
+account. A page is never handed two of the user's accounts, however many the stored grant has
+accumulated from repeated approvals, so a site cannot correlate them. The connected-sites manager
+still lists the site with its full granted-account count, because it reads the stored grants
+directly, and revoking there is what clears the grant.
+
+The active-network consumers (invoke, declare, typed-data signing, STRK-20, deploy discovery) then
+filter that account by the active network and refuse with `origin not connected` if it does not
+match — fail-closed, and unreachable in practice because both account pickers list only accounts on
+the active network and `switchActiveNetwork` re-selects the target network's account.
 
 `wallet_watchAsset` (SNIP-compatible ERC20, `options.address`) fetches the token's on-chain
 `name`/`symbol`/`decimals` via RPC (falling back to the caller's options), then queues a

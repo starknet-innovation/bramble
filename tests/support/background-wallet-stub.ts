@@ -1,10 +1,14 @@
 /**
  * Shared background-dispatcher test fixtures: a capturing wallet stub plus
- * the canonical senders, account, and vault passphrase used by the
- * background-message suites.
+ * the canonical senders, accounts, and vault passphrase used by the
+ * background-message suites. The stub keeps one vault object and answers both
+ * `readVault` and `getGrantedAccounts` from it through the real
+ * `grantedAccountIdsFor` policy, so a suite cannot end up with two disagreeing
+ * notions of what the origin may see.
  */
 import type { RuntimeSender } from "../../src/background/senders";
-import type { AccountRef } from "../../src/storage/vault-schema";
+import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import { grantedAccountIdsFor } from "../../src/wallet/origin-grants";
 import type {
   CreateVaultAccountInput,
   OriginGrantInput,
@@ -30,9 +34,25 @@ export const account: AccountRef = {
 };
 
 /**
+ * A second stub account on the same network, for suites that switch accounts.
+ * The stub vault's grant never names it, so making it active disconnects the
+ * granted origin — the state the re-prompt behaviour is built on.
+ */
+export const secondAccount: AccountRef = {
+  ...account,
+  address: "0xfeedface",
+  id: "SN_MAIN:0xfeedface",
+};
+
+/**
+ * The one origin the stub vault holds a grant for.
+ */
+export const grantedOrigin = "https://example.com";
+
+/**
  * Content-script sender for https://example.com pages.
  */
-export const contentSender: RuntimeSender = { id: "extension-id", url: "https://example.com/app" };
+export const contentSender: RuntimeSender = { id: "extension-id", url: `${grantedOrigin}/app` };
 
 /**
  * Extension-page sender accepted for privileged messages.
@@ -56,65 +76,82 @@ const status: WalletStatus = {
 };
 
 /**
- * Builds the capturing wallet stub; optional callbacks observe create, sign,
- * and grant inputs.
+ * Wiring for {@link createWallet}, by key rather than by position. The capture
+ * callbacks observe create, sign, and grant inputs. `accounts` widens the stub
+ * vault and `activeAccountId` chooses which of them is active — it is called on
+ * every read, so a suite can switch accounts between two messages and watch the
+ * origin connect or disconnect.
  */
-export const createWallet = (
-  captureCreate?: (input: CreateVaultAccountInput) => void,
-  captureSign?: (input: SignHashInput) => void,
-  captureGrant?: (input: OriginGrantInput) => void,
-) => ({
-  async createAccount(input: CreateVaultAccountInput) {
-    captureCreate?.(input);
-    return account;
-  },
-  async addDerivedAccount() {
-    return account;
-  },
-  async ensureNetworkAccount() {
-    return account;
-  },
-  async importRawKeyAccount() {
-    return account;
-  },
-  async previewAccount() {
-    return account;
-  },
-  async getGrantedAccounts(origin: string) {
-    return origin === "https://example.com" ? [account] : [];
-  },
-  async generateMnemonic() {
-    return "habit hope tip crystal because grunt nation idea electric witness alert like";
-  },
-  async grantOrigin(input: OriginGrantInput) {
-    captureGrant?.(input);
-    return [account];
-  },
-  async readVault(passphrase: string) {
-    if (passphrase !== vaultPassphrase) {
-      throw new Error("bad passphrase");
-    }
-    return {
-      accounts: [account],
-      activeAccountId: account.id,
-      mnemonic: null,
-      originGrants: [{ accountIds: [account.id], origin: "https://example.com" }],
-      schemaVersion: 3 as const,
-      signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
-    };
-  },
-  async setActiveAccount() {
-    return account;
-  },
-  async signHash(input: SignHashInput) {
-    captureSign?.(input);
-    return {
-      publicKey: "0xabc",
-      r: "0x1",
-      s: "0x2",
-    };
-  },
-  async status() {
-    return status;
-  },
-});
+export type WalletStubOptions = {
+  readonly accounts?: readonly AccountRef[];
+  readonly activeAccountId?: () => string;
+  readonly captureCreate?: (input: CreateVaultAccountInput) => void;
+  readonly captureGrant?: (input: OriginGrantInput) => void;
+  readonly captureSign?: (input: SignHashInput) => void;
+};
+
+/**
+ * Builds the capturing wallet stub over a single stub vault.
+ */
+export const createWallet = (options: WalletStubOptions = {}) => {
+  const accounts = options.accounts ?? [account];
+  const vault = (): Vault => ({
+    accounts,
+    activeAccountId: options.activeAccountId?.() ?? account.id,
+    mnemonic: null,
+    originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
+    schemaVersion: 3,
+    signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
+  });
+  return {
+    async createAccount(input: CreateVaultAccountInput) {
+      options.captureCreate?.(input);
+      return account;
+    },
+    async addDerivedAccount() {
+      return account;
+    },
+    async ensureNetworkAccount() {
+      return account;
+    },
+    async importRawKeyAccount() {
+      return account;
+    },
+    async previewAccount() {
+      return account;
+    },
+    async getGrantedAccounts(origin: string) {
+      const current = vault();
+      return grantedAccountIdsFor(current, origin)
+        .map((id) => current.accounts.find((stored) => stored.id === id))
+        .filter((stored) => stored !== undefined);
+    },
+    async generateMnemonic() {
+      return "habit hope tip crystal because grunt nation idea electric witness alert like";
+    },
+    async grantOrigin(input: OriginGrantInput) {
+      options.captureGrant?.(input);
+      return [account];
+    },
+    async readVault(passphrase: string) {
+      if (passphrase !== vaultPassphrase) {
+        throw new Error("bad passphrase");
+      }
+      return vault();
+    },
+    async setActiveAccount() {
+      return account;
+    },
+    async signHash(input: SignHashInput) {
+      options.captureSign?.(input);
+      return {
+        publicKey: "0xabc",
+        r: "0x1",
+        s: "0x2",
+      };
+    },
+    async status() {
+      return status;
+    },
+  };
+};

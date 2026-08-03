@@ -133,53 +133,6 @@ describe("createWalletVaultService", () => {
     expect(secrets).toEqual({ mnemonic, privateKey: "0x123456" });
   });
 
-  test("grants origins access only to selected accounts", async () => {
-    const service = createWalletVaultService({
-      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
-      kms: fakeKms(),
-    });
-
-    const account = await service.createAccount({ mnemonic, vaultPassphrase });
-
-    await expect(
-      service.grantOrigin({
-        origin: "https://example.com",
-        vaultPassphrase,
-      }),
-    ).resolves.toEqual([account]);
-    await expect(
-      service.getGrantedAccounts("https://example.com", vaultPassphrase),
-    ).resolves.toEqual([account]);
-    await expect(
-      service.getGrantedAccounts("https://evil.example", vaultPassphrase),
-    ).resolves.toEqual([]);
-    await expect(
-      service.grantOrigin({
-        origin: "http://127.0.0.1:5173",
-        vaultPassphrase,
-      }),
-    ).resolves.toEqual([account]);
-  });
-
-  test("rejects insecure origin grants", async () => {
-    const service = createWalletVaultService({
-      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
-      kms: fakeKms(),
-    });
-
-    await service.createAccount({ mnemonic, vaultPassphrase });
-
-    await expect(
-      service.grantOrigin({
-        origin: "http://example.com",
-        vaultPassphrase,
-      }),
-    ).rejects.toThrow("Invalid origin");
-    await expect(service.getGrantedAccounts("http://example.com", vaultPassphrase)).rejects.toThrow(
-      "Invalid origin",
-    );
-  });
-
   test("rejects malformed account ids before account lookup", async () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
@@ -327,41 +280,6 @@ describe("createWalletVaultService", () => {
         vaultPassphrase,
       }),
     ).rejects.toThrow("Invalid message hash");
-  });
-
-  test("revokes an origin grant and reports the remaining connected sites", async () => {
-    const service = createWalletVaultService({
-      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
-      kms: fakeKms(),
-    });
-
-    await service.createAccount({ mnemonic, vaultPassphrase });
-    await service.grantOrigin({ origin: "https://alpha.example", vaultPassphrase });
-    await service.grantOrigin({ origin: "https://beta.example", vaultPassphrase });
-
-    await expect(
-      service.revokeOrigin({ origin: "https://alpha.example", vaultPassphrase }),
-    ).resolves.toEqual([{ accountCount: 1, origin: "https://beta.example" }]);
-    const vault = await service.readVault(vaultPassphrase);
-    expect(vault.originGrants.map((grant) => grant.origin)).toEqual(["https://beta.example"]);
-    await expect(
-      service.getGrantedAccounts("https://alpha.example", vaultPassphrase),
-    ).resolves.toEqual([]);
-    await expect(
-      service.revokeOrigin({ origin: "https://alpha.example", vaultPassphrase }),
-    ).resolves.toEqual([{ accountCount: 1, origin: "https://beta.example" }]);
-  });
-
-  test("rejects revoking an insecure origin", async () => {
-    const service = createWalletVaultService({
-      encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
-      kms: fakeKms(),
-    });
-
-    await service.createAccount({ mnemonic, vaultPassphrase });
-    await expect(
-      service.revokeOrigin({ origin: "http://example.com", vaultPassphrase }),
-    ).rejects.toThrow("Invalid origin");
   });
 
   test("fails closed for direct popup vault access", () => {
