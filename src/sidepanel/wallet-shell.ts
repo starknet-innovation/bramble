@@ -69,14 +69,18 @@ export const walletHeader = (
 /**
  * Renders the persistent three-destination wallet dock.
  */
-export const walletDock = (activeView: WalletView, pendingCount: number): string =>
+export const walletDock = (
+  activeView: WalletView,
+  pendingCount: number,
+  sharedAccount = false,
+): string =>
   dockNavigation([
     {
-      attributes: { "data-view": "home" },
+      attributes: { "data-view": sharedAccount ? "multisig-home" : "home" },
       controls: "wallet-screen-home",
       icon: "home",
       label: "Home",
-      selected: activeView === "home",
+      selected: activeView === "home" || activeView === "multisig-home",
     },
     {
       attributes: { "data-view": "activity" },

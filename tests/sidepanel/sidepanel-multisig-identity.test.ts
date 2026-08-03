@@ -24,7 +24,7 @@ const treasury: MultisigRecord = {
   name: "Treasury",
   networkId: "SN_MAIN",
   quorum: 2,
-  signers: [activeAccount.address, "0x444"],
+  signers: [activeAccount.address, status.accounts[1]?.address ?? "0x444"],
 };
 
 const operations: MultisigRecord = {
@@ -110,6 +110,21 @@ describe("multisig account identity", () => {
     await Promise.resolve();
     expect(mounted.selectedSingle()).toBe(1);
     expect(mounted.switched).toEqual([]);
+  });
+
+  test("switching to another owned signer preserves the shared portfolio", async () => {
+    const second = status.accounts[1];
+    if (!second) throw new Error("missing second signer fixture");
+    const mounted = mount(treasury);
+    expect(
+      mounted.app
+        .querySelector(`[data-switch-account="${second.id}"]`)
+        ?.getAttribute("data-selected-multisig-signer"),
+    ).toBe("true");
+    mounted.app.querySelector<HTMLButtonElement>(`[data-switch-account="${second.id}"]`)?.click();
+    for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+    expect(mounted.selectedSingle()).toBe(0);
+    expect(mounted.switched).toEqual([second.id]);
   });
 
   test("selecting another multisig changes the portfolio identity directly", () => {

@@ -5,6 +5,7 @@ import type { MultisigProposalState } from "../../src/starknet/multisig";
 import { predictMultisigAddress } from "../../src/starknet/multisig-deploy";
 import { type ActivityLog, memoryActivityLog } from "../../src/storage/activity-store";
 import { type MultisigProposalRecord, memoryMultisigStore } from "../../src/storage/multisig-store";
+import type { AccountRef } from "../../src/storage/vault-schema";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,
@@ -21,6 +22,16 @@ const staticStatus = (state: MultisigProposalState) => () => ({
   confirmedBySigner: false,
   state,
 });
+
+const secondOwnedSigner: AccountRef = {
+  address: HARNESS_OTHER_SIGNER,
+  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd1",
+  derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },
+  id: `SN_MAIN:${HARNESS_OTHER_SIGNER}`,
+  networkId: "SN_MAIN",
+  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd1",
+  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd1",
+};
 
 const watch = async (handler: ReturnType<typeof makeMultisigHarness>["handler"]) =>
   handler(
@@ -148,6 +159,59 @@ describe("multisig messages", () => {
     expect(confirm).toEqual({ ok: true, transactionHash: "0x7cd" });
     const confirmed = invokeCalls.at(-1)?.[0] as { entrypoint: string };
     expect(confirmed.entrypoint).toBe("confirm_transaction");
+  });
+  test("partitions shared activity from both signer accounts", async () => {
+    const { handler } = makeMultisigHarness();
+    const watched = (await watch(handler)) as { multisig: { id: string } };
+    await propose(handler, watched.multisig.id);
+
+    const signerActivity = (await handler({ type: "wallet.activity" }, harnessExtensionSender)) as {
+      activity: readonly { summary: string }[];
+    };
+    const sharedActivity = (await handler(
+      { accountId: watched.multisig.id, type: "wallet.activity" },
+      harnessExtensionSender,
+    )) as { activity: readonly { summary: string }[] };
+
+    expect(signerActivity.activity).toEqual([]);
+    expect(sharedActivity.activity.map((entry) => entry.summary)).toEqual(["Propose: Pay vendor"]);
+    await expect(
+      handler({ accountId: "SN_MAIN:0x999", type: "wallet.activity" }, harnessExtensionSender),
+    ).resolves.toEqual({ error: "activity scope unavailable" });
+  });
+  test("discovers every owned signer and confirms with the selected account", async () => {
+    const { handler, multisigStore, submittedAccounts } = makeMultisigHarness({
+      accounts: [harnessAccount, secondOwnedSigner],
+      proposalStatus: (signer) => ({
+        confirmations: 1,
+        confirmedBySigner: signer === harnessAccount.address,
+        state: "pending",
+      }),
+      signers: [harnessAccount.address, secondOwnedSigner.address],
+    });
+    const watched = (await watch(handler)) as { multisig: { id: string } };
+    const proposed = (await propose(handler, watched.multisig.id)) as {
+      proposal: MultisigProposalRecord;
+    };
+    await handler(
+      { id: watched.multisig.id, type: "wallet.refreshMultisig" },
+      harnessExtensionSender,
+    );
+    expect((await multisigStore.listProposals())[0]?.confirmedSignerAddresses).toEqual([
+      harnessAccount.address,
+    ]);
+
+    await handler(
+      { accountId: secondOwnedSigner.id, type: "wallet.setActiveAccount" },
+      harnessExtensionSender,
+    );
+    await expect(
+      handler(
+        { proposalId: proposed.proposal.id, type: "wallet.confirmMultisigProposal" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ ok: true, transactionHash: "0x7cd" });
+    expect(submittedAccounts.at(-1)).toBe(secondOwnedSigner.id);
   });
   test("executes a proposal with quorum", async () => {
     const { handler, invokeCalls } = makeMultisigHarness({

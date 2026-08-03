@@ -141,8 +141,12 @@ describe("multisig views", () => {
     expect(home).toContain(
       `data-multisig-select="${multisig.id}" type="button" aria-pressed="true"`,
     );
-    expect(home).toContain(`data-active-signer="true" type="button" aria-pressed="false"`);
+    expect(home).toContain(
+      `data-active-signer="true" data-selected-multisig-signer="true" type="button" aria-pressed="false"`,
+    );
     expect(home).not.toContain("data-nav-back");
+    expect(home).toContain('data-view="multisig-home"');
+    expect(home).toContain('aria-label="Wallet screens"');
     expect(home).toContain('id="wallet-screen-multisig-home"');
     expect(home).toContain('class="hero multisig-portfolio-hero"');
     expect(home).toContain(">Tokens</button>");
@@ -157,6 +161,19 @@ describe("multisig views", () => {
     expect(home).toContain('data-ms-home-tab="proposals"');
   });
 
+  test("retains shared identity through Activity and Settings dock navigation", () => {
+    const activity = render("activity");
+    expect(activity).toContain("Treasury");
+    expect(activity).toContain(`data-activity-account-id="${multisig.id}"`);
+    expect(activity).toContain('data-view="multisig-home"');
+    expect(activity).toContain('aria-label="Home"');
+
+    const settings = render("settings");
+    expect(settings).toContain("Multisig 2 of 2");
+    expect(settings).toContain('data-view="multisig-home"');
+    expect(settings).toContain('aria-label="Settings"');
+  });
+
   test("detail shows lifecycle actions and routes signer and tracking tasks", () => {
     const html = render("multisig-detail", [multisig], [proposal]);
     expect(html).toContain("Pay vendor");
@@ -164,12 +181,14 @@ describe("multisig views", () => {
     expect(html).toContain("This proposal will");
     expect(html).toContain("Call details");
     expect(html).toContain("Verify elsewhere");
-    expect(html).toContain(`data-ms-confirm="${proposal.id}"`);
+    expect(html).toContain(`data-ms-confirm-open="${proposal.id}"`);
     expect(html).toContain(`data-ms-execute="${proposal.id}"`);
     expect(html).toContain('class="allowance-row proposal-row"');
     expect(html).toContain('class="proposal-actions"');
     expect(html).toContain('class="proposal-head"');
-    expect(html).toMatch(/data-ms-confirm="[^"]+"[^>]*data-ms-action-allowed="false"[^>]*disabled/);
+    expect(html).toMatch(
+      /data-ms-action-allowed="false"[^>]*data-ms-confirm-open="[^"]+"[^>]*disabled/,
+    );
     expect(html).toMatch(/data-ms-revoke="[^"]+"[^>]*data-ms-action-allowed="true"/);
     expect(html).not.toContain("data-ms-requires-ack");
     expect(html).toContain('data-view="multisig-signers"');
@@ -204,7 +223,7 @@ describe("multisig views", () => {
       state: "pending" as const,
     };
     const allowed = render("multisig-detail", [multisig], [pending]);
-    expect(allowed).toMatch(/data-ms-confirm="[^"]+"[^>]*data-ms-action-allowed="true"/);
+    expect(allowed).toMatch(/data-ms-action-allowed="true"[^>]*data-ms-confirm-open="[^"]+"/);
     expect(allowed).toMatch(
       /data-ms-revoke="[^"]+"[^>]*data-ms-action-allowed="false"[^>]*disabled/,
     );
@@ -218,7 +237,9 @@ describe("multisig views", () => {
       [multisig],
       [{ ...pending, confirmedBySignerAddress: multisig.signers[1] ?? "0x4" }],
     );
-    expect(staleSignerSnapshot.match(/data-ms-action-allowed="false"/g)).toHaveLength(2);
+    expect(staleSignerSnapshot).toMatch(
+      /data-ms-action-allowed="true"[^>]*data-ms-confirm-open="[^"]+"/,
+    );
   });
 
   test("detail hides execute for proposals tracked by id only", () => {
@@ -331,7 +352,9 @@ describe("multisig views", () => {
       false,
       "proposal-discovery-recent",
     );
-    expect(recent).toContain("proposal search covers recent activity");
+    expect(recent).toContain("About proposal search coverage");
+    expect(recent).toContain("To review an older proposal, add its proposal id.");
+    expect(recent).not.toContain("Account state is current");
     expect(recent).not.toContain("Cached data may be stale");
   });
 });

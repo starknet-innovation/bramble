@@ -6,7 +6,9 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { serializeMultisigReviewPackage } from "../../src/sidepanel/multisig-model";
 import { bindMultisigs, type MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
+import { multisigDetailFlow } from "../../src/sidepanel/multisig-views";
 import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
+import type { AccountRef } from "../../src/storage/vault-schema";
 import { registerDom, unregisterDom } from "../support/groups-harness";
 
 beforeAll(registerDom);
@@ -293,5 +295,93 @@ describe("bindMultisigs", () => {
     await Promise.resolve();
 
     expect(tracked).toEqual([[multisig.id, proposal.txId, proposal.summary, proposal.call]]);
+  });
+
+  test("reviews a confirmation, switches to another owned signer, then submits", async () => {
+    const first: AccountRef = {
+      address: "0x123",
+      classHash: "0x456",
+      derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_MAIN:0x123",
+      networkId: "SN_MAIN",
+      publicKeyX: "0x789",
+      publicKeyY: "0xabc",
+    };
+    const second: AccountRef = {
+      ...first,
+      address: "0x234",
+      derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_MAIN:0x234",
+      publicKeyX: "0x890",
+      publicKeyY: "0xbcd",
+    };
+    const status = {
+      accountCount: 2,
+      accounts: [first, second],
+      activeAccountId: first.id,
+      hasVault: true,
+      locked: false,
+      network: "Starknet Mainnet",
+      networkId: "SN_MAIN",
+      networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+      ready: true,
+    } as const;
+    const record: MultisigRecord = {
+      address: "0x999",
+      id: "SN_MAIN:0x999",
+      name: "Treasury",
+      networkId: "SN_MAIN",
+      quorum: 2,
+      signers: [first.address, second.address],
+    };
+    const proposal: MultisigProposalRecord = {
+      call: { calldata: ["0x1"], contractAddress: "0x456", entrypoint: "transfer", salt: "0x0" },
+      confirmations: 1,
+      confirmedBySigner: true,
+      confirmedBySignerAddress: first.address,
+      confirmedSignerAddresses: [first.address],
+      id: `${record.id}:0x789`,
+      multisigId: record.id,
+      state: "pending",
+      summary: "Pay contributor",
+      txId: "0x789",
+    };
+    const calls: string[] = [];
+    const app = mount(
+      multisigDetailFlow(status, first, record, [proposal]),
+      async () => {
+        calls.push("render");
+      },
+      {
+        multisig: {
+          async confirmProposal(id: string) {
+            calls.push(`confirm:${id}`);
+            return "0xabc";
+          },
+        } as MultisigUiDeps["multisig"],
+        wallet: {
+          async loadStatus() {
+            return status;
+          },
+          async setActiveAccount(id: string) {
+            calls.push(`switch:${id}`);
+          },
+        } as unknown as MultisigUiDeps["wallet"],
+      },
+    );
+
+    expect(app.querySelector(`[data-ms-confirm-signer="${first.id}"]`)).toBeNull();
+    const open = app.querySelector<HTMLButtonElement>(`[data-ms-confirm-open="${proposal.id}"]`);
+    open?.click();
+    const panel = app.querySelector<HTMLElement>(`[data-ms-confirm-panel="${proposal.id}"]`);
+    expect(panel?.hidden).toBe(false);
+    expect(
+      panel?.querySelector(`[data-ms-confirm-signer="${second.id}"]`)?.getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]")?.click();
+    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe("Switching signer…");
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    expect(calls).toEqual([`switch:${second.id}`, `confirm:${proposal.id}`, "render"]);
   });
 });

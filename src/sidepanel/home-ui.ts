@@ -233,9 +233,15 @@ const bindDrawer = (deps: HomeUiDeps): void => {
       buttonBusy(button, true);
       void deps.wallet.setActiveAccount(accountId).then(
         async () => {
-          deps.selectPortfolio?.(null);
+          const keepsSharedAccount = button.dataset["selectedMultisigSigner"] === "true";
+          if (!keepsSharedAccount) {
+            deps.selectPortfolio?.(null);
+          }
           deps.setDrawerOpen(false);
-          showToast("Account switched", "success");
+          showToast(
+            keepsSharedAccount ? "Multisig signer switched" : "Account switched",
+            "success",
+          );
           await deps.render(await deps.wallet.loadStatus());
         },
         (error: unknown) => {

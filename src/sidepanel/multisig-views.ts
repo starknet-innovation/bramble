@@ -13,6 +13,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { emptyState, pill } from "../ui/content";
 import { button } from "../ui/controls";
 import { menuRow } from "../ui/navigation";
+import { icon } from "./icons";
 import { multisigDisplayName } from "./multisig-model";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
@@ -24,6 +25,7 @@ import type { MultisigSyncState } from "./multisig-sync";
 import {
   accountLabel,
   copyButton,
+  dockScreen,
   flowHeader,
   flowScreen,
   hardwareBadge,
@@ -88,8 +90,16 @@ const multisigSyncNotice = (
     </div>`;
   }
   if (sync === "proposal-discovery-recent") {
-    return `<div class="review-panel" role="status">
-      <p>Account state is current. Automatic proposal search covers recent activity; add an older proposal by id to verify it directly.</p>
+    return `<div class="multisig-sync-meta">
+      <details class="multisig-sync-info">
+        <summary aria-label="About proposal search coverage" title="About proposal search coverage">
+          ${icon("info")}<span class="multisig-sync-tooltip" role="tooltip">Proposal search coverage</span>
+        </summary>
+        <div class="multisig-sync-popover" role="note">
+          <strong>Recent proposals checked</strong>
+          <p>To review an older proposal, add its proposal id.</p>
+        </div>
+      </details>
     </div>`;
   }
   return "";
@@ -175,8 +185,8 @@ export const multisigDetailFlow = (
 ): string => {
   if (!record) {
     return (
-      flowHeader("Multisig", status) +
-      flowScreen(
+      (view === "multisig-home" ? "" : flowHeader("Multisig", status)) +
+      (view === "multisig-home" ? dockScreen : flowScreen)(
         view,
         loadError
           ? multisigSyncNotice(true, "background-unavailable", "multisig-list-retry")
@@ -196,7 +206,7 @@ export const multisigDetailFlow = (
           status,
           `${record.quorum} of ${record.signers.length} signers`,
         )) +
-    flowScreen(
+    (view === "multisig-home" ? dockScreen : flowScreen)(
       view,
       `${multisigSyncNotice(loadError, sync, "multisig-list-retry")}
       ${multisigPortfolio({
@@ -204,7 +214,7 @@ export const multisigDetailFlow = (
         data: portfolio,
         openCount,
         preferences,
-        proposals: `${multisigProposalList(record, tracked, canSign, account, preferences)}
+        proposals: `${multisigProposalList(record, tracked, status.accounts, account, preferences)}
           <p id="multisig-proposal-result" role="status"></p>`,
         record,
       })}

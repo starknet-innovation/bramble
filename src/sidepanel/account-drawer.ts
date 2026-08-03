@@ -14,6 +14,7 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { sameFelt } from "../starknet/networks";
 import { type AccountGroups, accountGroup } from "../storage/account-groups";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { WalletPreferences } from "../storage/preferences-store";
@@ -53,6 +54,7 @@ const drawerAccountRow = (
   preferences: WalletPreferences | null,
   groups: AccountGroups,
   openAssignId: string | null,
+  selectedMultisig: MultisigRecord | null,
 ): string => {
   const folder = accountGroup(groups, stored.id);
   const assignOpen = stored.id === openAssignId;
@@ -61,14 +63,17 @@ const drawerAccountRow = (
   const rowGlyph = folder ? folder.icon : "folder";
   const pickerLabel = folder ? `Folder: ${folder.name}` : "No folder — choose one";
   const name = accountDisplayName(stored, preferences);
+  const selectedMultisigSigner =
+    selectedMultisig?.signers.some((signer) => sameFelt(signer, stored.address)) ?? false;
   return `
   <li class="drawer-account-item">
     <div class="drawer-account-row">
-      <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" data-active-signer="${stored.id === activeId}" type="button" aria-pressed="${singleSignerSelected && stored.id === activeId}">
+      <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" data-active-signer="${stored.id === activeId}"${selectedMultisigSigner ? ' data-selected-multisig-signer="true"' : ""} type="button" aria-pressed="${singleSignerSelected && stored.id === activeId}">
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
           <code>${accountLabel(stored.address)}</code>
+          ${selectedMultisigSigner ? `<span class="account-groups-line">Signer for ${escapeHtml(selectedMultisig?.name ?? "selected multisig")}</span>` : ""}
         </span>
         ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>
@@ -115,6 +120,7 @@ export const accountDrawer = (
   const shared = groupFilter
     ? []
     : multisigs.filter((record) => record.networkId === status.networkId);
+  const selectedMultisig = shared.find((record) => record.id === selectedMultisigId) ?? null;
   const hasVisibleAccounts = visible.length > 0 || shared.length > 0;
   return `
   <div class="drawer-root" data-open="false">
@@ -150,6 +156,7 @@ export const accountDrawer = (
                   preferences,
                   groups,
                   openAssignId,
+                  selectedMultisig,
                 ),
               )
               .join("")}${shared

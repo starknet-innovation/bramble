@@ -8,6 +8,7 @@ import {
 import { serializeMultisigReviewPackage } from "../../../src/sidepanel/multisig-model";
 import { bindMultisigProposalForm } from "../../../src/sidepanel/multisig-proposal-ui";
 import { createMultisigClient } from "../../../src/sidepanel/multisig-runtime";
+import { bindMultisigs, type MultisigUiDeps } from "../../../src/sidepanel/multisig-ui";
 import {
   multisigDeployFlow,
   multisigDetailFlow,
@@ -44,6 +45,13 @@ const confirmedProposal: MultisigProposalRecord = {
   confirmations: 2,
   confirmedBySigner: true,
   state: "confirmed",
+};
+
+const awaitingOwnedSigner: MultisigProposalRecord = {
+  ...pendingProposal,
+  confirmedBySigner: true,
+  confirmedBySignerAddress: softwareAccount.address,
+  confirmedSignerAddresses: [softwareAccount.address],
 };
 
 const untrackedProposal: MultisigProposalRecord = {
@@ -118,6 +126,28 @@ const showSharedCollectibles = (context: FrameContext): void =>
   showSharedTab(context, "collectibles");
 
 const showSharedProposals = (context: FrameContext): void => showSharedTab(context, "proposals");
+
+const showConfirmationReview = (context: FrameContext): void => {
+  bindMultisigs({
+    app: context.app,
+    multisig: {
+      async confirmProposal() {
+        throw new Error("UI Lab blocks transaction submission");
+      },
+    },
+    openDetail: () => undefined,
+    openList: () => undefined,
+    render: async () => undefined,
+    selectedMultisigId: () => multisig.id,
+    wallet: {
+      loadStatus: async () => statusFor(),
+      setActiveAccount: async () => undefined,
+    },
+  } as unknown as MultisigUiDeps);
+  showSharedProposals(context);
+  context.app.querySelector<HTMLButtonElement>("[data-ms-confirm-open]")?.click();
+  context.emit({ detail: "Confirmation review opened", kind: "action" });
+};
 
 const showImportedReviewPackage = (context: FrameContext): void => {
   const input = context.app.querySelector<HTMLTextAreaElement>('textarea[name="reviewPackage"]');
@@ -197,6 +227,30 @@ export const multisigScenario: WalletScenario = {
         }),
       { config: "current", proposalDiscovery: "recent" },
     ),
+    {
+      content: () =>
+        walletDashboard({
+          activity: [
+            {
+              accountId: multisig.id,
+              hash: "0x904",
+              kind: "invoke",
+              networkId: "SN_MAIN",
+              status: "accepted",
+              submittedAt: 1_785_171_200_000,
+              summary: "Propose: Pay 100 USDC to research treasury",
+            },
+          ],
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "activity",
+        }),
+      id: "shared-activity",
+      label: "Shared account activity",
+      narrative:
+        "The dock, header, export boundary, and transaction feed remain scoped to the shared account rather than the current signer.",
+      state: { accountScope: multisig.id, signerBleed: false, view: "activity" },
+    },
     multisigCheckpoint(
       "configuration-unavailable",
       "Configuration unavailable",
@@ -247,6 +301,29 @@ export const multisigScenario: WalletScenario = {
       state: { accountType: "shared", openProposals: 1, quorum: 2 },
     },
     ...multisigReviewCheckpoints(portfolio),
+    {
+      content: () =>
+        walletDashboard({
+          balanceState: portfolio.balances,
+          changes: portfolio.changes,
+          multisigNfts: portfolio.nfts ?? [],
+          multisigProposals: [awaitingOwnedSigner],
+          multisigSync: "current",
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "multisig-home",
+        }),
+      id: "confirm-owned-signer",
+      label: "Confirm with an owned signer",
+      narrative:
+        "The wallet intersects on-chain signer rules with locally-owned accounts, excludes a signer already confirmed, and requires a focused review before signing.",
+      prepare: showConfirmationReview,
+      state: {
+        alreadyConfirmed: softwareAccount.id,
+        eligibleSigners: 2,
+        reviewRequired: true,
+      },
+    },
     multisigCheckpoint(
       "receive",
       "Receive to shared account",

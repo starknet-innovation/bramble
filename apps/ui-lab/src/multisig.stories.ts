@@ -12,6 +12,16 @@ export const AddAccount = checkpointStory("Add a Multisig account", "multisig", 
 export const Watched = checkpointStory("Watched multisigs", "multisig", "list");
 export const Watch = checkpointStory("Watch multisig", "multisig", "watch");
 export const Proposal = checkpointStory("Proposal detail", "multisig", "proposal");
+export const ProposalSearch = checkpointStory(
+  "Recent proposal search",
+  "multisig",
+  "proposal-search-recent",
+);
+export const SharedActivity = checkpointStory(
+  "Shared account activity",
+  "multisig",
+  "shared-activity",
+);
 export const Collectibles = checkpointStory("Shared collectibles", "multisig", "collectibles");
 export const AccountDrawer = checkpointStory("Shared account drawer", "multisig", "drawer");
 export const Receive = checkpointStory("Receive to shared account", "multisig", "receive");
@@ -24,7 +34,12 @@ export const ImportReviewPackage = checkpointStory(
 );
 export const Ready = checkpointStory("Ready to execute", "multisig", "ready");
 export const ReadyProposal = checkpointStory("Ready proposal detail", "multisig", "ready-proposal");
-export const SyncFailure = checkpointStory("Refresh failed", "multisig", "sync-error");
+export const ConfirmOwnedSigner = checkpointStory(
+  "Confirm with an owned signer",
+  "multisig",
+  "confirm-owned-signer",
+);
+export const SyncFailure = checkpointStory("Refresh failed", "multisig", "registry-unavailable");
 export const Propose = checkpointStory("Create proposal", "multisig", "propose");
 export const ProposeAmount = checkpointStory(
   "Create proposal · token and amount",

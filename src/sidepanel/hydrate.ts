@@ -169,14 +169,14 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       true,
     );
   }
-  if (activeView === "activity" || activeView === "home") {
+  if (activeView === "activity" || activeView === "home" || activeView === "multisig-home") {
     fill(
-      wallet.loadActivity(),
+      wallet.loadActivity(activeView === "home" ? undefined : (selectedMultisigId ?? undefined)),
       (value) => {
         cache.transactions = value.entries;
         cache.historyUnavailable = value.historyUnavailable;
       },
-      activeView === "home",
+      activeView !== "activity",
     );
   }
   if (activeView === "account") {

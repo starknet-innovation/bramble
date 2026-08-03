@@ -1,8 +1,9 @@
 /**
  * Side panel screen composition. Dock screens (Home, Activity, Settings)
  * share the account-bar header and account drawer. Signer Home, Activity, and
- * Settings also share the bottom dock; multisig Home deliberately omits the
- * signer-scoped dock while remaining a first-class selectable portfolio.
+ * Settings also share the bottom dock. A selected multisig retains that shared
+ * identity across Home, Activity, and Settings while signing remains delegated
+ * to an explicitly selected owned signer.
  * Every other view renders as a dedicated flow screen from ./flows.ts with its
  * own back navigation, so each journey has a distinct place to complete its
  * goal. Home follows a compact portfolio structure: hero balance, primary
@@ -440,7 +441,10 @@ export const dashboard = (
   if (activeView === "reveal") {
     return revealFlow(status);
   }
-  const sharedIdentity = activeView === "multisig-home" ? selectedMultisig(journeyContext) : null;
+  const sharedIdentity =
+    activeView === "multisig-home" || activeView === "activity" || activeView === "settings"
+      ? selectedMultisig(journeyContext)
+      : null;
   const screen =
     activeView === "multisig-home"
       ? multisigDetailFlow(
@@ -455,7 +459,7 @@ export const dashboard = (
           journeyContext.multisigPortfolio,
         )
       : activeView === "activity"
-        ? activityScreen(pending, status, transactions, historyUnavailable)
+        ? activityScreen(pending, status, transactions, historyUnavailable, sharedIdentity)
         : activeView === "settings"
           ? settingsScreen(status, preferences)
           : homeScreen(
@@ -474,7 +478,7 @@ export const dashboard = (
   return `
     ${walletHeader(status, account, preferences, sharedIdentity)}
     ${screen}
-    ${activeView === "multisig-home" ? "" : walletDock(activeView, pending.length)}
+    ${walletDock(activeView, pending.length, sharedIdentity !== null)}
     ${accountDrawer(
       status,
       account,

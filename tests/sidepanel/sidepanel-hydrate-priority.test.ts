@@ -215,6 +215,7 @@ describe("home hydration priority", () => {
     const cache = emptyRenderCache();
     let signerBalanceReads = 0;
     const sharedBalanceReads: string[] = [];
+    const sharedActivityReads: (string | undefined)[] = [];
     const sharedNftReads: unknown[][] = [];
     const record = {
       address: "0x7123",
@@ -259,11 +260,16 @@ describe("home hydration priority", () => {
           signerBalanceReads += 1;
           return { balances: [] };
         },
+        loadActivity: async (accountId?: string) => {
+          sharedActivityReads.push(accountId);
+          return { entries: [], historyUnavailable: false };
+        },
         loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
       },
     } as never);
 
     expect(sharedBalanceReads).toEqual([multisigId]);
+    expect(sharedActivityReads).toEqual([multisigId]);
     expect(signerBalanceReads).toBe(0);
     expect(cache.multisigBalanceId).toBe(multisigId);
     expect(cache.multisigBalances).toEqual(sharedBalances);

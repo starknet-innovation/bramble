@@ -29,6 +29,7 @@ import {
   readMultisigIdInput,
   readTrackMultisigProposalInput,
 } from "./multisig-inputs";
+import { refreshMultisigProposals } from "./multisig-proposal-status";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import type { WalletOpsDeps } from "./wallet-ops";
@@ -120,27 +121,7 @@ export const multisigRpc = (deps: MultisigOpsDeps) => {
   return rpc;
 };
 
-/**
- * Checks whether this wallet's submit transaction for a proposal is still
- * pending. While that activity row is pending, a not-found proposal status can
- * simply mean the submit has not mined yet; after it is accepted/rejected, a
- * not-found status is authoritative and should be persisted.
- */
-export const isProposalSubmitPending = async (
-  deps: MultisigOpsDeps,
-  proposal: MultisigProposalRecord,
-): Promise<boolean> => {
-  const hash = proposal.submitTransactionHash;
-  if (!hash) {
-    return false;
-  }
-  try {
-    const entries = await deps.activity.list();
-    return entries.some((entry) => entry.hash === hash && entry.status === "pending");
-  } catch {
-    return true;
-  }
-};
+export { isProposalSubmitPending } from "./multisig-proposal-status";
 
 const shortAddress = (address: string): string => `${address.slice(0, 8)}…${address.slice(-4)}`;
 
@@ -193,67 +174,6 @@ const scopedList = async (
     ids.has(proposal.multisigId),
   );
   return { multisigs, proposals };
-};
-
-// Re-read one proposal, preserving not-found only while its submit is pending.
-const refreshProposal = async (
-  deps: MultisigOpsDeps,
-  record: MultisigRecord,
-  proposal: MultisigProposalRecord,
-  signer: string,
-  rpcUrls: readonly string[],
-): Promise<MultisigProposalRecord> => {
-  const status = await multisigRpc(deps).getProposalStatus({
-    address: record.address,
-    rpcUrls,
-    signer,
-    txId: proposal.txId,
-  });
-  if (status.state === "not-found" && (await isProposalSubmitPending(deps, proposal))) {
-    return proposal;
-  }
-  const next: MultisigProposalRecord = {
-    ...proposal,
-    confirmations: status.confirmations,
-    confirmedBySigner: status.confirmedBySigner,
-    confirmedBySignerAddress: signer,
-    state: status.state,
-  };
-  await deps.multisigStore.upsertProposal(next);
-  return next;
-};
-
-/**
- * Refreshes every tracked proposal for a multisig, tolerating per-proposal
- * read failures so one broken read never hides the rest.
- */
-const refreshProposals = async (
-  deps: MultisigOpsDeps,
-  record: MultisigRecord,
-  signer: string,
-  rpcUrls: readonly string[],
-): Promise<{
-  readonly complete: boolean;
-  readonly proposals: readonly MultisigProposalRecord[];
-}> => {
-  const proposals = (await deps.multisigStore.listProposals()).filter(
-    (proposal) => proposal.multisigId === record.id,
-  );
-  let complete = true;
-  const refreshed = await Promise.all(
-    proposals.map(async (proposal) => {
-      if (proposal.state === "executed") {
-        return proposal;
-      }
-      try {
-        return await refreshProposal(deps, record, proposal, signer, rpcUrls);
-      } catch {
-        complete = false;
-        return proposal;
-      }
-    }),
-  );
-  return { complete, proposals: refreshed };
 };
 
 // Event IDs stay call-less until contract views verify their proposal state.
@@ -396,6 +316,13 @@ const refreshMultisig: MultisigOpsHandler = async (deps, message) => {
     signers: config.signers,
   };
   await deps.multisigStore.upsertMultisig(record);
+  const localSigners = resolved.account.accounts
+    .filter(
+      (account) =>
+        account.networkId === record.networkId &&
+        record.signers.some((signer) => sameFelt(signer, account.address)),
+    )
+    .map((account) => account.address);
   const warnings: MultisigSyncWarning[] = [];
   try {
     const discoveryWarning = await discoverProposals(deps, record, resolved.rpcUrls);
@@ -405,9 +332,10 @@ const refreshMultisig: MultisigOpsHandler = async (deps, message) => {
   } catch {
     warnings.push("proposal-discovery-unavailable");
   }
-  const refreshed = await refreshProposals(
+  const refreshed = await refreshMultisigProposals(
     deps,
     record,
+    localSigners,
     resolved.account.account.address,
     resolved.rpcUrls,
   );
@@ -461,6 +389,7 @@ const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
     confirmations: status.confirmations,
     confirmedBySigner: status.confirmedBySigner,
     confirmedBySignerAddress: resolved.account.account.address,
+    confirmedSignerAddresses: status.confirmedBySigner ? [resolved.account.account.address] : [],
     id,
     multisigId: resolved.record.id,
     state: status.state,

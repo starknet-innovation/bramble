@@ -186,17 +186,149 @@ const bindListActions = (deps: MultisigUiDeps): void => {
   });
 };
 
+type MultisigHomeTab = "assets" | "collectibles" | "proposals";
+let retainedMultisigTab: { readonly id: string; readonly tab: MultisigHomeTab } | null = null;
+
+const isMultisigHomeTab = (value: string | undefined): value is MultisigHomeTab =>
+  value === "assets" || value === "collectibles" || value === "proposals";
+
 const bindPortfolioTabs = (deps: MultisigUiDeps): void => {
+  const multisigId = deps.selectedMultisigId();
+  const apply = (selected: MultisigHomeTab): void => {
+    deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((tab) => {
+      tab.setAttribute("aria-selected", String(tab.dataset["msHomeTab"] === selected));
+    });
+    deps.app?.querySelectorAll<HTMLElement>("[data-ms-home-panel]").forEach((panel) => {
+      const target = panel;
+      target.hidden = target.dataset["msHomePanel"] !== selected;
+    });
+  };
+  if (!multisigId) {
+    retainedMultisigTab = null;
+    return;
+  }
+  apply(retainedMultisigTab?.id === multisigId ? retainedMultisigTab.tab : "assets");
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((button) => {
     button.addEventListener("click", () => {
       const selected = button.dataset["msHomeTab"];
-      deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-home-tab]").forEach((tab) => {
-        tab.setAttribute("aria-selected", String(tab.dataset["msHomeTab"] === selected));
+      if (!isMultisigHomeTab(selected)) return;
+      retainedMultisigTab = { id: multisigId, tab: selected };
+      apply(selected);
+    });
+  });
+};
+
+const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
+  const panelFor = (proposalId: string): HTMLElement | undefined =>
+    [...(deps.app?.querySelectorAll<HTMLElement>("[data-ms-confirm-panel]") ?? [])].find(
+      (panel) => panel.dataset["msConfirmPanel"] === proposalId,
+    );
+  const close = (panel: HTMLElement, restoreFocus = true): void => {
+    const target = panel;
+    const proposalId = target.dataset["msConfirmPanel"];
+    target.hidden = true;
+    if (restoreFocus && proposalId) {
+      [...(deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-open]") ?? [])]
+        .find((button) => button.dataset["msConfirmOpen"] === proposalId)
+        ?.focus();
+    }
+  };
+
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-open]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = panelFor(button.dataset["msConfirmOpen"] ?? "");
+      if (!panel) {
+        return;
+      }
+      panel.hidden = false;
+      panel
+        .querySelector<HTMLButtonElement>('[data-ms-confirm-signer][aria-pressed="true"]')
+        ?.focus();
+    });
+  });
+
+  deps.app?.querySelectorAll<HTMLElement>("[data-ms-confirm-panel]").forEach((panel) => {
+    panel.addEventListener("click", (event) => {
+      if (event.target === panel) {
+        close(panel);
+      }
+    });
+    panel.addEventListener("keydown", (event) => {
+      if (event instanceof KeyboardEvent && event.key === "Escape") {
+        close(panel);
+      }
+    });
+  });
+
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-cancel]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = button.closest<HTMLElement>("[data-ms-confirm-panel]");
+      if (panel) {
+        close(panel);
+      }
+    });
+  });
+
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-signer]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const panel = button.closest<HTMLElement>("[data-ms-confirm-panel]");
+      const signerId = button.dataset["msConfirmSigner"];
+      const submit = panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]");
+      if (!panel || !signerId || !submit) {
+        return;
+      }
+      panel.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-signer]").forEach((option) => {
+        option.setAttribute("aria-pressed", String(option === button));
       });
-      deps.app?.querySelectorAll<HTMLElement>("[data-ms-home-panel]").forEach((panel) => {
-        const target = panel;
-        target.hidden = target.dataset["msHomePanel"] !== selected;
-      });
+      submit.dataset["msSelectedSigner"] = signerId;
+    });
+  });
+
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const proposalId = button.dataset["msConfirmSubmit"];
+      const signerId = button.dataset["msSelectedSigner"];
+      const panel = button.closest<HTMLElement>("[data-ms-confirm-panel]");
+      const row = button.closest(".allowance-row");
+      const acknowledgment = row?.querySelector<HTMLInputElement>("[data-ms-ack]");
+      const selected = [
+        ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-signer]") ?? []),
+      ].find((option) => option.dataset["msConfirmSigner"] === signerId);
+      const result = panel?.querySelector<HTMLElement>("[data-ms-confirm-status]");
+      if (!proposalId || !signerId || !panel || !selected || !result) {
+        return;
+      }
+      if (acknowledgment && !acknowledgment.checked) {
+        showToast("Verify the proposal and check the acknowledgment first", "error");
+        return;
+      }
+      buttonBusy(button, true);
+      result.textContent =
+        selected.dataset["msConfirmSignerActive"] === "true"
+          ? "Refreshing signer permission…"
+          : "Switching signer…";
+      void (async () => {
+        if (selected.dataset["msConfirmSignerActive"] !== "true") {
+          await deps.wallet.setActiveAccount(signerId);
+        }
+        result.textContent = "Submitting confirmation…";
+        await deps.multisig.confirmProposal(
+          proposalId,
+          acknowledgment?.checked === true ? true : undefined,
+        );
+      })().then(
+        async () => {
+          showToast("Confirmation submitted", "success");
+          close(panel, false);
+          await rerender(deps);
+        },
+        (error: unknown) => {
+          const failed = errorMessage(error, "Confirmation failed");
+          result.textContent = failed;
+          showToast(failed, "error");
+          buttonBusy(button, false);
+        },
+      );
     });
   });
 };
@@ -224,16 +356,10 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
 
   const actions: readonly {
     readonly attribute: string;
-    readonly key: "msConfirm" | "msExecute" | "msRevoke";
+    readonly key: "msExecute" | "msRevoke";
     readonly run: (proposalId: string, untrackedVerified?: boolean) => Promise<string>;
     readonly success: string;
   }[] = [
-    {
-      attribute: "[data-ms-confirm]",
-      key: "msConfirm",
-      run: (id, untrackedVerified) => deps.multisig.confirmProposal(id, untrackedVerified),
-      success: "Confirmation submitted",
-    },
     {
       attribute: "[data-ms-revoke]",
       key: "msRevoke",
@@ -315,6 +441,7 @@ export const bindMultisigs = (deps: MultisigUiDeps): void => {
   bindAddForm(deps);
   bindListActions(deps);
   bindPortfolioTabs(deps);
+  bindProposalConfirmation(deps);
   bindProposalActions(deps);
   bindMultisigReviewTools(deps.app);
   bindTrackForm(deps);
