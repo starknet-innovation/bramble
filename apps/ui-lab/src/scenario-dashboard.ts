@@ -5,8 +5,8 @@ import type {
   PendingApproval,
   WalletStatus,
 } from "../../../src/popup/responses";
-import type { BalanceState } from "../../../src/sidepanel/runtime";
 import type { MultisigSyncState } from "../../../src/sidepanel/multisig-sync";
+import type { BalanceState } from "../../../src/sidepanel/runtime";
 import { dashboard, type WalletView } from "../../../src/sidepanel/views";
 import type { AllowanceView } from "../../../src/starknet/allowance-discovery";
 import type { ClassHashVerification } from "../../../src/starknet/class-hash-verify";

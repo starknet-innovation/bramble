@@ -320,9 +320,9 @@ export const multisigScenario: WalletScenario = {
       state: { confirmations: 2, proposalId: pendingProposal.txId, tab: "proposals" },
     },
     multisigCheckpoint(
-      "sync-error",
-      "Refresh failed",
-      "Cached public data remains visible with an honest retry path.",
+      "registry-unavailable",
+      "Registry unavailable",
+      "Cached public data remains visible with a fixed background-registry support code and retry path.",
       () =>
         multisigDetailFlow(
           statusFor(),
@@ -330,12 +330,12 @@ export const multisigScenario: WalletScenario = {
           multisig,
           [pendingProposal],
           true,
-          "error",
+          "background-unavailable",
           preferences,
           "multisig-home",
           portfolio,
         ),
-      { cached: true, sync: "error" },
+      { cached: true, sync: "background-unavailable" },
     ),
     multisigCheckpoint(
       "propose",
