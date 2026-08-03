@@ -71,6 +71,30 @@ PR. In short:
 - Releases are promoted to `main` via `release/**` (a **merge commit**, tagged
   `vX.Y.0`) and urgent fixes via `hotfix/**`. See DEVELOPMENT.md and RELEASING.md.
 
+### Branch hygiene (delete-on-merge)
+
+Keep the remote branch list scoped to branches that represent active, unmerged
+work, so contributors find live branches without wading through already-landed
+history.
+
+- **Delete the head branch once its PR merges.** After confirming the target
+  branch contains the PR's intended changes, the source branch is dead weight.
+  Delete it
+  (`git push origin --delete <branch>`, or the "Delete branch" button GitHub
+  shows on a merged PR). This applies to every `feature/`, `fix/`, `chore/`,
+  and `docs/` branch, and to `qa/*` triage branches.
+- **Never delete a branch whose work is not yet on its target.** Check the
+  merged PR and compare its intended diff with the target branch. Do not rely
+  only on `git branch --merged`: squash-merges and cherry-picks preserve changes
+  without preserving the source commit as an ancestor. A superseded-but-unmerged
+  branch is deleted only after confirming its changes are preserved elsewhere;
+  otherwise keep it and document the gap.
+- **Long-lived branches are exempt:** `main` and any active `release/vX.Y`
+  branch are never pruned.
+- Maintainers may enable GitHub's repository setting *Settings → General →
+  "Automatically delete head branches"* to make this automatic on merge; when it
+  is off, the deletion is manual per this convention.
+
 ## Architecture Rules
 
 - Keep files under 500 lines. Split by behavior, not by arbitrary layers.
