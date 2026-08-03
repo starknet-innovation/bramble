@@ -119,6 +119,7 @@ export const isMultisigClassStatusResponse = (
 export type MultisigDeployResponse = {
   readonly address: string;
   readonly ok: true;
+  readonly tracked: boolean;
   readonly transactionHash: string;
 };
 
@@ -128,10 +129,11 @@ export type MultisigDeployResponse = {
 export const isMultisigDeployResponse = (value: unknown): value is MultisigDeployResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["address", "ok", "transactionHash"]) &&
+  hasOnlyKnownKeys(value, ["address", "ok", "tracked", "transactionHash"]) &&
   value["ok"] === true &&
   typeof value["address"] === "string" &&
   isStarkFieldElement(value["address"]) &&
+  typeof value["tracked"] === "boolean" &&
   typeof value["transactionHash"] === "string" &&
   isStarkFieldElement(value["transactionHash"]);
 

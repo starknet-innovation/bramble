@@ -154,7 +154,7 @@ describe("guided Multisig actions", () => {
       {
         async deployMultisig(signers, quorum, salt) {
           deployments.push({ quorum, salt, signers });
-          return { address: "0x777", transactionHash: "0x888" };
+          return { address: "0x777", ok: true, tracked: true, transactionHash: "0x888" };
         },
       } as MultisigUiDeps["multisig"],
     );
@@ -170,7 +170,12 @@ describe("guided Multisig actions", () => {
     expect(deployments).toEqual([]);
     expect(app.querySelector("#multisig-deploy-review")?.textContent).toContain("Deployment rules");
     form?.requestSubmit();
-    await Promise.resolve();
+    for (let turn = 0; turn < 6; turn += 1) {
+      await Promise.resolve();
+    }
     expect(deployments).toEqual([{ quorum: 1, salt: "0x0", signers: [account.address, "0x555"] }]);
+    expect(document.querySelector<HTMLElement>(".toast-text")?.textContent ?? "").toContain(
+      "added to watched multisigs",
+    );
   });
 });

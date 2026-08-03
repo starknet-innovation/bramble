@@ -10,7 +10,7 @@ import type { MultisigProposalStatus } from "../../src/starknet/multisig";
 import { MULTISIG_CLASS_HASH } from "../../src/starknet/multisig-deploy";
 import type { MultisigProposalDiscovery } from "../../src/starknet/multisig-discovery";
 import type { ActivityLog, ActivityStatus } from "../../src/storage/activity-store";
-import { memoryMultisigStore } from "../../src/storage/multisig-store";
+import { type MultisigStore, memoryMultisigStore } from "../../src/storage/multisig-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
 
 /**
@@ -131,6 +131,7 @@ export type MultisigHarnessOptions = {
     readonly accountAddress: string;
   }) => Promise<readonly never[]>;
   readonly loadClass?: () => Promise<unknown>;
+  readonly multisigStore?: MultisigStore;
   readonly proposalDiscovery?: () => MultisigProposalDiscovery;
   readonly proposalStatus?: () => MultisigProposalStatus;
   readonly signers?: readonly string[];
@@ -147,7 +148,7 @@ export type MultisigHarnessOptions = {
 export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
-  const multisigStore = memoryMultisigStore();
+  const multisigStore = options.multisigStore ?? memoryMultisigStore();
   const invokeCalls: (readonly unknown[])[] = [];
   const balanceReads: string[] = [];
   const declared: unknown[] = [];

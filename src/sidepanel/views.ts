@@ -458,5 +458,6 @@ export const dashboard = (
       openAssignId,
       multisigs,
       multisigProposals,
+      selectedMultisigId,
     )}`;
 };

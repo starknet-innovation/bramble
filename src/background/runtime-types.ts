@@ -387,13 +387,13 @@ export type MultisigClassStatusResponse = {
   readonly ok: true;
   readonly transactionHash?: string;
 };
-
 /**
  * Deploy-multisig submission outcome with the predicted contract address.
  */
 export type MultisigDeployResponse = {
   readonly address: string;
   readonly ok: true;
+  readonly tracked: boolean;
   readonly transactionHash: string;
 };
 

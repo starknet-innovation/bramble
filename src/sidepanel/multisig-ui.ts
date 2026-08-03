@@ -62,18 +62,67 @@ const runAction = (
   );
 };
 
+const WATCH_TIMEOUT_MS = 15_000;
+
+const boundedWatch = async (watch: Promise<void>): Promise<void> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      watch,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error("Multisig verification took too long. Check the RPC endpoint and retry."),
+            ),
+          WATCH_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+};
+
+const startWatchProgress = (deps: MultisigUiDeps): (() => void) => {
+  const resultId = "multisig-add-result";
+  const timers = [
+    setTimeout(() => setResult(deps, resultId, "Reading signer and quorum rules…"), 700),
+    setTimeout(() => setResult(deps, resultId, "Verifying this account is a signer…"), 2_000),
+    setTimeout(
+      () => setResult(deps, resultId, "The RPC is slower than expected; failover is automatic…"),
+      4_000,
+    ),
+    setTimeout(() => setResult(deps, resultId, "Trying the fallback RPC endpoint…"), 10_000),
+  ];
+  return () => {
+    for (const timer of timers) {
+      clearTimeout(timer);
+    }
+  };
+};
+
 const bindAddForm = (deps: MultisigUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#multisig-add-form");
   const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(form);
-    runAction(deps, submitButton, "multisig-add-result", "Checking on-chain…", async () => {
-      await deps.multisig.addMultisig(
-        normalizeFeltInput(String(data.get("address") ?? "")),
-        String(data.get("name") ?? "").trim(),
-      );
-      return "Multisig watched";
+    runAction(deps, submitButton, "multisig-add-result", "Contacting Starknet…", async () => {
+      const stopProgress = startWatchProgress(deps);
+      try {
+        await boundedWatch(
+          deps.multisig.addMultisig(
+            normalizeFeltInput(String(data.get("address") ?? "")),
+            String(data.get("name") ?? "").trim(),
+          ),
+        );
+        return "Multisig verified and added to Accounts";
+      } finally {
+        stopProgress();
+      }
     });
   });
 };

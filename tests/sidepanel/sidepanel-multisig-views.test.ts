@@ -125,9 +125,12 @@ describe("multisig views", () => {
 
   test("surfaces shared accounts in the account drawer and opens a dedicated home", () => {
     const drawer = render("home", [multisig], [proposal]);
-    expect(drawer).toContain("Shared accounts");
-    expect(drawer).toContain("Shared · 2 of 2 · 1 open");
+    expect(drawer).not.toContain("Shared accounts");
+    expect(drawer).toContain("Multisig · 2 of 2 signers required · 1 open");
     expect(drawer).toContain(`data-multisig-open="${multisig.id}"`);
+    expect(drawer).toContain(
+      `data-multisig-open="${multisig.id}" type="button" aria-pressed="true"`,
+    );
 
     const home = render("multisig-home", [multisig], [proposal]);
     expect(home).toContain('id="wallet-screen-multisig-home"');

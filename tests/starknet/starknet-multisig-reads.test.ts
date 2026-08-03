@@ -76,6 +76,16 @@ describe("getMultisigConfig", () => {
       "Invalid multisig signers response",
     );
   });
+
+  test("turns an aborted RPC read into an actionable verification error", async () => {
+    const timeout = new Error("The operation was aborted due to timeout");
+    timeout.name = "TimeoutError";
+    spyOn(RpcProvider.prototype, "callContract").mockRejectedValue(timeout);
+
+    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
+      "Multisig verification took too long. Check the RPC endpoint and retry.",
+    );
+  });
 });
 
 describe("getMultisigProposalStatus", () => {

@@ -44,7 +44,7 @@ const depsFor = (
   const deps = {
     activeView,
     cache,
-    deployment: {},
+    deployment: { load: async () => null },
     multisig: multisigClient,
     paint() {
       paints += 1;
@@ -52,12 +52,46 @@ const depsFor = (
     selectedMultisigId: multisig.id,
     selectedTokenId: null,
     status: emptyStatus(),
-    wallet: {},
-  } as HydrateDeps;
+    wallet: {
+      async discoverNfts() {
+        return [];
+      },
+      async loadActivity() {
+        return { entries: [], historyUnavailable: false };
+      },
+      async loadBalances() {
+        return { balances: [] };
+      },
+      async loadPrices() {
+        return { asOf: null, changes: {}, prices: {}, stale: false };
+      },
+      async loadWatchedNfts() {
+        return [];
+      },
+    },
+  } as unknown as HydrateDeps;
   return { cache, deps, paints: () => paints };
 };
 
 describe("multisig view hydration", () => {
+  test("loads the local multisig registry for the account drawer on Home", async () => {
+    let refreshes = 0;
+    const client = {
+      async loadMultisigs() {
+        return { multisigs: [multisig], proposals: [proposal] };
+      },
+      async refreshMultisig() {
+        refreshes += 1;
+      },
+    } as unknown as MultisigClient;
+    const { cache, deps } = depsFor(client, "home");
+
+    await hydrateView(deps);
+
+    expect(cache.multisigs).toEqual({ multisigs: [multisig], proposals: [proposal] });
+    expect(refreshes).toBe(0);
+  });
+
   test("refreshes every listed multisig and reloads the resulting state", async () => {
     let loads = 0;
     const refreshed: string[] = [];

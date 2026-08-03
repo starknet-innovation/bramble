@@ -3,7 +3,7 @@
  * cannot re-enable a statically forbidden signer action, and explicit retry
  * controls rehydrate instead of leaving a false empty state.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { serializeMultisigReviewPackage } from "../../src/sidepanel/multisig-model";
 import { bindMultisigs, type MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
 import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
@@ -65,6 +65,95 @@ describe("bindMultisigs", () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(renders).toBe(1);
+  });
+
+  test("watching exposes immediate progress and completes with a refreshed account list", async () => {
+    let finish: (() => void) | undefined;
+    let renders = 0;
+    const verification = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const app = mount(
+      `<form id="multisig-add-form">
+        <input name="address" value="0x123" />
+        <input name="name" value="Treasury" />
+        <button type="submit">Verify and watch</button>
+        <p id="multisig-add-result" role="status"></p>
+      </form>`,
+      async () => {
+        renders += 1;
+      },
+      {
+        multisig: {
+          async addMultisig() {
+            await verification;
+          },
+        } as unknown as MultisigUiDeps["multisig"],
+      },
+    );
+    const button = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+    app.querySelector<HTMLFormElement>("#multisig-add-form")?.requestSubmit();
+    await Promise.resolve();
+
+    expect(button?.disabled).toBe(true);
+    expect(button?.hasAttribute("data-busy")).toBe(true);
+    expect(app.querySelector("#multisig-add-result")?.textContent).toBe("Contacting Starknet…");
+
+    finish?.();
+    for (let turn = 0; turn < 6; turn += 1) {
+      await Promise.resolve();
+    }
+    expect(renders).toBe(1);
+  });
+
+  test("a stalled watch fails visibly and releases the form", async () => {
+    const nativeSetTimeout = globalThis.setTimeout;
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((
+      callback: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (delay === 15_000) {
+        queueMicrotask(() => {
+          if (typeof callback === "function") {
+            callback(...args);
+          }
+        });
+        return 0;
+      }
+      return nativeSetTimeout(callback, delay, ...args);
+    }) as typeof setTimeout);
+    try {
+      const app = mount(
+        `<form id="multisig-add-form">
+          <input name="address" value="0x123" />
+          <button type="submit">Verify and watch</button>
+          <p id="multisig-add-result" role="status"></p>
+        </form>`,
+        async () => {},
+        {
+          multisig: {
+            async addMultisig() {
+              await new Promise(() => {});
+            },
+          } as unknown as MultisigUiDeps["multisig"],
+        },
+      );
+      const button = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+      app.querySelector<HTMLFormElement>("#multisig-add-form")?.requestSubmit();
+
+      for (let turn = 0; turn < 8; turn += 1) {
+        await Promise.resolve();
+      }
+
+      expect(app.querySelector("#multisig-add-result")?.textContent).toBe(
+        "Multisig verification took too long. Check the RPC endpoint and retry.",
+      );
+      expect(button?.disabled).toBe(false);
+      expect(button?.hasAttribute("data-busy")).toBe(false);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
   });
 
   test("the declare control submits once and exposes immediate progress", async () => {

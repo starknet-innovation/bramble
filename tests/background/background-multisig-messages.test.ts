@@ -4,7 +4,7 @@ import { hash } from "starknet";
 import type { MultisigProposalState } from "../../src/starknet/multisig";
 import { predictMultisigAddress } from "../../src/starknet/multisig-deploy";
 import { type ActivityLog, memoryActivityLog } from "../../src/storage/activity-store";
-import type { MultisigProposalRecord } from "../../src/storage/multisig-store";
+import { type MultisigProposalRecord, memoryMultisigStore } from "../../src/storage/multisig-store";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,
@@ -238,7 +238,7 @@ describe("multisig messages", () => {
       ),
     ).resolves.toEqual({ error: "no proposal with that id exists on this multisig" });
   });
-  test("deploys through the UDC without watching until finalized", async () => {
+  test("deploys through the UDC and immediately watches the predicted multisig", async () => {
     const { handler, invokeCalls } = makeMultisigHarness();
     const response = (await handler(
       {
@@ -261,9 +261,23 @@ describe("multisig messages", () => {
     const deployed = invokeCalls.at(-1)?.[0] as { entrypoint: string };
     expect(deployed.entrypoint).toBe("deploy_contract");
     const listed = (await handler({ type: "wallet.multisigs" }, harnessExtensionSender)) as {
-      multisigs: readonly { name?: string }[];
+      multisigs: readonly {
+        address: string;
+        id: string;
+        networkId: string;
+        quorum: number;
+        signers: readonly string[];
+      }[];
     };
-    expect(listed.multisigs).toHaveLength(0);
+    expect(listed.multisigs).toEqual([
+      {
+        address: response.address,
+        id: `SN_MAIN:${response.address}`,
+        networkId: "SN_MAIN",
+        quorum: 2,
+        signers: [harnessAccount.address, HARNESS_OTHER_SIGNER],
+      },
+    ]);
   });
 
   test("rejects a deploy request carrying an unknown name field", async () => {
@@ -329,12 +343,31 @@ describe("multisig messages", () => {
       },
     };
     const { handler } = makeMultisigHarness({ activity });
+    const result = await handler(
+      { quorum: 1, signers: [harnessAccount.address], type: "wallet.deployMultisig" },
+      harnessExtensionSender,
+    );
+    expect(result).toMatchObject({ ok: true, tracked: true, transactionHash: "0x7cd" });
+    const listed = await handler({ type: "wallet.multisigs" }, harnessExtensionSender);
+    expect(listed).toMatchObject({ multisigs: [{ signers: [harnessAccount.address] }] });
+  });
+
+  test("reports a submitted deployment when automatic tracking storage fails", async () => {
+    const base = memoryMultisigStore();
+    const { handler } = makeMultisigHarness({
+      multisigStore: {
+        ...base,
+        async upsertMultisig() {
+          throw new Error("storage unavailable");
+        },
+      },
+    });
     await expect(
       handler(
         { quorum: 1, signers: [harnessAccount.address], type: "wallet.deployMultisig" },
         harnessExtensionSender,
       ),
-    ).resolves.toMatchObject({ ok: true, transactionHash: "0x7cd" });
+    ).resolves.toMatchObject({ ok: true, tracked: false, transactionHash: "0x7cd" });
   });
   test("refuses to deploy over an existing contract", async () => {
     const { handler } = makeMultisigHarness({ contractAt: true });

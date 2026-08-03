@@ -212,7 +212,7 @@ export const multisigScenario: WalletScenario = {
       id: "drawer",
       label: "Shared account in drawer",
       narrative:
-        "Multisigs are visually separated from single-signer accounts with threshold and open-work heuristics.",
+        "Multisigs sit alongside single-signer accounts with explicit account type, threshold, and open-work heuristics.",
       prepare: openSharedAccountDrawer,
       state: { accountType: "shared", openProposals: 1, quorum: 2 },
     },

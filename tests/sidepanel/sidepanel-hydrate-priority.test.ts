@@ -34,6 +34,12 @@ const flush = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+const emptyMultisigClient = {
+  async loadMultisigs() {
+    return { multisigs: [], proposals: [] };
+  },
+};
+
 describe("home hydration priority", () => {
   test("paints critical balances and prices before deferred home data", async () => {
     const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
@@ -48,7 +54,7 @@ describe("home hydration priority", () => {
       activeView: "home",
       cache,
       deployment: { load: () => deployment.promise },
-      multisig: {},
+      multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
       },
@@ -85,7 +91,7 @@ describe("home hydration priority", () => {
       activeView: "home",
       cache,
       deployment: { load: async () => true },
-      multisig: {},
+      multisig: emptyMultisigClient,
       paint: () => undefined,
       selectedMultisigId: null,
       selectedTokenId: null,
@@ -123,7 +129,7 @@ describe("home hydration priority", () => {
       activeView: "home",
       cache,
       deployment: { load: async () => true },
-      multisig: {},
+      multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
       },
@@ -170,7 +176,7 @@ describe("home hydration priority", () => {
       cache,
       deployment: {},
       isCurrent: () => current,
-      multisig: {},
+      multisig: emptyMultisigClient,
       paint: () => {
         paints += 1;
       },

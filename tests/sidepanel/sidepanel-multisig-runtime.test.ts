@@ -51,7 +51,7 @@ const responses: Readonly<Record<string, unknown>> = {
   "wallet.addMultisig": { multisig, ok: true },
   "wallet.confirmMultisigProposal": { ok: true, transactionHash: "0x123" },
   "wallet.declareMultisigClass": { ok: true, transactionHash: "0x123" },
-  "wallet.deployMultisig": { address, ok: true, transactionHash: "0x123" },
+  "wallet.deployMultisig": { address, ok: true, tracked: true, transactionHash: "0x123" },
   "wallet.executeMultisigProposal": { ok: true, transactionHash: "0x123" },
   "wallet.multisigClassStatus": { declarationPending: false, declared: true, ok: true },
   "wallet.multisigBalances": {
@@ -129,6 +129,7 @@ describe("createMultisigClient", () => {
     expect(await client.deployMultisig([account.address], 1, "0x0")).toEqual({
       address,
       ok: true,
+      tracked: true,
       transactionHash: "0x123",
     });
     expect(await client.executeProposal(proposal.id)).toBe("0x123");

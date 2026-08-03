@@ -293,13 +293,6 @@ export const MULTISIG_STYLES = `
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};
   }
-  .drawer-shared {
-    border-top: 1px solid var(--mc-border);
-    display: grid;
-    gap: ${SPACE.sm};
-    margin-top: ${SPACE.md};
-    padding-top: ${SPACE.md};
-  }
   .drawer-multisig .account-groups-line {
     color: var(--mc-muted);
     font-size: ${TYPE.micro.size};
