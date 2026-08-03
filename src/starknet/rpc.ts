@@ -426,14 +426,12 @@ const FINALITY_TO_STATUS: Readonly<Record<string, TransactionStatus>> = {
   REJECTED: "rejected",
 };
 
-// A hash the node answered about but could not classify, and the shape used for
-// RECEIVED / CANDIDATE, which deliberately still read as pending.
+// Unclassified, RECEIVED, and CANDIDATE answers deliberately stay pending.
 const PENDING_REPORT: TransactionStatusReport = {
   finalizedOnL1: false,
   found: true,
   status: "pending",
 };
-// A hash the node explicitly has no record of.
 const NOT_FOUND_REPORT: TransactionStatusReport = {
   finalizedOnL1: false,
   found: false,
@@ -441,9 +439,7 @@ const NOT_FOUND_REPORT: TransactionStatusReport = {
 };
 
 /**
- * Maximum transaction-status reads in flight against one RPC endpoint. This
- * bounds background reconciliation fanout across wallets with many accounts;
- * batches remain sequential so a transport failure can fail over cleanly.
+ * Maximum status reads in flight against one RPC endpoint.
  */
 export const TRANSACTION_STATUS_CONCURRENCY = 8;
 
@@ -461,11 +457,7 @@ const transactionStatusEntry = async (
   }
 };
 
-// Maps a status response to a wallet report. REVERTED execution wins over
-// finality — a reverted transaction can be ACCEPTED_ON_L2, and it is already
-// reverted while PRE_CONFIRMED — so a pre-confirmed revert reads as reverted,
-// never as a provisional success. Unmapped finality (RECEIVED, CANDIDATE) stays
-// pending.
+// REVERTED execution wins over finality, including PRE_CONFIRMED.
 const classifyStatus = (receipt: {
   readonly execution_status?: unknown;
   readonly finality_status?: unknown;
@@ -481,12 +473,8 @@ const classifyStatus = (receipt: {
 };
 
 /**
- * Reads finality/execution status for submitted transactions.
- *
- * Transport failures fail over to the next endpoint (or throw when none is
- * left) so a node outage is never mistaken for a chain answer. A node that
- * answers `TXN_HASH_NOT_FOUND` yields a `found: false` report so callers can
- * tally consecutive disappearances; any other semantic error reads as pending.
+ * Reads transaction status with bounded fanout and transport failover. Explicit
+ * not-found answers remain distinct so callers can tally disappearances.
  */
 export const getTransactionStatuses = async (
   { hashes, rpcUrls }: TransactionStatusInput,

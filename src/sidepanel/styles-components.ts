@@ -219,11 +219,8 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  /* Status reads as a plain semantic micro-label, not a boxed pill: pending
-     stays muted, accepted goes green (success, not brand), reverted/rejected
-     go danger. Pre-confirmed is a provisional success — it borrows the accepted
-     green so the outcome reads at a glance, then dims and dots it so it is
-     visibly not the same thing as settled. */
+  /* Plain semantic status: pending is muted, accepted green, failures danger.
+     Pre-confirmed borrows green, then dims and dots it to remain provisional. */
   .tx-status {
     color: var(--mc-muted);
     flex: none;

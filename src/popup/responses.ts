@@ -3,10 +3,6 @@
  */
 
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
-import {
-  MAX_TRANSACTION_ALERT_CHARACTERS,
-  MAX_TRANSACTION_ALERTS_PER_DRAIN,
-} from "../shared/transaction-alerts";
 import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
 import { type ActivityEntry, isActivityEntry } from "../storage/activity-store";
 
@@ -44,6 +40,10 @@ export {
   type DiscoverNftsResponse,
   isDiscoverNftsResponse,
 } from "./responses-nft";
+export {
+  isTransactionAlertsResponse,
+  type TransactionAlertsResponse,
+} from "./responses-transaction-alerts";
 /**
  * Re-exported transfer-review validators for one import path.
  */
@@ -448,35 +448,6 @@ export const isActivityResponse = (value: unknown): value is ActivityResponse =>
   Array.isArray(value["activity"]) &&
   value["activity"].every(isActivityEntry) &&
   (value["historyUnavailable"] === undefined || typeof value["historyUnavailable"] === "boolean");
-
-/**
- * Undelivered transaction failure notices drained from the activity log.
- *
- * Each string is ready-to-show copy for a transaction that failed after the
- * send journey had already advanced. The background hands each notice out
- * exactly once, so an empty list is the normal case.
- */
-export type TransactionAlertsResponse = {
-  readonly alerts: readonly string[];
-  readonly ok: true;
-};
-
-/**
- * Checks transaction alert responses before toasting them.
- */
-export const isTransactionAlertsResponse = (value: unknown): value is TransactionAlertsResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["alerts", "ok"]) &&
-  value["ok"] === true &&
-  Array.isArray(value["alerts"]) &&
-  value["alerts"].length <= MAX_TRANSACTION_ALERTS_PER_DRAIN &&
-  value["alerts"].every(
-    (alert) =>
-      typeof alert === "string" &&
-      alert.length > 0 &&
-      alert.length <= MAX_TRANSACTION_ALERT_CHARACTERS,
-  );
 
 /**
  * Tracked allowances response accepted from the background boundary.
