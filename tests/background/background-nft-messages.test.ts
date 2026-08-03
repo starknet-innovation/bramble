@@ -114,7 +114,12 @@ describe("NFT gallery messages", () => {
       response as { preferences: { nfts: readonly { contract: string; tokenId: string }[] } }
     ).preferences.nfts;
     expect(nfts).toHaveLength(1);
-    expect(nfts[0]).toMatchObject({ contract: "0x511a2b3", label: "Punk", tokenId: "5" });
+    expect(nfts[0]).toMatchObject({
+      contract: "0x511a2b3",
+      label: "Punk",
+      owner: account.address,
+      tokenId: "5",
+    });
   });
 
   test("refuses to watch an NFT the account does not own", async () => {

@@ -258,6 +258,25 @@ describe("NFT auto-discovery messages", () => {
     expect(indexerCalls()).toBe(0);
   });
 
+  test("excludes watches explicitly scoped to another account before ownership reads", async () => {
+    const contract = "0x511a2b3";
+    const { handler, preferencesStore } = makeHandler({
+      candidates: [],
+      owners: { [contract]: account.address },
+    });
+    await preferencesStore.addNft({
+      contract,
+      networkId: "SN_MAIN",
+      owner: "0x987",
+      tokenId: "0",
+    });
+
+    await expect(handler({ type: "wallet.loadWatchedNfts" }, sender)).resolves.toEqual({
+      nfts: [],
+      ok: true,
+    });
+  });
+
   test("indexed-only discovery excludes watched NFTs and their metadata work", async () => {
     const watched = candidate("0", "0x511a2b3");
     const unsolicited = candidate("5", "0x6220000");

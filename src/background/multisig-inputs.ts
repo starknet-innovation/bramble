@@ -5,7 +5,12 @@
  * and the multisig contract enforces them again at execution time.
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
-import { isMultisigEntrypoint, MULTISIG_LIMITS } from "../starknet/multisig";
+import {
+  isMultisigCallInput,
+  isMultisigEntrypoint,
+  MULTISIG_LIMITS,
+  type MultisigCallInput,
+} from "../starknet/multisig";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
 
 // Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
@@ -33,6 +38,33 @@ const isFeltList = (value: unknown, max: number): value is readonly string[] =>
   Array.isArray(value) &&
   value.length <= max &&
   value.every((felt) => typeof felt === "string" && isStarkFieldElement(felt));
+
+/**
+ * Public call details carried by an imported review package.
+ */
+export type TrackedMultisigCall = MultisigCallInput & { readonly salt: string };
+
+const readTrackedCall = (value: unknown): TrackedMultisigCall | null => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["calldata", "contractAddress", "entrypoint", "salt"]) ||
+    !Array.isArray(value["calldata"]) ||
+    typeof value["contractAddress"] !== "string" ||
+    typeof value["entrypoint"] !== "string" ||
+    typeof value["salt"] !== "string" ||
+    !isStarkFieldElement(value["salt"])
+  ) {
+    return null;
+  }
+  const call = {
+    calldata: value["calldata"].filter((felt): felt is string => typeof felt === "string"),
+    contractAddress: value["contractAddress"],
+    entrypoint: value["entrypoint"],
+  };
+  return value["calldata"].length === call.calldata.length && isMultisigCallInput(call)
+    ? { ...call, salt: value["salt"] }
+    : null;
+};
 
 /**
  * Parses a watch request that adds a multisig contract by address.
@@ -158,20 +190,34 @@ export const readMultisigProposalActionInput = (
  */
 export const readTrackMultisigProposalInput = (
   message: unknown,
-): { readonly multisigId: string; readonly summary?: string; readonly txId: string } | null =>
-  isRecord(message) &&
-  hasOnlyKnownKeys(message, ["multisigId", "summary", "txId", "type"]) &&
-  message["type"] === "wallet.trackMultisigProposal" &&
-  isId(message["multisigId"]) &&
-  typeof message["txId"] === "string" &&
-  isStarkFieldElement(message["txId"]) &&
-  isOptionalSummary(message["summary"])
-    ? {
-        multisigId: message["multisigId"] as string,
-        ...(message["summary"] === undefined ? {} : { summary: message["summary"] }),
-        txId: message["txId"],
-      }
-    : null;
+): {
+  readonly call?: TrackedMultisigCall;
+  readonly multisigId: string;
+  readonly summary?: string;
+  readonly txId: string;
+} | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["call", "multisigId", "summary", "txId", "type"]) ||
+    message["type"] !== "wallet.trackMultisigProposal" ||
+    !isId(message["multisigId"]) ||
+    typeof message["txId"] !== "string" ||
+    !isStarkFieldElement(message["txId"]) ||
+    !isOptionalSummary(message["summary"])
+  ) {
+    return null;
+  }
+  const call = message["call"] === undefined ? undefined : readTrackedCall(message["call"]);
+  if (call === null) {
+    return null;
+  }
+  return {
+    ...(call === undefined ? {} : { call }),
+    multisigId: message["multisigId"] as string,
+    ...(message["summary"] === undefined ? {} : { summary: message["summary"] }),
+    txId: message["txId"],
+  };
+};
 
 /**
  * Parsed deploy request for a new multisig contract. No name is carried: the
