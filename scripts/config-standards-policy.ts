@@ -30,7 +30,7 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@ledgerhq/hw-transport-web-ble": "6.35.0",
   "@ledgerhq/hw-transport-webhid": "6.36.0",
   "@ledgerhq/hw-transport-webusb": "6.35.0",
-  buffer: "5.7.1",
+  buffer: "6.0.3",
   starknet: "10.0.2",
 };
 
