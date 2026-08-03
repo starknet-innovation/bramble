@@ -43,6 +43,8 @@ export const PINNED_RUNTIME_FILES = [
   "onboarding.html",
   "popup.html",
   "provider/inpage.js",
+  "sandbox/render.html",
+  "sandbox/render.js",
   "sidepanel.html",
   "sidepanel/index.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",

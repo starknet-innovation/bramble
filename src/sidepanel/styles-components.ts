@@ -275,7 +275,7 @@ ${SIGN_REQUEST_STYLES}
      minimally framed art square (a hairline on the art tile only) over a tight
      caption, with compact ghost actions — no fill/edge box wraps the whole item. */
   .nft-grid { display: grid; gap: ${SPACE.md}; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .nft-card { display: grid; gap: ${SPACE.sm}; min-width: 0; }
+  .nft-card { display: grid; gap: ${SPACE.sm}; min-width: 0; position: relative; }
   button.nft-open {
     align-content: start; background: transparent; color: var(--mc-text); display: grid; gap: ${SPACE.sm};
     grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 0; text-align: left;
@@ -293,6 +293,21 @@ ${SIGN_REQUEST_STYLES}
   /* The detail hero owns an explicit width. Without it, the inline-flex art
      square shrink-wrapped to the image's intrinsic thumbnail dimensions. */
   .nft-hero { display: grid; gap: ${SPACE.sm}; margin: 0 auto ${SPACE.sm}; max-width: 240px; width: 100%; }
+  .nft-animation { aspect-ratio: 1 / 1; border: 0; border-radius: ${RADIUS.md}; margin-top: ${SPACE.sm}; width: 100%; }
+  .nft-animation[hidden] { display: none; }
+  .nft-animation--tile { left: 0; margin: 0; position: absolute; top: 0; }
+  /* The gallery play affordance overlays the art square and is revealed on
+     hover/focus so a collectible's on-chain animation can be started in place. */
+  .nft-play-tile {
+    align-items: center; aspect-ratio: 1 / 1; background: var(--mc-hover); border: 0;
+    border-radius: ${RADIUS.md}; color: var(--mc-text); cursor: pointer; display: flex; gap: 6px;
+    font-size: ${TYPE.label.size}; font-weight: ${WEIGHT.medium}; justify-content: center; left: 0;
+    opacity: 0; pointer-events: none; position: absolute; top: 0; width: 100%;
+    transition: opacity ${MOTION.liftMs}ms ${MOTION.ease};
+  }
+  .nft-play-tile[hidden] { display: none; }
+  .nft-play-tile .icon { height: 18px; width: 18px; }
+  .nft-card:hover .nft-play-tile, .nft-card:focus-within .nft-play-tile { opacity: 1; pointer-events: auto; }
   button.nft-open:not(:disabled):active .nft-art { box-shadow: var(--mc-shadow-sm); }
   .nft-copy { display: grid; gap: 2px; min-width: 0; padding: 0 2px; }
   .nft-copy strong { overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }

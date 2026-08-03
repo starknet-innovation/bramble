@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 import type { PendingApproval, WalletStatus } from "../../src/popup/responses";
 import { activityScreen, requestsFlow } from "../../src/sidepanel/activity-views";
 import type { ActivityEntry } from "../../src/storage/activity-store";
+import type { MultisigRecord } from "../../src/storage/multisig-store";
 import { account } from "../support/sidepanel-fixtures";
 
 const status: WalletStatus = {
@@ -38,6 +39,15 @@ const transaction: ActivityEntry = {
   summary: "Send 1 STRK",
 };
 
+const multisig: MultisigRecord = {
+  address: "0x999",
+  id: "SN_MAIN:0x999",
+  name: "Treasury",
+  networkId: "SN_MAIN",
+  quorum: 1,
+  signers: [account.address],
+};
+
 describe("activity journey boundaries", () => {
   test("keeps dApp decision controls out of account transaction history", () => {
     const html = activityScreen(pending, status, [transaction], false);
@@ -58,5 +68,19 @@ describe("activity journey boundaries", () => {
     expect(html).toContain('data-approval-action="approve"');
     expect(html).toContain('data-approval-action="deny"');
     expect(html).not.toContain('class="tx-list"');
+  });
+
+  test("labels and exposes the selected shared-account activity scope", () => {
+    const html = activityScreen(
+      [],
+      status,
+      [{ ...transaction, accountId: multisig.id }],
+      false,
+      multisig,
+    );
+
+    expect(html).toContain(`data-activity-account-id="${multisig.id}"`);
+    expect(html).toContain("Only Starknet Mainnet activity for Treasury.");
+    expect(html).not.toContain("for the active account");
   });
 });

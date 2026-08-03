@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
 import { dashboard } from "../../src/sidepanel/views";
 import type { AllowanceView } from "../../src/starknet/allowance-discovery";
+import type { DiscoveredNft } from "../../src/starknet/nft-metadata";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
 import { account, preferences } from "../support/sidepanel-fixtures";
 
@@ -39,17 +40,59 @@ const nftPrefs: WalletPreferences = {
       id: "SN_MAIN:0x511a2b3:5",
       label: "Punk",
       networkId: "SN_MAIN",
+      owner: account.address,
       tokenId: "5",
     },
     {
       contract: "0x6220000",
       id: "SN_MAIN:0x6220000:9",
       networkId: "SN_MAIN",
+      owner: account.address,
       spam: true,
       tokenId: "9",
     },
   ],
 };
+
+const ownedNft: DiscoveredNft = {
+  collection: "",
+  contract: "0x511a2b3",
+  id: "SN_MAIN:0x511a2b3:5",
+  image: "",
+  name: "Punk",
+  networkId: "SN_MAIN",
+  tokenId: "5",
+};
+
+const dashboardWithNft = (
+  view: "nft-detail" | "nft-hidden" | "nft-send" | "nfts",
+  selectedNftId: string | null = null,
+): string =>
+  dashboard(
+    view,
+    status,
+    [],
+    nftPrefs,
+    { balances: [] },
+    null,
+    [],
+    [],
+    {},
+    [],
+    null,
+    [],
+    selectedNftId,
+    {},
+    [],
+    [],
+    null,
+    null,
+    null,
+    null,
+    false,
+    null,
+    [ownedNft],
+  );
 
 const pendingTx = {
   accountId: account.id,
@@ -110,68 +153,26 @@ describe("cluster views", () => {
   });
 
   test("NFT gallery grids visible NFTs and routes watch and hidden management", () => {
-    const html = dashboard("nfts", status, [], nftPrefs, { balances: [] });
+    const html = dashboardWithNft("nfts");
     expect(html).toContain('data-nft-open="SN_MAIN:0x511a2b3:5"');
     expect(html).toContain("Punk");
     expect(html).toContain('data-view="nft-watch"');
     expect(html).toContain('data-nft-spam="SN_MAIN:0x511a2b3:5"');
     expect(html).toContain('data-view="nft-hidden"');
-    const hidden = dashboard("nft-hidden", status, [], nftPrefs, { balances: [] });
+    const hidden = dashboardWithNft("nft-hidden");
     expect(hidden).toContain('data-nft-spam-value="false"');
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
   });
 
   test("NFT detail shows identifiers and routes to a focused send flow", () => {
-    const html = dashboard(
-      "nft-detail",
-      status,
-      [],
-      nftPrefs,
-      { balances: [] },
-      null,
-      [],
-      [],
-      {},
-      [],
-      null,
-      [],
-      "SN_MAIN:0x511a2b3:5",
-    );
+    const html = dashboardWithNft("nft-detail", ownedNft.id);
     expect(html).toContain('data-view="nft-send"');
     expect(html).toContain("0x511a…a2b3");
     expect(html).toMatch(/data-nav-back[^>]*aria-label="Back"/);
-    const send = dashboard(
-      "nft-send",
-      status,
-      [],
-      nftPrefs,
-      { balances: [] },
-      null,
-      [],
-      [],
-      {},
-      [],
-      null,
-      [],
-      "SN_MAIN:0x511a2b3:5",
-    );
+    const send = dashboardWithNft("nft-send", ownedNft.id);
     expect(send).toContain('id="nft-send-form"');
 
-    const missing = dashboard(
-      "nft-detail",
-      status,
-      [],
-      nftPrefs,
-      { balances: [] },
-      null,
-      [],
-      [],
-      {},
-      [],
-      null,
-      [],
-      "x",
-    );
+    const missing = dashboardWithNft("nft-detail", "x");
     expect(missing).toContain("no longer watched");
   });
 });

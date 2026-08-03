@@ -397,10 +397,20 @@ on-chain data, kept in the plain `mc-wallet:multisigs` store).
   the wallet never re-implements the Pedersen scheme. Submitting does not
   confirm; the proposer confirms like any other signer.
 - Coordinate: proposal ids are copyable and a pasted id can be tracked and
-  confirmed from another signer's wallet. Executing needs the original call
-  and salt, so it runs from a wallet that has them (the proposer's, today).
-  Discovering proposals submitted outside this wallet requires an event
-  indexer and is a documented follow-up, like allowances.
+  confirmed from another signer's wallet. Refresh performs a bounded,
+  paginated scan of the multisig's `TransactionSubmitted` events, then treats
+  every discovered id only as a hint: proposal state is read back through the
+  contract before any action is offered. If the RPC page budget is exhausted,
+  the UI reports an incomplete scan instead of presenting a partial result as
+  complete.
+- Review elsewhere: the proposer can copy a deterministic, secret-free review
+  package containing the public multisig identity, proposal id, call, salt, and
+  summary. Another signer can decode it locally or import it while tracking the
+  proposal. The background recomputes the id through that multisig contract's
+  `hash_transaction` view and rejects a mismatch before persisting the call.
+  Importing the original call enables that signer to execute after quorum;
+  importing only an id remains call-less and requires explicit independent
+  verification before confirmation.
 - Deploy: new multisigs deploy from the pinned `MultisigWallet` class
   (`contracts/multisig`, a constructor-only shell around the OZ component)
   through the public Universal Deployer Contract with `not_from_zero = 0`, so
@@ -418,8 +428,9 @@ verified by `bun run check:multisig`):
 Known limitations (v1): proposals are single-call (`submit_transaction_batch`
 is not surfaced); signer/quorum changes go through the custom-call form as
 self-calls (`add_signers`, `remove_signers`, `change_quorum`) rather than a
-dedicated editor; each confirmation is a separate on-chain transaction with
-its own fee, and proposals are public once submitted.
+dedicated editor; event discovery is deliberately bounded and RPC-dependent;
+each confirmation is a separate on-chain transaction with its own fee, and
+proposals and review packages contain public transaction data.
 
 ## Allowance manager
 

@@ -8,8 +8,9 @@ import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
 import type { MultisigProposalStatus } from "../../src/starknet/multisig";
 import { MULTISIG_CLASS_HASH } from "../../src/starknet/multisig-deploy";
+import type { MultisigProposalDiscovery } from "../../src/starknet/multisig-discovery";
 import type { ActivityLog, ActivityStatus } from "../../src/storage/activity-store";
-import { memoryMultisigStore } from "../../src/storage/multisig-store";
+import { type MultisigStore, memoryMultisigStore } from "../../src/storage/multisig-store";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
 
 /**
@@ -68,53 +69,6 @@ export const harnessContentSender: RuntimeSender = {
   url: "https://dapp.example/app",
 };
 
-const vault = {
-  accounts: [harnessAccount],
-  activeAccountId: harnessAccount.id,
-} as unknown as Vault;
-
-const walletStub = {
-  async addDerivedAccount() {
-    return harnessAccount;
-  },
-  async createAccount() {
-    return harnessAccount;
-  },
-  async ensureNetworkAccount() {
-    return harnessAccount;
-  },
-  async importRawKeyAccount() {
-    return harnessAccount;
-  },
-  async getGrantedAccounts() {
-    return [harnessAccount];
-  },
-  async generateMnemonic() {
-    return "unused";
-  },
-  async grantOrigin() {
-    return [harnessAccount];
-  },
-  async readVault() {
-    return vault;
-  },
-  async setActiveAccount() {
-    return harnessAccount;
-  },
-  async signHash() {
-    return { publicKey: harnessAccount.publicKeyX, r: "0x1", s: "0x2" };
-  },
-  async status() {
-    return {
-      accountCount: 1,
-      activeAccountId: harnessAccount.id,
-      hasVault: true,
-      locked: false,
-      ready: false,
-    };
-  },
-};
-
 /**
  * Harness knobs. `proposalStatus` and `deploymentStatus` are consulted on
  * every chain read so tests can change the reported state (or start
@@ -122,6 +76,8 @@ const walletStub = {
  * for the declare flow.
  */
 export type MultisigHarnessOptions = {
+  readonly accounts?: readonly AccountRef[];
+  readonly activeAccountId?: string;
   readonly activity?: ActivityLog;
   readonly classDeclared?: boolean;
   readonly contractAt?: boolean;
@@ -130,7 +86,13 @@ export type MultisigHarnessOptions = {
     readonly accountAddress: string;
   }) => Promise<readonly never[]>;
   readonly loadClass?: () => Promise<unknown>;
-  readonly proposalStatus?: () => MultisigProposalStatus;
+  readonly multisigStore?: MultisigStore;
+  readonly multisigConfig?: () => {
+    readonly quorum: number;
+    readonly signers: readonly string[];
+  };
+  readonly proposalDiscovery?: () => MultisigProposalDiscovery;
+  readonly proposalStatus?: (signer: string) => MultisigProposalStatus;
   readonly signers?: readonly string[];
   readonly submitInvoke?: (
     calls: readonly unknown[],
@@ -145,10 +107,59 @@ export type MultisigHarnessOptions = {
 export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
   const session = createUnlockSession();
   session.unlock("correct horse battery staple");
-  const multisigStore = memoryMultisigStore();
+  const multisigStore = options.multisigStore ?? memoryMultisigStore();
   const invokeCalls: (readonly unknown[])[] = [];
+  const submittedAccounts: string[] = [];
   const balanceReads: string[] = [];
   const declared: unknown[] = [];
+  const accounts = options.accounts ?? [harnessAccount];
+  let activeAccountId = options.activeAccountId ?? accounts[0]?.id ?? harnessAccount.id;
+  const activeAccount = (): AccountRef =>
+    accounts.find((account) => account.id === activeAccountId) ?? harnessAccount;
+  const walletStub = {
+    async addDerivedAccount() {
+      return activeAccount();
+    },
+    async createAccount() {
+      return activeAccount();
+    },
+    async ensureNetworkAccount() {
+      return activeAccount();
+    },
+    async importRawKeyAccount() {
+      return activeAccount();
+    },
+    async getGrantedAccounts() {
+      return accounts;
+    },
+    async generateMnemonic() {
+      return "unused";
+    },
+    async grantOrigin() {
+      return accounts;
+    },
+    async readVault() {
+      return { accounts, activeAccountId } as unknown as Vault;
+    },
+    async setActiveAccount(input: { readonly accountId: string }) {
+      const selected = accounts.find((account) => account.id === input.accountId);
+      if (!selected) throw new Error("account not found");
+      activeAccountId = selected.id;
+      return selected;
+    },
+    async signHash() {
+      return { publicKey: activeAccount().publicKeyX, r: "0x1", s: "0x2" };
+    },
+    async status() {
+      return {
+        accountCount: accounts.length,
+        activeAccountId,
+        hasVault: true,
+        locked: false,
+        ready: false,
+      };
+    },
+  };
   const handler = createMessageHandler(walletStub, "extension-id", {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.loadClass ? { loadMultisigClass: options.loadClass } : {}),
@@ -177,15 +188,24 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
         async computeTransactionId() {
           return HARNESS_TX_ID;
         },
+        ...(options.proposalDiscovery
+          ? {
+              async discoverProposalIds() {
+                return options.proposalDiscovery?.() ?? { complete: true, ids: [] };
+              },
+            }
+          : {}),
         async getConfig() {
-          return {
-            quorum: 2,
-            signers: options.signers ?? [harnessAccount.address, HARNESS_OTHER_SIGNER],
-          };
+          return (
+            options.multisigConfig?.() ?? {
+              quorum: 2,
+              signers: options.signers ?? [harnessAccount.address, HARNESS_OTHER_SIGNER],
+            }
+          );
         },
-        async getProposalStatus(input: { readonly txId: string }) {
+        async getProposalStatus(input: { readonly signer: string; readonly txId: string }) {
           if (options.proposalStatus) {
-            return options.proposalStatus();
+            return options.proposalStatus(input.signer);
           }
           // Default chain behavior: a signer counts as having confirmed once
           // this harness recorded a confirm_transaction invoke for the id, so
@@ -216,6 +236,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
       },
       async submitInvokeTransaction(input) {
         invokeCalls.push(input.calls);
+        submittedAccounts.push(input.account.id);
         if (options.submitInvoke) {
           const result = await options.submitInvoke(input.calls);
           return { calls: input.calls, transactionHash: result.transactionHash };
@@ -225,5 +246,5 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     },
     session,
   });
-  return { balanceReads, declared, handler, invokeCalls, multisigStore };
+  return { balanceReads, declared, handler, invokeCalls, multisigStore, submittedAccounts };
 };

@@ -2,7 +2,7 @@
  * Multisig portfolio, proposal, deployment, and independent-review styles.
  * The common proposal path deliberately reuses Send component classes.
  */
-import { RADIUS, SPACE, TYPE } from "../ui/tokens";
+import { MOTION, RADIUS, SPACE, TYPE, WEIGHT } from "../ui/tokens";
 
 /**
  * Multisig stylesheet fragment consumed after Send composition styles.
@@ -23,6 +23,81 @@ export const MULTISIG_STYLES = `
   .multisig-portfolio-tabs .tab-set { gap: ${SPACE.lg}; }
   .multisig-portfolio-tabs [data-ms-home-panel] { min-width: 0; }
   .shared-collectible-card { cursor: default; }
+  .multisig-sync-meta {
+    display: flex;
+    justify-content: flex-end;
+    min-height: 32px;
+    position: relative;
+  }
+  .multisig-sync-info { position: relative; }
+  .multisig-sync-info > summary {
+    align-items: center;
+    background: transparent;
+    border-radius: ${RADIUS.full};
+    color: var(--mc-muted);
+    cursor: pointer;
+    display: inline-flex;
+    height: 32px;
+    justify-content: center;
+    list-style: none;
+    position: relative;
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      color ${MOTION.pressMs}ms ${MOTION.ease};
+    width: 32px;
+  }
+  .multisig-sync-info > summary::-webkit-details-marker { display: none; }
+  .multisig-sync-info > summary .icon { height: 17px; width: 17px; }
+  .multisig-sync-info[open] > summary { background: var(--mc-soft); color: var(--mc-text); }
+  @media (hover: hover) and (pointer: fine) {
+    .multisig-sync-info > summary:hover { background: var(--mc-hover); color: var(--mc-text); }
+    .multisig-sync-info:not([open]) > summary:hover .multisig-sync-tooltip,
+    .multisig-sync-info:not([open]) > summary:focus-visible .multisig-sync-tooltip {
+      opacity: 1;
+      transform: translateY(0);
+      visibility: visible;
+    }
+  }
+  .multisig-sync-tooltip {
+    background: var(--mc-text);
+    border-radius: ${RADIUS.sm};
+    color: var(--mc-bg);
+    font-size: ${TYPE.micro.size};
+    font-weight: ${WEIGHT.medium};
+    opacity: 0;
+    padding: ${SPACE.xs} ${SPACE.sm};
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    text-wrap: nowrap;
+    top: calc(100% + ${SPACE.xs});
+    transform: translateY(-3px);
+    transition:
+      opacity ${MOTION.pressMs}ms ${MOTION.ease},
+      transform ${MOTION.liftMs}ms var(--ease-out);
+    visibility: hidden;
+    z-index: 12;
+  }
+  .multisig-sync-popover {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    box-shadow: var(--mc-elev-lg);
+    display: grid;
+    gap: ${SPACE.xs};
+    padding: ${SPACE.md};
+    position: absolute;
+    right: 0;
+    top: calc(100% + ${SPACE.xs});
+    width: min(270px, calc(100vw - ${SPACE.xl}));
+    z-index: 11;
+  }
+  .multisig-sync-popover strong { font-size: ${TYPE.label.size}; }
+  .multisig-sync-popover p {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    line-height: ${TYPE.caption.line};
+    margin: 0;
+  }
 
   .proposal-flow { min-width: 0; }
   .proposal-compose-form { display: grid; gap: ${SPACE.md}; min-width: 0; }
@@ -214,6 +289,81 @@ export const MULTISIG_STYLES = `
     width: min(100%, 360px);
   }
   .multisig-review-card h2 { font-size: ${TYPE.title.size}; }
+  .multisig-confirm-card { width: min(100%, 380px); }
+  .proposal-confirm-summary {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    gap: 1px;
+    overflow: hidden;
+  }
+  .proposal-confirm-summary > div {
+    align-items: start;
+    background: var(--mc-panel);
+    display: grid;
+    gap: ${SPACE.xs};
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    padding: ${SPACE.sm} ${SPACE.md};
+  }
+  .proposal-confirm-summary span {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+  }
+  .proposal-confirm-summary strong {
+    font-size: ${TYPE.label.size};
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+  .multisig-confirm-fieldset {
+    border: 0;
+    display: grid;
+    gap: ${SPACE.sm};
+    margin: 0;
+    min-width: 0;
+    padding: 0;
+  }
+  .multisig-confirm-fieldset legend {
+    font-size: ${TYPE.label.size};
+    font-weight: ${WEIGHT.semibold};
+    padding: 0;
+  }
+  .multisig-confirm-signers {
+    display: grid;
+    gap: ${SPACE.xs};
+    max-height: 184px;
+    overflow: auto;
+  }
+  .multisig-confirm-signer {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: ${RADIUS.lg};
+    color: var(--mc-text);
+    display: grid;
+    font: inherit;
+    gap: ${SPACE.md};
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: ${SPACE.sm};
+    text-align: left;
+    transition:
+      background ${MOTION.pressMs}ms ${MOTION.ease},
+      color ${MOTION.pressMs}ms ${MOTION.ease};
+    width: 100%;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .multisig-confirm-signer:hover { background: var(--mc-hover); color: var(--mc-text); }
+  }
+  .multisig-confirm-signer:active { background: var(--mc-soft-press); }
+  .multisig-confirm-signer[aria-pressed="true"] { background: var(--mc-soft); }
+  .multisig-confirm-signer .multisig-signer-check { opacity: 0; }
+  .multisig-confirm-signer[aria-pressed="true"] .multisig-signer-check { opacity: 1; }
+  .multisig-confirm-card [data-ms-confirm-submit] { width: 100%; }
+  .multisig-confirm-card [data-ms-confirm-status]:empty { display: none; }
+  .multisig-confirm-card [data-ms-confirm-status] {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    margin: 0;
+  }
   .multisig-review-qr {
     background: var(--mc-text);
     border-radius: ${RADIUS.lg};
@@ -292,13 +442,6 @@ export const MULTISIG_STYLES = `
   .multisig-selected-summary code {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};
-  }
-  .drawer-shared {
-    border-top: 1px solid var(--mc-border);
-    display: grid;
-    gap: ${SPACE.sm};
-    margin-top: ${SPACE.md};
-    padding-top: ${SPACE.md};
   }
   .drawer-multisig .account-groups-line {
     color: var(--mc-muted);

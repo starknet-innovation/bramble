@@ -264,6 +264,31 @@ const bindImages = (deps: NftUiDeps): void => {
   });
 };
 
+// Reveals a collectible's on-chain animation only on explicit user action. The
+// untrusted data:text/html URI (carried on the play button) is handed to the
+// manifest-sandboxed sandbox/render.html page through the iframe URL hash — never
+// executed in the privileged side panel. render.html runs without privileged
+// extension APIs or parent-DOM access under an egress-blocking CSP, so it cannot
+// reach the vault or network.
+const bindAnimation = (deps: NftUiDeps): void => {
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-nft-play]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const animationUrl = button.dataset["nftPlay"];
+      const frame = button
+        .closest(".nft-card, .collectible-tile, section")
+        ?.querySelector<HTMLIFrameElement>("iframe.nft-animation");
+      if (!animationUrl || !frame) {
+        return;
+      }
+      frame.src = `sandbox/render.html#${encodeURIComponent(animationUrl)}`;
+      frame.hidden = false;
+      // setAttribute (not `button.hidden = …`) so we never assign to the loop
+      // parameter's property; the play control collapses once it has fired.
+      button.setAttribute("hidden", "");
+    });
+  });
+};
+
 // Hides an auto-discovered NFT as spam persistently: it is watched (re-proving
 // ownership on-chain) and then flagged hidden, so it moves to the Hidden section
 // and stays hidden across sessions like a manually watched spam NFT.
@@ -356,4 +381,5 @@ export const bindNfts = (deps: NftUiDeps): void => {
   bindRowActions(deps);
   bindHideDiscovered(deps);
   bindImages(deps);
+  bindAnimation(deps);
 };

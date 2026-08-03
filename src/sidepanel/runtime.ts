@@ -196,11 +196,14 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "reveal failed");
     },
-    async loadActivity(): Promise<{
+    async loadActivity(accountId?: string): Promise<{
       readonly entries: ActivityResponse["activity"];
       readonly historyUnavailable: boolean;
     }> {
-      const response = await sendMessage({ type: "wallet.activity" });
+      const response = await sendMessage({
+        ...(accountId === undefined ? {} : { accountId }),
+        type: "wallet.activity",
+      });
       if (!isActivityResponse(response)) {
         return { entries: [], historyUnavailable: false };
       }
