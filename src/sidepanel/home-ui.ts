@@ -26,6 +26,7 @@ export type HomeUiDeps = {
   readonly setHomeTab: (tab: HomeTab) => void;
   readonly networkId: () => string;
   readonly render: (status: WalletStatus) => Promise<void>;
+  readonly selectPortfolio?: (multisigId: string | null) => void;
   readonly startAddAccount?: () => void;
   readonly wallet: SidepanelWallet;
 };
@@ -223,9 +224,16 @@ const bindDrawer = (deps: HomeUiDeps): void => {
         setOpen(false, true);
         return;
       }
+      if (button.dataset["activeSigner"] === "true") {
+        deps.selectPortfolio?.(null);
+        setOpen(false, false);
+        void deps.wallet.loadStatus().then(deps.render);
+        return;
+      }
       buttonBusy(button, true);
       void deps.wallet.setActiveAccount(accountId).then(
         async () => {
+          deps.selectPortfolio?.(null);
           deps.setDrawerOpen(false);
           showToast("Account switched", "success");
           await deps.render(await deps.wallet.loadStatus());
@@ -235,6 +243,22 @@ const bindDrawer = (deps: HomeUiDeps): void => {
           buttonBusy(button, false);
         },
       );
+    });
+  });
+
+  root.querySelectorAll<HTMLButtonElement>("[data-multisig-select]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["multisigSelect"];
+      if (!id) {
+        return;
+      }
+      if (button.getAttribute("aria-pressed") === "true") {
+        setOpen(false, true);
+        return;
+      }
+      setOpen(false, false);
+      deps.selectPortfolio?.(id);
+      void deps.wallet.loadStatus().then(deps.render);
     });
   });
 

@@ -185,6 +185,8 @@ const bindAll = (): void => {
   bindLedgerFirstRun({ app, startLedgerSetup: ledgerOnboard.startLedgerSetup });
   bindUnlock({ app, render, wallet }, () => {
     activeView = "home";
+    selectedMultisigId = null;
+    viewHistory = [];
   });
   const shellDeps = {
     app,
@@ -205,6 +207,13 @@ const bindAll = (): void => {
     homeTab: () => homeTab,
     networkId: () => lastNetworkId,
     render,
+    selectPortfolio: (id: string | null) => {
+      selectedMultisigId = id;
+      activeView = id ? "multisig-home" : "home";
+      viewHistory = [];
+      forcedDirection = "swap";
+      paint();
+    },
     setDrawerGroupFilter: (filter) => {
       drawerGroupFilter = filter;
     },
@@ -229,10 +238,7 @@ const bindAll = (): void => {
     refresh: () => wallet.loadStatus(),
     render,
     setExpandedGroup: (id: string | null) => {
-      // Opens one panel in the manage-accounts Groups accordion — a group's bulk
-      // editor or the "Create a group" panel. Set right after creating a group so
-      // the new group's editor opens (collapsing the create panel) for immediate
-      // rename/re-icon/bucketing.
+      // Keep one manage-accounts group editor open across repaints.
       expandedGroupId = id;
     },
     setOpenAssign: (id: string | null) => {
@@ -264,8 +270,7 @@ const bindAll = (): void => {
     app,
     balances: () => cache.balances,
     currency: () => cache.preferences?.displayCurrency ?? "usd",
-    // The success moment returns home on its own; guard so a user who already
-    // navigated away is never yanked back.
+    // Never yank a user who left while the swap completed.
     navigateHome: () => {
       if (activeView === "swap") {
         navigate("home");
@@ -334,8 +339,7 @@ const paint = (): void => {
   lastScene = scene;
   const direction = forcedDirection ?? navDirection(lastActiveView, activeView);
   forcedDirection = null;
-  // Self-heal stale group selections (filter/expanded/open panel) so a deleted
-  // group or a departed account can never silently re-apply itself on repaint.
+  // Drop deleted group/account selections before repainting.
   const healed = healTransientGroupState(
     { drawerGroupFilter, expandedGroupId, openAssignId },
     cache.preferences?.groups ?? [],
@@ -344,10 +348,7 @@ const paint = (): void => {
   drawerGroupFilter = healed.drawerGroupFilter;
   expandedGroupId = healed.expandedGroupId;
   openAssignId = healed.openAssignId;
-  // Key the class-hash verification by the account it was computed for, so a
-  // stale badge from the previous account never shows against a freshly switched
-  // one — it falls back to its honest "verifying…" state until the new account's
-  // verification lands (mirrors how deployment-cache keys by accountId).
+  // Never show the prior account's class verification after a switch.
   const classHashVerification = verificationForAccount(
     cache.classHashVerification,
     status.activeAccountId,
@@ -411,7 +412,11 @@ let renderGeneration = 0;
 const render = async (status: WalletStatus): Promise<void> => {
   const generation = ++renderGeneration;
   const isCurrent = (): boolean => generation === renderGeneration;
-  updateRenderScope(cache, status);
+  if (updateRenderScope(cache, status) && selectedMultisigId !== null) {
+    selectedMultisigId = null;
+    activeView = "home";
+    viewHistory = [];
+  }
   const [pending, nextPreferences] = await Promise.all([
     wallet.loadPendingApprovals(),
     status.hasVault && !status.locked
@@ -424,8 +429,6 @@ const render = async (status: WalletStatus): Promise<void> => {
   cache.pending = pending;
   cache.preferences = nextPreferences;
   if (!status.hasVault || status.locked) {
-    // Reset every view-scoped field from one source so stale state cannot leak
-    // across a lock; preserve the status/pending/preferences just refreshed.
     Object.assign(cache, emptyRenderCache(), {
       pending: cache.pending,
       preferences: cache.preferences,
@@ -454,7 +457,6 @@ const render = async (status: WalletStatus): Promise<void> => {
   });
 };
 
-// Swap cached navigation state immediately, then hydrate it.
 const navigate = (view: WalletView): void => {
   if (view !== activeView) {
     viewHistory = pushView(viewHistory, activeView);
@@ -464,7 +466,6 @@ const navigate = (view: WalletView): void => {
   paint();
   void wallet.loadStatus().then(render);
 };
-// Return to the prior view with reverse-transition direction.
 const goBack = (): void => {
   const popped = popView(viewHistory);
   viewHistory = popped.history;

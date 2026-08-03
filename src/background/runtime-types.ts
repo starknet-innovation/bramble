@@ -2,6 +2,7 @@
  * Shared background runtime response and service types.
  */
 import type { StarkSignature } from "../crypto/krusty";
+import type { MultisigSyncWarning } from "../shared/multisig-sync";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { SwapCatalogToken } from "../starknet/avnu";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
@@ -357,15 +358,14 @@ export type MultisigsResponse = {
   readonly ok: true;
   readonly proposals: readonly MultisigProposalRecord[];
 };
-
 /**
- * One watched multisig after an add or config refresh, with refreshed
- * proposals when the refresh path produced them.
+ * One watched multisig after an add or config refresh.
  */
 export type MultisigResponse = {
   readonly multisig: MultisigRecord;
   readonly ok: true;
   readonly proposals?: readonly MultisigProposalRecord[];
+  readonly warnings?: readonly MultisigSyncWarning[];
 };
 
 /**

@@ -34,7 +34,7 @@ const drawerMultisigRow = (
     (proposal) => proposal.multisigId === record.id && proposal.state !== "executed",
   ).length;
   return `<li class="drawer-account-item">
-    <button class="drawer-account drawer-multisig" data-multisig-open="${escapeHtml(record.id)}" type="button" aria-pressed="${record.id === selectedId}">
+    <button class="drawer-account drawer-multisig" data-multisig-select="${escapeHtml(record.id)}" type="button" aria-pressed="${record.id === selectedId}">
       <span class="option-avatar">${accountAvatar(record.address)}</span>
       <span class="drawer-copy">
         <strong>${escapeHtml(record.name ?? "Multisig account")}</strong>
@@ -49,6 +49,7 @@ const drawerMultisigRow = (
 const drawerAccountRow = (
   stored: AccountRef,
   activeId: string | null,
+  singleSignerSelected: boolean,
   preferences: WalletPreferences | null,
   groups: AccountGroups,
   openAssignId: string | null,
@@ -63,13 +64,13 @@ const drawerAccountRow = (
   return `
   <li class="drawer-account-item">
     <div class="drawer-account-row">
-      <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === activeId}">
+      <button class="drawer-account" data-switch-account="${escapeHtml(stored.id)}" data-active-signer="${stored.id === activeId}" type="button" aria-pressed="${singleSignerSelected && stored.id === activeId}">
         <span class="option-avatar">${accountAvatar(stored.address)}</span>
         <span class="drawer-copy">
           <strong>${escapeHtml(name)}${hardwareBadge(stored)}</strong>
           <code>${accountLabel(stored.address)}</code>
         </span>
-        ${stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
+        ${singleSignerSelected && stored.id === activeId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>
       ${iconButton({
         attributes: {
@@ -142,7 +143,14 @@ export const accountDrawer = (
             )
           : `<ul class="drawer-list">${visible
               .map((stored) =>
-                drawerAccountRow(stored, account?.id ?? null, preferences, groups, openAssignId),
+                drawerAccountRow(
+                  stored,
+                  account?.id ?? null,
+                  selectedMultisigId === null,
+                  preferences,
+                  groups,
+                  openAssignId,
+                ),
               )
               .join("")}${shared
               .map((record) => drawerMultisigRow(record, proposals, selectedMultisigId))

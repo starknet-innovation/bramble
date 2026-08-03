@@ -7,6 +7,8 @@
  * exported router is a single dispatch-map lookup. Transaction-submitting
  * multisig operations live in multisig-tx-ops.ts.
  */
+
+import type { MultisigSyncWarning } from "../shared/multisig-sync";
 import {
   canonicalFelt,
   STARKNET_NETWORKS,
@@ -193,9 +195,7 @@ const scopedList = async (
   return { multisigs, proposals };
 };
 
-// Re-reads one proposal's on-chain status and persists the fresh snapshot. For
-// wallet-submitted proposals, a not-found status is suppressed only while the
-// submit transaction is still pending.
+// Re-read one proposal, preserving not-found only while its submit is pending.
 const refreshProposal = async (
   deps: MultisigOpsDeps,
   record: MultisigRecord,
@@ -232,30 +232,39 @@ const refreshProposals = async (
   record: MultisigRecord,
   signer: string,
   rpcUrls: readonly string[],
-): Promise<readonly MultisigProposalRecord[]> => {
+): Promise<{
+  readonly complete: boolean;
+  readonly proposals: readonly MultisigProposalRecord[];
+}> => {
   const proposals = (await deps.multisigStore.listProposals()).filter(
     (proposal) => proposal.multisigId === record.id,
   );
-  return Promise.all(
-    proposals.map((proposal) =>
-      proposal.state === "executed"
-        ? proposal
-        : refreshProposal(deps, record, proposal, signer, rpcUrls).catch(() => proposal),
-    ),
+  let complete = true;
+  const refreshed = await Promise.all(
+    proposals.map(async (proposal) => {
+      if (proposal.state === "executed") {
+        return proposal;
+      }
+      try {
+        return await refreshProposal(deps, record, proposal, signer, rpcUrls);
+      } catch {
+        complete = false;
+        return proposal;
+      }
+    }),
   );
+  return { complete, proposals: refreshed };
 };
 
-// Adds event-discovered IDs as untrusted, call-less records. The subsequent
-// refresh reads each proposal through the contract views before the UI can
-// enable an action; discovery never supplies executable call data.
+// Event IDs stay call-less until contract views verify their proposal state.
 const discoverProposals = async (
   deps: MultisigOpsDeps,
   record: MultisigRecord,
   rpcUrls: readonly string[],
-): Promise<boolean> => {
+): Promise<MultisigSyncWarning | null> => {
   const discover = multisigRpc(deps).discoverProposalIds;
   if (!discover) {
-    return true;
+    return null;
   }
   const result = await discover({ address: record.address, rpcUrls });
   const existing = new Set(
@@ -280,9 +289,10 @@ const discoverProposals = async (
       });
     }
   }
-  return (
-    result.complete && missing.length === result.ids.filter((txId) => !existing.has(txId)).length
-  );
+  return result.complete &&
+    missing.length === result.ids.filter((txId) => !existing.has(txId)).length
+    ? null
+    : "proposal-discovery-recent";
 };
 
 type MultisigOpsHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
@@ -371,35 +381,45 @@ const refreshMultisig: MultisigOpsHandler = async (deps, message) => {
   if ("error" in resolved) {
     return { error: resolved.error };
   }
-  const config = await multisigRpc(deps).getConfig({
-    address: resolved.record.address,
-    rpcUrls: resolved.rpcUrls,
-  });
+  const config = await multisigRpc(deps)
+    .getConfig({
+      address: resolved.record.address,
+      rpcUrls: resolved.rpcUrls,
+    })
+    .catch(() => null);
+  if (config === null) {
+    return { error: "multisig configuration unavailable" };
+  }
   const record: MultisigRecord = {
     ...resolved.record,
     quorum: config.quorum,
     signers: config.signers,
   };
   await deps.multisigStore.upsertMultisig(record);
-  let discoveryComplete = true;
+  const warnings: MultisigSyncWarning[] = [];
   try {
-    discoveryComplete = await discoverProposals(deps, record, resolved.rpcUrls);
+    const discoveryWarning = await discoverProposals(deps, record, resolved.rpcUrls);
+    if (discoveryWarning) {
+      warnings.push(discoveryWarning);
+    }
   } catch {
-    discoveryComplete = false;
+    warnings.push("proposal-discovery-unavailable");
   }
-  const proposals = await refreshProposals(
+  const refreshed = await refreshProposals(
     deps,
     record,
     resolved.account.account.address,
     resolved.rpcUrls,
   );
-  if (!discoveryComplete) {
-    return {
-      error:
-        "proposal discovery is incomplete — existing proposals were refreshed; retry to continue",
-    };
+  if (!refreshed.complete) {
+    warnings.push("proposal-refresh-incomplete");
   }
-  return { multisig: record, ok: true, proposals };
+  return {
+    multisig: record,
+    ok: true,
+    proposals: refreshed.proposals,
+    ...(warnings.length === 0 ? {} : { warnings }),
+  };
 };
 
 const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
@@ -454,8 +474,7 @@ const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
   return { ok: true, proposal };
 };
 
-// One handler per registry-level multisig message type; the router below is a
-// single map lookup and unknown types fall through to null.
+// One registry handler per message type; unknown types fall through to null.
 const OPS_HANDLERS: Record<string, MultisigOpsHandler> = {
   "wallet.addMultisig": addMultisig,
   "wallet.multisigBalances": loadMultisigBalances,

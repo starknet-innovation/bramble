@@ -9,6 +9,7 @@
 import type { WalletStatus } from "../popup/responses";
 import type { DeploymentCache } from "./deployment-cache";
 import type { MultisigClient } from "./multisig-runtime";
+import { mostImportantMultisigSync } from "./multisig-sync";
 import type { RenderData } from "./render-cache";
 import type { SidepanelWallet } from "./runtime";
 import type { WalletView } from "./views";
@@ -38,7 +39,7 @@ const hydrateMultisigs = async (
 ): Promise<Pick<RenderData, "multisigs" | "multisigsError" | "multisigSync">> => {
   const loaded = await multisig.loadMultisigs();
   if (loaded === "error") {
-    return { multisigs: cached, multisigsError: true, multisigSync: "error" };
+    return { multisigs: cached, multisigsError: true, multisigSync: "background-unavailable" };
   }
   const ids =
     activeView === "multisigs"
@@ -62,21 +63,16 @@ const hydrateMultisigs = async (
     return { multisigs: loaded, multisigsError: false, multisigSync: null };
   }
   const refreshed = await Promise.all(
-    ids.map((id) =>
-      multisig.refreshMultisig(id).then(
-        () => true,
-        () => false,
-      ),
-    ),
+    ids.map((id) => multisig.refreshMultisig(id).catch(() => "background-unavailable" as const)),
   );
   const reloaded = await multisig.loadMultisigs();
   if (reloaded === "error") {
-    return { multisigs: loaded, multisigsError: true, multisigSync: "error" };
+    return { multisigs: loaded, multisigsError: true, multisigSync: "background-unavailable" };
   }
   return {
     multisigs: reloaded,
     multisigsError: false,
-    multisigSync: refreshed.every(Boolean) ? "current" : "error",
+    multisigSync: mostImportantMultisigSync(refreshed),
   };
 };
 

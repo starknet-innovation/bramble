@@ -3,6 +3,7 @@
  * responses.ts so that file stays within the size budget.
  */
 import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
+import { isMultisigSyncWarning, type MultisigSyncWarning } from "../shared/multisig-sync";
 import { isStarkFieldElement } from "../starknet/networks";
 import {
   isMultisigProposalRecord,
@@ -41,6 +42,7 @@ export type MultisigResponse = {
   readonly multisig: MultisigRecord;
   readonly ok: true;
   readonly proposals?: readonly MultisigProposalRecord[];
+  readonly warnings?: readonly MultisigSyncWarning[];
 };
 
 /**
@@ -49,11 +51,15 @@ export type MultisigResponse = {
 export const isMultisigResponse = (value: unknown): value is MultisigResponse =>
   isRecord(value) &&
   isJson(value) &&
-  hasOnlyKnownKeys(value, ["multisig", "ok", "proposals"]) &&
+  hasOnlyKnownKeys(value, ["multisig", "ok", "proposals", "warnings"]) &&
   value["ok"] === true &&
   isMultisigRecord(value["multisig"]) &&
   (value["proposals"] === undefined ||
-    (Array.isArray(value["proposals"]) && value["proposals"].every(isMultisigProposalRecord)));
+    (Array.isArray(value["proposals"]) && value["proposals"].every(isMultisigProposalRecord))) &&
+  (value["warnings"] === undefined ||
+    (Array.isArray(value["warnings"]) &&
+      value["warnings"].length <= 2 &&
+      value["warnings"].every(isMultisigSyncWarning)));
 
 /**
  * One tracked proposal accepted from the background boundary, with the

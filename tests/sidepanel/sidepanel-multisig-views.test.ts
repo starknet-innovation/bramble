@@ -92,7 +92,7 @@ const render = (
     {},
     multisigs,
     proposals,
-    multisig.id,
+    view === "home" ? null : multisig.id,
     declared,
   );
 
@@ -127,12 +127,22 @@ describe("multisig views", () => {
     const drawer = render("home", [multisig], [proposal]);
     expect(drawer).not.toContain("Shared accounts");
     expect(drawer).toContain("Multisig · 2 of 2 signers required · 1 open");
-    expect(drawer).toContain(`data-multisig-open="${multisig.id}"`);
+    expect(drawer).toContain(`data-multisig-select="${multisig.id}"`);
     expect(drawer).toContain(
-      `data-multisig-open="${multisig.id}" type="button" aria-pressed="true"`,
+      `data-multisig-select="${multisig.id}" type="button" aria-pressed="false"`,
     );
 
     const home = render("multisig-home", [multisig], [proposal]);
+    expect(home).toContain('id="account-trigger"');
+    expect(home).toContain("Treasury");
+    expect(home).toContain("Multisig 2 of 2");
+    expect(home).toContain('class="avatar"');
+    expect(home).toContain('class="drawer-root"');
+    expect(home).toContain(
+      `data-multisig-select="${multisig.id}" type="button" aria-pressed="true"`,
+    );
+    expect(home).toContain(`data-active-signer="true" type="button" aria-pressed="false"`);
+    expect(home).not.toContain("data-nav-back");
     expect(home).toContain('id="wallet-screen-multisig-home"');
     expect(home).toContain('class="hero multisig-portfolio-hero"');
     expect(home).toContain(">Tokens</button>");
@@ -298,11 +308,30 @@ describe("multisig views", () => {
   });
 
   test("list and detail render an explicit retry instead of false empty state on load errors", () => {
-    const list = multisigsFlow(status, account, [], [], true, "error");
-    expect(list).toContain("Cached data may be stale");
+    const list = multisigsFlow(status, account, [], [], true, "background-unavailable");
+    expect(list).toContain("MC-MS-REGISTRY");
     expect(list).toContain('id="multisig-list-retry"');
-    const detail = multisigDetailFlow(status, account, null, [], true, "error");
-    expect(detail).toContain("Could not refresh multisig state");
+    const detail = multisigDetailFlow(status, account, null, [], true, "background-unavailable");
+    expect(detail).toContain("wallet background could not load");
     expect(detail).not.toContain("no longer watched");
+  });
+
+  test("distinguishes config, proposal status, and bounded discovery health", () => {
+    expect(
+      multisigDetailFlow(status, account, multisig, [], false, "configuration-unavailable"),
+    ).toContain("MC-MS-CONFIG-RPC");
+    expect(
+      multisigDetailFlow(status, account, multisig, [], false, "proposal-refresh-incomplete"),
+    ).toContain("MC-MS-PROPOSALS-RPC");
+    const recent = multisigDetailFlow(
+      status,
+      account,
+      multisig,
+      [],
+      false,
+      "proposal-discovery-recent",
+    );
+    expect(recent).toContain("proposal search covers recent activity");
+    expect(recent).not.toContain("Cached data may be stale");
   });
 });

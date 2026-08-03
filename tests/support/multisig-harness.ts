@@ -132,6 +132,10 @@ export type MultisigHarnessOptions = {
   }) => Promise<readonly never[]>;
   readonly loadClass?: () => Promise<unknown>;
   readonly multisigStore?: MultisigStore;
+  readonly multisigConfig?: () => {
+    readonly quorum: number;
+    readonly signers: readonly string[];
+  };
   readonly proposalDiscovery?: () => MultisigProposalDiscovery;
   readonly proposalStatus?: () => MultisigProposalStatus;
   readonly signers?: readonly string[];
@@ -188,10 +192,12 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
             }
           : {}),
         async getConfig() {
-          return {
-            quorum: 2,
-            signers: options.signers ?? [harnessAccount.address, HARNESS_OTHER_SIGNER],
-          };
+          return (
+            options.multisigConfig?.() ?? {
+              quorum: 2,
+              signers: options.signers ?? [harnessAccount.address, HARNESS_OTHER_SIGNER],
+            }
+          );
         },
         async getProposalStatus(input: { readonly txId: string }) {
           if (options.proposalStatus) {

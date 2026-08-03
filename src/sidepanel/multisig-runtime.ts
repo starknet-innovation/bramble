@@ -16,6 +16,7 @@ import {
 } from "../popup/multisig-responses";
 import { isBalancesResponse, isErrorResponse, isTransferResponse } from "../popup/responses";
 import type { MultisigProposalCall } from "../storage/multisig-store";
+import type { MultisigSyncState } from "./multisig-sync";
 import type { BalanceState, RuntimeApi } from "./runtime";
 
 const responseError = (response: unknown, fallback: string): Error =>
@@ -144,11 +145,26 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "propose failed");
     },
-    async refreshMultisig(id: string): Promise<void> {
-      const response = await sendMessage({ id, type: "wallet.refreshMultisig" });
-      if (!isMultisigResponse(response)) {
-        throw responseError(response, "refresh failed");
+    async refreshMultisig(id: string): Promise<Exclude<MultisigSyncState, null>> {
+      let response: unknown;
+      try {
+        response = await sendMessage({ id, type: "wallet.refreshMultisig" });
+      } catch {
+        return "background-unavailable";
       }
+      if (isMultisigResponse(response)) {
+        const warnings = response.warnings ?? [];
+        return warnings.includes("proposal-refresh-incomplete")
+          ? "proposal-refresh-incomplete"
+          : warnings.includes("proposal-discovery-unavailable")
+            ? "proposal-discovery-unavailable"
+            : warnings.includes("proposal-discovery-recent")
+              ? "proposal-discovery-recent"
+              : "current";
+      }
+      return isErrorResponse(response) && response.error === "multisig configuration unavailable"
+        ? "configuration-unavailable"
+        : "background-unavailable";
     },
     async removeMultisig(id: string): Promise<void> {
       const response = await sendMessage({ id, type: "wallet.removeMultisig" });

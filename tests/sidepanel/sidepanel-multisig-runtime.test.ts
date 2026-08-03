@@ -85,6 +85,14 @@ describe("multisig response guards", () => {
       false,
     );
     expect(isMultisigResponse({ multisig: { ...multisig, quorum: 0 }, ok: true })).toBe(false);
+    expect(
+      isMultisigResponse({
+        multisig,
+        ok: true,
+        warnings: ["proposal-discovery-recent"],
+      }),
+    ).toBe(true);
+    expect(isMultisigResponse({ multisig, ok: true, warnings: ["raw-rpc-error"] })).toBe(false);
     expect(isMultisigProposalResponse({ ok: true, proposal, transactionHash: "bad" })).toBe(false);
     expect(isMultisigClassStatusResponse({ declared: "yes", ok: true })).toBe(false);
     expect(
@@ -152,7 +160,7 @@ describe("createMultisigClient", () => {
         to: account.address,
       }),
     ).toBe("0x123");
-    await client.refreshMultisig(multisig.id);
+    expect(await client.refreshMultisig(multisig.id)).toBe("current");
     await client.removeMultisig(multisig.id);
     expect(await client.revokeConfirmation(proposal.id, true)).toBe("0x123");
     await client.trackProposal(multisig.id, proposal.txId, "Shared", importedCall);
@@ -202,6 +210,32 @@ describe("createMultisigClient", () => {
       },
     });
     expect(await rejected.loadMultisigs()).toBe("error");
+    expect(await rejected.refreshMultisig(multisig.id)).toBe("background-unavailable");
     await expect(rejected.addMultisig(address, "")).rejects.toThrow("runtime unavailable");
+  });
+
+  test("maps refresh diagnostics to bounded, non-secret UI states", async () => {
+    const resultFor = (response: unknown) =>
+      createMultisigClient({
+        async sendMessage() {
+          return response;
+        },
+      }).refreshMultisig(multisig.id);
+
+    await expect(
+      resultFor({ multisig, ok: true, warnings: ["proposal-discovery-recent"] }),
+    ).resolves.toBe("proposal-discovery-recent");
+    await expect(
+      resultFor({ multisig, ok: true, warnings: ["proposal-discovery-unavailable"] }),
+    ).resolves.toBe("proposal-discovery-unavailable");
+    await expect(
+      resultFor({ multisig, ok: true, warnings: ["proposal-refresh-incomplete"] }),
+    ).resolves.toBe("proposal-refresh-incomplete");
+    await expect(resultFor({ error: "multisig configuration unavailable" })).resolves.toBe(
+      "configuration-unavailable",
+    );
+    await expect(resultFor({ error: "unexpected internal provider detail" })).resolves.toBe(
+      "background-unavailable",
+    );
   });
 });

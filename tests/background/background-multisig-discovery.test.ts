@@ -49,7 +49,7 @@ describe("multisig proposal discovery and communication", () => {
     });
   });
 
-  test("reports a partial scan instead of implying proposal discovery is complete", async () => {
+  test("keeps fresh config usable while reporting bounded recent proposal discovery", async () => {
     const { handler } = makeMultisigHarness({
       proposalDiscovery: () => ({ complete: false, ids: [] }),
     });
@@ -57,9 +57,43 @@ describe("multisig proposal discovery and communication", () => {
 
     await expect(
       handler({ id: watched.multisig.id, type: "wallet.refreshMultisig" }, harnessExtensionSender),
-    ).resolves.toEqual({
-      error:
-        "proposal discovery is incomplete — existing proposals were refreshed; retry to continue",
+    ).resolves.toMatchObject({
+      ok: true,
+      warnings: ["proposal-discovery-recent"],
+    });
+  });
+
+  test("keeps fresh config usable when automatic proposal discovery is unavailable", async () => {
+    const { handler } = makeMultisigHarness({
+      proposalDiscovery() {
+        throw new Error("provider event scan failed");
+      },
+    });
+    const watched = await watch(handler);
+
+    await expect(
+      handler({ id: watched.multisig.id, type: "wallet.refreshMultisig" }, harnessExtensionSender),
+    ).resolves.toMatchObject({
+      ok: true,
+      warnings: ["proposal-discovery-unavailable"],
+    });
+  });
+
+  test("identifies a stale tracked proposal without invalidating fresh config", async () => {
+    const discoveredId = "0x987";
+    const { handler } = makeMultisigHarness({
+      proposalDiscovery: () => ({ complete: true, ids: [discoveredId] }),
+      proposalStatus() {
+        throw new Error("proposal view failed");
+      },
+    });
+    const watched = await watch(handler);
+
+    await expect(
+      handler({ id: watched.multisig.id, type: "wallet.refreshMultisig" }, harnessExtensionSender),
+    ).resolves.toMatchObject({
+      ok: true,
+      warnings: ["proposal-refresh-incomplete"],
     });
   });
 

@@ -11,6 +11,7 @@ import { parseMultisigReviewPackage } from "./multisig-model";
 import { bindMultisigProposalForm } from "./multisig-proposal-ui";
 import { bindMultisigReviewTools } from "./multisig-review-ui";
 import type { MultisigClient } from "./multisig-runtime";
+import { isMultisigSyncFailure, multisigSyncActionMessage } from "./multisig-sync";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -175,8 +176,12 @@ const bindListActions = (deps: MultisigUiDeps): void => {
       return;
     }
     runAction(deps, refresh, "multisig-detail-result", "Refreshing from chain…", async () => {
-      await deps.multisig.refreshMultisig(id);
-      return "Refreshed from chain";
+      const state = await deps.multisig.refreshMultisig(id);
+      const message = multisigSyncActionMessage(state);
+      if (isMultisigSyncFailure(state)) {
+        throw new Error(message);
+      }
+      return message;
     });
   });
 };

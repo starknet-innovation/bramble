@@ -20,6 +20,7 @@ import {
   multisigPortfolio,
 } from "./multisig-portfolio";
 import { multisigProposalList } from "./multisig-proposal-view";
+import type { MultisigSyncState } from "./multisig-sync";
 import {
   accountLabel,
   copyButton,
@@ -46,20 +47,50 @@ const multisigRow = (record: MultisigRecord, pendingCount: number): string => `
 
 const multisigSyncNotice = (
   loadError: boolean,
-  sync: "current" | "error" | null,
+  sync: MultisigSyncState,
   retryId: string,
 ): string => {
-  if (loadError || sync === "error") {
+  const retry = button({
+    attributes: { id: retryId },
+    icon: "refresh",
+    label: "Retry",
+    size: "small",
+    variant: "secondary",
+  });
+  if (loadError) {
     return `<div class="review-panel" role="alert">
-      <p class="review-flag">Could not refresh multisig state from the background or chain. Cached data may be stale.</p>
-      ${button({
-        attributes: { id: retryId },
-        icon: "refresh",
-        label: "Retry",
-        size: "small",
-        variant: "secondary",
-      })}
-      </div>`;
+      <p class="review-flag">The wallet background could not load the watched multisig registry. The visible snapshot may be stale.</p>
+      <p><code>Support code · MC-MS-REGISTRY</code></p>${retry}
+    </div>`;
+  }
+  if (sync === "configuration-unavailable") {
+    return `<div class="review-panel" role="alert">
+      <p class="review-flag">The selected network did not return this multisig's current signer and quorum configuration.</p>
+      <p><code>Support code · MC-MS-CONFIG-RPC</code></p>${retry}
+    </div>`;
+  }
+  if (sync === "background-unavailable") {
+    return `<div class="review-panel" role="alert">
+      <p class="review-flag">The wallet background did not complete the multisig refresh.</p>
+      <p><code>Support code · MC-MS-BACKGROUND</code></p>${retry}
+    </div>`;
+  }
+  if (sync === "proposal-refresh-incomplete") {
+    return `<div class="review-panel" role="status">
+      <p>Signer and quorum configuration is current. At least one tracked proposal status remains cached.</p>
+      <p><code>Support code · MC-MS-PROPOSALS-RPC</code></p>${retry}
+    </div>`;
+  }
+  if (sync === "proposal-discovery-unavailable") {
+    return `<div class="review-panel" role="status">
+      <p>Account state and tracked proposals are current. Automatic proposal search is temporarily unavailable; you can still add a proposal by id.</p>
+      <p><code>Support code · MC-MS-DISCOVERY-RPC</code></p>${retry}
+    </div>`;
+  }
+  if (sync === "proposal-discovery-recent") {
+    return `<div class="review-panel" role="status">
+      <p>Account state is current. Automatic proposal search covers recent activity; add an older proposal by id to verify it directly.</p>
+    </div>`;
   }
   return "";
 };
@@ -74,7 +105,7 @@ export const multisigsFlow = (
   multisigs: readonly MultisigRecord[],
   proposals: readonly MultisigProposalRecord[],
   loadError = false,
-  sync: "current" | "error" | null = null,
+  sync: MultisigSyncState = null,
 ): string => {
   const scoped = multisigs.filter((record) => record.networkId === status.networkId);
   const openCount = (record: MultisigRecord): number =>
@@ -137,7 +168,7 @@ export const multisigDetailFlow = (
   record: MultisigRecord | null,
   proposals: readonly MultisigProposalRecord[],
   loadError = false,
-  sync: "current" | "error" | null = null,
+  sync: MultisigSyncState = null,
   preferences: WalletPreferences | null = null,
   view: "multisig-detail" | "multisig-home" = "multisig-detail",
   portfolio: MultisigPortfolioData = EMPTY_MULTISIG_PORTFOLIO,
@@ -148,7 +179,7 @@ export const multisigDetailFlow = (
       flowScreen(
         view,
         loadError
-          ? multisigSyncNotice(true, "error", "multisig-list-retry")
+          ? multisigSyncNotice(true, "background-unavailable", "multisig-list-retry")
           : emptyState("This multisig is no longer watched."),
       )
     );
@@ -158,11 +189,13 @@ export const multisigDetailFlow = (
     account !== null && record.signers.some((signer) => sameFelt(signer, account.address));
   const openCount = tracked.filter((proposal) => proposal.state !== "executed").length;
   return (
-    flowHeader(
-      multisigDisplayName(record),
-      status,
-      `${record.quorum} of ${record.signers.length} signers`,
-    ) +
+    (view === "multisig-home"
+      ? ""
+      : flowHeader(
+          multisigDisplayName(record),
+          status,
+          `${record.quorum} of ${record.signers.length} signers`,
+        )) +
     flowScreen(
       view,
       `${multisigSyncNotice(loadError, sync, "multisig-list-retry")}

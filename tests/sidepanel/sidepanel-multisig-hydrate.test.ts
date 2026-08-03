@@ -82,6 +82,7 @@ describe("multisig view hydration", () => {
       },
       async refreshMultisig() {
         refreshes += 1;
+        return "current" as const;
       },
     } as unknown as MultisigClient;
     const { cache, deps } = depsFor(client, "home");
@@ -105,6 +106,7 @@ describe("multisig view hydration", () => {
       },
       async refreshMultisig(id: string) {
         refreshed.push(id);
+        return "current" as const;
       },
     } as unknown as MultisigClient;
     const { cache, deps, paints } = depsFor(client);
@@ -132,16 +134,16 @@ describe("multisig view hydration", () => {
 
     expect(cache.multisigs).toEqual({ multisigs: [multisig], proposals: [proposal] });
     expect(cache.multisigsError).toBe(true);
-    expect(cache.multisigSync).toBe("error");
+    expect(cache.multisigSync).toBe("background-unavailable");
   });
 
-  test("marks a detail snapshot stale when its automatic chain refresh fails", async () => {
+  test("reports configuration refresh failure without discarding cached identity", async () => {
     const client = {
       async loadMultisigs() {
         return { multisigs: [multisig], proposals: [proposal] };
       },
       async refreshMultisig() {
-        throw new Error("rpc unavailable");
+        return "configuration-unavailable" as const;
       },
     } as unknown as MultisigClient;
     const { cache, deps } = depsFor(client, "multisig-detail");
@@ -150,6 +152,23 @@ describe("multisig view hydration", () => {
 
     expect(cache.multisigs.multisigs).toEqual([multisig]);
     expect(cache.multisigsError).toBe(false);
-    expect(cache.multisigSync).toBe("error");
+    expect(cache.multisigSync).toBe("configuration-unavailable");
+  });
+
+  test("reports bounded proposal discovery without calling fresh config stale", async () => {
+    const client = {
+      async loadMultisigs() {
+        return { multisigs: [multisig], proposals: [proposal] };
+      },
+      async refreshMultisig() {
+        return "proposal-discovery-recent" as const;
+      },
+    } as unknown as MultisigClient;
+    const { cache, deps } = depsFor(client, "multisig-detail");
+
+    await hydrateView(deps);
+
+    expect(cache.multisigsError).toBe(false);
+    expect(cache.multisigSync).toBe("proposal-discovery-recent");
   });
 });
