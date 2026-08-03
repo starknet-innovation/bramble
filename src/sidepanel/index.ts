@@ -57,8 +57,8 @@ import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { SIDEPANEL_STYLES } from "./styles";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
-import { withTransactionAlerts } from "./tx-alerts-ui";
 import * as transfer from "./transfer-bindings";
+import { withTransactionAlerts } from "./tx-alerts-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {

@@ -3,6 +3,7 @@
  * export stay validated and deterministic.
  */
 import { describe, expect, test } from "bun:test";
+import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "../../src/shared/transaction-alerts";
 import {
   activityForScope,
   activityToCsv,
@@ -14,6 +15,7 @@ import { createMemoryStore } from "../../src/storage/kv";
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER_ACCOUNT_ID =
   "SN_MAIN:0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+const MAIN_SCOPE = { accountId: ACCOUNT_ID, networkId: "SN_MAIN" as const };
 
 const makeLog = () => {
   let tick = 0;
@@ -238,9 +240,9 @@ describe("provisional status and tracking fields", () => {
       { accountId: ACCOUNT_ID, networkId: "SN_MAIN" },
     );
 
-    const first = await log.takeFailureNotices();
+    const first = await log.takeFailureNotices(MAIN_SCOPE);
     expect(first.map((entry) => entry.hash)).toEqual(["0x1"]);
-    expect(await log.takeFailureNotices()).toEqual([]);
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toEqual([]);
     // The terminal status survives delivery: the record is the durable truth.
     expect((await log.list())[0]?.status).toBe("reverted");
     expect((await log.list())[0]?.failureNotice).toBe("delivered");
@@ -276,8 +278,94 @@ describe("provisional status and tracking fields", () => {
       { "0x1": { failureNotice: "pending", status: "reverted" } },
       { accountId: ACCOUNT_ID, networkId: "SN_MAIN" },
     );
-    expect(await log.takeFailureNotices()).toHaveLength(1);
-    expect(await log.takeFailureNotices()).toEqual([]);
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toHaveLength(1);
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toEqual([]);
+  });
+
+  test("scopes and bounds each failure-notice drain", async () => {
+    const log = makeLog();
+    for (let index = 1; index <= MAX_TRANSACTION_ALERTS_PER_DRAIN + 2; index += 1) {
+      const hash = `0x${index.toString(16)}`;
+      await log.record({
+        accountId: ACCOUNT_ID,
+        hash,
+        kind: "transfer",
+        networkId: "SN_MAIN",
+        summary: `Send ${index}`,
+      });
+      await log.updateStatuses(
+        { [hash]: { failureNotice: "pending", status: "reverted" } },
+        MAIN_SCOPE,
+      );
+    }
+    await log.record({
+      accountId: OTHER_ACCOUNT_ID,
+      hash: "0xff",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Other account send",
+    });
+    const otherScope = { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" as const };
+    await log.updateStatuses(
+      { "0xff": { failureNotice: "pending", status: "reverted" } },
+      otherScope,
+    );
+
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toHaveLength(MAX_TRANSACTION_ALERTS_PER_DRAIN);
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toHaveLength(2);
+    expect((await log.takeFailureNotices(otherScope)).map((entry) => entry.hash)).toEqual(["0xff"]);
+  });
+
+  test("keeps terminal progress, L1 finality, and delivered notices monotonic", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send",
+    });
+    await log.updateStatuses(
+      { "0x1": { failureNotice: "pending", finalizedOnL1: true, status: "reverted" } },
+      MAIN_SCOPE,
+    );
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toHaveLength(1);
+    const [stored] = await log.updateStatuses(
+      { "0x1": { failureNotice: "pending", finalizedOnL1: false, status: "accepted" } },
+      MAIN_SCOPE,
+    );
+    expect(stored).toMatchObject({
+      failureNotice: "delivered",
+      finalizedOnL1: true,
+      status: "reverted",
+    });
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toEqual([]);
+  });
+
+  test("never demotes accepted or pre-confirmed progress", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Accepted send",
+    });
+    await log.updateStatuses({ "0x1": { status: "accepted" } }, MAIN_SCOPE);
+    expect(
+      (await log.updateStatuses({ "0x1": { status: "preconfirmed" } }, MAIN_SCOPE))[0]?.status,
+    ).toBe("accepted");
+
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x2",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Pre-confirmed send",
+    });
+    await log.updateStatuses({ "0x2": { status: "preconfirmed" } }, MAIN_SCOPE);
+    const next = await log.updateStatuses({ "0x2": { status: "pending" } }, MAIN_SCOPE);
+    expect(next.find((entry) => entry.hash === "0x2")?.status).toBe("preconfirmed");
   });
 
   test("loads entries stored before the tracking fields existed", async () => {

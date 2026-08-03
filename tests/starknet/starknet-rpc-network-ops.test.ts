@@ -15,6 +15,7 @@ import {
   parseTokenAmount,
   submitErc20Transfer,
   submitInvokeTransaction,
+  TRANSACTION_STATUS_CONCURRENCY,
   type TransactionStatus,
   type TransactionStatusReport,
 } from "../../src/starknet/rpc";
@@ -291,6 +292,30 @@ describe("getTransactionStatuses", () => {
         ),
       ),
     ).rejects.toThrow("fetch failed");
+  });
+
+  test("bounds transaction-status RPC concurrency without dropping results", async () => {
+    const hashes = Array.from(
+      { length: TRANSACTION_STATUS_CONCURRENCY * 2 + 3 },
+      (_, index) => `0x${(index + 1).toString(16)}`,
+    );
+    let active = 0;
+    let maximum = 0;
+    const statuses = await getTransactionStatuses({ hashes, rpcUrls: RPC_URLS }, () =>
+      readProvider(
+        async () => [],
+        async () => {
+          active += 1;
+          maximum = Math.max(maximum, active);
+          await Promise.resolve();
+          active -= 1;
+          return { execution_status: "SUCCEEDED", finality_status: "ACCEPTED_ON_L2" };
+        },
+      ),
+    );
+
+    expect(maximum).toBe(TRANSACTION_STATUS_CONCURRENCY);
+    expect(Object.keys(statuses)).toEqual(hashes);
   });
 });
 

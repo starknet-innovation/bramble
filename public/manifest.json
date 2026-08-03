@@ -31,6 +31,7 @@
   "host_permissions": [
     "https://mainnet.nodes.starknet.org/*",
     "https://sepolia.nodes.starknet.org/*",
+    "https://api.cartridge.gg/*",
     "https://api.coingecko.com/*",
     "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",

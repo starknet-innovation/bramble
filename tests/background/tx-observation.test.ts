@@ -104,6 +104,21 @@ describe("reconciled outcome", () => {
     ).toEqual({ finalizedOnL1: true, notFoundCount: 0, status: "accepted" });
   });
 
+  test("does not demote progress or erase observed L1 finality", () => {
+    expect(reconciledOutcome(entry({ status: "accepted" }), report({ status: "pending" }))).toEqual(
+      { finalizedOnL1: false, notFoundCount: 0, status: "accepted" },
+    );
+    expect(
+      reconciledOutcome(entry({ status: "preconfirmed" }), report({ status: "pending" })),
+    ).toEqual({ finalizedOnL1: false, notFoundCount: 0, status: "preconfirmed" });
+    expect(
+      reconciledOutcome(
+        entry({ finalizedOnL1: true, status: "accepted" }),
+        report({ finalizedOnL1: false, status: "accepted" }),
+      ),
+    ).toEqual({ finalizedOnL1: true, notFoundCount: 0, status: "accepted" });
+  });
+
   test("owes the user a notice when a confirmed transaction later fails", () => {
     for (const previous of ["accepted", "preconfirmed"] as const) {
       expect(

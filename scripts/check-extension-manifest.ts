@@ -33,6 +33,8 @@ const expectedHostPermissions = [
   // worker, where host permissions apply and CORS does not.
   "https://mainnet.nodes.starknet.org/*",
   "https://sepolia.nodes.starknet.org/*",
+  // Keyless availability fallback when a Foundation node is unreachable.
+  "https://api.cartridge.gg/*",
   "https://api.coingecko.com/*",
   // Read-only indexed activity and complete token-holdings snapshots. This
   // never participates in signing or transaction submission.

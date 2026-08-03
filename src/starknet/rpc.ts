@@ -440,6 +440,27 @@ const NOT_FOUND_REPORT: TransactionStatusReport = {
   status: "pending",
 };
 
+/**
+ * Maximum transaction-status reads in flight against one RPC endpoint. This
+ * bounds background reconciliation fanout across wallets with many accounts;
+ * batches remain sequential so a transport failure can fail over cleanly.
+ */
+export const TRANSACTION_STATUS_CONCURRENCY = 8;
+
+const transactionStatusEntry = async (
+  provider: RpcProvider,
+  transactionHash: string,
+): Promise<readonly [string, TransactionStatusReport]> => {
+  try {
+    return [transactionHash, classifyStatus(await provider.getTransactionStatus(transactionHash))];
+  } catch (error) {
+    if (isTransportRpcError(error)) {
+      throw error;
+    }
+    return [transactionHash, isTransactionNotFoundError(error) ? NOT_FOUND_REPORT : PENDING_REPORT];
+  }
+};
+
 // Maps a status response to a wallet report. REVERTED execution wins over
 // finality — a reverted transaction can be ACCEPTED_ON_L2, and it is already
 // reverted while PRE_CONFIRMED — so a pre-confirmed revert reads as reverted,
@@ -474,24 +495,15 @@ export const getTransactionStatuses = async (
   withRpcFallback(
     rpcUrls,
     async (provider) => {
-      const entries = await Promise.all(
-        hashes.map(async (transactionHash): Promise<readonly [string, TransactionStatusReport]> => {
-          try {
-            return [
-              transactionHash,
-              classifyStatus(await provider.getTransactionStatus(transactionHash)),
-            ];
-          } catch (error) {
-            if (isTransportRpcError(error)) {
-              throw error;
-            }
-            return [
-              transactionHash,
-              isTransactionNotFoundError(error) ? NOT_FOUND_REPORT : PENDING_REPORT,
-            ];
-          }
-        }),
-      );
+      const entries: (readonly [string, TransactionStatusReport])[] = [];
+      for (let offset = 0; offset < hashes.length; offset += TRANSACTION_STATUS_CONCURRENCY) {
+        const batch = hashes.slice(offset, offset + TRANSACTION_STATUS_CONCURRENCY);
+        entries.push(
+          ...(await Promise.all(
+            batch.map((transactionHash) => transactionStatusEntry(provider, transactionHash)),
+          )),
+        );
+      }
       return Object.fromEntries(entries);
     },
     makeProvider,

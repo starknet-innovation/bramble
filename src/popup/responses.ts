@@ -3,6 +3,10 @@
  */
 
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
+import {
+  MAX_TRANSACTION_ALERT_CHARACTERS,
+  MAX_TRANSACTION_ALERTS_PER_DRAIN,
+} from "../shared/transaction-alerts";
 import { isStarkFieldElement, isStarknetNetworkId } from "../starknet/networks";
 import { type ActivityEntry, isActivityEntry } from "../storage/activity-store";
 
@@ -466,7 +470,13 @@ export const isTransactionAlertsResponse = (value: unknown): value is Transactio
   hasOnlyKnownKeys(value, ["alerts", "ok"]) &&
   value["ok"] === true &&
   Array.isArray(value["alerts"]) &&
-  value["alerts"].every((alert) => typeof alert === "string" && alert.length > 0);
+  value["alerts"].length <= MAX_TRANSACTION_ALERTS_PER_DRAIN &&
+  value["alerts"].every(
+    (alert) =>
+      typeof alert === "string" &&
+      alert.length > 0 &&
+      alert.length <= MAX_TRANSACTION_ALERT_CHARACTERS,
+  );
 
 /**
  * Tracked allowances response accepted from the background boundary.

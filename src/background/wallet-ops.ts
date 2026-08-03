@@ -307,7 +307,13 @@ const handleTransactionAlerts: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.transactionAlerts")) {
     return { error: "invalid transaction alerts request" };
   }
-  const entries = await deps.activity.takeFailureNotices().catch(() => []);
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { alerts: [], ok: true };
+  }
+  const entries = await deps.activity
+    .takeFailureNotices({ accountId: context.account.id, networkId: context.networkId })
+    .catch(() => []);
   return { alerts: entries.map(failureNoticeMessage), ok: true };
 };
 

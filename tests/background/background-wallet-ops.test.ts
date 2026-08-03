@@ -159,7 +159,7 @@ const makeHarness = (options?: {
     },
     session,
   });
-  return { activity, handler, statusRequests };
+  return { activity, handler, session, statusRequests };
 };
 
 describe("wallet operations", () => {
@@ -326,6 +326,49 @@ describe("wallet operations", () => {
       ok: true,
     });
     expect((await activityLog.list())[0]?.status).toBe("reverted");
+  });
+
+  test("drains notices only for the active account", async () => {
+    const { activity: activityLog, handler } = makeHarness();
+    await activityLog.record({
+      accountId: OTHER_ACCOUNT_ID,
+      hash: "0x8ab",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Other account send",
+    });
+    await activityLog.updateStatuses(
+      { "0x8ab": { failureNotice: "pending", status: "reverted" } },
+      { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" },
+    );
+
+    expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
+      alerts: [],
+      ok: true,
+    });
+    expect((await activityLog.list())[0]?.failureNotice).toBe("pending");
+  });
+
+  test("does not drain a notice while the wallet is locked", async () => {
+    const { activity: activityLog, handler, session } = makeHarness();
+    await activityLog.record({
+      accountId: account.id,
+      hash: "0x9ab",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Locked account send",
+    });
+    await activityLog.updateStatuses(
+      { "0x9ab": { failureNotice: "pending", status: "reverted" } },
+      { accountId: account.id, networkId: "SN_MAIN" },
+    );
+    session.lock();
+
+    expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
+      alerts: [],
+      ok: true,
+    });
+    expect((await activityLog.list())[0]?.failureNotice).toBe("pending");
   });
 
   test("merges real on-chain history into the feed, deduped against local records", async () => {

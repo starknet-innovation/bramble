@@ -3,6 +3,7 @@
  * outside the encrypted vault; the clock stays injectable for tests.
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "../shared/transaction-alerts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -45,6 +46,27 @@ export type ActivityStatus = "accepted" | "pending" | "preconfirmed" | "rejected
  */
 export const isUnresolvedActivityStatus = (status: ActivityStatus): boolean =>
   status === "pending" || status === "preconfirmed";
+
+/**
+ * Resolves two status observations without allowing stale asynchronous reads
+ * to demote chain progress or overwrite a terminal failure.
+ */
+export const monotonicActivityStatus = (
+  current: ActivityStatus,
+  observed: ActivityStatus,
+): ActivityStatus => {
+  const terminal = (status: ActivityStatus): boolean =>
+    status === "rejected" || status === "reverted";
+  if (terminal(current)) {
+    return current;
+  }
+  if (terminal(observed)) {
+    return observed;
+  }
+  const progress = (status: ActivityStatus): number =>
+    status === "accepted" ? 2 : status === "preconfirmed" ? 1 : 0;
+  return progress(observed) >= progress(current) ? observed : current;
+};
 
 /**
  * One recorded transaction. The `amount`, `counterparty`, and `token` fields
@@ -118,9 +140,10 @@ export type ActivityLog = {
   /**
    * Atomically returns the entries carrying an undelivered failure notice and
    * marks them delivered, so a notice surfaces exactly once even if two panels
-   * drain concurrently.
+   * drain concurrently. Delivery is scoped to one account/network and bounded
+   * per refresh.
    */
-  readonly takeFailureNotices: () => Promise<readonly ActivityEntry[]>;
+  readonly takeFailureNotices: (scope: ActivityScope) => Promise<readonly ActivityEntry[]>;
   readonly updateStatuses: (
     outcomes: Readonly<Record<string, ActivityOutcome>>,
     scope: ActivityScope,
@@ -234,12 +257,19 @@ const outcomeForHash = (
 // dropped rather than written as `undefined`, so the persisted record stays
 // JSON-clean and revalidates; a merge that would not revalidate is discarded.
 const applyOutcome = (entry: ActivityEntry, outcome: ActivityOutcome): ActivityEntry => {
+  const status = monotonicActivityStatus(entry.status, outcome.status);
+  const failureNotice =
+    entry.failureNotice === "delivered"
+      ? "delivered"
+      : (outcome.failureNotice ?? entry.failureNotice);
+  const finalizedOnL1 =
+    entry.finalizedOnL1 === true ? true : (outcome.finalizedOnL1 ?? entry.finalizedOnL1);
   const next: ActivityEntry = {
     ...entry,
-    ...(outcome.failureNotice === undefined ? {} : { failureNotice: outcome.failureNotice }),
-    ...(outcome.finalizedOnL1 === undefined ? {} : { finalizedOnL1: outcome.finalizedOnL1 }),
+    ...(failureNotice === undefined ? {} : { failureNotice }),
+    ...(finalizedOnL1 === undefined ? {} : { finalizedOnL1 }),
     ...(outcome.notFoundCount === undefined ? {} : { notFoundCount: outcome.notFoundCount }),
-    status: outcome.status,
+    status,
   };
   return isActivityEntry(next) ? next : entry;
 };
@@ -261,15 +291,22 @@ const reconciled = (
 // notices marked delivered.
 const drainFailureNotices = (
   entries: readonly ActivityEntry[],
+  scope: ActivityScope,
 ): {
   readonly delivered: readonly ActivityEntry[];
   readonly next: readonly ActivityEntry[];
-} => ({
-  delivered: entries.filter((entry) => entry.failureNotice === "pending"),
-  next: entries.map((entry) =>
-    entry.failureNotice === "pending" ? { ...entry, failureNotice: "delivered" as const } : entry,
-  ),
-});
+} => {
+  const delivered = entries
+    .filter((entry) => matchesScope(entry, scope) && entry.failureNotice === "pending")
+    .slice(0, MAX_TRANSACTION_ALERTS_PER_DRAIN);
+  const deliveredEntries = new Set(delivered);
+  return {
+    delivered,
+    next: entries.map((entry) =>
+      deliveredEntries.has(entry) ? { ...entry, failureNotice: "delivered" as const } : entry,
+    ),
+  };
+};
 
 /**
  * Creates the persistent activity log.
@@ -295,8 +332,8 @@ export const createActivityLog = ({
         const entries = await readEntries(store);
         await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
       },
-      async takeFailureNotices() {
-        const { delivered, next } = drainFailureNotices(await readEntries(store));
+      async takeFailureNotices(scope) {
+        const { delivered, next } = drainFailureNotices(await readEntries(store), scope);
         if (delivered.length > 0) {
           await store.set(ACTIVITY_STORE_KEY, next);
         }
@@ -324,8 +361,8 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
       const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
     },
-    async takeFailureNotices() {
-      const { delivered, next } = drainFailureNotices(entries);
+    async takeFailureNotices(scope) {
+      const { delivered, next } = drainFailureNotices(entries, scope);
       entries.splice(0, entries.length, ...next);
       return delivered;
     },

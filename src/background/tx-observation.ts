@@ -12,7 +12,7 @@
 
 import type { TransactionStatusReport } from "../starknet/rpc";
 import type { ActivityEntry, ActivityOutcome, ActivityStatus } from "../storage/activity-store";
-import { isUnresolvedActivityStatus } from "../storage/activity-store";
+import { isUnresolvedActivityStatus, monotonicActivityStatus } from "../storage/activity-store";
 
 /**
  * Consecutive `TXN_HASH_NOT_FOUND` answers required before a transaction the
@@ -139,22 +139,24 @@ const disappearedOutcome = (entry: ActivityEntry): ActivityOutcome => {
  * Folds one chain report into the outcome to persist for an entry.
  *
  * Any answer that finds the transaction clears the not-found tally, so
- * intermittent misses never accumulate into a false failure. L1 finality is
- * taken from the report rather than latched, so a node that reports a
- * transaction back below L1 puts it back under observation instead of retiring
- * it on stale information.
+ * intermittent misses never accumulate into a false failure. Progress and L1
+ * finality are monotonic: a lagging failover node cannot move an accepted
+ * transaction back to pre-confirmed/pending or erase observed L1 finality.
  */
 export const reconciledOutcome = (
   entry: ActivityEntry,
   report: TransactionStatusReport,
-): ActivityOutcome =>
-  report.found
-    ? withNotice(entry, {
-        finalizedOnL1: report.finalizedOnL1,
-        notFoundCount: 0,
-        status: report.status,
-      })
-    : disappearedOutcome(entry);
+): ActivityOutcome => {
+  if (!report.found) {
+    return disappearedOutcome(entry);
+  }
+  const status = monotonicActivityStatus(entry.status, report.status);
+  return withNotice(entry, {
+    finalizedOnL1: entry.finalizedOnL1 === true || report.finalizedOnL1,
+    notFoundCount: 0,
+    status,
+  });
+};
 
 /**
  * User-facing copy for one owed failure notice. Written for someone who has
