@@ -10,6 +10,7 @@ import { knownAccountType } from "../starknet/account-types";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import { isStarknetNetworkId } from "../starknet/networks";
+import type { MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { receipt } from "../ui/content";
@@ -24,14 +25,13 @@ import {
   accountAvatar,
   accountDisplayName,
   accountLabel,
-  copyButton,
   flowHeader,
   flowScreen,
   noAccountEmpty,
   type WalletView,
   walletMenuRow,
 } from "./parts";
-import { qrSvg } from "./qr";
+import { receiveAddressView } from "./receive-view";
 import { sendFlow } from "./send-views";
 import {
   appearanceFlow,
@@ -57,20 +57,12 @@ export const receiveFlow = (status: WalletStatus, account: AccountRef | null): s
     `<section class="section">
       ${
         account
-          ? `<div class="stack">
-              <div class="qr-card">${qrSvg(account.address)}</div>
-              <p class="eyebrow">Your address</p>
-              <div class="address-line">
-                <code>${escapeHtml(account.address)}</code>
-                ${copyButton(account.address, "Copy address")}
-              </div>
-              ${button({
-                attributes: { "data-copy": account.address },
-                icon: "copy",
-                label: "Copy address",
-              })}
-              <p class="hint">Only send ${escapeHtml(status.network)} assets to this address.</p>
-            </div>`
+          ? receiveAddressView({
+              address: account.address,
+              copyLabel: "Copy address",
+              eyebrow: "Your address",
+              hint: `Only send ${status.network} assets to this address.`,
+            })
           : noAccountEmpty(status)
       }
       <p id="receive-result" role="status"></p>
@@ -418,6 +410,7 @@ export const simpleFlowScreen = (
     readonly connectedSites: readonly ConnectedSite[];
     readonly currency: DisplayCurrency;
     readonly expandedGroupId: string | null;
+    readonly multisigs?: readonly MultisigRecord[];
     readonly preferences: WalletPreferences | null;
     readonly prices: Readonly<Record<string, number>>;
     readonly status: WalletStatus;
@@ -433,6 +426,7 @@ export const simpleFlowScreen = (
         ctx.prices,
         ctx.changes,
         ctx.currency,
+        ctx.multisigs ?? [],
       );
     case "swap":
       return swapFlow(ctx.status, ctx.account);

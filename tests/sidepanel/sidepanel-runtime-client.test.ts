@@ -231,6 +231,12 @@ describe("activity feed", () => {
     ).toEqual({ entries: [activityEntry], historyUnavailable: true });
   });
 
+  test("loadActivity carries an explicit shared-account scope", async () => {
+    const { sent, wallet } = captureRuntime({ activity: [activityEntry], ok: true });
+    await wallet.loadActivity("SN_MAIN:0x999");
+    expect(sent[0]).toEqual({ accountId: "SN_MAIN:0x999", type: "wallet.activity" });
+  });
+
   test("loadActivity defaults historyUnavailable to false when omitted", async () => {
     expect(await runtimeReturning({ activity: [activityEntry], ok: true }).loadActivity()).toEqual({
       entries: [activityEntry],

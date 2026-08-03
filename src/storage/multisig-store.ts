@@ -66,6 +66,8 @@ export type MultisigProposalRecord = {
   readonly confirmations: number;
   readonly confirmedBySigner?: boolean;
   readonly confirmedBySignerAddress?: string;
+  /** Signers owned by this wallet whose confirmations were individually proved on-chain. */
+  readonly confirmedSignerAddresses?: readonly string[];
   readonly id: string;
   readonly multisigId: string;
   readonly state: "confirmed" | "executed" | "not-found" | "pending";
@@ -193,6 +195,7 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
     "confirmations",
     "confirmedBySigner",
     "confirmedBySignerAddress",
+    "confirmedSignerAddresses",
     "id",
     "multisigId",
     "state",
@@ -208,6 +211,14 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
   (value["confirmedBySignerAddress"] === undefined ||
     (typeof value["confirmedBySignerAddress"] === "string" &&
       isNonZeroStarkFieldElement(value["confirmedBySignerAddress"]))) &&
+  (value["confirmedSignerAddresses"] === undefined ||
+    (Array.isArray(value["confirmedSignerAddresses"]) &&
+      value["confirmedSignerAddresses"].length <= MULTISIG_LIMITS.signers &&
+      value["confirmedSignerAddresses"].every(
+        (signer) => typeof signer === "string" && isNonZeroStarkFieldElement(signer),
+      ) &&
+      new Set(value["confirmedSignerAddresses"].map(canonicalFelt)).size ===
+        value["confirmedSignerAddresses"].length)) &&
   (value["confirmedBySigner"] === undefined) ===
     (value["confirmedBySignerAddress"] === undefined) &&
   typeof value["multisigId"] === "string" &&

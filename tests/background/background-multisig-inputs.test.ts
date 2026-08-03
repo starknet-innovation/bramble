@@ -194,11 +194,26 @@ describe("readTrackMultisigProposalInput", () => {
     ).toEqual({ multisigId: "SN_MAIN:0x1", summary: "Shared", txId: "0xabc" });
     expect(
       readTrackMultisigProposalInput({
+        call: {
+          calldata: ["0x1"],
+          contractAddress: TARGET,
+          entrypoint: "transfer",
+          salt: "0x2",
+        },
         multisigId: "SN_MAIN:0x1",
         txId: "0xabc",
         type: "wallet.trackMultisigProposal",
       }),
-    ).toEqual({ multisigId: "SN_MAIN:0x1", txId: "0xabc" });
+    ).toEqual({
+      call: {
+        calldata: ["0x1"],
+        contractAddress: TARGET,
+        entrypoint: "transfer",
+        salt: "0x2",
+      },
+      multisigId: "SN_MAIN:0x1",
+      txId: "0xabc",
+    });
   });
 
   test("rejects a non-felt txId and unknown fields", () => {
@@ -206,6 +221,19 @@ describe("readTrackMultisigProposalInput", () => {
       readTrackMultisigProposalInput({
         multisigId: "SN_MAIN:0x1",
         txId: "not-a-felt",
+        type: "wallet.trackMultisigProposal",
+      }),
+    ).toBeNull();
+    expect(
+      readTrackMultisigProposalInput({
+        call: {
+          calldata: ["not-a-felt"],
+          contractAddress: TARGET,
+          entrypoint: "transfer",
+          salt: "0x1",
+        },
+        multisigId: "SN_MAIN:0x1",
+        txId: "0xabc",
         type: "wallet.trackMultisigProposal",
       }),
     ).toBeNull();

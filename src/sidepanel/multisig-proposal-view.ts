@@ -18,7 +18,13 @@ import {
   multisigProposalQrPayload,
   serializeMultisigReviewPackage,
 } from "./multisig-model";
-import { accountLabel, copyButton } from "./parts";
+import {
+  accountAvatar,
+  accountDisplayName,
+  accountLabel,
+  copyButton,
+  hardwareBadge,
+} from "./parts";
 import { qrSvg } from "./qr";
 
 const stateLabel: Readonly<Record<MultisigProposalRecord["state"], string>> = {
@@ -39,22 +45,37 @@ const actionAttributes = (
   ...(requiresAck ? { "data-ms-requires-ack": "true" } : {}),
 });
 
+const confirmationCandidates = (
+  proposal: MultisigProposalRecord,
+  localSigners: readonly AccountRef[],
+): readonly AccountRef[] => {
+  const alreadyConfirmed =
+    proposal.confirmedSignerAddresses ??
+    (proposal.confirmedBySigner === true && proposal.confirmedBySignerAddress
+      ? [proposal.confirmedBySignerAddress]
+      : []);
+  return localSigners.filter(
+    (signer) => !alreadyConfirmed.some((confirmed) => sameFelt(signer.address, confirmed)),
+  );
+};
+
 const proposalActions = (
   proposal: MultisigProposalRecord,
-  canSign: boolean,
-  signerAddress: string | null,
+  localSigners: readonly AccountRef[],
+  activeAccount: AccountRef | null,
 ): string => {
   if (proposal.state === "executed" || proposal.state === "not-found") return "";
+  const signerAddress = activeAccount?.address ?? null;
   const signerSnapshotIsCurrent =
     signerAddress !== null &&
     proposal.confirmedBySignerAddress !== undefined &&
     sameFelt(signerAddress, proposal.confirmedBySignerAddress);
-  const confirmAllowed =
-    canSign &&
-    signerSnapshotIsCurrent &&
-    proposal.state !== "confirmed" &&
-    proposal.confirmedBySigner === false;
-  const revokeAllowed = canSign && signerSnapshotIsCurrent && proposal.confirmedBySigner === true;
+  const candidates = confirmationCandidates(proposal, localSigners);
+  const confirmAllowed = candidates.length > 0 && proposal.state !== "confirmed";
+  const activeCanSign =
+    activeAccount !== null && localSigners.some((signer) => signer.id === activeAccount.id);
+  const revokeAllowed =
+    activeCanSign && signerSnapshotIsCurrent && proposal.confirmedBySigner === true;
   const requiresAck = proposal.call === null;
   const execute =
     proposal.state === "confirmed"
@@ -70,7 +91,11 @@ const proposalActions = (
       : "";
   return `<div class="proposal-actions" aria-label="Proposal actions">
     ${button({
-      attributes: actionAttributes("confirm", proposal.id, confirmAllowed, requiresAck),
+      attributes: {
+        "data-ms-action-allowed": String(confirmAllowed),
+        "data-ms-confirm-open": proposal.id,
+        ...(requiresAck ? { "data-ms-requires-ack": "true" } : {}),
+      },
       disabled: !confirmAllowed || requiresAck,
       icon: "check",
       label: "Confirm",
@@ -87,6 +112,71 @@ const proposalActions = (
     })}
     ${execute}
   </div>`;
+};
+
+const confirmationReview = (
+  record: MultisigRecord,
+  proposal: MultisigProposalRecord,
+  localSigners: readonly AccountRef[],
+  activeAccount: AccountRef | null,
+  preferences: WalletPreferences | null,
+): string => {
+  const candidates = confirmationCandidates(proposal, localSigners);
+  if (proposal.state !== "pending" || candidates.length === 0) {
+    return "";
+  }
+  const selected = candidates.find((signer) => signer.id === activeAccount?.id) ?? candidates[0];
+  if (!selected) {
+    return "";
+  }
+  return `<section class="multisig-review-sheet" data-ms-confirm-panel="${escapeHtml(proposal.id)}" role="dialog" aria-modal="true" aria-labelledby="confirm-${escapeHtml(proposal.id)}-title" hidden>
+    <div class="multisig-review-card multisig-confirm-card">
+      <div class="row">
+        <div><p class="eyebrow">Confirmation review</p><h2 id="confirm-${escapeHtml(proposal.id)}-title">Confirm this proposal</h2></div>
+        ${button({
+          attributes: { "data-ms-confirm-cancel": proposal.id },
+          icon: "x",
+          label: "Close",
+          size: "small",
+          variant: "ghost",
+        })}
+      </div>
+      <div class="proposal-confirm-summary">
+        <div><span>Proposal</span><strong>${escapeHtml(proposal.summary || "Untitled proposal")}</strong></div>
+        <div><span>Current approval</span><strong>${proposal.confirmations} of ${record.quorum}</strong></div>
+        <div><span>Result</span><strong>Add one signer confirmation</strong></div>
+      </div>
+      <fieldset class="multisig-confirm-fieldset">
+        <legend>Sign with</legend>
+        <p class="hint">These wallet accounts match the latest signer rules read from Starknet.</p>
+        <div class="multisig-confirm-signers">
+          ${candidates
+            .map(
+              (
+                signer,
+              ) => `<button class="multisig-confirm-signer" data-ms-confirm-proposal="${escapeHtml(proposal.id)}" data-ms-confirm-signer="${escapeHtml(signer.id)}" data-ms-confirm-signer-active="${signer.id === activeAccount?.id}" type="button" aria-pressed="${signer.id === selected.id}">
+                <span class="option-avatar">${accountAvatar(signer.address)}</span>
+                <span class="send-recipient-copy"><strong>${escapeHtml(accountDisplayName(signer, preferences))}${hardwareBadge(signer)}</strong><span>${escapeHtml(accountLabel(signer.address))}</span></span>
+                <span class="multisig-signer-check">${icon("check")}</span>
+              </button>`,
+            )
+            .join("")}
+        </div>
+      </fieldset>
+      <div class="review-panel" role="note">
+        <p>This signs one confirmation. It does not execute the proposal; execution becomes available only after quorum.</p>
+      </div>
+      ${button({
+        attributes: {
+          "data-ms-confirm-submit": proposal.id,
+          "data-ms-selected-signer": selected.id,
+        },
+        icon: "check",
+        label: "Confirm proposal",
+      })}
+      <p data-ms-confirm-status role="status"></p>
+    </div>
+  </section>`;
 };
 
 const technicalDetails = (proposal: MultisigProposalRecord): string => {
@@ -160,7 +250,7 @@ const independentReview = (record: MultisigRecord, proposal: MultisigProposalRec
 const proposalRow = (
   proposal: MultisigProposalRecord,
   record: MultisigRecord,
-  canSign: boolean,
+  localSigners: readonly AccountRef[],
   account: AccountRef | null,
   preferences: WalletPreferences | null,
 ): string => {
@@ -194,8 +284,9 @@ const proposalRow = (
           variant: "ghost",
         })}
       </div>
-      ${proposalActions(proposal, canSign, account?.address ?? null)}
+      ${proposalActions(proposal, localSigners, account)}
     </div>
+    ${confirmationReview(record, proposal, localSigners, account, preferences)}
     ${independentReview(record, proposal)}
   </li>`;
 };
@@ -206,12 +297,18 @@ const proposalRow = (
 export const multisigProposalList = (
   record: MultisigRecord,
   proposals: readonly MultisigProposalRecord[],
-  canSign: boolean,
+  accounts: readonly AccountRef[],
   account: AccountRef | null,
   preferences: WalletPreferences | null,
-): string =>
-  proposals.length === 0
+): string => {
+  const localSigners = accounts.filter(
+    (stored) =>
+      stored.networkId === record.networkId &&
+      record.signers.some((signer) => sameFelt(signer, stored.address)),
+  );
+  return proposals.length === 0
     ? emptyState("No proposals yet. Create one, or track an id shared by another signer.")
     : `<ul class="allowance-list">${proposals
-        .map((proposal) => proposalRow(proposal, record, canSign, account, preferences))
+        .map((proposal) => proposalRow(proposal, record, localSigners, account, preferences))
         .join("")}</ul>`;
+};

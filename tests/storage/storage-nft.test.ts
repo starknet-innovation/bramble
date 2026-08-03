@@ -1,5 +1,5 @@
 /**
- * Watched-NFT validator checks: canonical ids, optional label/spam fields, and
+ * Watched-NFT validator checks: canonical ids, optional owner/label/spam fields, and
  * rejection of malformed records.
  */
 import { describe, expect, test } from "bun:test";
@@ -21,10 +21,12 @@ describe("watched NFT helpers", () => {
       contract: CONTRACT,
       label: "  Punk  ",
       networkId: "SN_SEPOLIA",
+      owner: "0x000123",
       spam: true,
       tokenId: "42",
     });
     expect(nft.label).toBe("Punk");
+    expect(nft.owner).toBe("0x123");
     expect(nft.spam).toBe(true);
     expect(isWatchedNft(nft)).toBe(true);
   });
@@ -43,6 +45,15 @@ describe("watched NFT helpers", () => {
     ).toBe(false);
     expect(
       isWatchedNft({ contract: CONTRACT, id: "x", networkId: "SN_MAIN", tokenId: "1.5" }),
+    ).toBe(false);
+    expect(
+      isWatchedNft({
+        contract: CONTRACT,
+        id: `SN_MAIN:${CONTRACT}:1`,
+        networkId: "SN_MAIN",
+        owner: "not-an-address",
+        tokenId: "1",
+      }),
     ).toBe(false);
   });
 });
