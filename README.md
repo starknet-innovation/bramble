@@ -29,10 +29,19 @@ Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also ava
 
 ## Quick start
 
+### Prerequisites
+
+| Tool | Version | Install | Needed for |
+| --- | --- | --- | --- |
+| [Bun](https://bun.sh) | 1.3.3 | [bun.sh](https://bun.sh/) | all |
+| Rust (stable) | 1.96+ | [rustup](https://rustup.rs) | `vendor:krusty` |
+| [wasm-pack](https://github.com/rustwasm/wasm-pack) | 0.13.1 | `cargo install wasm-pack --locked --version 0.13.1` | `vendor:krusty` |
+| [Scarb](https://docs.swmansion.com/scarb/) | 2.18.0 **exactly** | `asdf install scarb 2.18.0` (pinned in `.tool-versions`) | `vendor:multisig` |
+
 ```bash
 bun install
-bun run vendor:krusty     # Krusty KMS crypto core (WASM)
-bun run vendor:multisig   # pinned multisig contract artifacts
+bun run vendor:krusty     # Krusty KMS crypto core (WASM) — needs Rust + wasm-pack
+bun run vendor:multisig   # pinned multisig contract artifacts — needs scarb (version denoted in .tool-versions)
 bun run build             # -> dist/
 ```
 
