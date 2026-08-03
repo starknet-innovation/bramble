@@ -485,7 +485,6 @@ export type WalletStatusReader = {
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
-  /** The active account when the origin's grant covers it, else empty. */
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,

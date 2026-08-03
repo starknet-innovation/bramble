@@ -41,7 +41,7 @@ export const account: AccountRef = {
 export const secondAccount: AccountRef = {
   ...account,
   address: "0xfeedface",
-  id: "SN_SEPOLIA:0xfeedface",
+  id: "SN_MAIN:0xfeedface",
 };
 
 /**
