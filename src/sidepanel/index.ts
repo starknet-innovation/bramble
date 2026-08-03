@@ -60,6 +60,7 @@ import { SIDEPANEL_STYLES } from "./styles";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
 import { bindActivity, bindTransfer, markTransferLedgerAuthorized } from "./transfer-ui";
+import { withTransactionAlerts } from "./tx-alerts-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {
@@ -477,15 +478,13 @@ const goBack = (): void => {
 };
 
 const refreshScheduler = createRefreshScheduler({
-  refresh: async () => render(await wallet.loadStatus()),
+  refresh: withTransactionAlerts(wallet, async () => render(await wallet.loadStatus())),
   visible: () => document.visibilityState === "visible",
 });
 mutationRuntime.setListener(refreshScheduler.afterAction);
 
 runtime?.onMessage?.addListener((message) => {
-  if (isWalletEventMessage(message)) {
-    refreshScheduler.afterAction();
-  }
+  if (isWalletEventMessage(message)) refreshScheduler.afterAction();
 });
 document.addEventListener("visibilitychange", refreshScheduler.visibilityChanged);
 window.addEventListener("focus", () => {

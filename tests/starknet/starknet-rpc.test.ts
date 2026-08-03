@@ -10,6 +10,7 @@ import {
   decodeErc20String,
   formatTokenAmount,
   isContractNotFoundError,
+  isTransactionNotFoundError,
   isTransportRpcError,
   ozAccountDeployment,
   parseTokenAmount,
@@ -168,6 +169,25 @@ describe("starknet RPC helpers", () => {
     ).toBe(true);
     expect(isContractNotFoundError(new Error("connection reset"))).toBe(false);
     expect(isContractNotFoundError("Contract not found")).toBe(false);
+  });
+
+  // "The node says the hash is gone" must stay distinguishable from "the node
+  // said something else" and from a transport failure, because three of the
+  // first kind in a row retire a transaction as failed.
+  test("classifies transaction-not-found RPC failures", () => {
+    expect(isTransactionNotFoundError(new Error("RPC: Transaction hash not found"))).toBe(true);
+    expect(
+      isTransactionNotFoundError(
+        Object.assign(new Error("RPC error"), { baseError: { code: 29, message: "" } }),
+      ),
+    ).toBe(true);
+    expect(
+      isTransactionNotFoundError(
+        Object.assign(new Error("RPC error"), { baseError: { code: 20, message: "" } }),
+      ),
+    ).toBe(false);
+    expect(isTransactionNotFoundError(new Error("connection reset"))).toBe(false);
+    expect(isTransactionNotFoundError("Transaction hash not found")).toBe(false);
   });
 
   test("decodes ERC20 name/symbol from felt short strings and byte arrays", () => {

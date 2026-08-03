@@ -19,10 +19,11 @@ import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readApprovalIdInput } from "./message-inputs";
 import { executeInvokeApproval } from "./provider-ops";
 import type { RuntimeRpc } from "./runtime-rpc";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
 import { executeStrk20InvokeApproval } from "./strk20-ops";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Dependencies for resolving a queued approval into its settled result.

@@ -446,6 +446,29 @@ export const isActivityResponse = (value: unknown): value is ActivityResponse =>
   (value["historyUnavailable"] === undefined || typeof value["historyUnavailable"] === "boolean");
 
 /**
+ * Undelivered transaction failure notices drained from the activity log.
+ *
+ * Each string is ready-to-show copy for a transaction that failed after the
+ * send journey had already advanced. The background hands each notice out
+ * exactly once, so an empty list is the normal case.
+ */
+export type TransactionAlertsResponse = {
+  readonly alerts: readonly string[];
+  readonly ok: true;
+};
+
+/**
+ * Checks transaction alert responses before toasting them.
+ */
+export const isTransactionAlertsResponse = (value: unknown): value is TransactionAlertsResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["alerts", "ok"]) &&
+  value["ok"] === true &&
+  Array.isArray(value["alerts"]) &&
+  value["alerts"].every((alert) => typeof alert === "string" && alert.length > 0);
+
+/**
  * Tracked allowances response accepted from the background boundary.
  */
 export type AllowancesResponse = {

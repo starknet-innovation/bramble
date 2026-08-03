@@ -9,6 +9,7 @@ import { watchDeployment } from "./shell-bindings";
 import { tokenGlyph } from "./token-row";
 import { bindTransferCompose, restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import {
+  confirmationOutcome,
   confirmationStatus,
   friendlyReviewError,
   initialTransferState,
@@ -274,7 +275,9 @@ export const markTransferLedgerAuthorized = (): void => {
 
 /**
  * Binds the recipient-first Send journey and observes the submitted hash until
- * Starknet reports acceptance, rejection, reversion, or a bounded pending state.
+ * Starknet reports a pre-confirmation, acceptance, rejection, reversion, or a
+ * bounded pending state. A pre-confirmation completes the journey; the
+ * background monitor keeps verifying the transaction after the panel closes.
  */
 export const bindTransfer = (deps: TransferUiDeps): void => {
   const { app, back, navigate, render, wallet } = deps;
@@ -365,24 +368,14 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       try {
         const activity = await wallet.loadActivity();
         if (epoch !== transferEpoch) return;
-        const status = confirmationStatus(activity.entries, hash);
-        if (status === "accepted") {
-          transferState = { ...transferState, error: "", stage: "submitted" };
+        const outcome = confirmationOutcome(confirmationStatus(activity.entries, hash));
+        if (outcome) {
+          transferState =
+            outcome.kind === "succeeded"
+              ? { ...transferState, error: "", stage: "submitted" }
+              : { ...transferState, error: outcome.message, stage: "failed" };
           repaintActiveTransfer?.();
-          showToast("Transaction confirmed on Starknet", "success");
-          return;
-        }
-        if (status === "rejected" || status === "reverted") {
-          transferState = {
-            ...transferState,
-            error:
-              status === "reverted"
-                ? "Starknet reverted this transaction. Review its activity details before retrying."
-                : "Starknet rejected this transaction. No transfer was completed.",
-            stage: "failed",
-          };
-          repaintActiveTransfer?.();
-          showToast("Transaction was not confirmed", "error");
+          showToast(outcome.toast, outcome.kind === "succeeded" ? "success" : "error");
           return;
         }
       } catch {

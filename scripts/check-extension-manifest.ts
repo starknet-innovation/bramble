@@ -18,7 +18,12 @@ const expectedExtensionCsp =
   "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:;";
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
 const expectedHostPermissions = [
-  "https://api.cartridge.gg/*",
+  // Starknet Foundation public RPC nodes: the wallet's default mainnet and
+  // sepolia endpoints. Keyless, and the only endpoints the extension signs or
+  // broadcasts against by default. Every request originates in the MV3 service
+  // worker, where host permissions apply and CORS does not.
+  "https://mainnet.nodes.starknet.org/*",
+  "https://sepolia.nodes.starknet.org/*",
   "https://api.coingecko.com/*",
   // Read-only indexed activity and complete token-holdings snapshots. This
   // never participates in signing or transaction submission.
@@ -90,8 +95,13 @@ if (
   failures.push("manifest top-level capabilities must stay explicit");
 }
 
-if (!hasOnly(manifest["permissions"], ["sidePanel", "storage"])) {
-  failures.push("manifest permissions must stay sidePanel and storage only");
+// `alarms` schedules background transaction reconciliation. An MV3 service
+// worker is terminated when idle, so a timer is not a schedule; alarms are the
+// only way to keep verifying a submitted transaction through to L1 finality
+// after the side panel closes. It grants no data access and shows no Chrome
+// permission warning.
+if (!hasOnly(manifest["permissions"], ["alarms", "sidePanel", "storage"])) {
+  failures.push("manifest permissions must stay alarms, sidePanel, and storage only");
 }
 
 if (!hasOnly(manifest["host_permissions"], expectedHostPermissions)) {

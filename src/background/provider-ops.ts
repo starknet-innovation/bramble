@@ -23,11 +23,12 @@ import { readAddInvokeTransactionInput } from "./message-inputs";
 import { readGetPermissionsInput, readWatchAssetInput } from "./provider-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
 import { verificationContext } from "./wallet-ops";
+import type { WalletStatusReader } from "./wallet-reader";
 import { canonicalTokenAddress, watchAssetToken } from "./watch-asset";
 
 /**

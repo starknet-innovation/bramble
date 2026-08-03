@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../../src/background/messages";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
+import type { TransactionStatusReport } from "../../src/starknet/rpc";
 import { type ActivityEntry, createActivityLog } from "../../src/storage/activity-store";
 import { createMemoryStore } from "../../src/storage/kv";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
@@ -77,6 +78,7 @@ const makeHarness = (options?: {
   readonly estimateFails?: boolean;
   readonly onChainHistory?: readonly ActivityEntry[];
   readonly historyThrows?: boolean;
+  readonly statusReport?: TransactionStatusReport;
 }) => {
   const history =
     options?.historyThrows || options?.onChainHistory
@@ -102,6 +104,10 @@ const makeHarness = (options?: {
   const statusRequests: string[][] = [];
   const handler = createMessageHandler(walletStub, "extension-id", {
     activity,
+    // The activity log stamps entries on its own monotonic test clock, so the
+    // reconciliation clock reads from the same tick counter — otherwise every
+    // recorded transaction looks older than its observation window.
+    now: () => tick,
     runtimeRpc: {
       async estimateInvokeFee() {
         if (options?.estimateFails) {
@@ -123,7 +129,12 @@ const makeHarness = (options?: {
       },
       async getTransactionStatuses({ hashes }) {
         statusRequests.push([...hashes]);
-        return Object.fromEntries(hashes.map((hash) => [hash, "accepted" as const]));
+        return Object.fromEntries(
+          hashes.map((hash) => [
+            hash,
+            options?.statusReport ?? { finalizedOnL1: false, found: true, status: "accepted" },
+          ]),
+        );
       },
       async submitDeclareTransaction() {
         return { classHash: "0x1", transactionHash: "0x1" };
@@ -259,6 +270,62 @@ describe("wallet operations", () => {
     const stored = await activityLog.list();
     expect(stored.find((entry) => entry.hash === "0x8ab")?.status).toBe("pending");
     expect(stored.find((entry) => entry.hash === "0x9ab")?.status).toBe("pending");
+  });
+
+  // A pre-confirmed transaction reaches the feed as its own provisional status
+  // rather than being flattened into accepted or left reading as pending.
+  test("surfaces a pre-confirmed transaction as provisional in the feed", async () => {
+    const { handler } = makeHarness({
+      statusReport: { finalizedOnL1: false, found: true, status: "preconfirmed" },
+    });
+    await handler(
+      {
+        accountId: account.id,
+        amount: "1.5",
+        recipient: "0x777",
+        speed: "fast",
+        tokenId,
+        type: "wallet.transfer",
+      },
+      extensionSender,
+    );
+    const response = await handler({ type: "wallet.activity" }, extensionSender);
+    const activity = (response as { activity: readonly { status: string }[] }).activity;
+    expect(activity[0]?.status).toBe("preconfirmed");
+  });
+
+  // The late-failure channel: a transaction that was pre-confirmed and then
+  // reverted owes the user one notice, delivered on the panel's next poll.
+  test("drains a late-failure notice exactly once through wallet.transactionAlerts", async () => {
+    const { activity: activityLog, handler } = makeHarness({
+      statusReport: { finalizedOnL1: false, found: true, status: "reverted" },
+    });
+    await activityLog.record({
+      accountId: account.id,
+      hash: "0x7ab",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send 1.5 ETH to 0x777",
+    });
+    await activityLog.updateStatuses(
+      { "0x7ab": { status: "preconfirmed" } },
+      { accountId: account.id, networkId: "SN_MAIN" },
+    );
+
+    expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
+      alerts: [],
+      ok: true,
+    });
+    await handler({ type: "wallet.activity" }, extensionSender);
+
+    const first = await handler({ type: "wallet.transactionAlerts" }, extensionSender);
+    expect((first as { alerts: readonly string[] }).alerts).toHaveLength(1);
+    expect((first as { alerts: readonly string[] }).alerts[0]).toContain("reverted");
+    expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
+      alerts: [],
+      ok: true,
+    });
+    expect((await activityLog.list())[0]?.status).toBe("reverted");
   });
 
   test("merges real on-chain history into the feed, deduped against local records", async () => {

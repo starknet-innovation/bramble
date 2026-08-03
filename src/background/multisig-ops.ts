@@ -13,6 +13,7 @@ import {
   type StarknetNetworkId,
   sameFelt,
 } from "../starknet/networks";
+import { isUnresolvedActivityStatus } from "../storage/activity-store";
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
@@ -132,7 +133,7 @@ export const isProposalSubmitPending = async (
   }
   try {
     const entries = await deps.activity.list();
-    return entries.some((entry) => entry.hash === hash && entry.status === "pending");
+    return entries.some((entry) => entry.hash === hash && isUnresolvedActivityStatus(entry.status));
   } catch {
     return true;
   }

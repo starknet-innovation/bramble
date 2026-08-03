@@ -28,25 +28,70 @@ export const systemClock = (): number => Date.now();
 
 /**
  * Lifecycle status of a submitted transaction.
+ *
+ * `preconfirmed` is provisional: the block proposer executed the transaction
+ * (so a revert is already visible) but consensus has not committed its block.
+ * `accepted` covers both `ACCEPTED_ON_L2` and `ACCEPTED_ON_L1`; L1 finality is
+ * carried by {@link ActivityEntry.finalizedOnL1} instead of a separate status,
+ * so the feed never grows a third success tier.
  */
-export type ActivityStatus = "accepted" | "pending" | "rejected" | "reverted";
+export type ActivityStatus = "accepted" | "pending" | "preconfirmed" | "rejected" | "reverted";
+
+/**
+ * Whether a status can still change on chain. Pre-confirmed and pending
+ * transactions are both unresolved; `accepted` is a real outcome even though
+ * reconciliation keeps watching it until L1 finality. Single source of truth —
+ * do not re-derive this comparison at call sites.
+ */
+export const isUnresolvedActivityStatus = (status: ActivityStatus): boolean =>
+  status === "pending" || status === "preconfirmed";
 
 /**
  * One recorded transaction. The `amount`, `counterparty`, and `token` fields
  * are optional so entries stored before they existed still load and export;
- * absent values fall back to blank CSV cells.
+ * absent values fall back to blank CSV cells. The three tracking fields below
+ * are internal bookkeeping for background reconciliation and are never
+ * rendered; they are optional for the same reason.
  */
 export type ActivityEntry = {
   readonly accountId: string;
   readonly amount?: string;
   readonly counterparty?: string;
+  /**
+   * Set to `"pending"` when reconciliation observes a failure the user has
+   * already moved past, and flipped to `"delivered"` once the side panel has
+   * shown it. Absent means there is nothing to tell the user.
+   */
+  readonly failureNotice?: "delivered" | "pending";
+  /**
+   * True once the chain reported `ACCEPTED_ON_L1`. Reconciliation's terminal
+   * condition; not a user-visible state.
+   */
+  readonly finalizedOnL1?: boolean;
   readonly hash: string;
   readonly kind: "deploy" | "invoke" | "transfer";
   readonly networkId: StarknetNetworkId;
+  /**
+   * Consecutive `TXN_HASH_NOT_FOUND` observations. Reset by any answer that
+   * finds the transaction, so ordinary RPC noise never accumulates.
+   */
+  readonly notFoundCount?: number;
   readonly status: ActivityStatus;
   readonly submittedAt: number;
   readonly summary: string;
   readonly token?: string;
+};
+
+/**
+ * The reconciled result written back for one hash. Policy (which transition
+ * deserves a user-visible notice, when a disappearance counts as failure) is
+ * decided by the caller; this store only applies what it is handed.
+ */
+export type ActivityOutcome = {
+  readonly failureNotice?: "pending";
+  readonly finalizedOnL1?: boolean;
+  readonly notFoundCount?: number;
+  readonly status: ActivityStatus;
 };
 
 /**
@@ -64,15 +109,36 @@ export type ActivityScope = {
  */
 export type ActivityLog = {
   readonly list: () => Promise<readonly ActivityEntry[]>;
-  readonly record: (entry: Omit<ActivityEntry, "status" | "submittedAt">) => Promise<void>;
+  readonly record: (
+    entry: Omit<
+      ActivityEntry,
+      "failureNotice" | "finalizedOnL1" | "notFoundCount" | "status" | "submittedAt"
+    >,
+  ) => Promise<void>;
+  /**
+   * Atomically returns the entries carrying an undelivered failure notice and
+   * marks them delivered, so a notice surfaces exactly once even if two panels
+   * drain concurrently.
+   */
+  readonly takeFailureNotices: () => Promise<readonly ActivityEntry[]>;
   readonly updateStatuses: (
-    statuses: Readonly<Record<string, ActivityStatus>>,
+    outcomes: Readonly<Record<string, ActivityOutcome>>,
     scope: ActivityScope,
   ) => Promise<readonly ActivityEntry[]>;
 };
 
 const isActivityStatus = (value: unknown): value is ActivityStatus =>
-  value === "accepted" || value === "pending" || value === "rejected" || value === "reverted";
+  value === "accepted" ||
+  value === "pending" ||
+  value === "preconfirmed" ||
+  value === "rejected" ||
+  value === "reverted";
+
+const isFailureNotice = (value: unknown): value is ActivityEntry["failureNotice"] =>
+  value === undefined || value === "delivered" || value === "pending";
+
+const isNotFoundCount = (value: unknown): value is number | undefined =>
+  value === undefined || (typeof value === "number" && Number.isSafeInteger(value) && value >= 0);
 
 const isActivityKind = (value: unknown): value is ActivityEntry["kind"] =>
   value === "deploy" || value === "invoke" || value === "transfer";
@@ -90,9 +156,12 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "accountId",
     "amount",
     "counterparty",
+    "failureNotice",
+    "finalizedOnL1",
     "hash",
     "kind",
     "networkId",
+    "notFoundCount",
     "status",
     "submittedAt",
     "summary",
@@ -113,7 +182,10 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
   value["summary"].length <= 200 &&
   isOptionalDetail(value["amount"]) &&
   isOptionalDetail(value["counterparty"]) &&
-  isOptionalDetail(value["token"]);
+  isOptionalDetail(value["token"]) &&
+  isFailureNotice(value["failureNotice"]) &&
+  (value["finalizedOnL1"] === undefined || typeof value["finalizedOnL1"] === "boolean") &&
+  isNotFoundCount(value["notFoundCount"]);
 
 const readEntries = async (store: KeyValueStore): Promise<readonly ActivityEntry[]> => {
   const stored = await store.get(ACTIVITY_STORE_KEY);
@@ -152,11 +224,52 @@ const entriesAfterRecord = (
   ];
 };
 
-const statusForHash = (
-  statuses: Readonly<Record<string, ActivityStatus>>,
+const outcomeForHash = (
+  outcomes: Readonly<Record<string, ActivityOutcome>>,
   hash: string,
-): ActivityStatus | undefined =>
-  Object.entries(statuses).find(([candidate]) => sameFelt(candidate, hash))?.[1];
+): ActivityOutcome | undefined =>
+  Object.entries(outcomes).find(([candidate]) => sameFelt(candidate, hash))?.[1];
+
+// Merges one reconciled outcome into a stored entry. Absent optional fields are
+// dropped rather than written as `undefined`, so the persisted record stays
+// JSON-clean and revalidates; a merge that would not revalidate is discarded.
+const applyOutcome = (entry: ActivityEntry, outcome: ActivityOutcome): ActivityEntry => {
+  const next: ActivityEntry = {
+    ...entry,
+    ...(outcome.failureNotice === undefined ? {} : { failureNotice: outcome.failureNotice }),
+    ...(outcome.finalizedOnL1 === undefined ? {} : { finalizedOnL1: outcome.finalizedOnL1 }),
+    ...(outcome.notFoundCount === undefined ? {} : { notFoundCount: outcome.notFoundCount }),
+    status: outcome.status,
+  };
+  return isActivityEntry(next) ? next : entry;
+};
+
+const reconciled = (
+  entries: readonly ActivityEntry[],
+  outcomes: Readonly<Record<string, ActivityOutcome>>,
+  scope: ActivityScope,
+): readonly ActivityEntry[] =>
+  entries.map((entry) => {
+    if (!matchesScope(entry, scope)) {
+      return entry;
+    }
+    const outcome = outcomeForHash(outcomes, entry.hash);
+    return outcome ? applyOutcome(entry, outcome) : entry;
+  });
+
+// Splits the log into the notices owed to the user and the log with those
+// notices marked delivered.
+const drainFailureNotices = (
+  entries: readonly ActivityEntry[],
+): {
+  readonly delivered: readonly ActivityEntry[];
+  readonly next: readonly ActivityEntry[];
+} => ({
+  delivered: entries.filter((entry) => entry.failureNotice === "pending"),
+  next: entries.map((entry) =>
+    entry.failureNotice === "pending" ? { ...entry, failureNotice: "delivered" as const } : entry,
+  ),
+});
 
 /**
  * Creates the persistent activity log.
@@ -182,17 +295,15 @@ export const createActivityLog = ({
         const entries = await readEntries(store);
         await store.set(ACTIVITY_STORE_KEY, entriesAfterRecord(entries, next));
       },
-      async updateStatuses(statuses, scope) {
-        const entries = await readEntries(store);
-        const updated = entries.map((entry) => {
-          if (!matchesScope(entry, scope)) {
-            return entry;
-          }
-          const status = statusForHash(statuses, entry.hash);
-          return status && isActivityStatus(status) && status !== entry.status
-            ? { ...entry, status }
-            : entry;
-        });
+      async takeFailureNotices() {
+        const { delivered, next } = drainFailureNotices(await readEntries(store));
+        if (delivered.length > 0) {
+          await store.set(ACTIVITY_STORE_KEY, next);
+        }
+        return delivered;
+      },
+      async updateStatuses(outcomes, scope) {
+        const updated = reconciled(await readEntries(store), outcomes, scope);
         await store.set(ACTIVITY_STORE_KEY, updated);
         return [...activityForScope(updated, scope)].sort((a, b) => b.submittedAt - a.submittedAt);
       },
@@ -213,16 +324,13 @@ export const memoryActivityLog = (now: () => number = () => 0): ActivityLog => {
       const next: ActivityEntry = { ...entry, status: "pending", submittedAt: now() };
       entries.splice(0, entries.length, ...entriesAfterRecord(entries, next));
     },
-    async updateStatuses(statuses, scope) {
-      for (const [index, entry] of entries.entries()) {
-        if (!matchesScope(entry, scope)) {
-          continue;
-        }
-        const status = statusForHash(statuses, entry.hash);
-        if (status) {
-          entries[index] = { ...entry, status };
-        }
-      }
+    async takeFailureNotices() {
+      const { delivered, next } = drainFailureNotices(entries);
+      entries.splice(0, entries.length, ...next);
+      return delivered;
+    },
+    async updateStatuses(outcomes, scope) {
+      entries.splice(0, entries.length, ...reconciled(entries, outcomes, scope));
       return [...activityForScope(entries, scope)].sort((a, b) => b.submittedAt - a.submittedAt);
     },
   };

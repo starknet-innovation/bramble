@@ -143,6 +143,48 @@ export const confirmationStatus = (
   entries.find((entry) => sameFelt(entry.hash, transactionHash))?.status ?? null;
 
 /**
+ * What the Send journey should do about the latest chain status.
+ *
+ * A pre-confirmation is a real answer — the proposer has executed the
+ * transaction and its revert status is already known — so the journey completes
+ * on it rather than sitting on a spinner waiting for L2 acceptance. Background
+ * reconciliation keeps verifying the transaction through to L1 finality and
+ * raises a notice if it later fails. `null` means keep waiting.
+ */
+export type ConfirmationOutcome =
+  | { readonly kind: "failed"; readonly message: string; readonly toast: string }
+  | { readonly kind: "succeeded"; readonly toast: string };
+
+/**
+ * Maps the latest observed status onto that decision.
+ */
+export const confirmationOutcome = (
+  status: ActivityEntry["status"] | null,
+): ConfirmationOutcome | null => {
+  if (status === "accepted") {
+    return { kind: "succeeded", toast: "Transaction confirmed on Starknet" };
+  }
+  if (status === "preconfirmed") {
+    return { kind: "succeeded", toast: "Transaction pre-confirmed on Starknet" };
+  }
+  if (status === "reverted") {
+    return {
+      kind: "failed",
+      message: "Starknet reverted this transaction. Review its activity details before retrying.",
+      toast: "Transaction was not confirmed",
+    };
+  }
+  if (status === "rejected") {
+    return {
+      kind: "failed",
+      message: "Starknet rejected this transaction. No transfer was completed.",
+      toast: "Transaction was not confirmed",
+    };
+  }
+  return null;
+};
+
+/**
  * Human-readable title for the current Send checkpoint.
  */
 export const transferStageTitle = (stage: TransferStage): string => {

@@ -5,7 +5,7 @@
  * hash, bookkeeping failures never turn that accepted submission into a false
  * failure response.
  */
-import type { ActivityLog } from "../storage/activity-store";
+import { type ActivityLog, isUnresolvedActivityStatus } from "../storage/activity-store";
 import { type MultisigOperationRecord, multisigOperationId } from "../storage/multisig-store";
 import type { MultisigOpsDeps } from "./multisig-ops";
 
@@ -26,8 +26,10 @@ const pendingClaimError = (message: string, transactionHash: string | undefined)
 
 /**
  * Atomically claims one declare/deploy configuration. A rejected or reverted
- * prior transaction releases its claim for retry; pending, accepted, unknown,
- * or unreadable state remains blocked so deduplication fails closed.
+ * prior transaction releases its claim for retry; unresolved (pending or
+ * pre-confirmed), accepted, unknown, or unreadable state remains blocked so
+ * deduplication fails closed. A pre-confirmation is provisional, so it must
+ * hold the claim exactly like a pending transaction does.
  */
 export const claimMultisigOperation = async (
   deps: MultisigOpsDeps,
@@ -46,15 +48,13 @@ export const claimMultisigOperation = async (
     const operations = await deps.multisigStore.listOperations();
     const entries = await deps.activity.list().catch(() => []);
     const statuses = new Map(entries.map((entry) => [entry.hash, entry.status]));
+    const resolved = (transactionHash: string | undefined): boolean => {
+      const status = transactionHash === undefined ? undefined : statuses.get(transactionHash);
+      return status !== undefined && !isUnresolvedActivityStatus(status);
+    };
     await Promise.all(
       operations
-        .filter(
-          (operation) =>
-            operation.id !== operationId &&
-            operation.transactionHash !== undefined &&
-            statuses.get(operation.transactionHash) !== undefined &&
-            statuses.get(operation.transactionHash) !== "pending",
-        )
+        .filter((operation) => operation.id !== operationId && resolved(operation.transactionHash))
         .map((operation) => deps.multisigStore.releaseOperation(operation.id)),
     );
     const existing = operations.find((operation) => operation.id === operationId);

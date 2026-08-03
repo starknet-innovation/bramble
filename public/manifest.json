@@ -20,12 +20,13 @@
       "run_at": "document_start"
     }
   ],
-  "permissions": ["sidePanel", "storage"],
+  "permissions": ["alarms", "sidePanel", "storage"],
   "side_panel": {
     "default_path": "sidepanel.html"
   },
   "host_permissions": [
-    "https://api.cartridge.gg/*",
+    "https://mainnet.nodes.starknet.org/*",
+    "https://sepolia.nodes.starknet.org/*",
     "https://api.coingecko.com/*",
     "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",

@@ -15,6 +15,8 @@ import {
   parseTokenAmount,
   submitErc20Transfer,
   submitInvokeTransaction,
+  type TransactionStatus,
+  type TransactionStatusReport,
 } from "../../src/starknet/rpc";
 import type { TokenConfig } from "../../src/storage/preferences-store";
 import type { AccountRef } from "../../src/storage/vault-schema";
@@ -170,6 +172,12 @@ describe("getTransactionStatuses", () => {
       },
     );
 
+  const found = (status: TransactionStatus, finalizedOnL1 = false): TransactionStatusReport => ({
+    finalizedOnL1,
+    found: true,
+    status,
+  });
+
   test("classifies reverted, rejected, accepted, and pending statuses", async () => {
     const statuses = await getTransactionStatuses(
       { hashes: ["0xrev", "0xrej", "0xacc", "0xpend"], rpcUrls: RPC_URLS },
@@ -182,15 +190,46 @@ describe("getTransactionStatuses", () => {
         }),
     );
     expect(statuses).toEqual({
-      "0xacc": "accepted",
-      "0xpend": "pending",
-      "0xrej": "rejected",
-      "0xrev": "reverted",
+      "0xacc": found("accepted"),
+      "0xpend": found("pending"),
+      "0xrej": found("rejected"),
+      "0xrev": found("reverted"),
     });
   });
 
-  // Pins the extracted classifyStatus lookup: ACCEPTED_ON_L1 also maps to
-  // accepted, and a receipt missing both fields falls through to pending.
+  // The headline invariant of the fast-confirmation work: PRE_CONFIRMED is its
+  // own status, and the REVERTED execution guard still wins over it, so a
+  // pre-confirmed transaction that already reverted can never read as a
+  // provisional success the Send flow would advance on.
+  test("maps PRE_CONFIRMED to preconfirmed and lets a revert win over it", async () => {
+    const statuses = await getTransactionStatuses(
+      { hashes: ["0xpre", "0xprerev"], rpcUrls: RPC_URLS },
+      () =>
+        statusProvider({
+          "0xpre": { execution_status: "SUCCEEDED", finality_status: "PRE_CONFIRMED" },
+          "0xprerev": { execution_status: "REVERTED", finality_status: "PRE_CONFIRMED" },
+        }),
+    );
+    expect(statuses).toEqual({
+      "0xpre": found("preconfirmed"),
+      "0xprerev": found("reverted"),
+    });
+  });
+
+  // CANDIDATE is a distinct Starknet status (selected by the proposer, not yet
+  // executed) that warrants its own handling later; today it must keep falling
+  // through to pending rather than being mistaken for a pre-confirmation.
+  test("leaves CANDIDATE and RECEIVED as pending", async () => {
+    const statuses = await getTransactionStatuses({ hashes: ["0xcand"], rpcUrls: RPC_URLS }, () =>
+      statusProvider({ "0xcand": { finality_status: "CANDIDATE" } }),
+    );
+    expect(statuses).toEqual({ "0xcand": found("pending") });
+  });
+
+  // Pins the extracted classifyStatus lookup: ACCEPTED_ON_L1 also maps to the
+  // same user-visible accepted status but flags L1 finality (the background
+  // monitor's terminal condition), and a receipt missing both fields falls
+  // through to pending.
   test("accepts L1 finality and treats a fieldless receipt as pending", async () => {
     const statuses = await getTransactionStatuses(
       { hashes: ["0xl1", "0xbare"], rpcUrls: RPC_URLS },
@@ -200,10 +239,16 @@ describe("getTransactionStatuses", () => {
           "0xl1": { execution_status: "SUCCEEDED", finality_status: "ACCEPTED_ON_L1" },
         }),
     );
-    expect(statuses).toEqual({ "0xbare": "pending", "0xl1": "accepted" });
+    expect(statuses).toEqual({
+      "0xbare": found("pending"),
+      "0xl1": found("accepted", true),
+    });
   });
 
-  test("treats a semantic per-transaction failure as pending", async () => {
+  // A node that answers TXN_HASH_NOT_FOUND is reported as not-found rather than
+  // collapsed into pending, so the reconciler can tally consecutive
+  // disappearances instead of waiting forever on a transaction that is gone.
+  test("reports a not-found hash distinctly from pending", async () => {
     const semantic = Object.assign(new Error("transaction hash not found"), {
       baseError: { code: 29 },
     });
@@ -217,7 +262,22 @@ describe("getTransactionStatuses", () => {
           },
         ),
     );
-    expect(statuses).toEqual({ "0xmissing": "pending" });
+    expect(statuses).toEqual({
+      "0xmissing": { finalizedOnL1: false, found: false, status: "pending" },
+    });
+  });
+
+  test("treats any other semantic failure as pending, not as a disappearance", async () => {
+    const semantic = Object.assign(new Error("something else"), { baseError: { code: 40 } });
+    const statuses = await getTransactionStatuses({ hashes: ["0xodd"], rpcUrls: RPC_URLS }, () =>
+      readProvider(
+        async () => [],
+        async () => {
+          throw semantic;
+        },
+      ),
+    );
+    expect(statuses).toEqual({ "0xodd": found("pending") });
   });
 
   test("propagates a transport failure so the caller can degrade", async () => {

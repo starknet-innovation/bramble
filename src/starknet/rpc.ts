@@ -7,6 +7,7 @@ import type { TokenConfig } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
 import {
+  isTransactionNotFoundError,
   isTransportRpcError,
   krustyAccount,
   type StarkHashSigner,
@@ -43,6 +44,7 @@ export {
  */
 export {
   isContractNotFoundError,
+  isTransactionNotFoundError,
   isTransportRpcError,
   type StarkHashSigner,
   withRpcFallback,
@@ -130,8 +132,33 @@ export type TransactionStatusInput = {
 
 /**
  * Chain-derived transaction status used by the activity feed.
+ *
+ * `preconfirmed` is Starknet's `PRE_CONFIRMED` finality: the block proposer has
+ * executed the transaction in the block it is building, so its outcome
+ * (including a revert) is already known, but consensus has not committed that
+ * block. Provisional — a real outcome the user can act on, never final.
+ * `ACCEPTED_ON_L1` and `ACCEPTED_ON_L2` both map to `accepted`; L1 finality is
+ * tracked out of band (see {@link TransactionStatusReport}).
  */
-export type TransactionStatus = "accepted" | "pending" | "rejected" | "reverted";
+export type TransactionStatus = "accepted" | "pending" | "preconfirmed" | "rejected" | "reverted";
+
+/**
+ * One hash's chain observation.
+ *
+ * - `found` is false only when the node answered that it has no record of the
+ *   hash (`TXN_HASH_NOT_FOUND`); a transport failure fails over or throws
+ *   instead, so this means "the node says it is gone", not "we could not ask".
+ *   A pre-confirmed transaction whose block proposal never commits disappears
+ *   exactly this way, but a single not-found is ordinary noise — callers must
+ *   require several consecutive observations before treating it as failure.
+ * - `finalizedOnL1` is true only for `ACCEPTED_ON_L1`: the reconciliation
+ *   loop's terminal condition, deliberately not a {@link TransactionStatus}.
+ */
+export type TransactionStatusReport = {
+  readonly finalizedOnL1: boolean;
+  readonly found: boolean;
+  readonly status: TransactionStatus;
+};
 
 const pow10 = (decimals: number): bigint => 10n ** BigInt(decimals);
 
@@ -395,40 +422,73 @@ export const estimateInvokeFee = async (
 const FINALITY_TO_STATUS: Readonly<Record<string, TransactionStatus>> = {
   ACCEPTED_ON_L1: "accepted",
   ACCEPTED_ON_L2: "accepted",
+  PRE_CONFIRMED: "preconfirmed",
   REJECTED: "rejected",
 };
-// Maps a receipt to a wallet status. REVERTED execution wins (a reverted tx can
-// still be ACCEPTED_ON_L2); the rest is pending.
+
+// A hash the node answered about but could not classify, and the shape used for
+// RECEIVED / CANDIDATE, which deliberately still read as pending.
+const PENDING_REPORT: TransactionStatusReport = {
+  finalizedOnL1: false,
+  found: true,
+  status: "pending",
+};
+// A hash the node explicitly has no record of.
+const NOT_FOUND_REPORT: TransactionStatusReport = {
+  finalizedOnL1: false,
+  found: false,
+  status: "pending",
+};
+
+// Maps a status response to a wallet report. REVERTED execution wins over
+// finality — a reverted transaction can be ACCEPTED_ON_L2, and it is already
+// reverted while PRE_CONFIRMED — so a pre-confirmed revert reads as reverted,
+// never as a provisional success. Unmapped finality (RECEIVED, CANDIDATE) stays
+// pending.
 const classifyStatus = (receipt: {
   readonly execution_status?: unknown;
   readonly finality_status?: unknown;
-}): TransactionStatus =>
-  String(receipt.execution_status ?? "") === "REVERTED"
-    ? "reverted"
-    : (FINALITY_TO_STATUS[String(receipt.finality_status ?? "")] ?? "pending");
+}): TransactionStatusReport => {
+  const finality = String(receipt.finality_status ?? "");
+  if (String(receipt.execution_status ?? "") === "REVERTED") {
+    return { finalizedOnL1: finality === "ACCEPTED_ON_L1", found: true, status: "reverted" };
+  }
+  const status = FINALITY_TO_STATUS[finality];
+  return status === undefined
+    ? PENDING_REPORT
+    : { finalizedOnL1: finality === "ACCEPTED_ON_L1", found: true, status };
+};
+
 /**
  * Reads finality/execution status for submitted transactions.
+ *
+ * Transport failures fail over to the next endpoint (or throw when none is
+ * left) so a node outage is never mistaken for a chain answer. A node that
+ * answers `TXN_HASH_NOT_FOUND` yields a `found: false` report so callers can
+ * tally consecutive disappearances; any other semantic error reads as pending.
  */
 export const getTransactionStatuses = async (
   { hashes, rpcUrls }: TransactionStatusInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
-): Promise<Readonly<Record<string, TransactionStatus>>> =>
+): Promise<Readonly<Record<string, TransactionStatusReport>>> =>
   withRpcFallback(
     rpcUrls,
     async (provider) => {
       const entries = await Promise.all(
-        hashes.map(async (transactionHash): Promise<readonly [string, TransactionStatus]> => {
+        hashes.map(async (transactionHash): Promise<readonly [string, TransactionStatusReport]> => {
           try {
             return [
               transactionHash,
               classifyStatus(await provider.getTransactionStatus(transactionHash)),
             ];
           } catch (error) {
-            // Transport failures propagate to fail over; semantic errors → pending.
             if (isTransportRpcError(error)) {
               throw error;
             }
-            return [transactionHash, "pending"];
+            return [
+              transactionHash,
+              isTransactionNotFoundError(error) ? NOT_FOUND_REPORT : PENDING_REPORT,
+            ];
           }
         }),
       );

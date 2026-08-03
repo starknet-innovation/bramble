@@ -15,7 +15,7 @@ import type { StarkHashSigner } from "../starknet/provider";
 import { type AccountRef, isKeylessAccount } from "../storage/vault-schema";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { ledgerStarkHashSigner } from "./ledger-signer";
-import type { WalletStatusReader } from "./runtime-types";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Collaborators the account signer chooses between. `ledgerSignQueue` is
