@@ -7,6 +7,8 @@ import { describe, expect, test } from "bun:test";
 import { createApprovalQueue } from "../../src/background/approvals";
 import { createMessageHandler } from "../../src/background/messages";
 import { createUnlockSession } from "../../src/background/session";
+import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import { grantedAccountIdsFor } from "../../src/wallet/origin-grants";
 import type { CreateVaultAccountInput, OriginGrantInput } from "../../src/wallet/vault-service";
 import {
   account,
@@ -228,6 +230,58 @@ describe("createMessageHandler", () => {
     await expect(held).resolves.toEqual({ error: "connection rejected" });
   });
 
+  test("re-prompts a reconnecting origin whose grant misses the active account", async () => {
+    // Regression: connect as account one, disconnect in the dapp, switch to
+    // account two in the wallet, reconnect. The stored grant still names only
+    // account one, so the site must be re-approved instead of silently getting
+    // account one back — and switching back reconnects it with no prompt.
+    const second: AccountRef = { ...account, id: "SN_SEPOLIA:0xfeedface" };
+    const accounts = [account, second];
+    let activeAccountId = second.id;
+    const vault = (): Vault => ({
+      accounts,
+      activeAccountId,
+      mnemonic: null,
+      originGrants: [{ accountIds: [account.id], origin: "https://example.com" }],
+      schemaVersion: 3,
+      signingKeys: [],
+    });
+    const handler = createMessageHandler(
+      {
+        ...createWallet(),
+        async getGrantedAccounts(origin: string) {
+          return grantedAccountIdsFor(vault(), origin).flatMap((id) =>
+            accounts.filter((stored) => stored.id === id),
+          );
+        },
+      },
+      "extension-id",
+      { session: createUnlockSession() },
+    );
+
+    await handler({ type: "wallet.unlock", vaultPassphrase }, sender);
+    const held = handler(
+      { origin: "https://example.com", type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    await flushHeld();
+    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toMatchObject({
+      pending: [{ origin: "https://example.com" }],
+    });
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    await expect(held).resolves.toEqual({ error: "connection rejected" });
+
+    activeAccountId = account.id;
+    await expect(
+      handler({ origin: "https://example.com", type: "wallet.requestAccounts" }, contentSender),
+    ).resolves.toEqual({ accounts: [account], ok: true });
+    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toEqual({
+      ok: true,
+      pending: [],
+    });
+  });
+
   test("returns no accounts without prompting for silent ungranted requests", async () => {
     const handler = createMessageHandler(createWallet(), "extension-id", {
       session: createUnlockSession(),
@@ -285,7 +339,10 @@ describe("createMessageHandler", () => {
       accounts: [account],
       ok: true,
     });
+    // The applier names the account it is granting rather than relying on
+    // grantOrigin's active-account fallback.
     expect(captured[0]).toEqual({
+      accountId: account.id,
       origin: "https://example.com",
       vaultPassphrase,
     });

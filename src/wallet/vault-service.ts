@@ -30,7 +30,8 @@ import {
   nextAccountIndex,
   sameWalletKey,
 } from "./accounts";
-import type { ConnectedSite, RevealedSecrets, WalletVaultService } from "./vault-service-types";
+import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
+import type { RevealedSecrets, WalletVaultService } from "./vault-service-types";
 
 /**
  * Re-exports the documented type surface from its size-budget split.
@@ -57,16 +58,6 @@ export type {
  * Browser storage key for the encrypted wallet vault.
  */
 export const VAULT_STORE_KEY = "mc-wallet:vault";
-
-/**
- * Derives the connected-sites list (origin plus granted account count) from a
- * decrypted vault, ordered by origin for stable rendering. Pure helper reused
- * by the connected-sites reader and by revocation responses.
- */
-export const connectedSitesFromVault = (vault: Vault): readonly ConnectedSite[] =>
-  vault.originGrants
-    .map((grant) => ({ accountCount: grant.accountIds.length, origin: grant.origin }))
-    .sort((left, right) => left.origin.localeCompare(right.origin));
 
 type WalletVaultServiceOptions = {
   readonly actor?: StoreActor;
@@ -416,11 +407,7 @@ export const createWalletVaultService = ({
       }
 
       const vault = await readVault(vaultPassphrase);
-      const grant = vault.originGrants.find((stored) => stored.origin === origin);
-      if (!grant) {
-        return [];
-      }
-      return grant.accountIds.map((accountId) => findAccount(vault, accountId));
+      return grantedAccountIdsFor(vault, origin).map((accountId) => findAccount(vault, accountId));
     },
     readVault,
     async revokeOrigin(input) {

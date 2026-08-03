@@ -164,6 +164,12 @@ export type WalletVaultService = {
    */
   readonly previewAccount: (input: AccountDerivationInput) => Promise<DerivedAccountRef>;
   readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
+  /**
+   * Accounts the origin may see right now, active account first, per
+   * `grantedAccountIdsFor`. Empty when the origin holds no grant or its grant
+   * does not cover the active account — a stored grant alone never exposes an
+   * account the user has switched away from. Rejects an invalid origin.
+   */
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,

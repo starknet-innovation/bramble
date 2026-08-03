@@ -261,8 +261,8 @@ The injected `window.starknet_mcWallet` object follows the get-starknet/starknet
 `StarknetWindowObject` shape: `id`, `name`, `version`, an inline `data:` URI `icon`, `isConnected`,
 `selectedAddress`, `on`/`off`, `enable`, and `request`. `chainId` is initialized lazily from
 `wallet_requestChainId` after `enable` and kept current from `networkChanged` events;
-`isPreauthorized()` resolves `true` when the origin already holds an account grant. The object is
-frozen and installed as a non-configurable global.
+`isPreauthorized()` resolves `true` when the origin's grant covers the wallet's active account. The
+object is frozen and installed as a non-configurable global.
 
 `request` accepts these methods, mapped to safe background messages by `src/provider/bridge.ts`:
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
@@ -273,6 +273,14 @@ frozen and installed as a non-configurable global.
 Grants and provider events are isolated per origin: each origin reads only its own accounts
 (`wallet.getGrantedAccounts`) and each content script derives page events from its own history
 (`pageEventsFor`), so multiple connected sites never observe each other's state.
+
+A grant records which accounts a site was ever approved for; the active account decides which of
+them it may see right now (`grantedAccountIdsFor` in `src/wallet/origin-grants.ts`). The granted
+accounts are returned active-account-first, and an origin whose grant does not cover the active
+account reads as disconnected — `wallet.getGrantedAccounts` returns `[]`, the page receives
+`accountsChanged([])`, and reconnecting queues a fresh approval instead of silently handing back the
+previously connected account. This can only narrow what an origin sees, never widen it; the
+connected-sites manager still lists the site, because it reads the stored grants directly.
 
 `wallet_watchAsset` (SNIP-compatible ERC20, `options.address`) fetches the token's on-chain
 `name`/`symbol`/`decimals` via RPC (falling back to the caller's options), then queues a
