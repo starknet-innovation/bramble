@@ -3,8 +3,12 @@
  * cannot re-enable a statically forbidden signer action, and explicit retry
  * controls rehydrate instead of leaving a false empty state.
  */
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { serializeMultisigReviewPackage } from "../../src/sidepanel/multisig-model";
 import { bindMultisigs, type MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
+import { multisigDetailFlow } from "../../src/sidepanel/multisig-views";
+import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
+import type { AccountRef } from "../../src/storage/vault-schema";
 import { registerDom, unregisterDom } from "../support/groups-harness";
 
 beforeAll(registerDom);
@@ -65,6 +69,134 @@ describe("bindMultisigs", () => {
     expect(renders).toBe(1);
   });
 
+  test("watching exposes immediate progress and completes with a refreshed account list", async () => {
+    let finish: (() => void) | undefined;
+    let renders = 0;
+    const verification = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const app = mount(
+      `<form id="multisig-add-form">
+        <input name="address" value="0x123" />
+        <input name="name" value="Treasury" />
+        <button type="submit">Verify and watch</button>
+        <p id="multisig-add-result" role="status"></p>
+      </form>`,
+      async () => {
+        renders += 1;
+      },
+      {
+        multisig: {
+          async addMultisig() {
+            await verification;
+          },
+        } as unknown as MultisigUiDeps["multisig"],
+      },
+    );
+    const button = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+    app.querySelector<HTMLFormElement>("#multisig-add-form")?.requestSubmit();
+    await Promise.resolve();
+
+    expect(button?.disabled).toBe(true);
+    expect(button?.hasAttribute("data-busy")).toBe(true);
+    expect(app.querySelector("#multisig-add-result")?.textContent).toBe("Contacting Starknet…");
+
+    finish?.();
+    for (let turn = 0; turn < 6; turn += 1) {
+      await Promise.resolve();
+    }
+    expect(renders).toBe(1);
+  });
+
+  test("a stalled watch fails visibly and releases the form", async () => {
+    const nativeSetTimeout = globalThis.setTimeout;
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((
+      callback: TimerHandler,
+      delay?: number,
+      ...args: unknown[]
+    ) => {
+      if (delay === 15_000) {
+        queueMicrotask(() => {
+          if (typeof callback === "function") {
+            callback(...args);
+          }
+        });
+        return 0;
+      }
+      return nativeSetTimeout(callback, delay, ...args);
+    }) as typeof setTimeout);
+    try {
+      const app = mount(
+        `<form id="multisig-add-form">
+          <input name="address" value="0x123" />
+          <button type="submit">Verify and watch</button>
+          <p id="multisig-add-result" role="status"></p>
+        </form>`,
+        async () => {},
+        {
+          multisig: {
+            async addMultisig() {
+              await new Promise(() => {});
+            },
+          } as unknown as MultisigUiDeps["multisig"],
+        },
+      );
+      const button = app.querySelector<HTMLButtonElement>('button[type="submit"]');
+      app.querySelector<HTMLFormElement>("#multisig-add-form")?.requestSubmit();
+
+      for (let turn = 0; turn < 8; turn += 1) {
+        await Promise.resolve();
+      }
+
+      expect(app.querySelector("#multisig-add-result")?.textContent).toBe(
+        "Multisig verification took too long. Check the RPC endpoint and retry.",
+      );
+      expect(button?.disabled).toBe(false);
+      expect(button?.hasAttribute("data-busy")).toBe(false);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
+  });
+
+  test("the declare control submits once and exposes immediate progress", async () => {
+    let declarations = 0;
+    let renders = 0;
+    let finish: ((transactionHash: string) => void) | undefined;
+    const submitted = new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+    const app = mount(
+      `<button id="multisig-declare" type="button">Declare multisig class</button>
+       <p id="multisig-declare-result" role="status"></p>`,
+      async () => {
+        renders += 1;
+      },
+      {
+        multisig: {
+          async declareClass() {
+            declarations += 1;
+            return submitted;
+          },
+        } as MultisigUiDeps["multisig"],
+      },
+    );
+    const declareButton = app.querySelector<HTMLButtonElement>("#multisig-declare");
+    declareButton?.click();
+    declareButton?.click();
+    await Promise.resolve();
+
+    expect(declarations).toBe(1);
+    expect(declareButton?.disabled).toBe(true);
+    expect(declareButton?.hasAttribute("data-busy")).toBe(true);
+    expect(app.querySelector("#multisig-declare-result")?.textContent).toBe("Submitting declare…");
+
+    finish?.("0xdec");
+    for (let turn = 0; turn < 6; turn += 1) {
+      await Promise.resolve();
+    }
+    expect(renders).toBe(1);
+  });
+
   test("requires a stable review before creating a proposal", async () => {
     const proposals: unknown[] = [];
     const app = mount(
@@ -112,5 +244,144 @@ describe("bindMultisigs", () => {
         to: "0x123",
       },
     ]);
+  });
+
+  test("imports a review package into the selected multisig tracking flow", async () => {
+    const multisig: MultisigRecord = {
+      address: "0x999",
+      id: "SN_MAIN:0x999",
+      networkId: "SN_MAIN",
+      quorum: 1,
+      signers: ["0x123"],
+    };
+    const proposal: MultisigProposalRecord = {
+      call: {
+        calldata: ["0x1"],
+        contractAddress: "0x456",
+        entrypoint: "transfer",
+        salt: "0x2",
+      },
+      confirmations: 0,
+      id: `${multisig.id}:0x789`,
+      multisigId: multisig.id,
+      state: "pending",
+      summary: "Pay contributor",
+      txId: "0x789",
+    };
+    const tracked: unknown[] = [];
+    const app = mount(
+      `<form id="multisig-track-form">
+        <input name="txId" />
+        <input name="summary" />
+        <textarea name="reviewPackage"></textarea>
+        <button type="submit">Track</button>
+        <p id="multisig-track-result"></p>
+      </form>`,
+      async () => {},
+      {
+        multisig: {
+          async trackProposal(...args: unknown[]) {
+            tracked.push(args);
+          },
+        } as unknown as MultisigUiDeps["multisig"],
+        selectedMultisigId: () => multisig.id,
+      },
+    );
+    const packageInput = app.querySelector<HTMLTextAreaElement>('textarea[name="reviewPackage"]');
+    if (packageInput) {
+      packageInput.value = serializeMultisigReviewPackage(multisig, proposal);
+    }
+    app.querySelector<HTMLFormElement>("#multisig-track-form")?.requestSubmit();
+    await Promise.resolve();
+
+    expect(tracked).toEqual([[multisig.id, proposal.txId, proposal.summary, proposal.call]]);
+  });
+
+  test("reviews a confirmation, switches to another owned signer, then submits", async () => {
+    const first: AccountRef = {
+      address: "0x123",
+      classHash: "0x456",
+      derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_MAIN:0x123",
+      networkId: "SN_MAIN",
+      publicKeyX: "0x789",
+      publicKeyY: "0xabc",
+    };
+    const second: AccountRef = {
+      ...first,
+      address: "0x234",
+      derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_MAIN:0x234",
+      publicKeyX: "0x890",
+      publicKeyY: "0xbcd",
+    };
+    const status = {
+      accountCount: 2,
+      accounts: [first, second],
+      activeAccountId: first.id,
+      hasVault: true,
+      locked: false,
+      network: "Starknet Mainnet",
+      networkId: "SN_MAIN",
+      networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+      ready: true,
+    } as const;
+    const record: MultisigRecord = {
+      address: "0x999",
+      id: "SN_MAIN:0x999",
+      name: "Treasury",
+      networkId: "SN_MAIN",
+      quorum: 2,
+      signers: [first.address, second.address],
+    };
+    const proposal: MultisigProposalRecord = {
+      call: { calldata: ["0x1"], contractAddress: "0x456", entrypoint: "transfer", salt: "0x0" },
+      confirmations: 1,
+      confirmedBySigner: true,
+      confirmedBySignerAddress: first.address,
+      confirmedSignerAddresses: [first.address],
+      id: `${record.id}:0x789`,
+      multisigId: record.id,
+      state: "pending",
+      summary: "Pay contributor",
+      txId: "0x789",
+    };
+    const calls: string[] = [];
+    const app = mount(
+      multisigDetailFlow(status, first, record, [proposal]),
+      async () => {
+        calls.push("render");
+      },
+      {
+        multisig: {
+          async confirmProposal(id: string) {
+            calls.push(`confirm:${id}`);
+            return "0xabc";
+          },
+        } as MultisigUiDeps["multisig"],
+        wallet: {
+          async loadStatus() {
+            return status;
+          },
+          async setActiveAccount(id: string) {
+            calls.push(`switch:${id}`);
+          },
+        } as unknown as MultisigUiDeps["wallet"],
+      },
+    );
+
+    expect(app.querySelector(`[data-ms-confirm-signer="${first.id}"]`)).toBeNull();
+    const open = app.querySelector<HTMLButtonElement>(`[data-ms-confirm-open="${proposal.id}"]`);
+    open?.click();
+    const panel = app.querySelector<HTMLElement>(`[data-ms-confirm-panel="${proposal.id}"]`);
+    expect(panel?.hidden).toBe(false);
+    expect(
+      panel?.querySelector(`[data-ms-confirm-signer="${second.id}"]`)?.getAttribute("aria-pressed"),
+    ).toBe("true");
+
+    panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]")?.click();
+    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe("Switching signer…");
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+    expect(calls).toEqual([`switch:${second.id}`, `confirm:${proposal.id}`, "render"]);
   });
 });

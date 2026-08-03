@@ -102,6 +102,7 @@ describe("NFT gallery auto-discovery", () => {
           contract: "0x511a2b3",
           id: "SN_MAIN:0x511a2b3:5",
           networkId: "SN_MAIN",
+          owner: account.address,
           spam: true,
           tokenId: "5",
         },
@@ -110,9 +111,71 @@ describe("NFT gallery auto-discovery", () => {
     const html = nftGalleryFlow(status, account, withSpam, [discovered]);
     expect(html).not.toContain('data-nft-open="SN_MAIN:0x511a2b3:5"');
     expect(html).toContain('data-view="nft-hidden"');
-    const hidden = nftHiddenFlow(status, withSpam);
+    const hidden = nftHiddenFlow(status, withSpam, account);
     expect(hidden).toContain('data-nft-spam-value="false"');
     expect(html).toContain("0 shown");
+  });
+
+  test("never treats another account's saved watch as current ownership", () => {
+    const otherAccount = {
+      ...account,
+      address: "0x987",
+      id: "SN_MAIN:0x987",
+    };
+    const otherStatus = {
+      ...status,
+      accounts: [account, otherAccount],
+      activeAccountId: otherAccount.id,
+    };
+    const watchedByFirstAccount: WalletPreferences = {
+      ...preferences,
+      nfts: [
+        {
+          contract: discovered.contract,
+          id: discovered.id,
+          networkId: "SN_MAIN",
+          owner: account.address,
+          tokenId: discovered.tokenId,
+        },
+      ],
+    };
+
+    const withoutOwnershipProof = nftGalleryFlow(
+      otherStatus,
+      otherAccount,
+      watchedByFirstAccount,
+      [],
+    );
+    expect(withoutOwnershipProof).not.toContain(`data-nft-open="${discovered.id}"`);
+
+    // An ERC-1155 edition may be owned by both accounts. If discovery proves
+    // the second account owns it, the card may render but the first account's
+    // watch must not authorize eager remote image loading or Remove controls.
+    const independentlyOwned = nftGalleryFlow(otherStatus, otherAccount, watchedByFirstAccount, [
+      discovered,
+    ]);
+    expect(independentlyOwned).toContain(`data-nft-open="${discovered.id}"`);
+    expect(independentlyOwned).not.toContain("<img");
+    expect(independentlyOwned).not.toContain(`data-remove-nft="${discovered.id}"`);
+  });
+
+  test("shows a legacy hidden watch only after current-account ownership was re-proven", () => {
+    const legacyHidden: WalletPreferences = {
+      ...preferences,
+      nfts: [
+        {
+          contract: discovered.contract,
+          id: discovered.id,
+          networkId: "SN_MAIN",
+          spam: true,
+          tokenId: discovered.tokenId,
+        },
+      ],
+    };
+    expect(nftHiddenFlow(status, legacyHidden, account)).not.toContain("data-nft-spam-value");
+    expect(nftHiddenFlow(status, legacyHidden, account, [discovered])).toContain(
+      'data-nft-spam-value="false"',
+    );
   });
 
   test("detail opens for a discovered token that is not manually watched", () => {
