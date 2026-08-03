@@ -10,10 +10,13 @@ import {
   isMultisigResponse,
   isMultisigsResponse,
   isOkResponse,
+  type MultisigClassState,
   type MultisigDeployResponse,
   type MultisigsResponse,
 } from "../popup/multisig-responses";
 import { isBalancesResponse, isErrorResponse, isTransferResponse } from "../popup/responses";
+import type { MultisigProposalCall } from "../storage/multisig-store";
+import type { MultisigSyncState } from "./multisig-sync";
 import type { BalanceState, RuntimeApi } from "./runtime";
 
 const responseError = (response: unknown, fallback: string): Error =>
@@ -87,10 +90,16 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     // rejects, so the deploy screen can tell "still loading" (null in the
     // cache) apart from "checked and failed" and offer a retry instead of
     // hanging on the checking state.
-    async loadClassStatus(): Promise<boolean | "error"> {
+    async loadClassStatus(): Promise<MultisigClassState | "error"> {
       try {
         const response = await sendMessage({ type: "wallet.multisigClassStatus" });
-        return isMultisigClassStatusResponse(response) ? response.declared : "error";
+        return isMultisigClassStatusResponse(response)
+          ? {
+              declarationPending: response.declarationPending,
+              declared: response.declared,
+              ...(response.transactionHash ? { transactionHash: response.transactionHash } : {}),
+            }
+          : "error";
       } catch {
         return "error";
       }
@@ -136,11 +145,26 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "propose failed");
     },
-    async refreshMultisig(id: string): Promise<void> {
-      const response = await sendMessage({ id, type: "wallet.refreshMultisig" });
-      if (!isMultisigResponse(response)) {
-        throw responseError(response, "refresh failed");
+    async refreshMultisig(id: string): Promise<Exclude<MultisigSyncState, null>> {
+      let response: unknown;
+      try {
+        response = await sendMessage({ id, type: "wallet.refreshMultisig" });
+      } catch {
+        return "background-unavailable";
       }
+      if (isMultisigResponse(response)) {
+        const warnings = response.warnings ?? [];
+        return warnings.includes("proposal-refresh-incomplete")
+          ? "proposal-refresh-incomplete"
+          : warnings.includes("proposal-discovery-unavailable")
+            ? "proposal-discovery-unavailable"
+            : warnings.includes("proposal-discovery-recent")
+              ? "proposal-discovery-recent"
+              : "current";
+      }
+      return isErrorResponse(response) && response.error === "multisig configuration unavailable"
+        ? "configuration-unavailable"
+        : "background-unavailable";
     },
     async removeMultisig(id: string): Promise<void> {
       const response = await sendMessage({ id, type: "wallet.removeMultisig" });
@@ -159,8 +183,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "revoke failed");
     },
-    async trackProposal(multisigId: string, txId: string, summary: string): Promise<void> {
+    async trackProposal(
+      multisigId: string,
+      txId: string,
+      summary: string,
+      call?: MultisigProposalCall,
+    ): Promise<void> {
       const response = await sendMessage({
+        ...(call ? { call } : {}),
         multisigId,
         ...(summary ? { summary } : {}),
         txId,
