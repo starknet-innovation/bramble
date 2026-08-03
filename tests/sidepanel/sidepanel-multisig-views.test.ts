@@ -3,6 +3,7 @@
  * detail lifecycle actions, and the declare-first deploy gate.
  */
 import { describe, expect, test } from "bun:test";
+import type { MultisigClassState } from "../../src/popup/multisig-responses";
 import type { WalletStatus } from "../../src/popup/responses";
 import {
   multisigAddFlow,
@@ -72,7 +73,7 @@ const render = (
   view: Parameters<typeof dashboard>[0],
   multisigs: readonly MultisigRecord[] = [multisig],
   proposals: readonly MultisigProposalRecord[] = [],
-  declared: boolean | "error" | null = null,
+  declared: MultisigClassState | "error" | null = null,
 ): string =>
   dashboard(
     view,
@@ -91,7 +92,7 @@ const render = (
     {},
     multisigs,
     proposals,
-    multisig.id,
+    view === "home" ? null : multisig.id,
     declared,
   );
 
@@ -124,11 +125,28 @@ describe("multisig views", () => {
 
   test("surfaces shared accounts in the account drawer and opens a dedicated home", () => {
     const drawer = render("home", [multisig], [proposal]);
-    expect(drawer).toContain("Shared accounts");
-    expect(drawer).toContain("Shared · 2 of 2 · 1 open");
-    expect(drawer).toContain(`data-multisig-open="${multisig.id}"`);
+    expect(drawer).not.toContain("Shared accounts");
+    expect(drawer).toContain("Multisig · 2 of 2 signers required · 1 open");
+    expect(drawer).toContain(`data-multisig-select="${multisig.id}"`);
+    expect(drawer).toContain(
+      `data-multisig-select="${multisig.id}" type="button" aria-pressed="false"`,
+    );
 
     const home = render("multisig-home", [multisig], [proposal]);
+    expect(home).toContain('id="account-trigger"');
+    expect(home).toContain("Treasury");
+    expect(home).toContain("Multisig 2 of 2");
+    expect(home).toContain('class="avatar"');
+    expect(home).toContain('class="drawer-root"');
+    expect(home).toContain(
+      `data-multisig-select="${multisig.id}" type="button" aria-pressed="true"`,
+    );
+    expect(home).toContain(
+      `data-active-signer="true" data-selected-multisig-signer="true" type="button" aria-pressed="false"`,
+    );
+    expect(home).not.toContain("data-nav-back");
+    expect(home).toContain('data-view="multisig-home"');
+    expect(home).toContain('aria-label="Wallet screens"');
     expect(home).toContain('id="wallet-screen-multisig-home"');
     expect(home).toContain('class="hero multisig-portfolio-hero"');
     expect(home).toContain(">Tokens</button>");
@@ -143,6 +161,19 @@ describe("multisig views", () => {
     expect(home).toContain('data-ms-home-tab="proposals"');
   });
 
+  test("retains shared identity through Activity and Settings dock navigation", () => {
+    const activity = render("activity");
+    expect(activity).toContain("Treasury");
+    expect(activity).toContain(`data-activity-account-id="${multisig.id}"`);
+    expect(activity).toContain('data-view="multisig-home"');
+    expect(activity).toContain('aria-label="Home"');
+
+    const settings = render("settings");
+    expect(settings).toContain("Multisig 2 of 2");
+    expect(settings).toContain('data-view="multisig-home"');
+    expect(settings).toContain('aria-label="Settings"');
+  });
+
   test("detail shows lifecycle actions and routes signer and tracking tasks", () => {
     const html = render("multisig-detail", [multisig], [proposal]);
     expect(html).toContain("Pay vendor");
@@ -150,12 +181,14 @@ describe("multisig views", () => {
     expect(html).toContain("This proposal will");
     expect(html).toContain("Call details");
     expect(html).toContain("Verify elsewhere");
-    expect(html).toContain(`data-ms-confirm="${proposal.id}"`);
+    expect(html).toContain(`data-ms-confirm-open="${proposal.id}"`);
     expect(html).toContain(`data-ms-execute="${proposal.id}"`);
     expect(html).toContain('class="allowance-row proposal-row"');
     expect(html).toContain('class="proposal-actions"');
     expect(html).toContain('class="proposal-head"');
-    expect(html).toMatch(/data-ms-confirm="[^"]+"[^>]*data-ms-action-allowed="false"[^>]*disabled/);
+    expect(html).toMatch(
+      /data-ms-action-allowed="false"[^>]*data-ms-confirm-open="[^"]+"[^>]*disabled/,
+    );
     expect(html).toMatch(/data-ms-revoke="[^"]+"[^>]*data-ms-action-allowed="true"/);
     expect(html).not.toContain("data-ms-requires-ack");
     expect(html).toContain('data-view="multisig-signers"');
@@ -173,6 +206,9 @@ describe("multisig views", () => {
     expect(receive).toContain("QR code for multisig address");
     expect(receive).toContain("Copy multisig address");
     expect(receive).toContain("2-of-2 approval rule");
+    expect(receive).toContain('class="stack receive-address-view"');
+    expect(receive).toContain('class="qr-card"');
+    expect(receive).not.toContain('class="section receive-card"');
 
     expect(multisigReceiveFlow(status, null)).toContain("no longer watched");
     expect(multisigSignersFlow(status, account, null)).toContain("no longer watched");
@@ -187,7 +223,7 @@ describe("multisig views", () => {
       state: "pending" as const,
     };
     const allowed = render("multisig-detail", [multisig], [pending]);
-    expect(allowed).toMatch(/data-ms-confirm="[^"]+"[^>]*data-ms-action-allowed="true"/);
+    expect(allowed).toMatch(/data-ms-action-allowed="true"[^>]*data-ms-confirm-open="[^"]+"/);
     expect(allowed).toMatch(
       /data-ms-revoke="[^"]+"[^>]*data-ms-action-allowed="false"[^>]*disabled/,
     );
@@ -201,7 +237,9 @@ describe("multisig views", () => {
       [multisig],
       [{ ...pending, confirmedBySignerAddress: multisig.signers[1] ?? "0x4" }],
     );
-    expect(staleSignerSnapshot.match(/data-ms-action-allowed="false"/g)).toHaveLength(2);
+    expect(staleSignerSnapshot).toMatch(
+      /data-ms-action-allowed="true"[^>]*data-ms-confirm-open="[^"]+"/,
+    );
   });
 
   test("detail hides execute for proposals tracked by id only", () => {
@@ -229,10 +267,16 @@ describe("multisig views", () => {
   });
 
   test("deploy screen gates on the declared class", () => {
-    const gated = render("multisig-deploy", [], [], false);
+    const gated = render("multisig-deploy", [], [], {
+      declarationPending: false,
+      declared: false,
+    });
     expect(gated).toContain('id="multisig-declare"');
     expect(gated).toContain("disabled");
-    const ready = render("multisig-deploy", [], [], true);
+    const ready = render("multisig-deploy", [], [], {
+      declarationPending: false,
+      declared: true,
+    });
     expect(ready).not.toContain('id="multisig-declare"');
     expect(ready).toContain('id="multisig-deploy-form"');
     // Deploy is enabled once the class is confirmed declared.
@@ -248,6 +292,19 @@ describe("multisig views", () => {
     expect(errored).toContain("disabled");
   });
 
+  test("deploy screen preserves a pending declaration across refreshes", () => {
+    const pending = render("multisig-deploy", [], [], {
+      declarationPending: true,
+      declared: false,
+      transactionHash: "0xdec",
+    });
+    expect(pending).toContain("Declaration in progress");
+    expect(pending).toContain("Waiting for confirmation");
+    expect(pending).toContain("0xdec");
+    expect(pending).not.toContain('id="multisig-declare"');
+    expect(pending).toContain("disabled");
+  });
+
   test("deploy screen shows the loading state before the status resolves", () => {
     const loading = render("multisig-deploy", [], [], null);
     expect(loading).toContain("Checking whether");
@@ -256,22 +313,48 @@ describe("multisig views", () => {
   });
 
   test("deploy form no longer collects a name", () => {
-    expect(render("multisig-deploy", [], [], true)).not.toContain('name="name"');
+    expect(
+      render("multisig-deploy", [], [], { declarationPending: false, declared: true }),
+    ).not.toContain('name="name"');
   });
 
   test("deploy explains the missing-account state instead of showing a silent disabled form", () => {
     const noAccount = { ...status, accountCount: 0, accounts: [], activeAccountId: null };
-    const html = multisigDeployFlow(noAccount, null, true);
+    const html = multisigDeployFlow(noAccount, null, {
+      declarationPending: false,
+      declared: true,
+    });
     expect(html).toContain("No account on Starknet");
     expect(html).not.toContain('id="multisig-deploy-form"');
   });
 
   test("list and detail render an explicit retry instead of false empty state on load errors", () => {
-    const list = multisigsFlow(status, account, [], [], true, "error");
-    expect(list).toContain("Cached data may be stale");
+    const list = multisigsFlow(status, account, [], [], true, "background-unavailable");
+    expect(list).toContain("MC-MS-REGISTRY");
     expect(list).toContain('id="multisig-list-retry"');
-    const detail = multisigDetailFlow(status, account, null, [], true, "error");
-    expect(detail).toContain("Could not refresh multisig state");
+    const detail = multisigDetailFlow(status, account, null, [], true, "background-unavailable");
+    expect(detail).toContain("wallet background could not load");
     expect(detail).not.toContain("no longer watched");
+  });
+
+  test("distinguishes config, proposal status, and bounded discovery health", () => {
+    expect(
+      multisigDetailFlow(status, account, multisig, [], false, "configuration-unavailable"),
+    ).toContain("MC-MS-CONFIG-RPC");
+    expect(
+      multisigDetailFlow(status, account, multisig, [], false, "proposal-refresh-incomplete"),
+    ).toContain("MC-MS-PROPOSALS-RPC");
+    const recent = multisigDetailFlow(
+      status,
+      account,
+      multisig,
+      [],
+      false,
+      "proposal-discovery-recent",
+    );
+    expect(recent).toContain("About proposal search coverage");
+    expect(recent).toContain("To review an older proposal, add its proposal id.");
+    expect(recent).not.toContain("Account state is current");
+    expect(recent).not.toContain("Cached data may be stale");
   });
 });

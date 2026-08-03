@@ -93,7 +93,12 @@ const collectiblesPanel = (
   if (data.nfts === null) {
     return emptyState("Shared collectibles are loading.");
   }
-  const nfts = visibleNftItems(preferences?.nfts ?? [], data.nfts, record.networkId);
+  const nfts = visibleNftItems(
+    preferences?.nfts ?? [],
+    data.nfts,
+    record.networkId,
+    record.address,
+  );
   if (nfts.length === 0) {
     return emptyState("No collectibles found for this shared account.");
   }
