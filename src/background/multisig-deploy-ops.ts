@@ -12,6 +12,7 @@ import {
   requireMultisigContractClass,
 } from "../starknet/multisig-deploy";
 import { canonicalFelt, STARKNET_NETWORKS } from "../starknet/networks";
+import { isUnresolvedActivityStatus } from "../storage/activity-store";
 import { type MultisigRecord, multisigId, multisigOperationId } from "../storage/multisig-store";
 import { readTypeOnlyInput } from "./message-inputs";
 import { readDeployMultisigInput } from "./multisig-inputs";
@@ -103,7 +104,7 @@ const declareMultisigClass: MultisigDeployHandler = async (deps, message) => {
         entry.accountId === context.account.id &&
         entry.networkId === context.networkId &&
         entry.summary === "Declare multisig class" &&
-        entry.status === "pending",
+        isUnresolvedActivityStatus(entry.status),
     )
   ) {
     return { error: "a declare transaction is already pending — wait for it to complete" };
@@ -192,7 +193,7 @@ const deployMultisig: MultisigDeployHandler = async (deps, message) => {
         entry.accountId === context.account.id &&
         entry.networkId === context.networkId &&
         entry.summary.includes(deployMarker) &&
-        entry.status === "pending",
+        isUnresolvedActivityStatus(entry.status),
     )
   ) {
     return {

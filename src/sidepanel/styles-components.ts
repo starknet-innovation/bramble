@@ -219,9 +219,8 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     text-overflow: ellipsis;
     text-wrap: nowrap;
   }
-  /* Status reads as a plain semantic micro-label, not a boxed pill: pending
-     stays muted, accepted goes green (success, not brand), reverted/rejected
-     go danger. */
+  /* Plain semantic status: pending is muted, accepted green, failures danger.
+     Pre-confirmed borrows green, then dims and dots it to remain provisional. */
   .tx-status {
     color: var(--mc-muted);
     flex: none;
@@ -232,6 +231,11 @@ export const COMPONENT_STYLES = `  /* Content groups are flush — spacing only,
     text-transform: uppercase;
   }
   .tx-status.accepted { color: var(--mc-positive); }
+  .tx-status.preconfirmed {
+    border-bottom: 1px dotted currentColor;
+    color: var(--mc-positive);
+    opacity: 0.68;
+  }
   .tx-status.reverted, .tx-status.rejected { color: var(--mc-danger); }
   .review-panel {
     background: var(--mc-soft);

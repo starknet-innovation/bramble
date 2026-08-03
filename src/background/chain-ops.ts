@@ -24,10 +24,11 @@ import {
   readSwitchChainInput,
 } from "./message-inputs";
 import { switchActiveNetwork } from "./runtime-state";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Dependencies for the provider chain and signing operations.

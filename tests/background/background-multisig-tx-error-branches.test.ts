@@ -206,7 +206,7 @@ describe("multisig class-status and declare guards", () => {
       summary: "Declare multisig class",
     });
     await activity.updateStatuses(
-      { "0xdec": "rejected" },
+      { "0xdec": { status: "rejected" } },
       { accountId: harnessAccount.id, networkId: harnessAccount.networkId },
     );
     await expect(

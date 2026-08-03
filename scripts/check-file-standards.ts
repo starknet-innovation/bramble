@@ -59,6 +59,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/signature-waiters.ts",
   "src/background/index.ts",
   "src/background/message-inputs.ts",
+  // Wires collaborators by name only. Its sole match is the `./signature-waiters`
+  // import path; it holds no secret material and touches no key operations.
+  "src/background/message-context.ts",
   "src/background/messages.ts",
   "src/background/provider-ops.ts",
   "src/background/origins-ops.ts",

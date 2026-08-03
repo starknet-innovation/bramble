@@ -24,6 +24,7 @@ import {
   isPricesResponse,
   isRevealSecretsResponse,
   isTokenChartResponse,
+  isTransactionAlertsResponse,
   isTransferResponse,
   isTransferReviewResponse,
   isWalletStatus,
@@ -211,6 +212,16 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         entries: response.activity,
         historyUnavailable: response.historyUnavailable ?? false,
       };
+    },
+    /**
+     * Drains the transaction failure notices background reconciliation
+     * recorded, including any raised while this panel was closed. The
+     * background hands each notice out once, so this is safe to call on every
+     * refresh; an unavailable background yields no notices rather than an error.
+     */
+    async loadTransactionAlerts(): Promise<readonly string[]> {
+      const response = await sendMessage({ type: "wallet.transactionAlerts" });
+      return isTransactionAlertsResponse(response) ? response.alerts : [];
     },
     async loadAllowances(): Promise<AllowancesResponse["allowances"]> {
       const response = await sendMessage({ type: "wallet.allowances" });

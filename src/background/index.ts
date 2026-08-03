@@ -22,6 +22,7 @@ import { createOriginHistoryStore } from "../storage/origin-history";
 import {
   type ApprovalSurfacePreference,
   createPreferencesStore,
+  type WalletPreferences,
 } from "../storage/preferences-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { setApprovalNotifier } from "./approval-notifier";
@@ -37,6 +38,7 @@ import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboar
 import { defaultRuntimeRpc } from "./runtime-rpc";
 import type { RuntimeSender } from "./senders";
 import { createUnlockSession, type UnlockSessionStore } from "./session";
+import { type AlarmsApi, startTransactionMonitor } from "./tx-monitor";
 import { createWalletReader } from "./wallet-reader";
 
 type RuntimeApi = {
@@ -57,6 +59,8 @@ type RuntimeApi = {
   readonly sendMessage?: (message: unknown) => Promise<unknown>;
 };
 
+type AlarmsGlobal = { readonly alarms?: AlarmsApi };
+
 type TabsApi = {
   readonly query: (
     queryInfo: Record<string, never>,
@@ -66,7 +70,8 @@ type TabsApi = {
 
 type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: ApprovalSurfaceBrowser &
-    OnboardingSurfaceBrowser & {
+    OnboardingSurfaceBrowser &
+    AlarmsGlobal & {
       readonly runtime?: RuntimeApi;
       readonly tabs?: TabsApi;
     };
@@ -137,6 +142,13 @@ void preferences
     updateApprovalSurface((await store?.read())?.approvalSurface ?? "side-panel");
   })
   .catch(() => undefined);
+const readPreferences = async (): Promise<WalletPreferences> => {
+  const store = await preferences;
+  if (!store) {
+    throw new Error("preferences unavailable");
+  }
+  return store.read();
+};
 const activityLog = (() => {
   try {
     return createActivityLog({ store: createBrowserLocalStore() });
@@ -244,13 +256,7 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
       updateApprovalSurface(next.approvalSurface ?? "side-panel");
       return next;
     },
-    async read() {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.read();
-    },
+    read: readPreferences,
     async removeAddress(input) {
       const store = await preferences;
       if (!store) {
@@ -378,6 +384,22 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
   ...(multisigLog ? { multisigStore: multisigLog } : {}),
   loadMultisigClass,
 });
+
+// Background verification of submitted transactions. Runs on its own alarm
+// cadence so a pre-confirmed transaction keeps being checked through to L1
+// finality after the side panel closes, and a failure detected then is queued
+// for the next time a panel opens.
+if (activityLog) {
+  startTransactionMonitor({
+    browser: extensionApi,
+    deps: {
+      activity: activityLog,
+      preferencesStore: { read: readPreferences },
+      runtimeRpc: defaultRuntimeRpc,
+    },
+    now: systemClock,
+  });
+}
 
 const broadcastEvent = (event: WalletEventMessage): void => {
   void runtime?.sendMessage?.(event).catch(() => undefined);
