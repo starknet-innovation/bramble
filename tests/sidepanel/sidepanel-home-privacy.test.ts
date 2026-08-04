@@ -127,6 +127,10 @@ describe("unified portfolio scope", () => {
     expect(row).toContain("0.5 ETH");
     expect(row).toContain(`data-token-detail="${token.id}"`);
     expect(row).toContain("See more about ETH");
+    // Registered accounts get the shield stepper beside the public balance.
+    expect(row).toContain('data-shield-step="down"');
+    expect(row).toContain('data-shield-step="up"');
+    expect(row).toContain("data-shield-confirm");
   });
 
   test("an unregistered account greys the private line into the activation entry", () => {
@@ -141,10 +145,12 @@ describe("unified portfolio scope", () => {
       },
     });
 
-    expect(html).toContain("data-privacy-register");
+    expect(html).toContain(`data-privacy-register="${token.id}"`);
     expect(html).toContain('title="Register to start shielding"');
-    // Combined amount degrades to public-only while unregistered.
+    // Combined amount degrades to public-only while unregistered, and the
+    // shield stepper never renders before registration.
     expect(html).toContain(">1.25<");
+    expect(html).not.toContain("data-shield-step");
   });
 
   test("pending discovery keeps public totals instead of hiding the hero", () => {

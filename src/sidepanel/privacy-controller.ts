@@ -5,11 +5,13 @@
 
 import type { WalletStatus } from "../popup/responses";
 import type { WalletPreferences } from "../storage/preferences-store";
+import { errorMessage, showToast } from "./dom";
 import {
   emptyPrivacyDisclosure,
   type PrivacyDisclosureState,
   type PrivacyJourneyState,
 } from "./privacy-model";
+import { bindShieldSteppers } from "./privacy-stepper";
 import { bindPrivacy } from "./privacy-ui";
 import type { BalanceState, SidepanelWallet } from "./runtime";
 
@@ -20,6 +22,8 @@ export type PrivacyControllerOptions = {
   readonly app: Element | null;
   readonly balances: () => BalanceState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
+  /** Monotonic milliseconds injected by the entrypoint for stepper pacing. */
+  readonly nowMs: () => number;
   readonly paint: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly status: () => WalletStatus;
@@ -34,8 +38,32 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
   let disclosure: PrivacyDisclosureState = emptyPrivacyDisclosure();
   let generation = 0;
   let journey: PrivacyJourneyState = { stage: "idle" };
+  // Hands a stepper-chosen shield amount to the standard deposit review; a
+  // slow preparation is dropped when the account/network scope changed.
+  const openShieldReview = (tokenId: string, amount: string): void => {
+    const startGeneration = generation;
+    const scope = options.status();
+    void options.wallet.preparePrivacyDeposit(tokenId, amount).then(
+      (preparation) => {
+        const current = options.status();
+        if (
+          generation !== startGeneration ||
+          current.activeAccountId !== scope.activeAccountId ||
+          current.networkId !== scope.networkId
+        ) {
+          return;
+        }
+        journey = { preparation, stage: "deposit-review", tokenId };
+        options.navigate("privacy");
+      },
+      (error: unknown) => {
+        showToast(errorMessage(error, "Shielding preparation failed"), "error");
+      },
+    );
+  };
   return {
     bind(): void {
+      bindShieldSteppers({ app: options.app, now: options.nowMs, openShieldReview });
       bindPrivacy({
         ...options,
         balances: () => {

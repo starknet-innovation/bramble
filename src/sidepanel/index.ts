@@ -401,6 +401,7 @@ privacy = createPrivacyController({
   app,
   balances: () => cache.balances,
   navigate: (view) => navigate(view),
+  nowMs: () => performance.now(),
   paint,
   preferences: () => cache.preferences,
   status: () => cache.status,
