@@ -54,6 +54,30 @@ const run = async (cmd: string[]): Promise<void> => {
   }
 };
 
+// Stamp the sidepanel bundle with the manifest version and source branch so
+// the settings screen can show exactly what build is loaded. Released builds
+// (main, or a detached tag checkout reporting HEAD) carry no branch.
+const gitBranch = async (): Promise<string> => {
+  try {
+    const child = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
+      stderr: "ignore",
+      stdout: "pipe",
+    });
+    const branch = (await new Response(child.stdout).text()).trim();
+    return (await child.exited) === 0 ? branch : "";
+  } catch {
+    return "";
+  }
+};
+const manifestVersion = (
+  JSON.parse(await readFile("public/manifest.json", "utf8")) as { version?: string }
+).version;
+const branch = await gitBranch();
+const buildStamp = {
+  __MC_BUILD_BRANCH__: JSON.stringify(branch === "main" || branch === "HEAD" ? "" : branch),
+  __MC_BUILD_VERSION__: JSON.stringify(manifestVersion ?? ""),
+};
+
 await run(["bun", "run", "check:extension"]);
 await run(["bun", "run", "check:krusty"]);
 await run(["bun", "run", "check:multisig"]);
@@ -74,6 +98,7 @@ requireBuild(
 
 requireBuild(
   await Bun.build({
+    define: buildStamp,
     entrypoints: ["src/sidepanel/index.ts"],
     format: "esm",
     minify: true,
