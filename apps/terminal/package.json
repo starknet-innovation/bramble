@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:full": "vercel dev",
+    "dev:gateway": "bun run scripts/dev-strk20-gateway.ts",
     "build": "tsc --noEmit && vite build",
     "build:contract": "bun run scripts/build-punk-contract.ts",
     "assets:avnu": "bun run scripts/sync-avnu-token-assets.ts",
