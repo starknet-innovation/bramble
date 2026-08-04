@@ -19,31 +19,16 @@ export const PRIVACY_STYLES = `
   .privacy-toggle-copy { display: grid; gap: 2px; }
   .privacy-toggle-copy strong { font-size: ${TYPE.label.size}; }
   .privacy-toggle-copy span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
-  button.privacy-switch {
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.full};
-    display: inline-flex;
+  .privacy-toggle-row > label {
+    color: var(--mc-text);
+    cursor: pointer;
     flex: none;
-    height: 20px;
-    min-height: 0;
-    padding: 3px;
-    width: 36px;
+    font-size: ${TYPE.label.size};
+    font-weight: ${WEIGHT.medium};
+    margin: 0;
+    text-wrap: nowrap;
   }
-  button.privacy-switch::after {
-    background: var(--mc-muted);
-    border-radius: ${RADIUS.full};
-    content: "";
-    display: block;
-    height: 14px;
-    transform: translateX(0);
-    transition: transform ${MOTION.liftMs}ms var(--ease-out), background ${MOTION.liftMs}ms var(--ease-out);
-    width: 14px;
-  }
-  button.privacy-switch[aria-checked="true"] { background: var(--mc-text); }
-  button.privacy-switch[aria-checked="true"]::after {
-    background: var(--mc-bg);
-    transform: translateX(16px);
-  }
+  .privacy-toggle-row input[type="checkbox"] { cursor: pointer; }
   .privacy-callout {
     background: var(--mc-elevated);
     border-radius: ${RADIUS.md};
@@ -222,7 +207,6 @@ export const PRIVACY_STYLES = `
     50% { opacity: 1; transform: scale(1); }
   }
   @media (prefers-reduced-motion: reduce) {
-    button.privacy-switch::after,
     .privacy-task-list li[data-state="active"] > span { animation: none; transition: none; }
   }
 `;

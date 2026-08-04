@@ -101,6 +101,29 @@ const privateDashboard = (privacy: PrivacyDisclosureState): string =>
   );
 
 describe("private portfolio scope", () => {
+  test("uses the shared browser-native checkbox for balance privacy", () => {
+    const publicHtml = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status);
+    const privateHtml = homeTabs(
+      { balances: [publicBalance] },
+      preferences,
+      {},
+      {},
+      "usd",
+      status,
+      [],
+      privateState(),
+    );
+
+    expect(publicHtml).toContain(
+      '<input name="privateBalances" type="checkbox" aria-label="Show private balances" data-privacy-toggle />',
+    );
+    expect(privateHtml).toContain(
+      '<input name="privateBalances" type="checkbox" checked aria-label="Show private balances" data-privacy-toggle />',
+    );
+    expect(publicHtml).not.toContain("privacy-switch");
+    expect(privateHtml).not.toContain('role="switch"');
+  });
+
   test("private mode replaces the public hero total and removes public 24h change", () => {
     const html = privateDashboard(privateState());
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("home-actions"));

@@ -11,6 +11,7 @@ import type { ActivityEntry } from "../storage/activity-store";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { emptyState } from "../ui/content";
 import { button, iconButton } from "../ui/controls";
+import { checkboxField } from "../ui/fields";
 import { menuRow } from "../ui/navigation";
 import { icon } from "./icons";
 import { type NftGalleryItem, nftImageMarkup, visibleNftItems } from "./nft-views";
@@ -169,7 +170,12 @@ const privacyToggle = (privacy: PrivacyDisclosureState): string => `
       <strong>${privacy.enabled ? "Private balances" : "Public balances"}</strong>
       <span>${privacy.enabled ? "Visible only inside this wallet" : "Read directly from Starknet"}</span>
     </span>
-    <button class="privacy-switch" data-privacy-toggle type="button" role="switch" aria-checked="${privacy.enabled}" aria-label="Show private balances"></button>
+    ${checkboxField({
+      attributes: { "aria-label": "Show private balances", "data-privacy-toggle": true },
+      checked: privacy.enabled,
+      name: "privateBalances",
+      text: "Private",
+    })}
   </div>`;
 
 const privateBalancesPanel = (

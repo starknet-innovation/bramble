@@ -123,9 +123,9 @@ const startJourney = async (
 };
 
 const bindDisclosure = (deps: PrivacyUiDeps): void => {
-  const toggle = deps.app?.querySelector<HTMLButtonElement>("[data-privacy-toggle]");
-  toggle?.addEventListener("click", () => {
-    if (deps.disclosure().enabled) {
+  const toggle = deps.app?.querySelector<HTMLInputElement>("[data-privacy-toggle]");
+  toggle?.addEventListener("change", () => {
+    if (!toggle.checked) {
       deps.setDisclosure({ enabled: false, error: null, loading: false, value: null });
       deps.paint();
       return;
