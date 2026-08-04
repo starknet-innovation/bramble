@@ -9,6 +9,7 @@ import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
 import type { DeclareFeeEstimate } from "../starknet/declare";
 import type { StarknetNetworkId } from "../starknet/networks";
+import type { FeeEstimate } from "../starknet/rpc";
 import type { Strk20Action } from "../starknet/strk20/schemas";
 import type { ApprovalContext } from "./approval-context";
 
@@ -69,20 +70,36 @@ export type DeclarationReview = {
 };
 
 /**
+ * Fee review carried by an invoke approval, classified exactly like the Send
+ * review (`resolveReviewFee`): an undeployed account intentionally has no
+ * estimate and no failure; a deployed account with no estimate is a retryable
+ * failure. Display-only — approving still signs the held calls unchanged.
+ */
+export type InvokeFeeReview = {
+  readonly fee: FeeEstimate | null;
+  readonly feeEstimateFailed: boolean;
+  readonly requiresDeployment: boolean;
+};
+
+/**
  * Pending dapp approval. `kind` and `token` describe watch-asset prompts;
  * `summaries`/`flags` describe an invoke prompt's decoded calls and risk flags;
- * `blocked` and `insights` are attached by the reputation layer when the queue
- * is listed to the UI — the queue itself never sets them.
+ * `fee`/`feeEstimateFailed`/`requiresDeployment` carry an invoke prompt's fee
+ * review; `blocked` and `insights` are attached by the reputation layer when
+ * the queue is listed to the UI — the queue itself never sets them.
  */
 export type PendingApproval = {
   readonly blocked?: boolean;
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
+  readonly fee?: FeeEstimate | null;
+  readonly feeEstimateFailed?: boolean;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
   readonly origin: string;
+  readonly requiresDeployment?: boolean;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
   readonly typedData?: unknown;
@@ -140,6 +157,7 @@ export type ApprovalQueue = {
   readonly requestInvoke: (input: {
     readonly calls: readonly Call[];
     readonly context: ApprovalContext;
+    readonly fee: InvokeFeeReview;
     readonly flags: readonly ApprovalRiskFlag[];
     readonly origin: string;
     readonly summaries: readonly string[];
@@ -167,6 +185,7 @@ export type ApprovalQueue = {
     readonly origin: string;
     readonly token: WatchAssetToken;
   }) => PendingApproval;
+  readonly updateInvokeFee: (id: string, fee: InvokeFeeReview) => PendingApproval | null;
 };
 
 const cloneCall = (call: Call): Call =>
@@ -221,6 +240,13 @@ const readApprovalPayload = (approval: ApprovalEntry): ApprovalPayload | null =>
 
 const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
   ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
+  ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
+  ...(approval.feeEstimateFailed === undefined
+    ? {}
+    : { feeEstimateFailed: approval.feeEstimateFailed }),
+  ...(approval.requiresDeployment === undefined
+    ? {}
+    : { requiresDeployment: approval.requiresDeployment }),
   ...(approval.declaration === undefined
     ? {}
     : {
@@ -354,7 +380,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
         summaries: [...summaries],
       });
     },
-    requestInvoke({ calls, context, flags, origin, summaries }) {
+    requestInvoke({ calls, context, fee, flags, origin, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
@@ -362,10 +388,13 @@ export const createApprovalQueue = (): ApprovalQueue => {
       return enqueue({
         calls: calls.map(cloneCall),
         context: { ...context },
+        fee: fee.fee && { ...fee.fee },
+        feeEstimateFailed: fee.feeEstimateFailed,
         flags: flags.map((flag) => ({ ...flag })),
         id: crypto.randomUUID(),
         kind: "invoke",
         origin,
+        requiresDeployment: fee.requiresDeployment,
         summaries: [...summaries],
       });
     },
@@ -437,6 +466,19 @@ export const createApprovalQueue = (): ApprovalQueue => {
         return approvalSnapshot(existing);
       }
       return enqueue({ id: crypto.randomUUID(), kind: "watch-asset", origin, token: { ...token } });
+    },
+    updateInvokeFee(id, fee) {
+      const approval = entry(id);
+      if (!approval || approval.kind !== "invoke") {
+        return null;
+      }
+      pending.set(id, {
+        ...approval,
+        fee: fee.fee && { ...fee.fee },
+        feeEstimateFailed: fee.feeEstimateFailed,
+        requiresDeployment: fee.requiresDeployment,
+      });
+      return get(id);
     },
   };
 };

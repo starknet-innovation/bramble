@@ -106,6 +106,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
   { message: { type: "wallet.deployAccount" }, sender: extensionSender },
   { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
+  {
+    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.retryApprovalFee" },
+    sender: extensionSender,
+  },
   { message: { type: "wallet.preferences" }, sender: extensionSender },
   { message: { origin: ORIGIN, type: "wallet.requestAccounts" }, sender: contentSender },
   { message: { origin: ORIGIN, type: "wallet.getGrantedAccounts" }, sender: contentSender },

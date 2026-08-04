@@ -91,8 +91,22 @@ const reviewForCalls = (
   };
 };
 
-const dappCard = (summaries: readonly string[], flags: readonly Flag[]): string => {
+// Fee state both surfaces render through the shared `reviewFeeSection` (#189).
+type FeeState = {
+  readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly feeEstimateFailed: boolean;
+  readonly requiresDeployment: boolean;
+};
+
+const NO_FEE: FeeState = { fee: null, feeEstimateFailed: false, requiresDeployment: false };
+
+const dappCard = (
+  summaries: readonly string[],
+  flags: readonly Flag[],
+  fee: FeeState = NO_FEE,
+): string => {
   const invoke: PendingApproval = {
+    ...fee,
     flags,
     id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
     kind: "invoke",
@@ -102,12 +116,14 @@ const dappCard = (summaries: readonly string[], flags: readonly Flag[]): string 
   return approvalCard(invoke, status);
 };
 
-const sendReview = (summaries: readonly string[], flags: readonly Flag[]): string =>
+const sendReview = (
+  summaries: readonly string[],
+  flags: readonly Flag[],
+  fee: FeeState = NO_FEE,
+): string =>
   reviewPanelHtml({
-    fee: null,
-    feeEstimateFailed: false,
+    ...fee,
     flags,
-    requiresDeployment: false,
     summaries,
   });
 
@@ -256,5 +272,69 @@ describe("Send review vs dApp invoke card decode/risk parity (#19)", () => {
     const list = reviewCallsList(summaries);
     expect(dappCard(summaries, flags)).toContain(list);
     expect(sendReview(summaries, flags)).toContain(list);
+  });
+});
+
+// One fee estimate, two surfaces: Send's review and the dApp invoke card must
+// render the identical shared fee line for an equivalent transaction, in the
+// unit the estimate actually returned (#189). These cases keep the hardcoded
+// `fee: null` fixtures above honest — the no-fee state is a state, not the
+// only covered state.
+describe("Send review vs dApp invoke card fee parity (#189)", () => {
+  test("both surfaces render the same estimated fee from one estimate", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    const fee: FeeState = {
+      fee: { overallFee: "2500000000000000", unit: "FRI" },
+      feeEstimateFailed: false,
+      requiresDeployment: false,
+    };
+
+    // The exact shared fee markup appears in both renders — one rendering path.
+    const line = '<p class="review-fee">Estimated fee: 0.0025 STRK</p>';
+    expect(sendReview(summaries, flags, fee)).toContain(line);
+    expect(dappCard(summaries, flags, fee)).toContain(line);
+  });
+
+  test("a non-FRI estimate keeps its own unit and is never mislabelled STRK", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    const fee: FeeState = {
+      fee: { overallFee: "123", unit: "WEI" },
+      feeEstimateFailed: false,
+      requiresDeployment: false,
+    };
+
+    for (const rendered of [sendReview(summaries, flags, fee), dappCard(summaries, flags, fee)]) {
+      expect(rendered).toContain("Estimated fee: 123 WEI");
+      expect(rendered).not.toContain("STRK");
+    }
+  });
+
+  test("an undeployed account reuses Send's existing wording on both surfaces", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    const fee: FeeState = { fee: null, feeEstimateFailed: false, requiresDeployment: true };
+    const line = "The network fee is estimated once this account is deployed.";
+
+    expect(sendReview(summaries, flags, fee)).toContain(line);
+    expect(dappCard(summaries, flags, fee)).toContain(line);
+  });
+
+  test("a failed estimate surfaces the same alert and a retry affordance on both surfaces", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    const fee: FeeState = { fee: null, feeEstimateFailed: true, requiresDeployment: false };
+    const alert = "Couldn't estimate the network fee right now.";
+
+    const send = sendReview(summaries, flags, fee);
+    expect(send).toContain(alert);
+    expect(send).toContain('id="review-retry-fee"');
+
+    const card = dappCard(summaries, flags, fee);
+    expect(card).toContain(alert);
+    expect(card).toContain('data-approval-retry-fee="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14"');
+    // Approve stays enabled on a failed estimate — deliberate divergence from
+    // Send's Confirm gating, so a flaky RPC cannot block dApp transactions.
+    expect(card).toContain('data-approval-action="approve"');
+    expect(card).not.toContain(
+      'data-approval-action="approve" data-approval-id="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14" type="button" disabled',
+    );
   });
 });

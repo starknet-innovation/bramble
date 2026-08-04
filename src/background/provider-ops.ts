@@ -5,9 +5,11 @@
  * verifies the claimed origin and re-checks the phishing blocklist — a blocked
  * origin gets nothing back even if it still holds an old connection grant.
  */
+import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { walletErrorMessage } from "../shared/errors";
 import { STARKNET_NETWORKS } from "../starknet/networks";
+import type { FeeEstimate } from "../starknet/rpc";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
@@ -17,17 +19,21 @@ import { accountHashSigner } from "./account-hash-signer";
 import { recordApproveAllowances } from "./allowance-ops";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
-import type { ApprovalPayload, ApprovalQueue } from "./approvals";
+import type { ApprovalPayload, ApprovalQueue, InvokeFeeReview } from "./approvals";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readAddInvokeTransactionInput } from "./message-inputs";
-import { readGetPermissionsInput, readWatchAssetInput } from "./provider-inputs";
+import {
+  readGetPermissionsInput,
+  readRetryApprovalFeeInput,
+  readWatchAssetInput,
+} from "./provider-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
-import { verificationContext } from "./wallet-ops";
+import { resolveReviewFee, verificationContext } from "./wallet-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 import { canonicalTokenAddress, watchAssetToken } from "./watch-asset";
 
@@ -38,6 +44,13 @@ export type ProviderOpsDeps = {
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
   readonly guard?: OriginGuard;
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial
+   * test stubs stay valid; the fee estimate never signs, but the signer seam
+   * requires the queue to build a Ledger signer — without it the estimate
+   * degrades to a retryable failure instead of breaking the approval.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -187,6 +200,49 @@ const handleWatchAsset: ProviderOpsHandler = async (deps, message, sender) => {
   return deps.waiters.register(approval.id);
 };
 
+// Estimates the fee for a queued dapp invoke, mirroring the Send review's
+// shape (deployment status → estimate → resolveReviewFee) so both journeys
+// classify fee outcomes identically. Nothing is broadcast and nothing is
+// signed; any failure — transport, RPC, or signer construction — degrades to a
+// retryable "estimate failed" state and never blocks the approval from
+// queueing or rendering.
+const estimateInvokeApprovalFee = async (
+  deps: Pick<ProviderOpsDeps, "ledgerSignQueue" | "runtimeRpc" | "wallet">,
+  resolved: ResolvedOriginAccount,
+  calls: readonly Call[],
+): Promise<InvokeFeeReview> => {
+  const rpcUrls = networkRpcUrls(
+    STARKNET_NETWORKS[resolved.account.networkId],
+    resolved.preferences,
+  );
+  let deployed = true;
+  try {
+    deployed = await deps.runtimeRpc.getDeploymentStatus({
+      accountAddress: resolved.account.address,
+      rpcUrls,
+    });
+  } catch {
+    deployed = true;
+  }
+  let estimated: FeeEstimate | null = null;
+  if (deployed) {
+    try {
+      estimated = await deps.runtimeRpc.estimateInvokeFee({
+        account: resolved.account,
+        calls: [...calls],
+        rpcUrls,
+        signHash: accountHashSigner(deps, resolved.account, resolved.passphrase),
+      });
+    } catch {
+      estimated = null;
+    }
+  }
+  return {
+    ...resolveReviewFee({ deployed, fee: estimated }),
+    requiresDeployment: !deployed,
+  };
+};
+
 const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sender) => {
   const input = readAddInvokeTransactionInput(message);
   if (!input) {
@@ -207,12 +263,40 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   const approval = deps.approvals.requestInvoke({
     calls: input.calls,
     context: await createApprovalContext(resolved.account, { calls: input.calls }),
+    fee: await estimateInvokeApprovalFee(deps, resolved, input.calls),
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     origin: input.origin,
     summaries: report.calls.map((call) => call.summary),
   });
   notifyApprovalsChanged();
   return deps.waiters.register(approval.id);
+};
+
+// Re-estimates the fee for a queued invoke approval on the panel's request
+// (the retry affordance on the approval card). Privileged-sender only — the
+// message type is not dapp-reachable. Re-resolves the origin's account against
+// the approval's pinned context so a network or account switch since queueing
+// fails safely instead of estimating against the wrong account.
+const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
+  const input = readRetryApprovalFeeInput(message);
+  if (!input) {
+    return { error: "invalid fee retry request" };
+  }
+  const approval = deps.approvals.get(input.id);
+  const payload = deps.approvals.payload(input.id);
+  if (!approval || approval.kind !== "invoke" || !payload?.calls) {
+    return { error: "approval not found" };
+  }
+  const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
+  if ("error" in resolved) {
+    return resolved;
+  }
+  const fee = await estimateInvokeApprovalFee(deps, resolved, payload.calls);
+  if (!deps.approvals.updateInvokeFee(input.id, fee)) {
+    return { error: "approval not found" };
+  }
+  notifyApprovalsChanged();
+  return { ok: true };
 };
 
 /**
@@ -222,6 +306,7 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
 const PROVIDER_OPS_HANDLERS: Readonly<Record<string, ProviderOpsHandler>> = {
   "wallet.addInvokeTransaction": handleAddInvokeTransaction,
   "wallet.getPermissions": handleGetPermissions,
+  "wallet.retryApprovalFee": handleRetryApprovalFee,
   "wallet.watchAsset": handleWatchAsset,
 };
 

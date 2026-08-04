@@ -163,6 +163,7 @@ describe("approval execution security", () => {
     const context = await createApprovalContext(account, { calls });
     const { approvals, deps, submissions } = makeDeps({ activeNetworkId: "SN_SEPOLIA" });
     const { id } = approvals.requestInvoke({
+      fee: { fee: null, feeEstimateFailed: false, requiresDeployment: false },
       calls,
       context,
       flags: [],
@@ -185,6 +186,7 @@ describe("approval execution security", () => {
     const context = await createApprovalContext(account, { calls });
     const { approvals, deps, settled, submissions } = makeDeps({ granted: [] });
     const { id } = approvals.requestInvoke({
+      fee: { fee: null, feeEstimateFailed: false, requiresDeployment: false },
       calls,
       context,
       flags: [],
@@ -209,6 +211,7 @@ describe("approval execution security", () => {
     const context = await createApprovalContext(account, { calls });
     const { approvals, deps, submitted } = makeDeps({ granted: [other, account] });
     const { id } = approvals.requestInvoke({
+      fee: { fee: null, feeEstimateFailed: false, requiresDeployment: false },
       calls,
       context,
       flags: [],
@@ -229,6 +232,7 @@ describe("approval execution security", () => {
     const context = await createApprovalContext(account, { calls: reviewed });
     const { approvals, deps, submissions } = makeDeps();
     const { id } = approvals.requestInvoke({
+      fee: { fee: null, feeEstimateFailed: false, requiresDeployment: false },
       calls: substituted,
       context,
       flags: [],
