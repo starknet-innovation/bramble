@@ -357,7 +357,7 @@ export const sendFlow = (
       `<section class="section send-flow">
         ${account ? "" : noAccountEmpty(status)}
         ${account && assets.length === 0 ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.") : ""}
-        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token">
+        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-public-balance="${escapeHtml(asset?.balance ?? "0")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "0")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />

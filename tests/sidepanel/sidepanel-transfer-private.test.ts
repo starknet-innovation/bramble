@@ -53,6 +53,10 @@ const registeredDisclosure = (privateBalance = "0x6f05b59d3b20000"): PrivacyDisc
 
 const mountForm = (recipient: string): HTMLFormElement => {
   const form = document.createElement("form");
+  // The real Send form carries the asset's public balance on the element so the
+  // toggle can restore it after a shell repaint destroys in-memory state.
+  form.dataset["publicBalance"] = "1250000000000000000";
+  form.dataset["publicFormatted"] = "1.25";
   form.innerHTML = `
     <input name="recipient" type="hidden" value="${recipient}" />
     <input name="privateSend" type="hidden" value="" />
@@ -153,6 +157,36 @@ describe("private send toggle", () => {
     expect(form.querySelector("#send-private-toggle")?.getAttribute("title")).toBe(
       "Choose a recipient first",
     );
+  });
+
+  test("keeps private mode across a repaint that rebuilds the form", async () => {
+    // Simulates the repaint: markup re-rendered with public values, the
+    // restored hidden flag still says private.
+    const { form, toggle } = bind(RECIPIENT, registeredDisclosure());
+    await flush();
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(form.querySelector<HTMLInputElement>('[name="tokenFormatted"]')?.value).toBe("0.5");
+
+    document.body.replaceChildren();
+    const repainted = mountForm(RECIPIENT);
+    const flag = repainted.querySelector<HTMLInputElement>('[name="privateSend"]');
+    if (flag) {
+      flag.value = "1";
+    }
+    bindPrivateSendToggle({
+      form: repainted,
+      onModeChange: () => undefined,
+      privacy: () => registeredDisclosure(),
+      wallet: {
+        loadPrivacyRecipientStatus: async () => "registered" as const,
+      } as unknown as SidepanelWallet,
+    });
+
+    // The private view is re-applied instead of silently sending the public
+    // balance with a private-looking form.
+    expect(repainted.querySelector<HTMLInputElement>("#send-private-checkbox")?.checked).toBe(true);
+    expect(repainted.querySelector<HTMLInputElement>('[name="tokenFormatted"]')?.value).toBe("0.5");
   });
 
   test("greys with a zero private balance of the selected asset", () => {

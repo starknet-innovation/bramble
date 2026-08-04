@@ -32,6 +32,8 @@ export type PrivacyAccountState = {
   readonly accountId: string;
   readonly balances: readonly PrivateBalanceView[];
   readonly networkId: string;
+  /** Pool action fee in FRI when known, for pre-quote fee display. */
+  readonly poolFeeFri?: string;
   readonly registration: "registered" | "unregistered";
 };
 
@@ -43,7 +45,7 @@ export type PrivacyPreparation = {
   readonly amount?: string;
   readonly authorization?: PaymasterAuthorizationReview;
   readonly id: string;
-  readonly kind: "deposit" | "register" | "transfer";
+  readonly kind: "deposit" | "register" | "transfer" | "withdraw";
   readonly payloadDigest: string;
   readonly poolAddress: string;
   readonly recipient?: string;
@@ -175,7 +177,7 @@ const readPreparation = (
         !isNonZeroStarkFieldElement(value["recipient"]))) ||
     (value["kind"] === "deposit" &&
       (typeof value["amount"] !== "string" || value["recipient"] !== undefined)) ||
-    (value["kind"] === "transfer" &&
+    ((value["kind"] === "transfer" || value["kind"] === "withdraw") &&
       (typeof value["amount"] !== "string" ||
         typeof value["recipient"] !== "string" ||
         value["route"] !== "private-relay")) ||
@@ -213,9 +215,17 @@ const readState = (response: unknown): PrivacyAccountState | null => {
   }
   const state = response["strk20State"];
   if (
-    !hasOnlyKnownKeys(state, ["accountId", "balances", "networkId", "registration"]) ||
+    !hasOnlyKnownKeys(state, [
+      "accountId",
+      "balances",
+      "networkId",
+      "poolFeeFri",
+      "registration",
+    ]) ||
     !isStarknetNetworkId(state["networkId"]) ||
     !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
+    (state["poolFeeFri"] !== undefined &&
+      (typeof state["poolFeeFri"] !== "string" || !isStarkFieldElement(state["poolFeeFri"]))) ||
     (state["registration"] !== "registered" && state["registration"] !== "unregistered") ||
     !Array.isArray(state["balances"]) ||
     state["balances"].length > STRK20_LIMITS.balances
@@ -252,6 +262,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     accountId: state["accountId"],
     balances,
     networkId: state["networkId"],
+    ...(typeof state["poolFeeFri"] === "string" ? { poolFeeFri: state["poolFeeFri"] } : {}),
     registration: state["registration"],
   };
 };
@@ -323,6 +334,23 @@ export const createPrivacyRuntimeClient = (
       return preparation;
     }
     throw errorFrom(response, "Private send preparation failed");
+  },
+  async preparePrivacyWithdraw(
+    tokenId: string,
+    recipient: string,
+    amount: string,
+  ): Promise<PrivacyPreparation> {
+    const response = await sendMessage({
+      amount,
+      recipient,
+      tokenId,
+      type: "wallet.strk20PrepareWithdraw",
+    });
+    const preparation = readPreparation(response, "withdraw");
+    if (preparation) {
+      return preparation;
+    }
+    throw errorFrom(response, "Unshielding preparation failed");
   },
   async loadPrivacyRecipientStatus(
     tokenId: string,

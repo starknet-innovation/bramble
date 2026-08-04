@@ -72,6 +72,13 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
               .map((token) => token.address),
           })
         : [];
+    const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    // Best effort: the fee is a display aid, so an unreadable fee leaves the
+    // field absent rather than failing the whole balance read.
+    const poolFeeFri = await service
+      .poolFee?.(context.accountContext)
+      .catch(() => undefined)
+      .then((value) => (typeof value === "string" ? value : undefined));
     return {
       ok: true,
       strk20State: {
@@ -91,6 +98,7 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
           };
         }),
         networkId: context.accountContext.account.networkId,
+        ...(poolFeeFri === undefined ? {} : { poolFeeFri }),
         registration,
       },
     };
@@ -268,7 +276,9 @@ const executePreparation = async (
           ? "Activate private balances"
           : preparation.kind === "transfer"
             ? `Send ${preparation.amount} ${preparation.token.symbol} privately`
-            : `Shield ${preparation.amount} ${preparation.token.symbol}`,
+            : preparation.kind === "withdraw"
+              ? `Unshield ${preparation.amount} ${preparation.token.symbol}`
+              : `Shield ${preparation.amount} ${preparation.token.symbol}`,
       ...(preparation.kind === "register" ? {} : { token: preparation.token.symbol }),
     });
     return { ok: true, transactionHash: result.transactionHash };
@@ -286,8 +296,8 @@ const submitPreparation = async (
   if (preparation.kind === "deposit") {
     return submitPreparedDeposit(deps, service, preparation, context);
   }
-  if (preparation.kind === "transfer") {
-    return submitPreparedTransfer(service, preparation, context);
+  if (preparation.kind === "transfer" || preparation.kind === "withdraw") {
+    return submitPreparedPrivateBatch(service, preparation, context);
   }
   const registration = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
@@ -299,9 +309,12 @@ const submitPreparation = async (
   return registerStrk20Account(service, context.accountContext);
 };
 
-const submitPreparedTransfer = async (
+// Transfers and withdrawals share their submission guard: both spend shielded
+// balance through the relay, so both re-check registration and the balance at
+// submit time rather than trusting the reviewed preparation.
+const submitPreparedPrivateBatch = async (
   service: ReturnType<typeof strk20ServiceForRuntime>,
-  preparation: Extract<Strk20WalletPreparation, { readonly kind: "transfer" }>,
+  preparation: Extract<Strk20WalletPreparation, { readonly kind: "transfer" | "withdraw" }>,
   context: ActivePrivacyContext,
 ): Promise<{ readonly transactionHash: string }> => {
   const registration = await readStrk20RegistrationStatus(service, {

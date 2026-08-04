@@ -49,6 +49,31 @@ export const readStrk20TransferPreparationInput = (
     : null;
 
 /**
+ * Reads the asset, public destination, and decimal amount for an unshield
+ * (withdrawal) preparation.
+ */
+export const readStrk20WithdrawPreparationInput = (
+  message: unknown,
+): { readonly amount: string; readonly recipient: string; readonly tokenId: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["amount", "recipient", "tokenId", "type"]) &&
+  message["type"] === "wallet.strk20PrepareWithdraw" &&
+  isTransferAmount(message["amount"]) &&
+  message["amount"].length <= 128 &&
+  typeof message["recipient"] === "string" &&
+  message["recipient"].length > 0 &&
+  message["recipient"].length <= 128 &&
+  typeof message["tokenId"] === "string" &&
+  message["tokenId"].length > 0 &&
+  message["tokenId"].length <= 200
+    ? {
+        amount: message["amount"].trim(),
+        recipient: message["recipient"].trim(),
+        tokenId: message["tokenId"],
+      }
+    : null;
+
+/**
  * Reads the address whose privacy-pool registration the send screen checks
  * before enabling a private send.
  */

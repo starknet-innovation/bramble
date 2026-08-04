@@ -27,34 +27,40 @@ export type PrivateSendUiDeps = {
   readonly wallet: SidepanelWallet;
 };
 
+// A blocker either forbids private mode outright (`pending: false`) or is only
+// an in-flight check. A pending check must not switch an already-enabled
+// private mode back off — a repaint re-checks the recipient, and reverting
+// there would silently turn a reviewed private send public.
+type Blocker = { readonly pending: boolean; readonly reason: string };
+
 const blockerReason = (
   deps: PrivateSendUiDeps,
   recipient: string,
   recipientStatus: RecipientRegistration | null,
-): string | null => {
+): Blocker | null => {
   const disclosure = deps.privacy();
   if (disclosure.error) {
-    return "Shielded balances are unavailable right now";
+    return { pending: false, reason: "Shielded balances are unavailable right now" };
   }
   if (disclosure.loading || !disclosure.value) {
-    return "Discovering shielded balances…";
+    return { pending: true, reason: "Discovering shielded balances…" };
   }
   if (disclosure.value.registration !== "registered") {
-    return "Activate private balances before sending privately";
+    return { pending: false, reason: "Activate private balances before sending privately" };
   }
   const tokenId = sendFormInput(deps.form, "tokenId")?.value ?? "";
   const entry = disclosure.value.balances.find((balance) => balance.tokenId === tokenId);
   if (!entry || BigInt(entry.balance) === 0n) {
-    return "No private balance of this asset yet";
+    return { pending: false, reason: "No private balance of this asset yet" };
   }
   if (!recipient || !isStarkFieldElement(recipient)) {
-    return "Choose a recipient first";
+    return { pending: false, reason: "Choose a recipient first" };
   }
   if (recipientStatus === "checking" || recipientStatus === null) {
-    return "Checking the recipient's privacy registration…";
+    return { pending: true, reason: "Checking the recipient's privacy registration…" };
   }
   if (recipientStatus === "unregistered") {
-    return "The recipient has not activated private balances";
+    return { pending: false, reason: "The recipient has not activated private balances" };
   }
   return null;
 };
@@ -81,57 +87,56 @@ export const bindPrivateSendToggle = (deps: PrivateSendUiDeps): void => {
   }
   const recipientChecks = new Map<string, RecipientRegistration>();
   let checkTimer: ReturnType<typeof setTimeout> | null = null;
-  let publicBalanceStash: { readonly balance: string; readonly formatted: string } | null = null;
 
   const currentRecipient = (): string =>
     normalizeFeltInput(sendFormInput(form, "recipient")?.value ?? "");
 
-  const disablePrivateMode = (): void => {
-    if (flag.value !== "1") {
-      return;
-    }
-    flag.value = "";
-    toggle.checked = false;
+  const applyBalance = (raw: string, formatted: string): void => {
     const balanceInput = sendFormInput(form, "tokenBalance");
     const formattedInput = sendFormInput(form, "tokenFormatted");
-    if (publicBalanceStash && balanceInput && formattedInput) {
-      balanceInput.value = publicBalanceStash.balance;
-      formattedInput.value = publicBalanceStash.formatted;
-      setBalanceDisplay(
-        form,
-        publicBalanceStash.formatted,
-        sendFormInput(form, "tokenSymbol")?.value ?? "",
-      );
+    if (!balanceInput || !formattedInput) {
+      return;
     }
-    publicBalanceStash = null;
-    deps.onModeChange();
+    balanceInput.value = raw;
+    formattedInput.value = formatted;
+    setBalanceDisplay(form, formatted, sendFormInput(form, "tokenSymbol")?.value ?? "");
   };
 
-  const enablePrivateMode = (): void => {
+  const disablePrivateMode = (notify = true): void => {
+    flag.value = "";
+    toggle.checked = false;
+    // The public balance rides on the form, re-rendered from the asset on every
+    // repaint, so restoring it never depends on in-memory state.
+    applyBalance(form.dataset["publicBalance"] ?? "0", form.dataset["publicFormatted"] ?? "0");
+    if (notify) {
+      deps.onModeChange();
+    }
+  };
+
+  const enablePrivateMode = (notify = true): void => {
     const tokenId = sendFormInput(form, "tokenId")?.value ?? "";
     const entry = deps.privacy().value?.balances.find((balance) => balance.tokenId === tokenId);
-    const balanceInput = sendFormInput(form, "tokenBalance");
-    const formattedInput = sendFormInput(form, "tokenFormatted");
-    if (!entry || !balanceInput || !formattedInput) {
+    if (!entry) {
       toggle.checked = false;
+      flag.value = "";
       return;
     }
-    publicBalanceStash = { balance: balanceInput.value, formatted: formattedInput.value };
     flag.value = "1";
-    balanceInput.value = BigInt(entry.balance).toString(10);
-    formattedInput.value = entry.formatted;
-    setBalanceDisplay(form, entry.formatted, sendFormInput(form, "tokenSymbol")?.value ?? "");
-    deps.onModeChange();
+    toggle.checked = true;
+    applyBalance(BigInt(entry.balance).toString(10), entry.formatted);
+    if (notify) {
+      deps.onModeChange();
+    }
   };
 
   const evaluate = (): void => {
     const recipient = currentRecipient();
     const status = recipient ? (recipientChecks.get(recipient) ?? null) : null;
-    const reason = blockerReason(deps, recipient, status);
-    toggle.disabled = reason !== null;
-    container.title = reason ?? "Send from your private balance to the recipient's";
-    container.classList.toggle("muted", reason !== null);
-    if (reason !== null && flag.value === "1") {
+    const blocker = blockerReason(deps, recipient, status);
+    toggle.disabled = blocker !== null;
+    container.title = blocker?.reason ?? "Send from your private balance to the recipient's";
+    container.classList.toggle("muted", blocker !== null);
+    if (blocker !== null && !blocker.pending && flag.value === "1") {
       disablePrivateMode();
     }
     if (
@@ -142,7 +147,14 @@ export const bindPrivateSendToggle = (deps: PrivateSendUiDeps): void => {
     ) {
       recipientChecks.set(recipient, "checking");
       if (checkTimer !== null) {
+        // Drop the superseded in-flight marker so an abandoned address is not
+        // left stuck on "checking" if the user comes back to it.
         clearTimeout(checkTimer);
+        for (const [address, state] of recipientChecks) {
+          if (state === "checking" && address !== recipient) {
+            recipientChecks.delete(address);
+          }
+        }
       }
       checkTimer = setTimeout(() => {
         const tokenId = sendFormInput(form, "tokenId")?.value ?? "";
@@ -171,5 +183,11 @@ export const bindPrivateSendToggle = (deps: PrivateSendUiDeps): void => {
   // click activity on the form; re-evaluating is cheap and idempotent.
   form.addEventListener("input", evaluate);
   form.addEventListener("click", () => evaluate());
+  // A shell repaint re-renders the form from the asset's public balance while
+  // the restored flag still says private, so re-apply the private view (or
+  // clear a flag whose private balance is gone) before the first evaluate.
+  if (flag.value === "1") {
+    enablePrivateMode(false);
+  }
   evaluate();
 };

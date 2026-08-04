@@ -60,6 +60,7 @@ const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | n
     accountId: fields.accountId,
     amount: fields.amount,
     fiatEstimate: fields.fiatEstimate,
+    privateSend: fields.privateSend,
     recipient: fields.recipient,
     recipientLabel: fields.recipientLabel,
     speed: fields.speed,

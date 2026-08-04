@@ -72,6 +72,15 @@ export const strk20KeyBoundaryMessages = ({
     sender: extensionSender,
   },
   {
+    message: {
+      amount: "1",
+      recipient: "0x123",
+      tokenId: "SN_MAIN:0x1",
+      type: "wallet.strk20PrepareWithdraw",
+    },
+    sender: extensionSender,
+  },
+  {
     message: { address: "0x123", tokenId: "SN_MAIN:0x1", type: "wallet.strk20RecipientStatus" },
     sender: extensionSender,
   },

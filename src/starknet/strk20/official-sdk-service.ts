@@ -294,10 +294,16 @@ export const createOfficialStrk20Service = ({
         },
       );
     },
+    async poolFee(input) {
+      const config = requireStrk20Config(input);
+      return num.toHex(await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress));
+    },
     async quoteActions(input) {
       const config = requireStrk20Config(input);
       if (!config.paymaster) {
-        throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+        throw new WalletError(
+          `${STRK20_SUBMISSION_UNAVAILABLE}: no private relay is configured for this network`,
+        );
       }
       if (!nowSeconds) {
         throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
