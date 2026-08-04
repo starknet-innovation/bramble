@@ -12,13 +12,13 @@ import type { AccountRef } from "../../src/storage/vault-schema";
  * Canonical active mainnet account.
  */
 export const account: AccountRef = {
-  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   networkId: "SN_MAIN",
-  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
 
 /**
@@ -26,8 +26,9 @@ export const account: AccountRef = {
  */
 export const secondAccount: AccountRef = {
   ...account,
-  address: "0x9994567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-  id: "SN_MAIN:0x9994567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+  address: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  derivation: { accountIndex: 0, addressIndex: 1, kind: "starknet-bip44" },
+  id: "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
 
 /**
