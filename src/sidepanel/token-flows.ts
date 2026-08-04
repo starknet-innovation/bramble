@@ -226,7 +226,7 @@ export const tokenDetailFlow = (
         ${button({
           attributes: { "data-privacy-open": token.id },
           icon: "shield",
-          label: registered ? `Shield ${token.symbol}` : "Go private",
+          label: registered ? "Shield/unshield" : "Go private",
         })}
         ${privacy.error ? `<p class="hint">${escapeHtml(privacy.error)}</p>` : ""}
       </section>

@@ -8,6 +8,7 @@ import { formatTokenAmount } from "../starknet/rpc";
 import type { WalletPreferences } from "../storage/preferences-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
+import { SHIELD_WARNING, UNSHIELD_WARNING } from "./privacy-views";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -165,26 +166,134 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
   });
 };
 
+// Half/Max operate on whichever domain currently sits on top, so the
+// shortcuts stay correct after a flip.
 const bindAmountShortcuts = (deps: PrivacyUiDeps, tokenId: string): void => {
   const input = deps.app?.querySelector<HTMLInputElement>("#privacy-amount");
-  const balance = deps.balances().find((candidate) => candidate.id === tokenId);
+  const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
   const token = deps.preferences()?.tokens.find((candidate) => candidate.id === tokenId);
+  const publicBalance = deps.balances().find((candidate) => candidate.id === tokenId);
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-amount]").forEach((button) => {
     button.addEventListener("click", () => {
-      if (!input || !balance || !token) {
+      if (!input || !token || !form) {
         return;
       }
-      if (button.dataset["privacyAmount"] === "max") {
-        input.value = balance.formatted;
-        return;
-      }
-      input.value = formatTokenAmount(BigInt(balance.balance) / 2n, token.decimals);
+      const unshielding = form.dataset["direction"] === "unshield";
+      const privateEntry = deps
+        .disclosure()
+        .value?.balances.find((entry) => entry.tokenId === tokenId);
+      const raw = unshielding ? (privateEntry?.balance ?? "0x0") : (publicBalance?.balance ?? "0");
+      const formatted = unshielding
+        ? (privateEntry?.formatted ?? "0")
+        : (publicBalance?.formatted ?? "0");
+      input.value =
+        button.dataset["privacyAmount"] === "max"
+          ? formatted
+          : formatTokenAmount(BigInt(raw) / 2n, token.decimals);
     });
+  });
+};
+
+// Repaints the two direction boxes and the source-balance shortcut line.
+const paintDirectionBoxes = (
+  root: ParentNode,
+  form: HTMLFormElement,
+  unshielding: boolean,
+): void => {
+  const publicAmount = form.dataset["publicAmount"] ?? "";
+  const privateAmount = form.dataset["privateAmount"] ?? "";
+  const text = (selector: string, value: string): void => {
+    const node = root.querySelector(selector);
+    if (node) {
+      node.textContent = value;
+    }
+  };
+  text('[data-privacy-box-label="source"]', unshielding ? "Private balance" : "Public balance");
+  text(
+    '[data-privacy-box-label="destination"]',
+    unshielding ? "Public balance" : "Private balance",
+  );
+  text('[data-privacy-box-value="source"]', unshielding ? privateAmount : publicAmount);
+  text('[data-privacy-box-value="destination"]', unshielding ? publicAmount : privateAmount);
+  text(
+    "[data-privacy-source-formatted]",
+    (unshielding ? form.dataset["privateFormatted"] : form.dataset["publicFormatted"]) ?? "0",
+  );
+  text("[data-privacy-warning]", unshielding ? UNSHIELD_WARNING : SHIELD_WARNING);
+  text(".flow-title h1", unshielding ? "Unshield" : "Shield");
+};
+
+// Flips which balance sits on top. Shield moves public into private; unshield
+// is previewed but not submittable until the withdrawal journey ships.
+const bindDirectionFlip = (deps: PrivacyUiDeps): void => {
+  const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
+  const flip = deps.app?.querySelector<HTMLButtonElement>("#privacy-flip");
+  const submit = deps.app?.querySelector<HTMLButtonElement>("#privacy-review-submit");
+  if (!form || !flip || !submit) {
+    return;
+  }
+  flip.addEventListener("click", () => {
+    const unshielding = form.dataset["direction"] !== "unshield";
+    form.dataset["direction"] = unshielding ? "unshield" : "shield";
+    paintDirectionBoxes(form.ownerDocument, form, unshielding);
+    submit.textContent = unshielding ? "Review unshielding" : "Review shielding";
+    submit.disabled = unshielding;
+    if (unshielding) {
+      submit.title = "Unshielding is coming soon";
+    } else {
+      submit.removeAttribute("title");
+    }
+  });
+};
+
+// The review's amount is editable: an edit re-prepares the deposit so its fee
+// quote and frozen digest always match the amount on screen. Confirm is
+// disabled until the new preparation lands.
+const bindReviewAmount = (
+  deps: PrivacyUiDeps,
+  journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" | "deposit-review" }>,
+): void => {
+  const input = deps.app?.querySelector<HTMLInputElement>("#privacy-review-amount");
+  const confirm = deps.app?.querySelector<HTMLButtonElement>("#privacy-confirm");
+  const result = deps.app?.querySelector<HTMLElement>("#privacy-review-result");
+  if (!input || !confirm) {
+    return;
+  }
+  input.addEventListener("change", () => {
+    const amount = input.value.trim();
+    if (amount === (journey.preparation.amount ?? "")) {
+      return;
+    }
+    const scope = captureScope(deps);
+    confirm.disabled = true;
+    if (result) {
+      result.textContent = "Re-checking this amount…";
+    }
+    void deps.wallet.preparePrivacyDeposit(journey.tokenId, amount).then(
+      (preparation) => {
+        if (!scopeMatches(deps, scope)) {
+          return;
+        }
+        deps.setJourney({ preparation, stage: "deposit-review", tokenId: journey.tokenId });
+        deps.paint();
+      },
+      (error: unknown) => {
+        if (!scopeMatches(deps, scope)) {
+          return;
+        }
+        const message = errorMessage(error, "Shielding preparation failed");
+        if (result) {
+          result.textContent = message;
+        }
+        showToast(message, "error");
+      },
+    );
   });
 };
 
 const bindCompose = (deps: PrivacyUiDeps, tokenId: string): void => {
   bindAmountShortcuts(deps, tokenId);
+  bindDirectionFlip(deps);
   const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const result = deps.app?.querySelector<HTMLElement>("#privacy-compose-result");
@@ -220,6 +329,9 @@ const bindConfirmation = (
   deps: PrivacyUiDeps,
   journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" | "deposit-review" }>,
 ): void => {
+  if (journey.stage === "deposit-review") {
+    bindReviewAmount(deps, journey);
+  }
   const button = deps.app?.querySelector<HTMLButtonElement>("#privacy-confirm");
   button?.addEventListener("click", () => {
     // Private sends run inside the Send flow, never this journey surface.

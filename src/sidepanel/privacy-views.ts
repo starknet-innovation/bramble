@@ -6,12 +6,13 @@ import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import type { TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { emptyState, receipt } from "../ui/content";
-import { button } from "../ui/controls";
+import { button, iconButton } from "../ui/controls";
 import { inputControl } from "../ui/fields";
+import { icon } from "./icons";
 import { flowHeader, flowScreen } from "./parts";
-import type { PrivacyJourneyState } from "./privacy-model";
+import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
 import { liquidDots, liquidDotsFilter } from "./progress-motion";
-import { compactAmount, starknetNetworkGlyph, tokenGlyph } from "./token-row";
+import { compactAmount, tokenGlyph } from "./token-row";
 
 const shortAddress = (value: string): string =>
   value.length <= 15 ? value : `${value.slice(0, 8)}…${value.slice(-5)}`;
@@ -28,10 +29,25 @@ const preparationDetails = (
       <h2>${activation ? "Activate private balances" : `Shield ${escapeHtml(preparation.amount ?? "0")} ${escapeHtml(preparation.symbol)}`}</h2>
       <p>${activation ? "One-time account registration" : "Move this public balance into the privacy pool"}</p>
     </div>
+    ${
+      activation
+        ? ""
+        : `<label class="privacy-amount privacy-review-amount">
+      <span>Amount</span>
+      <span class="privacy-amount-control">
+        ${inputControl({
+          ariaLabel: `Amount of ${preparation.symbol} to shield`,
+          attributes: { id: "privacy-review-amount" },
+          autocomplete: "off",
+          inputmode: "decimal",
+          name: "reviewAmount",
+          value: preparation.amount ?? "0",
+        })}
+        <strong>${escapeHtml(preparation.symbol)}</strong>
+      </span>
+    </label>`
+    }
     ${receipt([
-      ...(activation
-        ? []
-        : [{ label: "Amount", value: `${preparation.amount ?? "0"} ${preparation.symbol}` }]),
       {
         label: "Network",
         value: status.network,
@@ -79,6 +95,7 @@ const preparationDetails = (
       ${preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`).join("")}
     </ul>
     <p class="privacy-warning">${activation ? "Registration is public. It stores the account viewing-key commitment required to discover its private notes." : "Shielding is a public deposit. Future STRK20 transfers can use the resulting private balance without exposing this deposit amount to the recipient."}</p>
+    <p id="privacy-review-result" role="status" aria-live="assertive"></p>
     ${button({
       attributes: { id: "privacy-confirm" },
       icon: activation ? "shield" : "lock",
@@ -87,22 +104,47 @@ const preparationDetails = (
   </section>`;
 };
 
+/**
+ * The public warning shown per direction; the flip binding swaps them.
+ */
+export const SHIELD_WARNING =
+  "The deposit transaction is public. The shielded notes it creates become visible only when private balances are enabled in this wallet.";
+/**
+ * Unshield-direction warning shown when private sits on top.
+ */
+export const UNSHIELD_WARNING =
+  "Withdrawing moves shielded balance back to this public address, making the amount visible on-chain.";
+
+const composeBox = (
+  role: "destination" | "source",
+  domain: "private" | "public",
+  glyph: string,
+  amount: string,
+): string => `
+        <div class="privacy-box" data-privacy-box="${role}">
+          ${glyph}
+          <span><small data-privacy-box-label="${role}">${domain === "public" ? "Public balance" : "Private balance"}</small><strong data-privacy-box-value="${role}">${escapeHtml(amount)}</strong></span>
+        </div>`;
+
 const compose = (
   token: TokenConfig | null,
   balance: TokenBalance | undefined,
-  status: WalletStatus,
-): string =>
-  token
-    ? `<form class="privacy-compose" id="privacy-deposit-form">
-        <div class="privacy-token-context">
-          ${tokenGlyph(token.address, token.symbol)}
-          <span><small>Available to shield</small><strong>${escapeHtml(`${compactAmount(balance?.formatted ?? "0")} ${token.symbol}`)}</strong></span>
-        </div>
+  privateFormatted: string,
+): string => {
+  if (!token) {
+    return emptyState("This token is no longer tracked on the selected network.");
+  }
+  const publicAmount = `${compactAmount(balance?.formatted ?? "0")} ${token.symbol}`;
+  const privateAmount = `${compactAmount(privateFormatted)} ${token.symbol}`;
+  return `<form class="privacy-compose" id="privacy-deposit-form" data-direction="shield"
+        data-public-amount="${escapeHtml(publicAmount)}" data-private-amount="${escapeHtml(privateAmount)}"
+        data-public-formatted="${escapeHtml(balance?.formatted ?? "0")}" data-private-formatted="${escapeHtml(privateFormatted)}">
+        ${composeBox("source", "public", tokenGlyph(token.address, token.symbol), publicAmount)}
         <label class="privacy-amount">
           <span>Amount</span>
           <span class="privacy-amount-control">
             ${inputControl({
-              ariaLabel: `Amount of ${token.symbol} to shield`,
+              ariaLabel: `Amount of ${token.symbol} to move`,
               attributes: { id: "privacy-amount" },
               autocomplete: "off",
               inputmode: "decimal",
@@ -113,19 +155,24 @@ const compose = (
           </span>
         </label>
         <div class="privacy-shortcuts">
-          <span>Balance ${escapeHtml(balance?.formatted ?? "0")}</span>
+          <span>Balance <span data-privacy-source-formatted>${escapeHtml(balance?.formatted ?? "0")}</span></span>
           <button data-privacy-amount="half" type="button">Half</button>
           <button data-privacy-amount="max" type="button">Max</button>
         </div>
-        <div class="privacy-network">
-          <span>${starknetNetworkGlyph()}</span>
-          <span><small>Destination network</small><strong>${escapeHtml(status.network)}</strong></span>
+        <div class="privacy-flip-row">
+          ${iconButton({
+            attributes: { id: "privacy-flip" },
+            icon: "swap",
+            label: "Switch between shield and unshield",
+            variant: "ghost",
+          })}
         </div>
-        <p class="privacy-warning">The deposit transaction is public. The shielded notes it creates become visible only when private balances are enabled in this wallet.</p>
-        ${button({ icon: "shield", label: "Review shielding", type: "submit" })}
+        ${composeBox("destination", "private", `<span class="privacy-box-lock">${icon("lock")}</span>`, privateAmount)}
+        <p class="privacy-warning" data-privacy-warning>${SHIELD_WARNING}</p>
+        ${button({ attributes: { id: "privacy-review-submit" }, label: "Review shielding", type: "submit" })}
         <p id="privacy-compose-result" role="status" aria-live="assertive"></p>
-      </form>`
-    : emptyState("This token is no longer tracked on the selected network.");
+      </form>`;
+};
 
 const working = (journey: Extract<PrivacyJourneyState, { readonly stage: "working" }>): string => `
   <section class="privacy-working" role="status" aria-live="polite">
@@ -174,6 +221,7 @@ export const privacyFlow = (
   preferences: WalletPreferences | null,
   balances: readonly TokenBalance[],
   journey: PrivacyJourneyState,
+  privacy: PrivacyDisclosureState = { error: null, loading: false, value: null },
 ): string => {
   const tokenId = journey.stage === "idle" ? null : journey.tokenId;
   const token =
@@ -181,9 +229,11 @@ export const privacyFlow = (
       (candidate) => candidate.id === tokenId && candidate.networkId === status.networkId,
     ) ?? null;
   const balance = balances.find((candidate) => candidate.id === token?.id);
+  const privateFormatted =
+    privacy.value?.balances.find((entry) => entry.tokenId === token?.id)?.formatted ?? "0";
   const body =
     journey.stage === "compose"
-      ? compose(token, balance, status)
+      ? compose(token, balance, privateFormatted)
       : journey.stage === "activate-review" || journey.stage === "deposit-review"
         ? preparationDetails(journey, status)
         : journey.stage === "working"
@@ -195,7 +245,11 @@ export const privacyFlow = (
               : emptyState("Choose an asset to begin.");
   return (
     flowHeader(
-      journey.stage === "activate-review" ? "Go private" : "Private balance",
+      journey.stage === "activate-review"
+        ? "Go private"
+        : journey.stage === "compose"
+          ? "Shield"
+          : "Private balance",
       status,
       token?.symbol ?? "STRK20",
     ) + flowScreen("privacy", `<section class="section privacy-flow">${body}</section>`)
