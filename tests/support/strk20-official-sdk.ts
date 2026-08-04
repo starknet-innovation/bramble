@@ -33,7 +33,10 @@ export const STRK20_SDK_CONTEXT: Strk20AccountContext = {
 
 export const providerFor = (): RpcProvider =>
   ({
-    callContract: async () => ["0x0", "0x10"],
+    // Balance reads return a uint256; the pool-fee read returns a single u128
+    // felt (zero here so fee-independent tests see no extra approve call).
+    callContract: async (call: { entrypoint?: string }) =>
+      call?.entrypoint === "get_fee_amount" ? ["0x0"] : ["0x0", "0x10"],
     getClassHashAt: async () => "0xdef",
     getBlockNumber: async () => 20,
     waitForTransaction: async () => ({

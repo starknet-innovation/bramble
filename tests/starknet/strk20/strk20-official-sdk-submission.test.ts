@@ -4,6 +4,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { Call } from "starknet";
+import { num } from "starknet";
+import { STRK_TOKEN_ADDRESS } from "../../../src/starknet/networks";
 import { memoryStrk20MaturityStore } from "../../../src/starknet/strk20/maturity";
 import { createOfficialStrk20Service } from "../../../src/starknet/strk20/official-sdk-service";
 import {
@@ -221,6 +223,90 @@ describe("official STRK20 SDK submission boundary", () => {
     expect(proofAttempts).toBe(3);
     expect(pauses).toEqual([1, 2]);
     expect(submitted).toBe(false);
+  });
+
+  test("registration approves the pool's non-zero STRK action fee before apply_actions", async () => {
+    const submitted: (readonly Call[])[] = [];
+    const sdk = runtime(() => {
+      const base = builder(executeResult());
+      const instrumented = {
+        ...base,
+        register: () => instrumented,
+      } as unknown as OfficialBuilder;
+      return {
+        build: () => instrumented,
+        async discoverNotes() {
+          return { notes: new Map() };
+        },
+        executeWithInvocation: async () => executeResult(),
+      };
+    });
+    const feeProviderFor = (): ReturnType<typeof providerFor> =>
+      ({
+        ...providerFor(),
+        callContract: async (call: { entrypoint?: string }) =>
+          call?.entrypoint === "get_fee_amount" ? ["0x3782dace9d900000"] : ["0x0", "0x10"],
+      }) as unknown as ReturnType<typeof providerFor>;
+    const service = createOfficialStrk20Service({
+      providerFor: feeProviderFor,
+      sdk,
+      async submitInvoke(input) {
+        submitted.push(input.calls);
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    expect(submitted).toEqual([
+      [
+        {
+          calldata: ["291", "4000000000000000000", "0"],
+          contractAddress: num.toHex(BigInt(STRK_TOKEN_ADDRESS)),
+          entrypoint: "approve",
+        },
+        {
+          calldata: ["0x1"],
+          contractAddress: poolAddress,
+          entrypoint: "apply_actions",
+        },
+      ],
+    ]);
+  });
+
+  test("an unreadable pool fee fails registration closed before submission", async () => {
+    const sdk = runtime(() => {
+      const base = builder(executeResult());
+      const instrumented = {
+        ...base,
+        register: () => instrumented,
+      } as unknown as OfficialBuilder;
+      return {
+        build: () => instrumented,
+        async discoverNotes() {
+          return { notes: new Map() };
+        },
+        executeWithInvocation: async () => executeResult(),
+      };
+    });
+    const brokenProviderFor = (): ReturnType<typeof providerFor> =>
+      ({
+        ...providerFor(),
+        callContract: async () => {
+          throw new Error("fee read failed");
+        },
+      }) as unknown as ReturnType<typeof providerFor>;
+    let submissions = 0;
+    const service = createOfficialStrk20Service({
+      providerFor: brokenProviderFor,
+      sdk,
+      async submitInvoke(input) {
+        submissions += 1;
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(service.register?.(context)).rejects.toThrow("strk20 services unavailable");
+    expect(submissions).toBe(0);
   });
 
   test("first deposits grant only exact aggregate approval before pool submission", async () => {
