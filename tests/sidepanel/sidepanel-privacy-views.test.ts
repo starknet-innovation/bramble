@@ -74,18 +74,48 @@ const relayedDeposit: PrivacyPreparation = {
 };
 
 describe("privacy journey templates", () => {
-  test("compose shows the tracked public balance, shortcuts, network, and linkage warning", () => {
-    const html = privacyFlow(status, preferences, [balance], {
-      stage: "compose",
-      tokenId: token.id,
-    });
+  test("compose pairs the public and private boxes with a direction flip", () => {
+    const html = privacyFlow(
+      status,
+      preferences,
+      [balance],
+      { stage: "compose", tokenId: token.id },
+      {
+        error: null,
+        loading: false,
+        value: {
+          accountId: account.id,
+          balances: [
+            {
+              balance: "0x6f05b59d3b20000",
+              formatted: "0.5",
+              symbol: "ETH",
+              token: token.address,
+              tokenId: token.id,
+            },
+          ],
+          networkId: "SN_MAIN",
+          registration: "registered",
+        },
+      },
+    );
 
     expect(html).toContain('id="privacy-deposit-form"');
-    expect(html).toContain("Available to shield");
+    // Public on top, private below, flip control between them.
+    expect(html).toContain("Public balance");
+    expect(html).toContain("Private balance");
     expect(html).toContain("2.5 ETH");
+    expect(html).toContain("0.5 ETH");
+    expect(html).toContain('id="privacy-flip"');
+    expect(html).toContain('data-direction="shield"');
+    expect(html).toContain("Review shielding");
     expect(html).toContain('data-privacy-amount="half"');
-    expect(html).toContain("Destination network");
     expect(html).toContain("deposit transaction is public");
+    // The old single-source wording is gone.
+    expect(html).not.toContain("Available to shield");
+    expect(html).not.toContain("Destination network");
+    // The header names the direction.
+    expect(html).toContain("<h1>Shield</h1>");
   });
 
   test("deposit review freezes amount, route, pool, and escaped summaries", () => {
@@ -96,6 +126,10 @@ describe("privacy journey templates", () => {
     });
 
     expect(html).toContain("Shield 1 ETH");
+    // The review amount is editable so it can be corrected before confirming.
+    expect(html).toContain('id="privacy-review-amount"');
+    expect(html).toContain('name="reviewAmount"');
+    expect(html).toContain('value="1"');
     expect(html).toContain("Public account transaction");
     expect(html).toContain("0x123456…67890");
     expect(html).toContain("Shield &lt;one&gt; ETH");

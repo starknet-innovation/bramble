@@ -204,15 +204,46 @@ export const PRIVACY_STYLES = `
     padding: ${SPACE.md};
   }
   .privacy-token-context,
-  .privacy-network {
+  .privacy-network,
+  .privacy-box {
     align-items: center;
     display: flex;
     gap: ${SPACE.md};
   }
   .privacy-token-context > span:last-child,
-  .privacy-network > span:last-child { display: grid; gap: 2px; }
+  .privacy-network > span:last-child,
+  .privacy-box > span:last-child { display: grid; gap: 2px; }
   .privacy-token-context small,
-  .privacy-network small { color: var(--mc-muted); }
+  .privacy-network small,
+  .privacy-box small { color: var(--mc-muted); }
+  /* Shield/unshield direction boxes: source on top, destination below, with
+     the swap control between them (same shape as the swap screen). */
+  .privacy-box {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.md};
+    padding: ${SPACE.md};
+  }
+  .privacy-box strong { font-variant-numeric: tabular-nums; }
+  .privacy-box-lock {
+    align-items: center;
+    background: var(--mc-sunken);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-muted);
+    display: inline-flex;
+    flex: none;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
+  }
+  .privacy-box-lock .icon { height: 18px; width: 18px; }
+  .privacy-flip-row { display: flex; justify-content: center; margin: -${SPACE.xs} 0; }
+  .privacy-flip-row button {
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-text);
+  }
+  .privacy-flip-row button:not(:disabled):hover { background: var(--mc-hover); }
+  .privacy-review-amount { margin-bottom: ${SPACE.sm}; }
   .privacy-amount { display: grid; gap: ${SPACE.sm}; }
   .privacy-amount > span:first-child { color: var(--mc-muted); font-size: ${TYPE.label.size}; }
   .privacy-amount-control {
