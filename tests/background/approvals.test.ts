@@ -217,7 +217,12 @@ describe("createApprovalQueue payload discrimination", () => {
     const queue = createApprovalQueue();
     const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }];
     const { id } = queue.requestInvoke({
-      fee: { fee: null, feeEstimateFailed: false, requiresDeployment: false },
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        requiresDeployment: false,
+      },
       calls,
       context: CONTEXT,
       flags: [],
@@ -283,7 +288,12 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
     const queue = createApprovalQueue();
     expect(() =>
       queue.requestInvoke({
-        fee: { fee: null, feeEstimateFailed: false, requiresDeployment: false },
+        fee: {
+          fee: null,
+          feeAffordability: "unknown",
+          feeEstimateFailed: false,
+          requiresDeployment: false,
+        },
         calls: [],
         context: CONTEXT,
         flags: [],
@@ -369,7 +379,12 @@ describe("createApprovalQueue invoke fee review", () => {
     const { id } = queue.requestInvoke({
       calls,
       context: CONTEXT,
-      fee: { fee, feeEstimateFailed: false, requiresDeployment: false },
+      fee: {
+        fee,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        requiresDeployment: false,
+      },
       flags: [],
       origin: ORIGIN,
       summaries: ["Invoke"],
@@ -378,6 +393,7 @@ describe("createApprovalQueue invoke fee review", () => {
     const snapshot = queue.get(id);
     expect(snapshot).toMatchObject({
       fee: { overallFee: "1200", unit: "FRI" },
+      feeAffordability: "unknown",
       feeEstimateFailed: false,
       requiresDeployment: false,
     });
@@ -392,7 +408,12 @@ describe("createApprovalQueue invoke fee review", () => {
     const { id } = queue.requestInvoke({
       calls,
       context: CONTEXT,
-      fee: { fee: null, feeEstimateFailed: true, requiresDeployment: false },
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: true,
+        requiresDeployment: false,
+      },
       flags: [],
       origin: ORIGIN,
       summaries: ["Invoke"],
@@ -400,6 +421,7 @@ describe("createApprovalQueue invoke fee review", () => {
 
     const updated = queue.updateInvokeFee(id, {
       fee: { overallFee: "77", unit: "FRI" },
+      feeAffordability: "unknown",
       feeEstimateFailed: false,
       requiresDeployment: false,
     });
@@ -411,7 +433,12 @@ describe("createApprovalQueue invoke fee review", () => {
   test("updateInvokeFee rejects unknown ids and non-invoke approvals", () => {
     const queue = createApprovalQueue();
     const connect = queue.request(ORIGIN);
-    const review = { fee: null, feeEstimateFailed: false, requiresDeployment: false };
+    const review = {
+      fee: null,
+      feeAffordability: "unknown",
+      feeEstimateFailed: false,
+      requiresDeployment: false,
+    } as const;
 
     expect(queue.updateInvokeFee("9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01", review)).toBeNull();
     expect(queue.updateInvokeFee(connect.id, review)).toBeNull();

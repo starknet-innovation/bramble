@@ -8,6 +8,7 @@ import { WalletError } from "../shared/errors";
 import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
 import type { DeclareFeeEstimate } from "../starknet/declare";
+import type { FeeAffordability } from "../starknet/fee-funds";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { FeeEstimate } from "../starknet/rpc";
 import type { Strk20Action } from "../starknet/strk20/schemas";
@@ -77,6 +78,8 @@ export type DeclarationReview = {
  */
 export type InvokeFeeReview = {
   readonly fee: FeeEstimate | null;
+  /** Warn-only shared-predicate verdict (issue 191); "unknown" = no claim. */
+  readonly feeAffordability: FeeAffordability;
   readonly feeEstimateFailed: boolean;
   readonly requiresDeployment: boolean;
 };
@@ -93,6 +96,7 @@ export type PendingApproval = {
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
   readonly fee?: FeeEstimate | null;
+  readonly feeAffordability?: FeeAffordability;
   readonly feeEstimateFailed?: boolean;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
@@ -238,15 +242,24 @@ const readApprovalPayload = (approval: ApprovalEntry): ApprovalPayload | null =>
   }
 };
 
-const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
-  ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
+// Copies an invoke entry's fee review onto its snapshot without materializing
+// absent fields, so non-invoke snapshots stay byte-identical to before.
+const feeReviewSnapshot = (approval: ApprovalEntry): Partial<PendingApproval> => ({
   ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
+  ...(approval.feeAffordability === undefined
+    ? {}
+    : { feeAffordability: approval.feeAffordability }),
   ...(approval.feeEstimateFailed === undefined
     ? {}
     : { feeEstimateFailed: approval.feeEstimateFailed }),
   ...(approval.requiresDeployment === undefined
     ? {}
     : { requiresDeployment: approval.requiresDeployment }),
+});
+
+const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
+  ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
+  ...feeReviewSnapshot(approval),
   ...(approval.declaration === undefined
     ? {}
     : {
@@ -389,6 +402,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
         calls: calls.map(cloneCall),
         context: { ...context },
         fee: fee.fee && { ...fee.fee },
+        feeAffordability: fee.feeAffordability,
         feeEstimateFailed: fee.feeEstimateFailed,
         flags: flags.map((flag) => ({ ...flag })),
         id: crypto.randomUUID(),
@@ -475,6 +489,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
       pending.set(id, {
         ...approval,
         fee: fee.fee && { ...fee.fee },
+        feeAffordability: fee.feeAffordability,
         feeEstimateFailed: fee.feeEstimateFailed,
         requiresDeployment: fee.requiresDeployment,
       });

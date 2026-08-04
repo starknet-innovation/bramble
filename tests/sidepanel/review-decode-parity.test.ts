@@ -91,14 +91,21 @@ const reviewForCalls = (
   };
 };
 
-// Fee state both surfaces render through the shared `reviewFeeSection` (#189).
+// Fee state both surfaces render through the shared `reviewFeeSection` (#189),
+// including the warn-only affordability verdict (#191).
 type FeeState = {
   readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly feeAffordability: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed: boolean;
   readonly requiresDeployment: boolean;
 };
 
-const NO_FEE: FeeState = { fee: null, feeEstimateFailed: false, requiresDeployment: false };
+const NO_FEE: FeeState = {
+  fee: null,
+  feeAffordability: "unknown",
+  feeEstimateFailed: false,
+  requiresDeployment: false,
+};
 
 const dappCard = (
   summaries: readonly string[],
@@ -213,6 +220,7 @@ describe("Send review vs dApp invoke card decode/risk parity (#19)", () => {
 
     const rendered = reviewPanelHtml({
       fee: null,
+      feeAffordability: "unknown",
       feeEstimateFailed: false,
       flags,
       requiresDeployment: true,
@@ -285,6 +293,7 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
     const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
     const fee: FeeState = {
       fee: { overallFee: "2500000000000000", unit: "FRI" },
+      feeAffordability: "unknown",
       feeEstimateFailed: false,
       requiresDeployment: false,
     };
@@ -299,6 +308,7 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
     const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
     const fee: FeeState = {
       fee: { overallFee: "123", unit: "WEI" },
+      feeAffordability: "unknown",
       feeEstimateFailed: false,
       requiresDeployment: false,
     };
@@ -311,7 +321,12 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
 
   test("an undeployed account reuses Send's existing wording on both surfaces", () => {
     const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
-    const fee: FeeState = { fee: null, feeEstimateFailed: false, requiresDeployment: true };
+    const fee: FeeState = {
+      fee: null,
+      feeAffordability: "unknown",
+      feeEstimateFailed: false,
+      requiresDeployment: true,
+    };
     const line = "The network fee is estimated once this account is deployed.";
 
     expect(sendReview(summaries, flags, fee)).toContain(line);
@@ -320,7 +335,12 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
 
   test("a failed estimate surfaces the same alert and a retry affordance on both surfaces", () => {
     const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
-    const fee: FeeState = { fee: null, feeEstimateFailed: true, requiresDeployment: false };
+    const fee: FeeState = {
+      fee: null,
+      feeAffordability: "unknown",
+      feeEstimateFailed: true,
+      requiresDeployment: false,
+    };
     const alert = "Couldn't estimate the network fee right now.";
 
     const send = sendReview(summaries, flags, fee);
@@ -336,5 +356,37 @@ describe("Send review vs dApp invoke card fee parity (#189)", () => {
     expect(card).not.toContain(
       'data-approval-action="approve" data-approval-id="b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14" type="button" disabled',
     );
+  });
+});
+
+// Warn-only affordability guard (issue 191): the shared predicate's verdict
+// renders the same shortfall notice on both surfaces, makes no claim when
+// unknown, and never disables a decision.
+describe("fee shortfall warning parity (issue 191)", () => {
+  const NOTICE = "STRK balance is less than this transaction needs";
+  const feeWith = (feeAffordability: FeeState["feeAffordability"]): FeeState => ({
+    fee: { overallFee: "1000", unit: "FRI" },
+    feeAffordability,
+    feeEstimateFailed: false,
+    requiresDeployment: false,
+  });
+
+  test("an insufficient verdict renders the shortfall notice on both surfaces", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    const fee = feeWith("insufficient");
+
+    expect(sendReview(summaries, flags, fee)).toContain(NOTICE);
+    const card = dappCard(summaries, flags, fee);
+    expect(card).toContain(NOTICE);
+    // Warn-only: the shortfall never disables the card's decision buttons.
+    expect(card).not.toContain('type="button" disabled');
+  });
+
+  test("ok and unknown verdicts make no shortfall claim on either surface", () => {
+    const { flags, summaries } = reviewFor(CLEAN_RECIPIENT);
+    for (const verdict of ["ok", "unknown"] as const) {
+      expect(sendReview(summaries, flags, feeWith(verdict))).not.toContain(NOTICE);
+      expect(dappCard(summaries, flags, feeWith(verdict))).not.toContain(NOTICE);
+    }
   });
 });

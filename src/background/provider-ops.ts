@@ -8,6 +8,7 @@
 import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { walletErrorMessage } from "../shared/errors";
+import { resolveFeeAffordability } from "../starknet/fee-funds";
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import type { FeeEstimate } from "../starknet/rpc";
 import { verifyCalls } from "../starknet/verify";
@@ -20,6 +21,7 @@ import { recordApproveAllowances } from "./allowance-ops";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
 import type { ApprovalPayload, ApprovalQueue, InvokeFeeReview } from "./approvals";
+import { readStrkBalance } from "./fee-guard";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readAddInvokeTransactionInput } from "./message-inputs";
 import {
@@ -237,10 +239,16 @@ const estimateInvokeApprovalFee = async (
       estimated = null;
     }
   }
-  return {
-    ...resolveReviewFee({ deployed, fee: estimated }),
-    requiresDeployment: !deployed,
-  };
+  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  // Fee-affordability guard (issue 191): compare the estimate against the
+  // account's STRK balance via the shared predicate. Warn-only and fail-open —
+  // an unreadable balance yields "unknown" and never blocks the approval.
+  const feeAffordability = resolveFeeAffordability({
+    balance:
+      fee === null ? null : await readStrkBalance(deps, resolved.account, resolved.preferences),
+    fee,
+  });
+  return { fee, feeAffordability, feeEstimateFailed, requiresDeployment: !deployed };
 };
 
 const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sender) => {
