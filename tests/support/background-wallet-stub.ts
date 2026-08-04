@@ -34,14 +34,16 @@ export const account: AccountRef = {
 };
 
 /**
- * A second stub account on the same network, for suites that switch accounts.
- * The stub vault's grant never names it, so making it active disconnects the
- * granted origin — the state the re-prompt behaviour is built on.
+ * A second stub account on the same network as {@link account}, at the next
+ * address index, for suites that switch accounts. The stub vault's grant never
+ * names it, so making it active disconnects the granted origin — the state the
+ * re-prompt behaviour is built on.
  */
 export const secondAccount: AccountRef = {
   ...account,
   address: "0xfeedface",
-  id: "SN_MAIN:0xfeedface",
+  derivation: { accountIndex: 0, addressIndex: 1, kind: "starknet-bip44" },
+  id: "SN_SEPOLIA:0xfeedface",
 };
 
 /**
