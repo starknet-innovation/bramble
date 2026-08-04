@@ -96,7 +96,7 @@ const changeBadge = (change: number | undefined): string => {
  */
 export type PrivateBreakdown =
   | { readonly kind: "loading" }
-  | { readonly kind: "ready"; readonly formatted: string }
+  | { readonly kind: "ready"; readonly balance: string; readonly formatted: string }
   | { readonly kind: "unavailable"; readonly message: string }
   | { readonly kind: "unregistered" };
 
@@ -116,9 +116,18 @@ const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown):
         : `<span title="${escapeHtml(breakdown.message)}">Unavailable</span>`;
   return `<div class="token-breakdown-row${breakdown.kind === "ready" ? "" : " muted"}">
       <span class="token-breakdown-label">${icon("lock")}Private balance</span>
-      <span class="token-breakdown-value">${value}</span>
+      <span class="token-breakdown-value"${breakdown.kind === "ready" ? ' data-shield-private=""' : ""}>${value}</span>
     </div>`;
 };
+
+// The +/- shield stepper next to the public balance: "-" previews moving 5%
+// of the asset into the private balance, "+" previews the reverse; fast
+// clicks accelerate the step. Only rendered once the account is registered.
+const shieldStepper = (token: TokenBalance): string => `
+      <span class="shield-stepper">
+        <button class="shield-step" data-shield-step="down" type="button" aria-label="Move ${escapeHtml(token.symbol)} into the private balance">−</button>
+        <button class="shield-step" data-shield-step="up" type="button" aria-label="Move ${escapeHtml(token.symbol)} back to the public balance">+</button>
+      </span>`;
 
 /**
  * Renders one unified token row: the summary shows the combined public plus
@@ -131,7 +140,11 @@ export const unifiedBalanceRow = (
   price: number | undefined,
   change: number | undefined,
   currency: DisplayCurrency,
-  breakdown: { readonly private: PrivateBreakdown; readonly publicFormatted: string },
+  breakdown: {
+    readonly private: PrivateBreakdown;
+    readonly publicBalance: string;
+    readonly publicFormatted: string;
+  },
 ): string => {
   const fiat = tokenFiatValue(token.formatted, price);
   return `<li class="token-row token-unified">
@@ -147,12 +160,22 @@ export const unifiedBalanceRow = (
           ${changeBadge(change)}
         </div>
       </summary>
-      <div class="token-breakdown">
+      <div class="token-breakdown"${
+        breakdown.private.kind === "ready"
+          ? ` data-shield-row="${escapeHtml(token.id)}" data-shield-decimals="${token.decimals}" data-shield-symbol="${escapeHtml(token.symbol)}" data-shield-public="${escapeHtml(breakdown.publicBalance)}" data-shield-private-raw="${escapeHtml(breakdown.private.balance)}"`
+          : ""
+      }>
         <div class="token-breakdown-row">
           <span class="token-breakdown-label">Public balance</span>
-          <span class="token-breakdown-value">${escapeHtml(compactAmount(breakdown.publicFormatted))} ${escapeHtml(token.symbol)}</span>
+          <span class="token-breakdown-value" data-shield-public-value="">${escapeHtml(compactAmount(breakdown.publicFormatted))} ${escapeHtml(token.symbol)}</span>
+          ${breakdown.private.kind === "ready" ? shieldStepper(token) : ""}
         </div>
         ${privateBreakdownLine(token, breakdown.private)}
+        ${
+          breakdown.private.kind === "ready"
+            ? `<button class="shield-confirm" data-shield-confirm type="button" hidden></button>`
+            : ""
+        }
         <button class="token-breakdown-more" data-token-detail="${escapeHtml(token.id)}" type="button">See more about ${escapeHtml(token.symbol)}${icon("chevronRight")}</button>
       </div>
     </details>

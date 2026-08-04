@@ -189,8 +189,10 @@ const privateBreakdownFor = (
   if (privacy.value.registration !== "registered") {
     return { kind: "unregistered" };
   }
+  const entry = privacy.value.balances.find((candidate) => candidate.tokenId === tokenId);
   return {
-    formatted: privacy.value.balances.find((entry) => entry.tokenId === tokenId)?.formatted ?? "0",
+    balance: entry?.balance ?? "0x0",
+    formatted: entry?.formatted ?? "0",
     kind: "ready",
   };
 };
@@ -217,7 +219,7 @@ const tokensPanel = (
 ): string => {
   const visible = visibleHomeBalances(state, preferences);
   const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
-  const publicById = new Map(visible.map((token) => [token.id, token.formatted]));
+  const publicById = new Map(visible.map((token) => [token.id, token]));
   const unified = unifiedHomeBalances(state, privacy, preferences);
   const body =
     "error" in state
@@ -228,7 +230,8 @@ const tokensPanel = (
             .map((token) =>
               unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
                 private: privateBreakdownFor(privacy, token.id),
-                publicFormatted: publicById.get(token.id) ?? "0",
+                publicBalance: publicById.get(token.id)?.balance ?? "0x0",
+                publicFormatted: publicById.get(token.id)?.formatted ?? "0",
               }),
             )
             .join("")}</ul>`;

@@ -66,6 +66,28 @@ export const PRIVACY_STYLES = `
   }
   button.token-breakdown-more:not(:disabled):hover { background: transparent; }
   button.token-breakdown-more .icon { height: 14px; width: 14px; }
+  .shield-stepper { display: inline-flex; flex: none; gap: ${SPACE.xs}; }
+  button.shield-step {
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-text);
+    font-size: ${TYPE.label.size};
+    font-weight: ${WEIGHT.bold};
+    height: 22px;
+    line-height: 1;
+    min-height: 0;
+    padding: 0;
+    width: 22px;
+  }
+  button.shield-step:not(:disabled):hover { background: var(--mc-hover); }
+  button.shield-confirm {
+    background: var(--mc-accent);
+    color: var(--mc-accent-text);
+    font-size: ${TYPE.caption.size};
+    min-height: ${CONTROL.hitSmall};
+    width: 100%;
+  }
+  button.shield-confirm:disabled { cursor: not-allowed; opacity: 0.55; }
   .privacy-inline-error {
     align-items: center;
     color: var(--mc-muted);
