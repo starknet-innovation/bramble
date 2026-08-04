@@ -222,11 +222,6 @@ const assertFeeBalance = async (
 const isDepositOnly = (actions: readonly Strk20Action[]): boolean =>
   actions.length > 0 && actions.every((action) => action.type === "deposit");
 
-const isPrivateBalanceShortfall = (error: unknown): boolean =>
-  error instanceof WalletError &&
-  (error.message === STRK20_INSUFFICIENT_BALANCE ||
-    error.message === STRK20_SUBMISSION_UNAVAILABLE);
-
 const assertNoPrivacyLeak = (actions: readonly Strk20Action[]): void => {
   const deposits = new Set<bigint>();
   const withdrawals = new Set<bigint>();
@@ -288,14 +283,15 @@ export const quoteStrk20Plan = async (
   input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
 ): Promise<Strk20SubmissionPlan> => {
   assertNoPrivacyLeak(input.actions);
-  try {
-    return await service.quoteActions(input);
-  } catch (error) {
-    if (isDepositOnly(input.actions) && isPrivateBalanceShortfall(error)) {
-      return { mode: "account" };
-    }
-    throw error;
+  // Deposits are public by definition and may be the account's first private
+  // note. Routing them through the private relay would require a private fee
+  // balance that cannot exist yet, and checking for one here would disclose
+  // private state before the dapp request is approved. Keep the entry route
+  // deterministic and pay its fee from the public account instead.
+  if (isDepositOnly(input.actions)) {
+    return { mode: "account" };
   }
+  return service.quoteActions(input);
 };
 
 /**

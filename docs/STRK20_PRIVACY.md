@@ -185,6 +185,8 @@ production deployments require their own audits and operations monitoring.
 
 - Set `STRK20_DISCOVERY_UPSTREAM` and `STRK20_PROVER_UPSTREAM` only in the Terminal deployment
   environment. Do not use `VITE_` variables for them.
+- Set a valid `AVNU_PAYMASTER_API_KEY` in the Terminal deployment before enabling private transfer
+  or withdrawal; the gateway adds it server-side and never returns it to the extension.
 - Set `MC_WALLET_EXTENSION_ORIGINS` to the exact released extension origin(s). The gateway fails
   closed when this is absent or malformed.
 - Confirm both services expose OHTTP at `/ohttp-keys` and their service root before enabling the
@@ -207,5 +209,33 @@ production deployments require their own audits and operations monitoring.
 - Run `bun run check`, `bun run build`, `bun run test:e2e`, and `bun run package:extension`.
 
 Fixture tests intentionally use no real vault, private notes, signing material, hardware, or
-production service. Live interoperability testing therefore requires operator-provided service
-URLs and deployed contract addresses.
+production service.
+
+## Opt-in Mainnet lifecycle test
+
+`tests/mainnet/strk20-lifecycle.mainnet.ts` is a separate, local-only Playwright suite for the real
+deployed pool and configured services. It imports a dedicated funded account into a disposable
+Chromium profile, confirms that the derived address matches the expected address, connects that
+one account to a loopback dapp, and exercises registration, deposit, private transfer to self, and
+withdrawal to self. It waits for registration/indexer visibility between dependent writes.
+
+The suite is deliberately excluded from `bun run test:e2e` and CI. Its Playwright configuration
+disables traces, screenshots, video, retries, and parallel workers so entered signing material
+cannot enter a browser artifact. It also refuses deposits above 1 STRK. Build first, then export
+the values in the current shell without putting them in a repository file or shell history:
+
+```bash
+bun run build
+export MC_STRK20_E2E_ACCOUNT_ADDRESS='<dedicated test account address>'
+export MC_STRK20_E2E_DEPOSIT_STRK='0.1'
+export MC_STRK20_E2E_MAINNET_ACK='I_UNDERSTAND_THIS_WRITES_TO_MAINNET'
+read -rs 'MC_STRK20_E2E_PRIVATE_KEY?Dedicated test signing key: '
+export MC_STRK20_E2E_PRIVATE_KEY
+bun run test:e2e:mainnet
+unset MC_STRK20_E2E_ACCOUNT_ADDRESS MC_STRK20_E2E_PRIVATE_KEY \
+  MC_STRK20_E2E_DEPOSIT_STRK MC_STRK20_E2E_MAINNET_ACK
+```
+
+Use a dedicated disposable account, inspect its public and private balances before running, and
+rotate its key after a test campaign. The test leaves a residual private balance because both
+private relay operations need fee headroom; it does not attempt a risky max withdrawal.

@@ -2,7 +2,6 @@
  * STRK20 wallet-level policy tests around balance and privacy checks.
  */
 import { describe, expect, test } from "bun:test";
-import { WalletError } from "../../../src/shared/errors";
 import {
   prepareStrk20CallAndProof,
   quoteStrk20Actions,
@@ -13,7 +12,6 @@ import {
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_PRIVACY_LEAK,
   STRK20_SERVICE_UNAVAILABLE,
-  STRK20_SUBMISSION_UNAVAILABLE,
   type Strk20AccountContext,
   type Strk20Service,
   submitStrk20Actions,
@@ -201,10 +199,12 @@ describe("STRK20 wallet policy", () => {
     );
   });
 
-  test("uses the public account route only for deposit-only entry into the pool", async () => {
+  test("always uses the public account route for deposit-only entry into the pool", async () => {
+    let relayQuotes = 0;
     const noRelay = service({
       async quoteActions() {
-        throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+        relayQuotes += 1;
+        return plan;
       },
     });
     const deposit = [{ amount: "0x3", token: "0x8", type: "deposit" }] as const;
@@ -226,6 +226,7 @@ describe("STRK20 wallet policy", () => {
         plan: { mode: "account" },
       }),
     ).rejects.toThrow(STRK20_PRIVACY_LEAK);
+    expect(relayQuotes).toBe(0);
     expect(summarizeStrk20Plan({ mode: "account" })).toContain("Public account fee");
   });
 

@@ -29,6 +29,7 @@
     "test:e2e": "playwright test",
     "test:e2e:build": "bun run build && bun run test:e2e",
     "test:e2e:install": "playwright install chromium",
+    "test:e2e:mainnet": "playwright test --config playwright.mainnet.config.ts",
     "vendor:krusty": "bun run scripts/vendor-krusty.ts",
     "vendor:multisig": "bun run scripts/vendor-multisig.ts",
     "vendor:privacy": "bun run scripts/vendor-privacy-sdk.ts"

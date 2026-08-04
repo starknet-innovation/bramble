@@ -126,22 +126,33 @@ export const unlockWallet = async (sidepanel: Page): Promise<void> => {
  * Models Chrome opening a fresh native wallet surface in headless Chromium,
  * which does not expose its side-panel container to Playwright.
  */
-export const openPendingWalletSurface = async (sidepanel: Page): Promise<void> => {
+export const openPendingWalletSurface = async (
+  sidepanel: Page,
+  timeout = 10_000,
+  abort?: () => Error | null,
+): Promise<void> => {
   await expect
-    .poll(async () =>
-      sidepanel.evaluate(async () => {
-        const extensionGlobal = globalThis as typeof globalThis & {
-          readonly chrome?: {
-            readonly runtime?: {
-              readonly sendMessage?: (message: unknown) => Promise<unknown>;
+    .poll(
+      async () => {
+        const abortError = abort?.();
+        if (abortError) {
+          throw abortError;
+        }
+        return sidepanel.evaluate(async () => {
+          const extensionGlobal = globalThis as typeof globalThis & {
+            readonly chrome?: {
+              readonly runtime?: {
+                readonly sendMessage?: (message: unknown) => Promise<unknown>;
+              };
             };
           };
-        };
-        const response = (await extensionGlobal.chrome?.runtime?.sendMessage?.({
-          type: "wallet.pendingApprovals",
-        })) as { readonly pending?: readonly unknown[] } | undefined;
-        return response?.pending?.length ?? 0;
-      }),
+          const response = (await extensionGlobal.chrome?.runtime?.sendMessage?.({
+            type: "wallet.pendingApprovals",
+          })) as { readonly pending?: readonly unknown[] } | undefined;
+          return response?.pending?.length ?? 0;
+        });
+      },
+      { timeout },
     )
     .toBeGreaterThan(0);
   await sidepanel.reload();
@@ -169,8 +180,10 @@ export const resolvePendingApproval = async (
   eyebrow: string,
   origin: string,
   action: "approve" | "deny",
+  timeout?: number,
+  abort?: () => Error | null,
 ): Promise<void> => {
-  await openPendingWalletSurface(sidepanel);
+  await openPendingWalletSurface(sidepanel, timeout, abort);
   await expect(sidepanel.getByText("Review request")).toBeVisible();
   await expect(sidepanel.getByText(eyebrow)).toBeVisible();
   // The origin renders in both the takeover header and the request card.
