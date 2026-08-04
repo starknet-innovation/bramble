@@ -14,7 +14,7 @@ import { button, iconButton } from "../ui/controls";
 import { checkboxField } from "../ui/fields";
 import { menuRow } from "../ui/navigation";
 import { icon } from "./icons";
-import { type NftGalleryItem, nftImageMarkup, visibleNftItems } from "./nft-views";
+import { type NftGalleryItem, nftImageMarkup, nftTilePlay, visibleNftItems } from "./nft-views";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import type { BalanceState } from "./runtime";
 import { isHiddenFromHome } from "./token-flows";
@@ -89,30 +89,51 @@ export const visiblePrivateHomeBalances = (
 };
 
 /**
- * User guidance for pending Starknet transactions, shared with the activity
- * screen.
+ * User guidance for transactions Starknet has not settled yet, shared with the
+ * activity screen. Pending and pre-confirmed are both provisional, but they say
+ * different things: pending means the chain has not executed the transaction,
+ * pre-confirmed means the proposer has executed it and consensus has not
+ * committed its block yet.
  */
-const PENDING_TX_HINT =
-  "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.";
+const PROVISIONAL_TX_HINT: Partial<Record<ActivityEntry["status"], string>> = {
+  pending:
+    "Broadcast accepted. Starknet normally confirms quickly, and this wallet checks immediately. A pending transaction can't be fee-bumped, replaced, or cancelled.",
+  preconfirmed:
+    "Pre-confirmed by the block proposer, so the result is known but not yet final. MC Wallet keeps checking in the background and will tell you if it does not settle.",
+};
+
+/**
+ * Display label for a status. Pre-confirmed reads as "PRE-CONFIRMED" rather
+ * than the storage spelling.
+ */
+const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
+  preconfirmed: "pre-confirmed",
+};
 
 /**
  * Renders one recorded transaction row for the account-partitioned Activity
- * dock and its design-system specimen.
+ * dock and its design-system specimen. A provisional status carries an
+ * explanatory hint and its own muted-but-distinct treatment, so a pre-confirmed
+ * transaction never reads as settled.
  */
-export const transactionRow = (entry: ActivityEntry): string => `
+export const transactionRow = (entry: ActivityEntry): string => {
+  const hint = PROVISIONAL_TX_HINT[entry.status];
+  const label = STATUS_LABEL[entry.status] ?? entry.status;
+  return `
   <li class="tx-row">
     <div class="tx-copy">
       <strong>${escapeHtml(entry.summary)}</strong>
       <code>${escapeHtml(`${entry.hash.slice(0, 10)}…${entry.hash.slice(-6)}`)}</code>
-      ${entry.status === "pending" ? `<span class="tx-hint">${escapeHtml(PENDING_TX_HINT)}</span>` : ""}
+      ${hint ? `<span class="tx-hint">${escapeHtml(hint)}</span>` : ""}
     </div>
-    <span class="tx-status ${entry.status}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}"${entry.status === "pending" ? ` title="${escapeHtml(PENDING_TX_HINT)}"` : ""}>${escapeHtml(entry.status)}</span>
+    <span class="tx-status ${entry.status}" data-live-key="transaction:${escapeHtml(entry.hash)}:status" data-live-value="${escapeHtml(entry.status)}"${hint ? ` title="${escapeHtml(hint)}"` : ""}>${escapeHtml(label)}</span>
     ${iconButton({
       attributes: { "data-copy": entry.hash },
       icon: "copy",
       label: "Copy transaction hash",
     })}
   </li>`;
+};
 
 // Renders the failed-load state with a friendly, actionable line and an
 // in-panel retry that re-runs the balance load (wired in ./index.ts).
@@ -209,7 +230,7 @@ const privateBalancesPanel = (
  * Renders one compact collectible card for the home portfolio tab.
  */
 export const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => `
-  <li>
+  <li class="collectible-tile">
     <button class="collectible-card" data-nft-open="${escapeHtml(nft.id)}" type="button">
       <span class="collectible-art">${nftImageMarkup(nft, true, eager)}${icon("image")}</span>
       <span class="collectible-copy">
@@ -217,6 +238,7 @@ export const collectibleCard = (nft: NftGalleryItem, eager: boolean): string => 
         <code>#${escapeHtml(nft.tokenId)}</code>
       </span>
     </button>
+    ${nftTilePlay(nft)}
   </li>`;
 
 const collectiblesPanel = (
@@ -224,9 +246,13 @@ const collectiblesPanel = (
   preferences: WalletPreferences | null,
   discoveredNfts: readonly DiscoveredNft[],
 ): string => {
-  const nfts = visibleNftItems(preferences?.nfts ?? [], discoveredNfts, status.networkId).filter(
-    (nft) => nft.watched,
-  );
+  const owner = status.accounts.find((account) => account.id === status.activeAccountId)?.address;
+  const nfts = visibleNftItems(
+    preferences?.nfts ?? [],
+    discoveredNfts,
+    status.networkId,
+    owner ?? null,
+  ).filter((nft) => nft.watched);
   return `${
     nfts.length === 0
       ? emptyState("No collectibles watched on this network yet. Add one you own from the gallery.")

@@ -13,3 +13,7 @@
 # always emitted.
 [test]
 coverageReporter = ["text"]
+# Vendored dependencies keep their own suites and coverage policies. They are
+# not repository tests and must not dilute MC Wallet's aggregate source floor.
+pathIgnorePatterns = ["vendor/**"]
+coveragePathIgnorePatterns = ["vendor/**"]

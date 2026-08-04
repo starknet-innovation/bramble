@@ -9,8 +9,8 @@ import {
   statusResponse,
   switchActiveNetwork,
 } from "../../src/background/runtime-state";
-import type { WalletStatusReader } from "../../src/background/runtime-types";
 import { createUnlockSession } from "../../src/background/session";
+import type { WalletStatusReader } from "../../src/background/wallet-reader";
 import { STARKNET_NETWORKS } from "../../src/starknet/networks";
 import {
   defaultWalletPreferences,

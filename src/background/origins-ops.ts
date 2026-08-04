@@ -3,10 +3,11 @@
  * handler: listing the origins with persisted grants and revoking one. Both
  * are privileged and require an unlocked session.
  */
-import { connectedSitesFromVault } from "../wallet/vault-service";
+import { connectedSitesFromVault } from "../wallet/origin-grants";
 import { readRevokeOriginInput, readTypeOnlyInput } from "./message-inputs";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import type { UnlockSession } from "./session";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Dependencies shared by the connected-sites handlers.

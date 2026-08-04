@@ -40,6 +40,10 @@ export {
   type DiscoverNftsResponse,
   isDiscoverNftsResponse,
 } from "./responses-nft";
+export {
+  isTransactionAlertsResponse,
+  type TransactionAlertsResponse,
+} from "./responses-transaction-alerts";
 /**
  * Re-exported transfer-review validators for one import path.
  */

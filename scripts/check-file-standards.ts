@@ -25,6 +25,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/content/index.ts",
   "src/ledger-grant/index.ts",
   "src/provider/inpage.ts",
+  "src/sandbox/render.ts",
   "src/sidepanel/dom.ts",
   "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
@@ -59,6 +60,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/signature-waiters.ts",
   "src/background/index.ts",
   "src/background/message-inputs.ts",
+  // Wires collaborators by name only. Its sole match is the `./signature-waiters`
+  // import path; it holds no secret material and touches no key operations.
+  "src/background/message-context.ts",
   "src/background/messages.ts",
   "src/background/provider-ops.ts",
   "src/background/origins-ops.ts",
@@ -147,9 +151,14 @@ const HTML_SINK_FILES = new Set([
   // Shell replacement extracted from the sidepanel entrypoint; it receives
   // fully escaped production templates and owns no dynamic template content.
   "src/sidepanel/scene-renderer.ts",
+  // Collectible animation renderer: document.write of the untrusted on-chain
+  // data:text/html, confined by the manifest sandbox page's isolated security
+  // principal and egress-blocking CSP (never executed in a privileged page) —
+  // audited 2026-07.
+  "src/sandbox/render.ts",
 ]);
 const HTML_SINK_PATTERN =
-  /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML)\b/;
+  /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML|srcdoc)\b/;
 const VAULT_SERVICE_WIRING_FILES = new Set([
   "src/background/index.ts",
   "src/wallet/vault-service.ts",

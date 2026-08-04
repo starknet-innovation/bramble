@@ -86,10 +86,7 @@ export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
   return handled;
 };
 
-/** One request per handled message type. Payloads are best-effort valid so
- * responses exercise real handler paths; even rejected inputs are scanned,
- * since error strings must not echo secret material either.
- */
+/** One best-effort-valid request per handled type; rejected responses are also secret-scanned. */
 export const KEY_BOUNDARY_MESSAGES: readonly {
   readonly message: Record<string, unknown>;
   readonly sender: RuntimeSender;
@@ -286,6 +283,7 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   },
   { message: { type: "wallet.allowances" }, sender: extensionSender },
   { message: { type: "wallet.activity" }, sender: extensionSender },
+  { message: { type: "wallet.transactionAlerts" }, sender: extensionSender },
   {
     message: {
       options: { address: account.classHash, decimals: 18, symbol: "TKN" },

@@ -10,11 +10,8 @@ import { defaultWalletPreferences } from "../../src/storage/preferences-store";
 export const APPROVAL_ID = "123e4567-e89b-42d3-a456-426614174000";
 const ON_CHAIN = "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3";
 
-// A guard-valid account (short felts within the Stark field). The shared
-// sidepanel-fixtures account uses a 64-hex address that exceeds the field, so
-// it is only valid for rendering, not for the isAccountRef / isWalletStatus
-// checks these wrappers run. This mirrors the account shape used by the
-// popup-responses validator suite.
+// A compact guard-valid account used by response-wrapper tests. It remains
+// separate from the rendering fixture so these envelopes stay easy to read.
 export const account = {
   address: "0x123",
   classHash: "0xabc",

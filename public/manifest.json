@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "MC Wallet",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Starknet browser extension wallet shell.",
   "action": {
     "default_title": "Open MC Wallet"
@@ -11,7 +11,11 @@
     "type": "module"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:;"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; img-src 'self' data: https:; frame-src 'self';",
+    "sandbox": "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"
+  },
+  "sandbox": {
+    "pages": ["sandbox/render.html"]
   },
   "content_scripts": [
     {
@@ -20,13 +24,14 @@
       "run_at": "document_start"
     }
   ],
-  "permissions": ["sidePanel", "storage"],
+  "permissions": ["alarms", "sidePanel", "storage"],
   "side_panel": {
     "default_path": "sidepanel.html"
   },
   "host_permissions": [
-    "https://api.cartridge.gg/*",
     "https://mainnet.nodes.starknet.org/*",
+    "https://sepolia.nodes.starknet.org/*",
+    "https://api.cartridge.gg/*",
     "https://api.coingecko.com/*",
     "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",

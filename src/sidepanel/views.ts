@@ -1,13 +1,16 @@
 /**
  * Side panel screen composition. Dock screens (Home, Activity, Settings)
- * share the account-bar header, the bottom dock, and the account drawer;
- * every other view renders as a dedicated flow screen from ./flows.ts with
- * its own back navigation, so each journey has a distinct place to complete
- * its goal. Home follows a compact portfolio structure: hero balance, primary
- * actions, a trusted Terminal handoff, then the Tokens/Collectibles section
- * from ./home-tabs.ts.
+ * share the account-bar header and account drawer. Signer Home, Activity, and
+ * Settings also share the bottom dock. A selected multisig retains that shared
+ * identity across Home, Activity, and Settings while signing remains delegated
+ * to an explicitly selected owned signer.
+ * Every other view renders as a dedicated flow screen from ./flows.ts with its
+ * own back navigation, so each journey has a distinct place to complete its
+ * goal. Home follows a compact portfolio structure: hero balance, primary
+ * actions, a trusted Terminal handoff, then the Tokens/Collectibles section.
  */
 
+import type { MultisigClassState } from "../popup/multisig-responses";
 import type {
   ConnectedSite,
   DiscoveredNft,
@@ -15,7 +18,6 @@ import type {
   TokenBalance,
   WalletStatus,
 } from "../popup/responses";
-import { escapeHtml } from "../shared/html";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { ActivityEntry } from "../storage/activity-store";
@@ -25,10 +27,8 @@ import type { AccountRef } from "../storage/vault-schema";
 import { accountDrawer } from "./account-drawer";
 import { activityScreen, requestsFlow } from "./activity-views";
 import { actionableApprovals, approvalTakeover } from "./approval-screen";
-import { formatFiat, portfolioDelta, portfolioTotal } from "./fiat";
 import { backupFlow, simpleFlowScreen } from "./flows";
-import { homeTabs, visibleHomeBalances, visiblePrivateHomeBalances } from "./home-tabs";
-import { icon } from "./icons";
+import { homeScreen } from "./home-view";
 import {
   multisigAddFlow,
   multisigReceiveFlow,
@@ -37,6 +37,7 @@ import {
   multisigWatchFlow,
 } from "./multisig-management-views";
 import type { MultisigPortfolioData } from "./multisig-portfolio";
+import type { MultisigSyncState } from "./multisig-sync";
 import {
   multisigDeployFlow,
   multisigDetailFlow,
@@ -45,14 +46,7 @@ import {
 } from "./multisig-views";
 import { nftSendFlow } from "./nft-send-view";
 import { nftDetailFlow, nftGalleryFlow, nftHiddenFlow, nftWatchFlow } from "./nft-views";
-import {
-  activeAccount,
-  dockScreen,
-  isWalletView,
-  noAccountEmpty,
-  WALLET_VIEWS,
-  type WalletView,
-} from "./parts";
+import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "./parts";
 import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
 import { privacyFlow } from "./privacy-views";
 import { revealFlow } from "./reveal-ui";
@@ -65,109 +59,22 @@ import {
   tokenDiscoverFlow,
   tokensFlow,
 } from "./token-flows";
-import {
-  actionTile,
-  deployNotice,
-  pendingCallout,
-  terminalCta,
-  terminalPortfolioTile,
-  walletDock,
-  walletHeader,
-} from "./wallet-shell";
+import { walletDock, walletHeader } from "./wallet-shell";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
  */
 export { isWalletView, WALLET_VIEWS, type WalletView };
 
-// The portfolio 24h delta line under the balance: a green/red arrow and
-// magnitude beside a muted "percent · 24h" trailing label. Empty when nothing
-// is priced yet (no baseline), so it never renders a misleading zero-change.
-const heroDelta = (
-  balances: BalanceState,
-  preferences: WalletPreferences | null,
-  prices: Readonly<Record<string, number>>,
-  changes: Readonly<Record<string, number>>,
-  currency: DisplayCurrency,
-): string => {
-  const delta = portfolioDelta(visibleHomeBalances(balances, preferences), prices, changes);
-  if (delta === null) {
-    return "";
-  }
-  const arrow = delta.direction === "up" ? "↑" : "↓";
-  return `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
-      <span class="hero-change-amt">${arrow} ${escapeHtml(formatFiat(delta.absolute, currency))}</span>
-      <span class="hero-change-win">${delta.percent.toFixed(2)}% · 24h</span>
-    </p>`;
-};
-
-// A degraded-mode notice under the hero total. Saved prices continue to render
-// without an error-like caveat; only a genuinely empty cache needs an explicit
-// unavailable hint.
-const heroPriceNotice = (priceStale: boolean, hasPrices: boolean): string => {
-  if (!priceStale || hasPrices) {
-    return "";
-  }
-  return `<p class="hero-stale" role="status">${icon("alert")}<span>Live prices unavailable right now</span></p>`;
-};
-
-const homeScreen = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  balances: BalanceState,
-  pendingCount: number,
-  deployment: boolean | null,
-  preferences: WalletPreferences | null,
-  prices: Readonly<Record<string, number>>,
-  changes: Readonly<Record<string, number>>,
-  currency: DisplayCurrency,
-  priceStale: boolean,
-  discoveredNfts: readonly DiscoveredNft[],
-  privacy: PrivacyDisclosureState,
-): string => {
-  const nfts = discoveredNfts;
-  const privateBalances = visiblePrivateHomeBalances(privacy, preferences);
-  const selectedBalances = privacy.enabled
-    ? privateBalances
-    : visibleHomeBalances(balances, preferences);
-  const privateReady =
-    privacy.value?.registration === "registered" && !privacy.loading && !privacy.error;
-  const showTotal =
-    account !== null && Object.keys(prices).length > 0 && (!privacy.enabled || privateReady);
-  const total = showTotal ? portfolioTotal(selectedBalances, prices) : 0;
-  return dockScreen(
-    "home",
-    `${pendingCallout(pendingCount)}
-    <section class="hero">
-      <p class="hero-total" data-live-key="${privacy.enabled ? "private-portfolio-total" : "portfolio-total"}" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
-      ${showTotal && !privacy.enabled ? heroDelta(balances, preferences, prices, changes, currency) : ""}
-      ${privacy.enabled ? `<p class="hero-stale">${icon("lock")}<span>Private portfolio</span></p>` : ""}
-      ${account !== null ? heroPriceNotice(priceStale, showTotal) : ""}
-      ${account ? "" : noAccountEmpty(status)}
-      ${deployNotice(account, deployment)}
-    </section>
-    <section class="home-actions" aria-label="Wallet actions">
-      <div class="action-row">
-        ${actionTile("send", "Send", "send", account !== null)}
-        ${actionTile("swap", "Swap", "shuffle", account !== null)}
-        ${actionTile("receive", "Receive", "qrCode", account !== null)}
-        ${terminalPortfolioTile()}
-      </div>
-      ${terminalCta()}
-    </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, status, nfts, privacy)}`,
-  );
-};
-
 type JourneyContext = {
   readonly account: AccountRef | null;
   readonly chart: readonly number[];
   readonly currency: DisplayCurrency;
   readonly discoveredNfts: readonly DiscoveredNft[];
-  readonly multisigClassDeclared: boolean | "error" | null;
+  readonly multisigClassDeclared: MultisigClassState | "error" | null;
   readonly multisigPortfolio: MultisigPortfolioData;
   readonly multisigProposals: readonly MultisigProposalRecord[];
-  readonly multisigSync: "current" | "error" | null;
+  readonly multisigSync: MultisigSyncState;
   readonly multisigs: readonly MultisigRecord[];
   readonly multisigsError: boolean;
   readonly preferences: WalletPreferences | null;
@@ -181,7 +88,16 @@ type JourneyContext = {
   readonly trackedBalances: readonly TokenBalance[];
 };
 
+const selectedMultisig = (context: JourneyContext): MultisigRecord | null =>
+  context.multisigs.find(
+    (record) =>
+      record.id === context.selectedMultisigId && record.networkId === context.status.networkId,
+  ) ?? null;
+
 const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext): string | null => {
+  if (activeView === "multisig-home") {
+    return null;
+  }
   if (activeView === "multisig-add") {
     return multisigAddFlow(context.status, context.account);
   }
@@ -207,7 +123,6 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
     );
   }
   if (
-    activeView !== "multisig-home" &&
     activeView !== "multisig-detail" &&
     activeView !== "multisig-propose" &&
     activeView !== "multisig-signers" &&
@@ -216,12 +131,8 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
   ) {
     return null;
   }
-  const selected =
-    context.multisigs.find(
-      (record) =>
-        record.id === context.selectedMultisigId && record.networkId === context.status.networkId,
-    ) ?? null;
-  if (activeView === "multisig-detail" || activeView === "multisig-home") {
+  const selected = selectedMultisig(context);
+  if (activeView === "multisig-detail") {
     return multisigDetailFlow(
       context.status,
       context.account,
@@ -261,7 +172,12 @@ const collectibleJourneyScreen = (
     return nftWatchFlow(context.status, context.account);
   }
   if (activeView === "nft-hidden") {
-    return nftHiddenFlow(context.status, context.preferences);
+    return nftHiddenFlow(
+      context.status,
+      context.preferences,
+      context.account,
+      context.discoveredNfts,
+    );
   }
   if (activeView === "nft-detail") {
     return nftDetailFlow(
@@ -347,7 +263,7 @@ export const dashboard = (
   multisigs: readonly MultisigRecord[] = [],
   multisigProposals: readonly MultisigProposalRecord[] = [],
   selectedMultisigId: string | null = null,
-  multisigClassDeclared: boolean | "error" | null = null,
+  multisigClassDeclared: MultisigClassState | "error" | null = null,
   drawerGroupFilter: string | null = null,
   expandedGroupId: string | null = null,
   priceStale = false,
@@ -358,7 +274,7 @@ export const dashboard = (
   historyUnavailable = false,
   snoozedApprovalIds: readonly string[] = [],
   multisigsError = false,
-  multisigSync: "current" | "error" | null = null,
+  multisigSync: MultisigSyncState = null,
   multisigBalances: BalanceState = { error: "multisig balances unavailable" },
   multisigBalanceId: string | null = null,
   multisigNfts: readonly DiscoveredNft[] = [],
@@ -425,6 +341,7 @@ export const dashboard = (
     connectedSites,
     currency,
     expandedGroupId,
+    multisigs,
     preferences,
     prices,
     status,
@@ -453,29 +370,45 @@ export const dashboard = (
   if (activeView === "privacy") {
     return privacyFlow(status, preferences, trackedBalances, privacyJourney);
   }
+  const sharedIdentity =
+    activeView === "multisig-home" || activeView === "activity" || activeView === "settings"
+      ? selectedMultisig(journeyContext)
+      : null;
   const screen =
-    activeView === "activity"
-      ? activityScreen(pending, status, transactions, historyUnavailable)
-      : activeView === "settings"
-        ? settingsScreen(status, preferences)
-        : homeScreen(
-            status,
-            account,
-            balances,
-            pending.length,
-            deployment,
-            preferences,
-            prices,
-            changes,
-            currency,
-            priceStale,
-            discoveredNfts,
-            privacy,
-          );
+    activeView === "multisig-home"
+      ? multisigDetailFlow(
+          status,
+          account,
+          sharedIdentity,
+          multisigProposals,
+          multisigsError,
+          multisigSync,
+          preferences,
+          "multisig-home",
+          journeyContext.multisigPortfolio,
+        )
+      : activeView === "activity"
+        ? activityScreen(pending, status, transactions, historyUnavailable, sharedIdentity)
+        : activeView === "settings"
+          ? settingsScreen(status, preferences)
+          : homeScreen(
+              status,
+              account,
+              balances,
+              pending.length,
+              deployment,
+              preferences,
+              prices,
+              changes,
+              currency,
+              priceStale,
+              discoveredNfts,
+              privacy,
+            );
   return `
-    ${walletHeader(status, account, preferences)}
+    ${walletHeader(status, account, preferences, sharedIdentity)}
     ${screen}
-    ${walletDock(activeView, pending.length)}
+    ${walletDock(activeView, pending.length, sharedIdentity !== null)}
     ${accountDrawer(
       status,
       account,
@@ -484,5 +417,6 @@ export const dashboard = (
       openAssignId,
       multisigs,
       multisigProposals,
+      selectedMultisigId,
     )}`;
 };

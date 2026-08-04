@@ -81,13 +81,15 @@ Accounts use the OpenZeppelin `AccountUpgradeable` preset, pinned by Krusty KMS.
 
 ### Verification
 
-Verified DECLARED on both networks with `starknet_getClass` against the Cartridge
-endpoints on 2026-07-07 (RPC spec `0.10.2` mainnet, `0.9.0` sepolia); the class
-resolved with the `UpgradeableImpl` + `AccountMixinImpl` ABI on both. Re-run:
+Verified DECLARED on both networks with `starknet_getClass` against the
+Cartridge endpoints the wallet used at the time, on 2026-07-07 (RPC spec
+`0.10.2` mainnet, `0.9.0` sepolia); the class resolved with the
+`UpgradeableImpl` + `AccountMixinImpl` ABI on both. The wallet has since moved
+to the Starknet Foundation public nodes, so re-run against those:
 
 ```bash
 for NET in mainnet sepolia; do
-  curl -s -X POST "https://api.cartridge.gg/x/starknet/$NET" \
+  curl -s -X POST "https://$NET.nodes.starknet.org/rpc/v0_10" \
     -H 'content-type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"starknet_getClass","params":{"block_id":"latest","class_hash":"0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"}}' \
     | head -c 80; echo " <- $NET";
@@ -261,23 +263,36 @@ The injected `window.starknet_mcWallet` object follows the get-starknet/starknet
 `StarknetWindowObject` shape: `id`, `name`, `version`, an inline `data:` URI `icon`, `isConnected`,
 `selectedAddress`, `on`/`off`, `enable`, and `request`. `chainId` is initialized lazily from
 `wallet_requestChainId` after `enable` and kept current from `networkChanged` events;
-`isPreauthorized()` resolves `true` when the origin already holds an account grant. The object is
-frozen and installed as a non-configurable global.
+`isPreauthorized()` resolves `true` when the origin's grant covers the wallet's active account. The
+object is frozen and installed as a non-configurable global.
 
 `request` accepts these methods, mapped to safe background messages by `src/provider/bridge.ts`:
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
-`wallet_watchAsset`. The STRK20 extension adds `wallet_strk20Balances`,
-`wallet_strk20PrepareInvoke`, `wallet_strk20InvokeTransaction`, and
-`wallet_strk20SubaccountCommitment`; all use the same origin-grant and phishing gates. Private
-balance, proof-preparation, and sub-account-commitment requests also require a dedicated held
-approval bound to the exact account, network, and private payload digest; a general connection
-grant never authorizes disclosure of private state.
+`wallet_watchAsset`. STRK20 adds balance, proof-preparation, invoke, and sub-account-commitment
+methods behind the same origin and phishing gates. Private-state requests additionally require a
+held approval bound to the account, network, and payload digest; connection alone is insufficient.
 
 Grants and provider events are isolated per origin: each origin reads only its own accounts
 (`wallet.getGrantedAccounts`) and each content script derives page events from its own history
 (`pageEventsFor`), so multiple connected sites never observe each other's state.
+
+A grant records which accounts a site was ever approved for; the active account decides which single
+one of them it may see right now (`grantedAccountIdsFor` in `src/wallet/origin-grants.ts`).
+`wallet.getGrantedAccounts` returns the active account when the grant covers it and `[]` otherwise —
+no grant, no active account, or an active account the grant does not name. So an origin whose grant
+misses the active account reads as disconnected: the page receives `accountsChanged([])`, and
+reconnecting queues a fresh approval instead of silently handing back the previously connected
+account. A page is never handed two of the user's accounts, however many the stored grant has
+accumulated from repeated approvals, so a site cannot correlate them. The connected-sites manager
+still lists the site with its full granted-account count, because it reads the stored grants
+directly, and revoking there is what clears the grant.
+
+The active-network consumers (invoke, declare, typed-data signing, STRK-20, deploy discovery) then
+filter that account by the active network and refuse with `origin not connected` if it does not
+match — fail-closed, and unreachable in practice because both account pickers list only accounts on
+the active network and `switchActiveNetwork` re-selects the target network's account.
 
 `wallet_watchAsset` (SNIP-compatible ERC20, `options.address`) fetches the token's on-chain
 `name`/`symbol`/`decimals` via RPC (falling back to the caller's options), then queues a
@@ -343,27 +358,12 @@ and reputation signals before a connection is approved:
 
 ## STRK20 privacy
 
-MC Wallet implements the Wallet API `0.10.4-rc.0` STRK20 surface through the official Starknet
-Privacy SDK browser bundle. The source revision and emitted bundle digest are both pinned; run
-`bun run vendor:privacy` to build it and `bun run check:privacy` to verify the exact reviewed
-artifact. The privileged design derives chain-and-pool-scoped viewing keys only inside the
-encrypted-vault boundary, freezes actions and relay fees before approval, and exposes exact action
-parameters alongside their digest. It produces no signature, proof, private-balance response, or
-sub-account commitment until the corresponding dedicated approval. Execution requires the
-configured pool's `apply_actions` result and has no fallback prover or signer. The extension
-also owns an opt-in private-balance disclosure, explicit public registration, and reviewed
-public-to-private shielding journey. Within those wallet-owned journeys and the STRK20 action
-API, direct account broadcast is restricted to registration and deposit-only batches; private
-transfers, withdrawals, and invokes remain relayer-only. The separately reviewed
-MC-namespaced `mc_strk20Register` provider capability lets Terminal request that same explicit
-registration without presenting it as a standard Wallet API method; it remains origin-, account-,
-network-, pool-, token-, and digest-bound in the approval queue. The
-`wallet_addInvokeTransaction` prepared-proof route separately submits one validated pool
-`apply_actions` call from the selected account. Privacy writes are serialized and reserved in
-session storage before broadcast; new proofs use a ten-block historical base and wait for the
-relevant account/token state to be visible there. See
-[STRK20 privacy integration](STRK20_PRIVACY.md) for the complete service contract, data flow, trust
-boundaries, limitations, and operator checklist.
+MC Wallet implements Wallet API `0.10.4-rc.0` STRK20 through the pinned official Privacy SDK. Viewing
+keys stay inside the encrypted vault; actions, relay fees, account, network, pool, and payload digest
+are frozen before dedicated approval. No fallback prover or signer exists. Registration and
+deposit-only batches may use the public account; other private actions require a relayer. Writes are
+serialized before broadcast and prove against mature historical state. See
+[STRK20 privacy integration](STRK20_PRIVACY.md) for service contracts, trust boundaries, and operations.
 
 ## Krusty KMS
 
@@ -426,10 +426,20 @@ on-chain data, kept in the plain `mc-wallet:multisigs` store).
   the wallet never re-implements the Pedersen scheme. Submitting does not
   confirm; the proposer confirms like any other signer.
 - Coordinate: proposal ids are copyable and a pasted id can be tracked and
-  confirmed from another signer's wallet. Executing needs the original call
-  and salt, so it runs from a wallet that has them (the proposer's, today).
-  Discovering proposals submitted outside this wallet requires an event
-  indexer and is a documented follow-up, like allowances.
+  confirmed from another signer's wallet. Refresh performs a bounded,
+  paginated scan of the multisig's `TransactionSubmitted` events, then treats
+  every discovered id only as a hint: proposal state is read back through the
+  contract before any action is offered. If the RPC page budget is exhausted,
+  the UI reports an incomplete scan instead of presenting a partial result as
+  complete.
+- Review elsewhere: the proposer can copy a deterministic, secret-free review
+  package containing the public multisig identity, proposal id, call, salt, and
+  summary. Another signer can decode it locally or import it while tracking the
+  proposal. The background recomputes the id through that multisig contract's
+  `hash_transaction` view and rejects a mismatch before persisting the call.
+  Importing the original call enables that signer to execute after quorum;
+  importing only an id remains call-less and requires explicit independent
+  verification before confirmation.
 - Deploy: new multisigs deploy from the pinned `MultisigWallet` class
   (`contracts/multisig`, a constructor-only shell around the OZ component)
   through the public Universal Deployer Contract with `not_from_zero = 0`, so
@@ -438,17 +448,13 @@ on-chain data, kept in the plain `mc-wallet:multisigs` store).
   user-paid declare of the bundled Sierra artifact, whose class hash is
   re-verified against the pin before signing.
 
-Pinned class (reproduce with scarb `2.18.0` via `bun run vendor:multisig`;
-verified by `bun run check:multisig`):
+Pinned class (reproduce with scarb `2.18.0` via `bun run vendor:multisig`; verify with `bun run check:multisig`):
 
 - Class hash: `0xbb216b0643679b992e7953b6ea6f5057804237053e79fdd064cf2b5adea035`
 - Compiled class hash: `0x42d945a7f59ead19b20435fbea7d168449299b03d71f8da205517166a2c80c8`
 
-Known limitations (v1): proposals are single-call (`submit_transaction_batch`
-is not surfaced); signer/quorum changes go through the custom-call form as
-self-calls (`add_signers`, `remove_signers`, `change_quorum`) rather than a
-dedicated editor; each confirmation is a separate on-chain transaction with
-its own fee, and proposals are public once submitted.
+Known limitations (v1): batch submission and a signer/quorum editor are not surfaced; event
+discovery is bounded and RPC-dependent; confirmations and review packages remain public.
 
 ## Allowance manager
 
@@ -463,8 +469,8 @@ tracked today.
 
 ## NFT gallery
 
-Home → NFTs merges auto-discovered collectibles with an optional watched `nfts`
-list in preferences (contract, token id, network, optional label, spam flag).
+Home → NFTs merges auto-discovered collectibles with watched `nfts` preferences (contract, token
+id, network, optional label, spam flag).
 Indexer claims are re-proved on-chain against the active account before display;
 explicitly watched NFTs also resolve ERC-721/1155 metadata without auto-fetching
 attacker-controlled airdrop URLs. The detail screen shows the resolved artwork
@@ -472,21 +478,20 @@ and attributes, then sends through a two-phase review → confirm flow. Review
 re-proves ownership, detects ERC-721 versus ERC-1155, decodes the exact call,
 screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
-On unlock and resync, explicitly watched NFTs hydrate through a separate
-ownership-proven metadata lane that does not wait for the optional indexer.
+On unlock and resync, watched NFTs hydrate through an ownership-proven metadata lane without
+waiting for the optional indexer.
 Concurrent refreshes for the same account share the in-flight request, while
 account switches remain isolated; the first visible watched images are fetched
 eagerly so the hidden Collectibles panel is warm when opened.
 
 ## Reproducible Builds
 
-Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen
-lockfile, `wasm-pack 0.13.1`, scarb `2.18.0` (enforced by
+Every build input is pinned: Bun `1.3.3` (`packageManager` + CI), a frozen lockfile,
+`wasm-pack 0.13.1`, scarb `2.18.0` (enforced by
 `scripts/vendor-multisig.ts`) with exact OpenZeppelin versions in
 `contracts/multisig/Scarb.toml`, GitHub Actions by commit SHA, and the Krusty
-KMS source at the commit recorded in `scripts/vendor-krusty.ts`. The official
-Privacy SDK source revision and browser-bundle SHA-256 are pinned separately by
-the privacy vendor/check scripts. To reproduce a release, run the Commands section above and compare
+KMS source at the commit recorded in `scripts/vendor-krusty.ts`. The Privacy SDK source and browser
+bundle digest are pinned by its vendor/check scripts. Reproduce a release, then compare
 `artifacts/*.zip.sha256` against the CI artifact checksum:
 
 ```bash

@@ -2,15 +2,7 @@
  * Typed extension message handling for the background service worker.
  */
 
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
-import { type SwapService, unavailableSwapService } from "../starknet/avnu";
 import { DEFAULT_NETWORK } from "../starknet/networks";
-import { type PriceService, unavailablePriceService } from "../starknet/prices";
-import { type ActivityLog, memoryActivityLog } from "../storage/activity-store";
-import { type AllowanceStore, memoryAllowanceStore } from "../storage/allowance-store";
-import { type MultisigStore, memoryMultisigStore } from "../storage/multisig-store";
-import { memoryOriginHistory, type OriginHistoryStore } from "../storage/origin-history";
-import type { WalletPreferencesStore } from "../storage/preferences-store";
 import { activeAccountSecrets } from "../wallet/vault-service";
 import { readCreateAccountInput } from "./account-creation-inputs";
 import { handleAddChainOps } from "./add-chain-ops";
@@ -18,13 +10,12 @@ import { handleAllowanceOps } from "./allowance-ops";
 import { handleApprovalDecision } from "./approval-decisions";
 import { enrichApprovals } from "./approval-insights";
 import { notifyApprovalsChanged } from "./approval-notifier";
-import { type ApprovalQueue, createApprovalQueue } from "./approvals";
 import { handleChainOps } from "./chain-ops";
 import { handleDeclareOps } from "./declare-ops";
 import { handleDiscoveryOps } from "./discovery-ops";
 import { readImportAccountInput } from "./import-inputs";
 import { handleLedgerOps } from "./ledger-ops";
-import type { LedgerSignQueue } from "./ledger-sign-queue";
+import { type MessageHandlerOptions, type RouterContext, routerContext } from "./message-context";
 import {
   readAddAccountInput,
   readGetGrantedAccountsInput,
@@ -44,51 +35,22 @@ import { handleOnboardingOps } from "./onboarding-ops";
 import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
 import { handleProviderOps } from "./provider-ops";
-import { runtimeLedgerSignQueue } from "./runtime-ledger-sign-queue";
-import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
-import { statusResponse, switchActiveNetwork, unavailablePreferencesStore } from "./runtime-state";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import { statusResponse, switchActiveNetwork } from "./runtime-state";
+import type { RuntimeResponse } from "./runtime-types";
 import {
   isClaimedSenderOrigin,
   isExtensionPageSender,
   parseGatedMessage,
   type RuntimeSender,
 } from "./senders";
-import { createUnlockSession, type UnlockSession } from "./session";
-import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
+import { createUnlockSession } from "./session";
 import { handleStrk20Ops } from "./strk20-ops";
 import { handleStrk20WalletOps } from "./strk20-wallet-ops";
-import {
-  createStrk20WalletPreparationStore,
-  type Strk20WalletPreparationStore,
-} from "./strk20-wallet-preparations";
 import { handleSwapOps } from "./swap-ops";
-import { createSwapPreparationStore, type SwapPreparationStore } from "./swap-preparations";
 import { handleTokenOps } from "./token-ops";
 import { unlockFailureError } from "./unlock-errors";
 import { handleWalletOps, type WalletOpsDeps } from "./wallet-ops";
-
-// Everything the runtime router hands to a sub-handler.
-type RouterContext = {
-  readonly activity: ActivityLog;
-  readonly allowanceStore: AllowanceStore;
-  readonly approvals: ApprovalQueue;
-  readonly extensionId: string;
-  readonly guard: OriginGuard;
-  readonly ledgerSignQueue: LedgerSignQueue;
-  readonly loadMultisigClass: (() => Promise<unknown>) | undefined;
-  readonly multisigStore: MultisigStore;
-  readonly originHistory: OriginHistoryStore;
-  readonly preferencesStore: WalletPreferencesStore;
-  readonly prices: PriceService;
-  readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
-  readonly swap: SwapService;
-  readonly swapPreparations: SwapPreparationStore;
-  readonly strk20Preparations: Strk20WalletPreparationStore;
-  readonly waiters: SignatureWaiters;
-  readonly wallet: WalletStatusReader;
-};
+import type { WalletStatusReader } from "./wallet-reader";
 
 type RouterHandler = (
   ctx: RouterContext,
@@ -102,6 +64,7 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
   allowanceStore: ctx.allowanceStore,
   ledgerSignQueue: ctx.ledgerSignQueue,
   multisigStore: ctx.multisigStore,
+  now: ctx.now,
   preferencesStore: ctx.preferencesStore,
   runtimeRpc: ctx.runtimeRpc,
   session: ctx.session,
@@ -435,31 +398,6 @@ const runtimeErrorResponse = (
 });
 
 /**
- * Named optional collaborators for {@link createMessageHandler}.
- */
-export type MessageHandlerOptions = {
-  readonly activity?: ActivityLog;
-  readonly allowanceStore?: AllowanceStore;
-  readonly approvals?: ApprovalQueue;
-  readonly ledgerSignQueue?: LedgerSignQueue;
-  readonly loadMultisigClass?: () => Promise<unknown>;
-  readonly multisigStore?: MultisigStore;
-  readonly originGuard?: OriginGuard;
-  readonly originHistory?: OriginHistoryStore;
-  readonly preferencesStore?: WalletPreferencesStore;
-  readonly prices?: PriceService;
-  readonly runtimeRpc?: RuntimeRpc;
-  readonly session?: UnlockSession;
-  readonly swap?: SwapService;
-  readonly swapPreparations?: SwapPreparationStore;
-  readonly strk20Preparations?: Strk20WalletPreparationStore;
-};
-
-const strk20PreparationsFor = (
-  provided: Strk20WalletPreparationStore | undefined,
-): Strk20WalletPreparationStore => provided ?? createStrk20WalletPreparationStore();
-
-/**
  * Creates the trusted background runtime message dispatcher.
  */
 export const createMessageHandler = (
@@ -469,26 +407,7 @@ export const createMessageHandler = (
 ) => {
   // Resolve the session before the queue so the queue can read its generation.
   const session = options.session ?? createUnlockSession();
-  const ctx: RouterContext = {
-    activity: options.activity ?? memoryActivityLog(),
-    allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
-    approvals: options.approvals ?? createApprovalQueue(),
-    extensionId,
-    guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
-    ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
-    loadMultisigClass: options.loadMultisigClass,
-    multisigStore: options.multisigStore ?? memoryMultisigStore(),
-    originHistory: options.originHistory ?? memoryOriginHistory(),
-    preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
-    prices: options.prices ?? unavailablePriceService,
-    runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
-    session,
-    swap: options.swap ?? unavailableSwapService,
-    swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
-    strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
-    waiters: createSignatureWaiters(),
-    wallet,
-  };
+  const ctx = routerContext(wallet, extensionId, options, session);
   return async (message: unknown, sender?: RuntimeSender): Promise<RuntimeResponse> => {
     try {
       return await handleRuntimeMessage(ctx, message, sender);

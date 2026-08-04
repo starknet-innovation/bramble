@@ -27,7 +27,7 @@ import type { ApprovalQueue } from "./approvals";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
@@ -43,6 +43,7 @@ import {
   readStrk20RegisterMessage,
   readStrk20SubaccountMessage,
 } from "./strk20-provider-inputs";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.

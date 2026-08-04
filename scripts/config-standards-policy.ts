@@ -12,11 +12,11 @@ export const DEPENDENCY_FIELDS = [
 export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
 
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
-  "@biomejs/biome": "2.5.5",
+  "@biomejs/biome": "2.5.6",
   "@happy-dom/global-registrator": "20.11.1",
-  "@playwright/test": "1.61.1",
+  "@playwright/test": "1.62.0",
   "@types/bun": "1.3.14",
-  "@types/node": "26.1.1",
+  "@types/node": "26.1.2",
   "happy-dom": "20.11.1",
   knip: "6.29.0",
   madge: "8.0.0",
@@ -30,7 +30,7 @@ export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@ledgerhq/hw-transport-web-ble": "6.35.0",
   "@ledgerhq/hw-transport-webhid": "6.36.0",
   "@ledgerhq/hw-transport-webusb": "6.35.0",
-  buffer: "5.7.1",
+  buffer: "6.0.3",
   starknet: "10.0.2",
 };
 
@@ -43,6 +43,8 @@ export const PINNED_RUNTIME_FILES = [
   "onboarding.html",
   "popup.html",
   "provider/inpage.js",
+  "sandbox/render.html",
+  "sandbox/render.js",
   "sidepanel.html",
   "sidepanel/index.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",

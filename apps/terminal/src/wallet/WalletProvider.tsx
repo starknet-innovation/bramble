@@ -45,66 +45,18 @@ import {
   walletTransactionHash,
 } from "./wallet-request";
 import {
-  type PrivateBalance,
-  type PrivateCallAndProof,
   requestPrivateBalances,
   requestPrivateInvoke,
   requestPrivateProof,
   requestPrivateRegistration,
 } from "./privacy-wallet";
+import type {
+  ContractDeclaration,
+  DeclarationResult,
+  WalletContextValue,
+} from "./wallet-context-types";
 
-/**
- * The wallet state + actions exposed to the app through `useWallet()`.
- */
-export type WalletContextValue = {
-  /** The connected wallet account, or null when disconnected. Read-only consumers may inspect it; actions use requestTransaction(). */
-  readonly account: AccountInterface | null;
-  /** The selected account address (canonical hex), or null when disconnected. */
-  readonly address: string | null;
-  /** The wallet's current chain id (e.g. "SN_MAIN"), or null when disconnected. */
-  readonly chainId: string | null;
-  /** The human-readable name of the connected wallet, or null. */
-  readonly walletName: string | null;
-  /** True once an account is connected. */
-  readonly isConnected: boolean;
-  /** True while a connect() call is in flight. */
-  readonly isConnecting: boolean;
-  /** The last connection error message, or null. */
-  readonly error: string | null;
-  /** Clears a surfaced connection error without changing the wallet session. */
-  readonly clearError: () => void;
-  /** Opens the wallet and connects an account. Prefers the MC Wallet provider. */
-  readonly connect: () => Promise<void>;
-  /** Reviews and executes Starknet calls through the connected wallet. */
-  readonly requestTransaction: (
-    input: WalletTransactionRequest,
-  ) => Promise<InvokeFunctionResponse>;
-  /** Reads aggregate private balances without exposing notes or viewing keys. */
-  readonly privateBalances: (tokens: readonly string[]) => Promise<readonly PrivateBalance[]>;
-  /** Produces a wallet-approved STRK20 proof for external paymaster submission. */
-  readonly preparePrivateInvoke: (actions: readonly unknown[]) => Promise<PrivateCallAndProof>;
-  /** Proves and submits STRK20 actions through the wallet approval path. */
-  readonly invokePrivate: (actions: readonly unknown[]) => Promise<string>;
-  /** Requests the wallet's explicit one-time private-pool registration approval. */
-  readonly registerPrivate: () => Promise<string>;
-  /** Requests wallet tracking for an ERC20; the wallet re-reads metadata and requires approval. */
-  readonly watchAsset: (input: WatchAssetInput) => Promise<void>;
-  /** Requests an approved Sierra class declaration through the connected wallet. */
-  readonly declareContract: (input: ContractDeclaration) => Promise<DeclarationResult>;
-  /** Disconnects the current wallet and clears the last-connected hint. */
-  readonly disconnect: () => Promise<void>;
-};
-
-export type ContractDeclaration = {
-  readonly classHash: string;
-  readonly compiledClassHash: string;
-  readonly contractClass: Readonly<Record<string, unknown>>;
-};
-
-export type DeclarationResult = {
-  readonly classHash: string;
-  readonly transactionHash: string;
-};
+export type { ContractDeclaration, DeclarationResult, WalletContextValue };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 

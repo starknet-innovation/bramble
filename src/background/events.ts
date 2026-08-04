@@ -46,11 +46,24 @@ const switchChainBroadcast: BroadcastFactory = (response) =>
 /**
  * Maps a handled message type to the events it broadcasts. Absent keys (and
  * error responses, handled by the caller) broadcast nothing.
+ *
+ * Every message type whose handler can change the vault's active account must
+ * appear here: an origin only ever sees the active account, so changing it can
+ * connect or disconnect a page, and a page told nothing keeps showing an
+ * address the wallet will refuse to sign for. Adding, importing, or attaching
+ * an account all select the new one, so they broadcast like a switch. The
+ * events carry no addresses, so a message with key material in it (raw-key
+ * import) still puts nothing sensitive on the wire —
+ * `tests/background/background-events.test.ts` enforces both properties.
  */
 const BROADCAST_FACTORIES: Readonly<Record<string, BroadcastFactory>> = {
+  "wallet.addAccount": createAccountBroadcast,
+  "wallet.addLedgerAccount": createAccountBroadcast,
   "wallet.approveOrigin": approveOriginBroadcast,
   "wallet.createAccount": createAccountBroadcast,
+  "wallet.createLedgerVault": createAccountBroadcast,
   "wallet.denyOrigin": () => [approvalsChanged],
+  "wallet.importAccount": createAccountBroadcast,
   "wallet.lock": () => [accountsChanged],
   "wallet.revokeOrigin": () => [accountsChanged],
   "wallet.setActiveAccount": () => [accountsChanged],

@@ -215,8 +215,9 @@ Required before review will pass:
 - **Data-usage** disclosures (what is collected, how it is used/shared).
 - **Permissions justification** for every requested permission and host
   permission. For this MV3 Starknet wallet, expect to justify the RPC/host
-  permissions in `public/manifest.json` (Cartridge/CoinGecko endpoints and the
-  local devnet hosts) and side-panel/storage usage. Vague or missing
+  permissions in `public/manifest.json` (Starknet Foundation RPC, CoinGecko,
+  and the local devnet hosts), the `alarms` permission that schedules background
+  transaction reconciliation, and side-panel/storage usage. Vague or missing
   justifications are the most common rejection reason.
 - A **privacy policy** URL if any user data is handled.
 

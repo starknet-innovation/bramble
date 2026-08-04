@@ -12,6 +12,7 @@ import {
   account,
   contentSender,
   createWallet,
+  secondAccount,
   extensionSender as sender,
   vaultPassphrase,
 } from "../support/background-wallet-stub";
@@ -21,7 +22,7 @@ describe("createMessageHandler", () => {
   test("validates create account messages", async () => {
     let captured: CreateVaultAccountInput | null = null;
     const handler = createMessageHandler(
-      createWallet((input) => (captured = input)),
+      createWallet({ captureCreate: (input) => (captured = input) }),
       "extension-id",
     );
 
@@ -34,7 +35,7 @@ describe("createMessageHandler", () => {
   test("creates accounts through the wallet service only", async () => {
     const captured: CreateVaultAccountInput[] = [];
     const handler = createMessageHandler(
-      createWallet((input) => captured.push(input)),
+      createWallet({ captureCreate: (input) => captured.push(input) }),
       "extension-id",
     );
 
@@ -113,7 +114,7 @@ describe("createMessageHandler", () => {
   test("validates origin grant messages", async () => {
     const captured: OriginGrantInput[] = [];
     const handler = createMessageHandler(
-      createWallet(undefined, undefined, (input) => captured.push(input)),
+      createWallet({ captureGrant: (input) => captured.push(input) }),
       "extension-id",
     );
 
@@ -133,7 +134,7 @@ describe("createMessageHandler", () => {
   test("grants normalized origins through the wallet service only", async () => {
     const captured: OriginGrantInput[] = [];
     const handler = createMessageHandler(
-      createWallet(undefined, undefined, (input) => captured.push(input)),
+      createWallet({ captureGrant: (input) => captured.push(input) }),
       "extension-id",
     );
 
@@ -228,6 +229,44 @@ describe("createMessageHandler", () => {
     await expect(held).resolves.toEqual({ error: "connection rejected" });
   });
 
+  test("re-prompts a reconnecting origin whose grant misses the active account", async () => {
+    // Regression: connect as account one, disconnect in the dapp, switch to
+    // account two in the wallet, reconnect. The stored grant still names only
+    // account one, so the site must be re-approved instead of silently getting
+    // account one back — and switching back reconnects it with no prompt.
+    let activeAccountId = secondAccount.id;
+    const handler = createMessageHandler(
+      createWallet({
+        accounts: [account, secondAccount],
+        activeAccountId: () => activeAccountId,
+      }),
+      "extension-id",
+      { session: createUnlockSession() },
+    );
+
+    await handler({ type: "wallet.unlock", vaultPassphrase }, sender);
+    const held = handler(
+      { origin: "https://example.com", type: "wallet.requestAccounts" },
+      contentSender,
+    );
+    await flushHeld();
+    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toMatchObject({
+      pending: [{ origin: "https://example.com" }],
+    });
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    await expect(held).resolves.toEqual({ error: "connection rejected" });
+
+    activeAccountId = account.id;
+    await expect(
+      handler({ origin: "https://example.com", type: "wallet.requestAccounts" }, contentSender),
+    ).resolves.toEqual({ accounts: [account], ok: true });
+    await expect(handler({ type: "wallet.pendingApprovals" }, sender)).resolves.toEqual({
+      ok: true,
+      pending: [],
+    });
+  });
+
   test("returns no accounts without prompting for silent ungranted requests", async () => {
     const handler = createMessageHandler(createWallet(), "extension-id", {
       session: createUnlockSession(),
@@ -255,7 +294,7 @@ describe("createMessageHandler", () => {
     const pending = approvals.request("https://example.com");
     const session = createUnlockSession();
     const handler = createMessageHandler(
-      createWallet(undefined, undefined, (input) => captured.push(input)),
+      createWallet({ captureGrant: (input) => captured.push(input) }),
       "extension-id",
       { approvals, session },
     );

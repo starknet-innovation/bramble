@@ -13,7 +13,7 @@
  * re-checked by `isActivityEntry` at the message boundary before they render.
  */
 import { hash } from "starknet";
-import type { ActivityEntry } from "../storage/activity-store";
+import { type ActivityEntry, isUnresolvedActivityStatus } from "../storage/activity-store";
 import type { TokenConfig } from "../storage/preferences-store";
 import { canonicalFelt, isStarkFieldElement, type StarknetNetworkId, sameFelt } from "./networks";
 import { formatTokenAmount } from "./rpc";
@@ -230,13 +230,14 @@ const legKey = (entry: ActivityEntry): string =>
  * chain leg that shares its hash: the local record carries the richer,
  * user-facing summary, so it keeps its identity while purely chain-discovered
  * transactions are added around it. The one exception is status: a local row
- * still `pending` is reconciled to `accepted` when the chain scan found a
+ * still unresolved (`pending` or the provisional `preconfirmed`) is reconciled
+ * to `accepted` when the chain scan found a
  * `Transfer` event for its hash, since an emitted event proves the transaction
  * was included and succeeded (a reverted transaction emits none). This closes
- * the gap where the pending status re-poll fails but the event scan succeeds,
- * which would otherwise leave a confirmed transfer showing as pending. Terminal
- * local states (`accepted`, `rejected`, `reverted`) are authoritative and left
- * untouched. Chain rows with no local record are de-duplicated per leg, so a
+ * the gap where the status re-poll fails but the event scan succeeds,
+ * which would otherwise leave a confirmed transfer showing as provisional.
+ * Terminal local states (`accepted`, `rejected`, `reverted`) are authoritative
+ * and left untouched. Chain rows with no local record are de-duplicated per leg, so a
  * swap or multicall keeps all of its transfers rather than showing one arbitrary
  * leg. The result is the union, never fewer rows than the local log.
  */
@@ -255,13 +256,13 @@ export const mergeActivity = (
     if (localTxKeys.has(tk)) {
       // A local record owns this transaction and keeps its richer summary, so
       // the chain leg adds no row. But an emitted `Transfer` proves the
-      // transaction was included and succeeded, so a still-`pending` local row
-      // is reconciled to `accepted` even when the pending status re-poll never
+      // transaction was included and succeeded, so a still-unresolved local row
+      // is reconciled to `accepted` even when the status re-poll never
       // landed. Terminal local states are left untouched.
       const localMatch = byKey.get(tk);
       if (
         localMatch !== undefined &&
-        localMatch.status === "pending" &&
+        isUnresolvedActivityStatus(localMatch.status) &&
         entry.status === "accepted"
       ) {
         byKey.set(tk, { ...localMatch, status: "accepted" });

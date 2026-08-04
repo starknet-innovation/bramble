@@ -10,7 +10,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import type { RuntimeRpc } from "./runtime-rpc";
-import type { WalletStatusReader } from "./runtime-types";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Resolves the injected STRK20 adapter, retaining the fail-closed default for

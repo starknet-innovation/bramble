@@ -18,6 +18,10 @@ import {
   type MultisigClassStatusInput,
 } from "../starknet/multisig-deploy";
 import {
+  discoverMultisigProposalIds,
+  type MultisigProposalDiscoveryInput,
+} from "../starknet/multisig-discovery";
+import {
   createHttpNftIndexer,
   type NftIndexerHttp,
   type NftIndexerService,
@@ -73,6 +77,13 @@ export type MultisigRpc = {
   readonly getProposalStatus: (
     input: MultisigProposalStatusInput,
   ) => ReturnType<typeof getMultisigProposalStatus>;
+  /**
+   * Discovers proposal ids submitted by other signers. Optional for narrow
+   * test doubles; production always wires the bounded event scan.
+   */
+  readonly discoverProposalIds?: (
+    input: MultisigProposalDiscoveryInput,
+  ) => ReturnType<typeof discoverMultisigProposalIds>;
   readonly isClassDeclared: (
     input: MultisigClassStatusInput,
   ) => ReturnType<typeof isMultisigClassDeclared>;
@@ -206,6 +217,7 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   getTransactionStatuses,
   multisig: {
     computeTransactionId: computeMultisigTransactionId,
+    discoverProposalIds: discoverMultisigProposalIds,
     getConfig: getMultisigConfig,
     getProposalStatus: getMultisigProposalStatus,
     isClassDeclared: isMultisigClassDeclared,

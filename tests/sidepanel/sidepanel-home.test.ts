@@ -132,11 +132,18 @@ describe("sidepanel home", () => {
         },
       ],
     };
-    const html = dashboard("home", status, [], withNfts, { balances: [] });
-    const panel = html.slice(
-      html.indexOf('data-tab-panel="collectibles"'),
-      html.indexOf("wallet-dock"),
-    );
+    const html = homeTabs({ balances: [] }, withNfts, {}, {}, "usd", status, [
+      {
+        collection: "",
+        contract: "0xabc",
+        id: "SN_MAIN:0xabc:1",
+        image: "",
+        name: "Starkpunk",
+        networkId: "SN_MAIN",
+        tokenId: "1",
+      },
+    ]);
+    const panel = html.slice(html.indexOf('data-tab-panel="collectibles"'), html.length);
 
     expect(panel).toContain('data-nft-open="SN_MAIN:0xabc:1"');
     expect(panel).toContain("Starkpunk");

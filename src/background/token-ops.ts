@@ -13,9 +13,10 @@ import type { TokenConfig, WalletPreferencesStore } from "../storage/preferences
 import { readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import type { UnlockSession } from "./session";
 import { readAddTokenInput, readSetTokenHiddenInput, readTokenChartInput } from "./token-inputs";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Dependencies shared by the token operation handlers.

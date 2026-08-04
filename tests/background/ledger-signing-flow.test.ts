@@ -15,9 +15,9 @@ import {
   type LedgerSignQueue,
 } from "../../src/background/ledger-sign-queue";
 import { createMessageHandler } from "../../src/background/messages";
-import type { WalletStatusReader } from "../../src/background/runtime-types";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
+import type { WalletStatusReader } from "../../src/background/wallet-reader";
 import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
 import type { LedgerAccountRef, Vault } from "../../src/storage/vault-schema";

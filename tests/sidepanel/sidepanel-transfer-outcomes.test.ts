@@ -138,6 +138,24 @@ describe("Send confirmation outcomes", () => {
     expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
   });
 
+  // The point of the fast-confirmation work: a pre-confirmation is a real
+  // answer, so the journey completes on it instead of sitting on a spinner
+  // until the pending fallback fires ~10s later.
+  test("completes the journey on a pre-confirmation, not only on acceptance", async () => {
+    const { app, form } = mountOutcome("preconfirmed");
+    await submitTwice(form);
+    expect(form.dataset["stage"]).toBe("submitted");
+    expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe(HASH);
+  });
+
+  test("shows the failure recovery state when Starknet rejects", async () => {
+    const { app, form } = mountOutcome("rejected");
+    await submitTwice(form);
+    expect(form.dataset["stage"]).toBe("failed");
+    expect(app.querySelector("#send-failure-copy")?.textContent).toContain("rejected");
+  });
+
   test("shows the failure recovery state when Starknet reverts", async () => {
     const { app, form } = mountOutcome("reverted");
     await submitTwice(form);

@@ -72,6 +72,23 @@ export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
   isRecord(message) && hasOnlyKnownKeys(message, ["type"]) && message["type"] === type;
 
 /**
+ * Parses an activity request for either the active signer or one explicitly
+ * selected watched account. The background resolves and authorizes the scope;
+ * this boundary accepts only a well-formed account id and no unknown fields.
+ */
+export const readActivityInput = (message: unknown): { readonly accountId?: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["accountId", "type"]) ||
+    message["type"] !== "wallet.activity" ||
+    (message["accountId"] !== undefined && !isAccountId(message["accountId"]))
+  ) {
+    return null;
+  }
+  return message["accountId"] === undefined ? {} : { accountId: message["accountId"] };
+};
+
+/**
  * Parses privileged origin-grant messages and normalizes origins.
  */
 export const readGrantOriginInput = (message: unknown): OriginGrantInput | null => {

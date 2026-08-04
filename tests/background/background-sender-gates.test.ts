@@ -40,7 +40,7 @@ describe("background sender gates", () => {
   test("rejects privileged commands from content senders", async () => {
     const captured: SignHashInput[] = [];
     const handler = createMessageHandler(
-      createWallet(undefined, (input) => captured.push(input)),
+      createWallet({ captureSign: (input) => captured.push(input) }),
       "extension-id",
     );
 
@@ -68,7 +68,7 @@ describe("background sender gates", () => {
   test("rejects extension-page URL prefix matches from other senders", async () => {
     const captured: SignHashInput[] = [];
     const handler = createMessageHandler(
-      createWallet(undefined, (input) => captured.push(input)),
+      createWallet({ captureSign: (input) => captured.push(input) }),
       "extension-id",
     );
 
