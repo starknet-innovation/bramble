@@ -273,14 +273,20 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
     button.addEventListener("click", () => {
       const panel = button.closest<HTMLElement>("[data-ms-confirm-panel]");
       const signerId = button.dataset["msConfirmSigner"];
-      const submit = panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]");
-      if (!panel || !signerId || !submit) {
+      // A quorum-reaching panel carries both "Confirm & execute" and
+      // "Confirm only", so the chosen signer must land on every submit button.
+      const submits = [
+        ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]") ?? []),
+      ];
+      if (!panel || !signerId || submits.length === 0) {
         return;
       }
       panel.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-signer]").forEach((option) => {
         option.setAttribute("aria-pressed", String(option === button));
       });
-      submit.dataset["msSelectedSigner"] = signerId;
+      for (const submit of submits) {
+        submit.dataset["msSelectedSigner"] = signerId;
+      }
     });
   });
 
@@ -288,6 +294,9 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
     button.addEventListener("click", () => {
       const proposalId = button.dataset["msConfirmSubmit"];
       const signerId = button.dataset["msSelectedSigner"];
+      // Set only on the combined button the view renders when this
+      // confirmation reaches quorum; the background re-checks that on-chain.
+      const andExecute = button.dataset["msAndExecute"] === "true";
       const panel = button.closest<HTMLElement>("[data-ms-confirm-panel]");
       const row = button.closest(".allowance-row");
       const acknowledgment = row?.querySelector<HTMLInputElement>("[data-ms-ack]");
@@ -311,19 +320,25 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
         if (selected.dataset["msConfirmSignerActive"] !== "true") {
           await deps.wallet.setActiveAccount(signerId);
         }
-        result.textContent = "Submitting confirmation…";
+        result.textContent = andExecute
+          ? "Submitting confirmation and execution…"
+          : "Submitting confirmation…";
         await deps.multisig.confirmProposal(
           proposalId,
           acknowledgment?.checked === true ? true : undefined,
+          andExecute ? true : undefined,
         );
       })().then(
         async () => {
-          showToast("Confirmation submitted", "success");
+          showToast(andExecute ? "Confirmed and executed" : "Confirmation submitted", "success");
           close(panel, false);
           await rerender(deps);
         },
         (error: unknown) => {
-          const failed = errorMessage(error, "Confirmation failed");
+          const failed = errorMessage(
+            error,
+            andExecute ? "Confirm and execute failed" : "Confirmation failed",
+          );
           result.textContent = failed;
           showToast(failed, "error");
           buttonBusy(button, false);

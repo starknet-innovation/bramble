@@ -4,6 +4,7 @@
  * enough to audit directly.
  */
 import { escapeHtml } from "../shared/html";
+import { confirmationCompletesQuorum } from "../starknet/multisig";
 import { sameFelt } from "../starknet/networks";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { WalletPreferences } from "../storage/preferences-store";
@@ -129,6 +130,16 @@ const confirmationReview = (
   if (!selected) {
     return "";
   }
+  // Candidates exclude signers who already confirmed, so `selected` has not.
+  const completesQuorum = confirmationCompletesQuorum({
+    confirmations: proposal.confirmations,
+    quorum: record.quorum,
+    signerHasConfirmed: false,
+    state: proposal.state,
+  });
+  // Executing re-derives the proposal id from the original call, so a proposal
+  // tracked by id only can be confirmed here but never executed from here.
+  const canConfirmAndExecute = completesQuorum && proposal.call !== null;
   return `<section class="multisig-review-sheet" data-ms-confirm-panel="${escapeHtml(proposal.id)}" role="dialog" aria-modal="true" aria-labelledby="confirm-${escapeHtml(proposal.id)}-title" hidden>
     <div class="multisig-review-card multisig-confirm-card">
       <div class="row">
@@ -144,7 +155,7 @@ const confirmationReview = (
       <div class="proposal-confirm-summary">
         <div><span>Proposal</span><strong>${escapeHtml(proposal.summary || "Untitled proposal")}</strong></div>
         <div><span>Current approval</span><strong>${proposal.confirmations} of ${record.quorum}</strong></div>
-        <div><span>Result</span><strong>Add one signer confirmation</strong></div>
+        <div><span>Result</span><strong>${completesQuorum ? `Reaches quorum at ${record.quorum} of ${record.quorum}` : "Add one signer confirmation"}</strong></div>
       </div>
       <fieldset class="multisig-confirm-fieldset">
         <legend>Sign with</legend>
@@ -164,15 +175,35 @@ const confirmationReview = (
         </div>
       </fieldset>
       <div class="review-panel" role="note">
-        <p>This signs one confirmation. It does not execute the proposal; execution becomes available only after quorum.</p>
+        <p>${
+          canConfirmAndExecute
+            ? "Your confirmation reaches quorum, so it can execute the proposal in the same transaction. If execution fails, your confirmation is not recorded either — confirm without executing to record it on its own."
+            : completesQuorum
+              ? "Your confirmation reaches quorum, but this proposal was tracked by id only, so executing needs the wallet that proposed it."
+              : "This signs one confirmation. It does not execute the proposal; execution becomes available only after quorum."
+        }</p>
       </div>
+      ${
+        canConfirmAndExecute
+          ? button({
+              attributes: {
+                "data-ms-and-execute": "true",
+                "data-ms-confirm-submit": proposal.id,
+                "data-ms-selected-signer": selected.id,
+              },
+              icon: "send",
+              label: "Confirm & execute",
+            })
+          : ""
+      }
       ${button({
         attributes: {
           "data-ms-confirm-submit": proposal.id,
           "data-ms-selected-signer": selected.id,
         },
         icon: "check",
-        label: "Confirm proposal",
+        label: canConfirmAndExecute ? "Confirm only" : "Confirm proposal",
+        ...(canConfirmAndExecute ? { variant: "secondary" as const } : {}),
       })}
       <p data-ms-confirm-status role="status"></p>
     </div>

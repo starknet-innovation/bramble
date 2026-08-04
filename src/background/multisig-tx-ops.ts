@@ -8,17 +8,23 @@
  * type maps to one small async handler; the exported router is a single
  * dispatch-map lookup.
  */
+import type { Call } from "starknet";
 import {
   buildMultisigConfirmCall,
   buildMultisigExecuteCall,
   buildMultisigRevokeCall,
   buildMultisigSubmitCall,
+  confirmationCompletesQuorum,
   type MultisigCallInput,
   type MultisigProposalStatus,
 } from "../starknet/multisig";
 import { type MultisigProposalRecord, multisigProposalId } from "../storage/multisig-store";
 import { handleMultisigDeployOps } from "./multisig-deploy-ops";
-import { readMultisigProposalActionInput, readProposeMultisigInput } from "./multisig-inputs";
+import {
+  type MultisigProposalActionInput,
+  readMultisigProposalActionInput,
+  readProposeMultisigInput,
+} from "./multisig-inputs";
 import {
   buildMultisigProposalRecord,
   defaultSummary,
@@ -60,19 +66,21 @@ const resolveMultisigTarget = async (
   return refreshSignerMembership(deps, resolved);
 };
 
-// Submits one call through the shared invoke path and records activity.
-// The caller's descriptive summary is recorded verbatim: the generic call
-// decoder cannot describe multisig entrypoints, and the dedup guards below
-// match on these summaries, so they must stay deterministic and specific.
+// Submits one or more calls as a single invoke through the shared path and
+// records activity. The caller's descriptive summary is recorded verbatim: the
+// generic call decoder cannot describe multisig entrypoints, and the dedup
+// guards below match on these summaries, so they must stay deterministic and
+// specific. Batched calls share one transaction, so they succeed or revert
+// together.
 const submitAndRecord = async (
   deps: MultisigOpsDeps,
   resolved: MultisigContext,
-  call: ReturnType<typeof buildMultisigConfirmCall>,
+  calls: readonly Call[],
   summary: string,
 ): Promise<string> => {
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: resolved.account.account,
-    calls: [call],
+    calls,
     rpcUrls: resolved.rpcUrls,
     signHash: signerForContext(deps, resolved.account),
   });
@@ -201,7 +209,7 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
   const transactionHash = await submitAndRecord(
     deps,
     target,
-    buildMultisigSubmitCall(target.record.address, call, input.salt),
+    [buildMultisigSubmitCall(target.record.address, call, input.salt)],
     `Propose: ${summary}`,
   );
   const proposal = buildMultisigProposalRecord({
@@ -219,16 +227,27 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
   return { ok: true, proposal, transactionHash };
 };
 
+// What one proposal action will broadcast: the calls for a single invoke plus
+// the activity summary describing them.
+type ProposalActionPlan = {
+  readonly calls: readonly Call[];
+  readonly summary: string;
+};
+
 // Shared confirm/revoke flow: parse, resolve, enforce untracked-acknowledgement,
-// refresh status, run the state-specific guard, then submit and record.
+// refresh status, run the state-specific guard, then plan, submit, and record.
+// The plan runs after the fresh chain read so it can decide on real state.
 const runProposalAction = async (
   deps: MultisigOpsDeps,
   message: unknown,
   type: "wallet.confirmMultisigProposal" | "wallet.revokeMultisigConfirmation",
   invalidError: string,
   guard: (status: MultisigProposalStatus) => string | null,
-  build: (address: string, txId: string) => ReturnType<typeof buildMultisigConfirmCall>,
-  summaryPrefix: string,
+  plan: (
+    found: ResolvedProposal,
+    status: MultisigProposalStatus,
+    input: MultisigProposalActionInput,
+  ) => ProposalActionPlan | { readonly error: string },
 ): Promise<RuntimeResponse> => {
   const input = readMultisigProposalActionInput(message, type);
   if (!input) {
@@ -250,11 +269,15 @@ const runProposalAction = async (
   if (guardError) {
     return { error: guardError };
   }
+  const planned = plan(found, status, input);
+  if ("error" in planned) {
+    return { error: planned.error };
+  }
   const transactionHash = await submitAndRecord(
     deps,
     found.resolved,
-    build(found.resolved.record.address, found.proposal.txId),
-    `${summaryPrefix}: ${found.proposal.summary}`,
+    planned.calls,
+    planned.summary,
   );
   await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };
@@ -277,6 +300,58 @@ const revokeGuard = (status: MultisigProposalStatus): string | null => {
   return status.confirmedBySigner ? null : "this account has not confirmed this proposal";
 };
 
+// Plans a confirmation. With `andExecute` the signer asked to broadcast the
+// proposal in the same transaction, which is only offered when this very
+// confirmation reaches quorum — the `confirm_transaction` storage write lands
+// before the batched `execute_transaction` re-reads it, so the component sees a
+// confirmed proposal. Both calls share one transaction, so a failing inner call
+// reverts the confirmation too; that is why this is opt-in rather than implicit.
+const planConfirm = (
+  found: ResolvedProposal,
+  status: MultisigProposalStatus,
+  input: MultisigProposalActionInput,
+): ProposalActionPlan | { readonly error: string } => {
+  const { record } = found.resolved;
+  const confirmCall = buildMultisigConfirmCall(record.address, found.proposal.txId);
+  if (input.andExecute !== true) {
+    return { calls: [confirmCall], summary: `Confirm: ${found.proposal.summary}` };
+  }
+  const proposalCall = found.proposal.call;
+  if (!proposalCall) {
+    return {
+      error:
+        "this proposal was tracked by id only; executing needs the original call, so confirm it here and execute from the wallet that proposed it",
+    };
+  }
+  if (
+    !confirmationCompletesQuorum({
+      confirmations: status.confirmations,
+      quorum: record.quorum,
+      signerHasConfirmed: status.confirmedBySigner,
+      state: status.state,
+    })
+  ) {
+    return {
+      error: `this confirmation does not reach quorum (${status.confirmations + 1} of ${record.quorum}), so it cannot execute yet — confirm without executing`,
+    };
+  }
+  return {
+    calls: [
+      confirmCall,
+      buildMultisigExecuteCall(
+        record.address,
+        {
+          calldata: proposalCall.calldata,
+          contractAddress: proposalCall.contractAddress,
+          entrypoint: proposalCall.entrypoint,
+        },
+        proposalCall.salt,
+      ),
+    ],
+    summary: `Confirm and execute: ${found.proposal.summary}`,
+  };
+};
+
 const confirmMultisigProposal: MultisigTxHandler = (deps, message) =>
   runProposalAction(
     deps,
@@ -284,8 +359,7 @@ const confirmMultisigProposal: MultisigTxHandler = (deps, message) =>
     "wallet.confirmMultisigProposal",
     "invalid confirm request",
     confirmGuard,
-    buildMultisigConfirmCall,
-    "Confirm",
+    planConfirm,
   );
 
 const revokeMultisigConfirmation: MultisigTxHandler = (deps, message) =>
@@ -295,8 +369,10 @@ const revokeMultisigConfirmation: MultisigTxHandler = (deps, message) =>
     "wallet.revokeMultisigConfirmation",
     "invalid revoke request",
     revokeGuard,
-    buildMultisigRevokeCall,
-    "Revoke confirmation",
+    (found) => ({
+      calls: [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
+      summary: `Revoke confirmation: ${found.proposal.summary}`,
+    }),
   );
 
 const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
@@ -325,15 +401,17 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
   const transactionHash = await submitAndRecord(
     deps,
     found.resolved,
-    buildMultisigExecuteCall(
-      found.resolved.record.address,
-      {
-        calldata: proposalCall.calldata,
-        contractAddress: proposalCall.contractAddress,
-        entrypoint: proposalCall.entrypoint,
-      },
-      proposalCall.salt,
-    ),
+    [
+      buildMultisigExecuteCall(
+        found.resolved.record.address,
+        {
+          calldata: proposalCall.calldata,
+          contractAddress: proposalCall.contractAddress,
+          entrypoint: proposalCall.entrypoint,
+        },
+        proposalCall.salt,
+      ),
+    ],
     `Execute: ${found.proposal.summary}`,
   );
   await refreshAfterAction(deps, found).catch(() => undefined);

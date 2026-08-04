@@ -10,6 +10,7 @@ import {
   buildMultisigExecuteCall,
   buildMultisigRevokeCall,
   buildMultisigSubmitCall,
+  confirmationCompletesQuorum,
   decodeMultisigState,
   isMultisigEntrypoint,
 } from "../../src/starknet/multisig";
@@ -80,6 +81,44 @@ describe("multisig call builders", () => {
     expect(decodeMultisigState(2)).toBe("confirmed");
     expect(decodeMultisigState(3)).toBe("executed");
     expect(() => decodeMultisigState(4)).toThrow("Invalid multisig state response");
+  });
+});
+
+describe("confirmationCompletesQuorum", () => {
+  const base = {
+    confirmations: 1,
+    quorum: 2,
+    signerHasConfirmed: false,
+    state: "pending",
+  } as const;
+
+  test("is true only when this signer is the last confirmation quorum needs", () => {
+    expect(confirmationCompletesQuorum(base)).toBe(true);
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 0, quorum: 1 })).toBe(true);
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 0 })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, quorum: 4 })).toBe(false);
+  });
+
+  test("stays true when confirmations already exceed quorum", () => {
+    // A quorum lowered after confirmations accrued still leaves this signer
+    // able to execute, and the component agrees: it compares with >=.
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 5, quorum: 2 })).toBe(true);
+  });
+
+  test("is false for a signer who already confirmed", () => {
+    expect(confirmationCompletesQuorum({ ...base, signerHasConfirmed: true })).toBe(false);
+  });
+
+  test("is false for any state other than pending", () => {
+    // `confirmed` already has quorum, so it is executed rather than confirmed
+    // again; `executed` and `not-found` admit no action at all.
+    expect(confirmationCompletesQuorum({ ...base, state: "confirmed" })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, state: "executed" })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, state: "not-found" })).toBe(false);
+  });
+
+  test("is false for a zero quorum, which no confirmation can complete", () => {
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 0, quorum: 0 })).toBe(false);
   });
 });
 

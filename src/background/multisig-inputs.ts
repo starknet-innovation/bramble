@@ -148,12 +148,16 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
  * the user acknowledges that off-chain summaries are not chain-verified.
  */
 export type MultisigProposalActionInput = {
+  readonly andExecute?: boolean;
   readonly proposalId: string;
   readonly untrackedVerified?: boolean;
 };
 
 /**
  * Parses a proposal action request (`confirm`, `revoke`, `execute`).
+ * `andExecute` is confirm-only and opt-in: it asks for the confirmation and the
+ * execution to ride in one transaction, which the handler allows only when this
+ * confirmation actually reaches quorum.
  */
 export const readMultisigProposalActionInput = (
   message: unknown,
@@ -165,7 +169,9 @@ export const readMultisigProposalActionInput = (
   const keys =
     type === "wallet.executeMultisigProposal"
       ? (["proposalId", "type"] as const)
-      : (["proposalId", "type", "untrackedVerified"] as const);
+      : type === "wallet.confirmMultisigProposal"
+        ? (["andExecute", "proposalId", "type", "untrackedVerified"] as const)
+        : (["proposalId", "type", "untrackedVerified"] as const);
   if (
     !(
       isRecord(message) &&
@@ -179,7 +185,11 @@ export const readMultisigProposalActionInput = (
   if (message["untrackedVerified"] !== undefined && message["untrackedVerified"] !== true) {
     return null;
   }
+  if (message["andExecute"] !== undefined && message["andExecute"] !== true) {
+    return null;
+  }
   return {
+    ...(message["andExecute"] === true ? { andExecute: true } : {}),
     proposalId: message["proposalId"],
     ...(message["untrackedVerified"] === true ? { untrackedVerified: true } : {}),
   };

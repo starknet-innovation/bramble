@@ -5,40 +5,15 @@
  */
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { serializeMultisigReviewPackage } from "../../src/sidepanel/multisig-model";
-import { bindMultisigs, type MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
+import type { MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
 import { multisigDetailFlow } from "../../src/sidepanel/multisig-views";
 import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
 import type { AccountRef } from "../../src/storage/vault-schema";
 import { registerDom, unregisterDom } from "../support/groups-harness";
+import { mountMultisigUi as mount } from "../support/multisig-ui-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
-
-const mount = (
-  html: string,
-  render: () => Promise<void> = async () => {},
-  overrides: Partial<MultisigUiDeps> = {},
-) => {
-  document.body.replaceChildren();
-  const app = document.createElement("div");
-  app.append(document.createRange().createContextualFragment(html));
-  document.body.append(app);
-  bindMultisigs({
-    app,
-    multisig: {},
-    openDetail() {},
-    openList() {},
-    render,
-    selectedMultisigId: () => null,
-    wallet: {
-      async loadStatus() {
-        return {};
-      },
-    },
-    ...overrides,
-  } as unknown as MultisigUiDeps);
-  return app;
-};
 
 describe("bindMultisigs", () => {
   test("acknowledgement enables only actions allowed by signer state", () => {
@@ -379,7 +354,16 @@ describe("bindMultisigs", () => {
       panel?.querySelector(`[data-ms-confirm-signer="${second.id}"]`)?.getAttribute("aria-pressed"),
     ).toBe("true");
 
-    panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]")?.click();
+    // This fixture reaches quorum with the second signer, so the panel offers
+    // both actions; this test covers the confirm-only one.
+    const submits = [
+      ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]") ?? []),
+    ];
+    expect(submits).toHaveLength(2);
+    const confirmOnly = submits.find((entry) => entry.dataset["msAndExecute"] !== "true");
+    // Selecting a signer must reach every submit button, not just the first.
+    expect(submits.every((entry) => entry.dataset["msSelectedSigner"] === second.id)).toBe(true);
+    confirmOnly?.click();
     expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe("Switching signer…");
     for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
     expect(calls).toEqual([`switch:${second.id}`, `confirm:${proposal.id}`, "render"]);

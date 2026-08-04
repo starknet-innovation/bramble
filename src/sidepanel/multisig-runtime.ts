@@ -44,8 +44,16 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "add multisig failed");
       }
     },
-    async confirmProposal(proposalId: string, untrackedVerified?: boolean): Promise<string> {
+    // `andExecute` asks the background to broadcast the proposal in the same
+    // transaction as this confirmation. It is accepted only when this
+    // confirmation reaches quorum, so callers must offer it only then.
+    async confirmProposal(
+      proposalId: string,
+      untrackedVerified?: boolean,
+      andExecute?: boolean,
+    ): Promise<string> {
       const response = await sendMessage({
+        ...(andExecute ? { andExecute: true } : {}),
         proposalId,
         type: "wallet.confirmMultisigProposal",
         ...(untrackedVerified ? { untrackedVerified: true } : {}),

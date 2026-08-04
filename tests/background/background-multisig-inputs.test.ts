@@ -180,6 +180,49 @@ describe("readMultisigProposalActionInput", () => {
       ),
     ).toBeNull();
   });
+
+  test("accepts andExecute: true on a confirm", () => {
+    expect(
+      readMultisigProposalActionInput(
+        {
+          andExecute: true,
+          proposalId: "SN_MAIN:0x1:0x2",
+          type: "wallet.confirmMultisigProposal",
+        },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toEqual({ andExecute: true, proposalId: "SN_MAIN:0x1:0x2" });
+  });
+
+  test("returns null when andExecute is present but not literally true", () => {
+    expect(
+      readMultisigProposalActionInput(
+        { andExecute: false, proposalId: "x", type: "wallet.confirmMultisigProposal" },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toBeNull();
+    expect(
+      readMultisigProposalActionInput(
+        { andExecute: "yes", proposalId: "x", type: "wallet.confirmMultisigProposal" },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toBeNull();
+  });
+
+  test("rejects andExecute on revoke and execute, which cannot batch an execution", () => {
+    expect(
+      readMultisigProposalActionInput(
+        { andExecute: true, proposalId: "x", type: "wallet.revokeMultisigConfirmation" },
+        "wallet.revokeMultisigConfirmation",
+      ),
+    ).toBeNull();
+    expect(
+      readMultisigProposalActionInput(
+        { andExecute: true, proposalId: "x", type: "wallet.executeMultisigProposal" },
+        "wallet.executeMultisigProposal",
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("readTrackMultisigProposalInput", () => {
