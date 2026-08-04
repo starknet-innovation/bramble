@@ -311,7 +311,12 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
         showToast("Verify the proposal and check the acknowledgment first", "error");
         return;
       }
-      buttonBusy(button, true);
+      // Quorum panels carry both "Confirm & execute" and "Confirm only"; busy
+      // every submit so the sibling cannot fire a second confirm in flight.
+      const submits = [...panel.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]")];
+      for (const submit of submits) {
+        buttonBusy(submit, true);
+      }
       result.textContent =
         selected.dataset["msConfirmSignerActive"] === "true"
           ? "Refreshing signer permission…"
@@ -341,7 +346,9 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
           );
           result.textContent = failed;
           showToast(failed, "error");
-          buttonBusy(button, false);
+          for (const submit of submits) {
+            buttonBusy(submit, false);
+          }
         },
       );
     });

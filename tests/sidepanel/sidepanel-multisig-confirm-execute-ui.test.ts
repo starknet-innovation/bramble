@@ -145,4 +145,28 @@ describe("multisig confirm-and-execute affordance", () => {
       "executing needs the wallet that proposed it",
     );
   });
+
+  test("starting one confirm action disables every submit in the panel", async () => {
+    let release!: () => void;
+    const held = new Promise<string>((resolve) => {
+      release = () => resolve("0xabc");
+    });
+    const panel = openPanel(makeProposal(), {
+      multisig: {
+        async confirmProposal() {
+          return held;
+        },
+      } as MultisigUiDeps["multisig"],
+    });
+    const submits = [
+      ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]") ?? []),
+    ];
+    expect(submits).toHaveLength(2);
+
+    submits[0]?.click();
+    expect(submits.every((entry) => entry.disabled && entry.hasAttribute("data-busy"))).toBe(true);
+
+    release();
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+  });
 });
