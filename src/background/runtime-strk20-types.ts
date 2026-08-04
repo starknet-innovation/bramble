@@ -46,6 +46,8 @@ export type Strk20WalletStateResponse = {
       readonly tokenId: string;
     }[];
     readonly networkId: StarknetNetworkId;
+    /** Pool action fee in FRI, when the service could read it. */
+    readonly poolFeeFri?: string;
     readonly registration: "registered" | "unregistered";
   };
 };

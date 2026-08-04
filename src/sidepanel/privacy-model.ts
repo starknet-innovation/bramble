@@ -28,14 +28,14 @@ export type PrivacyJourneyState =
     }
   | { readonly stage: "compose"; readonly tokenId: string }
   | {
-      readonly kind: "deposit" | "register";
+      readonly kind: "deposit" | "register" | "withdraw";
       readonly preparation: PrivacyPreparation;
       readonly stage: "working";
       readonly tokenId: string;
     }
   | {
       readonly hash: string;
-      readonly kind: "deposit" | "register";
+      readonly kind: "deposit" | "register" | "withdraw";
       readonly stage: "success";
       readonly symbol: string;
       readonly tokenId: string;

@@ -119,6 +119,11 @@ export type Strk20Service = {
   readonly register?: (
     input: Strk20AccountContext,
   ) => Promise<{ readonly transactionHash: string }>;
+  /**
+   * Reads the pool's per-`apply_actions` STRK fee so the UI can show it before
+   * any quote exists. Absent implementations leave the fee unknown.
+   */
+  readonly poolFee?: (input: Strk20AccountContext) => Promise<string>;
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
@@ -148,6 +153,9 @@ export const unavailableStrk20Service: Strk20Service = {
     return unavailable();
   },
   async privateBalances() {
+    return unavailable();
+  },
+  async poolFee() {
     return unavailable();
   },
   async quoteActions() {

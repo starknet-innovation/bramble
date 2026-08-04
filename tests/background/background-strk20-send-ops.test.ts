@@ -80,6 +80,100 @@ const service = (capture: {
   },
 });
 
+describe("background unshield operations", () => {
+  test("prepares and executes a relay-only withdrawal to any address", async () => {
+    const capture = {
+      recipientRegistered: true,
+      submissions: [] as { actions: readonly Strk20Action[]; plan: Strk20SubmissionPlan }[],
+    };
+    const handler = buildStrk20Handler({ preferences: preferences(), strk20: service(capture) });
+
+    const prepared = (await handler(
+      {
+        amount: "0.25",
+        recipient: STRK20_RECIPIENT,
+        tokenId: token.id,
+        type: "wallet.strk20PrepareWithdraw",
+      },
+      STRK20_EXTENSION_SENDER,
+    )) as {
+      readonly strk20Preparation: {
+        readonly id: string;
+        readonly kind: string;
+        readonly recipient: string;
+        readonly relayFee: { readonly amount: string };
+        readonly route: string;
+        readonly summaries: readonly string[];
+      };
+    };
+
+    expect(prepared.strk20Preparation.kind).toBe("withdraw");
+    // Withdrawals never use the public account route.
+    expect(prepared.strk20Preparation.route).toBe("private-relay");
+    expect(prepared.strk20Preparation.recipient).toBe(recipient);
+    expect(prepared.strk20Preparation.relayFee.amount).toBe("0x2a");
+    expect(
+      prepared.strk20Preparation.summaries.some((summary) => summary.startsWith("Unshield 0.25")),
+    ).toBe(true);
+    expect(
+      prepared.strk20Preparation.summaries.some((summary) =>
+        summary.includes("amount and destination become visible on-chain"),
+      ),
+    ).toBe(true);
+
+    await expect(
+      handler(
+        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ ok: true, transactionHash: "0x444" });
+    expect(capture.submissions).toEqual([
+      {
+        actions: [
+          { amount: "0x3782dace9d90000", recipient, token: STRK20_TOKEN, type: "withdraw" },
+        ],
+        plan: RELAY_PLAN,
+      },
+    ]);
+  });
+
+  test("blocks withdrawals above the private balance and malformed requests", async () => {
+    const handler = buildStrk20Handler({
+      preferences: preferences(),
+      strk20: service({ recipientRegistered: true, submissions: [] }),
+    });
+
+    await expect(
+      handler(
+        {
+          amount: "5",
+          recipient: STRK20_RECIPIENT,
+          tokenId: token.id,
+          type: "wallet.strk20PrepareWithdraw",
+        },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: `Not enough private ${token.symbol}` });
+    await expect(
+      handler(
+        {
+          amount: "1",
+          recipient: "nope",
+          tokenId: token.id,
+          type: "wallet.strk20PrepareWithdraw",
+        },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: "Enter a valid Starknet address" });
+    await expect(
+      handler(
+        { amount: "1", tokenId: token.id, type: "wallet.strk20PrepareWithdraw" },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: "Invalid unshield request" });
+  });
+});
+
 describe("background private-send operations", () => {
   test("checks a recipient's registration for privileged senders only", async () => {
     const handler = buildStrk20Handler({

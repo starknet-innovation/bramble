@@ -54,17 +54,32 @@ export type Strk20TransferPreparation = BasePreparation & {
 };
 
 /**
+ * Frozen one-time withdrawal (unshield), always routed through the private
+ * relay. The public destination is committed by the digest with the batch.
+ */
+export type Strk20WithdrawPreparation = BasePreparation & {
+  readonly actions: readonly Strk20Action[];
+  readonly amount: string;
+  readonly amountRaw: string;
+  readonly kind: "withdraw";
+  readonly plan: Strk20SubmissionPlan;
+  readonly recipient: string;
+};
+
+/**
  * Frozen protected payload consumed at most once by the background.
  */
 export type Strk20WalletPreparation =
   | Strk20DepositPreparation
   | Strk20RegistrationPreparation
-  | Strk20TransferPreparation;
+  | Strk20TransferPreparation
+  | Strk20WithdrawPreparation;
 
 type UnsignedStrk20WalletPreparation =
   | Omit<Strk20DepositPreparation, "context" | "id">
   | Omit<Strk20RegistrationPreparation, "context" | "id">
-  | Omit<Strk20TransferPreparation, "context" | "id">;
+  | Omit<Strk20TransferPreparation, "context" | "id">
+  | Omit<Strk20WithdrawPreparation, "context" | "id">;
 
 /**
  * Safe review subset returned to the side panel before confirmation.
@@ -73,7 +88,7 @@ export type Strk20WalletPreparationReview = {
   readonly amount?: string;
   readonly authorization?: PaymasterAuthorizationReview;
   readonly id: string;
-  readonly kind: "deposit" | "register" | "transfer";
+  readonly kind: "deposit" | "register" | "transfer" | "withdraw";
   readonly payloadDigest: string;
   readonly poolAddress: string;
   readonly recipient?: string;
@@ -108,7 +123,7 @@ export const strk20WalletPreparationPayload = (
         kind: preparation.kind,
         plan: preparation.plan,
         poolAddress: preparation.poolAddress,
-        ...(preparation.kind === "transfer" ? { recipient: preparation.recipient } : {}),
+        ...(preparation.kind === "deposit" ? {} : { recipient: preparation.recipient }),
         summaries: preparation.summaries,
         token: preparation.token,
       };
@@ -124,7 +139,9 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
   kind: preparation.kind,
   payloadDigest: preparation.context.payloadDigest,
   poolAddress: preparation.poolAddress,
-  ...(preparation.kind === "transfer" ? { recipient: preparation.recipient } : {}),
+  ...(preparation.kind === "transfer" || preparation.kind === "withdraw"
+    ? { recipient: preparation.recipient }
+    : {}),
   route:
     preparation.kind !== "register" && preparation.plan.mode !== "account"
       ? "private-relay"

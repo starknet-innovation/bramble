@@ -74,7 +74,7 @@ const relayedDeposit: PrivacyPreparation = {
 };
 
 describe("privacy journey templates", () => {
-  test("compose pairs the public and private boxes with a direction flip", () => {
+  test("compose is a swap-style card with public/private panels and a flip", () => {
     const html = privacyFlow(
       status,
       preferences,
@@ -101,19 +101,24 @@ describe("privacy journey templates", () => {
     );
 
     expect(html).toContain('id="privacy-deposit-form"');
-    // Public on top, private below, flip control between them.
-    expect(html).toContain("Public balance");
-    expect(html).toContain("Private balance");
-    expect(html).toContain("2.5 ETH");
-    expect(html).toContain("0.5 ETH");
+    // Swap-style card: labelled panels replace the sell/buy sides, the source
+    // owns the input and Max, the destination is an output.
+    expect(html).toContain('class="swap-card"');
+    expect(html).toContain('data-privacy-side-label="source">Public balance');
+    expect(html).toContain('data-privacy-side-label="destination">Private balance');
+    expect(html).toContain('data-privacy-side-balance="source">2.5');
+    expect(html).toContain('data-privacy-side-balance="destination">0.5');
+    expect(html).toContain('id="privacy-result-amount"');
+    expect(html).toContain('class="swap-max"');
     expect(html).toContain('id="privacy-flip"');
     expect(html).toContain('data-direction="shield"');
     expect(html).toContain("Review shielding");
-    expect(html).toContain('data-privacy-amount="half"');
-    expect(html).toContain("deposit transaction is public");
-    // The old single-source wording is gone.
+    // Withdrawal address only exists for the unshield direction.
+    expect(html).toContain("data-privacy-recipient-row hidden");
+    // The old cluttered wording is gone.
     expect(html).not.toContain("Available to shield");
     expect(html).not.toContain("Destination network");
+    expect(html).not.toContain("deposit transaction is public");
     // The header names the direction.
     expect(html).toContain("<h1>Shield</h1>");
   });

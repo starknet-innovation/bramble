@@ -22,6 +22,7 @@ import { errorText, resolvePrivacyContext, type Strk20WalletOpsDeps } from "./st
 import {
   readStrk20RecipientStatusInput,
   readStrk20TransferPreparationInput,
+  readStrk20WithdrawPreparationInput,
 } from "./strk20-wallet-inputs";
 import { strk20WalletPreparationPayload } from "./strk20-wallet-preparations";
 
@@ -139,6 +140,87 @@ const transferPreparation = async (
   }
 };
 
+const withdrawPreparation = async (
+  deps: Strk20WalletOpsDeps,
+  input: { readonly amount: string; readonly recipient: string; readonly tokenId: string },
+): Promise<RuntimeResponse> => {
+  const recipient = canonicalFelt(input.recipient);
+  if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
+    return { error: "Enter a valid Starknet address" };
+  }
+  const context = await resolvePrivacyContext(deps, input.tokenId);
+  if ("error" in context) {
+    return { error: context.error };
+  }
+  try {
+    const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    const registration = await readStrk20RegistrationStatus(service, {
+      ...context.accountContext,
+      token: context.token.address,
+    });
+    if (registration !== "registered") {
+      return { error: "Activate private balances before unshielding" };
+    }
+    const amountRaw = parseTokenAmount(input.amount, context.token.decimals);
+    if (amountRaw <= 0n) {
+      return { error: "Enter an amount to unshield" };
+    }
+    if (!isStrk20Felt(`0x${amountRaw.toString(16)}`)) {
+      return { error: "Amount is outside the Starknet field range" };
+    }
+    const [privateBalance] = await readStrk20Balances(service, {
+      ...context.accountContext,
+      tokens: [context.token.address],
+    });
+    if (amountRaw > BigInt(privateBalance?.balance ?? "0x0")) {
+      return { error: `Not enough private ${context.token.symbol}` };
+    }
+    const actions = [
+      {
+        amount: `0x${amountRaw.toString(16)}`,
+        recipient,
+        token: context.token.address,
+        type: "withdraw" as const,
+      },
+    ];
+    const plan = await quoteStrk20Actions(service, { ...context.accountContext, actions });
+    const config = context.accountContext.config;
+    if (!config) {
+      return { error: "Private balances are not configured for this network" };
+    }
+    const own = sameFelt(recipient, context.accountContext.account.address);
+    const unsigned = {
+      actions,
+      amount: input.amount,
+      amountRaw: `0x${amountRaw.toString(16)}`,
+      kind: "withdraw" as const,
+      plan,
+      poolAddress: config.poolAddress,
+      recipient,
+      summaries: [
+        `Unshield ${input.amount} ${context.token.symbol} to ${own ? "this account" : recipient}`,
+        summarizeStrk20Plan(plan),
+        "The withdrawal is public: the amount and destination become visible on-chain",
+      ],
+      token: context.token,
+    };
+    const approvalContext = await createApprovalContext(
+      context.accountContext.account,
+      strk20WalletPreparationPayload(unsigned),
+    );
+    return {
+      ok: true,
+      strk20Preparation: deps.strk20Preparations.put({
+        ...unsigned,
+        context: approvalContext,
+        id: approvalContext.payloadDigest,
+      }),
+    };
+  } catch (error) {
+    return { error: errorText(error, "Unshielding preparation failed") };
+  }
+};
+
 /**
  * Handles privileged private-send messages and returns null for other types.
  */
@@ -154,6 +236,10 @@ export const handleStrk20SendOps = async (
   if (messageType === "wallet.strk20PrepareTransfer") {
     const input = readStrk20TransferPreparationInput(message);
     return input ? transferPreparation(deps, input) : { error: "Invalid private send request" };
+  }
+  if (messageType === "wallet.strk20PrepareWithdraw") {
+    const input = readStrk20WithdrawPreparationInput(message);
+    return input ? withdrawPreparation(deps, input) : { error: "Invalid unshield request" };
   }
   return null;
 };

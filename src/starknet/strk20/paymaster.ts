@@ -11,6 +11,7 @@ import { WalletError } from "../../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../../shared/json";
 import { isNonZeroStarkFieldElement, isStarkFieldElement, sameFelt } from "../networks";
 import type { Strk20PaymasterConfig } from "./config";
+import { sanitizeStrk20Detail } from "./official-sdk-errors";
 import { bindPaymasterTypedData, isPaymasterAuthorizationLive } from "./paymaster-typed-data";
 import type { Strk20Proof } from "./schemas";
 import { STRK20_SUBMISSION_UNAVAILABLE, type Strk20PrivateRelayPlan } from "./service";
@@ -113,10 +114,30 @@ const rpc = async (
     !isRecord(body) ||
     !hasOnlyKnownKeys(body, ["error", "id", "jsonrpc", "result"]) ||
     body["jsonrpc"] !== "2.0" ||
-    body["id"] !== "mc-wallet-strk20" ||
-    body["error"] !== undefined ||
-    !Object.hasOwn(body, "result")
+    body["id"] !== "mc-wallet-strk20"
   ) {
+    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
+  // A relay-reported error is an operator-side condition (credentials, an
+  // unsupported fee mode, a rejected batch) that the generic message hides.
+  // Surface the sanitized reason so it is diagnosable without a debug build;
+  // endpoints, felts, and proof blobs never survive sanitizeStrk20Detail.
+  const reported = body["error"];
+  if (reported !== undefined) {
+    const detail = sanitizeStrk20Detail(
+      isRecord(reported)
+        ? [reported["message"], reported["data"]]
+            .filter((part) => typeof part === "string")
+            .join(": ")
+        : String(reported),
+    );
+    throw new WalletError(
+      detail === ""
+        ? STRK20_SUBMISSION_UNAVAILABLE
+        : `${STRK20_SUBMISSION_UNAVAILABLE}: the private relay rejected the request (${detail})`,
+    );
+  }
+  if (!Object.hasOwn(body, "result")) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   return body["result"];

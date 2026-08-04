@@ -4,11 +4,11 @@
  */
 
 import type { TokenBalance, WalletStatus } from "../popup/responses";
-import { formatTokenAmount } from "../starknet/rpc";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
-import { SHIELD_WARNING, UNSHIELD_WARNING } from "./privacy-views";
+import { maxPrivacyMove, projectPrivacyMove } from "./privacy-projection";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -166,65 +166,84 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
   });
 };
 
-// Half/Max operate on whichever domain currently sits on top, so the
-// shortcuts stay correct after a flip.
-const bindAmountShortcuts = (deps: PrivacyUiDeps, tokenId: string): void => {
-  const input = deps.app?.querySelector<HTMLInputElement>("#privacy-amount");
-  const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
-  const token = deps.preferences()?.tokens.find((candidate) => candidate.id === tokenId);
-  const publicBalance = deps.balances().find((candidate) => candidate.id === tokenId);
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-amount]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (!input || !token || !form) {
-        return;
-      }
-      const unshielding = form.dataset["direction"] === "unshield";
-      const privateEntry = deps
-        .disclosure()
-        .value?.balances.find((entry) => entry.tokenId === tokenId);
-      const raw = unshielding ? (privateEntry?.balance ?? "0x0") : (publicBalance?.balance ?? "0");
-      const formatted = unshielding
-        ? (privateEntry?.formatted ?? "0")
-        : (publicBalance?.formatted ?? "0");
-      input.value =
-        button.dataset["privacyAmount"] === "max"
-          ? formatted
-          : formatTokenAmount(BigInt(raw) / 2n, token.decimals);
-    });
-  });
+// Reads the compose card's current direction-dependent numbers.
+const composeContext = (form: HTMLFormElement, tokenAddress: string) => {
+  const unshielding = form.dataset["direction"] === "unshield";
+  return {
+    decimals: Number(form.dataset["decimals"] ?? "18"),
+    feeInSameToken: sameFelt(tokenAddress, STRK_TOKEN_ADDRESS),
+    poolFeeFri: form.dataset["poolFee"],
+    sourceBalanceRaw: unshielding
+      ? (form.dataset["privateBalanceRaw"] ?? "0")
+      : (form.dataset["publicBalance"] ?? "0"),
+    symbol: form.dataset["symbol"] ?? "",
+    unshielding,
+  };
 };
 
-// Repaints the two direction boxes and the source-balance shortcut line.
-const paintDirectionBoxes = (
-  root: ParentNode,
-  form: HTMLFormElement,
-  unshielding: boolean,
-): void => {
-  const publicAmount = form.dataset["publicAmount"] ?? "";
-  const privateAmount = form.dataset["privateAmount"] ?? "";
+// Repaints the destination output and the fee sentence from the typed amount.
+const paintProjection = (form: HTMLFormElement): void => {
+  const input = form.querySelector<HTMLInputElement>("#privacy-amount");
+  const output = form.querySelector<HTMLElement>("#privacy-result-amount");
+  const feeNote = form.querySelector<HTMLElement>("[data-privacy-fee]");
+  if (!input || !output) {
+    return;
+  }
+  const context = composeContext(form, form.dataset["tokenAddress"] ?? "0x0");
+  const projection = projectPrivacyMove({ ...context, amount: input.value });
+  output.textContent = projection.received;
+  if (feeNote) {
+    feeNote.textContent = projection.feeNote;
+    feeNote.toggleAttribute("hidden", projection.feeNote === "");
+  }
+};
+
+// Max fills the source balance less any fee charged in the same asset, so the
+// composed amount always remains affordable.
+const bindAmountShortcuts = (deps: PrivacyUiDeps): void => {
+  const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
+  const input = deps.app?.querySelector<HTMLInputElement>("#privacy-amount");
+  if (!form || !input) {
+    return;
+  }
+  input.addEventListener("input", () => paintProjection(form));
+  form.querySelectorAll<HTMLButtonElement>("[data-privacy-amount]").forEach((button) => {
+    button.addEventListener("click", () => {
+      input.value = maxPrivacyMove(composeContext(form, form.dataset["tokenAddress"] ?? "0x0"));
+      paintProjection(form);
+    });
+  });
+  paintProjection(form);
+};
+
+// Repaints both panel labels and balance lines for the active direction.
+const paintDirection = (form: HTMLFormElement, unshielding: boolean): void => {
   const text = (selector: string, value: string): void => {
-    const node = root.querySelector(selector);
+    const node = form.querySelector(selector);
     if (node) {
       node.textContent = value;
     }
   };
-  text('[data-privacy-box-label="source"]', unshielding ? "Private balance" : "Public balance");
+  const publicFormatted = form.dataset["publicFormatted"] ?? "0";
+  const privateFormatted = form.dataset["privateFormatted"] ?? "0";
+  text('[data-privacy-side-label="source"]', unshielding ? "Private balance" : "Public balance");
   text(
-    '[data-privacy-box-label="destination"]',
+    '[data-privacy-side-label="destination"]',
     unshielding ? "Public balance" : "Private balance",
   );
-  text('[data-privacy-box-value="source"]', unshielding ? privateAmount : publicAmount);
-  text('[data-privacy-box-value="destination"]', unshielding ? publicAmount : privateAmount);
+  text('[data-privacy-side-balance="source"]', unshielding ? privateFormatted : publicFormatted);
   text(
-    "[data-privacy-source-formatted]",
-    (unshielding ? form.dataset["privateFormatted"] : form.dataset["publicFormatted"]) ?? "0",
+    '[data-privacy-side-balance="destination"]',
+    unshielding ? publicFormatted : privateFormatted,
   );
-  text("[data-privacy-warning]", unshielding ? UNSHIELD_WARNING : SHIELD_WARNING);
-  text(".flow-title h1", unshielding ? "Unshield" : "Shield");
+  const title = form.ownerDocument.querySelector(".flow-title h1");
+  if (title) {
+    title.textContent = unshielding ? "Unshield" : "Shield";
+  }
 };
 
-// Flips which balance sits on top. Shield moves public into private; unshield
-// is previewed but not submittable until the withdrawal journey ships.
+// Flips which balance is the source. Unshield reveals the destination address
+// field; shielding always lands in this account's own private balance.
 const bindDirectionFlip = (deps: PrivacyUiDeps): void => {
   const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
   const flip = deps.app?.querySelector<HTMLButtonElement>("#privacy-flip");
@@ -235,14 +254,12 @@ const bindDirectionFlip = (deps: PrivacyUiDeps): void => {
   flip.addEventListener("click", () => {
     const unshielding = form.dataset["direction"] !== "unshield";
     form.dataset["direction"] = unshielding ? "unshield" : "shield";
-    paintDirectionBoxes(form.ownerDocument, form, unshielding);
+    paintDirection(form, unshielding);
+    paintProjection(form);
     submit.textContent = unshielding ? "Review unshielding" : "Review shielding";
-    submit.disabled = unshielding;
-    if (unshielding) {
-      submit.title = "Unshielding is coming soon";
-    } else {
-      submit.removeAttribute("title");
-    }
+    form
+      .querySelector<HTMLElement>("[data-privacy-recipient-row]")
+      ?.toggleAttribute("hidden", !unshielding);
   });
 };
 
@@ -269,7 +286,11 @@ const bindReviewAmount = (
     if (result) {
       result.textContent = "Re-checking this amount…";
     }
-    void deps.wallet.preparePrivacyDeposit(journey.tokenId, amount).then(
+    const reprepared =
+      journey.preparation.kind === "withdraw" && journey.preparation.recipient
+        ? deps.wallet.preparePrivacyWithdraw(journey.tokenId, journey.preparation.recipient, amount)
+        : deps.wallet.preparePrivacyDeposit(journey.tokenId, amount);
+    void reprepared.then(
       (preparation) => {
         if (!scopeMatches(deps, scope)) {
           return;
@@ -292,17 +313,28 @@ const bindReviewAmount = (
 };
 
 const bindCompose = (deps: PrivacyUiDeps, tokenId: string): void => {
-  bindAmountShortcuts(deps, tokenId);
+  bindAmountShortcuts(deps);
   bindDirectionFlip(deps);
   const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const result = deps.app?.querySelector<HTMLElement>("#privacy-compose-result");
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const amount = String(new FormData(form).get("amount") ?? "").trim();
+    const data = new FormData(form);
+    const amount = String(data.get("amount") ?? "").trim();
+    const unshielding = form.dataset["direction"] === "unshield";
+    const typedRecipient = String(data.get("withdrawRecipient") ?? "").trim();
+    const recipient =
+      typedRecipient ||
+      deps.status().accounts.find((account) => account.id === deps.status().activeAccountId)
+        ?.address;
     const scope = captureScope(deps);
     buttonBusy(submit, true);
-    void deps.wallet.preparePrivacyDeposit(tokenId, amount).then(
+    const prepared =
+      unshielding && recipient
+        ? deps.wallet.preparePrivacyWithdraw(tokenId, recipient, amount)
+        : deps.wallet.preparePrivacyDeposit(tokenId, amount);
+    void prepared.then(
       (preparation) => {
         if (!scopeMatches(deps, scope)) {
           return;
@@ -314,7 +346,10 @@ const bindCompose = (deps: PrivacyUiDeps, tokenId: string): void => {
         if (!scopeMatches(deps, scope)) {
           return;
         }
-        const message = errorMessage(error, "Shielding preparation failed");
+        const message = errorMessage(
+          error,
+          unshielding ? "Unshielding preparation failed" : "Shielding preparation failed",
+        );
         if (result) {
           result.textContent = message;
         }
@@ -334,7 +369,8 @@ const bindConfirmation = (
   }
   const button = deps.app?.querySelector<HTMLButtonElement>("#privacy-confirm");
   button?.addEventListener("click", () => {
-    // Private sends run inside the Send flow, never this journey surface.
+    // Private sends run inside the Send flow, never this journey surface;
+    // registration, shielding, and unshielding all confirm here.
     const kind = journey.preparation.kind;
     if (kind === "transfer") {
       return;
