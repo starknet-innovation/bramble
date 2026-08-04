@@ -55,11 +55,18 @@ const scopeMatches = (deps: PrivacyUiDeps, scope: PrivacyAsyncScope): boolean =>
 
 const loadDisclosure = async (deps: PrivacyUiDeps): Promise<boolean> => {
   const scope = captureScope(deps);
-  deps.setDisclosure({ enabled: true, error: null, loading: true, value: null });
+  const pending: PrivacyDisclosureState = {
+    enabled: true,
+    error: null,
+    loading: true,
+    value: null,
+  };
+  deps.setDisclosure(pending);
   deps.paint();
   try {
     const value = await deps.wallet.loadPrivacyState();
     if (
+      deps.disclosure() !== pending ||
       !scopeMatches(deps, scope) ||
       value.accountId !== scope.accountId ||
       value.networkId !== scope.networkId
@@ -70,7 +77,7 @@ const loadDisclosure = async (deps: PrivacyUiDeps): Promise<boolean> => {
     deps.paint();
     return true;
   } catch (error) {
-    if (scopeMatches(deps, scope)) {
+    if (deps.disclosure() === pending && scopeMatches(deps, scope)) {
       deps.setDisclosure({
         enabled: true,
         error: errorMessage(error, "Private balances unavailable"),

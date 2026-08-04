@@ -183,11 +183,7 @@ export const buildStrk20PaymasterPlan = async (input: {
         value: result["typed_data"],
       })
     : undefined;
-  if (
-    !feeAction ||
-    !sameFelt(feeAction.token, input.config.feeToken) ||
-    (hasApprovals && !boundTypedData)
-  ) {
+  if (!feeAction || !sameFelt(feeAction.token, input.config.feeToken)) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   if (!hasApprovals) {
@@ -218,6 +214,11 @@ export const submitStrk20PaymasterPlan = async (input: {
   readonly proof: Strk20Proof;
   readonly signTypedData: (typedData: unknown) => Promise<readonly string[]>;
 }): Promise<{ readonly transactionHash: string }> => {
+  const authorization = input.plan.authorization;
+  const typedData = input.plan.typedData;
+  if ((authorization === undefined) !== (typedData === undefined)) {
+    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
   let invoke:
     | {
         readonly signature: readonly string[];
@@ -225,16 +226,13 @@ export const submitStrk20PaymasterPlan = async (input: {
         readonly user_address: string;
       }
     | undefined;
-  if (input.plan.typedData) {
-    if (
-      !input.plan.authorization ||
-      !isPaymasterAuthorizationLive(input.plan.authorization, input.nowSeconds, 10n)
-    ) {
+  if (typedData !== undefined && authorization !== undefined) {
+    if (!isPaymasterAuthorizationLive(authorization, input.nowSeconds, 10n)) {
       throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
     }
     invoke = {
-      signature: await input.signTypedData(input.plan.typedData),
-      typed_data: input.plan.typedData,
+      signature: await input.signTypedData(typedData),
+      typed_data: typedData,
       user_address: input.accountAddress,
     };
   }

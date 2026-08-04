@@ -150,6 +150,63 @@ describe("privacy UI async scope isolation", () => {
     expect(paints).toBe(2);
   });
 
+  test("does not repopulate private balances after disclosure is switched off", async () => {
+    const pending = deferred<{
+      readonly accountId: string;
+      readonly balances: readonly [];
+      readonly networkId: "SN_MAIN";
+      readonly registration: "registered";
+    }>();
+    let disclosure: PrivacyDisclosureState = {
+      enabled: false,
+      error: null,
+      loading: false,
+      value: null,
+    };
+    let paints = 0;
+    const app = mount('<input data-privacy-toggle name="privateBalances" type="checkbox">');
+    bindPrivacy({
+      app,
+      balances: () => [],
+      disclosure: () => disclosure,
+      generation: () => 0,
+      journey: () => ({ stage: "idle" }),
+      navigate: () => undefined,
+      openToken: () => undefined,
+      paint: () => {
+        paints += 1;
+      },
+      preferences: () => preferences,
+      setDisclosure: (state) => {
+        disclosure = state;
+      },
+      setJourney: () => undefined,
+      status: () => statusFor(account.id),
+      wallet: {
+        loadPrivacyState: () => pending.promise,
+      } as unknown as SidepanelWallet,
+    });
+
+    const toggle = app.querySelector<HTMLInputElement>("[data-privacy-toggle]");
+    if (!toggle) {
+      throw new Error("privacy checkbox missing");
+    }
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    pending.resolve({
+      accountId: account.id,
+      balances: [],
+      networkId: "SN_MAIN",
+      registration: "registered",
+    });
+    await tick();
+
+    expect(disclosure).toEqual({ enabled: false, error: null, loading: false, value: null });
+    expect(paints).toBe(2);
+  });
+
   test("drops a registration preparation that resolves after account switch", async () => {
     const pending = deferred<typeof preparation>();
     let generation = 0;

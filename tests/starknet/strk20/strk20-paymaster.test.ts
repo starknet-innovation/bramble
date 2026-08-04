@@ -217,6 +217,48 @@ describe("STRK20 paymaster boundary", () => {
     });
   });
 
+  test("rejects incomplete public authorization plans before signing or submitting", async () => {
+    const authorization = {
+      caller: "0x99",
+      executeAfter: "0x1",
+      executeBefore: "0x100",
+      publicCallCount: 1,
+    } as const;
+    for (const plan of [
+      {
+        authorization,
+        feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" as const },
+      },
+      {
+        feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" as const },
+        typedData: outsideTypedData(),
+      },
+    ]) {
+      let signed = false;
+      let submitted = false;
+      await expect(
+        submitStrk20PaymasterPlan({
+          accountAddress: "0x1",
+          call,
+          config,
+          http: async () => {
+            submitted = true;
+            return response({ transaction_hash: "0x123" });
+          },
+          nowSeconds: 2,
+          plan,
+          proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+          signTypedData: async () => {
+            signed = true;
+            return ["0x6", "0x7"];
+          },
+        }),
+      ).rejects.toThrow("strk20 private submission unavailable");
+      expect(signed).toBe(false);
+      expect(submitted).toBe(false);
+    }
+  });
+
   test("rejects a plan that expires after quote without signing or submitting", async () => {
     let signed = false;
     let submitted = false;
