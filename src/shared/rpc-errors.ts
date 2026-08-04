@@ -5,6 +5,7 @@
  * than parse a human string. Internal extension-page messages keep their plain
  * string errors; this module is only for the dapp boundary.
  */
+import { RPC_FAILURE_PREFIX } from "./rpc-failure";
 
 /**
  * A Starknet wallet JSON-RPC error object as defined by wallet_rpc.json.
@@ -76,9 +77,17 @@ export const unknownError = make(163, "The wallet request failed");
  * Maps an internal background error string to its spec error object. Denials
  * become USER_REFUSED_OP, malformed inputs become INVALID_REQUEST_PAYLOAD,
  * unsupported chains become CHAIN_ID_NOT_SUPPORTED, and anything unrecognized
- * becomes UNKNOWN_ERROR — never a raw string on the dapp wire.
+ * becomes UNKNOWN_ERROR — never a raw string on the dapp wire. A message
+ * carrying a node-supplied reason is redacted outright, before any matching.
  */
 export const errorForMessage = (message: string): WalletRpcError => {
+  // Node reason text is arbitrary chain data and can contain any keyword the
+  // branches below match on ("rejected", "not registered", …), which would both
+  // mis-code the failure and confirm internal detail to the dapp. Classify only
+  // wallet-authored strings; anything carrying a node reason is UNKNOWN_ERROR.
+  if (message.startsWith(RPC_FAILURE_PREFIX)) {
+    return unknownError();
+  }
   if (/reject|refus|deny|denied/i.test(message)) {
     return userRefusedOp();
   }

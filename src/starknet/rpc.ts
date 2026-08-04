@@ -10,6 +10,7 @@ import {
   isTransportRpcError,
   krustyAccount,
   type StarkHashSigner,
+  withRpcFailureDetail,
   withRpcFallback,
 } from "./provider";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
@@ -382,7 +383,13 @@ export const estimateInvokeFee = async (
     rpcUrls,
     async (provider) => {
       const starknetAccount = krustyAccount(provider, account, signHash);
-      const estimate = await starknetAccount.estimateInvokeFee([...calls]);
+      // A pre-flight estimate is rejected by the node for the same reasons the
+      // send is, and the reason is the whole point of estimating: surface it.
+      // Only semantic rejections are converted, so withRpcFallback still fails
+      // over on transport errors exactly as before.
+      const estimate = await withRpcFailureDetail(() =>
+        starknetAccount.estimateInvokeFee([...calls]),
+      );
       return {
         overallFee: BigInt(estimate.overall_fee).toString(),
         unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",

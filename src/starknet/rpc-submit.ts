@@ -7,7 +7,12 @@ import { isRecord } from "../shared/json";
 import type { AccountRef } from "../storage/vault-schema";
 import { ensureAccountDeployed } from "./deployment";
 import { STARKNET_NETWORKS } from "./networks";
-import { krustyAccount, type StarkHashSigner, withRpcWrite } from "./provider";
+import {
+  krustyAccount,
+  type StarkHashSigner,
+  withRpcFailureDetail,
+  withRpcWrite,
+} from "./provider";
 
 /**
  * Fee speed control: standard uses node defaults, fast scales estimated
@@ -68,22 +73,29 @@ export const submitInvokeTransaction = async (
     async (provider) => {
       const starknetAccount = krustyAccount(provider, account, signHash);
       await ensureAccountDeployed(provider, starknetAccount, account);
-      const details =
-        speed === "fast"
-          ? {
-              resourceBounds: scaledBounds(
-                (await starknetAccount.estimateInvokeFee([...calls])).resourceBounds,
-              ),
-            }
-          : {};
-      const result = await starknetAccount.execute(
-        [...calls],
-        details as Parameters<Account["execute"]>[1],
-      );
-      return {
-        calls,
-        transactionHash: result.transaction_hash,
-      };
+      // Estimation and execution are the two steps the node can reject with a
+      // reason (an out-of-gas bound, a revert). Mapping here rather than in a
+      // caller's catch means every invoke entrypoint reports the real cause;
+      // transport failures still fall through to withRpcWrite's fail-closed
+      // "submission status is unknown".
+      return withRpcFailureDetail(async () => {
+        const details =
+          speed === "fast"
+            ? {
+                resourceBounds: scaledBounds(
+                  (await starknetAccount.estimateInvokeFee([...calls])).resourceBounds,
+                ),
+              }
+            : {};
+        const result = await starknetAccount.execute(
+          [...calls],
+          details as Parameters<Account["execute"]>[1],
+        );
+        return {
+          calls,
+          transactionHash: result.transaction_hash,
+        };
+      });
     },
     makeProvider,
   );

@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { CallData, hash, shortString } from "starknet";
 import { WalletError } from "../../src/shared/errors";
+import { withRpcFailureDetail } from "../../src/starknet/provider";
 import {
   buildErc20TransferCall,
   decodeErc20String,
@@ -155,6 +156,30 @@ describe("starknet RPC helpers", () => {
       ),
     ).toBe(false);
     expect(isTransportRpcError(new WalletError("Invalid account address"))).toBe(false);
+  });
+
+  test("withRpcFailureDetail maps only semantic rejections, and passes the rest through", async () => {
+    await expect(withRpcFailureDetail(async () => "ok")).resolves.toBe("ok");
+
+    // A curated WalletError is already the best message available; re-mapping it
+    // would replace e.g. ensureAccountDeployed's guidance with a bare RPC code.
+    const curated = new WalletError("This account is not deployed on-chain yet");
+    await expect(withRpcFailureDetail(() => Promise.reject(curated))).rejects.toBe(curated);
+
+    // Transport failures must reach withRpcWrite/withRpcFallback unchanged so
+    // their failover and fail-closed wording still apply.
+    const transport = new Error("fetch failed");
+    await expect(withRpcFailureDetail(() => Promise.reject(transport))).rejects.toBe(transport);
+
+    await expect(
+      withRpcFailureDetail(() =>
+        Promise.reject(
+          Object.assign(new Error("RPC: starknet_call with params {...}"), {
+            baseError: { code: 21, message: "Requested entrypoint does not exist in the contract" },
+          }),
+        ),
+      ),
+    ).rejects.toThrow("The network could not execute this transaction (RPC error 21).");
   });
 
   test("classifies contract-not-found RPC failures", () => {

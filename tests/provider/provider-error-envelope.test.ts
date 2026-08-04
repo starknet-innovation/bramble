@@ -2,6 +2,8 @@
  * Wallet_rpc error-envelope checks: every dapp rejection crosses the bridge as
  * a spec `{ code, message, data? }` object, survives the response round-trip,
  * and reconstructs into a coded Error the in-page provider can reject with.
+ * Includes the redaction invariant: an internal message carrying a node-supplied
+ * failure reason is never pattern-matched and never leaves the wallet.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -13,6 +15,7 @@ import {
   walletRpcException,
 } from "../../src/provider/bridge";
 import { invalidRequestPayload, unknownError, userRefusedOp } from "../../src/shared/rpc-errors";
+import { RPC_FAILURE_PREFIX } from "../../src/shared/rpc-failure";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 const request: ProviderRequest = { id: requestId, method: "wallet_addInvokeTransaction" };
@@ -77,6 +80,24 @@ describe("wallet_rpc error envelope", () => {
     expect(
       readProviderResponse({ error: "request rejected", id: requestId, target: PAGE_TARGET }),
     ).toBeNull();
+  });
+
+  test("a node-supplied failure reason never reaches the dapp", () => {
+    // The extension UI shows the real reason (that is the point of the mapping
+    // in src/shared/rpc-failure.ts); the dapp must still get only UNKNOWN_ERROR.
+    const internal = `${RPC_FAILURE_PREFIX} (RPC error 41): Insufficient max L2Gas: max amount: 1200000000, actual used: 1378435600.`;
+    const payload = toProviderPayload({ error: internal }, "wallet_addInvokeTransaction");
+
+    expect(payload).toEqual({ error: unknownError() });
+    expect(JSON.stringify(payload)).not.toContain("L2Gas");
+
+    // Reason text is arbitrary chain data. Whatever keyword a contract puts in
+    // it, the message stays generic and the code stays 163 — a revert must not
+    // be re-coded as a user refusal or a registration error.
+    for (const reason of ["ERC20: transfer rejected", "Account is not registered", "invalid nonce"])
+      expect(
+        toProviderPayload({ error: `${RPC_FAILURE_PREFIX} (RPC error 41): ${reason}` }),
+      ).toEqual({ error: unknownError() });
   });
 
   test("walletRpcException preserves an optional data field", () => {

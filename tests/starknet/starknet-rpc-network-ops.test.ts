@@ -3,10 +3,14 @@
  * injection seam (mirroring scanTransactionHistory): balance and metadata reads,
  * the uint256 parse error path, transaction-status classification, and the
  * estimate/submit paths that drive a real starknet.js Account against a fake
- * provider whose channel returns canned JSON-RPC results.
+ * provider whose channel returns canned JSON-RPC results — including the
+ * failure paths, where a node's structured rejection must reach the caller as
+ * its own reason while a transport failure stays fail-closed and ambiguous.
  */
 import { describe, expect, test } from "bun:test";
 import { type Call, logger, type RpcProvider } from "starknet";
+import { WalletError } from "../../src/shared/errors";
+import { RPC_FAILURE_PREFIX } from "../../src/shared/rpc-failure";
 import {
   estimateInvokeFee,
   getTokenBalances,
@@ -293,6 +297,39 @@ const accountProvider = (): RpcProvider => {
 
 const oneCall: Call[] = [{ calldata: [], contractAddress: eth.address, entrypoint: "transfer" }];
 
+// starknet.js builds an RpcError whose own `message` embeds the full JSON
+// request params — on the privacy path that is proof and note calldata. The
+// fake reproduces that shape so the tests can assert the wallet reads the
+// structured `baseError` and never the message.
+const LEAKY_MESSAGE =
+  'RPC: starknet_addInvokeTransaction with params {"calldata":["0xPROOFBLOB","0xNOTECALLDATA"]}';
+const L2_GAS_REASON = "Insufficient max L2Gas: max amount: 1200000000, actual used: 1378435600.";
+
+const nodeRejection = (): Error =>
+  Object.assign(new Error(LEAKY_MESSAGE), {
+    baseError: {
+      code: 41,
+      data: { execution_error: L2_GAS_REASON, transaction_index: 0 },
+      message: "Transaction execution error",
+    },
+  });
+
+// Same canned channel, except one JSON-RPC method rejects.
+const failingAccountProvider = (method: string, error: Error) => (): RpcProvider => {
+  const provider = accountProvider() as unknown as Record<string, unknown>;
+  const channel = new Proxy(provider["channel"] as object, {
+    get(target, prop) {
+      if (prop === method) {
+        return async () => {
+          throw error;
+        };
+      }
+      return Reflect.get(target, prop);
+    },
+  });
+  return { ...provider, channel } as unknown as RpcProvider;
+};
+
 describe("estimateInvokeFee", () => {
   test("returns a fee estimate from the injected account", async () => {
     const estimate = await estimateInvokeFee(
@@ -313,6 +350,15 @@ describe("estimateInvokeFee", () => {
       }),
     ).rejects.toThrow("No calls to estimate");
     expect(touched).toBe(false);
+  });
+
+  test("surfaces the node's own reason when the estimate is rejected", async () => {
+    await expect(
+      estimateInvokeFee(
+        { account, calls: [...oneCall], rpcUrls: RPC_URLS, signHash },
+        failingAccountProvider("getEstimateFee", nodeRejection()),
+      ),
+    ).rejects.toThrow(`${RPC_FAILURE_PREFIX} (RPC error 41): ${L2_GAS_REASON}`);
   });
 });
 
@@ -340,6 +386,42 @@ describe("submitInvokeTransaction", () => {
     await expect(
       submitInvokeTransaction({ account, calls: [], rpcUrls: RPC_URLS, signHash }, accountProvider),
     ).rejects.toThrow("No calls to submit");
+  });
+
+  // Submits against a node that rejects the invoke with L2_GAS_REASON, and
+  // hands back whatever the wallet threw.
+  const rejectedSubmit = (): Promise<unknown> =>
+    submitInvokeTransaction(
+      { account, calls: [...oneCall], rpcUrls: RPC_URLS, signHash },
+      failingAccountProvider("invoke", nodeRejection()),
+    ).catch((error: unknown) => error);
+
+  test("surfaces the node's own reason for a semantic rejection", async () => {
+    const failed = await rejectedSubmit();
+
+    expect(failed).toBeInstanceOf(WalletError);
+    expect((failed as WalletError).message).toBe(
+      `${RPC_FAILURE_PREFIX} (RPC error 41): ${L2_GAS_REASON}`,
+    );
+  });
+
+  test("never lets the starknet.js message (and its request params) escape", async () => {
+    const surfaced = ((await rejectedSubmit()) as Error).message;
+
+    expect(surfaced).not.toContain("PROOFBLOB");
+    expect(surfaced).not.toContain("NOTECALLDATA");
+    expect(surfaced).not.toContain("params");
+  });
+
+  test("keeps a transport failure ambiguous rather than inventing a reason", async () => {
+    // No `baseError`: the node never answered, so the submission may or may not
+    // have landed. That must stay fail-closed, exactly as before this mapping.
+    await expect(
+      submitInvokeTransaction(
+        { account, calls: [...oneCall], rpcUrls: RPC_URLS, signHash },
+        failingAccountProvider("invoke", new Error("fetch failed")),
+      ),
+    ).rejects.toThrow("Transaction submission status is unknown");
   });
 });
 

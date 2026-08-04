@@ -6,6 +6,7 @@ import { Account, RpcProvider, type Signature, Signer } from "starknet";
 import type { StarkSignature } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
+import { rpcFailureError } from "../shared/rpc-failure";
 import type { AccountRef } from "../storage/vault-schema";
 import { isStarkFieldElement, sameFelt } from "./networks";
 
@@ -53,6 +54,15 @@ export const krustyAccount = (
     signer: new KrustyStarknetSigner(account.publicKeyX, signHash),
   });
 
+// The structured payload starknet.js attaches to a rejected RPC request. Every
+// classifier below reads the node's answer through here so "did the node answer
+// at all" is decided in exactly one place. The sibling `Error.message` is never
+// read: it embeds the full JSON request params (see ../shared/rpc-failure).
+const rpcBaseError = (error: unknown): Record<string, unknown> | null => {
+  const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
+  return isRecord(baseError) ? baseError : null;
+};
+
 /**
  * Checks whether an RPC failure means the queried contract is not deployed.
  */
@@ -63,8 +73,7 @@ export const isContractNotFoundError = (error: unknown): boolean => {
   if (/contract not found/i.test(error.message)) {
     return true;
   }
-  const baseError = (error as { readonly baseError?: unknown }).baseError;
-  return isRecord(baseError) && baseError["code"] === 20;
+  return rpcBaseError(error)?.["code"] === 20;
 };
 
 /**
@@ -75,8 +84,33 @@ export const isTransportRpcError = (error: unknown): boolean => {
   if (error instanceof WalletError) {
     return false;
   }
-  const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
-  return !(isRecord(baseError) && typeof baseError["code"] === "number");
+  return typeof rpcBaseError(error)?.["code"] !== "number";
+};
+
+/**
+ * Runs one RPC operation and replaces a semantic node rejection with a
+ * `WalletError` carrying the node's own, sanitized reason, so a revert reaches
+ * the user as "…: Insufficient max L2Gas…" instead of a generic string.
+ *
+ * Trust boundary: only structured `baseError` fields are read — never the
+ * starknet.js message, which embeds the request params. The resulting reason is
+ * for the extension UI; the dapp boundary redacts it (see `RPC_FAILURE_PREFIX`).
+ *
+ * Failure behaviour: fail closed and unchanged. An already-curated
+ * `WalletError` and every transport-level failure are rethrown as-is, so an
+ * ambiguous submission stays ambiguous and `withRpcWrite` still reports
+ * "submission status is unknown". Wrap the smallest span that can reject: the
+ * caller keeps its own retry/failover semantics.
+ */
+export const withRpcFailureDetail = async <T>(run: () => Promise<T>): Promise<T> => {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof WalletError || isTransportRpcError(error)) {
+      throw error;
+    }
+    throw rpcFailureError(rpcBaseError(error)) ?? error;
+  }
 };
 
 /**

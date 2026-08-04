@@ -26,6 +26,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/ledger-grant/index.ts",
   "src/provider/inpage.ts",
   "src/sidepanel/dom.ts",
+  "src/sidepanel/focus-memo.ts",
   "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/ledger/grant-window.ts",
@@ -76,6 +77,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/provider/bridge-results.ts",
   "src/provider/bridge.ts",
   "src/sidepanel/dom.ts",
+  // Only for FOCUS_NAMES: the `name` attributes of fields whose focus survives
+  // a repaint. No secret value is read, written or stored here.
+  "src/sidepanel/focus-memo.ts",
   "src/sidepanel/gate-views.ts",
   "src/sidepanel/ledger/client.ts",
   "src/sidepanel/ledger/errors.ts",
