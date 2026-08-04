@@ -1,35 +1,45 @@
 /**
- * Guard: the shared account fixtures in `tests/support/background-wallet-stub.ts`
- * must satisfy the real vault validator. A stub the schema would reject is not a
- * stub of anything — it quietly weakens every suite built on it, and stays green
- * for exactly as long as no test happens to route it through `isAccountRef`.
- * That is how a `secondAccount` whose id named one network while its `networkId`
- * named another survived in-tree: latent, never exercised, never red.
- *
- * Scoped to the background stub deliberately. The side-panel fixtures in
- * `tests/support/sidepanel-fixtures.ts` are internally consistent but use
- * 64-hex-digit addresses that exceed `STARK_FIELD_PRIME`, so they do not pass
- * `isAccountRef` today; widening this guard to them is a separate change.
+ * Guard: central shared account fixtures must satisfy the real vault validator.
+ * A stub the schema would reject quietly weakens every suite built on it and
+ * stays green until an unrelated test routes it through `isAccountRef`. This
+ * guard covers the background dispatcher and side-panel rendering fixtures,
+ * including the distinct-account invariants their consumers rely on.
  */
 import { describe, expect, test } from "bun:test";
 import { isAccountRef } from "../../src/storage/vault-schema";
-import { account, secondAccount } from "../support/background-wallet-stub";
+import {
+  account as backgroundAccount,
+  secondAccount as backgroundSecondAccount,
+} from "../support/background-wallet-stub";
+import {
+  account as sidepanelAccount,
+  secondAccount as sidepanelSecondAccount,
+} from "../support/sidepanel-fixtures";
 
 const accountFixtures: readonly (readonly [string, unknown])[] = [
-  ["account", account],
-  ["secondAccount", secondAccount],
+  ["background account", backgroundAccount],
+  ["background secondAccount", backgroundSecondAccount],
+  ["sidepanel account", sidepanelAccount],
+  ["sidepanel secondAccount", sidepanelSecondAccount],
 ];
 
-describe("shared background stub fixtures", () => {
+const accountPairs = [
+  ["background", backgroundAccount, backgroundSecondAccount],
+  ["sidepanel", sidepanelAccount, sidepanelSecondAccount],
+] as const;
+
+describe("shared account fixtures", () => {
   for (const [name, fixture] of accountFixtures) {
     test(`${name} is a valid AccountRef`, () => {
       expect(isAccountRef(fixture)).toBe(true);
     });
   }
 
-  test("the two stub accounts are distinct accounts on one network", () => {
-    expect(secondAccount.id).not.toBe(account.id);
-    expect(secondAccount.networkId).toBe(account.networkId);
-    expect(secondAccount.derivation).not.toEqual(account.derivation);
-  });
+  for (const [name, first, second] of accountPairs) {
+    test(`${name} fixtures are distinct accounts on one network`, () => {
+      expect(second.id).not.toBe(first.id);
+      expect(second.networkId).toBe(first.networkId);
+      expect(second.derivation).not.toEqual(first.derivation);
+    });
+  }
 });
