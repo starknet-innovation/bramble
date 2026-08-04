@@ -5,11 +5,11 @@ import type {
   PendingApproval,
   WalletStatus,
 } from "../../../src/popup/responses";
+import type { MultisigSyncState } from "../../../src/sidepanel/multisig-sync";
 import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
 } from "../../../src/sidepanel/privacy-model";
-import type { MultisigSyncState } from "../../../src/sidepanel/multisig-sync";
 import type { BalanceState } from "../../../src/sidepanel/runtime";
 import { dashboard, type WalletView } from "../../../src/sidepanel/views";
 import type { AllowanceView } from "../../../src/starknet/allowance-discovery";
