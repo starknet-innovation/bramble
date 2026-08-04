@@ -335,7 +335,13 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
         );
       })().then(
         async () => {
-          showToast(andExecute ? "Confirmed and executed" : "Confirmation submitted", "success");
+          // Submitted, not settled: this resolves on the transaction hash, and a
+          // batched execution that reverts takes the confirmation down with it.
+          // Activity reports the final state; do not claim it here.
+          showToast(
+            andExecute ? "Confirm & execute submitted" : "Confirmation submitted",
+            "success",
+          );
           close(panel, false);
           await rerender(deps);
         },

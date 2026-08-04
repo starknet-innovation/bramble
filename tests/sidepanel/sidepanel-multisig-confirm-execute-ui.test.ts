@@ -153,7 +153,11 @@ describe("multisig confirm-and-execute affordance", () => {
     });
     const panel = openPanel(makeProposal(), {
       multisig: {
-        async confirmProposal() {
+        async confirmProposal(
+          _id: string,
+          _untrackedVerified?: boolean,
+          _andExecute?: boolean,
+        ): Promise<string> {
           return held;
         },
       } as MultisigUiDeps["multisig"],
@@ -168,5 +172,52 @@ describe("multisig confirm-and-execute affordance", () => {
 
     release();
     for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+  });
+
+  test("a failed submission re-enables every submit for a retry", async () => {
+    const panel = openPanel(makeProposal(), {
+      multisig: {
+        async confirmProposal(
+          _id: string,
+          _untrackedVerified?: boolean,
+          _andExecute?: boolean,
+        ): Promise<string> {
+          throw new Error("rpc down");
+        },
+      } as MultisigUiDeps["multisig"],
+    });
+    const submits = [
+      ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]") ?? []),
+    ];
+
+    submits.find((entry) => entry.dataset["msAndExecute"] === "true")?.click();
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+
+    // Busying every submit must not strand the panel: a failure has to release
+    // all of them, not just the one that was clicked.
+    expect(submits.some((entry) => entry.disabled)).toBe(false);
+    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe("rpc down");
+  });
+
+  test("reports the batch as submitted rather than as already executed", async () => {
+    const panel = openPanel(makeProposal(), {
+      multisig: {
+        async confirmProposal(
+          _id: string,
+          _untrackedVerified?: boolean,
+          _andExecute?: boolean,
+        ): Promise<string> {
+          return "0xabc";
+        },
+      } as MultisigUiDeps["multisig"],
+    });
+
+    panel?.querySelector<HTMLButtonElement>("[data-ms-and-execute]")?.click();
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+
+    const toast = document.querySelector("#toast-stack .toast-text")?.textContent ?? "";
+    // The promise resolves on a transaction hash, and a reverting batched
+    // execution takes the confirmation with it, so nothing is settled yet.
+    expect(toast).toBe("Confirm & execute submitted");
   });
 });
