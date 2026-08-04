@@ -222,9 +222,14 @@ const bindConfirmation = (
 ): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#privacy-confirm");
   button?.addEventListener("click", () => {
+    // Private sends run inside the Send flow, never this journey surface.
+    const kind = journey.preparation.kind;
+    if (kind === "transfer") {
+      return;
+    }
     const scope = captureScope(deps);
     deps.setJourney({
-      kind: journey.preparation.kind,
+      kind,
       preparation: journey.preparation,
       stage: "working",
       tokenId: journey.tokenId,
@@ -237,7 +242,7 @@ const bindConfirmation = (
         }
         deps.setJourney({
           hash,
-          kind: journey.preparation.kind,
+          kind,
           stage: "success",
           symbol: journey.preparation.symbol,
           tokenId: journey.tokenId,

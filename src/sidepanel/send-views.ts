@@ -200,6 +200,10 @@ const amountStage = (
         <strong id="send-selected-token-symbol">${escapeHtml(asset?.symbol ?? "Select")}</strong>
         ${icon("chevronDown")}
       </button>
+      <label class="send-private-toggle muted" id="send-private-toggle" title="Discovering shielded balances…">
+        <input id="send-private-checkbox" type="checkbox" disabled />
+        <span class="send-private-copy">${icon("lock")}Private</span>
+      </label>
       <label class="send-amount-field">
         <span class="sr-only">Amount to send</span>
         <span class="send-amount-prefix" id="send-amount-prefix" hidden></span>
@@ -360,6 +364,7 @@ export const sendFlow = (
           <input name="fiatEstimate" type="hidden" value="" />
           <input name="recipient" type="hidden" value="" />
           <input name="recipientLabel" type="hidden" value="" />
+          <input name="privateSend" type="hidden" value="" />
           <input name="speed" type="hidden" value="standard" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />
           <input name="tokenBalance" type="hidden" value="${escapeHtml(asset?.balance ?? "0")}" />

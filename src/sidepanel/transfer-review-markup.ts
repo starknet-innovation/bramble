@@ -7,6 +7,14 @@ import type { SidepanelWallet } from "./runtime";
 type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
 
 /**
+ * Renders the relay-fee line for a private send: the fee is withdrawn from
+ * the sender's shielded balance by the paymaster relay, so it replaces the
+ * public network-fee estimate on the confirm face.
+ */
+export const privateRelayFeeHtml = (relayFee: { readonly amount: string }): string =>
+  `<p class="review-fee">Relay fee (paid privately): ${escapeHtml(formatFri(relayFee.amount))}</p>`;
+
+/**
  * Renders the transfer fee state — the estimated amount, the pending-deployment
  * note, or the failed-estimate alert with its retry affordance (`""` when no
  * state applies). Delegates to the shared `reviewFeeSection` so every confirm

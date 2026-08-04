@@ -51,9 +51,19 @@ export type Strk20WalletStateResponse = {
 };
 
 /**
- * Frozen registration or deposit review returned to the extension side panel.
+ * Frozen registration, deposit, or private-send review returned to the
+ * extension side panel.
  */
 export type Strk20WalletPreparationResponse = {
   readonly ok: true;
   readonly strk20Preparation: Strk20WalletPreparationReview;
+};
+
+/**
+ * Pool-registration status of a prospective private-send recipient, returned
+ * only to an extension-controlled page.
+ */
+export type Strk20RecipientStatusResponse = {
+  readonly ok: true;
+  readonly strk20RecipientRegistration: "registered" | "unregistered";
 };

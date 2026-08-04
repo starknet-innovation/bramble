@@ -66,6 +66,29 @@ export const PRIVACY_STYLES = `
   }
   button.token-breakdown-more:not(:disabled):hover { background: transparent; }
   button.token-breakdown-more .icon { height: 14px; width: 14px; }
+  /* Private-send toggle on the Send amount card: a plain labelled checkbox
+     under the token picker. Blocked states grey the label; the reason lives
+     in the container's title attribute. */
+  .send-private-toggle {
+    align-items: center;
+    cursor: pointer;
+    display: inline-flex;
+    gap: ${SPACE.sm};
+    justify-self: start;
+    min-height: ${CONTROL.hitSmall};
+  }
+  .send-private-toggle input[type="checkbox"] { cursor: pointer; }
+  .send-private-toggle.muted { color: var(--mc-muted); cursor: not-allowed; }
+  .send-private-toggle.muted input[type="checkbox"] { cursor: not-allowed; }
+  .send-private-copy {
+    align-items: center;
+    display: inline-flex;
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.medium};
+    gap: ${SPACE.xs};
+  }
+  .send-private-copy .icon { height: 12px; width: 12px; }
+  .token-breakdown-side { align-items: center; display: inline-flex; gap: ${SPACE.sm}; }
   .shield-stepper { display: inline-flex; flex: none; gap: ${SPACE.xs}; }
   button.shield-step {
     background: var(--mc-elevated);

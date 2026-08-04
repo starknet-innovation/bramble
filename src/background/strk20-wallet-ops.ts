@@ -5,7 +5,7 @@
  * is produced.
  */
 
-import { STARKNET_NETWORKS, sameFelt } from "../starknet/networks";
+import { sameFelt } from "../starknet/networks";
 import { formatTokenAmount, parseTokenAmount } from "../starknet/rpc";
 import { isStrk20Felt } from "../starknet/strk20/schemas";
 import {
@@ -16,84 +16,30 @@ import {
   submitStrk20Actions,
   summarizeStrk20Plan,
 } from "../starknet/strk20/service";
-import type { TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { approvalPayloadMatchesContext, createApprovalContext } from "./approval-context";
 import { readTypeOnlyInput } from "./message-inputs";
-import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
-import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
+import { strk20ServiceForRuntime } from "./strk20-account-context";
+import {
+  type ActivePrivacyContext,
+  errorText,
+  resolvePrivacyContext,
+  type Strk20WalletOpsDeps,
+} from "./strk20-op-context";
+import { handleStrk20SendOps } from "./strk20-send-ops";
 import {
   readStrk20DepositPreparationInput,
   readStrk20WalletExecuteInput,
 } from "./strk20-wallet-inputs";
 import {
   type Strk20WalletPreparation,
-  type Strk20WalletPreparationStore,
   strk20WalletPreparationPayload,
 } from "./strk20-wallet-preparations";
-import type { WalletOpsDeps } from "./wallet-ops";
 
 /**
- * Extension-owned privacy dependencies, including the one-time preparation
- * store that keeps executable payloads out of the side panel.
+ * Re-exported deps type so existing wiring keeps one import site.
  */
-export type Strk20WalletOpsDeps = WalletOpsDeps & {
-  readonly strk20Preparations: Strk20WalletPreparationStore;
-};
-
-type ActivePrivacyContext = {
-  readonly accountContext: ReturnType<typeof strk20AccountContext>;
-  readonly preferences: WalletPreferences;
-  readonly token: TokenConfig;
-};
-
-const errorText = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message.length > 0 ? error.message : fallback;
-
-const firstNetworkToken = (preferences: WalletPreferences, networkId: string): TokenConfig | null =>
-  preferences.tokens.find((token) => token.networkId === networkId) ?? null;
-
-const resolvePrivacyContext = async (
-  deps: Strk20WalletOpsDeps,
-  tokenId?: string,
-): Promise<ActivePrivacyContext | { readonly error: string }> => {
-  const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (active.error !== undefined) {
-    return { error: active.error };
-  }
-  const preferences = await deps.preferencesStore.read();
-  const config = preferences.strk20Networks?.[active.networkId] ?? null;
-  if (!config) {
-    return { error: "Private balances are not configured for this network" };
-  }
-  if (active.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
-  }
-  const token = tokenId
-    ? preferences.tokens.find(
-        (stored) => stored.id === tokenId && stored.networkId === active.networkId,
-      )
-    : firstNetworkToken(preferences, active.networkId);
-  if (!token) {
-    return { error: "Track a token before activating private balances" };
-  }
-  return {
-    accountContext: strk20AccountContext(
-      {
-        ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
-        wallet: deps.wallet,
-      },
-      {
-        account: active.account,
-        passphrase: active.vaultPassphrase,
-        preferences,
-        rpcUrls: networkRpcUrls(STARKNET_NETWORKS[active.networkId], preferences),
-      },
-    ),
-    preferences,
-    token,
-  };
-};
+export type { Strk20WalletOpsDeps } from "./strk20-op-context";
 
 const publicBalance = async (
   deps: Strk20WalletOpsDeps,
@@ -313,15 +259,17 @@ const executePreparation = async (
     const result = await submitPreparation(deps, service, preparation, context);
     await deps.activity.record({
       accountId: context.accountContext.account.id,
-      ...(preparation.kind === "deposit" ? { amount: preparation.amount } : {}),
+      ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.accountContext.account.networkId,
       summary:
         preparation.kind === "register"
           ? "Activate private balances"
-          : `Shield ${preparation.amount} ${preparation.token.symbol}`,
-      ...(preparation.kind === "deposit" ? { token: preparation.token.symbol } : {}),
+          : preparation.kind === "transfer"
+            ? `Send ${preparation.amount} ${preparation.token.symbol} privately`
+            : `Shield ${preparation.amount} ${preparation.token.symbol}`,
+      ...(preparation.kind === "register" ? {} : { token: preparation.token.symbol }),
     });
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
@@ -338,6 +286,9 @@ const submitPreparation = async (
   if (preparation.kind === "deposit") {
     return submitPreparedDeposit(deps, service, preparation, context);
   }
+  if (preparation.kind === "transfer") {
+    return submitPreparedTransfer(service, preparation, context);
+  }
   const registration = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
     token: context.token.address,
@@ -346,6 +297,32 @@ const submitPreparation = async (
     throw new Error("Private balances are already active");
   }
   return registerStrk20Account(service, context.accountContext);
+};
+
+const submitPreparedTransfer = async (
+  service: ReturnType<typeof strk20ServiceForRuntime>,
+  preparation: Extract<Strk20WalletPreparation, { readonly kind: "transfer" }>,
+  context: ActivePrivacyContext,
+): Promise<{ readonly transactionHash: string }> => {
+  const registration = await readStrk20RegistrationStatus(service, {
+    ...context.accountContext,
+    token: context.token.address,
+  });
+  if (registration !== "registered") {
+    throw new Error("Private registration is no longer active");
+  }
+  const [privateBalance] = await readStrk20Balances(service, {
+    ...context.accountContext,
+    tokens: [context.token.address],
+  });
+  if (BigInt(privateBalance?.balance ?? "0x0") < BigInt(preparation.amountRaw)) {
+    throw new Error(`Not enough private ${preparation.token.symbol}`);
+  }
+  return submitStrk20Actions(service, {
+    ...context.accountContext,
+    actions: preparation.actions,
+    plan: preparation.plan,
+  });
 };
 
 const submitPreparedDeposit = async (
@@ -399,5 +376,5 @@ export const handleStrk20WalletOps = async (
       ? executePreparation(deps, input.preparationId)
       : { error: "Invalid privacy execution request" };
   }
-  return null;
+  return handleStrk20SendOps(deps, messageType, message);
 };

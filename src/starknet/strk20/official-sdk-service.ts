@@ -240,7 +240,10 @@ export const createOfficialStrk20Service = ({
         if (!transfers.discoverRequirement || !sdk.SetupRequirement) {
           throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
         }
-        const requirement = await transfers.discoverRequirement(input.account.address, input.token);
+        const requirement = await transfers.discoverRequirement(
+          input.subject ?? input.account.address,
+          input.token,
+        );
         return requirement === sdk.SetupRequirement.Register ? "unregistered" : "registered";
       } catch (error) {
         return mapStrk20ProtocolError(error);

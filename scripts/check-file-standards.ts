@@ -72,6 +72,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/origins-ops.ts",
   "src/background/strk20-account-context.ts",
   "src/background/strk20-ops.ts",
+  // Active-account context split from strk20-wallet-ops; the vault passphrase
+  // only transits into the protected signer wiring, never logged or stored.
+  "src/background/strk20-op-context.ts",
   "src/background/strk20-wallet-ops.ts",
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
