@@ -187,15 +187,11 @@ const tokensPanel = (
 
 const privacyToggle = (privacy: PrivacyDisclosureState): string => `
   <div class="privacy-toggle-row">
-    <span class="privacy-toggle-copy">
-      <strong>${privacy.enabled ? "Private balances" : "Public balances"}</strong>
-      <span>${privacy.enabled ? "Visible only inside this wallet" : "Read directly from Starknet"}</span>
-    </span>
     ${checkboxField({
-      attributes: { "aria-label": "Show private balances", "data-privacy-toggle": true },
+      attributes: { "data-privacy-toggle": true },
       checked: privacy.enabled,
       name: "privateBalances",
-      text: "Private",
+      text: "Display shielded balances",
     })}
   </div>`;
 

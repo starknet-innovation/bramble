@@ -385,10 +385,6 @@ privacy = createPrivacyController({
   app,
   balances: () => cache.balances,
   navigate: (view) => navigate(view),
-  openToken: (tokenId) => {
-    selectedTokenId = tokenId;
-    navigate("token-detail");
-  },
   paint,
   preferences: () => cache.preferences,
   status: () => cache.status,
