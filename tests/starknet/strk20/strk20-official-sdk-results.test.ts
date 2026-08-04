@@ -53,8 +53,8 @@ describe("official SDK warning envelope", () => {
     expect(() =>
       assertNoSdkWarnings({ warnings: [{ code: "UNKNOWN", message: "review" }] }),
     ).toThrow("strk20 services unavailable");
-    expect(() => assertNoSdkWarnings({})).toThrow("strk20 services unavailable");
-    expect(() => assertNoSdkWarnings({ warnings: "nope" })).toThrow("strk20 services unavailable");
+    expect(() => assertNoSdkWarnings({})).toThrow("sdk-result/missing-warnings");
+    expect(() => assertNoSdkWarnings({ warnings: "nope" })).toThrow("sdk-result/missing-warnings");
   });
 });
 
@@ -71,7 +71,7 @@ describe("STRK20 detail sanitizer", () => {
     expect(sanitizeStrk20Detail("Error message: pool/not-registered")).toBe(
       "Error message: pool/not-registered",
     );
-    expect(sanitizeStrk20Detail(`${"reason ".repeat(80)}`).length).toBeLessThanOrEqual(200);
+    expect(sanitizeStrk20Detail(`${"reason ".repeat(160)}`).length).toBeLessThanOrEqual(800);
     expect(sanitizeStrk20Detail("  collapse\n\tthe   space ")).toBe("collapse the space");
   });
 });

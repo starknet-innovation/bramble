@@ -42,6 +42,7 @@ export type SdkBuilder = {
   ) => SdkBuilder;
   readonly register?: () => SdkBuilder;
   readonly simulate: (options: unknown) => Promise<unknown>;
+  readonly surplusTo: (recipient: string, withdraw?: boolean) => SdkBuilder;
   readonly subaccounts: (dappName: string) => {
     readonly commitment: (nonce: BigNumberish) => Promise<bigint>;
     readonly invoke: (

@@ -9,6 +9,7 @@ import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { walletErrorMessage } from "../shared/errors";
 import { canonicalFelt, STARKNET_NETWORKS } from "../starknet/networks";
+import { mapStrk20StageError } from "../starknet/strk20/official-sdk-errors";
 import { unavailableStrk20Service } from "../starknet/strk20/service";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
@@ -113,6 +114,18 @@ const resolveOriginAccount = async (
     return { error: "origin not connected" };
   }
   return { account, passphrase, preferences };
+};
+
+const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
+  if (!hasProof) {
+    return walletErrorMessage(error, "invoke request failed");
+  }
+  try {
+    mapStrk20StageError("submission", error);
+  } catch (mapped) {
+    return walletErrorMessage(mapped, "invoke request failed");
+  }
+  return "invoke request failed";
 };
 
 // Fail-closed perimeter shared by the dapp surfaces that error on a blocked
@@ -325,6 +338,6 @@ export const executeInvokeApproval = async (
     await recordApproveAllowances(allowanceStore, calls, account);
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return { error: walletErrorMessage(error, "invoke request failed") };
+    return { error: invokeFailureMessage(error, approval.payload.proof !== undefined) };
   }
 };

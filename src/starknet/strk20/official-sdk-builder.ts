@@ -87,6 +87,7 @@ export const strk20BuilderFor = (
   sdk: PrivacySdkRuntime,
   transfers: SdkTransfers,
   actions: readonly Strk20Action[],
+  surplusRecipient: string,
 ): SdkBuilder => {
   let builder = transfers.build({
     autoDiscover: { channels: "refresh", notes: "refresh" },
@@ -97,6 +98,9 @@ export const strk20BuilderFor = (
   });
   for (const action of actions) {
     builder = addAction(builder, action, sdk.Open);
+  }
+  if (actions.some((action) => action.type === "transfer" || action.type === "withdraw")) {
+    builder = builder.surplusTo(surplusRecipient, false);
   }
   return builder;
 };

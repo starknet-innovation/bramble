@@ -17,6 +17,8 @@ import { STRK20_SERVICE_UNAVAILABLE } from "./service";
 
 const PROVING_BLOCK_DEPTH = 10;
 const MAX_MATURITY_POLLS = 120;
+const ACCEPTANCE_RETRIES = 240;
+const ACCEPTANCE_LIFECYCLE_RETRIES = 120;
 
 class RejectedPrivacyTransaction extends Error {}
 
@@ -35,7 +37,11 @@ const defaultWaitForAccepted = async (
   provider: RpcProvider,
   transactionHash: string,
 ): Promise<number> => {
-  const receipt = await provider.waitForTransaction(transactionHash, { retryInterval: 250 });
+  const receipt = await provider.waitForTransaction(transactionHash, {
+    lifeCycleRetries: ACCEPTANCE_LIFECYCLE_RETRIES,
+    retries: ACCEPTANCE_RETRIES,
+    retryInterval: 250,
+  });
   if (!receipt.isSuccess()) {
     throw new RejectedPrivacyTransaction();
   }

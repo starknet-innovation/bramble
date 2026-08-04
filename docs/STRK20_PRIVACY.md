@@ -213,11 +213,13 @@ production service.
 
 ## Opt-in Mainnet lifecycle test
 
-`tests/mainnet/strk20-lifecycle.mainnet.ts` is a separate, local-only Playwright suite for the real
-deployed pool and configured services. It imports a dedicated funded account into a disposable
-Chromium profile, confirms that the derived address matches the expected address, connects that
-one account to a loopback dapp, and exercises registration, deposit, private transfer to self, and
-withdrawal to self. It waits for registration/indexer visibility between dependent writes.
+`tests/mainnet/strk20-lifecycle.mainnet.ts` is a separate, local-only Playwright core-lifecycle suite
+for the real deployed pool and configured discovery/proving services. It imports a dedicated funded
+account into a disposable Chromium profile, confirms that the derived address matches the expected
+address, connects that one account to a loopback dapp, and exercises registration, deposit,
+transfer to self, and withdrawal to self. It prepares real proofs, but deliberately submits them
+from the public account instead of a relayer. This validates the protocol without AVNU while
+publicly linking the account to every action; it is not a privacy-preserving production route.
 
 The suite is deliberately excluded from `bun run test:e2e` and CI. Its Playwright configuration
 disables traces, screenshots, video, retries, and parallel workers so entered signing material
@@ -228,14 +230,28 @@ the values in the current shell without putting them in a repository file or she
 bun run build
 export MC_STRK20_E2E_ACCOUNT_ADDRESS='<dedicated test account address>'
 export MC_STRK20_E2E_DEPOSIT_STRK='0.1'
+export MC_STRK20_E2E_DISCOVERY_URL='<direct discovery service URL>'
+export MC_STRK20_E2E_PROVER_URL='<direct proving service URL>'
+export MC_STRK20_E2E_RPC_URL='<RPC 0.10 endpoint with proof-facts support>'
 export MC_STRK20_E2E_MAINNET_ACK='I_UNDERSTAND_THIS_WRITES_TO_MAINNET'
+export MC_STRK20_E2E_PUBLIC_CALLER_ACK='I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS'
 read -rs 'MC_STRK20_E2E_PRIVATE_KEY?Dedicated test signing key: '
 export MC_STRK20_E2E_PRIVATE_KEY
 bun run test:e2e:mainnet
 unset MC_STRK20_E2E_ACCOUNT_ADDRESS MC_STRK20_E2E_PRIVATE_KEY \
-  MC_STRK20_E2E_DEPOSIT_STRK MC_STRK20_E2E_MAINNET_ACK
+  MC_STRK20_E2E_DEPOSIT_STRK MC_STRK20_E2E_DISCOVERY_URL \
+  MC_STRK20_E2E_PROVER_URL MC_STRK20_E2E_RPC_URL MC_STRK20_E2E_MAINNET_ACK \
+  MC_STRK20_E2E_PUBLIC_CALLER_ACK MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK
 ```
 
+If a proof-bearing deposit reached the RPC but its response was lost, first
+verify that the private balance increased, then set
+`MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK=I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED`
+to resume at self-transfer without submitting a second deposit. This recovery
+gate is not part of the default full-lifecycle run.
+
 Use a dedicated disposable account, inspect its public and private balances before running, and
-rotate its key after a test campaign. The test leaves a residual private balance because both
-private relay operations need fee headroom; it does not attempt a risky max withdrawal.
+rotate its key after a test campaign. The suite reads the pool's live fee and aborts when it exceeds
+5 STRK per action. At the current 4 STRK pool fee it spends roughly 12 STRK plus transaction gas
+for an already-registered account, or 16 STRK plus gas when registration is needed. It leaves the
+remainder of the deposited amount private and does not attempt a risky max withdrawal.

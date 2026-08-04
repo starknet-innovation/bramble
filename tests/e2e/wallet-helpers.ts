@@ -185,7 +185,7 @@ export const resolvePendingApproval = async (
 ): Promise<void> => {
   await openPendingWalletSurface(sidepanel, timeout, abort);
   await expect(sidepanel.getByText("Review request")).toBeVisible();
-  await expect(sidepanel.getByText(eyebrow)).toBeVisible();
+  await expect(sidepanel.getByText(eyebrow, { exact: true }).first()).toBeVisible();
   // The origin renders in both the takeover header and the request card.
   await expect(sidepanel.getByText(origin).first()).toBeVisible();
   await sidepanel.locator(`[data-approval-action="${action}"]`).click();

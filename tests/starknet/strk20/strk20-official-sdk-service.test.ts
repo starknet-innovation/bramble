@@ -102,6 +102,10 @@ describe("official STRK20 SDK adapter", () => {
               proof: { data: "", output: [], proofFacts: [] },
             },
           }),
+          surplusTo(recipient: string, withdraw?: boolean) {
+            seen.push(["surplusTo", recipient, withdraw]);
+            return self;
+          },
           subaccounts(dappName: string) {
             return {
               commitment: async () => 0x123n,
@@ -176,6 +180,7 @@ describe("official STRK20 SDK adapter", () => {
         },
       ],
       ["invoke", { calldata: [poolAddress, "0x42", "literal"], contractAddress: "0x777" }],
+      ["surplusTo", context.account.address, false],
     ]);
   });
 

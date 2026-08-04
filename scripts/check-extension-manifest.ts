@@ -19,6 +19,7 @@ const expectedExtensionCsp =
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
 const expectedHostPermissions = [
   "https://api.cartridge.gg/*",
+  "https://mainnet.nodes.starknet.org/*",
   "https://api.coingecko.com/*",
   // Read-only indexed activity and complete token-holdings snapshots. This
   // never participates in signing or transaction submission.

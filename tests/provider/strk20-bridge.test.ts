@@ -10,6 +10,7 @@ import {
   toProviderPayload,
   toRuntimeMessage,
 } from "../../src/provider/bridge";
+import { readProviderParams } from "../../src/provider/request-params";
 
 const origin = "https://example.com";
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -119,6 +120,27 @@ describe("strk20 bridge params", () => {
       ),
     ).toBeNull();
   });
+
+  test("normalizes a schema-bounded proof larger than the generic request budget", () => {
+    const proof = { ...callAndProof.proof, data: "p".repeat(200_000) };
+    const params = readProviderParams("wallet_addInvokeTransaction", {
+      invoke_transaction: [callAndProof.call],
+      proof,
+    });
+    expect(params).not.toBeNull();
+    expect(toRuntimeMessage(request("wallet_addInvokeTransaction", params), origin)).toEqual({
+      calls: [
+        {
+          calldata: ["0x1"],
+          contractAddress: token,
+          entrypoint: "shielded_execute",
+        },
+      ],
+      origin,
+      proof,
+      type: "wallet.addInvokeTransaction",
+    });
+  });
 });
 
 describe("strk20 bridge results", () => {
@@ -132,6 +154,16 @@ describe("strk20 bridge results", () => {
     expect(toProviderPayload({ callAndProof, ok: true }, "wallet_strk20PrepareInvoke")).toEqual({
       result: callAndProof,
     });
+  });
+
+  test("carries a schema-bounded proof larger than the generic provider JSON budget", () => {
+    const largeProof = {
+      ...callAndProof,
+      proof: { ...callAndProof.proof, data: "p".repeat(200_000) },
+    };
+    expect(
+      toProviderPayload({ callAndProof: largeProof, ok: true }, "wallet_strk20PrepareInvoke"),
+    ).toEqual({ result: largeProof });
   });
 
   test("pads the invoke transaction hash", () => {
@@ -153,6 +185,15 @@ describe("strk20 bridge results", () => {
     expect(toProviderPayload({ error: "strk20 privacy leak" }).error?.code).toBe(120);
     expect(toProviderPayload({ error: "invalid strk20 prepare request" }).error?.code).toBe(114);
     expect(toProviderPayload({ error: "request rejected" }).error?.code).toBe(113);
+    expect(
+      toProviderPayload({
+        error: "strk20 services unavailable (proving/proof-rejected): proof rejected",
+      }).error,
+    ).toEqual({
+      code: 163,
+      data: "strk20 services unavailable (proving/proof-rejected): proof rejected",
+      message: "The wallet request failed",
+    });
   });
 
   test("round-trips balances and call-and-proof through the page response", () => {

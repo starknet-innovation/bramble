@@ -12,6 +12,9 @@ import type { SdkWarning } from "./official-sdk-runtime";
 import { isStrk20CallAndProof, STRK20_LIMITS, type Strk20CallAndProof } from "./schemas";
 import { STRK20_PRIVACY_LEAK, STRK20_SERVICE_UNAVAILABLE } from "./service";
 
+const invalidSdkResult = (reason: string): WalletError =>
+  new WalletError(`${STRK20_SERVICE_UNAVAILABLE} (sdk-result/${reason})`);
+
 // A warning is only usable if it is a bounded { code, message } string pair.
 // Checked before any semantic branch so a malformed envelope can never be read
 // as a recognized signal.
@@ -30,11 +33,11 @@ const isSdkWarningShape = (warning: unknown): boolean =>
  */
 export const assertNoSdkWarnings = (value: unknown): void => {
   if (!isRecord(value) || !Array.isArray(value["warnings"])) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw invalidSdkResult("missing-warnings");
   }
   const warnings = value["warnings"] as readonly SdkWarning[];
   if (warnings.length > STRK20_LIMITS.sdkWarnings || !warnings.every(isSdkWarningShape)) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw invalidSdkResult("invalid-warnings");
   }
   if (warnings.some((warning) => warning.code === "USER_LINKAGE")) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
@@ -43,7 +46,7 @@ export const assertNoSdkWarnings = (value: unknown): void => {
   // still present therefore carries an unreviewed code: fail closed instead of
   // proceeding on a signal this adapter does not understand.
   if (warnings.length > 0) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw invalidSdkResult("unsupported-warning");
   }
 };
 
@@ -59,7 +62,7 @@ export const readCallAndProof = (
 ): Strk20CallAndProof => {
   const source = isRecord(value) && isRecord(value["callAndProof"]) ? value["callAndProof"] : null;
   if (!source || !isRecord(source["call"]) || !isRecord(source["proof"])) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw invalidSdkResult("missing-call-and-proof");
   }
   const call = source["call"];
   const proof = source["proof"];
@@ -72,7 +75,7 @@ export const readCallAndProof = (
     !Array.isArray(proof["proofFacts"]) ||
     proof["proofFacts"].length > STRK20_LIMITS.proofFacts
   ) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw invalidSdkResult("invalid-call-or-proof");
   }
   const candidate = {
     call: {
@@ -93,7 +96,7 @@ export const readCallAndProof = (
     !sameFelt(candidate.call.contract_address, config.poolAddress) ||
     candidate.call.entry_point !== "apply_actions"
   ) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw invalidSdkResult("unbound-call-or-proof");
   }
   return candidate;
 };

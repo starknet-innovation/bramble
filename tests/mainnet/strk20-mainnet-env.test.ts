@@ -8,8 +8,12 @@ import { readStrk20MainnetEnvironment } from "./strk20-mainnet-env";
 const valid = (): Record<string, string> => ({
   MC_STRK20_E2E_ACCOUNT_ADDRESS: "0x123",
   MC_STRK20_E2E_DEPOSIT_STRK: "0.1",
+  MC_STRK20_E2E_DISCOVERY_URL: "https://discovery.example/",
   MC_STRK20_E2E_MAINNET_ACK: "I_UNDERSTAND_THIS_WRITES_TO_MAINNET",
   MC_STRK20_E2E_PRIVATE_KEY: "0x456",
+  MC_STRK20_E2E_PUBLIC_CALLER_ACK: "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS",
+  MC_STRK20_E2E_PROVER_URL: "https://prover.example/",
+  MC_STRK20_E2E_RPC_URL: "https://rpc.example/",
 });
 
 describe("STRK20 live-mainnet environment", () => {
@@ -19,7 +23,11 @@ describe("STRK20 live-mainnet environment", () => {
       actionAmount: "0x2386f26fc10000",
       depositAmount: "0.1",
       depositAmountRaw: 100_000_000_000_000_000n,
+      discoveryUrl: "https://discovery.example/",
       privateKey: "0x456",
+      proverUrl: "https://prover.example/",
+      resumeAfterDeposit: false,
+      rpcUrl: "https://rpc.example/",
     });
   });
 
@@ -35,6 +43,27 @@ describe("STRK20 live-mainnet environment", () => {
     }
   });
 
+  test("requires a separate acknowledgement for the public-caller privacy tradeoff", () => {
+    const env = valid();
+    env["MC_STRK20_E2E_PUBLIC_CALLER_ACK"] = "no";
+    expect(() => readStrk20MainnetEnvironment(env)).toThrow("public-caller submission");
+  });
+
+  test("gates recovery after an already-accepted deposit separately", () => {
+    expect(
+      readStrk20MainnetEnvironment({
+        ...valid(),
+        MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK: "I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED",
+      }).resumeAfterDeposit,
+    ).toBe(true);
+    expect(() =>
+      readStrk20MainnetEnvironment({
+        ...valid(),
+        MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK: "yes",
+      }),
+    ).toThrow("resume after a confirmed deposit");
+  });
+
   test("rejects CI, invalid secrets, and deposits over the hard cap", () => {
     expect(() => readStrk20MainnetEnvironment({ ...valid(), CI: "true" })).toThrow("local-only");
     expect(() =>
@@ -46,5 +75,20 @@ describe("STRK20 live-mainnet environment", () => {
         MC_STRK20_E2E_DEPOSIT_STRK: "1.000000000000000001",
       }),
     ).toThrow("hard 1 STRK safety cap");
+  });
+
+  test("requires HTTPS discovery and proving endpoints without echoing them", () => {
+    expect(() =>
+      readStrk20MainnetEnvironment({ ...valid(), MC_STRK20_E2E_DISCOVERY_URL: "" }),
+    ).toThrow("MC_STRK20_E2E_DISCOVERY_URL");
+    expect(() =>
+      readStrk20MainnetEnvironment({
+        ...valid(),
+        MC_STRK20_E2E_PROVER_URL: "http://prover.example/secret",
+      }),
+    ).toThrow("MC_STRK20_E2E_PROVER_URL");
+    expect(() => readStrk20MainnetEnvironment({ ...valid(), MC_STRK20_E2E_RPC_URL: "" })).toThrow(
+      "MC_STRK20_E2E_RPC_URL",
+    );
   });
 });

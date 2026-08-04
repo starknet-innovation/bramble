@@ -120,7 +120,9 @@ const discoverWith = (
   try {
     const transfers = transfersFor(sdk, input);
     return {
-      builder: builderForTransfers?.(transfers) ?? strk20BuilderFor(sdk, transfers, input.actions),
+      builder:
+        builderForTransfers?.(transfers) ??
+        strk20BuilderFor(sdk, transfers, input.actions, input.account.address),
       transfers,
     };
   } catch (error) {

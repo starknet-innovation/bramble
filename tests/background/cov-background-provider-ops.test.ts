@@ -313,4 +313,47 @@ describe("executeInvokeApproval failure branches", () => {
       executeInvokeApproval(executeDeps(false), { origin: ORIGIN, payload: invoke }),
     ).resolves.toEqual({ error: "origin not connected" });
   });
+
+  test("preserves a sanitized RPC reason for a proof-bearing invoke failure", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const rpcFailure = Object.assign(new Error("request body must not surface"), {
+      baseError: { code: -32_005, data: null, message: "rate limit exceeded" },
+    });
+    const deps: InvokeExecuteDeps = {
+      activity: memoryActivityLog(),
+      allowanceStore: memoryAllowanceStore(),
+      preferencesStore: {
+        async read() {
+          return { activeNetworkId: "SN_MAIN" };
+        },
+      } as unknown as InvokeExecuteDeps["preferencesStore"],
+      runtimeRpc: {
+        strk20: {
+          async submitPrepared() {
+            throw rpcFailure;
+          },
+        },
+      } as unknown as RuntimeRpc,
+      session,
+      wallet: {
+        ...(wallet as object),
+        async getGrantedAccounts() {
+          return [account];
+        },
+      } as unknown as InvokeExecuteDeps["wallet"],
+    };
+    await expect(
+      executeInvokeApproval(deps, {
+        origin: ORIGIN,
+        payload: {
+          ...invoke,
+          proof: { data: "opaque", output: ["0x1"], proof_facts: ["0x2"] },
+        },
+      }),
+    ).resolves.toEqual({
+      error:
+        "strk20 services unavailable (submission/service-unavailable): -32005 rate limit exceeded",
+    });
+  });
 });

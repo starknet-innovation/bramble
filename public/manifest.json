@@ -26,6 +26,7 @@
   },
   "host_permissions": [
     "https://api.cartridge.gg/*",
+    "https://mainnet.nodes.starknet.org/*",
     "https://api.coingecko.com/*",
     "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",

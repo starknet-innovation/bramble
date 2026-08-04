@@ -218,10 +218,14 @@ describe("STRK20 proof maturity", () => {
 
   test("uses the built-in receipt wait when no override is injected", async () => {
     const store = memoryStrk20MaturityStore();
+    let waitOptions: unknown;
     const receiptFor = (receipt: { block_number: unknown; isSuccess: () => boolean }) =>
       ({
         getBlockNumber: async () => 30,
-        waitForTransaction: async () => receipt,
+        waitForTransaction: async (_hash: string, options: unknown) => {
+          waitOptions = options;
+          return receipt;
+        },
       }) as unknown as RpcProvider;
 
     // Accepted receipt: the default wait reads the block straight off it.
@@ -235,6 +239,7 @@ describe("STRK20 proof maturity", () => {
       state: "submitted",
       transactionHash: "0x456",
     });
+    expect(waitOptions).toEqual({ lifeCycleRetries: 120, retries: 240, retryInterval: 250 });
 
     // A reverted receipt clears the scope so a retry is not blocked by it.
     await expect(

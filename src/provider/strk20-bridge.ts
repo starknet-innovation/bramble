@@ -2,7 +2,14 @@
  * STRK20 privacy-method param and result parsing for the dapp provider bridge.
  * Split from bridge-results.ts to keep each provider module within the size cap.
  */
-import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
+import {
+  hasOnlyKnownKeys,
+  isJson,
+  isJsonWithinBudget,
+  isRecord,
+  JSON_BUDGETS,
+  type Json,
+} from "../shared/json";
 import {
   isStrk20BalanceEntry,
   isStrk20CallAndProof,
@@ -92,7 +99,9 @@ export const providerStrk20Balances = (result: unknown): readonly Strk20BalanceE
  * Narrows a background result to a STRK20_CALL_AND_PROOF envelope for the page.
  */
 export const providerStrk20CallAndProof = (result: unknown): Strk20CallAndProof | null =>
-  isJson(result) && isStrk20CallAndProof(result) ? result : null;
+  isJsonWithinBudget(result, JSON_BUDGETS.strk20Proof) && isStrk20CallAndProof(result)
+    ? result
+    : null;
 
 /**
  * Narrows a sub-account commitment result to one felt.

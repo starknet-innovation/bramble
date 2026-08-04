@@ -202,7 +202,7 @@ The terminal reads from these hosts:
 | Vesu V2 pools/positions    | `https://api.vesu.xyz`                         | Direct (CORS-enabled)      |
 | Vesu Multiply routes       | `https://prod-api-quoter.ekubo.org`            | Direct (CORS-enabled)      |
 | Indexed holdings/activity  | `https://starkscan.co/v1/SN_MAIN`              | `/proxy/starkscan` in dev  |
-| Starknet RPC               | `https://api.cartridge.gg/x/starknet/mainnet`  | Direct (CORS-enabled)      |
+| Starknet RPC               | `https://mainnet.nodes.starknet.org/rpc/v0_10` | Direct (CORS-enabled)      |
 
 Ekubo and Cartridge allow browser origins. AVNU market data is routed through
 Vite in development for one consistent browser path. Token charts prefer a

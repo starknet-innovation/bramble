@@ -72,6 +72,7 @@ export const officialBuilder = (
       invoke: () => self,
       partialCommitment: async () => 0x456n,
     }),
+    surplusTo: () => self,
     with: () => ({
       deposit: () => ({ done: () => self }),
       done: () => self,

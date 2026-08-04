@@ -3,6 +3,8 @@
  * values are validated but never included in an error message or returned from
  * the browser under test.
  */
+
+import { isServiceUrl } from "../../src/shared/service-url";
 import {
   isNonZeroStarkFieldElement,
   isStarkPrivateKey,
@@ -11,6 +13,8 @@ import {
 import { parseTokenAmount } from "../../src/starknet/rpc";
 
 const MAINNET_ACK = "I_UNDERSTAND_THIS_WRITES_TO_MAINNET";
+const PUBLIC_CALLER_ACK = "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS";
+const RESUME_AFTER_DEPOSIT_ACK = "I_UNDERSTAND_DEPOSIT_ALREADY_SUCCEEDED";
 const STRK_DECIMALS = 18;
 const MAX_DEPOSIT_RAW = 10n ** 18n;
 
@@ -23,7 +27,22 @@ export type Strk20MainnetEnvironment = {
   readonly actionAmount: string;
   readonly depositAmount: string;
   readonly depositAmountRaw: bigint;
+  readonly discoveryUrl: string;
   readonly privateKey: string;
+  readonly proverUrl: string;
+  readonly resumeAfterDeposit: boolean;
+  readonly rpcUrl: string;
+};
+
+const httpsServiceUrl = (value: string | undefined, name: string): string => {
+  if (!isServiceUrl(value)) {
+    throw new Error(`${name} must be a valid HTTPS service URL`);
+  }
+  const url = new URL(value);
+  if (url.protocol !== "https:") {
+    throw new Error(`${name} must be a valid HTTPS service URL`);
+  }
+  return url.toString();
 };
 
 /**
@@ -39,6 +58,11 @@ export const readStrk20MainnetEnvironment = (
   if (env["MC_STRK20_E2E_MAINNET_ACK"] !== MAINNET_ACK) {
     throw new Error(`Set MC_STRK20_E2E_MAINNET_ACK=${MAINNET_ACK} to permit mainnet writes`);
   }
+  if (env["MC_STRK20_E2E_PUBLIC_CALLER_ACK"] !== PUBLIC_CALLER_ACK) {
+    throw new Error(
+      `Set MC_STRK20_E2E_PUBLIC_CALLER_ACK=${PUBLIC_CALLER_ACK} to permit public-caller submission`,
+    );
+  }
   const accountAddress = normalizeFeltInput(env["MC_STRK20_E2E_ACCOUNT_ADDRESS"] ?? "");
   if (!isNonZeroStarkFieldElement(accountAddress)) {
     throw new Error("MC_STRK20_E2E_ACCOUNT_ADDRESS must be a Starknet address");
@@ -46,6 +70,18 @@ export const readStrk20MainnetEnvironment = (
   const privateKey = normalizeFeltInput(env["MC_STRK20_E2E_PRIVATE_KEY"] ?? "");
   if (!isStarkPrivateKey(privateKey)) {
     throw new Error("MC_STRK20_E2E_PRIVATE_KEY must be a valid Stark signing key");
+  }
+  const discoveryUrl = httpsServiceUrl(
+    env["MC_STRK20_E2E_DISCOVERY_URL"],
+    "MC_STRK20_E2E_DISCOVERY_URL",
+  );
+  const proverUrl = httpsServiceUrl(env["MC_STRK20_E2E_PROVER_URL"], "MC_STRK20_E2E_PROVER_URL");
+  const rpcUrl = httpsServiceUrl(env["MC_STRK20_E2E_RPC_URL"], "MC_STRK20_E2E_RPC_URL");
+  const resumeValue = env["MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK"];
+  if (resumeValue !== undefined && resumeValue !== RESUME_AFTER_DEPOSIT_ACK) {
+    throw new Error(
+      `Set MC_STRK20_E2E_RESUME_AFTER_DEPOSIT_ACK=${RESUME_AFTER_DEPOSIT_ACK} to resume after a confirmed deposit`,
+    );
   }
   const depositAmount = env["MC_STRK20_E2E_DEPOSIT_STRK"] ?? "";
   let depositAmountRaw: bigint;
@@ -66,6 +102,10 @@ export const readStrk20MainnetEnvironment = (
     actionAmount: `0x${actionAmountRaw.toString(16)}`,
     depositAmount,
     depositAmountRaw,
+    discoveryUrl,
     privateKey,
+    proverUrl,
+    resumeAfterDeposit: resumeValue === RESUME_AFTER_DEPOSIT_ACK,
+    rpcUrl,
   };
 };

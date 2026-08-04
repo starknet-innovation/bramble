@@ -40,7 +40,7 @@ export type Strk20ErrorCategory =
 
 // Longest sanitized revert detail surfaced to the user. A Starknet revert reason
 // is short; a longer string is far more likely to be an echoed request body.
-const DETAIL_LIMIT = 200;
+const DETAIL_LIMIT = 800;
 
 const BASE_MARKERS: readonly (readonly [RegExp, string])[] = [
   [/not registered|registration|viewing key.*not set/i, STRK20_NOT_REGISTERED],
