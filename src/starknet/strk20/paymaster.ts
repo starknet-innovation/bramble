@@ -202,7 +202,8 @@ export const buildStrk20PaymasterPlan = async (input: {
 
 /**
  * Submits the frozen proof and paymaster plan. The returned transaction hash is
- * strictly validated before it reaches wallet activity state.
+ * strictly validated before it reaches wallet activity state. Public typed
+ * data and its reviewed authorization are an inseparable, fail-closed pair.
  */
 export const submitStrk20PaymasterPlan = async (input: {
   readonly accountAddress: string;
