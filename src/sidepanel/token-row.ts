@@ -167,8 +167,10 @@ export const unifiedBalanceRow = (
       }>
         <div class="token-breakdown-row">
           <span class="token-breakdown-label">Public balance</span>
-          <span class="token-breakdown-value" data-shield-public-value="">${escapeHtml(compactAmount(breakdown.publicFormatted))} ${escapeHtml(token.symbol)}</span>
-          ${breakdown.private.kind === "ready" ? shieldStepper(token) : ""}
+          <span class="token-breakdown-side">
+            ${breakdown.private.kind === "ready" ? shieldStepper(token) : ""}
+            <span class="token-breakdown-value" data-shield-public-value="">${escapeHtml(compactAmount(breakdown.publicFormatted))} ${escapeHtml(token.symbol)}</span>
+          </span>
         </div>
         ${privateBreakdownLine(token, breakdown.private)}
         ${

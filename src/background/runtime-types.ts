@@ -20,6 +20,7 @@ import type { PendingLedgerSign } from "./ledger-sign-queue";
 import type {
   Strk20BalancesResponse,
   Strk20PrepareResponse,
+  Strk20RecipientStatusResponse,
   Strk20SubaccountCommitmentResponse,
   Strk20WalletPreparationResponse,
   Strk20WalletStateResponse,
@@ -436,6 +437,7 @@ export type RuntimeResponse =
   | SignHashResponse
   | Strk20BalancesResponse
   | Strk20PrepareResponse
+  | Strk20RecipientStatusResponse
   | Strk20SubaccountCommitmentResponse
   | Strk20WalletPreparationResponse
   | Strk20WalletStateResponse

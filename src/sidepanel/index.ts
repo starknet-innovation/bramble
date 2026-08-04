@@ -94,15 +94,11 @@ const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       const view = button.dataset["view"];
-      if (!isWalletView(view)) {
-        return;
+      if (isWalletView(view)) {
+        navigate(view);
       }
-      navigate(view);
     });
   });
-};
-
-const bindBack = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-nav-back]").forEach((button) => {
     button.addEventListener("click", goBack);
   });
@@ -148,7 +144,6 @@ const ledgerOnboard = createLedgerOnboardEntry({
 
 const bindAll = (): void => {
   bindNavigation();
-  bindBack();
   bindCopyButtons(app);
   bindOnboardingCompletion(app, extensionApi, () => globalThis.close());
   bindOnboarding({ app, render, wallet });
@@ -204,7 +199,14 @@ const bindAll = (): void => {
   });
   bindReveal({ app, wallet });
   transfer.bindActivity({ app, render, wallet });
-  transfer.bindTransfer({ app, back: goBack, navigate: (view) => navigate(view), render, wallet });
+  transfer.bindTransfer({
+    app,
+    back: goBack,
+    navigate: (view) => navigate(view),
+    privacy: () => privacy.disclosure(),
+    render,
+    wallet,
+  });
   const settingsDeps = {
     activeAccountId: () => lastAccountId,
     app,

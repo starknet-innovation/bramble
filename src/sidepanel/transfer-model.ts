@@ -7,6 +7,7 @@
 import { isStarkFieldElement, normalizeFeltInput, sameFelt } from "../starknet/networks";
 import type { ActivityEntry } from "../storage/activity-store";
 import { errorMessage } from "./dom";
+import type { PrivacyPreparation } from "./privacy-runtime";
 
 /**
  * Friendly validation copy shared by the recipient screen and review failures.
@@ -56,6 +57,7 @@ export type TransferFields = {
   readonly accountId: string;
   readonly amount: string;
   readonly fiatEstimate: string;
+  readonly privateSend: string;
   readonly recipient: string;
   readonly recipientLabel: string;
   readonly signer: "ledger" | "software";
@@ -75,6 +77,7 @@ export type TransferFields = {
 export type TransferState<Review> = {
   readonly error: string;
   readonly fields: TransferFields | null;
+  readonly privatePreparation: PrivacyPreparation | null;
   readonly requiresDeployment: boolean;
   readonly review: Review | null;
   readonly reviewedKey: string | null;
@@ -88,6 +91,7 @@ export type TransferState<Review> = {
 export const initialTransferState = <Review>(): TransferState<Review> => ({
   error: "",
   fields: null,
+  privatePreparation: null,
   requiresDeployment: false,
   review: null,
   reviewedKey: null,
@@ -106,6 +110,7 @@ export const transferFields = (form: HTMLFormElement): TransferFields => {
     accountId: String(data.get("accountId") ?? ""),
     amount: String(data.get("amount") ?? "").trim(),
     fiatEstimate: String(data.get("fiatEstimate") ?? ""),
+    privateSend: data.get("privateSend") === "1" ? "1" : "",
     recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
     recipientLabel: String(data.get("recipientLabel") ?? "").trim(),
     signer: form.dataset["signer"] === "ledger" ? "ledger" : "software",
@@ -128,6 +133,7 @@ export const transferKey = (fields: TransferFields): string =>
   JSON.stringify({
     accountId: fields.accountId,
     amount: fields.amount,
+    privateSend: fields.privateSend,
     recipient: fields.recipient,
     speed: fields.speed,
     tokenId: fields.tokenId,

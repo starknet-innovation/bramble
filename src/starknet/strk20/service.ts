@@ -114,7 +114,7 @@ export type Strk20Service = {
   readonly privateBalances: (input: Strk20BalancesInput) => Promise<readonly Strk20BalanceEntry[]>;
   readonly prepare: (input: Strk20PrepareInput) => Promise<Strk20CallAndProof>;
   readonly registrationStatus?: (
-    input: Strk20AccountContext & { readonly token: string },
+    input: Strk20AccountContext & { readonly subject?: string; readonly token: string },
   ) => Promise<"registered" | "unregistered">;
   readonly register?: (
     input: Strk20AccountContext,
@@ -327,13 +327,14 @@ export const submitStrk20Actions = async (
 };
 
 /**
- * Discovers whether the active account has registered its viewing key with the
- * configured pool. The token scopes the SDK preflight request only; setup of a
- * token channel is not treated as account registration.
+ * Discovers whether an address has registered its viewing key with the
+ * configured pool — the active account by default, or `subject` (e.g. a send
+ * recipient) when provided. The token scopes the SDK preflight request only;
+ * setup of a token channel is not treated as account registration.
  */
 export const readStrk20RegistrationStatus = (
   service: Strk20Service,
-  input: Strk20AccountContext & { readonly token: string },
+  input: Strk20AccountContext & { readonly subject?: string; readonly token: string },
 ): Promise<"registered" | "unregistered"> => {
   if (!service.registrationStatus) {
     return Promise.reject(new WalletError(STRK20_SERVICE_UNAVAILABLE));
