@@ -12,6 +12,7 @@ import {
   type MultisigCallInput,
 } from "../starknet/multisig";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
+import { isAccountId } from "../storage/vault-schema";
 
 // Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
 // proposal id runs to ~144 characters, so the cap must sit comfortably above.
@@ -106,6 +107,7 @@ export type ProposeMultisigInput = {
   readonly entrypoint: string;
   readonly multisigId: string;
   readonly salt: string;
+  readonly signerAccountId?: string;
   readonly summary?: string;
   readonly to: string;
 };
@@ -120,6 +122,7 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
     "entrypoint",
     "multisigId",
     "salt",
+    "signerAccountId",
     "summary",
     "to",
     "type",
@@ -131,12 +134,16 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
   isMultisigEntrypoint(message["entrypoint"]) &&
   isFeltList(message["calldata"], MAX_CALLDATA_FELTS) &&
   isOptionalSalt(message["salt"]) &&
+  (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
   isOptionalSummary(message["summary"])
     ? {
         calldata: message["calldata"],
         entrypoint: message["entrypoint"] as string,
         multisigId: message["multisigId"] as string,
         salt: message["salt"] ?? "0x0",
+        ...(message["signerAccountId"] === undefined
+          ? {}
+          : { signerAccountId: message["signerAccountId"] }),
         ...(message["summary"] === undefined ? {} : { summary: message["summary"] }),
         to: message["to"],
       }
@@ -149,6 +156,7 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
  */
 export type MultisigProposalActionInput = {
   readonly proposalId: string;
+  readonly signerAccountId?: string;
   readonly untrackedVerified?: boolean;
 };
 
@@ -164,14 +172,15 @@ export const readMultisigProposalActionInput = (
 ): MultisigProposalActionInput | null => {
   const keys =
     type === "wallet.executeMultisigProposal"
-      ? (["proposalId", "type"] as const)
-      : (["proposalId", "type", "untrackedVerified"] as const);
+      ? (["proposalId", "signerAccountId", "type"] as const)
+      : (["proposalId", "signerAccountId", "type", "untrackedVerified"] as const);
   if (
     !(
       isRecord(message) &&
       hasOnlyKnownKeys(message, keys) &&
       message["type"] === type &&
-      isId(message["proposalId"])
+      isId(message["proposalId"]) &&
+      (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"]))
     )
   ) {
     return null;
@@ -181,6 +190,9 @@ export const readMultisigProposalActionInput = (
   }
   return {
     proposalId: message["proposalId"],
+    ...(message["signerAccountId"] === undefined
+      ? {}
+      : { signerAccountId: message["signerAccountId"] }),
     ...(message["untrackedVerified"] === true ? { untrackedVerified: true } : {}),
   };
 };

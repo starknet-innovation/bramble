@@ -39,9 +39,11 @@ const actionAttributes = (
   proposalId: string,
   allowed: boolean,
   requiresAck: boolean,
+  signerAccountId?: string,
 ): UiAttributes => ({
   [`data-ms-${action}`]: proposalId,
   "data-ms-action-allowed": String(allowed),
+  ...(signerAccountId ? { "data-ms-signer-id": signerAccountId } : {}),
   ...(requiresAck ? { "data-ms-requires-ack": "true" } : {}),
 });
 
@@ -65,28 +67,33 @@ const proposalActions = (
   activeAccount: AccountRef | null,
 ): string => {
   if (proposal.state === "executed" || proposal.state === "not-found") return "";
-  const signerAddress = activeAccount?.address ?? null;
-  const signerSnapshotIsCurrent =
-    signerAddress !== null &&
-    proposal.confirmedBySignerAddress !== undefined &&
-    sameFelt(signerAddress, proposal.confirmedBySignerAddress);
   const candidates = confirmationCandidates(proposal, localSigners);
   const confirmAllowed = candidates.length > 0 && proposal.state !== "confirmed";
-  const activeCanSign =
-    activeAccount !== null && localSigners.some((signer) => signer.id === activeAccount.id);
-  const revokeAllowed =
-    activeCanSign && signerSnapshotIsCurrent && proposal.confirmedBySigner === true;
+  const preferredSigner =
+    localSigners.find((signer) => signer.id === activeAccount?.id) ?? localSigners[0];
+  const revokeSigner =
+    proposal.confirmedBySigner === true && proposal.confirmedBySignerAddress
+      ? localSigners.find((signer) =>
+          sameFelt(signer.address, proposal.confirmedBySignerAddress ?? ""),
+        )
+      : undefined;
+  const revokeAllowed = revokeSigner !== undefined;
   const requiresAck = proposal.call === null;
   const execute =
     proposal.state === "confirmed"
       ? proposal.call
-        ? button({
-            attributes: { "data-ms-execute": proposal.id },
-            icon: "send",
-            label: "Execute",
-            size: "small",
-            variant: "secondary",
-          })
+        ? preferredSigner
+          ? button({
+              attributes: {
+                "data-ms-execute": proposal.id,
+                "data-ms-signer-id": preferredSigner.id,
+              },
+              icon: "send",
+              label: "Execute",
+              size: "small",
+              variant: "secondary",
+            })
+          : '<span class="hint proposal-action-hint">This wallet does not own a current signer for execution.</span>'
         : '<span class="hint proposal-action-hint">Execute from the proposing wallet because pasted ids do not carry call data.</span>'
       : "";
   return `<div class="proposal-actions" aria-label="Proposal actions">
@@ -103,7 +110,13 @@ const proposalActions = (
       variant: "secondary",
     })}
     ${button({
-      attributes: actionAttributes("revoke", proposal.id, revokeAllowed, requiresAck),
+      attributes: actionAttributes(
+        "revoke",
+        proposal.id,
+        revokeAllowed,
+        requiresAck,
+        revokeSigner?.id,
+      ),
       disabled: !revokeAllowed || requiresAck,
       icon: "x",
       label: "Revoke",

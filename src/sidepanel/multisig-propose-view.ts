@@ -5,6 +5,7 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { sameFelt } from "../starknet/networks";
 import type { MultisigRecord } from "../storage/multisig-store";
 import type { WalletPreferences } from "../storage/preferences-store";
 import { emptyState } from "../ui/content";
@@ -14,7 +15,14 @@ import { formatFiat, tokenFiatValue } from "./fiat";
 import { icon } from "./icons";
 import { multisigDisplayName } from "./multisig-model";
 import { EMPTY_MULTISIG_PORTFOLIO, type MultisigPortfolioData } from "./multisig-portfolio";
-import { accountAvatar, accountDisplayName, accountLabel, flowHeader, flowScreen } from "./parts";
+import {
+  accountAvatar,
+  accountDisplayName,
+  accountLabel,
+  flowHeader,
+  flowScreen,
+  hardwareBadge,
+} from "./parts";
 import { type SendAsset, sendAssets, sendBalanceLabel } from "./send-model";
 import { starknetNetworkGlyph, tokenGlyph } from "./token-row";
 
@@ -222,6 +230,22 @@ export const multisigProposeFlow = (
       flowScreen("multisig-propose", emptyState("This multisig is no longer watched."))
     );
   }
+  const localSigners = status.accounts.filter(
+    (stored) =>
+      stored.networkId === record.networkId &&
+      record.signers.some((signer) => sameFelt(signer, stored.address)),
+  );
+  const signer =
+    localSigners.find((stored) => stored.id === status.activeAccountId) ?? localSigners[0];
+  if (!signer) {
+    return (
+      flowHeader("New proposal", status, multisigDisplayName(record)) +
+      flowScreen(
+        "multisig-propose",
+        emptyState("This wallet does not own a current signer for this multisig."),
+      )
+    );
+  }
   const balances = "balances" in portfolio.balances ? portfolio.balances.balances : [];
   const assets = sendAssets(
     status.networkId,
@@ -243,7 +267,15 @@ export const multisigProposeFlow = (
           data-currency="${portfolio.currency}"
           data-multisig-address="${escapeHtml(record.address)}"
           data-multisig-name="${escapeHtml(multisigDisplayName(record))}"
-          data-network="${escapeHtml(status.network)}">
+          data-network="${escapeHtml(status.network)}"
+          data-signer-account-address="${escapeHtml(signer.address)}"
+          data-signer-account-id="${escapeHtml(signer.id)}"
+          data-signer-account-name="${escapeHtml(accountDisplayName(signer, preferences))}">
+          <div class="proposal-signing-context" role="note">
+            <span class="option-avatar">${accountAvatar(signer.address)}</span>
+            <span><small>Proposal signer</small><strong>${escapeHtml(accountDisplayName(signer, preferences))}${hardwareBadge(signer)}</strong></span>
+            <code>${escapeHtml(accountLabel(signer.address))}</code>
+          </div>
           <input name="guidedRecipient" type="hidden" value="" />
           <input name="guidedToken" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />
           <input name="guidedDecimals" type="hidden" value="${asset?.decimals ?? ""}" />

@@ -101,6 +101,26 @@ export const MULTISIG_STYLES = `
 
   .proposal-flow { min-width: 0; }
   .proposal-compose-form { display: grid; gap: ${SPACE.md}; min-width: 0; }
+  .proposal-signing-context {
+    align-items: center;
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    padding: ${SPACE.sm} ${SPACE.md};
+  }
+  .proposal-signing-context > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; }
+  .proposal-signing-context small {
+    color: var(--mc-muted);
+    font-size: ${TYPE.micro.size};
+    line-height: ${TYPE.micro.line};
+  }
+  .proposal-signing-context strong { font-size: ${TYPE.label.size}; overflow-wrap: anywhere; }
+  .proposal-signing-context code {
+    color: var(--mc-muted);
+    font-size: ${TYPE.micro.size};
+  }
   .proposal-stage {
     align-content: start;
     display: grid;

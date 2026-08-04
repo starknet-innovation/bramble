@@ -2,8 +2,8 @@
  * Transaction-submitting multisig operations: propose, confirm, revoke,
  * execute, deploy a new multisig through the Universal Deployer Contract,
  * and declare the pinned multisig class when a network lacks it. Every
- * submission goes through the shared verified invoke path with the active
- * account's session signer; the multisig contract re-checks signer membership
+ * submission goes through the shared verified invoke path with an explicitly
+ * selected vault account; the multisig contract re-checks signer membership
  * and quorum on-chain, so these handlers can never bypass it. Each message
  * type maps to one small async handler; the exported router is a single
  * dispatch-map lookup.
@@ -46,14 +46,15 @@ type ResolvedProposal = {
   readonly resolved: MultisigContext;
 };
 
-// Resolves the active account + watched record and re-proves signer membership
+// Resolves the selected signer + watched record and re-proves signer membership
 // in one step. Every signer-gated submission runs this first so stale registry
 // data can never offer a transaction the chain would reject.
 const resolveMultisigTarget = async (
   deps: MultisigOpsDeps,
   id: string,
+  signerAccountId?: string,
 ): Promise<{ readonly error: string } | MultisigContext> => {
-  const resolved = await multisigContext(deps, id);
+  const resolved = await multisigContext(deps, id, signerAccountId);
   if ("error" in resolved) {
     return { error: resolved.error };
   }
@@ -89,6 +90,7 @@ const submitAndRecord = async (
 const proposalById = async (
   deps: MultisigOpsDeps,
   proposalId: string,
+  signerAccountId?: string,
 ): Promise<{ readonly error: string } | ResolvedProposal> => {
   const proposal = (await deps.multisigStore.listProposals()).find(
     (stored) => stored.id === proposalId,
@@ -96,7 +98,7 @@ const proposalById = async (
   if (!proposal) {
     return { error: "proposal not found" };
   }
-  const resolved = await resolveMultisigTarget(deps, proposal.multisigId);
+  const resolved = await resolveMultisigTarget(deps, proposal.multisigId, signerAccountId);
   if ("error" in resolved) {
     return { error: resolved.error };
   }
@@ -178,7 +180,7 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid propose request" };
   }
-  const target = await resolveMultisigTarget(deps, input.multisigId);
+  const target = await resolveMultisigTarget(deps, input.multisigId, input.signerAccountId);
   if ("error" in target) {
     return { error: target.error };
   }
@@ -234,7 +236,7 @@ const runProposalAction = async (
   if (!input) {
     return { error: invalidError };
   }
-  const found = await proposalById(deps, input.proposalId);
+  const found = await proposalById(deps, input.proposalId, input.signerAccountId);
   if ("error" in found) {
     return { error: found.error };
   }
@@ -304,7 +306,7 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid execute request" };
   }
-  const found = await proposalById(deps, input.proposalId);
+  const found = await proposalById(deps, input.proposalId, input.signerAccountId);
   if ("error" in found) {
     return { error: found.error };
   }

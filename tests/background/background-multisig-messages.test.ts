@@ -201,17 +201,22 @@ describe("multisig messages", () => {
       harnessAccount.address,
     ]);
 
-    await handler(
-      { accountId: secondOwnedSigner.id, type: "wallet.setActiveAccount" },
-      harnessExtensionSender,
-    );
     await expect(
       handler(
-        { proposalId: proposed.proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          proposalId: proposed.proposal.id,
+          signerAccountId: secondOwnedSigner.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toEqual({ ok: true, transactionHash: "0x7cd" });
     expect(submittedAccounts.at(-1)).toBe(secondOwnedSigner.id);
+    await expect(handler({ type: "wallet.status" }, harnessExtensionSender)).resolves.toMatchObject(
+      {
+        activeAccountId: harnessAccount.id,
+      },
+    );
   });
   test("executes a proposal with quorum", async () => {
     const { handler, invokeCalls } = makeMultisigHarness({
@@ -482,13 +487,13 @@ describe("multisig messages", () => {
     expect(declared).toHaveLength(0);
   });
 
-  test("refuses propose when the active account was removed as a signer", async () => {
+  test("refuses propose when the selected account was removed as a signer", async () => {
     const signers = [harnessAccount.address, HARNESS_OTHER_SIGNER];
     const { handler } = makeMultisigHarness({ signers });
     const watched = (await watch(handler)) as { multisig: { id: string } };
     signers.splice(0, signers.length, HARNESS_OTHER_SIGNER);
     await expect(propose(handler, watched.multisig.id)).resolves.toEqual({
-      error: "the active account is not a signer of this multisig",
+      error: "the selected account is not a signer of this multisig",
     });
   });
 });

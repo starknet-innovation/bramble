@@ -141,7 +141,6 @@ const showConfirmationReview = (context: FrameContext): void => {
     selectedMultisigId: () => multisig.id,
     wallet: {
       loadStatus: async () => statusFor(),
-      setActiveAccount: async () => undefined,
     },
   } as unknown as MultisigUiDeps);
   showSharedProposals(context);
@@ -299,6 +298,20 @@ export const multisigScenario: WalletScenario = {
         "Multisigs sit alongside single-signer accounts with explicit account type, threshold, and open-work heuristics.",
       prepare: openSharedAccountDrawer,
       state: { accountType: "shared", openProposals: 1, quorum: 2 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          multisigProposals: [pendingProposal],
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "account",
+        }),
+      id: "account-management",
+      label: "Manage signer and Multisig accounts",
+      narrative:
+        "The account manager presents shared and signer accounts as peer identities while keeping their signing semantics explicit.",
+      state: { accountTypes: ["signer", "multisig"], selected: multisig.id },
     },
     ...multisigReviewCheckpoints(portfolio),
     {

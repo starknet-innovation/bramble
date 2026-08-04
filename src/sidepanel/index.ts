@@ -143,7 +143,6 @@ const renderScene = (content: string, animate: boolean, direction: NavDirection)
 
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
-
 const ledgerSignMount = document.createElement("div");
 ledgerSignMount.className = "ledger-sign-overlay";
 ledgerSignMount.hidden = true;
@@ -193,6 +192,7 @@ const bindAll = (): void => {
     render,
     setActiveView: (view: WalletView) => {
       activeView = view;
+      if (view === "home") selectedMultisigId = null;
     },
     wallet,
   };
@@ -412,7 +412,7 @@ let renderGeneration = 0;
 const render = async (status: WalletStatus): Promise<void> => {
   const generation = ++renderGeneration;
   const isCurrent = (): boolean => generation === renderGeneration;
-  if (updateRenderScope(cache, status) && selectedMultisigId !== null) {
+  if (updateRenderScope(cache, status) === "network" && selectedMultisigId !== null) {
     selectedMultisigId = null;
     activeView = "home";
     viewHistory = [];

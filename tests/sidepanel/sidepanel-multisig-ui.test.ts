@@ -200,7 +200,7 @@ describe("bindMultisigs", () => {
   test("requires a stable review before creating a proposal", async () => {
     const proposals: unknown[] = [];
     const app = mount(
-      `<form id="multisig-propose-form" data-proposal-mode="advanced">
+      `<form id="multisig-propose-form" data-proposal-mode="advanced" data-signer-account-id="SN_MAIN:0x123">
         <input name="summary" value="Pay contributor" />
         <input name="to" value="0x123" />
         <input name="entrypoint" value="transfer" />
@@ -240,6 +240,7 @@ describe("bindMultisigs", () => {
         entrypoint: "transfer",
         multisigId: "SN_MAIN:0x999",
         salt: "0x789",
+        signerAccountId: "SN_MAIN:0x123",
         summary: "Pay contributor",
         to: "0x123",
       },
@@ -297,7 +298,7 @@ describe("bindMultisigs", () => {
     expect(tracked).toEqual([[multisig.id, proposal.txId, proposal.summary, proposal.call]]);
   });
 
-  test("reviews a confirmation, switches to another owned signer, then submits", async () => {
+  test("reviews a confirmation with another owned signer without switching portfolios", async () => {
     const first: AccountRef = {
       address: "0x123",
       classHash: "0x456",
@@ -354,17 +355,14 @@ describe("bindMultisigs", () => {
       },
       {
         multisig: {
-          async confirmProposal(id: string) {
-            calls.push(`confirm:${id}`);
+          async confirmProposal(id: string, signerAccountId: string) {
+            calls.push(`confirm:${id}:${signerAccountId}`);
             return "0xabc";
           },
-        } as MultisigUiDeps["multisig"],
+        } as unknown as MultisigUiDeps["multisig"],
         wallet: {
           async loadStatus() {
             return status;
-          },
-          async setActiveAccount(id: string) {
-            calls.push(`switch:${id}`);
           },
         } as unknown as MultisigUiDeps["wallet"],
       },
@@ -380,8 +378,10 @@ describe("bindMultisigs", () => {
     ).toBe("true");
 
     panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]")?.click();
-    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe("Switching signer…");
+    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe(
+      "Submitting confirmation…",
+    );
     for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-    expect(calls).toEqual([`switch:${second.id}`, `confirm:${proposal.id}`, "render"]);
+    expect(calls).toEqual([`confirm:${proposal.id}:${second.id}`, "render"]);
   });
 });

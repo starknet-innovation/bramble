@@ -16,6 +16,7 @@ import {
 
 const ADDR = "0x111111111111111111111111111111111111111111111111111111111111111";
 const TARGET = "0x222222222222222222222222222222222222222222222222222222222222222";
+const SIGNER_ACCOUNT_ID = `SN_MAIN:${ADDR}`;
 
 describe("readAddMultisigInput", () => {
   test("accepts an add request carrying an optional name", () => {
@@ -78,6 +79,7 @@ describe("readProposeMultisigInput", () => {
         calldata: ["0x5", "0x0"],
         entrypoint: "transfer",
         multisigId: "SN_MAIN:0x1",
+        signerAccountId: SIGNER_ACCOUNT_ID,
         summary: "Pay vendor",
         to: TARGET,
         type: "wallet.proposeMultisigTx",
@@ -87,6 +89,7 @@ describe("readProposeMultisigInput", () => {
       entrypoint: "transfer",
       multisigId: "SN_MAIN:0x1",
       salt: "0x0",
+      signerAccountId: SIGNER_ACCOUNT_ID,
       summary: "Pay vendor",
       to: TARGET,
     });
@@ -124,6 +127,7 @@ describe("readProposeMultisigInput", () => {
     expect(readProposeMultisigInput({ ...base, calldata: ["not-a-felt"] })).toBeNull();
     expect(readProposeMultisigInput({ ...base, salt: "not-a-felt" })).toBeNull();
     expect(readProposeMultisigInput({ ...base, summary: "x".repeat(200) })).toBeNull();
+    expect(readProposeMultisigInput({ ...base, signerAccountId: "bad" })).toBeNull();
   });
 });
 
@@ -133,12 +137,17 @@ describe("readMultisigProposalActionInput", () => {
       readMultisigProposalActionInput(
         {
           proposalId: "SN_MAIN:0x1:0x2",
+          signerAccountId: SIGNER_ACCOUNT_ID,
           type: "wallet.confirmMultisigProposal",
           untrackedVerified: true,
         },
         "wallet.confirmMultisigProposal",
       ),
-    ).toEqual({ proposalId: "SN_MAIN:0x1:0x2", untrackedVerified: true });
+    ).toEqual({
+      proposalId: "SN_MAIN:0x1:0x2",
+      signerAccountId: SIGNER_ACCOUNT_ID,
+      untrackedVerified: true,
+    });
   });
 
   test("accepts an execute without the untrackedVerified flag", () => {
@@ -170,6 +179,16 @@ describe("readMultisigProposalActionInput", () => {
     expect(
       readMultisigProposalActionInput(
         { proposalId: "x", type: "wallet.confirmMultisigProposal", untrackedVerified: false },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toBeNull();
+    expect(
+      readMultisigProposalActionInput(
+        {
+          proposalId: "x",
+          signerAccountId: "bad",
+          type: "wallet.confirmMultisigProposal",
+        },
         "wallet.confirmMultisigProposal",
       ),
     ).toBeNull();

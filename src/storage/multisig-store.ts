@@ -291,8 +291,17 @@ const upsertMultisigIn = (shape: StoredShape, record: MultisigRecord): StoredSha
   if (!isMultisigRecord(record)) {
     return null;
   }
-  const kept = shape.multisigs.filter((stored) => stored.id !== record.id);
-  return { ...shape, multisigs: [...kept.slice(-(MAX_MULTISIGS - 1)), record] };
+  const existing = shape.multisigs.findIndex((stored) => stored.id === record.id);
+  if (existing >= 0) {
+    return {
+      ...shape,
+      multisigs: shape.multisigs.map((stored, index) => (index === existing ? record : stored)),
+    };
+  }
+  return {
+    ...shape,
+    multisigs: [...shape.multisigs.slice(-(MAX_MULTISIGS - 1)), record],
+  };
 };
 
 // Eviction priority at the proposal cap. Settled proposals go first, then

@@ -44,9 +44,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "add multisig failed");
       }
     },
-    async confirmProposal(proposalId: string, untrackedVerified?: boolean): Promise<string> {
+    async confirmProposal(
+      proposalId: string,
+      signerAccountId: string,
+      untrackedVerified?: boolean,
+    ): Promise<string> {
       const response = await sendMessage({
         proposalId,
+        signerAccountId,
         type: "wallet.confirmMultisigProposal",
         ...(untrackedVerified ? { untrackedVerified: true } : {}),
       });
@@ -78,8 +83,12 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "deploy failed");
     },
-    async executeProposal(proposalId: string): Promise<string> {
-      const response = await sendMessage({ proposalId, type: "wallet.executeMultisigProposal" });
+    async executeProposal(proposalId: string, signerAccountId: string): Promise<string> {
+      const response = await sendMessage({
+        proposalId,
+        signerAccountId,
+        type: "wallet.executeMultisigProposal",
+      });
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
@@ -128,6 +137,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       readonly entrypoint: string;
       readonly multisigId: string;
       readonly salt: string;
+      readonly signerAccountId: string;
       readonly summary: string;
       readonly to: string;
     }): Promise<string> {
@@ -136,6 +146,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         entrypoint: input.entrypoint,
         multisigId: input.multisigId,
         ...(input.salt ? { salt: input.salt } : {}),
+        signerAccountId: input.signerAccountId,
         ...(input.summary ? { summary: input.summary } : {}),
         to: input.to,
         type: "wallet.proposeMultisigTx",
@@ -172,9 +183,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "remove failed");
       }
     },
-    async revokeConfirmation(proposalId: string, untrackedVerified?: boolean): Promise<string> {
+    async revokeConfirmation(
+      proposalId: string,
+      signerAccountId: string,
+      untrackedVerified?: boolean,
+    ): Promise<string> {
       const response = await sendMessage({
         proposalId,
+        signerAccountId,
         type: "wallet.revokeMultisigConfirmation",
         ...(untrackedVerified ? { untrackedVerified: true } : {}),
       });

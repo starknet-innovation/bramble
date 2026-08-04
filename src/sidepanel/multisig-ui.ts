@@ -303,17 +303,12 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
         return;
       }
       buttonBusy(button, true);
-      result.textContent =
-        selected.dataset["msConfirmSignerActive"] === "true"
-          ? "Refreshing signer permission…"
-          : "Switching signer…";
+      result.textContent = "Refreshing signer permission…";
       void (async () => {
-        if (selected.dataset["msConfirmSignerActive"] !== "true") {
-          await deps.wallet.setActiveAccount(signerId);
-        }
         result.textContent = "Submitting confirmation…";
         await deps.multisig.confirmProposal(
           proposalId,
+          signerId,
           acknowledgment?.checked === true ? true : undefined,
         );
       })().then(
@@ -357,19 +352,24 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
   const actions: readonly {
     readonly attribute: string;
     readonly key: "msExecute" | "msRevoke";
-    readonly run: (proposalId: string, untrackedVerified?: boolean) => Promise<string>;
+    readonly run: (
+      proposalId: string,
+      signerAccountId: string,
+      untrackedVerified?: boolean,
+    ) => Promise<string>;
     readonly success: string;
   }[] = [
     {
       attribute: "[data-ms-revoke]",
       key: "msRevoke",
-      run: (id, untrackedVerified) => deps.multisig.revokeConfirmation(id, untrackedVerified),
+      run: (id, signerAccountId, untrackedVerified) =>
+        deps.multisig.revokeConfirmation(id, signerAccountId, untrackedVerified),
       success: "Revocation submitted",
     },
     {
       attribute: "[data-ms-execute]",
       key: "msExecute",
-      run: (id) => deps.multisig.executeProposal(id),
+      run: (id, signerAccountId) => deps.multisig.executeProposal(id, signerAccountId),
       success: "Execution submitted",
     },
   ];
@@ -377,7 +377,8 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
     deps.app?.querySelectorAll<HTMLButtonElement>(action.attribute).forEach((button) => {
       button.addEventListener("click", () => {
         const proposalId = button.dataset[action.key];
-        if (!proposalId) {
+        const signerAccountId = button.dataset["msSignerId"];
+        if (!proposalId || !signerAccountId) {
           return;
         }
         const row = button.closest(".allowance-row");
@@ -390,7 +391,7 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
           return;
         }
         runAction(deps, button, "multisig-proposal-result", "Submitting…", async () => {
-          await action.run(proposalId, ack ? true : undefined);
+          await action.run(proposalId, signerAccountId, ack ? true : undefined);
           return action.success;
         });
       });

@@ -137,6 +137,7 @@ export const multisigPortfolio = (input: {
       ${actionTile("multisig-signers", "Signers", "users", true)}
       ${actionTile("multisig-track", "Track", "search", true)}
     </div>
+    ${input.canSign ? "" : '<p class="hint">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'}
     ${terminalCta()}
   </section>
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">

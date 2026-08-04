@@ -97,18 +97,33 @@ describe("multisig tx handler invalid-input returns", () => {
 });
 
 describe("multisig tx handler proposalById failures", () => {
-  test("confirm fails when the active account is no longer a signer", async () => {
+  test("rejects an explicit signer account that is not in the unlocked vault", async () => {
+    const harness = makeMultisigHarness();
+    const { proposal } = await watchAndPropose(harness);
+    await expect(
+      harness.handler(
+        {
+          proposalId: proposal.id,
+          signerAccountId: "SN_MAIN:0x999",
+          type: "wallet.confirmMultisigProposal",
+        },
+        harnessExtensionSender,
+      ),
+    ).resolves.toEqual({ error: "selected signer account is unavailable on this network" });
+  });
+
+  test("confirm fails when the selected account is no longer a signer", async () => {
     const signers = [harnessAccount.address, HARNESS_OTHER_SIGNER];
     const harness = makeMultisigHarness({ proposalStatus: staticStatus("pending"), signers });
     const { proposal } = await watchAndPropose(harness);
-    // Drop the active account from the on-chain signer set after proposing.
+    // Drop the selected account from the on-chain signer set after proposing.
     signers.splice(0, signers.length, HARNESS_OTHER_SIGNER);
     await expect(
       harness.handler(
         { proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
         harnessExtensionSender,
       ),
-    ).resolves.toEqual({ error: "the active account is not a signer of this multisig" });
+    ).resolves.toEqual({ error: "the selected account is not a signer of this multisig" });
   });
 });
 

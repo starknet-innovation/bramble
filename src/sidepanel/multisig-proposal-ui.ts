@@ -347,6 +347,7 @@ const reviewMarkup = (form: HTMLFormElement, fields: ProposalFields): string => 
           : ""
       }
       <div><dt>From</dt><dd><strong>${escapeHtml(form.dataset["multisigName"] ?? "Shared account")}</strong><code>${escapeHtml(accountLabel(form.dataset["multisigAddress"] ?? ""))}</code></dd></div>
+      <div><dt>Signer</dt><dd><strong>${escapeHtml(form.dataset["signerAccountName"] ?? "Wallet account")}</strong><code>${escapeHtml(accountLabel(form.dataset["signerAccountAddress"] ?? ""))}</code></dd></div>
       <div><dt>Network</dt><dd><strong>${escapeHtml(form.dataset["network"] ?? "Starknet")}</strong></dd></div>
     </dl>
   </div>
@@ -422,7 +423,8 @@ export const bindMultisigProposalForm = (deps: MultisigProposalUiDeps): void => 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const multisigId = deps.selectedMultisigId();
-    if (!multisigId) return;
+    const signerAccountId = form.dataset["signerAccountId"];
+    if (!multisigId || !signerAccountId) return;
     let fields: ProposalFields;
     try {
       fields = proposalFields(form);
@@ -444,6 +446,7 @@ export const bindMultisigProposalForm = (deps: MultisigProposalUiDeps): void => 
         entrypoint: fields.entrypoint,
         multisigId,
         salt: fields.salt,
+        signerAccountId,
         summary: fields.summary,
         to: fields.to,
       });
