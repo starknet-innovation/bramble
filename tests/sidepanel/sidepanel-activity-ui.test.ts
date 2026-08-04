@@ -18,9 +18,13 @@ beforeAll(registerDom);
 afterAll(unregisterDom);
 
 const originalSetTimeout = globalThis.setTimeout;
+let originalCreateObjectUrl: typeof URL.createObjectURL;
+let originalRevokeObjectUrl: typeof URL.revokeObjectURL;
 
 beforeEach(() => {
   document.body.replaceChildren();
+  originalCreateObjectUrl = URL.createObjectURL;
+  originalRevokeObjectUrl = URL.revokeObjectURL;
   // Run timers synchronously so the CSV revoke resolves observably within the
   // test.
   (globalThis as { setTimeout: unknown }).setTimeout = ((fn: () => void) => {
@@ -31,6 +35,8 @@ beforeEach(() => {
 
 afterEach(() => {
   (globalThis as { setTimeout: unknown }).setTimeout = originalSetTimeout;
+  URL.createObjectURL = originalCreateObjectUrl;
+  URL.revokeObjectURL = originalRevokeObjectUrl;
 });
 
 describe("activityExportToast", () => {
