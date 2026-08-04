@@ -90,6 +90,76 @@ const changeBadge = (change: number | undefined): string => {
 };
 
 /**
+ * Public/private split shown inside a unified row's dropdown. `unavailable`
+ * covers both a failed discovery (with its message) and a network without
+ * STRK20 configuration.
+ */
+export type PrivateBreakdown =
+  | { readonly kind: "loading" }
+  | { readonly kind: "ready"; readonly formatted: string }
+  | { readonly kind: "unavailable"; readonly message: string }
+  | { readonly kind: "unregistered" };
+
+const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown): string => {
+  const symbol = token.symbol;
+  if (breakdown.kind === "unregistered") {
+    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="Register to start shielding">
+        <span class="token-breakdown-label">${icon("lock")}Private balance</span>
+        <span>Register to start shielding</span>
+      </button>`;
+  }
+  const value =
+    breakdown.kind === "ready"
+      ? `${escapeHtml(compactAmount(breakdown.formatted))} ${escapeHtml(symbol)}`
+      : breakdown.kind === "loading"
+        ? "Discovering…"
+        : `<span title="${escapeHtml(breakdown.message)}">Unavailable</span>`;
+  return `<div class="token-breakdown-row${breakdown.kind === "ready" ? "" : " muted"}">
+      <span class="token-breakdown-label">${icon("lock")}Private balance</span>
+      <span class="token-breakdown-value">${value}</span>
+    </div>`;
+};
+
+/**
+ * Renders one unified token row: the summary shows the combined public plus
+ * private amount, and expanding it disloses the public/private split with the
+ * asset-screen link. The private line doubles as the registration entry when
+ * the account is not registered with the privacy pool.
+ */
+export const unifiedBalanceRow = (
+  token: TokenBalance,
+  price: number | undefined,
+  change: number | undefined,
+  currency: DisplayCurrency,
+  breakdown: { readonly private: PrivateBreakdown; readonly publicFormatted: string },
+): string => {
+  const fiat = tokenFiatValue(token.formatted, price);
+  return `<li class="token-row token-unified">
+    <details class="token-disclosure">
+      <summary aria-label="Show ${escapeHtml(token.symbol)} balance breakdown">
+        ${tokenGlyph(token.address, token.symbol)}
+        <div class="token-copy">
+          <strong>${escapeHtml(token.symbol)}</strong>
+          <p data-live-key="token:${escapeHtml(token.id)}:balance" data-live-value="${escapeHtml(token.formatted)}">${escapeHtml(compactAmount(token.formatted))}</p>
+        </div>
+        <div class="token-side">
+          <span class="token-amount" data-live-key="token:${escapeHtml(token.id)}:fiat" data-live-value="${fiat === null ? "unknown" : fiat}">${fiat === null ? "—" : escapeHtml(formatFiat(fiat, currency))}</span>
+          ${changeBadge(change)}
+        </div>
+      </summary>
+      <div class="token-breakdown">
+        <div class="token-breakdown-row">
+          <span class="token-breakdown-label">Public balance</span>
+          <span class="token-breakdown-value">${escapeHtml(compactAmount(breakdown.publicFormatted))} ${escapeHtml(token.symbol)}</span>
+        </div>
+        ${privateBreakdownLine(token, breakdown.private)}
+        <button class="token-breakdown-more" data-token-detail="${escapeHtml(token.id)}" type="button">See more about ${escapeHtml(token.symbol)}${icon("chevronRight")}</button>
+      </div>
+    </details>
+  </li>`;
+};
+
+/**
  * Renders one tappable token row for the home balances list.
  */
 export const balanceRow = (

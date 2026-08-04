@@ -8,33 +8,74 @@ import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens
  * Privacy styles inherit every color from the active skin.
  */
 export const PRIVACY_STYLES = `
-  .privacy-toggle-row {
+  /* Unified balance rows: the summary is the row, the dropdown carries the
+     public/private split and the asset-screen link. The private line doubles
+     as the registration entry while the account is unregistered. */
+  .token-row.token-unified { display: block; }
+  .token-disclosure { min-width: 0; }
+  .token-disclosure summary {
     align-items: center;
+    cursor: pointer;
     display: flex;
     gap: ${SPACE.md};
-    justify-content: space-between;
-    min-height: ${CONTROL.hit};
-    padding: ${SPACE.sm} 0 ${SPACE.md};
+    list-style: none;
   }
-  .privacy-toggle-row > label {
-    color: var(--mc-text);
-    cursor: pointer;
-    flex: none;
-    font-size: ${TYPE.label.size};
-    font-weight: ${WEIGHT.medium};
-    margin: 0;
-    text-wrap: nowrap;
-  }
-  .privacy-toggle-row input[type="checkbox"] { cursor: pointer; }
-  .privacy-callout {
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
+  .token-disclosure summary::-webkit-details-marker { display: none; }
+  .token-breakdown {
     display: grid;
     gap: ${SPACE.sm};
-    margin: ${SPACE.sm} 0 ${SPACE.md};
-    padding: ${SPACE.md};
+    padding: ${SPACE.md} ${SPACE.sm} ${SPACE.sm} calc(40px + ${SPACE.md});
   }
-  .privacy-callout p { color: var(--mc-muted); margin: 0; }
+  .token-breakdown-row {
+    align-items: center;
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.md};
+    justify-content: space-between;
+  }
+  .token-breakdown-row.muted .token-breakdown-value { color: var(--mc-muted); }
+  .token-breakdown-label {
+    align-items: center;
+    color: var(--mc-muted);
+    display: inline-flex;
+    gap: ${SPACE.xs};
+  }
+  .token-breakdown-label .icon { height: 12px; width: 12px; }
+  .token-breakdown-value { font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.medium}; }
+  button.token-breakdown-register {
+    background: transparent;
+    color: var(--mc-muted);
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.medium};
+    justify-content: space-between;
+    min-height: ${CONTROL.hitSmall};
+    padding: 0;
+    text-align: left;
+    width: 100%;
+  }
+  button.token-breakdown-register:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+  button.token-breakdown-more {
+    background: transparent;
+    color: var(--mc-text);
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.semibold};
+    justify-content: flex-start;
+    min-height: ${CONTROL.hitSmall};
+    padding: 0;
+  }
+  button.token-breakdown-more:not(:disabled):hover { background: transparent; }
+  button.token-breakdown-more .icon { height: 14px; width: 14px; }
+  .privacy-inline-error {
+    align-items: center;
+    color: var(--mc-muted);
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.sm};
+    justify-content: space-between;
+    padding: ${SPACE.sm} ${SPACE.sm} 0;
+  }
+  .private-balance-summary.muted .token-fiat { color: var(--mc-muted); }
   .private-balance-mark,
   .private-balance-label {
     align-items: center;

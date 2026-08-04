@@ -14,6 +14,12 @@ import type { SidepanelWallet } from "./runtime";
 export type EndpointUiDeps = {
   readonly app: Element | null;
   readonly networkId: () => string;
+  /**
+   * Called after the STRK20 service routing changes so stale shielded-balance
+   * discovery state (including a sticky error from the previous endpoints) is
+   * dropped and discovery re-runs against the new configuration.
+   */
+  readonly onStrk20ConfigChanged?: () => void;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly wallet: SidepanelWallet;
 };
@@ -93,6 +99,7 @@ const bindStrk20Services = (deps: EndpointUiDeps): void => {
     void deps.wallet.setStrk20NetworkConfig(deps.networkId(), config).then(
       async () => {
         showToast(`Privacy services ${config ? "saved" : "disabled"}`, "success");
+        deps.onStrk20ConfigChanged?.();
         await deps.render(await deps.wallet.loadStatus());
       },
       (error: unknown) => {

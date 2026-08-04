@@ -55,7 +55,6 @@ const scopeMatches = (deps: PrivacyUiDeps, scope: PrivacyAsyncScope): boolean =>
 const loadDisclosure = async (deps: PrivacyUiDeps): Promise<boolean> => {
   const scope = captureScope(deps);
   const pending: PrivacyDisclosureState = {
-    enabled: true,
     error: null,
     loading: true,
     value: null,
@@ -72,13 +71,12 @@ const loadDisclosure = async (deps: PrivacyUiDeps): Promise<boolean> => {
     ) {
       return false;
     }
-    deps.setDisclosure({ enabled: true, error: null, loading: false, value });
+    deps.setDisclosure({ error: null, loading: false, value });
     deps.paint();
     return true;
   } catch (error) {
     if (deps.disclosure() === pending && scopeMatches(deps, scope)) {
       deps.setDisclosure({
-        enabled: true,
         error: errorMessage(error, "Private balances unavailable"),
         loading: false,
         value: null,
@@ -129,28 +127,34 @@ const startJourney = async (
 };
 
 const bindDisclosure = (deps: PrivacyUiDeps): void => {
-  const toggle = deps.app?.querySelector<HTMLInputElement>("[data-privacy-toggle]");
-  toggle?.addEventListener("change", () => {
-    if (!toggle.checked) {
-      deps.setDisclosure({ enabled: false, error: null, loading: false, value: null });
-      deps.paint();
-      return;
-    }
+  // Balances are unified: discovery starts automatically for the unlocked
+  // active account. `error` intentionally blocks re-triggering so a failing
+  // service is retried only through the explicit retry affordance.
+  const status = deps.status();
+  const disclosure = deps.disclosure();
+  if (
+    status.ready &&
+    !status.locked &&
+    status.activeAccountId !== null &&
+    !disclosure.loading &&
+    !disclosure.error &&
+    disclosure.value === null
+  ) {
     void loadDisclosure(deps);
-  });
+  }
   deps.app
     ?.querySelector<HTMLButtonElement>("[data-privacy-retry]")
     ?.addEventListener("click", () => {
       void loadDisclosure(deps);
     });
-  deps.app
-    ?.querySelector<HTMLButtonElement>("[data-privacy-register]")
-    ?.addEventListener("click", (event) => {
-      const tokenId = defaultTokenId(deps);
+  deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-register]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const tokenId = button.dataset["privacyRegister"] || defaultTokenId(deps);
       if (tokenId) {
-        void startJourney(deps, tokenId, event.currentTarget as HTMLButtonElement);
+        void startJourney(deps, tokenId, button);
       }
     });
+  });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-open]").forEach((button) => {
     button.addEventListener("click", () => {
       const tokenId = button.dataset["privacyOpen"];
@@ -258,7 +262,7 @@ const bindConfirmation = (
 const bindOutcome = (deps: PrivacyUiDeps, journey: PrivacyJourneyState): void => {
   if (journey.stage === "success") {
     deps.app?.querySelector("#privacy-check-activation")?.addEventListener("click", () => {
-      deps.setDisclosure({ enabled: true, error: null, loading: false, value: null });
+      deps.setDisclosure({ error: null, loading: false, value: null });
       const scope = captureScope(deps);
       void loadDisclosure(deps).then((loaded) => {
         if (!loaded || !scopeMatches(deps, scope)) {
@@ -276,7 +280,7 @@ const bindOutcome = (deps: PrivacyUiDeps, journey: PrivacyJourneyState): void =>
       });
     });
     deps.app?.querySelector("#privacy-check-balance")?.addEventListener("click", () => {
-      deps.setDisclosure({ enabled: true, error: null, loading: false, value: null });
+      deps.setDisclosure({ error: null, loading: false, value: null });
       const scope = captureScope(deps);
       void loadDisclosure(deps).then((loaded) => {
         if (loaded && scopeMatches(deps, scope)) {

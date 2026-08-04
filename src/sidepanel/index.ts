@@ -170,7 +170,13 @@ const bindAll = (): void => {
   bindDashboard(shellDeps);
   bindDeploy(shellDeps);
   bindPickers(shellDeps);
-  bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
+  bindEndpointSettings({
+    app,
+    networkId: () => lastNetworkId,
+    onStrk20ConfigChanged: () => privacy.reset(),
+    render,
+    wallet,
+  });
   bindHomeUi({
     app,
     drawerGroupFilter: () => drawerGroupFilter,

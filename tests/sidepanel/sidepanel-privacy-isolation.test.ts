@@ -61,60 +61,16 @@ const mount = (html: string): HTMLElement => {
 };
 
 describe("privacy UI async scope isolation", () => {
-  test("uses the native checkbox change event to disable private balances", () => {
-    let disclosure: PrivacyDisclosureState = {
-      enabled: true,
-      error: null,
-      loading: false,
-      value: null,
-    };
-    let paints = 0;
-    const app = mount('<input checked data-privacy-toggle name="privateBalances" type="checkbox">');
-    bindPrivacy({
-      app,
-      balances: () => [],
-      disclosure: () => disclosure,
-      generation: () => 0,
-      journey: () => ({ stage: "idle" }),
-      navigate: () => undefined,
-      paint: () => {
-        paints += 1;
-      },
-      preferences: () => preferences,
-      setDisclosure: (state) => {
-        disclosure = state;
-      },
-      setJourney: () => undefined,
-      status: () => statusFor(account.id),
-      wallet: {} as SidepanelWallet,
-    });
-
-    const toggle = app.querySelector<HTMLInputElement>("[data-privacy-toggle]");
-    if (!toggle) {
-      throw new Error("privacy checkbox missing");
-    }
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
-
-    expect(disclosure).toEqual({ enabled: false, error: null, loading: false, value: null });
-    expect(paints).toBe(1);
-  });
-
-  test("loads private balances when the native checkbox is checked", async () => {
+  test("starts shielded-balance discovery automatically for the unlocked account", async () => {
     const loaded = {
       accountId: account.id,
       balances: [],
       networkId: "SN_MAIN" as const,
       registration: "registered" as const,
     };
-    let disclosure: PrivacyDisclosureState = {
-      enabled: false,
-      error: null,
-      loading: false,
-      value: null,
-    };
+    let disclosure: PrivacyDisclosureState = { error: null, loading: false, value: null };
     let paints = 0;
-    const app = mount('<input data-privacy-toggle name="privateBalances" type="checkbox">');
+    const app = mount("<div></div>");
     bindPrivacy({
       app,
       balances: () => [],
@@ -135,39 +91,63 @@ describe("privacy UI async scope isolation", () => {
         loadPrivacyState: async () => loaded,
       } as unknown as SidepanelWallet,
     });
-
-    const toggle = app.querySelector<HTMLInputElement>("[data-privacy-toggle]");
-    if (!toggle) {
-      throw new Error("privacy checkbox missing");
-    }
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
     await tick();
 
-    expect(disclosure).toEqual({ enabled: true, error: null, loading: false, value: loaded });
+    expect(disclosure).toEqual({ error: null, loading: false, value: loaded });
     expect(paints).toBe(2);
   });
 
-  test("does not repopulate private balances after disclosure is switched off", async () => {
+  test("never starts discovery while locked, already loading, or after an error", () => {
+    let loads = 0;
+    const wallet = {
+      loadPrivacyState: async () => {
+        loads += 1;
+        throw new Error("must not be called");
+      },
+    } as unknown as SidepanelWallet;
+    const bindWith = (status: WalletStatus, disclosure: PrivacyDisclosureState): void => {
+      bindPrivacy({
+        app: mount("<div></div>"),
+        balances: () => [],
+        disclosure: () => disclosure,
+        generation: () => 0,
+        journey: () => ({ stage: "idle" }),
+        navigate: () => undefined,
+        paint: () => undefined,
+        preferences: () => preferences,
+        setDisclosure: () => undefined,
+        setJourney: () => undefined,
+        status: () => status,
+        wallet,
+      });
+    };
+
+    bindWith(
+      { ...statusFor(account.id), locked: true },
+      { error: null, loading: false, value: null },
+    );
+    bindWith(statusFor(account.id), { error: null, loading: true, value: null });
+    bindWith(statusFor(account.id), { error: "prover offline", loading: false, value: null });
+
+    expect(loads).toBe(0);
+  });
+
+  test("drops a slow discovery that resolves after the account scope changes", async () => {
     const pending = deferred<{
       readonly accountId: string;
       readonly balances: readonly [];
       readonly networkId: "SN_MAIN";
       readonly registration: "registered";
     }>();
-    let disclosure: PrivacyDisclosureState = {
-      enabled: false,
-      error: null,
-      loading: false,
-      value: null,
-    };
+    let disclosure: PrivacyDisclosureState = { error: null, loading: false, value: null };
+    let generation = 0;
+    let status = statusFor(account.id);
     let paints = 0;
-    const app = mount('<input data-privacy-toggle name="privateBalances" type="checkbox">');
     bindPrivacy({
-      app,
+      app: mount("<div></div>"),
       balances: () => [],
       disclosure: () => disclosure,
-      generation: () => 0,
+      generation: () => generation,
       journey: () => ({ stage: "idle" }),
       navigate: () => undefined,
       paint: () => {
@@ -178,20 +158,14 @@ describe("privacy UI async scope isolation", () => {
         disclosure = state;
       },
       setJourney: () => undefined,
-      status: () => statusFor(account.id),
+      status: () => status,
       wallet: {
         loadPrivacyState: () => pending.promise,
       } as unknown as SidepanelWallet,
     });
 
-    const toggle = app.querySelector<HTMLInputElement>("[data-privacy-toggle]");
-    if (!toggle) {
-      throw new Error("privacy checkbox missing");
-    }
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    generation += 1;
+    status = statusFor(secondAccount.id);
     pending.resolve({
       accountId: account.id,
       balances: [],
@@ -200,8 +174,8 @@ describe("privacy UI async scope isolation", () => {
     });
     await tick();
 
-    expect(disclosure).toEqual({ enabled: false, error: null, loading: false, value: null });
-    expect(paints).toBe(2);
+    expect(disclosure.value).toBeNull();
+    expect(paints).toBe(1);
   });
 
   test("drops a registration preparation that resolves after account switch", async () => {
@@ -214,7 +188,6 @@ describe("privacy UI async scope isolation", () => {
       app,
       balances: () => [],
       disclosure: () => ({
-        enabled: true,
         error: null,
         loading: false,
         value: {
@@ -256,7 +229,7 @@ describe("privacy UI async scope isolation", () => {
     const deps = {
       app,
       balances: () => [],
-      disclosure: () => ({ enabled: true, error: null, loading: false, value: null }),
+      disclosure: () => ({ error: null, loading: true, value: null }),
       generation: () => generation,
       journey: () => ({ stage: "compose", tokenId: preparation.tokenId }) as PrivacyJourneyState,
       navigate: () => undefined,
@@ -287,7 +260,7 @@ describe("privacy UI async scope isolation", () => {
     bindPrivacy({
       app,
       balances: () => [],
-      disclosure: () => ({ enabled: true, error: null, loading: false, value: null }),
+      disclosure: () => ({ error: null, loading: true, value: null }),
       generation: () => generation,
       journey: () => ({
         preparation,
