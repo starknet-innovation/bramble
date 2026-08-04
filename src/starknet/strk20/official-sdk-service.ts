@@ -10,9 +10,11 @@ import { isJson } from "../../shared/json";
 import { STARKNET_NETWORKS, sameFelt } from "../networks";
 import { submitInvokeTransaction } from "../rpc-submit";
 import { Strk20CallSetSigner } from "./call-set-signer";
+import type { Strk20NetworkConfig } from "./config";
 import type { Strk20MaturityScope, Strk20MaturityStore } from "./maturity";
 import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
 import {
+  isRetryableStrk20ServiceError,
   mapStrk20ProtocolError,
   mapStrk20StageError,
   type Strk20FailureStage,
@@ -43,11 +45,22 @@ type OfficialServiceOptions = {
   readonly maturityStore?: Strk20MaturityStore;
   readonly nowSeconds?: () => number;
   readonly pauseForMaturity?: () => Promise<void>;
+  readonly pauseForServiceRetry?: (attempt: number) => Promise<void>;
   readonly providerFor?: (nodeUrl: string) => RpcProvider;
   readonly sdk: PrivacySdkRuntime;
   readonly submitInvoke?: typeof submitInvokeTransaction;
   readonly waitForAccepted?: (provider: RpcProvider, transactionHash: string) => Promise<number>;
 };
+
+const MAX_SERVICE_ATTEMPTS = 3;
+
+const defaultServiceRetryPause = (attempt: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, attempt * 1_000);
+  });
+
+const retryableServiceAttempt = (attempt: number, error: unknown): boolean =>
+  attempt < MAX_SERVICE_ATTEMPTS && isRetryableStrk20ServiceError(error);
 
 const signatureFor = async (
   context: Strk20AccountContext,
@@ -114,20 +127,67 @@ const maturityScope = (input: Strk20AccountContext, poolAddress: string) => ({
 const discoverWith = (
   sdk: PrivacySdkRuntime,
   input: Strk20PrepareInput,
-  stage: Strk20FailureStage,
   builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
 ): { readonly builder: SdkBuilder; readonly transfers: SdkTransfers } => {
-  try {
-    const transfers = transfersFor(sdk, input);
-    return {
-      builder:
-        builderForTransfers?.(transfers) ??
-        strk20BuilderFor(sdk, transfers, input.actions, input.account.address),
-      transfers,
-    };
-  } catch (error) {
-    return mapStrk20StageError(stage, error);
+  const transfers = transfersFor(sdk, input);
+  return {
+    builder:
+      builderForTransfers?.(transfers) ??
+      strk20BuilderFor(sdk, transfers, input.actions, input.account.address),
+    transfers,
+  };
+};
+
+type HistoricalState = "deposits" | "registration";
+
+const historicalReadiness = (
+  kind: HistoricalState | undefined,
+  provider: RpcProvider,
+  input: Strk20PrepareInput,
+): ((block: number) => Promise<boolean>) | undefined => {
+  if (kind === "registration") {
+    return (block) => isHistoricalAccountReady(provider, input.account.address, block);
   }
+  if (kind === "deposits") {
+    return (block) =>
+      areHistoricalDepositsReady(provider, input.account.address, input.actions, block);
+  }
+  return undefined;
+};
+
+const prepareOnce = async (input: {
+  readonly builder: SdkBuilder;
+  readonly config: Strk20NetworkConfig;
+  readonly historicalState: HistoricalState | undefined;
+  readonly maturity: Strk20MaturityRuntime;
+  readonly preparation: Strk20PrepareInput;
+  readonly provider: RpcProvider;
+  readonly transfers: SdkTransfers;
+}): Promise<Strk20CallAndProof> => {
+  const readinessKind =
+    input.historicalState ??
+    (input.preparation.actions.some((action) => action.type === "deposit")
+      ? "deposits"
+      : undefined);
+  const block = await input.maturity.provingBlock(
+    input.provider,
+    maturityScope(input.preparation, input.config.poolAddress),
+    historicalReadiness(readinessKind, input.provider, input.preparation),
+  );
+  let result: unknown;
+  if (input.preparation.simulate) {
+    result = await input.builder.simulate({
+      provider: input.provider,
+      provingBlockId: block,
+      validateSignature: false,
+    });
+  } else {
+    const invocation = await input.builder.createProofInvocation({ provingBlockId: block });
+    assertNoSdkWarnings(invocation);
+    result = await input.transfers.executeWithInvocation(invocation, block);
+  }
+  assertNoSdkWarnings(result);
+  return readCallAndProof(result, input.config, input.preparation.simulate);
 };
 
 const prepareWith = async (
@@ -135,8 +195,9 @@ const prepareWith = async (
   input: Strk20PrepareInput,
   maturity: Strk20MaturityRuntime,
   providerFor: (nodeUrl: string) => RpcProvider,
+  pauseForServiceRetry: (attempt: number) => Promise<void>,
   builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
-  historicalState?: "deposits" | "registration",
+  historicalState?: HistoricalState,
 ): Promise<Strk20CallAndProof> => {
   const config = requireStrk20Config(input);
   if (
@@ -149,46 +210,30 @@ const prepareWith = async (
   if (!nodeUrl) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
-  const { builder, transfers } = discoverWith(
-    sdk,
-    input,
-    historicalState === "registration" ? "registration-preparation" : "discovery",
-    builderForTransfers,
-  );
-  try {
-    const provider = providerFor(nodeUrl);
-    const readinessKind =
-      historicalState ??
-      (input.actions.some((action) => action.type === "deposit") ? "deposits" : undefined);
-    const readiness =
-      readinessKind === "registration"
-        ? (block: number) => isHistoricalAccountReady(provider, input.account.address, block)
-        : readinessKind === "deposits"
-          ? (block: number) =>
-              areHistoricalDepositsReady(provider, input.account.address, input.actions, block)
-          : undefined;
-    const block = await maturity.provingBlock(
-      provider,
-      maturityScope(input, config.poolAddress),
-      readiness,
-    );
-    let result: unknown;
-    if (input.simulate) {
-      result = await builder.simulate({
+  for (let attempt = 1; attempt <= MAX_SERVICE_ATTEMPTS; attempt += 1) {
+    let stage: Strk20FailureStage =
+      historicalState === "registration" ? "registration-preparation" : "discovery";
+    try {
+      const { builder, transfers } = discoverWith(sdk, input, builderForTransfers);
+      const provider = providerFor(nodeUrl);
+      stage = "proving";
+      return await prepareOnce({
+        builder,
+        config,
+        historicalState,
+        maturity,
+        preparation: input,
         provider,
-        provingBlockId: block,
-        validateSignature: false,
+        transfers,
       });
-    } else {
-      const invocation = await builder.createProofInvocation({ provingBlockId: block });
-      assertNoSdkWarnings(invocation);
-      result = await transfers.executeWithInvocation(invocation, block);
+    } catch (error) {
+      if (!retryableServiceAttempt(attempt, error)) {
+        return mapStrk20StageError(stage, error);
+      }
+      await pauseForServiceRetry(attempt);
     }
-    assertNoSdkWarnings(result);
-    return readCallAndProof(result, config, input.simulate);
-  } catch (error) {
-    return mapStrk20StageError("proving", error);
   }
+  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
 };
 
 /**
@@ -199,6 +244,7 @@ export const createOfficialStrk20Service = ({
   maturityStore,
   nowSeconds,
   pauseForMaturity,
+  pauseForServiceRetry = defaultServiceRetryPause,
   providerFor = (nodeUrl) => new RpcProvider({ nodeUrl }),
   sdk,
   submitInvoke = submitInvokeTransaction,
@@ -225,7 +271,7 @@ export const createOfficialStrk20Service = ({
   };
   return {
     async prepare(input) {
-      return prepareWith(sdk, input, maturity, providerFor);
+      return prepareWith(sdk, input, maturity, providerFor, pauseForServiceRetry);
     },
     async privateBalances(input) {
       try {
@@ -257,6 +303,7 @@ export const createOfficialStrk20Service = ({
             { ...input, actions: [], simulate: false },
             maturity,
             providerFor,
+            pauseForServiceRetry,
             strk20RegistrationBuilderFor,
             "registration",
           ),
@@ -336,7 +383,14 @@ export const createOfficialStrk20Service = ({
         }
         return submission(
           input,
-          async () => prepareWith(sdk, { ...input, simulate: false }, maturity, providerFor),
+          async () =>
+            prepareWith(
+              sdk,
+              { ...input, simulate: false },
+              maturity,
+              providerFor,
+              pauseForServiceRetry,
+            ),
           async (callAndProof) => {
             const result = await submitInvoke({
               account: input.account,
@@ -376,6 +430,7 @@ export const createOfficialStrk20Service = ({
             },
             maturity,
             providerFor,
+            pauseForServiceRetry,
           ),
         async (callAndProof) =>
           submitStrk20PaymasterPlan({

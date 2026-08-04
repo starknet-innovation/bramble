@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  isRetryableStrk20ServiceError,
   mapStrk20ProtocolError,
   mapStrk20StageError,
   sanitizeStrk20Detail,
@@ -106,18 +107,27 @@ describe("STRK20 stage error mapping", () => {
     expect(thrown).not.toContain("params");
   });
 
-  test("classifies nonce, fee, validation, proof, and transport failures", () => {
+  test("classifies nonce, fee, validation, proof, throttling, and transport failures", () => {
     const cases: readonly (readonly [unknown, string])[] = [
       [rpcError(52, "Invalid transaction nonce"), "invalid-nonce"],
       [rpcError(55, "insufficient max fee for validate"), "insufficient-fee"],
       [rpcError(55, "Account validation failed"), "validation-failed"],
       [rpcError(63, "proof rejected for base_block"), "proof-rejected"],
+      [rpcError(-32_005, "rate limit exceeded"), "rate-limited"],
+      [new Error("Proving service HTTP 429"), "rate-limited"],
       [new Error("Failed to fetch"), "transport"],
       [new Error("something else entirely"), "service-unavailable"],
     ];
     for (const [error, category] of cases) {
       expect(() => mapStrk20StageError("submission", error)).toThrow(`/${category})`);
     }
+  });
+
+  test("retries only explicit service throttling responses", () => {
+    expect(isRetryableStrk20ServiceError(rpcError(-32_005, "rate limit exceeded"))).toBe(true);
+    expect(isRetryableStrk20ServiceError(new Error("Proving service HTTP 429"))).toBe(true);
+    expect(isRetryableStrk20ServiceError(rpcError(63, "proof rejected"))).toBe(false);
+    expect(isRetryableStrk20ServiceError(new Error("Failed to fetch"))).toBe(false);
   });
 
   test("preserves reviewed wallet errors and the protocol base message", () => {

@@ -34,6 +34,7 @@ export type Strk20ErrorCategory =
   | "insufficient-fee"
   | "invalid-nonce"
   | "proof-rejected"
+  | "rate-limited"
   | "service-unavailable"
   | "transport"
   | "validation-failed";
@@ -49,6 +50,7 @@ const BASE_MARKERS: readonly (readonly [RegExp, string])[] = [
 ];
 
 const CATEGORY_MARKERS: readonly (readonly [RegExp, Strk20ErrorCategory])[] = [
+  [/-32005|rate limit|too many requests|\b429\b/i, "rate-limited"],
   [/invalid transaction nonce|nonce mismatch|wrong nonce/i, "invalid-nonce"],
   [/validate_failure|validation failed|validate failed/i, "validation-failed"],
   [/max fee|fee token|exceed balance|fee transfer/i, "insufficient-fee"],
@@ -118,6 +120,19 @@ const markerFor = <T>(text: string, markers: readonly (readonly [RegExp, T])[]):
     }
   }
   return undefined;
+};
+
+/**
+ * Identifies an explicit upstream throttling response that is safe to retry
+ * during proof preparation, before any transaction can be broadcast. RPC
+ * envelopes are read structurally so starknet.js request bodies stay ignored.
+ */
+export const isRetryableStrk20ServiceError = (error: unknown): boolean => {
+  const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
+  if (isRecord(baseError) && baseError["code"] === -32_005) {
+    return true;
+  }
+  return /rate limit|too many requests|\bHTTP 429\b/i.test(failureText(error));
 };
 
 /**

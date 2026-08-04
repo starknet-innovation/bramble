@@ -352,8 +352,7 @@ describe("executeInvokeApproval failure branches", () => {
         },
       }),
     ).resolves.toEqual({
-      error:
-        "strk20 services unavailable (submission/service-unavailable): -32005 rate limit exceeded",
+      error: "strk20 services unavailable (submission/rate-limited): -32005 rate limit exceeded",
     });
   });
 });

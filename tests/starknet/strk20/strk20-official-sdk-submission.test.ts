@@ -24,6 +24,11 @@ const scope = {
   poolAddress,
 };
 
+const rateLimitError = (): Error =>
+  Object.assign(new Error("RPC request failed"), {
+    baseError: { code: -32_005, data: null, message: "rate limit exceeded" },
+  });
+
 describe("official STRK20 SDK submission boundary", () => {
   test("submits only a non-empty proof to the configured apply_actions call", async () => {
     const submitted: Call[] = [];
@@ -127,6 +132,95 @@ describe("official STRK20 SDK submission boundary", () => {
         signHash: expect.any(Function),
       },
     ]);
+  });
+
+  test("retries rate-limited registration proofs before any broadcast", async () => {
+    let proofAttempts = 0;
+    const pauses: number[] = [];
+    const submitted: unknown[] = [];
+    const sdk = runtime(() => {
+      const base = builder(executeResult());
+      const instrumented = {
+        ...base,
+        async createProofInvocation() {
+          proofAttempts += 1;
+          if (proofAttempts < 3) {
+            throw rateLimitError();
+          }
+          return { warnings: [] };
+        },
+        register() {
+          return instrumented;
+        },
+      } as unknown as OfficialBuilder;
+      return {
+        build: () => instrumented,
+        async discoverNotes() {
+          return { notes: new Map() };
+        },
+        executeWithInvocation: async () => executeResult(),
+      };
+    });
+    const service = createOfficialStrk20Service({
+      pauseForServiceRetry: async (attempt) => {
+        pauses.push(attempt);
+      },
+      providerFor,
+      sdk,
+      async submitInvoke(input) {
+        submitted.push(input);
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    expect(proofAttempts).toBe(3);
+    expect(pauses).toEqual([1, 2]);
+    expect(submitted).toHaveLength(1);
+  });
+
+  test("bounds registration retries and never broadcasts after persistent throttling", async () => {
+    let proofAttempts = 0;
+    const pauses: number[] = [];
+    let submitted = false;
+    const sdk = runtime(() => {
+      const base = builder(executeResult());
+      const instrumented = {
+        ...base,
+        async createProofInvocation() {
+          proofAttempts += 1;
+          throw rateLimitError();
+        },
+        register() {
+          return instrumented;
+        },
+      } as unknown as OfficialBuilder;
+      return {
+        build: () => instrumented,
+        async discoverNotes() {
+          return { notes: new Map() };
+        },
+        executeWithInvocation: async () => executeResult(),
+      };
+    });
+    const service = createOfficialStrk20Service({
+      pauseForServiceRetry: async (attempt) => {
+        pauses.push(attempt);
+      },
+      providerFor,
+      sdk,
+      async submitInvoke(input) {
+        submitted = true;
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(service.register?.(context)).rejects.toThrow(
+      "strk20 services unavailable (proving/rate-limited): -32005 rate limit exceeded",
+    );
+    expect(proofAttempts).toBe(3);
+    expect(pauses).toEqual([1, 2]);
+    expect(submitted).toBe(false);
   });
 
   test("first deposits grant only exact aggregate approval before pool submission", async () => {
