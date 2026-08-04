@@ -21,7 +21,7 @@ import {
   transferKey,
   transferStageTitle,
 } from "./transfer-model";
-import { reviewPanelHtml } from "./transfer-review-markup";
+import { reviewDetailsHtml, reviewFeeHtml } from "./transfer-review-markup";
 
 export { activityExportToast, bindActivity } from "./activity-ui";
 export { friendlyReviewError, recipientFieldError } from "./transfer-model";
@@ -222,13 +222,17 @@ const applyTransferUi = (form: HTMLFormElement): void => {
 
   const reviewPanel = form.querySelector<HTMLElement>("#review-panel");
   if (reviewPanel) {
-    reviewPanel.innerHTML = state.review ? reviewPanelHtml(state.review) : "";
+    reviewPanel.innerHTML = state.review ? reviewDetailsHtml(state.review) : "";
+  }
+  const reviewFee = form.querySelector<HTMLElement>("#send-review-fee");
+  if (reviewFee) {
+    reviewFee.innerHTML = state.review ? reviewFeeHtml(state.review) : "";
   }
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {
     reviewSummary.innerHTML = state.fields ? reviewSummaryHtml(state.fields) : "";
   }
-  reviewPanel
+  reviewFee
     ?.querySelector<HTMLButtonElement>("#review-retry-fee")
     ?.addEventListener("click", () => form.requestSubmit());
 

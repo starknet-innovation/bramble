@@ -392,6 +392,14 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-review-hero small { color: var(--mc-muted); }
   .send-review-facts { border-top: 1px solid var(--mc-hairline); margin: 0; }
+  .send-review-fee {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    display: grid;
+    gap: ${SPACE.sm};
+    padding: ${SPACE.md} ${SPACE.lg};
+  }
+  .send-review-fee:empty { display: none; }
   .send-review-disclosure {
     background: var(--mc-panel);
     border-radius: ${RADIUS.lg};

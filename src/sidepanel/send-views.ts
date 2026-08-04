@@ -379,6 +379,7 @@ export const sendFlow = (
                 ${button({ attributes: { id: "send-edit" }, label: "Edit", size: "small", variant: "ghost" })}
               </div>
               <div class="send-review-summary" id="send-review-summary"></div>
+              <div class="send-review-fee" id="send-review-fee" aria-live="polite"></div>
               <details class="send-review-disclosure">
                 <summary><span>Transaction details</span>${icon("chevronDown")}</summary>
                 <div class="send-review-disclosure-body" id="review-panel"></div>
