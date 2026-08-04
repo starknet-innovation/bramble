@@ -11,6 +11,7 @@ import { parseMultisigReviewPackage } from "./multisig-model";
 import { bindMultisigProposalForm } from "./multisig-proposal-ui";
 import { bindMultisigReviewTools } from "./multisig-review-ui";
 import type { MultisigClient } from "./multisig-runtime";
+import { closeMultisigSheet, openMultisigSheet } from "./multisig-sheet-motion";
 import { isMultisigSyncFailure, multisigSyncActionMessage } from "./multisig-sync";
 import type { SidepanelWallet } from "./runtime";
 
@@ -224,14 +225,13 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
       (panel) => panel.dataset["msConfirmPanel"] === proposalId,
     );
   const close = (panel: HTMLElement, restoreFocus = true): void => {
-    const target = panel;
-    const proposalId = target.dataset["msConfirmPanel"];
-    target.hidden = true;
-    if (restoreFocus && proposalId) {
-      [...(deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-open]") ?? [])]
-        .find((button) => button.dataset["msConfirmOpen"] === proposalId)
-        ?.focus();
-    }
+    const proposalId = panel.dataset["msConfirmPanel"];
+    const trigger = restoreFocus
+      ? [...(deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-open]") ?? [])].find(
+          (button) => button.dataset["msConfirmOpen"] === proposalId,
+        )
+      : null;
+    closeMultisigSheet(panel, trigger);
   };
 
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-open]").forEach((button) => {
@@ -240,10 +240,10 @@ const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
       if (!panel) {
         return;
       }
-      panel.hidden = false;
-      panel
-        .querySelector<HTMLButtonElement>('[data-ms-confirm-signer][aria-pressed="true"]')
-        ?.focus();
+      openMultisigSheet(
+        panel,
+        panel.querySelector<HTMLButtonElement>('[data-ms-confirm-signer][aria-pressed="true"]'),
+      );
     });
   });
 

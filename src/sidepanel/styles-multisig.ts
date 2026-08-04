@@ -127,6 +127,7 @@ export const MULTISIG_STYLES = `
     gap: ${SPACE.md};
     min-width: 0;
   }
+  .proposal-stage:not([hidden]) { view-transition-name: proposal-stage; }
   .proposal-stage-heading { display: grid; gap: ${SPACE.xs}; }
   .proposal-stage-heading h2 {
     font-size: ${TYPE.headline.size};

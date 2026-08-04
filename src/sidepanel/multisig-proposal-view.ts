@@ -273,7 +273,7 @@ const proposalRow = (
       <div class="proposal-head">
         <div class="proposal-title">
           <strong>${escapeHtml(proposal.summary || "Untitled proposal")}</strong>
-          <span class="hint">${escapeHtml(stateLabel[proposal.state])} · ${proposal.confirmations} of ${record.quorum}</span>
+          <span class="hint" data-live-key="proposal-state:${escapeHtml(proposal.id)}" data-live-value="${proposal.state}:${proposal.confirmations}">${escapeHtml(stateLabel[proposal.state])} · ${proposal.confirmations} of ${record.quorum}</span>
         </div>
         ${copyButton(proposal.txId, "Copy proposal id")}
       </div>

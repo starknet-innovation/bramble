@@ -38,7 +38,15 @@ const multisigCheckpoint = (
   narrative: string,
   content: () => string,
   state: Readonly<Record<string, unknown>>,
-): ScenarioCheckpoint => ({ content, id, label, narrative, state });
+  prepare?: (context: FrameContext) => void,
+): ScenarioCheckpoint => ({
+  content,
+  id,
+  label,
+  narrative,
+  ...(prepare ? { prepare } : {}),
+  state,
+});
 
 const confirmedProposal: MultisigProposalRecord = {
   ...pendingProposal,
@@ -84,23 +92,27 @@ const showAdvancedProposal = (context: FrameContext): void => {
   if (options) options.hidden = false;
 };
 
+const bindProposalJourney = (context: FrameContext): void => {
+  const client = createMultisigClient({
+    sendMessage: async () => ({ error: "UI Lab blocks proposal submission" }),
+  });
+  bindMultisigProposalForm({
+    app: context.app,
+    multisig: client,
+    openDetail: () => context.emit({ detail: "return to shared account", kind: "state" }),
+    runAction: () => undefined,
+    selectedMultisigId: () => multisig.id,
+    setResult: (id, message) => {
+      const result = context.app.querySelector(`#${id}`);
+      if (result) result.textContent = message;
+    },
+  });
+};
+
 const prepareProposal =
   (stage: "amount" | "review") =>
   (context: FrameContext): void => {
-    const client = createMultisigClient({
-      sendMessage: async () => ({ error: "UI Lab blocks proposal submission" }),
-    });
-    bindMultisigProposalForm({
-      app: context.app,
-      multisig: client,
-      openDetail: () => context.emit({ detail: "return to shared account", kind: "state" }),
-      runAction: () => undefined,
-      selectedMultisigId: () => multisig.id,
-      setResult: (id, message) => {
-        const result = context.app.querySelector(`#${id}`);
-        if (result) result.textContent = message;
-      },
-    });
+    bindProposalJourney(context);
     context.app
       .querySelector<HTMLButtonElement>(`[data-proposal-recipient="${RECIPIENT_ADDRESS}"]`)
       ?.click();
@@ -433,6 +445,7 @@ export const multisigScenario: WalletScenario = {
       "A familiar token transfer is primary while arbitrary calldata remains an explicit advanced path.",
       () => multisigProposeFlow(statusFor(), multisig, preferences, portfolio),
       { action: "send-token", calldata: "derived and reviewed", view: "multisig-propose" },
+      bindProposalJourney,
     ),
     {
       content: () => multisigProposeFlow(statusFor(), multisig, preferences, portfolio),

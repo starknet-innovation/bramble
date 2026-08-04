@@ -38,10 +38,10 @@ export const animateLiveValueChanges = (
     animate(
       element,
       [
-        { filter: "blur(2px)", opacity: 0.45, transform: "translateY(-3px)" },
-        { filter: "blur(0)", opacity: 1, transform: "translateY(0)" },
+        { opacity: 0.62, transform: "translateY(-2px)" },
+        { opacity: 1, transform: "translateY(0)" },
       ],
-      { duration: 320, id: "live-value-change" },
+      { duration: 180, id: "live-value-change" },
     );
   });
 };

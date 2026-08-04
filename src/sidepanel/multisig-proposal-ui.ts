@@ -16,6 +16,7 @@ import { icon } from "./icons";
 import type { MultisigClient } from "./multisig-runtime";
 import { accountLabel } from "./parts";
 import { balanceShortcut, fiatInputToken, sendCurrencySymbol, tokenInputFiat } from "./send-model";
+import { transitionProposalStage } from "./send-transition";
 import { tokenGlyph } from "./token-row";
 
 type ProposalStage = "advanced" | "amount" | "asset" | "recipient" | "review";
@@ -63,15 +64,17 @@ const setText = (form: HTMLFormElement, id: string, value: string): void => {
 };
 
 const showStage = (form: HTMLFormElement, stage: ProposalStage): void => {
-  const targetForm = form;
-  targetForm.dataset["proposalStage"] = stage;
-  form.querySelectorAll<HTMLElement>("[data-proposal-stage-panel]").forEach((panel) => {
-    const target = panel;
-    target.hidden = target.dataset["proposalStagePanel"] !== stage;
+  transitionProposalStage(form.ownerDocument, form.dataset["proposalStage"], stage, () => {
+    const targetForm = form;
+    targetForm.dataset["proposalStage"] = stage;
+    form.querySelectorAll<HTMLElement>("[data-proposal-stage-panel]").forEach((panel) => {
+      const target = panel;
+      target.hidden = target.dataset["proposalStagePanel"] !== stage;
+    });
+    const options = form.querySelector<HTMLElement>("[data-proposal-options]");
+    if (options) options.hidden = stage !== "amount" && stage !== "advanced";
+    form.querySelector<HTMLElement>(`[data-proposal-stage-panel="${stage}"] input`)?.focus();
   });
-  const options = form.querySelector<HTMLElement>("[data-proposal-options]");
-  if (options) options.hidden = stage !== "amount" && stage !== "advanced";
-  form.querySelector<HTMLElement>(`[data-proposal-stage-panel="${stage}"] input`)?.focus();
 };
 
 const normalizedAddress = (value: string): string | null => {

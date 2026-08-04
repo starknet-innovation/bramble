@@ -261,6 +261,7 @@ export const multisigProposeFlow = (
       "multisig-propose",
       `<section class="section proposal-flow">
         <form class="proposal-compose-form" id="multisig-propose-form"
+          data-multisig-id="${escapeHtml(record.id)}"
           data-proposal-mode="send"
           data-proposal-stage="recipient"
           data-amount-mode="token"
