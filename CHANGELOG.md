@@ -8,6 +8,56 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [0.8.0] - 2026-08-03
+
+Safer dApp account boundaries, faster and more truthful transaction status, and
+opt-in support for fully on-chain animated collectibles.
+
+### Added
+- A background transaction monitor that recognizes Starknet pre-confirmation,
+  finality, and L1 acceptance, then reconciles submitted activity without
+  blocking the send flow on slow polling.
+- Account-scoped transaction alerts for late rejection, reversion, and expiry,
+  with bounded delivery and visible status updates in the popup and side panel.
+- Explicit playback for self-contained on-chain NFT animations on collectible
+  detail screens, including static fallbacks for gallery views.
+
+### Changed
+- Connected dApps now resolve a grant to at most the active account. Switching
+  outside a site's approved accounts disconnects it and requires deliberate
+  reapproval instead of silently exposing or signing with a stale account.
+- Account creation, import, Ledger creation, and manual account selection now
+  notify connected pages of active-account changes consistently.
+- Submitted activity advances monotonically through pre-confirmed, accepted,
+  rejected, reverted, expired, and L1-confirmed states; terminal observations
+  cannot regress when providers disagree or respond out of order.
+- Mainnet status reads prefer the Starknet Foundation v0.10 endpoint with a
+  Cartridge fallback and bounded concurrency.
+
+### Fixed
+- Late transaction failures are delivered only to the matching unlocked
+  account and network, preventing activity or alerts from bleeding between
+  account scopes.
+- Reconnecting after an account switch no longer returns the previously active
+  address, and a stale network-switch approval cannot reconnect an origin that
+  is no longer authorized.
+- Fully on-chain collectibles without a static image no longer stop at an empty
+  placeholder when their supported animation is opened deliberately.
+
+### Security
+- Untrusted animation HTML runs in a manifest sandbox with an egress-denying
+  CSP and a second opaque-origin iframe sandbox. Browser regression tests prove
+  it cannot access extension APIs or parent DOM state, beacon the network, load
+  remote images, or escape isolation through self-navigation.
+- Transaction approvals remain bound to the exact account shown at review time
+  and fail closed if active-account or origin-grant state changes before
+  execution.
+- Status reconciliation is fail-closed, concurrency-bounded, and capped to five
+  sanitized alerts per drain, limiting provider-induced resource use and UI
+  flooding.
+- The final release head passes the repository's 95% coverage floor, extension
+  browser E2E suite, reproducible packaging, and high-severity dependency audit.
+
 ## [0.7.2] - 2026-07-28
 
 A focused interaction-design and security release: clearer onboarding and
