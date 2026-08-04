@@ -9,7 +9,14 @@ import type { SidepanelWallet } from "./runtime";
 
 type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
 
-const feeLineHtml = (review: TransferReview): string => {
+/**
+ * Renders the transfer fee state — the estimated amount, the pending-deployment
+ * note, or the failed-estimate alert with its retry affordance (`""` when no
+ * state applies). Single source for every confirm surface that promotes the
+ * fee, so wording and formatting cannot diverge between flows (issues 189 and
+ * 190). Dynamic copy is escaped before rendering.
+ */
+export const reviewFeeHtml = (review: TransferReview): string => {
   if (review.fee) {
     return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFri(review.fee.overallFee))}</p>`;
   }
@@ -29,13 +36,22 @@ const feeLineHtml = (review: TransferReview): string => {
 };
 
 /**
- * Renders decoded calls, risk flags, deployment context, and fee state. All
- * untrusted review copy passes through the shared escaped renderers.
+ * Renders decoded calls, risk flags, and deployment context without the fee
+ * state, for surfaces that promote `reviewFeeHtml` onto their always-visible
+ * confirm face. All untrusted review copy passes through the shared escaped
+ * renderers.
  */
-export const reviewPanelHtml = (review: TransferReview): string =>
+export const reviewDetailsHtml = (review: TransferReview): string =>
   `${reviewCallsList(review.summaries)}${reviewPanel([
     ...riskFlagMessages(review.flags),
     ...(review.requiresDeployment
       ? ["This account is not deployed yet; the first send also submits its deployment."]
       : []),
-  ])}${feeLineHtml(review)}`;
+  ])}`;
+
+/**
+ * Renders decoded calls, risk flags, deployment context, and fee state. All
+ * untrusted review copy passes through the shared escaped renderers.
+ */
+export const reviewPanelHtml = (review: TransferReview): string =>
+  `${reviewDetailsHtml(review)}${reviewFeeHtml(review)}`;
