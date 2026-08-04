@@ -280,7 +280,6 @@ export const dashboard = (
   multisigNfts: readonly DiscoveredNft[] = [],
   multisigNftId: string | null = null,
   privacy: PrivacyDisclosureState = {
-    enabled: false,
     error: null,
     loading: false,
     value: null,

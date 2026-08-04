@@ -7,18 +7,18 @@
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { friendlyNetworkError } from "../shared/network-error";
+import { formatTokenAmount } from "../starknet/rpc";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { emptyState } from "../ui/content";
 import { button, iconButton } from "../ui/controls";
-import { checkboxField } from "../ui/fields";
 import { menuRow } from "../ui/navigation";
 import { icon } from "./icons";
 import { type NftGalleryItem, nftImageMarkup, nftTilePlay, visibleNftItems } from "./nft-views";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import type { BalanceState } from "./runtime";
 import { isHiddenFromHome } from "./token-flows";
-import { balanceRow } from "./token-row";
+import { type PrivateBreakdown, unifiedBalanceRow } from "./token-row";
 
 /**
  * Tab ids of the home portfolio section, in display order.
@@ -69,12 +69,7 @@ export const visiblePrivateHomeBalances = (
   privacy: PrivacyDisclosureState,
   preferences: WalletPreferences | null,
 ): readonly TokenBalance[] => {
-  if (
-    !privacy.enabled ||
-    privacy.loading ||
-    privacy.error ||
-    privacy.value?.registration !== "registered"
-  ) {
+  if (privacy.loading || privacy.error || privacy.value?.registration !== "registered") {
     return [];
   }
   const trackedById = new Map<string, TokenConfig>(
@@ -86,6 +81,36 @@ export const visiblePrivateHomeBalances = (
       ? []
       : [{ ...token, balance: entry.balance, formatted: entry.formatted }];
   });
+};
+
+/**
+ * Home token list with public and private balances summed per asset. Rows keep
+ * the public token order; tokens holding only a private balance are appended.
+ * When discovery has not produced private amounts the list equals the public
+ * one, so hero totals degrade to public-only instead of hiding.
+ */
+export const unifiedHomeBalances = (
+  state: BalanceState,
+  privacy: PrivacyDisclosureState,
+  preferences: WalletPreferences | null,
+): readonly TokenBalance[] => {
+  const privateById = new Map(
+    visiblePrivateHomeBalances(privacy, preferences).map((token) => [token.id, token]),
+  );
+  const combined = visibleHomeBalances(state, preferences).map((token) => {
+    const privateEntry = privateById.get(token.id);
+    privateById.delete(token.id);
+    if (!privateEntry) {
+      return token;
+    }
+    const total = BigInt(token.balance) + BigInt(privateEntry.balance);
+    return {
+      ...token,
+      balance: `0x${total.toString(16)}`,
+      formatted: formatTokenAmount(total, token.decimals),
+    };
+  });
+  return [...combined, ...privateById.values()];
 };
 
 /**
@@ -149,6 +174,39 @@ const tokensErrorPanel = (error: string): string => `
     })}
   </div>`;
 
+// Derives one asset's private-line state from the shared discovery state. An
+// idle discovery (auto-load not finished) reads as loading, never as absent.
+const privateBreakdownFor = (
+  privacy: PrivacyDisclosureState,
+  tokenId: string,
+): PrivateBreakdown => {
+  if (privacy.error) {
+    return { kind: "unavailable", message: privacy.error };
+  }
+  if (privacy.loading || !privacy.value) {
+    return { kind: "loading" };
+  }
+  if (privacy.value.registration !== "registered") {
+    return { kind: "unregistered" };
+  }
+  return {
+    formatted: privacy.value.balances.find((entry) => entry.tokenId === tokenId)?.formatted ?? "0",
+    kind: "ready",
+  };
+};
+
+const privacyErrorLine = (privacy: PrivacyDisclosureState): string =>
+  privacy.error
+    ? `<div class="privacy-inline-error" role="alert"><span>Shielded balances unavailable right now.</span>${button(
+        {
+          attributes: { "data-privacy-retry": true },
+          label: "Try again",
+          size: "small",
+          variant: "ghost",
+        },
+      )}</div>`
+    : "";
+
 const tokensPanel = (
   state: BalanceState,
   preferences: WalletPreferences | null,
@@ -159,21 +217,25 @@ const tokensPanel = (
 ): string => {
   const visible = visibleHomeBalances(state, preferences);
   const hiddenCount = "error" in state ? 0 : state.balances.length - visible.length;
-  const publicBody =
+  const publicById = new Map(visible.map((token) => [token.id, token.formatted]));
+  const unified = unifiedHomeBalances(state, privacy, preferences);
+  const body =
     "error" in state
       ? tokensErrorPanel(state.error)
-      : visible.length === 0
+      : unified.length === 0
         ? emptyState("No tracked balances yet. Add or detect tokens to see them here.")
-        : `<ul class="token-list">${visible
+        : `<ul class="token-list">${unified
             .map((token) =>
-              balanceRow(token, prices[token.address], changes[token.address], currency),
+              unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
+                private: privateBreakdownFor(privacy, token.id),
+                publicFormatted: publicById.get(token.id) ?? "0",
+              }),
             )
             .join("")}</ul>`;
-  const privateBody = privateBalancesPanel(privacy, preferences, prices, changes, currency);
-  return `${privacyToggle(privacy)}
-    ${privacy.enabled ? privateBody : publicBody}
+  return `${privacyErrorLine(privacy)}
+    ${body}
     ${
-      !privacy.enabled && hiddenCount > 0
+      hiddenCount > 0
         ? menuRow({
             attributes: { "data-view": "tokens" },
             icon: "coins",
@@ -183,43 +245,6 @@ const tokensPanel = (
         : ""
     }
     <p id="panel-result" role="status"></p>`;
-};
-
-const privacyToggle = (privacy: PrivacyDisclosureState): string => `
-  <div class="privacy-toggle-row">
-    ${checkboxField({
-      attributes: { "data-privacy-toggle": true },
-      checked: privacy.enabled,
-      name: "privateBalances",
-      text: "Display shielded balances",
-    })}
-  </div>`;
-
-const privateBalancesPanel = (
-  privacy: PrivacyDisclosureState,
-  preferences: WalletPreferences | null,
-  prices: Readonly<Record<string, number>>,
-  changes: Readonly<Record<string, number>>,
-  currency: DisplayCurrency,
-): string => {
-  if (privacy.loading) {
-    return `<div class="privacy-callout" role="status"><strong>Discovering private notes…</strong><p>Reading the privacy indexer for this account.</p></div>`;
-  }
-  if (privacy.error) {
-    return `<div class="privacy-callout" role="alert"><strong>Private balances unavailable</strong><p>${escapeHtml(privacy.error)}</p>${button({ attributes: { "data-privacy-retry": true }, label: "Try again", size: "small", variant: "secondary" })}</div>`;
-  }
-  if (!privacy.value) {
-    return `<div class="privacy-callout"><strong>Private balances are off</strong><p>Enable the toggle to discover shielded assets for this account.</p></div>`;
-  }
-  if (privacy.value.registration === "unregistered") {
-    return `<div class="privacy-callout"><strong>Activate private balances</strong><p>Register this account with the privacy pool before shielding an asset.</p>${button({ attributes: { "data-privacy-register": true }, icon: "shield", label: "Review activation", size: "small" })}</div>`;
-  }
-  const rows = visiblePrivateHomeBalances(privacy, preferences).map((token) =>
-    balanceRow(token, prices[token.address], changes[token.address], currency, { private: true }),
-  );
-  return rows.length > 0
-    ? `<ul class="token-list">${rows.join("")}</ul>`
-    : `<div class="privacy-callout"><strong>No private balances yet</strong><p>Open an asset and choose Go private to shield part of its public balance.</p></div>`;
 };
 
 /**
@@ -292,7 +317,6 @@ export const homeTabs = (
   status: WalletStatus,
   discoveredNfts: readonly DiscoveredNft[] = [],
   privacy: PrivacyDisclosureState = {
-    enabled: false,
     error: null,
     loading: false,
     value: null,

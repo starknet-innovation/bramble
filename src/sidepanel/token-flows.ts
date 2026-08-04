@@ -180,7 +180,6 @@ export const tokenDetailFlow = (
   price: number | null,
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState = {
-    enabled: false,
     error: null,
     loading: false,
     value: null,
@@ -209,7 +208,7 @@ export const tokenDetailFlow = (
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
-          privacy.enabled && registered
+          registered
             ? `<div class="private-balance-summary">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-side">
@@ -217,7 +216,12 @@ export const tokenDetailFlow = (
                   ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
                 </span>
               </div>`
-            : ""
+            : privacy.value
+              ? `<div class="private-balance-summary muted" title="Register to start shielding">
+                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="token-fiat">Register to start shielding</span>
+              </div>`
+              : ""
         }
         ${button({
           attributes: { "data-privacy-open": token.id },

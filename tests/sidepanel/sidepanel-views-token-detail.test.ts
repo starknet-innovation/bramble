@@ -86,7 +86,6 @@ describe("dashboard token-detail arm", () => {
 
   test("private entry uses the public balance hierarchy with a restrained marker", () => {
     const privacy: PrivacyDisclosureState = {
-      enabled: true,
       error: null,
       loading: false,
       value: {
@@ -112,5 +111,24 @@ describe("dashboard token-detail arm", () => {
     expect(html).toContain("0.5 ETH");
     expect(html).toContain("$1,000.00");
     expect(html).not.toContain("Discovered from shielded notes");
+  });
+
+  test("an unregistered account sees the greyed register hint instead of a split", () => {
+    const privacy: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        registration: "unregistered",
+      },
+    };
+
+    const html = tokenDetailFlow(status, token, balance, [10, 20, 30], 2_000, "usd", privacy);
+
+    expect(html).toContain('title="Register to start shielding"');
+    expect(html).toContain("Go private");
+    expect(html).not.toContain('class="private-balance-summary"\n');
   });
 });

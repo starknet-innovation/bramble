@@ -6,10 +6,11 @@
 import type { PrivacyAccountState, PrivacyPreparation } from "./privacy-runtime";
 
 /**
- * Current explicit-disclosure state for the selected account and network.
+ * Current shielded-balance discovery state for the selected account and
+ * network. Discovery starts automatically for the unlocked active account;
+ * `value === null` with no error means it has not completed yet.
  */
 export type PrivacyDisclosureState = {
-  readonly enabled: boolean;
   readonly error: string | null;
   readonly loading: boolean;
   readonly value: PrivacyAccountState | null;
@@ -49,7 +50,6 @@ export type PrivacyJourneyState =
  * Returns the disclosure state used at lock, account switch, and first boot.
  */
 export const emptyPrivacyDisclosure = (): PrivacyDisclosureState => ({
-  enabled: false,
   error: null,
   loading: false,
   value: null,

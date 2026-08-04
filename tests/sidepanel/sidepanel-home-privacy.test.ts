@@ -1,6 +1,7 @@
 /**
- * Private mode switches the whole portfolio scope atomically: the hero and
- * token list must never mix public and private balance domains.
+ * Unified balances: the hero and token list total public and private amounts
+ * together, and each asset row discloses its public/private split. Missing
+ * private data degrades to public-only totals instead of hiding the portfolio.
  */
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance, WalletStatus } from "../../src/popup/responses";
@@ -41,7 +42,6 @@ const publicBalance: TokenBalance = {
   formatted: "1.25",
 };
 const privateState = (loading = false): PrivacyDisclosureState => ({
-  enabled: true,
   error: null,
   loading,
   value: loading
@@ -100,60 +100,63 @@ const privateDashboard = (privacy: PrivacyDisclosureState): string =>
     privacy,
   );
 
-describe("private portfolio scope", () => {
-  test("uses the shared browser-native checkbox for balance privacy", () => {
-    const publicHtml = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status);
-    const privateHtml = homeTabs(
-      { balances: [publicBalance] },
-      preferences,
-      {},
-      {},
-      "usd",
-      status,
-      [],
-      privateState(),
-    );
-
-    expect(publicHtml).toContain(
-      '<input name="privateBalances" type="checkbox" data-privacy-toggle />',
-    );
-    expect(privateHtml).toContain(
-      '<input name="privateBalances" type="checkbox" checked data-privacy-toggle />',
-    );
-    expect(publicHtml).not.toContain("privacy-switch");
-    expect(privateHtml).not.toContain('role="switch"');
-    // One static clickable label in both states — no state-dependent copy.
-    for (const html of [publicHtml, privateHtml]) {
-      expect(html).toContain("Display shielded balances");
-      expect(html).not.toContain("Public balances");
-      expect(html).not.toContain("Read directly from Starknet");
-      expect(html).not.toContain("Visible only inside this wallet");
-    }
-  });
-
-  test("private mode replaces the public hero total and removes public 24h change", () => {
+describe("unified portfolio scope", () => {
+  test("the hero totals public and private balances together", () => {
+    // 1.25 public + 0.5 private ETH at $2,000 = $3,500.
     const html = privateDashboard(privateState());
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("home-actions"));
 
-    expect(hero).toContain("$1,000.00");
-    expect(hero).not.toContain("$2,500.00");
-    expect(hero).toContain("Private portfolio");
-    expect(hero).not.toContain("24h");
-    expect(html).toContain('class="token-open"');
-    expect(html).toContain('class="private-balance-mark" aria-label="Private balance"');
-    expect(html).toContain('class="token-amount"');
+    expect(hero).toContain("$3,500.00");
+    expect(hero).toContain('data-live-key="portfolio-total"');
+    expect(hero).toContain("Includes shielded balances");
+    // The old toggle and its copy are gone.
+    expect(html).not.toContain("data-privacy-toggle");
+    expect(html).not.toContain("Display shielded balances");
+    expect(html).not.toContain("Private portfolio");
   });
 
-  test("private discovery clears the previous public hero instead of leaking stale state", () => {
+  test("asset rows disclose the public/private split with the asset link", () => {
+    const html = privateDashboard(privateState());
+    const row = html.slice(html.indexOf("token-unified"));
+
+    // Summary shows the combined amount; the dropdown shows the split.
+    expect(row).toContain(">1.75<");
+    expect(row).toContain("Public balance");
+    expect(row).toContain("1.25 ETH");
+    expect(row).toContain("Private balance");
+    expect(row).toContain("0.5 ETH");
+    expect(row).toContain(`data-token-detail="${token.id}"`);
+    expect(row).toContain("See more about ETH");
+  });
+
+  test("an unregistered account greys the private line into the activation entry", () => {
+    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        registration: "unregistered",
+      },
+    });
+
+    expect(html).toContain("data-privacy-register");
+    expect(html).toContain('title="Register to start shielding"');
+    // Combined amount degrades to public-only while unregistered.
+    expect(html).toContain(">1.25<");
+  });
+
+  test("pending discovery keeps public totals instead of hiding the hero", () => {
     const html = privateDashboard(privateState(true));
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("home-actions"));
 
-    expect(hero).toContain('data-live-key="private-portfolio-total"');
-    expect(hero).toContain('data-live-value="unknown">—');
-    expect(hero).not.toContain("$2,500.00");
+    expect(hero).toContain("$2,500.00");
+    expect(hero).not.toContain("Includes shielded balances");
+    expect(html).toContain("Discovering…");
   });
 
-  test("private mode preserves the hidden-token filter", () => {
+  test("unified rows preserve the hidden-token filter", () => {
     const hiddenPreferences: WalletPreferences = {
       ...preferences,
       hiddenTokens: [token.id],
@@ -170,6 +173,5 @@ describe("private portfolio scope", () => {
     );
 
     expect(html).not.toContain(`data-token-detail="${token.id}"`);
-    expect(html).toContain("No private balances yet");
   });
 });
