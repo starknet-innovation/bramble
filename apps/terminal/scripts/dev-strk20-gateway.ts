@@ -9,6 +9,13 @@
  * origin check requires. Bodies pass through untouched, so OHTTP envelopes
  * survive the hop. Development only — never deploy this listener.
  *
+ * The paymaster leg is different: the deployed gateway holds its own (currently
+ * invalid) relay credential, so a local `AVNU_PAYMASTER_API_KEY` makes this
+ * server forward paymaster calls straight to the relay upstream with that key
+ * instead of chaining through production. The key is read from the environment
+ * (Bun auto-loads `.env.local`, which is git-ignored), is never logged, and
+ * never leaves this process except as the upstream request header.
+ *
  * Usage:
  *   bun run dev:gateway            # listens on http://127.0.0.1:8787
  *   PORT=9000 bun run dev:gateway  # custom port
@@ -22,6 +29,40 @@
 
 const upstreamBase = process.env["STRK20_DEV_UPSTREAM"] ?? "https://mc-wallet-terminal.vercel.app";
 const port = Number(process.env["PORT"] ?? 8787);
+const paymasterKey = process.env["AVNU_PAYMASTER_API_KEY"];
+const paymasterUpstream =
+  process.env["STRK20_PAYMASTER_UPSTREAM"] ?? "https://starknet.paymaster.avnu.fi";
+const PAYMASTER_PREFIX = "/api/strk20/paymaster";
+
+// Forwards one paymaster JSON-RPC call directly to the relay with the local
+// credential. Returns null when no key is configured so the caller falls back
+// to chaining through the deployed gateway.
+const forwardToPaymaster = async (request: Request, url: URL): Promise<Response | null> => {
+  if (paymasterKey === undefined || paymasterKey === "") {
+    return null;
+  }
+  const suffix = url.pathname.slice(PAYMASTER_PREFIX.length);
+  const headers = new Headers({ "content-type": "application/json" });
+  headers.set("x-paymaster-api-key", paymasterKey);
+  const accept = request.headers.get("accept");
+  if (accept !== null) {
+    headers.set("Accept", accept);
+  }
+  try {
+    return await fetch(`${paymasterUpstream}${suffix}${url.search}`, {
+      body: request.method === "POST" ? await request.arrayBuffer() : undefined,
+      headers,
+      method: request.method,
+      redirect: "error",
+    });
+  } catch (error) {
+    console.error(`${request.method} ${url.pathname} -> paymaster unreachable:`, error);
+    return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
+      headers: { "content-type": "application/json" },
+      status: 502,
+    });
+  }
+};
 
 const corsHeaders = (request: Request): Record<string, string> => ({
   "Access-Control-Allow-Headers": "content-type",
@@ -43,6 +84,21 @@ const server = Bun.serve({
         headers: { ...cors, "content-type": "application/json" },
         status: 404,
       });
+    }
+    if (url.pathname.startsWith(PAYMASTER_PREFIX)) {
+      const direct = await forwardToPaymaster(request, url);
+      if (direct !== null) {
+        console.log(`${request.method} ${url.pathname} -> paymaster ${direct.status} (local key)`);
+        const responseHeaders = new Headers(cors);
+        const type = direct.headers.get("content-type");
+        if (type !== null) {
+          responseHeaders.set("Content-Type", type);
+        }
+        return new Response(await direct.arrayBuffer(), {
+          headers: responseHeaders,
+          status: direct.status,
+        });
+      }
     }
     const headers = new Headers();
     const accept = request.headers.get("accept");
@@ -87,3 +143,8 @@ const server = Bun.serve({
 });
 
 console.log(`STRK20 dev gateway on http://127.0.0.1:${server.port} -> ${upstreamBase}`);
+console.log(
+  paymasterKey
+    ? `paymaster -> ${paymasterUpstream} with a local key (${paymasterKey.length} chars, not logged)`
+    : "paymaster -> chained upstream (set AVNU_PAYMASTER_API_KEY to use a local relay key)",
+);
