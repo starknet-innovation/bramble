@@ -31,7 +31,7 @@ const configuredOrigins = (name: string): readonly string[] =>
 
 const validConfiguredOrigin = (origin: string, audience: GatewayAudience): boolean => {
   if (audience === "extension") {
-    return /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
+    return EXTENSION_ORIGIN_SHAPE.test(origin);
   }
   if (LOCAL_ORIGINS.has(origin)) {
     return true;
@@ -66,13 +66,20 @@ const expectedOrigins = (audience: GatewayAudience): ReadonlySet<string> => {
     : new Set();
 };
 
-// Chrome omits Origin and Referer from privileged extension fetches, including
-// MV3 workers and extension pages. Fetch Metadata remains browser-controlled:
-// requiring this exact non-navigation shape blocks website fetches, forms, and
-// address-bar navigations. It is not software attestation; non-browser clients
-// can spoof HTTP headers, so deployment rate limits remain mandatory.
+const EXTENSION_ORIGIN_SHAPE = /^chrome-extension:\/\/[a-p]{32}$/;
+
+// Chrome omits Origin and Referer from privileged extension GET fetches, but
+// always stamps extension POSTs with the extension's own chrome-extension://
+// origin, so both header shapes are the same privileged fetch. Fetch Metadata
+// remains browser-controlled: requiring this exact non-navigation shape blocks
+// website fetches, forms, and address-bar navigations, and a website can never
+// present a chrome-extension:// origin. It is not software attestation; non-
+// browser clients can spoof HTTP headers, so deployment rate limits remain
+// mandatory.
 const isPrivilegedExtensionFetch = (request: VercelRequest): boolean =>
-  request.headers.origin === undefined &&
+  (request.headers.origin === undefined ||
+    (typeof request.headers.origin === "string" &&
+      EXTENSION_ORIGIN_SHAPE.test(request.headers.origin))) &&
   request.headers.referer === undefined &&
   request.headers["sec-fetch-site"] === "none" &&
   request.headers["sec-fetch-mode"] === "cors" &&

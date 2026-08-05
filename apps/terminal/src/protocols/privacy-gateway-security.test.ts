@@ -125,6 +125,52 @@ describe("privacy gateway security configuration", () => {
     expect(target.headers.has("Access-Control-Allow-Origin")).toBe(false);
   });
 
+  it("accepts Chrome's origin-stamped privileged extension POST shape", () => {
+    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    const target = response();
+    expect(
+      authorizeOrigin(
+        {
+          headers: {
+            origin: "chrome-extension://eaeigbgejaogcbboamdmpolingenbmmd",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "none",
+          },
+          method: "POST",
+        } as unknown as VercelRequest,
+        target.value,
+        "extension",
+      ),
+    ).toBe(true);
+    expect(target.headers.has("Access-Control-Allow-Origin")).toBe(false);
+  });
+
+  it("rejects web origins and malformed extension origins on the privileged shape", () => {
+    delete process.env.MC_WALLET_EXTENSION_ORIGINS;
+    for (const origin of [
+      "https://attacker.example",
+      "chrome-extension://short",
+      "chrome-extension://EAEIGBGEJAOGCBBOAMDMPOLINGENBMMD",
+    ]) {
+      expect(
+        authorizeOrigin(
+          {
+            headers: {
+              origin,
+              "sec-fetch-dest": "empty",
+              "sec-fetch-mode": "cors",
+              "sec-fetch-site": "none",
+            },
+            method: "POST",
+          } as unknown as VercelRequest,
+          response().value,
+          "extension",
+        ),
+      ).toBe(false);
+    }
+  });
+
   it("rejects originless websites and navigation-shaped requests", () => {
     delete process.env.MC_WALLET_EXTENSION_ORIGINS;
     for (const headers of [
