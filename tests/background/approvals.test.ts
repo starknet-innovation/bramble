@@ -221,6 +221,7 @@ describe("createApprovalQueue payload discrimination", () => {
         fee: null,
         feeAffordability: "unknown",
         feeEstimateFailed: false,
+        feeEstimatePending: false,
         requiresDeployment: false,
       },
       calls,
@@ -292,6 +293,7 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
           fee: null,
           feeAffordability: "unknown",
           feeEstimateFailed: false,
+          feeEstimatePending: false,
           requiresDeployment: false,
         },
         calls: [],
@@ -383,6 +385,7 @@ describe("createApprovalQueue invoke fee review", () => {
         fee,
         feeAffordability: "unknown",
         feeEstimateFailed: false,
+        feeEstimatePending: false,
         requiresDeployment: false,
       },
       flags: [],
@@ -395,6 +398,7 @@ describe("createApprovalQueue invoke fee review", () => {
       fee: { overallFee: "1200", unit: "FRI" },
       feeAffordability: "unknown",
       feeEstimateFailed: false,
+      feeEstimatePending: false,
       requiresDeployment: false,
     });
     // Mutating the caller's estimate or the snapshot never reaches the queue.
@@ -412,6 +416,7 @@ describe("createApprovalQueue invoke fee review", () => {
         fee: null,
         feeAffordability: "unknown",
         feeEstimateFailed: true,
+        feeEstimatePending: false,
         requiresDeployment: false,
       },
       flags: [],
@@ -423,6 +428,7 @@ describe("createApprovalQueue invoke fee review", () => {
       fee: { overallFee: "77", unit: "FRI" },
       feeAffordability: "unknown",
       feeEstimateFailed: false,
+      feeEstimatePending: false,
       requiresDeployment: false,
     });
     expect(updated).toMatchObject({ fee: { overallFee: "77", unit: "FRI" } });
@@ -437,6 +443,7 @@ describe("createApprovalQueue invoke fee review", () => {
       fee: null,
       feeAffordability: "unknown",
       feeEstimateFailed: false,
+      feeEstimatePending: false,
       requiresDeployment: false,
     } as const;
 

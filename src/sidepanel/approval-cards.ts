@@ -164,6 +164,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
           fee: approval.fee ?? null,
           feeAffordability: approval.feeAffordability ?? "unknown",
           feeEstimateFailed: approval.feeEstimateFailed === true,
+          feeEstimatePending: approval.feeEstimatePending === true,
           requiresDeployment: approval.requiresDeployment === true,
         },
         { "data-approval-retry-fee": approval.id },
@@ -171,7 +172,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       ${contextDisclosure(approval)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
-    ${decisionRow(approval, "Approve", status.locked)}
+    ${decisionRow(approval, "Approve", status.locked || approval.feeEstimatePending === true)}
   </li>`;
 
 const signCard = (approval: PendingApproval, status: WalletStatus): string => `

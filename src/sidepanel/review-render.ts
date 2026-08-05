@@ -31,6 +31,7 @@ export type ReviewFeeState = {
    */
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
+  readonly feeEstimatePending?: boolean;
   readonly requiresDeployment?: boolean;
 };
 
@@ -59,6 +60,9 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
  * never a fabricated amount.
  */
 export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttributes): string => {
+  if (state.feeEstimatePending === true) {
+    return '<p class="review-fee" role="status">Estimating network fee…</p>';
+  }
   if (state.fee) {
     return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`;
   }

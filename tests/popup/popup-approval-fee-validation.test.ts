@@ -23,6 +23,7 @@ const invokeApproval = (overrides: Record<string, unknown> = {}): Record<string,
   context,
   fee: { overallFee: "2500000000000000", unit: "FRI" },
   feeEstimateFailed: false,
+  feeEstimatePending: false,
   id: INVOKE_ID,
   kind: "invoke",
   origin: "https://dapp.example",
@@ -54,6 +55,7 @@ describe("PendingApproval fee review validation (#189)", () => {
     const bare = invokeApproval();
     delete bare["fee"];
     delete bare["feeEstimateFailed"];
+    delete bare["feeEstimatePending"];
     delete bare["requiresDeployment"];
     expect(isPendingApprovalsResponse(response(bare))).toBe(true);
   });
@@ -84,11 +86,34 @@ describe("PendingApproval fee review validation (#189)", () => {
         response(invokeApproval({ fee: null, feeEstimateFailed: true, requiresDeployment: true })),
       ),
     ).toBe(false);
+    expect(
+      isPendingApprovalsResponse(
+        response(invokeApproval({ fee: null, feeEstimatePending: true, requiresDeployment: true })),
+      ),
+    ).toBe(false);
+    expect(isPendingApprovalsResponse(response(invokeApproval({ feeEstimatePending: true })))).toBe(
+      false,
+    );
+    expect(
+      isPendingApprovalsResponse(
+        response(invokeApproval({ fee: null, feeEstimateFailed: true, feeEstimatePending: true })),
+      ),
+    ).toBe(false);
+  });
+
+  test("accepts only a well-formed pending estimate state", () => {
+    expect(
+      isPendingApprovalsResponse(response(invokeApproval({ fee: null, feeEstimatePending: true }))),
+    ).toBe(true);
+    expect(
+      isPendingApprovalsResponse(response(invokeApproval({ feeEstimatePending: "yes" }))),
+    ).toBe(false);
   });
 
   test("rejects the fee review on non-invoke kinds", () => {
     const connect = {
       fee: { overallFee: "1", unit: "FRI" },
+      feeEstimatePending: false,
       id: INVOKE_ID,
       kind: "connect",
       origin: "https://dapp.example",

@@ -71,25 +71,19 @@ export type DeclarationReview = {
 };
 
 /**
- * Fee review carried by an invoke approval, classified exactly like the Send
- * review (`resolveReviewFee`): an undeployed account intentionally has no
- * estimate and no failure; a deployed account with no estimate is a retryable
- * failure. Display-only — approving still signs the held calls unchanged.
+ * Display-only invoke fee state, aligned with Send review classification.
  */
 export type InvokeFeeReview = {
   readonly fee: FeeEstimate | null;
-  /** Warn-only shared-predicate verdict (issue 191); "unknown" = no claim. */
   readonly feeAffordability: FeeAffordability;
   readonly feeEstimateFailed: boolean;
+  readonly feeEstimatePending: boolean;
   readonly requiresDeployment: boolean;
 };
 
 /**
- * Pending dapp approval. `kind` and `token` describe watch-asset prompts;
- * `summaries`/`flags` describe an invoke prompt's decoded calls and risk flags;
- * `fee`/`feeEstimateFailed`/`requiresDeployment` carry an invoke prompt's fee
- * review; `blocked` and `insights` are attached by the reputation layer when
- * the queue is listed to the UI — the queue itself never sets them.
+ * Pending dapp approval snapshot. Kind-specific review fields are display-only;
+ * reputation fields are attached when listed and are not queue state.
  */
 export type PendingApproval = {
   readonly blocked?: boolean;
@@ -98,6 +92,7 @@ export type PendingApproval = {
   readonly fee?: FeeEstimate | null;
   readonly feeAffordability?: FeeAffordability;
   readonly feeEstimateFailed?: boolean;
+  readonly feeEstimatePending?: boolean;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
@@ -252,6 +247,9 @@ const feeReviewSnapshot = (approval: ApprovalEntry): Partial<PendingApproval> =>
   ...(approval.feeEstimateFailed === undefined
     ? {}
     : { feeEstimateFailed: approval.feeEstimateFailed }),
+  ...(approval.feeEstimatePending === undefined
+    ? {}
+    : { feeEstimatePending: approval.feeEstimatePending }),
   ...(approval.requiresDeployment === undefined
     ? {}
     : { requiresDeployment: approval.requiresDeployment }),
@@ -404,6 +402,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
         fee: fee.fee && { ...fee.fee },
         feeAffordability: fee.feeAffordability,
         feeEstimateFailed: fee.feeEstimateFailed,
+        feeEstimatePending: fee.feeEstimatePending,
         flags: flags.map((flag) => ({ ...flag })),
         id: crypto.randomUUID(),
         kind: "invoke",
@@ -483,7 +482,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
     },
     updateInvokeFee(id, fee) {
       const approval = entry(id);
-      if (!approval || approval.kind !== "invoke") {
+      if (approval?.kind !== "invoke") {
         return null;
       }
       pending.set(id, {
@@ -491,6 +490,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
         fee: fee.fee && { ...fee.fee },
         feeAffordability: fee.feeAffordability,
         feeEstimateFailed: fee.feeEstimateFailed,
+        feeEstimatePending: fee.feeEstimatePending,
         requiresDeployment: fee.requiresDeployment,
       });
       return get(id);

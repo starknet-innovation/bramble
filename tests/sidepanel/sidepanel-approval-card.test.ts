@@ -116,6 +116,20 @@ describe("invoke approval card fee review (#189)", () => {
     );
   });
 
+  test("a pending estimate is visible and prevents approval until review is complete", () => {
+    const pending: PendingApproval = {
+      ...withFee,
+      fee: null,
+      feeEstimatePending: true,
+    };
+    const html = activity([pending]);
+
+    expect(html).toContain("Estimating network fee…");
+    expect(html).toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
+    );
+  });
+
   test("an undeployed account reuses the Send wording instead of a fee amount", () => {
     const undeployed: PendingApproval = { ...withFee, fee: null, requiresDeployment: true };
     expect(activity([undeployed])).toContain(

@@ -48,9 +48,9 @@ export type ProviderOpsDeps = {
   readonly guard?: OriginGuard;
   /**
    * Panel round-trip queue for keyless Ledger accounts. Optional so partial
-   * test stubs stay valid; the fee estimate never signs, but the signer seam
-   * requires the queue to build a Ledger signer — without it the estimate
-   * degrades to a retryable failure instead of breaking the approval.
+   * test stubs stay valid. Production invoke estimation skips account
+   * validation and does not call this queue; the seam remains part of the RPC
+   * input shape shared with submit paths and narrow test doubles.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
@@ -204,10 +204,9 @@ const handleWatchAsset: ProviderOpsHandler = async (deps, message, sender) => {
 
 // Estimates the fee for a queued dapp invoke, mirroring the Send review's
 // shape (deployment status → estimate → resolveReviewFee) so both journeys
-// classify fee outcomes identically. Nothing is broadcast and nothing is
-// signed; any failure — transport, RPC, or signer construction — degrades to a
-// retryable "estimate failed" state and never blocks the approval from
-// queueing or rendering.
+// classify fee outcomes identically. Nothing is broadcast or signed because
+// the RPC estimate skips account validation. Any failure — transport, RPC, or
+// signer construction — degrades to a retryable "estimate failed" state.
 const estimateInvokeApprovalFee = async (
   deps: Pick<ProviderOpsDeps, "ledgerSignQueue" | "runtimeRpc" | "wallet">,
   resolved: ResolvedOriginAccount,
@@ -248,7 +247,29 @@ const estimateInvokeApprovalFee = async (
       fee === null ? null : await readStrkBalance(deps, resolved.account, resolved.preferences),
     fee,
   });
-  return { fee, feeAffordability, feeEstimateFailed, requiresDeployment: !deployed };
+  return {
+    fee,
+    feeAffordability,
+    feeEstimateFailed,
+    feeEstimatePending: false,
+    requiresDeployment: !deployed,
+  };
+};
+
+const PENDING_INVOKE_FEE: InvokeFeeReview = {
+  fee: null,
+  feeAffordability: "unknown",
+  feeEstimateFailed: false,
+  feeEstimatePending: true,
+  requiresDeployment: false,
+};
+
+const FAILED_INVOKE_FEE: InvokeFeeReview = {
+  fee: null,
+  feeAffordability: "unknown",
+  feeEstimateFailed: true,
+  feeEstimatePending: false,
+  requiresDeployment: false,
 };
 
 const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sender) => {
@@ -268,15 +289,31 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
     input.calls,
     verificationContext(resolved.account, resolved.preferences),
   );
+  // Queue and foreground the request before any network work. Fee estimation
+  // can involve deployment, fee, and balance RPCs; awaiting those
+  // here previously left the dapp on "Waiting for wallet" with no visible
+  // request. Approval remains disabled while this initial estimate is pending.
   const approval = deps.approvals.requestInvoke({
     calls: input.calls,
     context: await createApprovalContext(resolved.account, { calls: input.calls }),
-    fee: await estimateInvokeApprovalFee(deps, resolved, input.calls),
+    fee: PENDING_INVOKE_FEE,
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     origin: input.origin,
     summaries: report.calls.map((call) => call.summary),
   });
   notifyApprovalsChanged();
+  void estimateInvokeApprovalFee(deps, resolved, input.calls).then(
+    (fee) => {
+      if (deps.approvals.updateInvokeFee(approval.id, fee)) {
+        notifyApprovalsChanged();
+      }
+    },
+    () => {
+      if (deps.approvals.updateInvokeFee(approval.id, FAILED_INVOKE_FEE)) {
+        notifyApprovalsChanged();
+      }
+    },
+  );
   return deps.waiters.register(approval.id);
 };
 
@@ -292,14 +329,20 @@ const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
   }
   const approval = deps.approvals.get(input.id);
   const payload = deps.approvals.payload(input.id);
-  if (!approval || approval.kind !== "invoke" || !payload?.calls) {
+  if (approval?.kind !== "invoke" || !payload?.calls) {
     return { error: "approval not found" };
   }
   const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
   if ("error" in resolved) {
     return resolved;
   }
-  const fee = await estimateInvokeApprovalFee(deps, resolved, payload.calls);
+  if (!deps.approvals.updateInvokeFee(input.id, PENDING_INVOKE_FEE)) {
+    return { error: "approval not found" };
+  }
+  notifyApprovalsChanged();
+  const fee = await estimateInvokeApprovalFee(deps, resolved, payload.calls).catch(
+    () => FAILED_INVOKE_FEE,
+  );
   if (!deps.approvals.updateInvokeFee(input.id, fee)) {
     return { error: "approval not found" };
   }

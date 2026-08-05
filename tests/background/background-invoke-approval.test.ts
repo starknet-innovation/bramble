@@ -18,114 +18,19 @@ import { memoryActivityLog } from "../../src/storage/activity-store";
 import {
   defaultWalletPreferences,
   type WalletPreferences,
-  type WalletPreferencesStore,
 } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
-import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
-
-const account: AccountRef = {
-  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  networkId: "SN_MAIN",
-  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-};
-const vaultPassphrase = "correct horse battery staple";
-const origin = "https://dapp.example";
-const contentSender: RuntimeSender = { id: "extension-id", url: `${origin}/app` };
-const extensionSender: RuntimeSender = {
-  id: "extension-id",
-  url: "chrome-extension://extension-id/sidepanel.html",
-};
-const call = { calldata: ["0x5", "1000", "0"], contractAddress: "0x123", entrypoint: "transfer" };
-
-const walletStub = (connected: readonly AccountRef[]) => ({
-  async addDerivedAccount() {
-    return account;
-  },
-  async createAccount() {
-    return account;
-  },
-  async ensureNetworkAccount() {
-    return account;
-  },
-  async getGrantedAccounts(target: string) {
-    return target === origin ? connected : [];
-  },
-  async generateMnemonic() {
-    return "unused";
-  },
-  async grantOrigin() {
-    return connected;
-  },
-  async readVault() {
-    return {
-      accounts: [account],
-      activeAccountId: account.id,
-      mnemonic: null,
-      originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 3 as const,
-      signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
-    };
-  },
-  async setActiveAccount() {
-    return account;
-  },
-  async signHash() {
-    return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
-  },
-  async status() {
-    return {
-      accountCount: 1,
-      activeAccountId: account.id,
-      hasVault: true,
-      locked: false,
-      ready: true,
-    };
-  },
-});
-
-// A read-only preferences store returning fixed preferences, so an invoke can
-// be decoded against a populated address book/token list. Only `read` is
-// exercised on the queueing path; the rest stay unavailable.
-const fixedPreferencesStore = (preferences: WalletPreferences): WalletPreferencesStore =>
-  ({ read: async () => preferences }) as unknown as WalletPreferencesStore;
-
-const makeHarness = (
-  connected: readonly AccountRef[] = [account],
-  preferencesStore = unavailablePreferencesStore,
-  rpcOverrides: Partial<RuntimeRpc> = {},
-) => {
-  const session = createUnlockSession();
-  session.unlock(vaultPassphrase);
-  const approvals = createApprovalQueue();
-  const activity = memoryActivityLog();
-  const invoked: InvokeInput[] = [];
-  const rpc = makeRuntimeRpc({
-    async submitInvokeTransaction(input: InvokeInput) {
-      invoked.push(input);
-      return { calls: input.calls, transactionHash: "0x7cd" };
-    },
-    ...rpcOverrides,
-  });
-  const handler = createMessageHandler(walletStub(connected), "extension-id", {
-    activity,
-    approvals,
-    preferencesStore,
-    runtimeRpc: rpc,
-    session,
-  });
-  return { activity, handler, invoked, session };
-};
-
-const invokeMessage = (target = origin) => ({
-  calls: [call],
-  origin: target,
-  type: "wallet.addInvokeTransaction" as const,
-});
+import {
+  invokeAccount as account,
+  invokeContentSender as contentSender,
+  invokeExtensionSender as extensionSender,
+  fixedInvokePreferences as fixedPreferencesStore,
+  invokeMessage,
+  makeInvokeHarness as makeHarness,
+  invokeOrigin as origin,
+  invokeVaultPassphrase as vaultPassphrase,
+  invokeWalletStub as walletStub,
+} from "../support/invoke-approval-harness";
 
 describe("per-transaction invoke approval (A-H1)", () => {
   test("queues a connected dapp invoke instead of submitting it", async () => {
@@ -335,28 +240,72 @@ type FeePending = {
   readonly fee?: { readonly overallFee: string; readonly unit: string } | null;
   readonly feeAffordability?: string;
   readonly feeEstimateFailed?: boolean;
+  readonly feeEstimatePending?: boolean;
   readonly id: string;
   readonly requiresDeployment?: boolean;
+};
+
+const waitForSettledFee = async (
+  handler: (m: unknown, s?: RuntimeSender) => Promise<unknown>,
+  id: string,
+): Promise<FeePending> => {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const pending = await waitForPendingApprovals<FeePending>(handler, extensionSender);
+    const approval = pending.find((entry) => entry.id === id);
+    if (approval && approval.feeEstimatePending !== true) {
+      return approval;
+    }
+    await flushHeld();
+  }
+  throw new Error("fee estimate did not settle");
 };
 
 // Queues one dapp invoke on the harness and returns the pending snapshot; the
 // held request is denied afterwards by each test so nothing dangles.
 const queueInvoke = async (handler: (m: unknown, s?: RuntimeSender) => Promise<unknown>) => {
   const held = handler(invokeMessage(), contentSender);
-  const pending = (await waitForPendingApprovals<FeePending>(handler, extensionSender)).at(-1);
-  if (!pending) {
+  const queued = (await waitForPendingApprovals<FeePending>(handler, extensionSender)).at(-1);
+  if (!queued) {
     throw new Error("no pending approval");
   }
+  const pending = await waitForSettledFee(handler, queued.id);
   return { held, pending };
 };
 
 describe("dApp invoke fee estimate (#189)", () => {
+  test("foregrounds the approval before a slow fee estimate completes", async () => {
+    let finishEstimate: (() => void) | undefined;
+    const estimateGate = new Promise<void>((resolve) => {
+      finishEstimate = resolve;
+    });
+    const { handler } = makeHarness([account], unavailablePreferencesStore, {
+      async estimateInvokeFee() {
+        await estimateGate;
+        return { overallFee: "1", unit: "FRI" };
+      },
+    });
+
+    const held = handler(invokeMessage(), contentSender);
+    const queued = (await waitForPendingApprovals<FeePending>(handler, extensionSender)).at(-1);
+    expect(queued?.feeEstimatePending).toBe(true);
+    expect(queued?.fee).toBeNull();
+
+    finishEstimate?.();
+    const settled = await waitForSettledFee(handler, queued?.id ?? "");
+    expect(settled.feeEstimatePending).toBe(false);
+    expect(settled.fee).toEqual({ overallFee: "1", unit: "FRI" });
+
+    await handler({ id: settled.id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(held).resolves.toEqual({ error: "request rejected" });
+  });
+
   test("a deployed account's approval carries the estimate classified like the Send review", async () => {
     const { handler } = makeHarness();
 
     const { held, pending } = await queueInvoke(handler);
     expect(pending.fee).toEqual({ overallFee: "1", unit: "FRI" });
     expect(pending.feeEstimateFailed).toBe(false);
+    expect(pending.feeEstimatePending).toBe(false);
     expect(pending.requiresDeployment).toBe(false);
 
     await handler({ id: pending.id, type: "wallet.denyOrigin" }, extensionSender);

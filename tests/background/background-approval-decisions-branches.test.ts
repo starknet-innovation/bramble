@@ -162,6 +162,7 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
         fee: null,
         feeAffordability: "unknown",
         feeEstimateFailed: false,
+        feeEstimatePending: false,
         requiresDeployment: false,
       },
       calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "transfer" }],

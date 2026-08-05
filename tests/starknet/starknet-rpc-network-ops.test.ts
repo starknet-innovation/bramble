@@ -379,14 +379,24 @@ const accountProvider = (): RpcProvider => {
 const oneCall: Call[] = [{ calldata: [], contractAddress: eth.address, entrypoint: "transfer" }];
 
 describe("estimateInvokeFee", () => {
-  test("returns a fee estimate from the injected account", async () => {
+  test("returns a fee estimate without exercising the signer", async () => {
+    let signCalls = 0;
     const estimate = await estimateInvokeFee(
-      { account, calls: [...oneCall], rpcUrls: RPC_URLS, signHash },
+      {
+        account,
+        calls: [...oneCall],
+        rpcUrls: RPC_URLS,
+        signHash: async () => {
+          signCalls += 1;
+          return signHash();
+        },
+      },
       accountProvider,
     );
     expect(typeof estimate.overallFee).toBe("string");
     expect(BigInt(estimate.overallFee) > 0n).toBe(true);
     expect(estimate.unit).toBe("FRI");
+    expect(signCalls).toBe(0);
   });
 
   test("rejects an empty call list before touching the network", async () => {

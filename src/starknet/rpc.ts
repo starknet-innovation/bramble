@@ -396,7 +396,8 @@ export const submitErc20Transfer = async (
 };
 
 /**
- * Estimates the fee for invoke calls without broadcasting anything.
+ * Estimates invoke fees without broadcasting or signing. Validation is skipped
+ * so review-time estimation cannot open a Ledger prompt before user approval.
  */
 export const estimateInvokeFee = async (
   { account, calls, rpcUrls, signHash }: InvokeInput,
@@ -409,7 +410,7 @@ export const estimateInvokeFee = async (
     rpcUrls,
     async (provider) => {
       const starknetAccount = krustyAccount(provider, account, signHash);
-      const estimate = await starknetAccount.estimateInvokeFee([...calls]);
+      const estimate = await starknetAccount.estimateInvokeFee([...calls], { skipValidate: true });
       return {
         overallFee: BigInt(estimate.overall_fee).toString(),
         unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
