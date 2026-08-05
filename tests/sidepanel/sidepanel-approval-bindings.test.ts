@@ -132,3 +132,66 @@ describe("bindApprovals", () => {
     expect(renders).toBe(1);
   });
 });
+
+// The fee-retry affordance on a queued invoke card asks the background to
+// re-estimate and repaints on success; a failure re-enables the button and
+// leaves the approval untouched (#189).
+describe("bindApprovals fee retry", () => {
+  test("re-estimates and repaints on success", async () => {
+    const id = "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14";
+    const host = document.createElement("div");
+    host.innerHTML = `<button data-approval-retry-fee="${id}">Retry fee estimate</button>`;
+    document.body.replaceChildren(host);
+    const retried: string[] = [];
+    let renders = 0;
+
+    bindApprovals({
+      app: host,
+      render: async () => {
+        renders += 1;
+      },
+      wallet: {
+        loadStatus: async () => STATUS,
+        retryApprovalFee: async (approvalId: string) => {
+          retried.push(approvalId);
+        },
+      } as unknown as SidepanelWallet,
+    });
+    host.querySelector<HTMLButtonElement>("[data-approval-retry-fee]")?.click();
+    await flush();
+
+    expect(retried).toEqual([id]);
+    expect(renders).toBe(1);
+  });
+
+  test("a failed retry re-enables the button without deciding the approval", async () => {
+    const id = "a1c8df5b-894d-44e7-a925-27b730d92dc8";
+    const host = document.createElement("div");
+    host.innerHTML = `<button data-approval-retry-fee="${id}">Retry fee estimate</button>`;
+    document.body.replaceChildren(host);
+    let renders = 0;
+
+    bindApprovals({
+      app: host,
+      render: async () => {
+        renders += 1;
+      },
+      wallet: {
+        decideApproval: async () => {
+          throw new Error("must not decide");
+        },
+        loadStatus: async () => STATUS,
+        retryApprovalFee: async () => {
+          throw new Error("wallet locked");
+        },
+      } as unknown as SidepanelWallet,
+    });
+    const button = host.querySelector<HTMLButtonElement>("[data-approval-retry-fee]");
+    button?.click();
+    expect(button?.disabled).toBe(true);
+    await flush();
+
+    expect(button?.disabled).toBe(false);
+    expect(renders).toBe(0);
+  });
+});

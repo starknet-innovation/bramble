@@ -259,6 +259,13 @@ describe("createApprovalQueue payload discrimination", () => {
     const queue = createApprovalQueue();
     const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }];
     const { id } = queue.requestInvoke({
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
       calls,
       context: CONTEXT,
       flags: [],
@@ -324,6 +331,13 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
     const queue = createApprovalQueue();
     expect(() =>
       queue.requestInvoke({
+        fee: {
+          fee: null,
+          feeAffordability: "unknown",
+          feeEstimateFailed: false,
+          feeEstimatePending: false,
+          requiresDeployment: false,
+        },
         calls: [],
         context: CONTEXT,
         flags: [],

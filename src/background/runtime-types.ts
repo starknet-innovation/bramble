@@ -248,6 +248,11 @@ export type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
     readonly fee: FeeEstimate | null;
+    /**
+     * Warn-only fee-affordability verdict from the shared predicate (issue
+     * 191); "unknown" means no claim was possible and must never block.
+     */
+    readonly feeAffordability: "insufficient" | "ok" | "unknown";
     readonly feeEstimateFailed: boolean;
     readonly flags: readonly RiskFlag[];
     readonly requiresDeployment: boolean;

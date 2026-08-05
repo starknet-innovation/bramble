@@ -74,11 +74,13 @@ const walletStub = {
 };
 
 const makeHarness = (options?: {
+  readonly balanceThrows?: boolean;
   readonly deployed?: boolean;
   readonly estimateFails?: boolean;
   readonly onChainHistory?: readonly ActivityEntry[];
   readonly historyThrows?: boolean;
   readonly statusReport?: TransactionStatusReport;
+  readonly strkBalance?: string;
 }) => {
   const history =
     options?.historyThrows || options?.onChainHistory
@@ -121,8 +123,18 @@ const makeHarness = (options?: {
       async getNftOwner() {
         return "0x0";
       },
-      async getTokenBalances() {
-        return [];
+      async getTokenBalances({ tokens }) {
+        if (options?.balanceThrows) {
+          throw new Error("balance unavailable");
+        }
+        if (options?.strkBalance === undefined) {
+          return [];
+        }
+        return tokens.map((token) => ({
+          ...token,
+          balance: options.strkBalance ?? "0",
+          formatted: options.strkBalance ?? "0",
+        }));
       },
       async getTokenMetadata() {
         return { decimals: 18, name: "Token", symbol: "TKN" };
@@ -226,6 +238,62 @@ describe("wallet operations", () => {
     expect(response).toMatchObject({
       ok: true,
       review: { fee: null, feeEstimateFailed: true, requiresDeployment: false },
+    });
+  });
+
+  // Fee-affordability guard (issue 191): the review compares the estimate
+  // against the account's STRK balance via the shared predicate. Warn-only —
+  // nothing here changes what is submittable — and fail-open on missing data.
+  const reviewMessage = (overrides?: { amount?: string; tokenId?: string }) => ({
+    accountId: account.id,
+    amount: overrides?.amount ?? "1.5",
+    recipient: "0x777",
+    tokenId: overrides?.tokenId ?? tokenId,
+    type: "wallet.reviewTransfer",
+  });
+  const FEE = 2500000000000000n; // the harness estimate
+
+  test("review reports an insufficient STRK balance for the fee", async () => {
+    const { handler } = makeHarness({ strkBalance: (FEE - 1n).toString() });
+    const response = await handler(reviewMessage(), extensionSender);
+    expect(response).toMatchObject({
+      ok: true,
+      review: { feeAffordability: "insufficient" },
+    });
+  });
+
+  test("review reports ok when the STRK balance covers the fee", async () => {
+    const { handler } = makeHarness({ strkBalance: FEE.toString() });
+    const response = await handler(reviewMessage(), extensionSender);
+    expect(response).toMatchObject({ ok: true, review: { feeAffordability: "ok" } });
+  });
+
+  test("review fails open when the balance cannot be read", async () => {
+    const { handler } = makeHarness({ balanceThrows: true });
+    const response = await handler(reviewMessage(), extensionSender);
+    expect(response).toMatchObject({ ok: true, review: { feeAffordability: "unknown" } });
+  });
+
+  test("a STRK send checks amount plus fee against the balance", async () => {
+    const strkTokenId =
+      "SN_MAIN:STRK:0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+    const amount = 10n ** 18n; // "1" STRK in base units
+    const covers = (amount + FEE).toString();
+    const short = (amount + FEE - 1n).toString();
+
+    const ok = await makeHarness({ strkBalance: covers }).handler(
+      reviewMessage({ amount: "1", tokenId: strkTokenId }),
+      extensionSender,
+    );
+    expect(ok).toMatchObject({ ok: true, review: { feeAffordability: "ok" } });
+
+    const insufficient = await makeHarness({ strkBalance: short }).handler(
+      reviewMessage({ amount: "1", tokenId: strkTokenId }),
+      extensionSender,
+    );
+    expect(insufficient).toMatchObject({
+      ok: true,
+      review: { feeAffordability: "insufficient" },
     });
   });
 

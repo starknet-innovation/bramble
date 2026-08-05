@@ -1,7 +1,10 @@
 /**
  * Pure parsers for dapp provider runtime messages that reach the background
- * from the content bridge: permission queries and watch-asset requests.
+ * from the content bridge: permission queries and watch-asset requests. Also
+ * parses the panel-only fee-retry request, which is privileged and never
+ * reachable from content scripts.
  */
+import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isRecord, isSafeDecimals } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import type { WatchAssetRequest } from "./watch-asset";
@@ -57,3 +60,17 @@ export const readWatchAssetInput = (
   const asset = readWatchAssetOptions(message["asset"]);
   return origin && asset ? { asset, origin } : null;
 };
+
+/**
+ * Parses the panel's request to re-estimate a queued invoke approval's fee.
+ * Privileged traffic only: the message type is not in the dapp allowlist, so
+ * the dispatcher rejects it from content scripts before this parser runs.
+ */
+export const readRetryApprovalFeeInput = (message: unknown): { readonly id: string } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["id", "type"]) &&
+  message["type"] === "wallet.retryApprovalFee" &&
+  typeof message["id"] === "string" &&
+  isUuid(message["id"])
+    ? { id: message["id"] }
+    : null;
