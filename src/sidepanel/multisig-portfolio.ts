@@ -16,7 +16,7 @@ import { icon } from "./icons";
 import { nftImageMarkup, visibleNftItems } from "./nft-views";
 import type { BalanceState } from "./runtime";
 import { balanceRow } from "./token-row";
-import { actionTile, terminalCta } from "./wallet-shell";
+import { actionTile } from "./wallet-shell";
 
 /**
  * Public portfolio data resolved for one watched multisig address.

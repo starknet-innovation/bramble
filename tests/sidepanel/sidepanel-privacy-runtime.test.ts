@@ -129,6 +129,23 @@ describe("privacy runtime client", () => {
     await expect(client.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
   });
 
+  test("accepts a pending registration and still rejects an unknown registration state", async () => {
+    const state = {
+      accountId: "SN_MAIN:0xabc",
+      balances: [],
+      networkId: "SN_MAIN",
+      registration: "pending" as const,
+    };
+    const pending = createPrivacyRuntimeClient(async () => ({ ok: true, strk20State: state }));
+    await expect(pending.loadPrivacyState()).resolves.toEqual(state);
+
+    const unknown = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20State: { ...state, registration: "indexing" },
+    }));
+    await expect(unknown.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
+  });
+
   test("accepts a strict relay review and rejects hidden extra fields", async () => {
     const relayPreparation = {
       ...preparation,

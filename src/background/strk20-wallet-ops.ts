@@ -16,6 +16,7 @@ import {
   submitStrk20Actions,
   summarizeStrk20Plan,
 } from "../starknet/strk20/service";
+import { systemClock } from "../storage/activity-store";
 import { approvalPayloadMatchesContext, createApprovalContext } from "./approval-context";
 import { readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeResponse } from "./runtime-types";
@@ -41,6 +42,44 @@ import {
  */
 export type { Strk20WalletOpsDeps } from "./strk20-op-context";
 
+/**
+ * Activity summary recorded for a pool registration. Exported because the
+ * pending-registration derivation below matches on it: that entry is the only
+ * durable local record that a registration was broadcast, so the string is
+ * load-bearing in two places and must never be duplicated as a literal.
+ */
+export const STRK20_REGISTRATION_SUMMARY = "Activate private balances";
+
+/**
+ * How long a broadcast registration is trusted over the privacy indexer. The
+ * indexer reflects a registration seconds to minutes after Starknet accepts it;
+ * past this window a still-invisible registration reads as absent again, so an
+ * attempt that truly never landed leaves the user able to retry rather than
+ * locked out of the flow forever.
+ */
+const REGISTRATION_PENDING_WINDOW_MS = 30 * 60_000;
+
+// A registration the privacy indexer cannot see yet. Derived from the activity
+// log rather than stored separately: the registration is already recorded there
+// with its hash, and background reconciliation already advances that entry, so a
+// rejected or reverted attempt drops out of this check on its own.
+const hasPendingRegistration = async (
+  deps: Strk20WalletOpsDeps,
+  context: ActivePrivacyContext,
+): Promise<boolean> => {
+  const now = (deps.now ?? systemClock)();
+  const entries = await deps.activity.list();
+  return entries.some(
+    (entry) =>
+      entry.summary === STRK20_REGISTRATION_SUMMARY &&
+      entry.accountId === context.accountContext.account.id &&
+      entry.networkId === context.accountContext.account.networkId &&
+      entry.status !== "rejected" &&
+      entry.status !== "reverted" &&
+      now - entry.submittedAt < REGISTRATION_PENDING_WINDOW_MS,
+  );
+};
+
 const publicBalance = async (
   deps: Strk20WalletOpsDeps,
   context: ActivePrivacyContext,
@@ -59,10 +98,19 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
     return { error: context.error };
   }
   try {
-    const registration = await readStrk20RegistrationStatus(
-      strk20ServiceForRuntime(deps.runtimeRpc),
-      { ...context.accountContext, token: context.token.address },
-    );
+    const status = await readStrk20RegistrationStatus(strk20ServiceForRuntime(deps.runtimeRpc), {
+      ...context.accountContext,
+      token: context.token.address,
+    });
+    // An accepted-but-unindexed registration reads as `pending` rather than
+    // `unregistered`, so no surface offers to register a second time while the
+    // first one is still settling.
+    const registration =
+      status === "registered"
+        ? "registered"
+        : (await hasPendingRegistration(deps, context))
+          ? "pending"
+          : "unregistered";
     const balances =
       registration === "registered"
         ? await readStrk20Balances(strk20ServiceForRuntime(deps.runtimeRpc), {
@@ -119,6 +167,12 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
     });
     if (status === "registered") {
       return { error: "Private balances are already active" };
+    }
+    // The status read above is blind for as long as the indexer lags, which is
+    // exactly the window in which a user is most likely to try again. Refuse to
+    // prepare a duplicate on the local record instead.
+    if (await hasPendingRegistration(deps, context)) {
+      return { error: "A registration is already on its way for this account" };
     }
     const config = context.accountContext.config;
     if (!config) {
@@ -273,7 +327,7 @@ const executePreparation = async (
       networkId: context.accountContext.account.networkId,
       summary:
         preparation.kind === "register"
-          ? "Activate private balances"
+          ? STRK20_REGISTRATION_SUMMARY
           : preparation.kind === "transfer"
             ? `Send ${preparation.amount} ${preparation.token.symbol} privately`
             : preparation.kind === "withdraw"

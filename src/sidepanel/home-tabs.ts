@@ -7,17 +7,18 @@
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
 import { friendlyNetworkError } from "../shared/network-error";
+import { explorerTransactionUrl } from "../starknet/networks";
 import { formatTokenAmount } from "../starknet/rpc";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { emptyState } from "../ui/content";
-import { button, iconButton } from "../ui/controls";
+import { button, iconButton, iconLink } from "../ui/controls";
 import { menuRow } from "../ui/navigation";
 import { icon } from "./icons";
 import { type NftGalleryItem, nftImageMarkup, nftTilePlay, visibleNftItems } from "./nft-views";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import type { BalanceState } from "./runtime";
-import { isHiddenFromHome } from "./token-flows";
+import { compareStrkFirst, isHiddenFromHome } from "./token-flows";
 import { type PrivateBreakdown, unifiedBalanceRow } from "./token-row";
 
 /**
@@ -110,7 +111,7 @@ export const unifiedHomeBalances = (
       formatted: formatTokenAmount(total, token.decimals),
     };
   });
-  return [...combined, ...privateById.values()];
+  return [...combined, ...privateById.values()].sort(compareStrkFirst);
 };
 
 /**
@@ -144,6 +145,9 @@ const STATUS_LABEL: Partial<Record<ActivityEntry["status"], string>> = {
 export const transactionRow = (entry: ActivityEntry): string => {
   const hint = PROVISIONAL_TX_HINT[entry.status];
   const label = STATUS_LABEL[entry.status] ?? entry.status;
+  // Devnet has no explorer, so the outbound link is simply absent there rather
+  // than pointing somewhere that cannot resolve the hash.
+  const explorer = explorerTransactionUrl(entry.networkId, entry.hash);
   return `
   <li class="tx-row">
     <div class="tx-copy">
@@ -157,6 +161,18 @@ export const transactionRow = (entry: ActivityEntry): string => {
       icon: "copy",
       label: "Copy transaction hash",
     })}
+    ${
+      explorer
+        ? iconLink({
+            attributes: { "data-tx-explorer": entry.hash },
+            href: explorer,
+            icon: "externalLink",
+            label: "View transaction on Starkscan",
+            target: "_blank",
+            variant: "ghost",
+          })
+        : ""
+    }
   </li>`;
 };
 
@@ -185,6 +201,9 @@ const privateBreakdownFor = (
   }
   if (privacy.loading || !privacy.value) {
     return { kind: "loading" };
+  }
+  if (privacy.value.registration === "pending") {
+    return { kind: "pending" };
   }
   if (privacy.value.registration !== "registered") {
     return { kind: "unregistered" };
@@ -230,7 +249,6 @@ const tokensPanel = (
             .map((token) =>
               unifiedBalanceRow(token, prices[token.address], changes[token.address], currency, {
                 private: privateBreakdownFor(privacy, token.id),
-                publicBalance: publicById.get(token.id)?.balance ?? "0x0",
                 publicFormatted: publicById.get(token.id)?.formatted ?? "0",
               }),
             )

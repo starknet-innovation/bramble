@@ -10,6 +10,7 @@ import { createUnlockSession } from "../../src/background/session";
 import { WalletError } from "../../src/shared/errors";
 import type { InvokeInput } from "../../src/starknet/rpc";
 import { STRK20_NOT_REGISTERED, type Strk20Service } from "../../src/starknet/strk20/service";
+import type { ActivityLog } from "../../src/storage/activity-store";
 import {
   defaultWalletPreferences,
   type WalletPreferences,
@@ -41,9 +42,13 @@ export const STRK20_CALL_AND_PROOF = {
 };
 
 export type Strk20HarnessOptions = {
+  /** Seeded activity log, for pending-registration derivation. */
+  readonly activity?: ActivityLog;
   readonly balance?: string;
   readonly balanceCalls?: { value: number };
   readonly invoked?: InvokeInput[];
+  /** Wall clock used to age the pending-registration window. */
+  readonly now?: () => number;
   readonly preferences?: WalletPreferences;
   readonly proveCalls?: { value: number };
   readonly publicBalance?: string;
@@ -125,6 +130,8 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
     },
   };
   return createMessageHandler(createWallet(), "extension-id", {
+    ...(options.activity ? { activity: options.activity } : {}),
+    ...(options.now ? { now: options.now } : {}),
     preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {

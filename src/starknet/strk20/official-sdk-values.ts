@@ -123,12 +123,19 @@ export const balancesFrom = (
 
 const MAX_POOL_FEE = (1n << 128n) - 1n;
 
+// Every pool-fee failure is fatal to the submission, but they have different
+// causes (no RPC configured, node unreachable or rate limiting, a pool that
+// answers with something unusable). The suffix names which one without ever
+// echoing the node URL, which may carry an API key.
+const poolFeeUnavailable = (reason: string): WalletError =>
+  new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: could not read the pool fee (${reason})`);
+
 /**
  * Reads the pool's per-`apply_actions` STRK charge (`get_fee_amount`), which
  * the pool pulls from the caller via `transfer_from` in the same transaction.
  * Read fresh per submission so governance fee changes never desynchronize the
  * prepended approval; an unreachable or malformed response fails closed
- * before any transaction is signed.
+ * before any transaction is signed, with the cause named in the message.
  */
 export const readStrk20PoolFee = async (
   providerFor: (nodeUrl: string) => RpcProvider,
@@ -137,7 +144,7 @@ export const readStrk20PoolFee = async (
 ): Promise<bigint> => {
   const nodeUrl = rpcUrls[0];
   if (!nodeUrl) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw poolFeeUnavailable("no RPC endpoint is configured");
   }
   let response: readonly string[];
   try {
@@ -147,20 +154,20 @@ export const readStrk20PoolFee = async (
       entrypoint: "get_fee_amount",
     });
   } catch {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw poolFeeUnavailable("the node did not answer get_fee_amount");
   }
   const felt = response.length === 1 ? response[0] : undefined;
   if (felt === undefined) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw poolFeeUnavailable("the pool returned an unexpected result shape");
   }
   let fee: bigint;
   try {
     fee = BigInt(felt);
   } catch {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw poolFeeUnavailable("the pool returned a malformed amount");
   }
   if (fee < 0n || fee > MAX_POOL_FEE) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    throw poolFeeUnavailable("the pool returned an out-of-range amount");
   }
   return fee;
 };

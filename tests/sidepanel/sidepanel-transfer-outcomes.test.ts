@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
 import { sendFlow } from "../../src/sidepanel/send-views";
+import { CONFIRMATION_DELAYS_MS, confirmationOutcome } from "../../src/sidepanel/transfer-model";
 import { bindTransfer, type TransferUiDeps } from "../../src/sidepanel/transfer-ui";
 import type { ActivityStatus } from "../../src/storage/activity-store";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
@@ -170,5 +171,30 @@ describe("Send confirmation outcomes", () => {
     expect(form.dataset["stage"]).toBe("pending");
     expect(app.querySelector("#send-pending")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("#send-pending-hash")?.textContent).toBe(HASH);
+  });
+});
+
+describe("confirmation cadence", () => {
+  test("keeps checking for about a minute before handing over to Check again", () => {
+    // A pre-confirmation can take longer than a ten-second burst to appear, and
+    // giving up early stranded the user on "Confirmation pending" for a
+    // transaction that was seconds from settling.
+    const total = CONFIRMATION_DELAYS_MS.reduce((sum, delay) => sum + delay, 0);
+    expect(total).toBeGreaterThanOrEqual(50_000);
+    // Backs off rather than hammering: every gap is at least as long as the last.
+    for (const [index, delay] of CONFIRMATION_DELAYS_MS.entries()) {
+      expect(delay).toBeGreaterThanOrEqual(CONFIRMATION_DELAYS_MS[index - 1] ?? 0);
+    }
+    // The first check is immediate, so an already-settled transaction is caught
+    // without waiting at all.
+    expect(CONFIRMATION_DELAYS_MS[0]).toBe(0);
+  });
+
+  test("a pre-confirmation completes the journey instead of waiting for L2", () => {
+    expect(confirmationOutcome("preconfirmed")).toEqual({
+      kind: "succeeded",
+      toast: "Transaction pre-confirmed on Starknet",
+    });
+    expect(confirmationOutcome("pending")).toBeNull();
   });
 });

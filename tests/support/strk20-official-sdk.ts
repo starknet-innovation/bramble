@@ -61,7 +61,7 @@ export const sdkRuntime = (
   create: (input: SdkInput) => ReturnType<PrivacySdkRuntime["createPrivateTransfers"]>,
 ): PrivacySdkRuntime => ({
   Open: Symbol("OPEN"),
-  SetupRequirement: { Register: 0 },
+  SetupRequirement: { Ready: 3, Register: 0 },
   createPrivateTransfers: (input) => create(input as SdkInput),
 });
 

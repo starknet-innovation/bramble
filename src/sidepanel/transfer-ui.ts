@@ -1,16 +1,15 @@
 /** Persistent recipient, review, authorization, confirmation, and receipt bindings. */
 import type { WalletStatus } from "../popup/responses";
-import { escapeHtml } from "../shared/html";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { accountLabel } from "./parts";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import type { SidepanelWallet } from "./runtime";
 import { transitionSendStage } from "./send-transition";
 import { watchDeployment } from "./shell-bindings";
-import { tokenGlyph } from "./token-row";
 import { bindTransferCompose, restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import type { TransferState } from "./transfer-model";
 import {
+  CONFIRMATION_DELAYS_MS,
   confirmationOutcome,
   confirmationStatus,
   friendlyReviewError,
@@ -24,7 +23,12 @@ import {
 } from "./transfer-model";
 import { bindPrivateSendToggle } from "./transfer-private-ui";
 import { setSendProgress, setTaskStatus, setText, workingStatus } from "./transfer-progress-ui";
-import { privateRelayFeeHtml, reviewDetailsHtml, reviewFeeHtml } from "./transfer-review-markup";
+import {
+  privateRelayFeeHtml,
+  reviewDetailsHtml,
+  reviewFeeHtml,
+  reviewSummaryHtml,
+} from "./transfer-review-markup";
 
 export { activityExportToast, bindActivity } from "./activity-ui";
 export { friendlyReviewError, recipientFieldError } from "./transfer-model";
@@ -41,6 +45,8 @@ export type TransferUiDeps = {
   readonly back?: () => void;
   readonly confirmationDelaysMs?: readonly number[];
   readonly navigate?: (view: "activity" | "home") => void;
+  /** Invalidates the cached private balance once a private send is accepted. */
+  readonly onPrivateSendSettled?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly waitForConfirmation?: (delayMs: number) => Promise<void>;
@@ -81,17 +87,9 @@ const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | n
   restoreTransferCompose(form, fields);
 };
 
-const reviewSummaryHtml = (fields: TransferFields): string => `
-  <div class="send-review-hero">
-    <span class="send-review-token">${tokenGlyph(fields.tokenAddress, fields.tokenSymbol)}</span>
-    <span><strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong><small>${escapeHtml(fields.fiatEstimate || "Fiat estimate unavailable")}</small></span>
-  </div>
-  <dl class="send-review-facts">
-    <div><dt>Recipient</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><code>${escapeHtml(accountLabel(fields.recipient))}</code></dd></div>
-    <div><dt>Speed</dt><dd><strong>${fields.speed === "fast" ? "Fast" : "Standard"}</strong></dd></div>
-  </dl>`;
-
-const applyTransferUi = (form: HTMLFormElement): void => {
+// `poolFeeFri` is threaded in, not read here: the privacy reading belongs to the
+// binding, so this stays a function of its inputs.
+const applyTransferUi = (form: HTMLFormElement, poolFeeFri?: string): void => {
   const currentForm = form;
   const state = transferState;
   const previousStage = currentForm.dataset["stage"];
@@ -133,7 +131,7 @@ const applyTransferUi = (form: HTMLFormElement): void => {
   const reviewFee = form.querySelector<HTMLElement>("#send-review-fee");
   if (reviewFee) {
     reviewFee.innerHTML = state.privatePreparation?.relayFee
-      ? privateRelayFeeHtml(state.privatePreparation.relayFee)
+      ? privateRelayFeeHtml(state.privatePreparation.relayFee, poolFeeFri)
       : state.review
         ? reviewFeeHtml(state.review)
         : "";
@@ -215,7 +213,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   }
   const repaint = (): void =>
     transitionSendStage(form.ownerDocument, form.dataset["stage"], transferState.stage, () =>
-      applyTransferUi(form),
+      applyTransferUi(form, deps.privacy?.().value?.poolFeeFri),
     );
   repaintActiveTransfer = repaint;
   repaint();
@@ -289,10 +287,11 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       new Promise((resolve) => {
         setTimeout(resolve, delayMs);
       }));
+  // Polls to CONFIRMATION_DELAYS_MS, then hands over to "Check again".
   const confirmSubmitted = async (epoch: number): Promise<void> => {
     const hash = transferState.transactionHash;
     if (!hash) return;
-    for (const delay of deps.confirmationDelaysMs ?? [0, 250, 500, 900, 1_500, 2_500, 4_000]) {
+    for (const delay of deps.confirmationDelaysMs ?? CONFIRMATION_DELAYS_MS) {
       await wait(delay);
       if (epoch !== transferEpoch) return;
       try {
@@ -444,6 +443,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
             stage: "confirming",
             transactionHash,
           };
+          deps.onPrivateSendSettled?.();
           repaintActiveTransfer?.();
           void confirmSubmitted(epoch);
         },

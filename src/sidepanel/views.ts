@@ -339,11 +339,13 @@ export const dashboard = (
     classHashVerification,
     connectedSites,
     currency,
+    deployment,
     expandedGroupId,
     multisigs,
     preferences,
     prices,
     selectedMultisigId,
+    privacy,
     status,
   });
   if (simpleFlow !== null) {

@@ -40,6 +40,8 @@ if (!token) {
   throw new Error("Sepolia token fixture missing");
 }
 const recipient = canonicalFelt(STRK20_RECIPIENT) ?? "";
+// The harness's signed-in account, distinct from every destination used below.
+const ACTIVE_ACCOUNT_ADDRESS = "0xabcabcdef";
 
 const RELAY_PLAN: Strk20SubmissionPlan = {
   feeAction: { amount: "0x2a", recipient: STRK20_RECIPIENT, token: STRK20_TOKEN, type: "withdraw" },
@@ -78,6 +80,58 @@ const service = (capture: {
   async submitPrepared() {
     return { transactionHash: "0x333" };
   },
+});
+
+describe("unshield source and destination stay separate", () => {
+  test("the shielded balance is read for the active account, never the destination", async () => {
+    // The destination is only a payout address. Every read that decides what can
+    // be spent — registration and private balance — must be scoped to the active
+    // account, or picking a destination would silently change whose balance is
+    // being withdrawn.
+    const subjects: (string | undefined)[] = [];
+    const balanceAccounts: string[] = [];
+    const capture = {
+      recipientRegistered: true,
+      submissions: [] as { actions: readonly Strk20Action[]; plan: Strk20SubmissionPlan }[],
+    };
+    const base = service(capture);
+    const handler = buildStrk20Handler({
+      preferences: preferences(),
+      strk20: {
+        ...base,
+        async privateBalances(input) {
+          balanceAccounts.push(input.account.address);
+          return base.privateBalances(input);
+        },
+        async registrationStatus(input) {
+          subjects.push(input.subject);
+          return "registered";
+        },
+      },
+    });
+
+    const prepared = (await handler(
+      {
+        amount: "0.25",
+        recipient: STRK20_RECIPIENT,
+        tokenId: token.id,
+        type: "wallet.strk20PrepareWithdraw",
+      },
+      STRK20_EXTENSION_SENDER,
+    )) as { readonly strk20Preparation: { readonly recipient: string } };
+
+    // The payout goes to the chosen destination…
+    expect(prepared.strk20Preparation.recipient).toBe(recipient);
+    // …while the spendable balance was read for the signed-in account, whose
+    // address is not the destination.
+    expect(balanceAccounts.length).toBeGreaterThan(0);
+    expect(new Set(balanceAccounts)).toEqual(new Set([ACTIVE_ACCOUNT_ADDRESS]));
+    expect(balanceAccounts).not.toContain(recipient);
+    // Registration was checked for the account itself (no subject), never for
+    // the destination: a withdrawal does not require the destination to be in
+    // the pool at all.
+    expect(subjects.every((subject) => subject === undefined)).toBe(true);
+  });
 });
 
 describe("background unshield operations", () => {

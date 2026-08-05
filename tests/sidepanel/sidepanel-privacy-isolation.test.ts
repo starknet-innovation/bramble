@@ -178,6 +178,59 @@ describe("privacy UI async scope isolation", () => {
     expect(paints).toBe(1);
   });
 
+  test("never prepares a second registration while the first one is unindexed", async () => {
+    let registration: "pending" | "registered" = "pending";
+    let prepares = 0;
+    const app = mount(`<button data-privacy-open="${preparation.tokenId}">Go private</button>`);
+    const deps = {
+      app,
+      balances: () => [],
+      disclosure: () => ({
+        error: null,
+        loading: false,
+        value: {
+          accountId: account.id,
+          balances: [],
+          networkId: "SN_MAIN",
+          registration,
+        },
+      }),
+      generation: () => 0,
+      journey: () => ({ stage: "idle" }) as PrivacyJourneyState,
+      navigate: () => undefined,
+      paint: () => undefined,
+      preferences: () => preferences,
+      setDisclosure: () => undefined,
+      setJourney: () => undefined,
+      status: () => statusFor(account.id),
+      wallet: {
+        loadPrivacyState: async () => ({
+          accountId: account.id,
+          balances: [],
+          networkId: "SN_MAIN",
+          registration: "pending" as const,
+        }),
+        preparePrivacyRegistration: async () => {
+          prepares += 1;
+          return preparation;
+        },
+      } as unknown as SidepanelWallet,
+    } satisfies PrivacyUiDeps;
+    bindPrivacy(deps);
+
+    app.querySelector<HTMLButtonElement>("[data-privacy-open]")?.click();
+    await tick();
+
+    // The whole point of the pending state: a duplicate registration is never
+    // broadcast just because the indexer has not caught up.
+    expect(prepares).toBe(0);
+
+    // Settling the reading stops the poll this bind started, so no timer leaks
+    // into the next test.
+    registration = "registered";
+    bindPrivacy(deps);
+  });
+
   test("drops a registration preparation that resolves after account switch", async () => {
     const pending = deferred<typeof preparation>();
     let generation = 0;

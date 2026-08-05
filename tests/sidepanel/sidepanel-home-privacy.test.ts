@@ -5,9 +5,10 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance, WalletStatus } from "../../src/popup/responses";
-import { homeTabs } from "../../src/sidepanel/home-tabs";
+import { homeTabs, unifiedHomeBalances } from "../../src/sidepanel/home-tabs";
 import type { PrivacyDisclosureState } from "../../src/sidepanel/privacy-model";
 import { dashboard } from "../../src/sidepanel/views";
+import { STRK_TOKEN_ADDRESS } from "../../src/starknet/networks";
 import type { TokenConfig, WalletPreferences } from "../../src/storage/preferences-store";
 import { account } from "../support/sidepanel-fixtures";
 
@@ -101,6 +102,36 @@ const privateDashboard = (privacy: PrivacyDisclosureState): string =>
   );
 
 describe("unified portfolio scope", () => {
+  test("lists STRK first, whatever order the tracked tokens are stored in", () => {
+    // STRK pays every fee, so it leads every token list; the stored order
+    // (ETH first by default) must not decide what the user sees first.
+    const strkToken: TokenConfig = {
+      address: STRK_TOKEN_ADDRESS,
+      decimals: 18,
+      id: `SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`,
+      name: "Starknet Token",
+      networkId: "SN_MAIN",
+      symbol: "STRK",
+    };
+    const strk: TokenBalance = {
+      ...strkToken,
+      balance: "0x1",
+      formatted: "0.000000000000000001",
+    };
+    const tracked: WalletPreferences = {
+      ...preferences,
+      tokens: [...preferences.tokens, strkToken],
+    };
+    const ordered = unifiedHomeBalances(
+      { balances: [publicBalance, strk] },
+      { error: null, loading: false, value: null },
+      tracked,
+    );
+
+    expect(ordered[0]?.symbol).toBe("STRK");
+    expect(ordered.map((entry) => entry.symbol)).toContain("ETH");
+  });
+
   test("the hero totals public and private balances together", () => {
     // 1.25 public + 0.5 private ETH at $2,000 = $3,500.
     const html = privateDashboard(privateState());
@@ -124,13 +155,16 @@ describe("unified portfolio scope", () => {
     expect(row).toContain("Public balance");
     expect(row).toContain("1.25 ETH");
     expect(row).toContain("Private balance");
-    expect(row).toContain("0.5 ETH");
+    expect(row).toContain("0.50 ETH");
     expect(row).toContain(`data-token-detail="${token.id}"`);
     expect(row).toContain("See more about ETH");
-    // Registered accounts get the shield stepper beside the public balance.
-    expect(row).toContain('data-shield-step="down"');
-    expect(row).toContain('data-shield-step="up"');
-    expect(row).toContain("data-shield-confirm");
+    // A registered account gets the shield/unshield entry in the same style as
+    // the asset link, and it opens the compose journey for this token.
+    expect(row).toContain(`data-privacy-open="${token.id}"`);
+    expect(row).toContain("Shield / Unshield ETH");
+    // The retired +/- stepper leaves nothing behind.
+    expect(row).not.toContain("data-shield-step");
+    expect(row).not.toContain("shield-confirm");
   });
 
   test("an unregistered account greys the private line into the activation entry", () => {
@@ -147,10 +181,31 @@ describe("unified portfolio scope", () => {
 
     expect(html).toContain(`data-privacy-register="${token.id}"`);
     expect(html).toContain('title="Register to start shielding"');
-    // Combined amount degrades to public-only while unregistered, and the
-    // shield stepper never renders before registration.
+    // Combined amount degrades to public-only while unregistered, and there is
+    // nothing to shield yet, so no shield/unshield entry is offered.
     expect(html).toContain(">1.25<");
-    expect(html).not.toContain("data-shield-step");
+    expect(html).not.toContain("Shield / Unshield");
+  });
+
+  test("a pending registration reports itself instead of offering to register again", () => {
+    const html = homeTabs({ balances: [publicBalance] }, preferences, {}, {}, "usd", status, [], {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        registration: "pending",
+      },
+    });
+
+    expect(html).toContain("Registration pending…");
+    // The activation entry is what would broadcast a second registration, so it
+    // must be absent for as long as the first one is settling.
+    expect(html).not.toContain("data-privacy-register");
+    expect(html).not.toContain("Register to start shielding");
+    // Nor can anything be shielded until the pool can see the registration.
+    expect(html).not.toContain("Shield / Unshield");
   });
 
   test("pending discovery keeps public totals instead of hiding the hero", () => {

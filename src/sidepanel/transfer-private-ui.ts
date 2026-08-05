@@ -45,6 +45,11 @@ const blockerReason = (
   if (disclosure.loading || !disclosure.value) {
     return { pending: true, reason: "Discovering shielded balances…" };
   }
+  if (disclosure.value.registration === "pending") {
+    // A real in-flight check, not a refusal: the poll flips this on its own, so
+    // the toggle must not be turned off under a user who already enabled it.
+    return { pending: true, reason: "Waiting for your registration to be indexed…" };
+  }
   if (disclosure.value.registration !== "registered") {
     return { pending: false, reason: "Activate private balances before sending privately" };
   }

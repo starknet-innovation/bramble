@@ -10,6 +10,7 @@ import { button } from "../ui/controls";
 import { inputControl } from "../ui/fields";
 import { icon } from "./icons";
 import { flowHeader, flowScreen } from "./parts";
+import { withdrawDestinationReceipt, withdrawDestinationView } from "./privacy-destination";
 import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
 import { liquidDots, liquidDotsFilter } from "./progress-motion";
 import { tokenGlyph } from "./token-row";
@@ -31,6 +32,7 @@ const shortAddress = (value: string): string =>
 const preparationDetails = (
   journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" | "deposit-review" }>,
   status: WalletStatus,
+  preferences: WalletPreferences | null,
 ): string => {
   const { preparation } = journey;
   const activation = preparation.kind === "register";
@@ -59,13 +61,21 @@ const preparationDetails = (
       </span>
     </label>`
     }
+    <details class="send-review-disclosure">
+      <summary><span>Transaction details</span>${icon("chevronDown")}</summary>
+      <div class="send-review-disclosure-body">
     ${receipt([
       ...(unshielding && preparation.recipient
         ? [
             {
               label: "Withdraw to",
-              value: shortAddress(preparation.recipient),
-              valueStyle: "code" as const,
+              // Names the owned account when the withdrawal stays in the wallet,
+              // so the public link being created is legible before signing.
+              value: withdrawDestinationReceipt({
+                accounts: status.accounts,
+                preferences,
+                recipient: preparation.recipient,
+              }),
             },
           ]
         : []),
@@ -116,6 +126,8 @@ const preparationDetails = (
       ${preparation.summaries.map((summary) => `<li>${escapeHtml(summary)}</li>`).join("")}
     </ul>
     <p class="privacy-warning">${activation ? "Registration is public. It stores the account viewing-key commitment required to discover its private notes." : unshielding ? UNSHIELD_WARNING : "Shielding is a public deposit. Future STRK20 transfers can use the resulting private balance without exposing this deposit amount to the recipient."}</p>
+      </div>
+    </details>
     <p id="privacy-review-result" role="status" aria-live="assertive"></p>
     ${button({
       attributes: { id: "privacy-confirm" },
@@ -172,6 +184,7 @@ const compose = (
   privateFormatted: string,
   privateBalanceRaw: string,
   poolFeeFri: string | undefined,
+  destination: string,
 ): string => {
   if (!token) {
     return emptyState("This token is no longer tracked on the selected network.");
@@ -189,19 +202,8 @@ const compose = (
         <button id="privacy-flip" class="swap-flip" type="button" aria-label="Switch between shield and unshield">${icon("arrowDown")}</button>
         ${composePanel("destination", token.symbol, "private", privateFormatted)}
       </div>
-      <label class="privacy-withdraw-recipient" data-privacy-recipient-row hidden>
-        <span>Withdraw to</span>
-        ${inputControl({
-          ariaLabel: "Public address to withdraw to",
-          attributes: { id: "privacy-withdraw-recipient" },
-          autocomplete: "off",
-          className: "mono",
-          name: "withdrawRecipient",
-          placeholder: "0x… (defaults to this account)",
-          spellcheck: false,
-        })}
-      </label>
-      <p class="swap-warning" id="privacy-compose-fee" data-privacy-fee></p>
+      ${destination}
+      <p class="review-fee" id="privacy-compose-fee" data-privacy-fee></p>
       ${button({ attributes: { id: "privacy-review-submit" }, label: "Review shielding", type: "submit" })}
       <p id="privacy-compose-result" role="status" aria-live="assertive"></p>
     </form>`;
@@ -224,11 +226,9 @@ const working = (journey: Extract<PrivacyJourneyState, { readonly stage: "workin
 const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "success" }>): string => `
   <section class="privacy-outcome privacy-success" role="status" aria-live="polite">
     <span class="privacy-outcome-mark" aria-hidden="true"><svg viewBox="0 0 56 56"><circle class="send-success-ring" cx="28" cy="28" r="25" /><path class="send-success-check" d="M18 29.5l7 7 14-15" /></svg></span>
-    <h2>${journey.kind === "register" ? "Activation accepted" : `${escapeHtml(journey.symbol)} shielding accepted`}</h2>
-    <p>${journey.kind === "register" ? "Starknet accepted the registration. Check its indexer status before shielding a tracked token." : "Starknet accepted the deposit. Your private balance will appear after the privacy indexer catches up."}</p>
-    <code>${escapeHtml(shortAddress(journey.hash))}</code>
+    <h2>${journey.kind === "register" ? "Registered" : `${escapeHtml(journey.symbol)} shielding accepted`}</h2>
+    <p>${journey.kind === "register" ? "You'll soon be able to shield your assets." : "Starknet accepted the deposit. Your private balance will appear after the privacy indexer catches up."}</p>
     <div class="privacy-actions">
-      ${journey.kind === "register" ? button({ attributes: { id: "privacy-check-activation" }, icon: "refresh", label: "Check activation" }) : button({ attributes: { id: "privacy-check-balance" }, icon: "refresh", label: "Check private balance" })}
       ${button({ attributes: { id: "privacy-done" }, label: "Back to wallet", variant: "secondary" })}
       ${button({ attributes: { "data-view": "activity" }, icon: "activity", label: "View activity", variant: "secondary" })}
     </div>
@@ -267,9 +267,22 @@ export const privacyFlow = (
   const privateBalanceRaw = privateEntry ? BigInt(privateEntry.balance).toString(10) : "0";
   const body =
     journey.stage === "compose"
-      ? compose(token, balance, privateFormatted, privateBalanceRaw, privacy.value?.poolFeeFri)
+      ? compose(
+          token,
+          balance,
+          privateFormatted,
+          privateBalanceRaw,
+          privacy.value?.poolFeeFri,
+          withdrawDestinationView({
+            accounts: status.accounts,
+            activeAccountId: status.activeAccountId,
+            networkId: status.networkId,
+            preferences,
+            selectedAccountId: journey.destinationAccountId,
+          }),
+        )
       : journey.stage === "activate-review" || journey.stage === "deposit-review"
-        ? preparationDetails(journey, status)
+        ? preparationDetails(journey, status, preferences)
         : journey.stage === "working"
           ? working(journey)
           : journey.stage === "success"

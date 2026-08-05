@@ -89,6 +89,36 @@ describe("official STRK20 SDK submission boundary", () => {
     await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
   });
 
+  test("a recipient must be fully Ready, not merely past registration", async () => {
+    // Register=0, SetupChannel=1, SetupToken=2, Ready=3. Only Ready can receive
+    // a private transfer of this token; the middle two are registered but
+    // unreachable, and calling them registered let a private send pass review
+    // and then be rejected on-chain.
+    let requirement = 0;
+    const subject = "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      async discoverRequirement(recipient) {
+        // The lookup is scoped to the subject, never the sending account.
+        expect(recipient).toBe(subject);
+        return requirement;
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({ providerFor, sdk });
+    const statusFor = () => service.registrationStatus?.({ ...context, subject, token });
+
+    for (const unreachable of [0, 1, 2]) {
+      requirement = unreachable;
+      await expect(statusFor()).resolves.toBe("unregistered");
+    }
+    requirement = 3;
+    await expect(statusFor()).resolves.toBe("registered");
+  });
+
   test("registers through the SDK builder and submits only the reviewed pool proof", async () => {
     let registerCalls = 0;
     const submitted: unknown[] = [];
@@ -261,7 +291,7 @@ describe("official STRK20 SDK submission boundary", () => {
     expect(submitted).toEqual([
       [
         {
-          calldata: ["291", "4000000000000000000", "0"],
+          calldata: ["0x123", "0x3782dace9d900000", "0x0"],
           contractAddress: num.toHex(BigInt(STRK_TOKEN_ADDRESS)),
           entrypoint: "approve",
         },
@@ -341,7 +371,7 @@ describe("official STRK20 SDK submission boundary", () => {
     expect(submitted).toEqual([
       [
         {
-          calldata: ["291", "0", "1"],
+          calldata: ["0x123", "0x0", "0x1"],
           contractAddress: token,
           entrypoint: "approve",
         },

@@ -4,11 +4,17 @@
  */
 
 import type { TokenBalance, WalletStatus } from "../popup/responses";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
 import type { WalletPreferences } from "../storage/preferences-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
-import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
-import { maxPrivacyMove, projectPrivacyMove } from "./privacy-projection";
+import { bindDeployAndRegister } from "./privacy-activation-ui";
+import { bindComposeCard } from "./privacy-compose-ui";
+import { bindWithdrawDestination, withdrawRecipientFor } from "./privacy-destination-ui";
+import {
+  emptyPrivacyDisclosure,
+  type PrivacyDisclosureState,
+  type PrivacyJourneyState,
+} from "./privacy-model";
+import { createPendingRegistrationPoll } from "./privacy-pending-poll";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -111,6 +117,13 @@ const startJourney = async (
     return;
   }
   try {
+    if (state.registration === "pending") {
+      // Registered on Starknet, not yet visible to the indexer. The poll flips
+      // this on its own, so the only wrong move here is preparing a second one.
+      showToast("Registration is on its way. You'll be able to shield shortly.", "success");
+      buttonBusy(button, false);
+      return;
+    }
     if (state.registration === "unregistered") {
       const preparation = await deps.wallet.preparePrivacyRegistration();
       if (!scopeMatches(deps, scope)) {
@@ -125,6 +138,27 @@ const startJourney = async (
     showToast(errorMessage(error, "Private journey unavailable"), "error");
     buttonBusy(button, false);
   }
+};
+
+// One poll for the whole surface: any view that binds privacy while a
+// registration is pending keeps the reading fresh until it settles, so the flip
+// to "registered" needs no user action on any screen.
+const pendingPoll = createPendingRegistrationPoll();
+
+const syncPendingPoll = (deps: PrivacyUiDeps): void => {
+  const scope = captureScope(deps);
+  pendingPoll.sync(deps.disclosure().value?.registration === "pending", {
+    apply: (value) => {
+      deps.setDisclosure({ error: null, loading: false, value });
+      deps.paint();
+    },
+    load: () => deps.wallet.loadPrivacyState(),
+    stillCurrent: (value) =>
+      scopeMatches(deps, scope) &&
+      value.accountId === scope.accountId &&
+      value.networkId === scope.networkId,
+    visible: () => deps.app?.ownerDocument.visibilityState === "visible",
+  });
 };
 
 const bindDisclosure = (deps: PrivacyUiDeps): void => {
@@ -143,6 +177,19 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
   ) {
     void loadDisclosure(deps);
   }
+  syncPendingPoll(deps);
+  // Deploy-then-register lands on the same journey as the plain entry, so both
+  // reach the identical review.
+  bindDeployAndRegister({
+    app: deps.app,
+    startRegistration: () => {
+      const tokenId = defaultTokenId(deps);
+      if (tokenId) {
+        void startJourney(deps, tokenId);
+      }
+    },
+    wallet: deps.wallet,
+  });
   deps.app
     ?.querySelector<HTMLButtonElement>("[data-privacy-retry]")
     ?.addEventListener("click", () => {
@@ -166,106 +213,6 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
   });
 };
 
-// Reads the compose card's current direction-dependent numbers.
-const composeContext = (form: HTMLFormElement, tokenAddress: string) => {
-  const unshielding = form.dataset["direction"] === "unshield";
-  return {
-    decimals: Number(form.dataset["decimals"] ?? "18"),
-    feeInSameToken: sameFelt(tokenAddress, STRK_TOKEN_ADDRESS),
-    poolFeeFri: form.dataset["poolFee"],
-    sourceBalanceRaw: unshielding
-      ? (form.dataset["privateBalanceRaw"] ?? "0")
-      : (form.dataset["publicBalance"] ?? "0"),
-    symbol: form.dataset["symbol"] ?? "",
-    unshielding,
-  };
-};
-
-// Repaints the destination output and the fee sentence from the typed amount.
-const paintProjection = (form: HTMLFormElement): void => {
-  const input = form.querySelector<HTMLInputElement>("#privacy-amount");
-  const output = form.querySelector<HTMLElement>("#privacy-result-amount");
-  const feeNote = form.querySelector<HTMLElement>("[data-privacy-fee]");
-  if (!input || !output) {
-    return;
-  }
-  const context = composeContext(form, form.dataset["tokenAddress"] ?? "0x0");
-  const projection = projectPrivacyMove({ ...context, amount: input.value });
-  output.textContent = projection.received;
-  if (feeNote) {
-    feeNote.textContent = projection.feeNote;
-    feeNote.toggleAttribute("hidden", projection.feeNote === "");
-  }
-};
-
-// Max fills the source balance less any fee charged in the same asset, so the
-// composed amount always remains affordable.
-const bindAmountShortcuts = (deps: PrivacyUiDeps): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
-  const input = deps.app?.querySelector<HTMLInputElement>("#privacy-amount");
-  if (!form || !input) {
-    return;
-  }
-  input.addEventListener("input", () => paintProjection(form));
-  form.querySelectorAll<HTMLButtonElement>("[data-privacy-amount]").forEach((button) => {
-    button.addEventListener("click", () => {
-      input.value = maxPrivacyMove(composeContext(form, form.dataset["tokenAddress"] ?? "0x0"));
-      paintProjection(form);
-    });
-  });
-  paintProjection(form);
-};
-
-// Repaints both panel labels and balance lines for the active direction.
-const paintDirection = (form: HTMLFormElement, unshielding: boolean): void => {
-  const text = (selector: string, value: string): void => {
-    const node = form.querySelector(selector);
-    if (node) {
-      node.textContent = value;
-    }
-  };
-  const publicFormatted = form.dataset["publicFormatted"] ?? "0";
-  const privateFormatted = form.dataset["privateFormatted"] ?? "0";
-  text('[data-privacy-side-label="source"]', unshielding ? "Private balance" : "Public balance");
-  text(
-    '[data-privacy-side-label="destination"]',
-    unshielding ? "Public balance" : "Private balance",
-  );
-  text('[data-privacy-side-balance="source"]', unshielding ? privateFormatted : publicFormatted);
-  text(
-    '[data-privacy-side-balance="destination"]',
-    unshielding ? publicFormatted : privateFormatted,
-  );
-  const title = form.ownerDocument.querySelector(".flow-title h1");
-  if (title) {
-    title.textContent = unshielding ? "Unshield" : "Shield";
-  }
-};
-
-// Flips which balance is the source. Unshield reveals the destination address
-// field; shielding always lands in this account's own private balance.
-const bindDirectionFlip = (deps: PrivacyUiDeps): void => {
-  const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
-  const flip = deps.app?.querySelector<HTMLButtonElement>("#privacy-flip");
-  const submit = deps.app?.querySelector<HTMLButtonElement>("#privacy-review-submit");
-  if (!form || !flip || !submit) {
-    return;
-  }
-  flip.addEventListener("click", () => {
-    const unshielding = form.dataset["direction"] !== "unshield";
-    form.dataset["direction"] = unshielding ? "unshield" : "shield";
-    paintDirection(form, unshielding);
-    paintProjection(form);
-    submit.textContent = unshielding ? "Review unshielding" : "Review shielding";
-    form
-      .querySelector<HTMLElement>("[data-privacy-recipient-row]")
-      ?.toggleAttribute("hidden", !unshielding);
-  });
-};
-
-// The review's amount is editable: an edit re-prepares the deposit so its fee
-// quote and frozen digest always match the amount on screen. Confirm is
-// disabled until the new preparation lands.
 const bindReviewAmount = (
   deps: PrivacyUiDeps,
   journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" | "deposit-review" }>,
@@ -313,8 +260,8 @@ const bindReviewAmount = (
 };
 
 const bindCompose = (deps: PrivacyUiDeps, tokenId: string): void => {
-  bindAmountShortcuts(deps);
-  bindDirectionFlip(deps);
+  bindComposeCard(deps);
+  bindWithdrawDestination(deps);
   const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
   const result = deps.app?.querySelector<HTMLElement>("#privacy-compose-result");
@@ -323,11 +270,18 @@ const bindCompose = (deps: PrivacyUiDeps, tokenId: string): void => {
     const data = new FormData(form);
     const amount = String(data.get("amount") ?? "").trim();
     const unshielding = form.dataset["direction"] === "unshield";
-    const typedRecipient = String(data.get("withdrawRecipient") ?? "").trim();
-    const recipient =
-      typedRecipient ||
-      deps.status().accounts.find((account) => account.id === deps.status().activeAccountId)
-        ?.address;
+    const recipient = withdrawRecipientFor(deps, String(data.get("withdrawRecipient") ?? ""));
+    // An unshield without a destination must fail, never silently fall through
+    // to a deposit: that would move public value in when the user asked to move
+    // shielded value out.
+    if (unshielding && !recipient) {
+      const message = "Enter a Starknet address to unshield into";
+      if (result) {
+        result.textContent = message;
+      }
+      showToast(message, "error");
+      return;
+    }
     const scope = captureScope(deps);
     buttonBusy(submit, true);
     const prepared =
@@ -395,6 +349,12 @@ const bindConfirmation = (
           symbol: journey.preparation.symbol,
           tokenId: journey.tokenId,
         });
+        // The cached reading is now provably stale: registration just changed,
+        // or balance moved between the public and private sides. Dropping it
+        // makes the next paint re-read through the normal auto-discovery path,
+        // so the home rows show the settled state without the user hunting for
+        // a refresh control.
+        deps.setDisclosure(emptyPrivacyDisclosure());
         deps.paint();
       },
       (error: unknown) => {
@@ -414,33 +374,6 @@ const bindConfirmation = (
 
 const bindOutcome = (deps: PrivacyUiDeps, journey: PrivacyJourneyState): void => {
   if (journey.stage === "success") {
-    deps.app?.querySelector("#privacy-check-activation")?.addEventListener("click", () => {
-      deps.setDisclosure({ error: null, loading: false, value: null });
-      const scope = captureScope(deps);
-      void loadDisclosure(deps).then((loaded) => {
-        if (!loaded || !scopeMatches(deps, scope)) {
-          return;
-        }
-        if (deps.disclosure().value?.registration !== "registered") {
-          showToast(
-            "Activation is accepted but still being indexed. Check again shortly.",
-            "error",
-          );
-          return;
-        }
-        deps.setJourney({ stage: "compose", tokenId: journey.tokenId });
-        deps.navigate("privacy");
-      });
-    });
-    deps.app?.querySelector("#privacy-check-balance")?.addEventListener("click", () => {
-      deps.setDisclosure({ error: null, loading: false, value: null });
-      const scope = captureScope(deps);
-      void loadDisclosure(deps).then((loaded) => {
-        if (loaded && scopeMatches(deps, scope)) {
-          deps.navigate("home");
-        }
-      });
-    });
     deps.app?.querySelector("#privacy-done")?.addEventListener("click", () => {
       deps.navigate("home");
     });

@@ -190,6 +190,28 @@ const prepareWith = async (
 };
 
 /**
+ * Reads the SDK's setup requirement as a registration answer.
+ *
+ * The SDK reports four states — Register, SetupChannel, SetupToken, Ready — and
+ * they mean different things to the two callers. A transfer *recipient* must be
+ * fully `Ready` to receive this token: the middle two states are
+ * registered-but-unreachable, and reporting them as registered let a private
+ * send pass review and then be rejected on-chain at execution. The account's own
+ * status keeps the looser reading, because it gates the activation entry and the
+ * shielding journey, where anything past `Register` means registration is done.
+ */
+const readSetupRequirement = (
+  states: { readonly Ready: number; readonly Register: number },
+  requirement: number,
+  forRecipient: boolean,
+): "registered" | "unregistered" => {
+  if (forRecipient) {
+    return requirement === states.Ready ? "registered" : "unregistered";
+  }
+  return requirement === states.Register ? "unregistered" : "registered";
+};
+
+/**
  * Creates the production STRK20 service backed by the pinned official SDK.
  */
 export const createOfficialStrk20Service = ({
@@ -244,7 +266,7 @@ export const createOfficialStrk20Service = ({
           input.subject ?? input.account.address,
           input.token,
         );
-        return requirement === sdk.SetupRequirement.Register ? "unregistered" : "registered";
+        return readSetupRequirement(sdk.SetupRequirement, requirement, input.subject !== undefined);
       } catch (error) {
         return mapStrk20ProtocolError(error);
       }
