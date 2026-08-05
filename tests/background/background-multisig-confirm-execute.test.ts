@@ -10,6 +10,8 @@ import { buildMultisigConfirmCall, buildMultisigExecuteCall } from "../../src/st
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
+  type MultisigStore,
+  memoryMultisigStore,
   multisigId,
   multisigProposalId,
 } from "../../src/storage/multisig-store";
@@ -36,6 +38,7 @@ const proposalCall = {
 // expressible by moving the reported confirmation count alone.
 const makeHarness = async (options: {
   readonly confirmations: number;
+  readonly multisigStore?: MultisigStore;
   readonly quorum?: number;
   readonly storedQuorum?: number;
   readonly withCall?: boolean;
@@ -44,6 +47,7 @@ const makeHarness = async (options: {
   const signers = [harnessAccount.address, HARNESS_OTHER_SIGNER, THIRD_SIGNER];
   const harness = makeMultisigHarness({
     multisigConfig: () => ({ quorum, signers }),
+    ...(options.multisigStore ? { multisigStore: options.multisigStore } : {}),
     proposalStatus: () => ({
       confirmations: options.confirmations,
       confirmedBySigner: false,
@@ -83,12 +87,47 @@ const summaries = async (
 };
 
 describe("multisig confirm and execute", () => {
+  test("estimates the fee for the exact reviewed call batch without broadcasting", async () => {
+    const { estimatedCalls, handler, invokeCalls, proposal } = await makeHarness({
+      confirmations: 2,
+    });
+    await expect(
+      handler(
+        {
+          mode: "confirm-and-execute",
+          proposalId: proposal.id,
+          type: "wallet.prepareMultisigConfirmation",
+        },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({
+      confirmationReview: {
+        fee: { overallFee: "1", unit: "FRI" },
+        feeEstimateFailed: false,
+        mode: "confirm-and-execute",
+        proposalId: proposal.id,
+      },
+      ok: true,
+    });
+    expect(estimatedCalls).toEqual([
+      [
+        buildMultisigConfirmCall(HARNESS_MULTISIG, HARNESS_TX_ID),
+        buildMultisigExecuteCall(HARNESS_MULTISIG, proposalCall, proposalCall.salt),
+      ],
+    ]);
+    expect(invokeCalls).toHaveLength(0);
+  });
+
   test("batches confirm and execute into one invoke when this signer reaches quorum", async () => {
     const { handler, invokeCalls, proposal, record } = await makeHarness({ confirmations: 2 });
 
     await expect(
       handler(
-        { andExecute: true, proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-and-execute",
+          proposalId: proposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toMatchObject({ ok: true });
@@ -108,7 +147,11 @@ describe("multisig confirm and execute", () => {
 
     await expect(
       handler(
-        { proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-only",
+          proposalId: proposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toMatchObject({ ok: true });
@@ -122,7 +165,11 @@ describe("multisig confirm and execute", () => {
 
     await expect(
       handler(
-        { andExecute: true, proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-and-execute",
+          proposalId: proposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toEqual({
@@ -147,7 +194,11 @@ describe("multisig confirm and execute", () => {
 
     await expect(
       handler(
-        { andExecute: true, proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-and-execute",
+          proposalId: proposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toMatchObject({ ok: true });
@@ -164,7 +215,11 @@ describe("multisig confirm and execute", () => {
 
     await expect(
       handler(
-        { andExecute: true, proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-and-execute",
+          proposalId: proposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toEqual({
@@ -183,7 +238,7 @@ describe("multisig confirm and execute", () => {
     await expect(
       handler(
         {
-          andExecute: true,
+          mode: "confirm-and-execute",
           proposalId: proposal.id,
           type: "wallet.confirmMultisigProposal",
           untrackedVerified: true,
@@ -197,15 +252,97 @@ describe("multisig confirm and execute", () => {
     expect(invokeCalls).toHaveLength(0);
   });
 
-  test("rejects an unparseable andExecute rather than silently confirming", async () => {
+  test("rejects an unknown mode rather than silently confirming", async () => {
     const { handler, invokeCalls, proposal } = await makeHarness({ confirmations: 2 });
 
     await expect(
       handler(
-        { andExecute: "yes", proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
+        { mode: "yes", proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
         harnessExtensionSender,
       ),
     ).resolves.toEqual({ error: "invalid confirm request" });
     expect(invokeCalls).toHaveLength(0);
+  });
+
+  test("serializes duplicate confirmation submissions across extension surfaces", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const harness = makeMultisigHarness({
+      multisigConfig: () => ({
+        quorum: 3,
+        signers: [harnessAccount.address, HARNESS_OTHER_SIGNER, THIRD_SIGNER],
+      }),
+      proposalStatus: () => ({
+        confirmations: 2,
+        confirmedBySigner: false,
+        state: "pending",
+      }),
+      signers: [harnessAccount.address, HARNESS_OTHER_SIGNER, THIRD_SIGNER],
+      submitInvoke: async () => {
+        await held;
+        return { transactionHash: "0x7cd" };
+      },
+    });
+    const record: MultisigRecord = {
+      address: HARNESS_MULTISIG,
+      id: multisigId("SN_MAIN", HARNESS_MULTISIG) ?? "",
+      networkId: "SN_MAIN",
+      quorum: 3,
+      signers: [harnessAccount.address, HARNESS_OTHER_SIGNER, THIRD_SIGNER],
+    };
+    const proposal: MultisigProposalRecord = {
+      call: proposalCall,
+      confirmations: 2,
+      id: multisigProposalId(record.id, HARNESS_TX_ID) ?? "",
+      multisigId: record.id,
+      state: "pending",
+      summary: "Pay vendor",
+      txId: HARNESS_TX_ID,
+    };
+    await harness.multisigStore.upsertMultisig(record);
+    await harness.multisigStore.upsertProposal(proposal);
+    const message = {
+      mode: "confirm-and-execute",
+      proposalId: proposal.id,
+      type: "wallet.confirmMultisigProposal",
+    } as const;
+
+    const first = harness.handler(message, harnessExtensionSender);
+    for (let turn = 0; turn < 8 && harness.invokeCalls.length === 0; turn += 1) {
+      await Promise.resolve();
+    }
+    await expect(harness.handler(message, harnessExtensionSender)).resolves.toMatchObject({
+      error: expect.stringContaining("proposal action in progress"),
+    });
+    expect(harness.invokeCalls).toHaveLength(1);
+    release();
+    await expect(first).resolves.toMatchObject({ ok: true });
+  });
+
+  test("retains the claim when post-broadcast hash persistence fails", async () => {
+    const base = memoryMultisigStore();
+    const multisigStore: MultisigStore = {
+      ...base,
+      async setOperationHash() {
+        throw new Error("storage unavailable");
+      },
+    };
+    const { handler, invokeCalls, proposal } = await makeHarness({
+      confirmations: 2,
+      multisigStore,
+    });
+    const message = {
+      mode: "confirm-and-execute",
+      proposalId: proposal.id,
+      type: "wallet.confirmMultisigProposal",
+    } as const;
+
+    await expect(handler(message, harnessExtensionSender)).resolves.toMatchObject({ ok: true });
+    await expect(handler(message, harnessExtensionSender)).resolves.toMatchObject({
+      error: expect.stringContaining("proposal action in progress"),
+    });
+    expect(invokeCalls).toHaveLength(1);
   });
 });

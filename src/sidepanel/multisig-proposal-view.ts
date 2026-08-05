@@ -5,7 +5,7 @@
  */
 import { escapeHtml } from "../shared/html";
 import { confirmationCompletesQuorum } from "../starknet/multisig";
-import { sameFelt } from "../starknet/networks";
+import { STARKNET_NETWORKS, sameFelt } from "../starknet/networks";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
@@ -15,6 +15,7 @@ import { textareaField } from "../ui/fields";
 import type { UiAttributes } from "../ui/html-attributes";
 import { icon } from "./icons";
 import {
+  multisigDisplayName,
   multisigProposalEffect,
   multisigProposalQrPayload,
   serializeMultisigReviewPackage,
@@ -27,6 +28,7 @@ import {
   hardwareBadge,
 } from "./parts";
 import { qrSvg } from "./qr";
+import { starknetNetworkGlyph } from "./token-row";
 
 const stateLabel: Readonly<Record<MultisigProposalRecord["state"], string>> = {
   confirmed: "Ready to execute",
@@ -40,9 +42,11 @@ const actionAttributes = (
   proposalId: string,
   allowed: boolean,
   requiresAck: boolean,
+  signerAccountId?: string,
 ): UiAttributes => ({
   [`data-ms-${action}`]: proposalId,
   "data-ms-action-allowed": String(allowed),
+  ...(signerAccountId ? { "data-ms-signer-id": signerAccountId } : {}),
   ...(requiresAck ? { "data-ms-requires-ack": "true" } : {}),
 });
 
@@ -66,28 +70,33 @@ const proposalActions = (
   activeAccount: AccountRef | null,
 ): string => {
   if (proposal.state === "executed" || proposal.state === "not-found") return "";
-  const signerAddress = activeAccount?.address ?? null;
-  const signerSnapshotIsCurrent =
-    signerAddress !== null &&
-    proposal.confirmedBySignerAddress !== undefined &&
-    sameFelt(signerAddress, proposal.confirmedBySignerAddress);
   const candidates = confirmationCandidates(proposal, localSigners);
   const confirmAllowed = candidates.length > 0 && proposal.state !== "confirmed";
-  const activeCanSign =
-    activeAccount !== null && localSigners.some((signer) => signer.id === activeAccount.id);
-  const revokeAllowed =
-    activeCanSign && signerSnapshotIsCurrent && proposal.confirmedBySigner === true;
+  const preferredSigner =
+    localSigners.find((signer) => signer.id === activeAccount?.id) ?? localSigners[0];
+  const revokeSigner =
+    proposal.confirmedBySigner === true && proposal.confirmedBySignerAddress
+      ? localSigners.find((signer) =>
+          sameFelt(signer.address, proposal.confirmedBySignerAddress ?? ""),
+        )
+      : undefined;
+  const revokeAllowed = revokeSigner !== undefined;
   const requiresAck = proposal.call === null;
   const execute =
     proposal.state === "confirmed"
       ? proposal.call
-        ? button({
-            attributes: { "data-ms-execute": proposal.id },
-            icon: "send",
-            label: "Execute",
-            size: "small",
-            variant: "secondary",
-          })
+        ? preferredSigner
+          ? button({
+              attributes: {
+                "data-ms-execute": proposal.id,
+                "data-ms-signer-id": preferredSigner.id,
+              },
+              icon: "send",
+              label: "Execute",
+              size: "small",
+              variant: "secondary",
+            })
+          : '<span class="hint proposal-action-hint">This wallet does not own a current signer for execution.</span>'
         : '<span class="hint proposal-action-hint">Execute from the proposing wallet because pasted ids do not carry call data.</span>'
       : "";
   return `<div class="proposal-actions" aria-label="Proposal actions">
@@ -104,7 +113,13 @@ const proposalActions = (
       variant: "secondary",
     })}
     ${button({
-      attributes: actionAttributes("revoke", proposal.id, revokeAllowed, requiresAck),
+      attributes: actionAttributes(
+        "revoke",
+        proposal.id,
+        revokeAllowed,
+        requiresAck,
+        revokeSigner?.id,
+      ),
       disabled: !revokeAllowed || requiresAck,
       icon: "x",
       label: "Revoke",
@@ -140,9 +155,14 @@ const confirmationReview = (
   // Executing re-derives the proposal id from the original call, so a proposal
   // tracked by id only can be confirmed here but never executed from here.
   const canConfirmAndExecute = completesQuorum && proposal.call !== null;
-  return `<section class="multisig-review-sheet" data-ms-confirm-panel="${escapeHtml(proposal.id)}" role="dialog" aria-modal="true" aria-labelledby="confirm-${escapeHtml(proposal.id)}-title" hidden>
+  const initialMode = canConfirmAndExecute ? "confirm-and-execute" : "confirm-only";
+  const effect = proposal.call
+    ? multisigProposalEffect(proposal.call, selected, preferences)
+    : null;
+  const network = STARKNET_NETWORKS[record.networkId];
+  return `<section class="multisig-review-sheet" data-ms-confirm-panel="${escapeHtml(proposal.id)}" data-ms-confirm-mode="${initialMode}" role="dialog" aria-modal="true" aria-labelledby="confirm-${escapeHtml(proposal.id)}-title" tabindex="-1" hidden>
     <div class="multisig-review-card multisig-confirm-card">
-      <div class="row">
+      <div class="row multisig-confirm-head">
         <div><p class="eyebrow">Confirmation review</p><h2 id="confirm-${escapeHtml(proposal.id)}-title">Confirm this proposal</h2></div>
         ${button({
           attributes: { "data-ms-confirm-cancel": proposal.id },
@@ -152,60 +172,83 @@ const confirmationReview = (
           variant: "ghost",
         })}
       </div>
-      <div class="proposal-confirm-summary">
-        <div><span>Proposal</span><strong>${escapeHtml(proposal.summary || "Untitled proposal")}</strong></div>
-        <div><span>Current approval</span><strong>${proposal.confirmations} of ${record.quorum}</strong></div>
-        <div><span>Result</span><strong>${completesQuorum ? `Reaches quorum at ${record.quorum} of ${record.quorum}` : "Add one signer confirmation"}</strong></div>
-      </div>
-      <fieldset class="multisig-confirm-fieldset">
-        <legend>Sign with</legend>
-        <p class="hint">These wallet accounts match the latest signer rules read from Starknet.</p>
-        <div class="multisig-confirm-signers">
-          ${candidates
-            .map(
-              (
-                signer,
-              ) => `<button class="multisig-confirm-signer" data-ms-confirm-proposal="${escapeHtml(proposal.id)}" data-ms-confirm-signer="${escapeHtml(signer.id)}" data-ms-confirm-signer-active="${signer.id === activeAccount?.id}" type="button" aria-pressed="${signer.id === selected.id}">
-                <span class="option-avatar">${accountAvatar(signer.address)}</span>
-                <span class="send-recipient-copy"><strong>${escapeHtml(accountDisplayName(signer, preferences))}${hardwareBadge(signer)}</strong><span>${escapeHtml(accountLabel(signer.address))}</span></span>
-                <span class="multisig-signer-check">${icon("check")}</span>
-              </button>`,
-            )
-            .join("")}
+      <div class="multisig-confirm-scroll">
+        <div class="proposal-confirm-summary">
+          <div><span>Proposal</span><strong>${escapeHtml(proposal.summary || "Untitled proposal")}</strong></div>
+          <div><span>Multisig</span><strong>${escapeHtml(multisigDisplayName(record))}</strong></div>
+          <div><span>Network</span><strong class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span>${escapeHtml(network.name)}</strong></div>
+          <div><span>Current approval</span><strong>${proposal.confirmations} of ${record.quorum}</strong></div>
         </div>
-      </fieldset>
-      <div class="review-panel" role="note">
-        <p>${
+        ${
+          effect
+            ? `<div class="proposal-effect proposal-confirm-effect">
+                <span class="proposal-effect-mark">${icon(effect.targetKind === "Tracked ERC-20" ? "coins" : "alert")}</span>
+                <div><p class="eyebrow">This transaction will</p><strong>${escapeHtml(effect.summary)}</strong><span>${escapeHtml(effect.targetLabel)} · ${escapeHtml(effect.targetKind)}</span></div>
+              </div>
+              ${effect.flags.map((flag) => `<p class="review-flag">${escapeHtml(flag)}</p>`).join("")}`
+            : ""
+        }
+        ${technicalDetails(proposal)}
+        ${
           canConfirmAndExecute
-            ? "Your confirmation reaches quorum, so it can execute the proposal in the same transaction. If execution fails, your confirmation is not recorded either — confirm without executing to record it on its own."
-            : completesQuorum
-              ? "Your confirmation reaches quorum, but this proposal was tracked by id only, so executing needs the wallet that proposed it."
-              : "This signs one confirmation. It does not execute the proposal; execution becomes available only after quorum."
-        }</p>
+            ? `<div class="multisig-confirm-modes" role="group" aria-label="Confirmation action">
+                <button class="multisig-confirm-mode" data-ms-confirm-mode-option="confirm-and-execute" type="button" aria-pressed="true"><span><strong>Confirm &amp; execute</strong><small>One atomic transaction. A failed execution also drops this confirmation.</small></span>${icon("check")}</button>
+                <button class="multisig-confirm-mode" data-ms-confirm-mode-option="confirm-only" type="button" aria-pressed="false"><span><strong>Confirm only</strong><small>Record this confirmation now and execute in a later transaction.</small></span>${icon("check")}</button>
+              </div>`
+            : ""
+        }
+        <fieldset class="multisig-confirm-fieldset">
+          <legend>Sign with</legend>
+          <p class="hint">These wallet accounts match the latest signer rules read from Starknet.</p>
+          <div class="multisig-confirm-signers">
+            ${candidates
+              .map(
+                (
+                  signer,
+                ) => `<button class="multisig-confirm-signer" data-ms-confirm-proposal="${escapeHtml(proposal.id)}" data-ms-confirm-signer="${escapeHtml(signer.id)}" type="button" aria-pressed="${signer.id === selected.id}">
+                  <span class="option-avatar">${accountAvatar(signer.address)}</span>
+                  <span class="send-recipient-copy"><strong>${escapeHtml(accountDisplayName(signer, preferences))}${hardwareBadge(signer)}</strong><span>${escapeHtml(accountLabel(signer.address))}</span></span>
+                  <span class="multisig-signer-check">${icon("check")}</span>
+                </button>`,
+              )
+              .join("")}
+          </div>
+        </fieldset>
+        <div class="review-panel" role="note" data-ms-confirm-note>
+          <p>${
+            canConfirmAndExecute
+              ? "The contract rechecks quorum before execution. Review the exact effect and fee above before signing."
+              : completesQuorum
+                ? "This proposal was tracked by id only, so this wallet cannot safely reconstruct its execution."
+                : "This records one confirmation. Execution becomes available only after quorum."
+          }</p>
+        </div>
       </div>
-      ${
-        canConfirmAndExecute
-          ? button({
-              attributes: {
-                "data-ms-and-execute": "true",
-                "data-ms-confirm-submit": proposal.id,
-                "data-ms-selected-signer": selected.id,
-              },
-              icon: "send",
-              label: "Confirm & execute",
-            })
-          : ""
-      }
-      ${button({
-        attributes: {
-          "data-ms-confirm-submit": proposal.id,
-          "data-ms-selected-signer": selected.id,
-        },
-        icon: "check",
-        label: canConfirmAndExecute ? "Confirm only" : "Confirm proposal",
-        ...(canConfirmAndExecute ? { variant: "secondary" as const } : {}),
-      })}
-      <p data-ms-confirm-status role="status"></p>
+      <div class="multisig-confirm-actions">
+        <div class="multisig-confirm-fee" data-ms-confirm-fee><span>Network fee</span><strong>Checking estimate…</strong></div>
+        ${button({
+          attributes: {
+            "data-ms-confirm-retry-fee": proposal.id,
+            hidden: true,
+          },
+          className: "multisig-confirm-retry",
+          icon: "refresh",
+          label: "Retry fee estimate",
+          size: "small",
+          variant: "secondary",
+        })}
+        ${button({
+          attributes: {
+            "data-ms-confirm-submit": proposal.id,
+            "data-ms-confirm-submit-mode": initialMode,
+            "data-ms-selected-signer": selected.id,
+          },
+          disabled: true,
+          icon: "check",
+          label: canConfirmAndExecute ? "Confirm & execute" : "Confirm proposal",
+        })}
+        <p data-ms-confirm-status role="status" aria-live="polite">Reviewing signer and network fee…</p>
+      </div>
     </div>
   </section>`;
 };
@@ -291,7 +334,7 @@ const proposalRow = (
       <div class="proposal-head">
         <div class="proposal-title">
           <strong>${escapeHtml(proposal.summary || "Untitled proposal")}</strong>
-          <span class="hint">${escapeHtml(stateLabel[proposal.state])} · ${proposal.confirmations} of ${record.quorum}</span>
+          <span class="hint" data-live-key="proposal-state:${escapeHtml(proposal.id)}" data-live-value="${proposal.state}:${proposal.confirmations}">${escapeHtml(stateLabel[proposal.state])} · ${proposal.confirmations} of ${record.quorum}</span>
         </div>
         ${copyButton(proposal.txId, "Copy proposal id")}
       </div>

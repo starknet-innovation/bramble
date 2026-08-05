@@ -429,6 +429,11 @@ on-chain data, kept in the plain `mc-wallet:multisigs` store).
   Importing the original call enables that signer to execute after quorum;
   importing only an id remains call-less and requires explicit independent
   verification before confirmation.
+- Confirm: review binds signer, proposal, network, decoded effect, fee, and an
+  explicit mode. A confirmation may stand alone or, only when it reaches quorum,
+  batch `confirm_transaction` and `execute_transaction`. Execution observes the
+  earlier write; failure reverts the whole invoke. A durable background claim
+  serializes duplicate submissions across extension surfaces before broadcast.
 - Deploy: new multisigs deploy from the pinned `MultisigWallet` class
   (`contracts/multisig`, a constructor-only shell around the OZ component)
   through the public Universal Deployer Contract with `not_from_zero = 0`, so
@@ -443,12 +448,13 @@ verified by `bun run check:multisig`):
 - Class hash: `0xbb216b0643679b992e7953b6ea6f5057804237053e79fdd064cf2b5adea035`
 - Compiled class hash: `0x42d945a7f59ead19b20435fbea7d168449299b03d71f8da205517166a2c80c8`
 
+`bun run test:multisig-contract` proves same-call confirmation visibility and
+full rollback on target failure against the pinned Cairo component.
 Known limitations (v1): proposals are single-call (`submit_transaction_batch`
-is not surfaced); signer/quorum changes go through the custom-call form as
-self-calls (`add_signers`, `remove_signers`, `change_quorum`) rather than a
-dedicated editor; event discovery is deliberately bounded and RPC-dependent;
-each confirmation is a separate on-chain transaction with its own fee, and
-proposals and review packages contain public transaction data.
+is not surfaced); signer/quorum changes use custom self-calls rather than a
+dedicated editor; event discovery is bounded and RPC-dependent; confirmations
+below quorum remain separate transactions with their own fees; proposals and
+review packages contain public transaction data.
 
 ## Allowance manager
 

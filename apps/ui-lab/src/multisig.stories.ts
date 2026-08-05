@@ -24,6 +24,11 @@ export const SharedActivity = checkpointStory(
 );
 export const Collectibles = checkpointStory("Shared collectibles", "multisig", "collectibles");
 export const AccountDrawer = checkpointStory("Shared account drawer", "multisig", "drawer");
+export const AccountManagement = checkpointStory(
+  "Manage signer and Multisig accounts",
+  "multisig",
+  "account-management",
+);
 export const Receive = checkpointStory("Receive to shared account", "multisig", "receive");
 export const Signers = checkpointStory("Signers and quorum", "multisig", "signers");
 export const Track = checkpointStory("Track shared proposal", "multisig", "track");

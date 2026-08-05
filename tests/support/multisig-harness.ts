@@ -109,6 +109,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
   session.unlock("correct horse battery staple");
   const multisigStore = options.multisigStore ?? memoryMultisigStore();
   const invokeCalls: (readonly unknown[])[] = [];
+  const estimatedCalls: (readonly unknown[])[] = [];
   const submittedAccounts: string[] = [];
   const balanceReads: string[] = [];
   const declared: unknown[] = [];
@@ -169,7 +170,8 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     // long past its observation window.
     now: () => 0,
     runtimeRpc: {
-      async estimateInvokeFee() {
+      async estimateInvokeFee(input) {
+        estimatedCalls.push(input.calls);
         return { overallFee: "1", unit: "FRI" };
       },
       async getDeploymentStatus() {
@@ -255,5 +257,13 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     },
     session,
   });
-  return { balanceReads, declared, handler, invokeCalls, multisigStore, submittedAccounts };
+  return {
+    balanceReads,
+    declared,
+    estimatedCalls,
+    handler,
+    invokeCalls,
+    multisigStore,
+    submittedAccounts,
+  };
 };

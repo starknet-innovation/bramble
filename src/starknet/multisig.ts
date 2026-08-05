@@ -227,8 +227,11 @@ export const confirmationCompletesQuorum = (input: {
 }): boolean =>
   input.state === "pending" &&
   !input.signerHasConfirmed &&
+  Number.isSafeInteger(input.confirmations) &&
+  input.confirmations >= 0 &&
+  Number.isSafeInteger(input.quorum) &&
   input.quorum > 0 &&
-  input.confirmations + 1 >= input.quorum;
+  input.confirmations + 1 === input.quorum;
 
 const feltAt = (response: readonly string[], index: number, label: string): bigint => {
   const value = response[index];

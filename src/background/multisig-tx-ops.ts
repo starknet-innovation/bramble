@@ -2,11 +2,9 @@
  * Transaction-submitting multisig operations: propose, confirm, revoke,
  * execute, deploy a new multisig through the Universal Deployer Contract,
  * and declare the pinned multisig class when a network lacks it. Every
- * submission goes through the shared verified invoke path with the active
- * account's session signer; the multisig contract re-checks signer membership
- * and quorum on-chain, so these handlers can never bypass it. Each message
- * type maps to one small async handler; the exported router is a single
- * dispatch-map lookup.
+ * submission goes through the shared verified invoke path with an explicitly
+ * selected vault account; the multisig contract re-checks signer membership
+ * and quorum on-chain, so these handlers can never bypass it.
  */
 import type { Call } from "starknet";
 import {
@@ -21,7 +19,8 @@ import {
 import { type MultisigProposalRecord, multisigProposalId } from "../storage/multisig-store";
 import { handleMultisigDeployOps } from "./multisig-deploy-ops";
 import {
-  type MultisigProposalActionInput,
+  type ConfirmMultisigProposalInput,
+  readConfirmMultisigProposalInput,
   readMultisigProposalActionInput,
   readProposeMultisigInput,
 } from "./multisig-inputs";
@@ -35,31 +34,32 @@ import {
   refreshSignerMembership,
 } from "./multisig-ops";
 import { confirmedSignersAfterStatus, isProposalSubmitPending } from "./multisig-proposal-status";
-import { recordSubmittedActivity } from "./multisig-submission";
+import {
+  claimMultisigProposalOperation,
+  type MultisigProposalOperationKind,
+  recordClaimedMultisigSubmission,
+  recordSubmittedActivity,
+  releaseMultisigOperation,
+} from "./multisig-submission";
 import type { RuntimeResponse } from "./runtime-types";
 import { signerForContext } from "./wallet-ops";
 
-/**
- * One handler per transaction-submitting multisig message type.
- */
 type MultisigTxHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
-/**
- * A watched multisig resolved on the active network plus a stored proposal.
- */
 type ResolvedProposal = {
   readonly proposal: MultisigProposalRecord;
   readonly resolved: MultisigContext;
 };
 
-// Resolves the active account + watched record and re-proves signer membership
+// Resolves the selected signer + watched record and re-proves signer membership
 // in one step. Every signer-gated submission runs this first so stale registry
 // data can never offer a transaction the chain would reject.
 const resolveMultisigTarget = async (
   deps: MultisigOpsDeps,
   id: string,
+  signerAccountId?: string,
 ): Promise<{ readonly error: string } | MultisigContext> => {
-  const resolved = await multisigContext(deps, id);
+  const resolved = await multisigContext(deps, id, signerAccountId);
   if ("error" in resolved) {
     return { error: resolved.error };
   }
@@ -94,9 +94,39 @@ const submitAndRecord = async (
   return result.transactionHash;
 };
 
+const submitClaimedAndRecord = async (
+  deps: MultisigOpsDeps,
+  resolved: MultisigContext,
+  calls: readonly Call[],
+  summary: string,
+  operationId: string,
+): Promise<string> => {
+  let result: { readonly transactionHash: string };
+  try {
+    result = await deps.runtimeRpc.submitInvokeTransaction({
+      account: resolved.account.account,
+      calls,
+      rpcUrls: resolved.rpcUrls,
+      signHash: signerForContext(deps, resolved.account),
+    });
+  } catch (error) {
+    await releaseMultisigOperation(deps, operationId);
+    throw error;
+  }
+  await recordClaimedMultisigSubmission(deps, operationId, {
+    accountId: resolved.record.id,
+    hash: result.transactionHash,
+    kind: "invoke",
+    networkId: resolved.account.networkId,
+    summary,
+  });
+  return result.transactionHash;
+};
+
 const proposalById = async (
   deps: MultisigOpsDeps,
   proposalId: string,
+  signerAccountId?: string,
 ): Promise<{ readonly error: string } | ResolvedProposal> => {
   const proposal = (await deps.multisigStore.listProposals()).find(
     (stored) => stored.id === proposalId,
@@ -104,7 +134,7 @@ const proposalById = async (
   if (!proposal) {
     return { error: "proposal not found" };
   }
-  const resolved = await resolveMultisigTarget(deps, proposal.multisigId);
+  const resolved = await resolveMultisigTarget(deps, proposal.multisigId, signerAccountId);
   if ("error" in resolved) {
     return { error: resolved.error };
   }
@@ -186,7 +216,7 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid propose request" };
   }
-  const target = await resolveMultisigTarget(deps, input.multisigId);
+  const target = await resolveMultisigTarget(deps, input.multisigId, input.signerAccountId);
   if ("error" in target) {
     return { error: target.error };
   }
@@ -234,54 +264,18 @@ type ProposalActionPlan = {
   readonly summary: string;
 };
 
-// Shared confirm/revoke flow: parse, resolve, enforce untracked-acknowledgement,
-// refresh status, run the state-specific guard, then plan, submit, and record.
-// The plan runs after the fresh chain read so it can decide on real state.
-const runProposalAction = async (
+const reserveProposalAction = async (
   deps: MultisigOpsDeps,
-  message: unknown,
-  type: "wallet.confirmMultisigProposal" | "wallet.revokeMultisigConfirmation",
-  invalidError: string,
-  guard: (status: MultisigProposalStatus) => string | null,
-  plan: (
-    found: ResolvedProposal,
-    status: MultisigProposalStatus,
-    input: MultisigProposalActionInput,
-  ) => ProposalActionPlan | { readonly error: string },
-): Promise<RuntimeResponse> => {
-  const input = readMultisigProposalActionInput(message, type);
-  if (!input) {
-    return { error: invalidError };
-  }
-  const found = await proposalById(deps, input.proposalId);
-  if ("error" in found) {
-    return { error: found.error };
-  }
-  const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
-  if (verifyError) {
-    return { error: verifyError };
-  }
-  const status = await freshProposalStatus(deps, found);
-  if ("error" in status) {
-    return status;
-  }
-  const guardError = guard(status);
-  if (guardError) {
-    return { error: guardError };
-  }
-  const planned = plan(found, status, input);
-  if ("error" in planned) {
-    return { error: planned.error };
-  }
-  const transactionHash = await submitAndRecord(
-    deps,
-    found.resolved,
-    planned.calls,
-    planned.summary,
-  );
-  await refreshAfterAction(deps, found).catch(() => undefined);
-  return { ok: true, transactionHash };
-};
+  found: ResolvedProposal,
+  kind: MultisigProposalOperationKind,
+): Promise<{ readonly error: string } | { readonly operationId: string }> =>
+  claimMultisigProposalOperation(deps, {
+    accountId: found.resolved.account.account.id,
+    kind,
+    networkId: found.resolved.account.networkId,
+    pendingError: "this signer already has a proposal action in progress — wait for it to settle",
+    txId: found.proposal.txId,
+  });
 
 const confirmGuard = (status: MultisigProposalStatus): string | null => {
   if (status.state === "executed" || status.state === "not-found") {
@@ -300,20 +294,17 @@ const revokeGuard = (status: MultisigProposalStatus): string | null => {
   return status.confirmedBySigner ? null : "this account has not confirmed this proposal";
 };
 
-// Plans a confirmation. With `andExecute` the signer asked to broadcast the
-// proposal in the same transaction, which is only offered when this very
-// confirmation reaches quorum — the `confirm_transaction` storage write lands
-// before the batched `execute_transaction` re-reads it, so the component sees a
-// confirmed proposal. Both calls share one transaction, so a failing inner call
-// reverts the confirmation too; that is why this is opt-in rather than implicit.
+// The atomic mode is allowed only when this confirmation reaches quorum. The
+// contract sees confirm's storage write before execute; a failed execution
+// reverts both calls, which is why the mode remains explicit.
 const planConfirm = (
   found: ResolvedProposal,
   status: MultisigProposalStatus,
-  input: MultisigProposalActionInput,
+  input: ConfirmMultisigProposalInput,
 ): ProposalActionPlan | { readonly error: string } => {
   const { record } = found.resolved;
   const confirmCall = buildMultisigConfirmCall(record.address, found.proposal.txId);
-  if (input.andExecute !== true) {
+  if (input.mode === "confirm-only") {
     return { calls: [confirmCall], summary: `Confirm: ${found.proposal.summary}` };
   }
   const proposalCall = found.proposal.call;
@@ -352,38 +343,99 @@ const planConfirm = (
   };
 };
 
-const confirmMultisigProposal: MultisigTxHandler = (deps, message) =>
-  runProposalAction(
-    deps,
-    message,
-    "wallet.confirmMultisigProposal",
-    "invalid confirm request",
-    confirmGuard,
-    planConfirm,
-  );
+type ConfirmationContext = {
+  readonly found: ResolvedProposal;
+  readonly input: ConfirmMultisigProposalInput;
+  readonly plan: ProposalActionPlan;
+};
 
-const revokeMultisigConfirmation: MultisigTxHandler = (deps, message) =>
-  runProposalAction(
+const confirmationContext = async (
+  deps: MultisigOpsDeps,
+  message: unknown,
+  type: "wallet.confirmMultisigProposal" | "wallet.prepareMultisigConfirmation",
+): Promise<{ readonly error: string } | ConfirmationContext> => {
+  const input = readConfirmMultisigProposalInput(message, type);
+  if (!input) return { error: "invalid confirm request" };
+  const found = await proposalById(deps, input.proposalId, input.signerAccountId);
+  if ("error" in found) return found;
+  const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
+  if (verifyError) return { error: verifyError };
+  const status = await freshProposalStatus(deps, found);
+  if ("error" in status) return status;
+  const guardError = confirmGuard(status);
+  if (guardError) return { error: guardError };
+  const plan = planConfirm(found, status, input);
+  return "error" in plan ? plan : { found, input, plan };
+};
+
+const prepareMultisigConfirmation: MultisigTxHandler = async (deps, message) => {
+  const context = await confirmationContext(deps, message, "wallet.prepareMultisigConfirmation");
+  if ("error" in context) return context;
+  const fee = await deps.runtimeRpc
+    .estimateInvokeFee({
+      account: context.found.resolved.account.account,
+      calls: context.plan.calls,
+      rpcUrls: context.found.resolved.rpcUrls,
+      signHash: signerForContext(deps, context.found.resolved.account),
+    })
+    .catch(() => null);
+  return {
+    confirmationReview: {
+      fee,
+      feeEstimateFailed: fee === null,
+      mode: context.input.mode,
+      proposalId: context.input.proposalId,
+      signerAccountId: context.found.resolved.account.account.id,
+    },
+    ok: true,
+  };
+};
+
+const confirmMultisigProposal: MultisigTxHandler = async (deps, message) => {
+  const context = await confirmationContext(deps, message, "wallet.confirmMultisigProposal");
+  if ("error" in context) return context;
+  const claim = await reserveProposalAction(deps, context.found, "confirm");
+  if ("error" in claim) return claim;
+  const transactionHash = await submitClaimedAndRecord(
     deps,
-    message,
-    "wallet.revokeMultisigConfirmation",
-    "invalid revoke request",
-    revokeGuard,
-    (found) => ({
-      calls: [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
-      summary: `Revoke confirmation: ${found.proposal.summary}`,
-    }),
+    context.found.resolved,
+    context.plan.calls,
+    context.plan.summary,
+    claim.operationId,
   );
+  await refreshAfterAction(deps, context.found).catch(() => undefined);
+  return { ok: true, transactionHash };
+};
+
+const revokeMultisigConfirmation: MultisigTxHandler = async (deps, message) => {
+  const input = readMultisigProposalActionInput(message, "wallet.revokeMultisigConfirmation");
+  if (!input) return { error: "invalid revoke request" };
+  const found = await proposalById(deps, input.proposalId, input.signerAccountId);
+  if ("error" in found) return found;
+  const verifyError = requireUntrackedVerification(found.proposal, input.untrackedVerified);
+  if (verifyError) return { error: verifyError };
+  const status = await freshProposalStatus(deps, found);
+  if ("error" in status) return status;
+  const guardError = revokeGuard(status);
+  if (guardError) return { error: guardError };
+  const claim = await reserveProposalAction(deps, found, "revoke");
+  if ("error" in claim) return claim;
+  const transactionHash = await submitClaimedAndRecord(
+    deps,
+    found.resolved,
+    [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
+    `Revoke confirmation: ${found.proposal.summary}`,
+    claim.operationId,
+  );
+  await refreshAfterAction(deps, found).catch(() => undefined);
+  return { ok: true, transactionHash };
+};
 
 const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
   const input = readMultisigProposalActionInput(message, "wallet.executeMultisigProposal");
-  if (!input) {
-    return { error: "invalid execute request" };
-  }
-  const found = await proposalById(deps, input.proposalId);
-  if ("error" in found) {
-    return { error: found.error };
-  }
+  if (!input) return { error: "invalid execute request" };
+  const found = await proposalById(deps, input.proposalId, input.signerAccountId);
+  if ("error" in found) return found;
   const proposalCall = found.proposal.call;
   if (!proposalCall) {
     return {
@@ -398,7 +450,9 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
   if (status.state !== "confirmed") {
     return { error: `cannot execute a proposal that is ${status.state}` };
   }
-  const transactionHash = await submitAndRecord(
+  const claim = await reserveProposalAction(deps, found, "execute");
+  if ("error" in claim) return claim;
+  const transactionHash = await submitClaimedAndRecord(
     deps,
     found.resolved,
     [
@@ -413,6 +467,7 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
       ),
     ],
     `Execute: ${found.proposal.summary}`,
+    claim.operationId,
   );
   await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };
@@ -423,6 +478,7 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
 const TX_HANDLERS: Record<string, MultisigTxHandler> = {
   "wallet.confirmMultisigProposal": confirmMultisigProposal,
   "wallet.executeMultisigProposal": executeMultisigProposal,
+  "wallet.prepareMultisigConfirmation": prepareMultisigConfirmation,
   "wallet.proposeMultisigTx": proposeMultisigTx,
   "wallet.revokeMultisigConfirmation": revokeMultisigConfirmation,
 };

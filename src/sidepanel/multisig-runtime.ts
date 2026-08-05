@@ -5,16 +5,19 @@
  */
 import {
   isMultisigClassStatusResponse,
+  isMultisigConfirmationReviewResponse,
   isMultisigDeployResponse,
   isMultisigProposalResponse,
   isMultisigResponse,
   isMultisigsResponse,
   isOkResponse,
   type MultisigClassState,
+  type MultisigConfirmationReviewResponse,
   type MultisigDeployResponse,
   type MultisigsResponse,
 } from "../popup/multisig-responses";
 import { isBalancesResponse, isErrorResponse, isTransferResponse } from "../popup/responses";
+import type { MultisigConfirmationMode } from "../shared/multisig-confirmation";
 import type { MultisigProposalCall } from "../storage/multisig-store";
 import type { MultisigSyncState } from "./multisig-sync";
 import type { BalanceState, RuntimeApi } from "./runtime";
@@ -44,24 +47,41 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "add multisig failed");
       }
     },
-    // `andExecute` asks the background to broadcast the proposal in the same
-    // transaction as this confirmation. It is accepted only when this
-    // confirmation reaches quorum, so callers must offer it only then.
-    async confirmProposal(
-      proposalId: string,
-      untrackedVerified?: boolean,
-      andExecute?: boolean,
-    ): Promise<string> {
+    async confirmProposal(input: {
+      readonly mode: MultisigConfirmationMode;
+      readonly proposalId: string;
+      readonly signerAccountId: string;
+      readonly untrackedVerified?: boolean;
+    }): Promise<string> {
       const response = await sendMessage({
-        ...(andExecute ? { andExecute: true } : {}),
-        proposalId,
+        mode: input.mode,
+        proposalId: input.proposalId,
+        signerAccountId: input.signerAccountId,
         type: "wallet.confirmMultisigProposal",
-        ...(untrackedVerified ? { untrackedVerified: true } : {}),
+        ...(input.untrackedVerified ? { untrackedVerified: true } : {}),
       });
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
       throw responseError(response, "confirm failed");
+    },
+    async prepareConfirmation(input: {
+      readonly mode: MultisigConfirmationMode;
+      readonly proposalId: string;
+      readonly signerAccountId: string;
+      readonly untrackedVerified?: boolean;
+    }): Promise<MultisigConfirmationReviewResponse["confirmationReview"]> {
+      const response = await sendMessage({
+        mode: input.mode,
+        proposalId: input.proposalId,
+        signerAccountId: input.signerAccountId,
+        type: "wallet.prepareMultisigConfirmation",
+        ...(input.untrackedVerified ? { untrackedVerified: true } : {}),
+      });
+      if (isMultisigConfirmationReviewResponse(response)) {
+        return response.confirmationReview;
+      }
+      throw responseError(response, "confirmation review failed");
     },
     async declareClass(): Promise<string> {
       const response = await sendMessage({ type: "wallet.declareMultisigClass" });
@@ -86,8 +106,12 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "deploy failed");
     },
-    async executeProposal(proposalId: string): Promise<string> {
-      const response = await sendMessage({ proposalId, type: "wallet.executeMultisigProposal" });
+    async executeProposal(proposalId: string, signerAccountId: string): Promise<string> {
+      const response = await sendMessage({
+        proposalId,
+        signerAccountId,
+        type: "wallet.executeMultisigProposal",
+      });
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
@@ -136,6 +160,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       readonly entrypoint: string;
       readonly multisigId: string;
       readonly salt: string;
+      readonly signerAccountId: string;
       readonly summary: string;
       readonly to: string;
     }): Promise<string> {
@@ -144,6 +169,7 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         entrypoint: input.entrypoint,
         multisigId: input.multisigId,
         ...(input.salt ? { salt: input.salt } : {}),
+        signerAccountId: input.signerAccountId,
         ...(input.summary ? { summary: input.summary } : {}),
         to: input.to,
         type: "wallet.proposeMultisigTx",
@@ -180,9 +206,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "remove failed");
       }
     },
-    async revokeConfirmation(proposalId: string, untrackedVerified?: boolean): Promise<string> {
+    async revokeConfirmation(
+      proposalId: string,
+      signerAccountId: string,
+      untrackedVerified?: boolean,
+    ): Promise<string> {
       const response = await sendMessage({
         proposalId,
+        signerAccountId,
         type: "wallet.revokeMultisigConfirmation",
         ...(untrackedVerified ? { untrackedVerified: true } : {}),
       });

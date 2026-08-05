@@ -4,7 +4,7 @@
  * cleanup.
  */
 import { describe, expect, test } from "bun:test";
-import { transitionSendStage } from "../../src/sidepanel/send-transition";
+import { transitionProposalStage, transitionSendStage } from "../../src/sidepanel/send-transition";
 
 type Deferred = {
   readonly promise: Promise<void>;
@@ -76,5 +76,21 @@ describe("transitionSendStage", () => {
     await Promise.resolve();
     expect(view.dataset["sendTransition"]).toBeUndefined();
     expect(updates).toBe(2);
+  });
+});
+
+describe("transitionProposalStage", () => {
+  test("keeps recipient, amount, picker, and review movement spatially consistent", async () => {
+    const completion = deferred();
+    const view = fakeDocument(() => completion.promise);
+    let updates = 0;
+    transitionProposalStage(view.document, "recipient", "amount", () => {
+      updates += 1;
+    });
+    expect(view.dataset["proposalTransition"]).toBe("forward");
+    completion.resolve();
+    await Promise.resolve();
+    expect(view.dataset["proposalTransition"]).toBeUndefined();
+    expect(updates).toBe(1);
   });
 });

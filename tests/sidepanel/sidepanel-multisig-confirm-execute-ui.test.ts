@@ -1,10 +1,9 @@
 /**
- * Confirm-and-execute affordance: the combined action is offered only to the
- * signer whose confirmation reaches quorum on a proposal whose original call is
- * known locally, it states that a failed execution also drops the confirmation,
- * and clicking it asks the client to batch rather than to plain-confirm.
+ * Confirm-and-execute review invariants: exact effects and fees precede one
+ * explicit submission, mode/signer changes re-prepare, and failure is retryable.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import type { MultisigConfirmationMode } from "../../src/shared/multisig-confirmation";
 import type { MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
 import { multisigDetailFlow } from "../../src/sidepanel/multisig-views";
 import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
@@ -48,8 +47,6 @@ const record: MultisigRecord = {
   signers: [signer.address, OTHER_SIGNER],
 };
 
-// One confirmation already banked on a 2-of-2, so this signer's confirmation is
-// the last quorum needs. `call` present means it can also be executed here.
 const makeProposal = (overrides: Partial<MultisigProposalRecord> = {}): MultisigProposalRecord => ({
   call: { calldata: ["0x1"], contractAddress: "0x456", entrypoint: "transfer", salt: "0x0" },
   confirmations: 1,
@@ -63,161 +60,163 @@ const makeProposal = (overrides: Partial<MultisigProposalRecord> = {}): Multisig
   ...overrides,
 });
 
-const openPanel = (
-  proposal: MultisigProposalRecord,
-  overrides: Partial<MultisigUiDeps> = {},
-): HTMLElement | null => {
+type ConfirmationInput = {
+  readonly mode: MultisigConfirmationMode;
+  readonly proposalId: string;
+  readonly signerAccountId: string;
+};
+
+const client = (
+  options: {
+    readonly confirmed?: (input: ConfirmationInput) => Promise<string>;
+    readonly feeFailure?: boolean;
+    readonly prepared?: (input: ConfirmationInput) => void;
+  } = {},
+): MultisigUiDeps["multisig"] =>
+  ({
+    async confirmProposal(input: ConfirmationInput): Promise<string> {
+      return options.confirmed?.(input) ?? "0xabc";
+    },
+    async prepareConfirmation(input: ConfirmationInput) {
+      options.prepared?.(input);
+      return {
+        fee: options.feeFailure ? null : { overallFee: "1000", unit: "FRI" },
+        feeEstimateFailed: options.feeFailure === true,
+        ...input,
+      };
+    },
+  }) as unknown as MultisigUiDeps["multisig"];
+
+const flush = async (): Promise<void> => {
+  for (let turn = 0; turn < 10; turn += 1) await Promise.resolve();
+};
+
+const openPanel = (proposal: MultisigProposalRecord, multisig = client()): HTMLElement | null => {
   const app = mountMultisigUi(
     multisigDetailFlow(status, signer, record, [proposal]),
     async () => {},
-    overrides,
+    {
+      multisig,
+    },
   );
   app.querySelector<HTMLButtonElement>(`[data-ms-confirm-open="${proposal.id}"]`)?.click();
   return app.querySelector<HTMLElement>(`[data-ms-confirm-panel="${proposal.id}"]`);
 };
 
-describe("multisig confirm-and-execute affordance", () => {
-  test("the quorum-reaching signer can confirm and execute in one action", async () => {
-    const flags: (boolean | undefined)[] = [];
+describe("multisig confirm-and-execute review", () => {
+  test("reviews the exact effect, network, mode, signer, and fee before enabling submit", async () => {
+    const prepared: ConfirmationInput[] = [];
+    const submitted: ConfirmationInput[] = [];
     const proposal = makeProposal();
-    const panel = openPanel(proposal, {
-      multisig: {
-        async confirmProposal(_id: string, _untrackedVerified?: boolean, andExecute?: boolean) {
-          flags.push(andExecute);
+    const panel = openPanel(
+      proposal,
+      client({
+        confirmed: async (input) => {
+          submitted.push(input);
           return "0xabc";
         },
-      } as MultisigUiDeps["multisig"],
-    });
-
-    const combined = panel?.querySelector<HTMLButtonElement>("[data-ms-and-execute]");
-    expect(combined?.textContent).toContain("Confirm & execute");
-    expect(panel?.querySelectorAll("[data-ms-confirm-submit]")).toHaveLength(2);
-    // The atomicity consequence must be stated where the decision is made.
-    expect(panel?.querySelector(".review-panel")?.textContent).toContain(
-      "your confirmation is not recorded either",
+        prepared: (input) => prepared.push(input),
+      }),
     );
 
-    combined?.click();
-    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-    expect(flags).toEqual([true]);
+    expect(panel?.textContent).toContain("Treasury");
+    expect(panel?.textContent).toContain("Starknet Mainnet");
+    expect(panel?.textContent).toContain("Call transfer on");
+    expect(panel?.querySelectorAll("[data-ms-confirm-mode-option]")).toHaveLength(2);
+    const submit = panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]");
+    expect(submit?.disabled).toBe(true);
+
+    await flush();
+    expect(prepared[0]?.mode).toBe("confirm-and-execute");
+    expect(panel?.querySelector("[data-ms-confirm-fee]")?.textContent).toContain("STRK");
+    expect(submit?.disabled).toBe(false);
+    submit?.click();
+    await flush();
+    expect(submitted).toEqual([
+      {
+        mode: "confirm-and-execute",
+        proposalId: proposal.id,
+        signerAccountId: signer.id,
+      },
+    ]);
   });
 
-  test("the confirm-only action alongside it does not ask to execute", async () => {
-    const flags: (boolean | undefined)[] = [];
-    const proposal = makeProposal();
-    const panel = openPanel(proposal, {
-      multisig: {
-        async confirmProposal(_id: string, _untrackedVerified?: boolean, andExecute?: boolean) {
-          flags.push(andExecute);
+  test("switching to confirm-only re-prepares and submits only that mode", async () => {
+    const prepared: MultisigConfirmationMode[] = [];
+    const submitted: MultisigConfirmationMode[] = [];
+    const panel = openPanel(
+      makeProposal(),
+      client({
+        confirmed: async (input) => {
+          submitted.push(input.mode);
           return "0xabc";
         },
-      } as MultisigUiDeps["multisig"],
-    });
-
-    const confirmOnly = [
-      ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]") ?? []),
-    ].find((entry) => entry.dataset["msAndExecute"] !== "true");
-    expect(confirmOnly?.textContent).toContain("Confirm only");
-
-    confirmOnly?.click();
-    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-    expect(flags).toEqual([undefined]);
+        prepared: (input) => prepared.push(input.mode),
+      }),
+    );
+    await flush();
+    panel
+      ?.querySelector<HTMLButtonElement>('[data-ms-confirm-mode-option="confirm-only"]')
+      ?.click();
+    await flush();
+    expect(prepared).toEqual(["confirm-and-execute", "confirm-only"]);
+    const submit = panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]");
+    expect(submit?.textContent).toContain("Confirm proposal");
+    submit?.click();
+    await flush();
+    expect(submitted).toEqual(["confirm-only"]);
   });
 
-  test("a signer who is not the last one quorum needs sees only a plain confirm", () => {
-    // 1 of 3 confirmations on a 2-of-2 record raised to 3 signers: confirming
-    // brings it to 2 of 3, so execution is still someone else's step.
-    const panel = openPanel(makeProposal({ confirmations: 0, confirmedSignerAddresses: [] }));
-    expect(panel?.querySelector("[data-ms-and-execute]")).toBeNull();
-    expect(panel?.querySelectorAll("[data-ms-confirm-submit]")).toHaveLength(1);
-    expect(panel?.querySelector(".review-panel")?.textContent).toContain(
-      "It does not execute the proposal",
+  test("a non-quorum confirmation exposes only confirm-only mode", async () => {
+    const prepared: MultisigConfirmationMode[] = [];
+    const panel = openPanel(
+      makeProposal({ confirmations: 0, confirmedSignerAddresses: [] }),
+      client({ prepared: (input) => prepared.push(input.mode) }),
+    );
+    await flush();
+    expect(panel?.querySelector("[data-ms-confirm-mode-option]")).toBeNull();
+    expect(panel?.dataset["msConfirmMode"]).toBe("confirm-only");
+    expect(prepared).toEqual(["confirm-only"]);
+  });
+
+  test("a failed fee estimate keeps signing blocked and exposes retry", async () => {
+    const panel = openPanel(makeProposal(), client({ feeFailure: true }));
+    await flush();
+    expect(panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]")?.disabled).toBe(
+      true,
+    );
+    expect(panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-retry-fee]")?.hidden).toBe(
+      false,
+    );
+    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toContain(
+      "Retry before signing",
     );
   });
 
-  test("a proposal tracked by id only offers no combined action", () => {
-    // Reaches quorum, but without the original call it can never be executed
-    // from here, so only the plain confirmation is offered.
-    const panel = openPanel(makeProposal({ call: null, summary: "Shared by id" }));
-    expect(panel?.querySelector("[data-ms-and-execute]")).toBeNull();
-    expect(panel?.querySelectorAll("[data-ms-confirm-submit]")).toHaveLength(1);
-    expect(panel?.querySelector(".review-panel")?.textContent).toContain(
-      "executing needs the wallet that proposed it",
+  test("a failed submission restores controls and reports the actionable error", async () => {
+    const panel = openPanel(
+      makeProposal(),
+      client({
+        confirmed: async () => {
+          throw new Error("RPC unavailable");
+        },
+      }),
     );
+    await flush();
+    const submit = panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]");
+    submit?.click();
+    expect(submit?.hasAttribute("data-busy")).toBe(true);
+    await flush();
+    expect(submit?.disabled).toBe(false);
+    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe("RPC unavailable");
   });
 
-  test("starting one confirm action disables every submit in the panel", async () => {
-    let release!: () => void;
-    const held = new Promise<string>((resolve) => {
-      release = () => resolve("0xabc");
-    });
-    const panel = openPanel(makeProposal(), {
-      multisig: {
-        async confirmProposal(
-          _id: string,
-          _untrackedVerified?: boolean,
-          _andExecute?: boolean,
-        ): Promise<string> {
-          return held;
-        },
-      } as MultisigUiDeps["multisig"],
-    });
-    const submits = [
-      ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]") ?? []),
-    ];
-    expect(submits).toHaveLength(2);
-
-    submits[0]?.click();
-    expect(submits.every((entry) => entry.disabled && entry.hasAttribute("data-busy"))).toBe(true);
-
-    release();
-    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-  });
-
-  test("a failed submission re-enables every submit for a retry", async () => {
-    const panel = openPanel(makeProposal(), {
-      multisig: {
-        async confirmProposal(
-          _id: string,
-          _untrackedVerified?: boolean,
-          _andExecute?: boolean,
-        ): Promise<string> {
-          throw new Error("rpc down");
-        },
-      } as MultisigUiDeps["multisig"],
-    });
-    const submits = [
-      ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]") ?? []),
-    ];
-
-    submits.find((entry) => entry.dataset["msAndExecute"] === "true")?.click();
-    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-
-    // Busying every submit must not strand the panel: a failure has to release
-    // all of them, not just the one that was clicked.
-    expect(submits.some((entry) => entry.disabled)).toBe(false);
-    expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe("rpc down");
-  });
-
-  test("reports the batch as submitted rather than as already executed", async () => {
-    const panel = openPanel(makeProposal(), {
-      multisig: {
-        async confirmProposal(
-          _id: string,
-          _untrackedVerified?: boolean,
-          _andExecute?: boolean,
-        ): Promise<string> {
-          return "0xabc";
-        },
-      } as MultisigUiDeps["multisig"],
-    });
-
-    panel?.querySelector<HTMLButtonElement>("[data-ms-and-execute]")?.click();
-    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
-
+  test("success is reported as submitted, not already executed", async () => {
+    const panel = openPanel(makeProposal());
+    await flush();
+    panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]")?.click();
+    await flush();
     const toast = document.querySelector("#toast-stack .toast-text")?.textContent ?? "";
-    // The promise resolves on a transaction hash, and a reverting batched
-    // execution takes the confirmation with it, so nothing is settled yet.
     expect(toast).toBe("Confirm & execute submitted");
   });
 });

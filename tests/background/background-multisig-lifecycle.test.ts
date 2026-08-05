@@ -122,7 +122,11 @@ describe("unmined proposal protection", () => {
 
     await expect(
       handler(
-        { proposalId: proposed.proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-only",
+          proposalId: proposed.proposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toEqual({ error: "cannot confirm a proposal that is not-found" });

@@ -6,12 +6,17 @@
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import {
+  isMultisigConfirmationMode,
+  type MultisigConfirmationMode,
+} from "../shared/multisig-confirmation";
+import {
   isMultisigCallInput,
   isMultisigEntrypoint,
   MULTISIG_LIMITS,
   type MultisigCallInput,
 } from "../starknet/multisig";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
+import { isAccountId } from "../storage/vault-schema";
 
 // Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
 // proposal id runs to ~144 characters, so the cap must sit comfortably above.
@@ -106,6 +111,7 @@ export type ProposeMultisigInput = {
   readonly entrypoint: string;
   readonly multisigId: string;
   readonly salt: string;
+  readonly signerAccountId?: string;
   readonly summary?: string;
   readonly to: string;
 };
@@ -120,6 +126,7 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
     "entrypoint",
     "multisigId",
     "salt",
+    "signerAccountId",
     "summary",
     "to",
     "type",
@@ -131,12 +138,16 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
   isMultisigEntrypoint(message["entrypoint"]) &&
   isFeltList(message["calldata"], MAX_CALLDATA_FELTS) &&
   isOptionalSalt(message["salt"]) &&
+  (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
   isOptionalSummary(message["summary"])
     ? {
         calldata: message["calldata"],
         entrypoint: message["entrypoint"] as string,
         multisigId: message["multisigId"] as string,
         salt: message["salt"] ?? "0x0",
+        ...(message["signerAccountId"] === undefined
+          ? {}
+          : { signerAccountId: message["signerAccountId"] }),
         ...(message["summary"] === undefined ? {} : { summary: message["summary"] }),
         to: message["to"],
       }
@@ -148,36 +159,70 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
  * the user acknowledges that off-chain summaries are not chain-verified.
  */
 export type MultisigProposalActionInput = {
-  readonly andExecute?: boolean;
   readonly proposalId: string;
+  readonly signerAccountId?: string;
   readonly untrackedVerified?: boolean;
 };
 
 /**
- * Parses a proposal action request (`confirm`, `revoke`, `execute`).
- * `andExecute` is confirm-only and opt-in: it asks for the confirmation and the
- * execution to ride in one transaction, which the handler allows only when this
- * confirmation actually reaches quorum.
+ * Parsed confirmation review/submission. The discriminated mode makes a bare
+ * confirmation and an atomic confirmation-plus-execution impossible to mix up
+ * after the untrusted message boundary.
+ */
+export type ConfirmMultisigProposalInput = MultisigProposalActionInput & {
+  readonly mode: MultisigConfirmationMode;
+};
+
+/**
+ * Parses a confirmation review or submission. Both operations carry the same
+ * explicit mode so the fee shown in review is for the calls eventually sent.
+ */
+export const readConfirmMultisigProposalInput = (
+  message: unknown,
+  type: "wallet.confirmMultisigProposal" | "wallet.prepareMultisigConfirmation",
+): ConfirmMultisigProposalInput | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, [
+    "mode",
+    "proposalId",
+    "signerAccountId",
+    "type",
+    "untrackedVerified",
+  ]) &&
+  message["type"] === type &&
+  isMultisigConfirmationMode(message["mode"]) &&
+  isId(message["proposalId"]) &&
+  (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
+  (message["untrackedVerified"] === undefined || message["untrackedVerified"] === true)
+    ? {
+        mode: message["mode"],
+        proposalId: message["proposalId"],
+        ...(message["signerAccountId"] === undefined
+          ? {}
+          : { signerAccountId: message["signerAccountId"] }),
+        ...(message["untrackedVerified"] === true ? { untrackedVerified: true } : {}),
+      }
+    : null;
+
+/**
+ * Parses a revoke or execute request. Confirmation has its own discriminated
+ * parser above because its mode changes the exact calls being authorized.
  */
 export const readMultisigProposalActionInput = (
   message: unknown,
-  type:
-    | "wallet.confirmMultisigProposal"
-    | "wallet.executeMultisigProposal"
-    | "wallet.revokeMultisigConfirmation",
+  type: "wallet.executeMultisigProposal" | "wallet.revokeMultisigConfirmation",
 ): MultisigProposalActionInput | null => {
   const keys =
     type === "wallet.executeMultisigProposal"
-      ? (["proposalId", "type"] as const)
-      : type === "wallet.confirmMultisigProposal"
-        ? (["andExecute", "proposalId", "type", "untrackedVerified"] as const)
-        : (["proposalId", "type", "untrackedVerified"] as const);
+      ? (["proposalId", "signerAccountId", "type"] as const)
+      : (["proposalId", "signerAccountId", "type", "untrackedVerified"] as const);
   if (
     !(
       isRecord(message) &&
       hasOnlyKnownKeys(message, keys) &&
       message["type"] === type &&
-      isId(message["proposalId"])
+      isId(message["proposalId"]) &&
+      (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"]))
     )
   ) {
     return null;
@@ -185,12 +230,11 @@ export const readMultisigProposalActionInput = (
   if (message["untrackedVerified"] !== undefined && message["untrackedVerified"] !== true) {
     return null;
   }
-  if (message["andExecute"] !== undefined && message["andExecute"] !== true) {
-    return null;
-  }
   return {
-    ...(message["andExecute"] === true ? { andExecute: true } : {}),
     proposalId: message["proposalId"],
+    ...(message["signerAccountId"] === undefined
+      ? {}
+      : { signerAccountId: message["signerAccountId"] }),
     ...(message["untrackedVerified"] === true ? { untrackedVerified: true } : {}),
   };
 };

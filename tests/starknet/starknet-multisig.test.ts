@@ -99,10 +99,11 @@ describe("confirmationCompletesQuorum", () => {
     expect(confirmationCompletesQuorum({ ...base, quorum: 4 })).toBe(false);
   });
 
-  test("stays true when confirmations already exceed quorum", () => {
-    // A quorum lowered after confirmations accrued still leaves this signer
-    // able to execute, and the component agrees: it compares with >=.
-    expect(confirmationCompletesQuorum({ ...base, confirmations: 5, quorum: 2 })).toBe(true);
+  test("fails closed for an incoherent pending snapshot at or above quorum", () => {
+    // The component would resolve these counts as confirmed. Separate RPC
+    // reads can straddle a block, so impossible tuples must never offer a batch.
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 2 })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 5, quorum: 2 })).toBe(false);
   });
 
   test("is false for a signer who already confirmed", () => {
@@ -119,6 +120,8 @@ describe("confirmationCompletesQuorum", () => {
 
   test("is false for a zero quorum, which no confirmation can complete", () => {
     expect(confirmationCompletesQuorum({ ...base, confirmations: 0, quorum: 0 })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, confirmations: -1 })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, quorum: Number.NaN })).toBe(false);
   });
 });
 
