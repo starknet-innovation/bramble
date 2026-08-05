@@ -33,6 +33,27 @@ const paymasterKey = process.env["AVNU_PAYMASTER_API_KEY"];
 const paymasterUpstream =
   process.env["STRK20_PAYMASTER_UPSTREAM"] ?? "https://starknet.paymaster.avnu.fi";
 const PAYMASTER_PREFIX = "/api/strk20/paymaster";
+const debugPaymaster = process.env["STRK20_DEBUG_PAYMASTER"] === "1";
+const DEBUG_WINDOW_CHARS = 80;
+
+// Relay rejections name a byte offset ("… at line 1 column 699") without saying
+// which field sits there. With STRK20_DEBUG_PAYMASTER=1, print a narrow window
+// of the request around that offset so the offending felt is identifiable. Only
+// the window is printed, never the whole body, and never the credential.
+const explainRejection = (body: string, response: string): void => {
+  let column: number | null = null;
+  const match = /column (\d+)/.exec(response);
+  if (match?.[1] !== undefined) {
+    column = Number(match[1]);
+  }
+  console.error(`  request was ${body.length} chars`);
+  if (column === null || column > body.length) {
+    console.error(`  relay said: ${response.slice(0, 300)}`);
+    return;
+  }
+  const from = Math.max(0, column - DEBUG_WINDOW_CHARS);
+  console.error(`  around column ${column}: …${body.slice(from, column + DEBUG_WINDOW_CHARS)}…`);
+};
 
 // Forwards one paymaster JSON-RPC call directly to the relay with the local
 // credential. Returns null when no key is configured so the caller falls back
@@ -48,13 +69,23 @@ const forwardToPaymaster = async (request: Request, url: URL): Promise<Response 
   if (accept !== null) {
     headers.set("Accept", accept);
   }
+  const body = request.method === "POST" ? await request.text() : undefined;
   try {
-    return await fetch(`${paymasterUpstream}${suffix}${url.search}`, {
-      body: request.method === "POST" ? await request.arrayBuffer() : undefined,
+    const upstream = await fetch(`${paymasterUpstream}${suffix}${url.search}`, {
+      body,
       headers,
       method: request.method,
       redirect: "error",
     });
+    if (!debugPaymaster || body === undefined) {
+      return upstream;
+    }
+    // Reading the body consumes it, so hand back a fresh Response.
+    const text = await upstream.text();
+    if (text.includes('"error"')) {
+      explainRejection(body, text);
+    }
+    return new Response(text, { headers: upstream.headers, status: upstream.status });
   } catch (error) {
     console.error(`${request.method} ${url.pathname} -> paymaster unreachable:`, error);
     return new Response(JSON.stringify({ error: "upstream_unavailable" }), {
