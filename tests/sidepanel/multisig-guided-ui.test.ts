@@ -143,6 +143,7 @@ describe("guided Multisig actions", () => {
       entrypoint: "transfer",
       multisigId: record.id,
       salt: "0x0",
+      signerAccountId: account.id,
       summary: `Send 1.25 ${token.symbol} to Research treasury`,
       to,
     };

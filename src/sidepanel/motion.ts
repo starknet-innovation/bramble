@@ -9,8 +9,8 @@
  * imperative motion must go through these helpers so the accessibility contract
  * holds everywhere.
  *
- * By convention only compositor-friendly properties (`transform`, `opacity`,
- * `filter`) should be animated, and in-flight animations on the same element
+ * By convention only compositor-friendly properties (`transform`, `opacity`)
+ * should be animated, and in-flight animations on the same element
  * are cancelled before a new one starts so gestures can retarget mid-flight.
  */
 const MOTION_ID = "mc-motion";
@@ -22,6 +22,15 @@ const MOTION_ID = "mc-motion";
  */
 export const prefersReducedMotion = (): boolean =>
   typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Reads one computed compositor property at the browser-motion boundary. Empty
+ * values are returned when computed styles are unavailable in a test runtime.
+ */
+export const currentMotionStyle = (
+  element: HTMLElement,
+  property: "opacity" | "transform",
+): string => (typeof getComputedStyle === "function" ? getComputedStyle(element)[property] : "");
 
 /**
  * Options for {@link animate}: standard WAAPI timing plus an optional id used to

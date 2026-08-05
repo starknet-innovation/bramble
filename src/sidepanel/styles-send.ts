@@ -74,13 +74,16 @@ export const SEND_STYLES = `
     color: var(--mc-positive);
   }
   html[data-send-transition]::view-transition-old(root),
-  html[data-send-transition]::view-transition-new(root) { animation: none; }
-  ::view-transition-group(send-stage) {
+  html[data-send-transition]::view-transition-new(root),
+  html[data-proposal-transition]::view-transition-old(root),
+  html[data-proposal-transition]::view-transition-new(root) { animation: none; }
+  ::view-transition-group(send-stage), ::view-transition-group(proposal-stage) {
     animation-duration: 260ms;
     animation-timing-function: ${EASE.out};
   }
-  ::view-transition-image-pair(send-stage) { isolation: auto; }
-  ::view-transition-old(send-stage), ::view-transition-new(send-stage) {
+  ::view-transition-image-pair(send-stage), ::view-transition-image-pair(proposal-stage) { isolation: auto; }
+  ::view-transition-old(send-stage), ::view-transition-new(send-stage),
+  ::view-transition-old(proposal-stage), ::view-transition-new(proposal-stage) {
     mix-blend-mode: normal;
   }
   html[data-send-transition="forward"]::view-transition-old(send-stage) {
@@ -94,6 +97,18 @@ export const SEND_STYLES = `
   }
   html[data-send-transition="back"]::view-transition-new(send-stage) {
     animation: send-stage-in-left 260ms ${EASE.out} both;
+  }
+  html[data-proposal-transition="forward"]::view-transition-old(proposal-stage) {
+    animation: send-stage-out-left 130ms ${EASE.out} both;
+  }
+  html[data-proposal-transition="forward"]::view-transition-new(proposal-stage) {
+    animation: send-stage-in-right 220ms ${EASE.out} both;
+  }
+  html[data-proposal-transition="back"]::view-transition-old(proposal-stage) {
+    animation: send-stage-out-right 130ms ${EASE.out} both;
+  }
+  html[data-proposal-transition="back"]::view-transition-new(proposal-stage) {
+    animation: send-stage-in-left 220ms ${EASE.out} both;
   }
   @keyframes send-stage-in-right {
     from { opacity: 0; transform: translateX(12px); }
@@ -350,6 +365,9 @@ export const SEND_STYLES = `
     html[data-send-transition]::view-transition-group(send-stage),
     html[data-send-transition]::view-transition-old(send-stage),
     html[data-send-transition]::view-transition-new(send-stage),
+    html[data-proposal-transition]::view-transition-group(proposal-stage),
+    html[data-proposal-transition]::view-transition-old(proposal-stage),
+    html[data-proposal-transition]::view-transition-new(proposal-stage),
     .liquid-dot,
     .send-task-list li[data-state="active"] > span:first-child::after,
     .send-success-ring,

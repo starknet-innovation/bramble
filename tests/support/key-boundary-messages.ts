@@ -372,7 +372,19 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   {
-    message: { proposalId: `SN_MAIN:${MULTISIG}:0xabc`, type: "wallet.confirmMultisigProposal" },
+    message: {
+      mode: "confirm-only",
+      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
+      type: "wallet.confirmMultisigProposal",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      mode: "confirm-only",
+      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
+      type: "wallet.prepareMultisigConfirmation",
+    },
     sender: extensionSender,
   },
   {

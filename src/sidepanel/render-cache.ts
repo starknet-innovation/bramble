@@ -82,13 +82,17 @@ export const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "t
 
 /**
  * Applies a freshly loaded status and clears account-scoped render data when
- * the active signer or network changed. Returns whether the render scope
- * changed so callers can leave any selected contract-account portfolio.
+ * the active signer or network changed. The precise change is returned so a
+ * signer handoff can retain a selected contract-account portfolio while a
+ * network switch still leaves it.
  */
-export const updateRenderScope = (cache: RenderData, status: WalletStatus): boolean => {
-  const changed =
-    cache.status.activeAccountId !== status.activeAccountId ||
-    cache.status.networkId !== status.networkId;
+export const updateRenderScope = (
+  cache: RenderData,
+  status: WalletStatus,
+): "account" | "network" | null => {
+  const accountChanged = cache.status.activeAccountId !== status.activeAccountId;
+  const networkChanged = cache.status.networkId !== status.networkId;
+  const changed = accountChanged || networkChanged;
   Object.assign(cache, {
     status,
     ...(changed
@@ -105,7 +109,7 @@ export const updateRenderScope = (cache: RenderData, status: WalletStatus): bool
         }
       : {}),
   });
-  return changed;
+  return networkChanged ? "network" : accountChanged ? "account" : null;
 };
 
 /**

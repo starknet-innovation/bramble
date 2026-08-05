@@ -33,7 +33,10 @@ const isRiskFlagShape = (value: unknown): value is { code: string; message: stri
   value["message"].length > 0 &&
   value["message"].length <= 300;
 
-const isFeeShape = (value: unknown): value is { overallFee: string; unit: string } =>
+/**
+ * Checks a fee estimate before any extension page renders it.
+ */
+export const isFeeShape = (value: unknown): value is { overallFee: string; unit: string } =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["overallFee", "unit"]) &&
   typeof value["overallFee"] === "string" &&

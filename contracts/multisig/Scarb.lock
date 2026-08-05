@@ -6,6 +6,7 @@ name = "mc_multisig"
 version = "0.1.0"
 dependencies = [
  "openzeppelin_governance",
+ "snforge_std",
 ]
 
 [[package]]
@@ -65,4 +66,19 @@ source = "registry+https://scarbs.xyz/"
 checksum = "sha256:4d5504fef1c5a6d9fee6a3ae392004a4a24b4b3ccb790c5e5217da96beb73e08"
 dependencies = [
  "openzeppelin_interfaces",
+]
+
+[[package]]
+name = "snforge_scarb_plugin"
+version = "0.59.0"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:871fba677c03b66a1bf40815dac0ab1b385eb1b9be6e6c3cf2ad9788eeb2b6bb"
+
+[[package]]
+name = "snforge_std"
+version = "0.59.0"
+source = "registry+https://scarbs.xyz/"
+checksum = "sha256:3620924fa08bd2d740b2b5b01ef86c8dab3d4b9c2206387c8dbdc8d2ec15133e"
+dependencies = [
+ "snforge_scarb_plugin",
 ]

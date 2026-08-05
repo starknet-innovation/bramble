@@ -212,6 +212,27 @@ export const buildMultisigExecuteCall = (
   entrypoint: "execute_transaction",
 });
 
+/**
+ * Checks whether one more confirmation brings a pending proposal to quorum,
+ * i.e. whether this signer is the last one needed and can therefore confirm
+ * and execute in a single transaction. Pure: callers pass a freshly read
+ * quorum and confirmation count, and the component re-checks both on-chain, so
+ * a stale `true` can only waste fees — it can never bypass quorum.
+ */
+export const confirmationCompletesQuorum = (input: {
+  readonly confirmations: number;
+  readonly quorum: number;
+  readonly signerHasConfirmed: boolean;
+  readonly state: MultisigProposalState;
+}): boolean =>
+  input.state === "pending" &&
+  !input.signerHasConfirmed &&
+  Number.isSafeInteger(input.confirmations) &&
+  input.confirmations >= 0 &&
+  Number.isSafeInteger(input.quorum) &&
+  input.quorum > 0 &&
+  input.confirmations + 1 === input.quorum;
+
 const feltAt = (response: readonly string[], index: number, label: string): bigint => {
   const value = response[index];
   if (typeof value !== "string" || !isStarkFieldElement(value)) {

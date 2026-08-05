@@ -116,6 +116,7 @@ export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   "test:e2e": "playwright test",
   "test:e2e:build": "bun run build && bun run test:e2e",
   "test:e2e:install": "playwright install chromium",
+  "test:multisig-contract": "scarb --manifest-path contracts/multisig/Scarb.toml run test",
   "vendor:krusty": "bun run scripts/vendor-krusty.ts",
   "vendor:multisig": "bun run scripts/vendor-multisig.ts",
 };

@@ -38,7 +38,15 @@ const multisigCheckpoint = (
   narrative: string,
   content: () => string,
   state: Readonly<Record<string, unknown>>,
-): ScenarioCheckpoint => ({ content, id, label, narrative, state });
+  prepare?: (context: FrameContext) => void,
+): ScenarioCheckpoint => ({
+  content,
+  id,
+  label,
+  narrative,
+  ...(prepare ? { prepare } : {}),
+  state,
+});
 
 const confirmedProposal: MultisigProposalRecord = {
   ...pendingProposal,
@@ -84,23 +92,27 @@ const showAdvancedProposal = (context: FrameContext): void => {
   if (options) options.hidden = false;
 };
 
+const bindProposalJourney = (context: FrameContext): void => {
+  const client = createMultisigClient({
+    sendMessage: async () => ({ error: "UI Lab blocks proposal submission" }),
+  });
+  bindMultisigProposalForm({
+    app: context.app,
+    multisig: client,
+    openDetail: () => context.emit({ detail: "return to shared account", kind: "state" }),
+    runAction: () => undefined,
+    selectedMultisigId: () => multisig.id,
+    setResult: (id, message) => {
+      const result = context.app.querySelector(`#${id}`);
+      if (result) result.textContent = message;
+    },
+  });
+};
+
 const prepareProposal =
   (stage: "amount" | "review") =>
   (context: FrameContext): void => {
-    const client = createMultisigClient({
-      sendMessage: async () => ({ error: "UI Lab blocks proposal submission" }),
-    });
-    bindMultisigProposalForm({
-      app: context.app,
-      multisig: client,
-      openDetail: () => context.emit({ detail: "return to shared account", kind: "state" }),
-      runAction: () => undefined,
-      selectedMultisigId: () => multisig.id,
-      setResult: (id, message) => {
-        const result = context.app.querySelector(`#${id}`);
-        if (result) result.textContent = message;
-      },
-    });
+    bindProposalJourney(context);
     context.app
       .querySelector<HTMLButtonElement>(`[data-proposal-recipient="${RECIPIENT_ADDRESS}"]`)
       ?.click();
@@ -134,6 +146,17 @@ const showConfirmationReview = (context: FrameContext): void => {
       async confirmProposal() {
         throw new Error("UI Lab blocks transaction submission");
       },
+      async prepareConfirmation(input: {
+        mode: "confirm-and-execute" | "confirm-only";
+        proposalId: string;
+        signerAccountId: string;
+      }) {
+        return {
+          fee: { overallFee: "240000000000000", unit: "FRI" },
+          feeEstimateFailed: false,
+          ...input,
+        };
+      },
     },
     openDetail: () => undefined,
     openList: () => undefined,
@@ -141,7 +164,6 @@ const showConfirmationReview = (context: FrameContext): void => {
     selectedMultisigId: () => multisig.id,
     wallet: {
       loadStatus: async () => statusFor(),
-      setActiveAccount: async () => undefined,
     },
   } as unknown as MultisigUiDeps);
   showSharedProposals(context);
@@ -300,6 +322,20 @@ export const multisigScenario: WalletScenario = {
       prepare: openSharedAccountDrawer,
       state: { accountType: "shared", openProposals: 1, quorum: 2 },
     },
+    {
+      content: () =>
+        walletDashboard({
+          multisigProposals: [pendingProposal],
+          multisigs: [multisig],
+          selectedMultisigId: multisig.id,
+          view: "account",
+        }),
+      id: "account-management",
+      label: "Manage signer and Multisig accounts",
+      narrative:
+        "The account manager presents shared and signer accounts as peer identities while keeping their signing semantics explicit.",
+      state: { accountTypes: ["signer", "multisig"], selected: multisig.id },
+    },
     ...multisigReviewCheckpoints(portfolio),
     {
       content: () =>
@@ -420,6 +456,7 @@ export const multisigScenario: WalletScenario = {
       "A familiar token transfer is primary while arbitrary calldata remains an explicit advanced path.",
       () => multisigProposeFlow(statusFor(), multisig, preferences, portfolio),
       { action: "send-token", calldata: "derived and reviewed", view: "multisig-propose" },
+      bindProposalJourney,
     ),
     {
       content: () => multisigProposeFlow(statusFor(), multisig, preferences, portfolio),

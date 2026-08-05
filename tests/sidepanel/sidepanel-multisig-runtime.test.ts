@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   isMultisigClassStatusResponse,
+  isMultisigConfirmationReviewResponse,
   isMultisigDeployResponse,
   isMultisigProposalResponse,
   isMultisigResponse,
@@ -54,6 +55,16 @@ const responses: Readonly<Record<string, unknown>> = {
   "wallet.deployMultisig": { address, ok: true, tracked: true, transactionHash: "0x123" },
   "wallet.executeMultisigProposal": { ok: true, transactionHash: "0x123" },
   "wallet.multisigClassStatus": { declarationPending: false, declared: true, ok: true },
+  "wallet.prepareMultisigConfirmation": {
+    confirmationReview: {
+      fee: { overallFee: "1000", unit: "FRI" },
+      feeEstimateFailed: false,
+      mode: "confirm-only",
+      proposalId: proposal.id,
+      signerAccountId: account.id,
+    },
+    ok: true,
+  },
   "wallet.multisigBalances": {
     accountId: multisig.id,
     balances: [],
@@ -78,6 +89,9 @@ describe("multisig response guards", () => {
     expect(isMultisigResponse(responses["wallet.addMultisig"])).toBe(true);
     expect(isMultisigProposalResponse(responses["wallet.proposeMultisigTx"])).toBe(true);
     expect(isMultisigClassStatusResponse(responses["wallet.multisigClassStatus"])).toBe(true);
+    expect(
+      isMultisigConfirmationReviewResponse(responses["wallet.prepareMultisigConfirmation"]),
+    ).toBe(true);
     expect(isMultisigDeployResponse(responses["wallet.deployMultisig"])).toBe(true);
     expect(isOkResponse(responses["wallet.removeMultisig"])).toBe(true);
 
@@ -132,7 +146,27 @@ describe("createMultisigClient", () => {
     });
 
     await client.addMultisig(address, "Treasury");
-    expect(await client.confirmProposal(proposal.id, true)).toBe("0x123");
+    expect(
+      await client.confirmProposal({
+        mode: "confirm-only",
+        proposalId: proposal.id,
+        signerAccountId: account.id,
+        untrackedVerified: true,
+      }),
+    ).toBe("0x123");
+    expect(
+      await client.prepareConfirmation({
+        mode: "confirm-only",
+        proposalId: proposal.id,
+        signerAccountId: account.id,
+      }),
+    ).toEqual({
+      fee: { overallFee: "1000", unit: "FRI" },
+      feeEstimateFailed: false,
+      mode: "confirm-only",
+      proposalId: proposal.id,
+      signerAccountId: account.id,
+    });
     expect(await client.declareClass()).toBe("0x123");
     expect(await client.deployMultisig([account.address], 1, "0x0")).toEqual({
       address,
@@ -140,7 +174,7 @@ describe("createMultisigClient", () => {
       tracked: true,
       transactionHash: "0x123",
     });
-    expect(await client.executeProposal(proposal.id)).toBe("0x123");
+    expect(await client.executeProposal(proposal.id, account.id)).toBe("0x123");
     expect(await client.loadClassStatus()).toEqual({
       declarationPending: false,
       declared: true,
@@ -156,13 +190,14 @@ describe("createMultisigClient", () => {
         entrypoint: "transfer",
         multisigId: multisig.id,
         salt: "0x0",
+        signerAccountId: account.id,
         summary: "Pay",
         to: account.address,
       }),
     ).toBe("0x123");
     expect(await client.refreshMultisig(multisig.id)).toBe("current");
     await client.removeMultisig(multisig.id);
-    expect(await client.revokeConfirmation(proposal.id, true)).toBe("0x123");
+    expect(await client.revokeConfirmation(proposal.id, account.id, true)).toBe("0x123");
     await client.trackProposal(multisig.id, proposal.txId, "Shared", importedCall);
 
     expect(sent).toContainEqual({
@@ -171,8 +206,37 @@ describe("createMultisigClient", () => {
       type: "wallet.addMultisig",
     });
     expect(sent).toContainEqual({
+      mode: "confirm-only",
       proposalId: proposal.id,
+      signerAccountId: account.id,
       type: "wallet.confirmMultisigProposal",
+      untrackedVerified: true,
+    });
+    expect(sent).toContainEqual({
+      mode: "confirm-only",
+      proposalId: proposal.id,
+      signerAccountId: account.id,
+      type: "wallet.prepareMultisigConfirmation",
+    });
+    expect(sent).toContainEqual({
+      proposalId: proposal.id,
+      signerAccountId: account.id,
+      type: "wallet.executeMultisigProposal",
+    });
+    expect(sent).toContainEqual({
+      calldata: ["0x1"],
+      entrypoint: "transfer",
+      multisigId: multisig.id,
+      salt: "0x0",
+      signerAccountId: account.id,
+      summary: "Pay",
+      to: account.address,
+      type: "wallet.proposeMultisigTx",
+    });
+    expect(sent).toContainEqual({
+      proposalId: proposal.id,
+      signerAccountId: account.id,
+      type: "wallet.revokeMultisigConfirmation",
       untrackedVerified: true,
     });
     expect(sent).toContainEqual({

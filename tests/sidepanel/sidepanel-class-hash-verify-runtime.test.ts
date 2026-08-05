@@ -166,7 +166,7 @@ describe("updateRenderScope", () => {
       watchedNfts: [nft],
     });
 
-    updateRenderScope(cache, { ...cache.status });
+    expect(updateRenderScope(cache, { ...cache.status })).toBeNull();
     expect(cache.discoveredNfts).toEqual([nft]);
     expect(cache.transactions).toEqual([transaction]);
     expect(cache.historyUnavailable).toBe(true);
@@ -176,12 +176,16 @@ describe("updateRenderScope", () => {
       transactionHash: "0xdec",
     });
 
-    updateRenderScope(cache, { ...cache.status, activeAccountId: OTHER_ACCOUNT_ID });
+    expect(updateRenderScope(cache, { ...cache.status, activeAccountId: OTHER_ACCOUNT_ID })).toBe(
+      "account",
+    );
     expect(cache.discoveredNfts).toEqual([]);
     expect(cache.indexedNfts).toEqual([]);
     expect(cache.watchedNfts).toEqual([]);
     expect(cache.transactions).toEqual([]);
     expect(cache.historyUnavailable).toBe(false);
     expect(cache.multisigClassDeclared).toBeNull();
+
+    expect(updateRenderScope(cache, { ...cache.status, networkId: "SN_SEPOLIA" })).toBe("network");
   });
 });

@@ -23,8 +23,8 @@ import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
 import { ledgerConnector } from "./ledger/sign-connector";
 import { createLedgerSignRuntime } from "./ledger/sign-runtime";
 import { animateLiveValueChanges, captureLiveValues } from "./live-updates";
-import { prefersReducedMotion } from "./motion";
 import { createMultisigClient } from "./multisig-runtime";
+import { shouldPreserveMultisigProposalSurface } from "./multisig-surface";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
@@ -45,6 +45,7 @@ import {
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { createMutationRuntime } from "./runtime-refresh";
+import { transitionScene } from "./scene-transition";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -91,11 +92,6 @@ let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 let snoozedApprovalIds: readonly string[] = [];
 
-type ViewTransition = { readonly finished: Promise<void> };
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => void) => ViewTransition;
-};
-
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -126,25 +122,19 @@ const renderShell = (content: string, animate: boolean): void => {
 };
 
 const renderScene = (content: string, animate: boolean, direction: NavDirection): void => {
-  const doc = document as ViewTransitionDocument;
-  if (!animate || prefersReducedMotion() || typeof doc.startViewTransition !== "function") {
+  if (!animate) {
     renderShell(content, animate);
     bindAll();
     return;
   }
-  document.documentElement.dataset["navDirection"] = direction;
-  const transition = doc.startViewTransition(() => {
-    renderShell(content, false);
+  transitionScene(document, direction, (animateFallback) => {
+    renderShell(content, animateFallback);
     bindAll();
-  });
-  void transition.finished.finally(() => {
-    delete document.documentElement.dataset["navDirection"];
   });
 };
 
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
-
 const ledgerSignMount = document.createElement("div");
 ledgerSignMount.className = "ledger-sign-overlay";
 ledgerSignMount.hidden = true;
@@ -194,6 +184,7 @@ const bindAll = (): void => {
     render,
     setActiveView: (view: WalletView) => {
       activeView = view;
+      if (view === "home") selectedMultisigId = null;
     },
     wallet,
   };
@@ -340,7 +331,6 @@ const paint = (): void => {
   lastScene = scene;
   const direction = forcedDirection ?? navDirection(lastActiveView, activeView);
   forcedDirection = null;
-  // Drop deleted group/account selections before repainting.
   const healed = healTransientGroupState(
     { drawerGroupFilter, expandedGroupId, openAssignId },
     cache.preferences?.groups ?? [],
@@ -349,7 +339,6 @@ const paint = (): void => {
   drawerGroupFilter = healed.drawerGroupFilter;
   expandedGroupId = healed.expandedGroupId;
   openAssignId = healed.openAssignId;
-  // Never show the prior account's class verification after a switch.
   const classHashVerification = verificationForAccount(
     cache.classHashVerification,
     status.activeAccountId,
@@ -358,6 +347,17 @@ const paint = (): void => {
     cache.pending.some((approval) => approval.id === id),
   );
   if (transfer.preserveSend(app, activeView, status, cache.pending, snoozedApprovalIds)) return;
+  if (
+    shouldPreserveMultisigProposalSurface(
+      app,
+      activeView,
+      selectedMultisigId,
+      status,
+      cache.pending,
+      snoozedApprovalIds,
+    )
+  )
+    return;
   const content =
     fullPageOnboarding && status.hasVault
       ? onboardingComplete()
@@ -413,7 +413,7 @@ let renderGeneration = 0;
 const render = async (status: WalletStatus): Promise<void> => {
   const generation = ++renderGeneration;
   const isCurrent = (): boolean => generation === renderGeneration;
-  if (updateRenderScope(cache, status) && selectedMultisigId !== null) {
+  if (updateRenderScope(cache, status) === "network" && selectedMultisigId !== null) {
     selectedMultisigId = null;
     activeView = "home";
     viewHistory = [];
