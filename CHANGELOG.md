@@ -14,6 +14,10 @@ Safer dApp account boundaries, faster and more truthful transaction status, and
 opt-in support for fully on-chain animated collectibles.
 
 ### Added
+- An explicit multisig confirmation review that shows the exact decoded effect,
+  signer, network, mode, and estimated fee before hardware or software signing.
+- Atomic confirm-and-execute for the signer that reaches quorum, while retaining
+  a deliberate confirmation-only choice.
 - A background transaction monitor that recognizes Starknet pre-confirmation,
   finality, and L1 acceptance, then reconciles submitted activity without
   blocking the send flow on slow polling.
@@ -35,6 +39,10 @@ opt-in support for fully on-chain animated collectibles.
   Cartridge fallback and bounded concurrency.
 
 ### Fixed
+- Multisig confirmation sheets keep focus contained, keep their final action
+  visible at compact side-panel heights, and expose a working fee-estimate retry.
+- Impossible confirmation counts no longer qualify for atomic execution, and
+  concurrent extension surfaces cannot broadcast the same proposal action twice.
 - Late transaction failures are delivered only to the matching unlocked
   account and network, preventing activity or alerts from bleeding between
   account scopes.
@@ -45,6 +53,10 @@ opt-in support for fully on-chain animated collectibles.
   placeholder when their supported animation is opened deliberately.
 
 ### Security
+- Multisig action messages require an exact confirmation mode and reject unknown
+  fields; the reviewed fee and submitted call batch are derived from that same
+  typed request. Durable pre-broadcast claims fail closed on unresolved duplicate
+  intent without blocking a valid later confirm/revoke state transition.
 - Untrusted animation HTML runs in a manifest sandbox with an egress-denying
   CSP and a second opaque-origin iframe sandbox. Browser regression tests prove
   it cannot access extension APIs or parent DOM state, beacon the network, load

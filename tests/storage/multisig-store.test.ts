@@ -102,6 +102,14 @@ describe("multisig store", () => {
     expect(isMultisigProposalRecord({ ...proposal, state: "unknown" })).toBe(false);
     expect(isMultisigProposalRecord({ ...proposal, id: "other" })).toBe(false);
     expect(isMultisigOperationRecord(operation)).toBe(true);
+    expect(
+      isMultisigOperationRecord({
+        ...operation,
+        id: multisigOperationId("confirm", "SN_MAIN", "account-1", proposal.txId) ?? "",
+        kind: "confirm",
+        target: proposal.txId,
+      }),
+    ).toBe(true);
     expect(isMultisigOperationRecord({ ...operation, id: "other" })).toBe(false);
   });
 
@@ -127,6 +135,30 @@ describe("multisig store", () => {
     await registry.upsertProposal(proposal);
     expect(await registry.listMultisigs()).toEqual([record]);
     expect(await registry.listProposals()).toEqual([proposal]);
+  });
+
+  test("keeps watched multisig order stable when chain refreshes update records", async () => {
+    const { store } = memoryKv();
+    const registry = createMultisigStore({ store });
+    const secondAddress = "0x444";
+    const second: MultisigRecord = {
+      address: secondAddress,
+      id: multisigId("SN_MAIN", secondAddress) ?? "",
+      networkId: "SN_MAIN",
+      quorum: 1,
+      signers: [SIGNER_A],
+    };
+    await registry.upsertMultisig(record);
+    await registry.upsertMultisig(second);
+    expect((await registry.listMultisigs()).map((stored) => stored.id)).toEqual([
+      second.id,
+      record.id,
+    ]);
+
+    await registry.upsertMultisig({ ...record, name: "Updated treasury", quorum: 1 });
+    const refreshed = await registry.listMultisigs();
+    expect(refreshed.map((stored) => stored.id)).toEqual([second.id, record.id]);
+    expect(refreshed[1]?.name).toBe("Updated treasury");
   });
 
   test("drops proposals whose multisig is not watched", async () => {

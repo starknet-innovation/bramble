@@ -2,6 +2,7 @@
  * Shared background runtime response and service types.
  */
 import type { StarkSignature } from "../crypto/krusty";
+import type { MultisigConfirmationMode } from "../shared/multisig-confirmation";
 import type { MultisigSyncWarning } from "../shared/multisig-sync";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { SwapCatalogToken } from "../starknet/avnu";
@@ -249,6 +250,20 @@ export type TransferReviewResponse = {
 };
 
 /**
+ * Pre-sign fee review for one exact multisig confirmation operation.
+ */
+export type MultisigConfirmationReviewResponse = {
+  readonly confirmationReview: {
+    readonly fee: FeeEstimate | null;
+    readonly feeEstimateFailed: boolean;
+    readonly mode: MultisigConfirmationMode;
+    readonly proposalId: string;
+    readonly signerAccountId: string;
+  };
+  readonly ok: true;
+};
+
+/**
  * Activity feed returned to extension pages.
  */
 export type ActivityResponse = {
@@ -432,6 +447,7 @@ export type RuntimeResponse =
   | LedgerAccountStatusResponse
   | LedgerSignPendingResponse
   | MultisigClassStatusResponse
+  | MultisigConfirmationReviewResponse
   | MultisigDeployResponse
   | MultisigProposalResponse
   | MultisigResponse

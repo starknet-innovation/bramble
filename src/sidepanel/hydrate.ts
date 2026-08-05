@@ -222,6 +222,7 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
     activeView === "home" ||
     activeView === "activity" ||
     activeView === "settings" ||
+    activeView === "account" ||
     activeView === "send" ||
     activeView === "multisigs" ||
     activeView === "multisig-home" ||

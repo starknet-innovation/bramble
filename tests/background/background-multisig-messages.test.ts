@@ -153,7 +153,11 @@ describe("multisig messages", () => {
       proposal: MultisigProposalRecord;
     };
     const confirm = await handler(
-      { proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
+      {
+        mode: "confirm-only",
+        proposalId: proposal.id,
+        type: "wallet.confirmMultisigProposal",
+      },
       harnessExtensionSender,
     );
     expect(confirm).toEqual({ ok: true, transactionHash: "0x7cd" });
@@ -164,7 +168,6 @@ describe("multisig messages", () => {
     const { handler } = makeMultisigHarness();
     const watched = (await watch(handler)) as { multisig: { id: string } };
     await propose(handler, watched.multisig.id);
-
     const signerActivity = (await handler({ type: "wallet.activity" }, harnessExtensionSender)) as {
       activity: readonly { summary: string }[];
     };
@@ -172,7 +175,6 @@ describe("multisig messages", () => {
       { accountId: watched.multisig.id, type: "wallet.activity" },
       harnessExtensionSender,
     )) as { activity: readonly { summary: string }[] };
-
     expect(signerActivity.activity).toEqual([]);
     expect(sharedActivity.activity.map((entry) => entry.summary)).toEqual(["Propose: Pay vendor"]);
     await expect(
@@ -200,18 +202,23 @@ describe("multisig messages", () => {
     expect((await multisigStore.listProposals())[0]?.confirmedSignerAddresses).toEqual([
       harnessAccount.address,
     ]);
-
-    await handler(
-      { accountId: secondOwnedSigner.id, type: "wallet.setActiveAccount" },
-      harnessExtensionSender,
-    );
     await expect(
       handler(
-        { proposalId: proposed.proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          proposalId: proposed.proposal.id,
+          signerAccountId: secondOwnedSigner.id,
+          mode: "confirm-only",
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toEqual({ ok: true, transactionHash: "0x7cd" });
     expect(submittedAccounts.at(-1)).toBe(secondOwnedSigner.id);
+    await expect(handler({ type: "wallet.status" }, harnessExtensionSender)).resolves.toMatchObject(
+      {
+        activeAccountId: harnessAccount.id,
+      },
+    );
   });
   test("executes a proposal with quorum", async () => {
     const { handler, invokeCalls } = makeMultisigHarness({
@@ -237,7 +244,6 @@ describe("multisig messages", () => {
       "0x0",
     ]);
   });
-
   test("tracks a pasted proposal id but refuses to execute it", async () => {
     const { handler } = makeMultisigHarness();
     const watched = (await watch(handler)) as { multisig: { id: string } };
@@ -246,18 +252,21 @@ describe("multisig messages", () => {
       harnessExtensionSender,
     )) as { proposal: MultisigProposalRecord };
     expect(tracked.proposal).toMatchObject({ call: null, state: "pending", txId: "0xdef" });
-
     await expect(
       handler(
-        { proposalId: tracked.proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-only",
+          proposalId: tracked.proposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toMatchObject({
       error: expect.stringContaining("verify this proposal"),
     });
-
     const confirm = await handler(
       {
+        mode: "confirm-only",
         proposalId: tracked.proposal.id,
         type: "wallet.confirmMultisigProposal",
         untrackedVerified: true,
@@ -265,7 +274,6 @@ describe("multisig messages", () => {
       harnessExtensionSender,
     );
     expect(confirm).toEqual({ ok: true, transactionHash: "0x7cd" });
-
     await expect(
       handler(
         { proposalId: tracked.proposal.id, type: "wallet.revokeMultisigConfirmation" },
@@ -274,7 +282,6 @@ describe("multisig messages", () => {
     ).resolves.toMatchObject({
       error: expect.stringContaining("verify this proposal"),
     });
-
     const revoke = await handler(
       {
         proposalId: tracked.proposal.id,
@@ -284,14 +291,12 @@ describe("multisig messages", () => {
       harnessExtensionSender,
     );
     expect(revoke).toEqual({ ok: true, transactionHash: "0x7cd" });
-
     const execute = await handler(
       { proposalId: tracked.proposal.id, type: "wallet.executeMultisigProposal" },
       harnessExtensionSender,
     );
     expect(execute).toMatchObject({ error: expect.stringContaining("tracked by id only") });
   });
-
   test("rejects tracking an id the contract does not know", async () => {
     const { handler } = makeMultisigHarness({ proposalStatus: staticStatus("not-found") });
     const watched = (await watch(handler)) as { multisig: { id: string } };
@@ -482,13 +487,13 @@ describe("multisig messages", () => {
     expect(declared).toHaveLength(0);
   });
 
-  test("refuses propose when the active account was removed as a signer", async () => {
+  test("refuses propose when the selected account was removed as a signer", async () => {
     const signers = [harnessAccount.address, HARNESS_OTHER_SIGNER];
     const { handler } = makeMultisigHarness({ signers });
     const watched = (await watch(handler)) as { multisig: { id: string } };
     signers.splice(0, signers.length, HARNESS_OTHER_SIGNER);
     await expect(propose(handler, watched.multisig.id)).resolves.toEqual({
-      error: "the active account is not a signer of this multisig",
+      error: "the selected account is not a signer of this multisig",
     });
   });
 });

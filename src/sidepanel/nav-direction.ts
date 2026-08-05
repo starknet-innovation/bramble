@@ -26,7 +26,6 @@ const DETAIL_VIEWS: readonly WalletView[] = [
   "nft-hidden",
   "nft-send",
   "nft-watch",
-  "multisig-home",
   "multisig-detail",
   "multisig-signers",
   "multisig-track",
@@ -36,10 +35,15 @@ const DETAIL_VIEWS: readonly WalletView[] = [
   "multisig-deploy",
 ];
 
+// A selected multisig is a first-class portfolio identity, so its home sits at
+// the same shell depth as a single-signer Home rather than behaving like a
+// nested detail page.
+const ROOT_VIEWS: readonly WalletView[] = [...DOCK_VIEWS, "multisig-home"];
+
 // Dock screens sit at the root (0); flows push one level deeper (1); detail
 // screens deeper still (2).
 const viewDepth = (view: WalletView): number =>
-  DOCK_VIEWS.includes(view) ? 0 : DETAIL_VIEWS.includes(view) ? 2 : 1;
+  ROOT_VIEWS.includes(view) ? 0 : DETAIL_VIEWS.includes(view) ? 2 : 1;
 
 /**
  * Resolves the transition direction from the change in screen depth: deeper is
