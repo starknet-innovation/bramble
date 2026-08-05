@@ -62,6 +62,7 @@ const fixtureReview = async (
     ok: true,
     review: {
       fee: feeEstimateFailed ? null : { overallFee: "2400000000000000", unit: "FRI" },
+      feeAffordability: feeEstimateFailed ? "unknown" : "ok",
       feeEstimateFailed,
       flags: [],
       requiresDeployment: false,

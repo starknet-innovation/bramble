@@ -217,6 +217,13 @@ describe("createApprovalQueue payload discrimination", () => {
     const queue = createApprovalQueue();
     const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }];
     const { id } = queue.requestInvoke({
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
       calls,
       context: CONTEXT,
       flags: [],
@@ -282,6 +289,13 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
     const queue = createApprovalQueue();
     expect(() =>
       queue.requestInvoke({
+        fee: {
+          fee: null,
+          feeAffordability: "unknown",
+          feeEstimateFailed: false,
+          feeEstimatePending: false,
+          requiresDeployment: false,
+        },
         calls: [],
         context: CONTEXT,
         flags: [],
@@ -352,5 +366,89 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
     expect(repeat).toEqual(first);
     expect(other.id).not.toBe(first.id);
     expect(queue.list()).toHaveLength(2);
+  });
+});
+
+// The fee review is snapshotted on the way in and out, and can be replaced in
+// place by the panel's retry without disturbing the held calls (#189).
+describe("createApprovalQueue invoke fee review", () => {
+  const ORIGIN = "https://fee.example";
+  const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }];
+
+  test("carries the fee review on snapshots and isolates it from callers", () => {
+    const queue = createApprovalQueue();
+    const fee = { overallFee: "1200", unit: "FRI" };
+    const { id } = queue.requestInvoke({
+      calls,
+      context: CONTEXT,
+      fee: {
+        fee,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
+      flags: [],
+      origin: ORIGIN,
+      summaries: ["Invoke"],
+    });
+
+    const snapshot = queue.get(id);
+    expect(snapshot).toMatchObject({
+      fee: { overallFee: "1200", unit: "FRI" },
+      feeAffordability: "unknown",
+      feeEstimateFailed: false,
+      feeEstimatePending: false,
+      requiresDeployment: false,
+    });
+    // Mutating the caller's estimate or the snapshot never reaches the queue.
+    fee.overallFee = "9999";
+    (snapshot?.fee as { overallFee: string }).overallFee = "8888";
+    expect(queue.get(id)?.fee).toEqual({ overallFee: "1200", unit: "FRI" });
+  });
+
+  test("updateInvokeFee replaces the fee review and leaves the payload intact", () => {
+    const queue = createApprovalQueue();
+    const { id } = queue.requestInvoke({
+      calls,
+      context: CONTEXT,
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: true,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
+      flags: [],
+      origin: ORIGIN,
+      summaries: ["Invoke"],
+    });
+
+    const updated = queue.updateInvokeFee(id, {
+      fee: { overallFee: "77", unit: "FRI" },
+      feeAffordability: "unknown",
+      feeEstimateFailed: false,
+      feeEstimatePending: false,
+      requiresDeployment: false,
+    });
+    expect(updated).toMatchObject({ fee: { overallFee: "77", unit: "FRI" } });
+    expect(queue.get(id)?.feeEstimateFailed).toBe(false);
+    expect(queue.payload(id)).toEqual({ calls });
+  });
+
+  test("updateInvokeFee rejects unknown ids and non-invoke approvals", () => {
+    const queue = createApprovalQueue();
+    const connect = queue.request(ORIGIN);
+    const review = {
+      fee: null,
+      feeAffordability: "unknown",
+      feeEstimateFailed: false,
+      feeEstimatePending: false,
+      requiresDeployment: false,
+    } as const;
+
+    expect(queue.updateInvokeFee("9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01", review)).toBeNull();
+    expect(queue.updateInvokeFee(connect.id, review)).toBeNull();
+    expect(queue.get(connect.id)?.fee).toBeUndefined();
   });
 });

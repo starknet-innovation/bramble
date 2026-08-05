@@ -8,7 +8,7 @@ import { escapeHtml } from "../shared/html";
 import { button } from "../ui/controls";
 import { icon } from "./icons";
 import { accountLabel, formatFri } from "./parts";
-import { reviewCallsList, reviewPanel, riskFlagMessages } from "./review-render";
+import { reviewCallsList, reviewFeeSection, reviewPanel, riskFlagMessages } from "./review-render";
 import { signRequestDetails } from "./sign-request";
 
 // Shared approve/deny controls (one long template line so it is not re-wrapped);
@@ -148,16 +148,31 @@ const watchAssetCard = (approval: PendingApproval): string => {
 
 // Everything is inlined into the template (template contents are not re-wrapped)
 // so the decoded calls and combined risk-flag/insight warnings stay compact.
+// The fee section renders through the shared `reviewFeeSection` — the same
+// renderer the Send review uses — so the two surfaces cannot drift (issue 189). The
+// retry button targets this approval by data attribute; a failed estimate
+// never disables Approve (deliberate divergence from Send, so a flaky RPC
+// cannot block dApp transactions).
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Transaction request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and approve this transaction." : "Review each call carefully. Approving signs and submits it from your active account."}</p>
       ${reviewCallsList(approval.summaries ?? [])}
+      ${reviewFeeSection(
+        {
+          fee: approval.fee ?? null,
+          feeAffordability: approval.feeAffordability ?? "unknown",
+          feeEstimateFailed: approval.feeEstimateFailed === true,
+          feeEstimatePending: approval.feeEstimatePending === true,
+          requiresDeployment: approval.requiresDeployment === true,
+        },
+        { "data-approval-retry-fee": approval.id },
+      )}
       ${contextDisclosure(approval)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
-    ${decisionRow(approval, "Approve", status.locked)}
+    ${decisionRow(approval, "Approve", status.locked || approval.feeEstimatePending === true)}
   </li>`;
 
 const signCard = (approval: PendingApproval, status: WalletStatus): string => `
