@@ -61,7 +61,10 @@ const actionMessage = (
     | "wallet.executeMultisigProposal"
     | "wallet.revokeMultisigConfirmation",
   proposalId: string,
-) => ({ proposalId, type });
+) =>
+  type === "wallet.confirmMultisigProposal"
+    ? { mode: "confirm-only" as const, proposalId, type }
+    : { proposalId, type };
 
 describe("multisig action status gates", () => {
   test("fails closed when proposal status cannot be refreshed", async () => {

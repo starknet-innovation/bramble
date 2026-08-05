@@ -17,6 +17,7 @@ const EXCLUDED = new Set([
   "node_modules",
   "output",
   "playwright-report",
+  "target",
   "test-results",
   "vendor",
 ]);

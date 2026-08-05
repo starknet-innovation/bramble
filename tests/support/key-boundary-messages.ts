@@ -8,6 +8,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RuntimeSender } from "../../src/background/senders";
 import type { AccountRef } from "../../src/storage/vault-schema";
+import { type KeyBoundaryMessage, strk20KeyBoundaryMessages } from "./key-boundary-strk20-messages";
 
 /**
  * Recognizable secrets salted into the stub vault; the scan greps serialized
@@ -87,10 +88,7 @@ export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
 };
 
 /** One best-effort-valid request per handled type; rejected responses are also secret-scanned. */
-export const KEY_BOUNDARY_MESSAGES: readonly {
-  readonly message: Record<string, unknown>;
-  readonly sender: RuntimeSender;
-}[] = [
+export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.status" }, sender: extensionSender },
   {
     message: { type: "wallet.unlock", vaultPassphrase: SECRET_PASSPHRASE },
@@ -363,7 +361,19 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   {
-    message: { proposalId: `SN_MAIN:${MULTISIG}:0xabc`, type: "wallet.confirmMultisigProposal" },
+    message: {
+      mode: "confirm-only",
+      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
+      type: "wallet.confirmMultisigProposal",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      mode: "confirm-only",
+      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
+      type: "wallet.prepareMultisigConfirmation",
+    },
     sender: extensionSender,
   },
   {
@@ -445,53 +455,14 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   {
-    message: {
-      config: {
-        discoveryUrl: "https://discovery.example",
-        poolAddress: "0x1",
-        proverUrl: "https://prover.example",
-        subaccountAnonymizerAddress: "0x2",
-      },
-      networkId: "SN_MAIN",
-      type: "wallet.setStrk20NetworkConfig",
-    },
-    sender: extensionSender,
-  },
-  {
     message: { hidden: true, id: "tok-1", type: "wallet.setTokenHidden" },
     sender: extensionSender,
   },
-  { message: { origin: ORIGIN, type: "wallet.strk20Balances" }, sender: contentSender },
-  { message: { origin: ORIGIN, type: "wallet.strk20Register" }, sender: contentSender },
-  {
-    message: { origin: ORIGIN, params: {}, type: "wallet.strk20InvokeTransaction" },
-    sender: contentSender,
-  },
-  {
-    message: { origin: ORIGIN, params: {}, type: "wallet.strk20PrepareInvoke" },
-    sender: contentSender,
-  },
-  {
-    message: {
-      dappName: "mc-terminal",
-      origin: ORIGIN,
-      type: "wallet.strk20SubaccountCommitment",
-    },
-    sender: contentSender,
-  },
-  { message: { type: "wallet.strk20State" }, sender: extensionSender },
-  { message: { type: "wallet.strk20PrepareRegistration" }, sender: extensionSender },
-  {
-    message: { amount: "1", tokenId: "SN_MAIN:0x1", type: "wallet.strk20PrepareDeposit" },
-    sender: extensionSender,
-  },
-  {
-    message: {
-      preparationId: `sha256:${"0".repeat(64)}`,
-      type: "wallet.strk20Execute",
-    },
-    sender: extensionSender,
-  },
+  ...strk20KeyBoundaryMessages({
+    contentSender,
+    extensionSender,
+    origin: ORIGIN,
+  }),
   { message: { origin: ORIGIN, type: "wallet.supportedSpecs" }, sender: contentSender },
   { message: { origin: ORIGIN, type: "wallet.supportedWalletApi" }, sender: contentSender },
 ];

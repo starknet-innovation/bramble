@@ -16,6 +16,7 @@ import { icon } from "./icons";
 import type { MultisigClient } from "./multisig-runtime";
 import { accountLabel } from "./parts";
 import { balanceShortcut, fiatInputToken, sendCurrencySymbol, tokenInputFiat } from "./send-model";
+import { transitionProposalStage } from "./send-transition";
 import { tokenGlyph } from "./token-row";
 
 type ProposalStage = "advanced" | "amount" | "asset" | "recipient" | "review";
@@ -63,15 +64,17 @@ const setText = (form: HTMLFormElement, id: string, value: string): void => {
 };
 
 const showStage = (form: HTMLFormElement, stage: ProposalStage): void => {
-  const targetForm = form;
-  targetForm.dataset["proposalStage"] = stage;
-  form.querySelectorAll<HTMLElement>("[data-proposal-stage-panel]").forEach((panel) => {
-    const target = panel;
-    target.hidden = target.dataset["proposalStagePanel"] !== stage;
+  transitionProposalStage(form.ownerDocument, form.dataset["proposalStage"], stage, () => {
+    const targetForm = form;
+    targetForm.dataset["proposalStage"] = stage;
+    form.querySelectorAll<HTMLElement>("[data-proposal-stage-panel]").forEach((panel) => {
+      const target = panel;
+      target.hidden = target.dataset["proposalStagePanel"] !== stage;
+    });
+    const options = form.querySelector<HTMLElement>("[data-proposal-options]");
+    if (options) options.hidden = stage !== "amount" && stage !== "advanced";
+    form.querySelector<HTMLElement>(`[data-proposal-stage-panel="${stage}"] input`)?.focus();
   });
-  const options = form.querySelector<HTMLElement>("[data-proposal-options]");
-  if (options) options.hidden = stage !== "amount" && stage !== "advanced";
-  form.querySelector<HTMLElement>(`[data-proposal-stage-panel="${stage}"] input`)?.focus();
 };
 
 const normalizedAddress = (value: string): string | null => {
@@ -347,6 +350,7 @@ const reviewMarkup = (form: HTMLFormElement, fields: ProposalFields): string => 
           : ""
       }
       <div><dt>From</dt><dd><strong>${escapeHtml(form.dataset["multisigName"] ?? "Shared account")}</strong><code>${escapeHtml(accountLabel(form.dataset["multisigAddress"] ?? ""))}</code></dd></div>
+      <div><dt>Signer</dt><dd><strong>${escapeHtml(form.dataset["signerAccountName"] ?? "Wallet account")}</strong><code>${escapeHtml(accountLabel(form.dataset["signerAccountAddress"] ?? ""))}</code></dd></div>
       <div><dt>Network</dt><dd><strong>${escapeHtml(form.dataset["network"] ?? "Starknet")}</strong></dd></div>
     </dl>
   </div>
@@ -422,7 +426,8 @@ export const bindMultisigProposalForm = (deps: MultisigProposalUiDeps): void => 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const multisigId = deps.selectedMultisigId();
-    if (!multisigId) return;
+    const signerAccountId = form.dataset["signerAccountId"];
+    if (!multisigId || !signerAccountId) return;
     let fields: ProposalFields;
     try {
       fields = proposalFields(form);
@@ -444,6 +449,7 @@ export const bindMultisigProposalForm = (deps: MultisigProposalUiDeps): void => 
         entrypoint: fields.entrypoint,
         multisigId,
         salt: fields.salt,
+        signerAccountId,
         summary: fields.summary,
         to: fields.to,
       });

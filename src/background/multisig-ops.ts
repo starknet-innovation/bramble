@@ -47,8 +47,8 @@ export type MultisigOpsDeps = WalletOpsDeps & {
 };
 
 /**
- * Resolved multisig action context: the active account plus the watched
- * record, guaranteed to be on the active network.
+ * Resolved multisig action context: the selected signing account plus the
+ * watched record, guaranteed to be on the active network.
  */
 export type MultisigContext = {
   readonly account: Awaited<ReturnType<typeof activeAccountContext>> & { readonly error?: never };
@@ -58,7 +58,7 @@ export type MultisigContext = {
 
 /**
  * Re-reads signer membership from chain, persists the fresh snapshot, and
- * rejects when the active account is no longer a signer. Used immediately
+ * rejects when the selected account is no longer a signer. Used immediately
  * before any signer-gated submission so stale registry data cannot offer
  * doomed transactions.
  */
@@ -78,18 +78,20 @@ export const refreshSignerMembership = async (
   await deps.multisigStore.upsertMultisig(record);
   const next: MultisigContext = { ...resolved, record };
   if (!record.signers.some((signer) => sameFelt(signer, next.account.account.address))) {
-    return { error: "the active account is not a signer of this multisig" };
+    return { error: "the selected account is not a signer of this multisig" };
   }
   return next;
 };
 
 /**
- * Resolves the active account and a watched multisig by id, enforcing that
- * both live on the active network. Returns an error response otherwise.
+ * Resolves a selected vault account and watched multisig by id, enforcing that
+ * both live on the active network. Omitting the signer preserves the legacy
+ * active-account behavior for non-transaction operations.
  */
 export const multisigContext = async (
   deps: MultisigOpsDeps,
   id: string,
+  signerAccountId?: string,
 ): Promise<{ readonly error: string } | MultisigContext> => {
   const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
@@ -102,9 +104,18 @@ export const multisigContext = async (
   if (record.networkId !== context.networkId) {
     return { error: "switch to the multisig's network first" };
   }
+  const signerAccount =
+    signerAccountId === undefined
+      ? context.account
+      : context.accounts.find(
+          (stored) => stored.id === signerAccountId && stored.networkId === context.networkId,
+        );
+  if (!signerAccount) {
+    return { error: "selected signer account is unavailable on this network" };
+  }
   const preferences = await deps.preferencesStore.read();
   return {
-    account: context,
+    account: { ...context, account: signerAccount },
     record,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
   };

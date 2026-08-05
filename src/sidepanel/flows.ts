@@ -22,6 +22,7 @@ import { allowancesFlow } from "./allowance-views";
 import { accountGroupsLine } from "./group-controls";
 import { groupsSection } from "./group-members";
 import { icon } from "./icons";
+import { multisigAccountOptions } from "./multisig-account-options";
 import {
   accountAvatar,
   accountDisplayName,
@@ -288,8 +289,11 @@ export const accountFlow = (
   preferences: WalletPreferences | null,
   expandedGroupId: string | null = null,
   classHashVerification: ClassHashVerification | null = null,
+  multisigs: readonly MultisigRecord[] = [],
+  selectedMultisigId: string | null = null,
 ): string => {
   const networkAccounts = status.accounts.filter((stored) => stored.networkId === status.networkId);
+  const networkMultisigs = multisigs.filter((stored) => stored.networkId === status.networkId);
   const accountType = account ? knownAccountType(account.classHash) : null;
   const groups = preferences?.groups ?? [];
   // One grouped picker owns the whole "which account" task: every account row,
@@ -307,17 +311,19 @@ export const accountFlow = (
           ${networkAccounts
             .map((stored) => {
               const memberGroups = groups.filter((group) => group.accountIds.includes(stored.id));
-              return `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${stored.id === account?.id}">
+              const selected = selectedMultisigId === null && stored.id === account?.id;
+              return `<button class="option-row" data-account-id="${escapeHtml(stored.id)}" type="button" aria-pressed="${selected}">
                     <span class="option-avatar">${accountAvatar(stored.address)}</span>
                     <span class="option-copy">
                       <strong>${escapeHtml(accountDisplayName(stored, preferences))}</strong>
                       <code>${accountLabel(stored.address)}</code>
                       ${accountGroupsLine(memberGroups)}
                     </span>
-                    ${stored.id === account?.id ? `<span class="option-mark">${icon("check")}</span>` : ""}
+                    ${selected ? `<span class="option-mark">${icon("check")}</span>` : ""}
                   </button>`;
             })
             .join("")}
+          ${multisigAccountOptions(networkMultisigs, selectedMultisigId)}
           ${menuRow({
             attributes: {
               id: "new-account",
@@ -328,7 +334,7 @@ export const accountFlow = (
             label: "Add account",
           })}
         </div>
-        ${networkAccounts.length === 0 ? noAccountEmpty(status) : ""}
+        ${networkAccounts.length === 0 && networkMultisigs.length === 0 ? noAccountEmpty(status) : ""}
         <p id="picker-result" role="status"></p>
         <p id="new-account-result" role="status"></p>
       </section>
@@ -336,7 +342,7 @@ export const accountFlow = (
       ${
         account
           ? `<section class="section">
-              <p class="eyebrow">Active account</p>
+              <p class="eyebrow">${selectedMultisigId === null ? "Active account" : "Current signer"}</p>
               <form id="label-form">
                 ${textField({
                   autocomplete: "off",
@@ -403,6 +409,7 @@ export const simpleFlowScreen = (
     readonly currency: DisplayCurrency;
     readonly expandedGroupId: string | null;
     readonly multisigs?: readonly MultisigRecord[];
+    readonly selectedMultisigId?: string | null;
     readonly preferences: WalletPreferences | null;
     readonly prices: Readonly<Record<string, number>>;
     readonly status: WalletStatus;
@@ -435,6 +442,8 @@ export const simpleFlowScreen = (
         ctx.preferences,
         ctx.expandedGroupId,
         ctx.classHashVerification,
+        ctx.multisigs,
+        ctx.selectedMultisigId,
       );
     case "import-key":
       return importKeyFlow(ctx.status);

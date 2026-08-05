@@ -23,6 +23,7 @@ import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
 import { ledgerConnector } from "./ledger/sign-connector";
 import { createLedgerSignRuntime } from "./ledger/sign-runtime";
 import { createMultisigClient } from "./multisig-runtime";
+import { shouldPreserveMultisigProposalSurface } from "./multisig-surface";
 import { bindMultisigs } from "./multisig-ui";
 import { type NavDirection, navDirection } from "./nav-direction";
 import { popView, pushView, type ViewHistory } from "./nav-history";
@@ -113,7 +114,6 @@ const renderScene = createSceneRenderer(app, () => bindAll());
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
 let privacy: ReturnType<typeof createPrivacyController>;
-
 const ledgerSignMount = document.createElement("div");
 ledgerSignMount.className = "ledger-sign-overlay";
 ledgerSignMount.hidden = true;
@@ -163,6 +163,7 @@ const bindAll = (): void => {
     render,
     setActiveView: (view: WalletView) => {
       activeView = view;
+      if (view === "home") selectedMultisigId = null;
     },
     wallet,
   };
@@ -310,7 +311,6 @@ const paint = (): void => {
   lastScene = scene;
   const direction = forcedDirection ?? navDirection(lastActiveView, activeView);
   forcedDirection = null;
-  // Drop deleted group/account selections before repainting.
   const healed = healTransientGroupState(
     { drawerGroupFilter, expandedGroupId, openAssignId },
     cache.preferences?.groups ?? [],
@@ -319,7 +319,6 @@ const paint = (): void => {
   drawerGroupFilter = healed.drawerGroupFilter;
   expandedGroupId = healed.expandedGroupId;
   openAssignId = healed.openAssignId;
-  // Never show the prior account's class verification after a switch.
   const classHashVerification = verificationForAccount(
     cache.classHashVerification,
     status.activeAccountId,
@@ -328,6 +327,17 @@ const paint = (): void => {
     cache.pending.some((approval) => approval.id === id),
   );
   if (transfer.preserveSend(app, activeView, status, cache.pending, snoozedApprovalIds)) return;
+  if (
+    shouldPreserveMultisigProposalSurface(
+      app,
+      activeView,
+      selectedMultisigId,
+      status,
+      cache.pending,
+      snoozedApprovalIds,
+    )
+  )
+    return;
   const content =
     fullPageOnboarding && status.hasVault
       ? onboardingComplete()
@@ -397,11 +407,11 @@ const render = async (status: WalletStatus): Promise<void> => {
   const scopeChanged = updateRenderScope(cache, status);
   if (scopeChanged) {
     privacy.reset();
-    if (selectedMultisigId !== null) {
-      selectedMultisigId = null;
-      activeView = "home";
-      viewHistory = [];
-    }
+  }
+  if (scopeChanged === "network" && selectedMultisigId !== null) {
+    selectedMultisigId = null;
+    activeView = "home";
+    viewHistory = [];
   }
   const [pending, nextPreferences] = await Promise.all([
     wallet.loadPendingApprovals(),

@@ -5,6 +5,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { prefersReducedMotion, projectMomentum, stagger } from "../../src/sidepanel/motion";
+import { navDirection } from "../../src/sidepanel/nav-direction";
 import { resolveSpring, solveSpring } from "../../src/ui/spring";
 import { SPRING } from "../../src/ui/tokens";
 
@@ -47,6 +48,12 @@ describe("spring solver", () => {
 });
 
 describe("motion helpers", () => {
+  test("treats a multisig home as a first-class root and its tasks as forward journeys", () => {
+    expect(navDirection("multisig-home", "activity")).toBe("swap");
+    expect(navDirection("multisig-home", "multisig-propose")).toBe("forward");
+    expect(navDirection("multisig-propose", "multisig-home")).toBe("back");
+  });
+
   test("stagger returns evenly spaced delays and handles empty groups", () => {
     expect(stagger(3, 50)).toEqual([0, 50, 100]);
     expect(stagger(3, 40, 20)).toEqual([20, 60, 100]);

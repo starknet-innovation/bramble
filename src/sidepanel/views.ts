@@ -344,6 +344,7 @@ export const dashboard = (
     multisigs,
     preferences,
     prices,
+    selectedMultisigId,
     status,
   });
   if (simpleFlow !== null) {

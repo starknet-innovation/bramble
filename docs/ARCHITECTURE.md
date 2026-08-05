@@ -425,36 +425,30 @@ on-chain data, kept in the plain `mc-wallet:multisigs` store).
   The transaction id comes from the contract's own `hash_transaction` view, so
   the wallet never re-implements the Pedersen scheme. Submitting does not
   confirm; the proposer confirms like any other signer.
-- Coordinate: proposal ids are copyable and a pasted id can be tracked and
-  confirmed from another signer's wallet. Refresh performs a bounded,
-  paginated scan of the multisig's `TransactionSubmitted` events, then treats
-  every discovered id only as a hint: proposal state is read back through the
-  contract before any action is offered. If the RPC page budget is exhausted,
-  the UI reports an incomplete scan instead of presenting a partial result as
-  complete.
-- Review elsewhere: the proposer can copy a deterministic, secret-free review
-  package containing the public multisig identity, proposal id, call, salt, and
-  summary. Another signer can decode it locally or import it while tracking the
-  proposal. The background recomputes the id through that multisig contract's
-  `hash_transaction` view and rejects a mismatch before persisting the call.
-  Importing the original call enables that signer to execute after quorum;
-  importing only an id remains call-less and requires explicit independent
-  verification before confirmation.
-- Deploy: new multisigs deploy from the pinned `MultisigWallet` class
-  (`contracts/multisig`, a constructor-only shell around the OZ component)
-  through the public Universal Deployer Contract with `not_from_zero = 0`, so
-  the address depends only on class, signers, quorum, and salt. If the class
-  is not declared on the active network, the deploy screen offers a one-time
-  user-paid declare of the bundled Sierra artifact, whose class hash is
-  re-verified against the pin before signing.
+- Coordinate: proposal ids are copyable and can be tracked from another signer's wallet. Refresh
+  performs a bounded, paginated `TransactionSubmitted` event scan, then reads every discovered id
+  back through the contract. Exhausting the RPC page budget reports an incomplete scan.
+- Review elsewhere: the proposer can copy a deterministic, secret-free package containing the
+  public multisig identity, proposal id, call, salt, and summary. The background recomputes its id
+  through `hash_transaction` before persisting the call. An id-only import remains call-less and
+  requires explicit independent verification before confirmation.
+- Confirm: review binds signer, proposal, network, decoded effect, fee, and explicit mode. A
+  quorum-reaching confirmation may batch `confirm_transaction` and `execute_transaction`; target
+  failure reverts the invoke, while a durable background claim prevents duplicate broadcasts.
+- Deploy: the pinned `MultisigWallet` class (`contracts/multisig`) deploys through the public UDC
+  with `not_from_zero = 0`, binding its address to class, signers, quorum, and salt. If undeclared,
+  the deploy screen offers a user-paid declaration after re-verifying the bundled Sierra class.
 
 Pinned class (reproduce with scarb `2.18.0` via `bun run vendor:multisig`; verify with `bun run check:multisig`):
 
 - Class hash: `0xbb216b0643679b992e7953b6ea6f5057804237053e79fdd064cf2b5adea035`
 - Compiled class hash: `0x42d945a7f59ead19b20435fbea7d168449299b03d71f8da205517166a2c80c8`
 
-Known limitations (v1): batch submission and a signer/quorum editor are not surfaced; event
-discovery is bounded and RPC-dependent; confirmations and review packages remain public.
+`bun run test:multisig-contract` proves same-call confirmation visibility and
+full rollback on target failure against the pinned Cairo component.
+Known limitations (v1): proposals are single-call; signer/quorum changes use custom self-calls;
+event discovery is bounded and RPC-dependent; below-quorum confirmations pay separate fees; and
+proposals plus review packages contain public transaction data.
 
 ## Allowance manager
 
