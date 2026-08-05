@@ -44,6 +44,16 @@ export type WalletStatusReader = {
   readonly deriveLedgerAccounts?: (
     input: DeriveLedgerAccountsInput,
   ) => Promise<readonly LedgerAccountRef[]>;
+  /**
+   * Derives the account-scoped STRK20 viewing key inside the vault boundary.
+   * Optional only for partial test stubs; production fails closed when absent.
+   */
+  readonly deriveStrk20ViewingKey?: (input: {
+    readonly accountId: string;
+    readonly chainId: string;
+    readonly poolAddress: string;
+    readonly vaultPassphrase: string;
+  }) => Promise<string>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
   /**
@@ -95,6 +105,9 @@ export const createWalletReader = (
     },
     async deriveLedgerAccounts(input) {
       return (await required()).deriveLedgerAccounts(input);
+    },
+    async deriveStrk20ViewingKey(input) {
+      return (await required()).deriveStrk20ViewingKey(input);
     },
     async ensureNetworkAccount(input) {
       return (await required()).ensureNetworkAccount(input);

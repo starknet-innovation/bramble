@@ -1,11 +1,9 @@
-import { getStarknet } from "get-starknet-core";
-import type { StarknetWindowObject } from "get-starknet-core";
 import { WalletAccount } from "starknet";
 import type { AccountInterface } from "starknet";
 import { STARKNET_NETWORKS } from "../protocols/support/networks";
 import {
   INJECTION_TIMEOUT_MS,
-  pickMcWallet,
+  type StarknetWindowObject,
   waitForInjectedMcWallet,
 } from "./starknet-window";
 
@@ -148,10 +146,5 @@ export const resolveAccount = async (
 
 /** Finds MC Wallet first, while preserving standards-based Starknet wallet fallback. */
 export const resolveWallet = async (): Promise<StarknetWindowObject | null> => {
-  const injected = await waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
-  if (injected !== null) {
-    return injected;
-  }
-  const available = await getStarknet().getAvailableWallets();
-  return pickMcWallet(available) ?? available[0] ?? null;
+  return waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
 };

@@ -5,23 +5,11 @@ import { CallData } from "starknet";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  disconnect: vi.fn(),
-  getAvailableWallets: vi.fn(),
-  getPreAuthorizedWallets: vi.fn(),
   waitForInjectedMcWallet: vi.fn(),
-}));
-
-vi.mock("get-starknet-core", () => ({
-  getStarknet: () => ({
-    disconnect: mocks.disconnect,
-    getAvailableWallets: mocks.getAvailableWallets,
-    getPreAuthorizedWallets: mocks.getPreAuthorizedWallets,
-  }),
 }));
 
 vi.mock("./starknet-window", () => ({
   INJECTION_TIMEOUT_MS: 0,
-  pickMcWallet: (wallets: readonly unknown[]) => wallets[0] ?? null,
   waitForInjectedMcWallet: mocks.waitForInjectedMcWallet,
 }));
 
@@ -180,8 +168,6 @@ const WatchAssetProbe = (): ReactNode => {
 describe("WalletProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getAvailableWallets.mockResolvedValue([]);
-    mocks.getPreAuthorizedWallets.mockResolvedValue([]);
   });
 
   test("requests accounts and reacts to wallet account and network events", async () => {

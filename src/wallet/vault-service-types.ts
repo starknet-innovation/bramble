@@ -155,6 +155,16 @@ export type WalletVaultService = {
   readonly deriveLedgerAccounts: (
     input: DeriveLedgerAccountsInput,
   ) => Promise<readonly LedgerAccountRef[]>;
+  /**
+   * Derives a domain-separated STRK20 viewing key from encrypted account key
+   * material. Keyless accounts fail closed and the result is never persisted.
+   */
+  readonly deriveStrk20ViewingKey: (input: {
+    readonly accountId: string;
+    readonly chainId: string;
+    readonly poolAddress: string;
+    readonly vaultPassphrase: string;
+  }) => Promise<string>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   readonly generateMnemonic: () => Promise<string>;
   readonly importRawKeyAccount: (input: ImportRawKeyAccountInput) => Promise<ImportedAccountRef>;

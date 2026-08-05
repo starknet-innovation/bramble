@@ -8,6 +8,9 @@ const createModule = (signatureR = "0x1") => ({
   deriveOzAccountAddress() {
     return "0xabc";
   },
+  deriveStrk20ViewingKey() {
+    return "0x456";
+  },
   deriveStarknetKeypair() {
     return {
       private_key: "0x123",
@@ -54,6 +57,7 @@ describe("createKrustyKms", () => {
   test("returns field-element account derivation results", async () => {
     const kms = createKrustyKms(createModule());
 
+    await expect(kms.deriveStrk20ViewingKey("0x123", "0x1", "0x2")).resolves.toBe("0x456");
     await expect(kms.deriveStarknetKeypair("seed words", 0, 0)).resolves.toEqual({
       privateKey: "0x123",
       publicKeyX: "0xabc",
@@ -65,6 +69,7 @@ describe("createKrustyKms", () => {
   test("rejects invalid derivation inputs before WASM calls", async () => {
     let addressDerived = false;
     let keypairDerived = false;
+    let viewingKeyDerived = false;
     const module = {
       ...createModule(),
       deriveOzAccountAddress() {
@@ -79,6 +84,10 @@ describe("createKrustyKms", () => {
           public_key_y: "0xdef",
         };
       },
+      deriveStrk20ViewingKey() {
+        viewingKeyDerived = true;
+        return "0x456";
+      },
     };
     const kms = createKrustyKms(module);
 
@@ -91,8 +100,15 @@ describe("createKrustyKms", () => {
     await expect(kms.deriveStarknetKeypair("   ", 0, 0)).rejects.toThrow(
       "Invalid Stark derivation input",
     );
+    await expect(kms.deriveStrk20ViewingKey("0x0", "0x1", "0x2")).rejects.toThrow(
+      "Invalid STRK20 viewing-key input",
+    );
+    await expect(kms.deriveStrk20ViewingKey("0x1", "0x0", "0x2")).rejects.toThrow(
+      "Invalid STRK20 viewing-key input",
+    );
     expect(addressDerived).toBe(false);
     expect(keypairDerived).toBe(false);
+    expect(viewingKeyDerived).toBe(false);
   });
 
   test("rejects invalid derivation outputs", async () => {
@@ -128,6 +144,14 @@ describe("createKrustyKms", () => {
         },
       }).deriveStarknetKeypair("seed words", 0, 0),
     ).rejects.toThrow("Krusty KMS result missing field element: public_key_x");
+    await expect(
+      createKrustyKms({
+        ...createModule(),
+        deriveStrk20ViewingKey() {
+          return "0x0";
+        },
+      }).deriveStrk20ViewingKey("0x123", "0x1", "0x2"),
+    ).rejects.toThrow("Krusty KMS returned an invalid STRK20 viewing key");
   });
 
   test("returns hex signatures from valid WASM output", async () => {

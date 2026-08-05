@@ -2,6 +2,7 @@
  * MV3 background entrypoint. All privileged wallet state stays behind this worker.
  */
 import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import { createKrustyKms } from "../crypto/krusty";
 import type { WalletEventMessage } from "../provider/events";
 import { createOriginGuard } from "../security/blocklist";
@@ -9,6 +10,11 @@ import { createPhishingFeed } from "../security/phishing-feed";
 import { createSwapService, unavailableSwapService } from "../starknet/avnu";
 import { MULTISIG_CLASS_ARTIFACT } from "../starknet/multisig-deploy";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
+import {
+  createOfficialStrk20Service,
+  type PrivacySdkRuntime,
+} from "../starknet/strk20/official-sdk-service";
+import { unavailableStrk20Service } from "../starknet/strk20/service";
 import { createActivityLog, systemClock } from "../storage/activity-store";
 import { createAllowanceStore } from "../storage/allowance-store";
 import {
@@ -24,6 +30,7 @@ import {
   createPreferencesStore,
   type WalletPreferences,
 } from "../storage/preferences-store";
+import { createStrk20MaturityStore } from "../storage/strk20-maturity-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { setApprovalNotifier } from "./approval-notifier";
 import {
@@ -222,6 +229,23 @@ const loadMultisigClass = async (): Promise<unknown> => {
   }
   return response.json();
 };
+const strk20MaturityStore = (() => {
+  try {
+    return createStrk20MaturityStore(createBrowserSessionStore());
+  } catch {
+    return undefined;
+  }
+})();
+const runtimeRpc = {
+  ...defaultRuntimeRpc,
+  strk20: strk20MaturityStore
+    ? createOfficialStrk20Service({
+        maturityStore: strk20MaturityStore,
+        nowSeconds: () => Math.floor(systemClock() / 1_000),
+        sdk: privacySdkModule as unknown as PrivacySdkRuntime,
+      })
+    : unavailableStrk20Service,
+};
 const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.id ?? "", {
   approvals,
   session,
@@ -352,12 +376,12 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
       }
       return store.setRpcOverride(input);
     },
-    async setStrk20ProverUrl(input) {
+    async setStrk20NetworkConfig(input) {
       const store = await preferences;
       if (!store) {
         throw new Error("preferences unavailable");
       }
-      return store.setStrk20ProverUrl(input);
+      return store.setStrk20NetworkConfig(input);
     },
     async setTokenHidden(input) {
       const store = await preferences;
@@ -374,7 +398,7 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
       return store.upsertToken(input);
     },
   },
-  runtimeRpc: defaultRuntimeRpc,
+  runtimeRpc,
   originGuard,
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),

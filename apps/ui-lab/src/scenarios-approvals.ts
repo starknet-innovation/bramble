@@ -7,7 +7,7 @@ import { walletDashboard } from "./scenario-dashboard";
 import { nextTurn } from "./scenario-runtime";
 import type { FrameContext, WalletScenario } from "./types";
 
-const prepareApprovalProcessing = async (context: FrameContext): Promise<void> => {
+export const prepareApprovalProcessing = async (context: FrameContext): Promise<void> => {
   const wallet = createSidepanelRuntime({
     sendMessage: async () => new Promise<never>(() => undefined),
   });

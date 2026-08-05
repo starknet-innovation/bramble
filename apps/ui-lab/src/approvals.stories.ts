@@ -3,7 +3,7 @@ import { checkpointStory, LAB_META, type LabMeta } from "./story-helpers";
 const meta: LabMeta = {
   ...LAB_META,
   args: { checkpointId: "connect", scenarioId: "approvals" },
-  title: "Wallet journeys/05 dApp requests",
+  title: "Wallet journeys/06 dApp requests",
 };
 
 export default meta;

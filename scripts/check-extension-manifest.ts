@@ -44,6 +44,9 @@ const expectedHostPermissions = [
   // policy-checked in src/background/swap-ops.ts before anything is signed.
   "https://starknet.api.avnu.fi/*",
   "https://sepolia.api.avnu.fi/*",
+  // Wallet-owned STRK20 gateway. Private discovery/prover upstream URLs and
+  // paymaster credentials remain deployment-only environment variables.
+  "https://mc-wallet-terminal.vercel.app/*",
   // Maintained web3 phishing feed (issue #34): the default source for the live
   // malicious-origin blocklist. Configurable per deployment via the feed's
   // `source` option; pinned here so the manifest stays an explicit allowlist.
@@ -116,7 +119,11 @@ if (!hasOnly(manifest["permissions"], ["alarms", "sidePanel", "storage"])) {
   failures.push("manifest permissions must stay alarms, sidePanel, and storage only");
 }
 
-if (!hasOnly(manifest["host_permissions"], expectedHostPermissions)) {
+const hostPermissions = manifest["host_permissions"];
+if (!Array.isArray(hostPermissions) || new Set(hostPermissions).size !== hostPermissions.length) {
+  failures.push("manifest host_permissions must not contain duplicates");
+}
+if (!hasOnly(hostPermissions, expectedHostPermissions)) {
   failures.push("manifest host_permissions must stay pinned to Starknet RPC endpoints");
 }
 

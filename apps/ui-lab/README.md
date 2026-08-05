@@ -68,7 +68,7 @@ Storybook section.
 
 ## Journey coverage
 
-The lab has 127 deterministic checkpoints across 14 scenario families:
+The lab has 174 deterministic checkpoints across 15 scenario families:
 
 | Family | Review surface |
 | --- | --- |
@@ -77,6 +77,7 @@ The lab has 127 deterministic checkpoints across 14 scenario families:
 | Home and portfolio | Ready, tabs, account drawer, undeployed, offline, error, and empty-network states. |
 | Send lifecycle | Details, review latency, fee failure, signing, broadcast, and receipt. |
 | Swap lifecycle | Picker, quote latency, route sanity, frozen review, failure, and submission. |
+| Private balances and actions | Explicit disclosure, registration, empty notes, shielding, selective and complete balance sharing, private transfer and public withdrawal, dapp-specific anonymizers, AVNU private swap, scoped sub-accounts, proof liveness, success, service failure, missing configuration, locked requests, and Ledger fail-closed behavior. |
 | Ledger signing | Connect, device selection, readiness, verification, approval, submission, and recovery. |
 | Ledger account onboarding | Setup method, device grants, enumeration, multi-select, partial add, and errors. |
 | dApp approvals | Every provider approval kind, blocked origin, queue visibility, and live authorization handoff. |

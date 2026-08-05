@@ -35,10 +35,12 @@ import {
   type TransferReviewResponse,
   type WalletStatus,
 } from "../popup/responses";
+import type { Strk20NetworkConfig } from "../starknet/strk20/config";
 import type { AccountGroupIcon } from "../storage/account-groups";
 import type { AccountRef } from "../storage/vault-schema";
 import { createLedgerRuntimeClient } from "./ledger/runtime-client";
 import { createNftRuntimeClient } from "./nft-runtime";
+import { createPrivacyRuntimeClient } from "./privacy-runtime";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -90,6 +92,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   return {
     ...createLedgerRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
+    ...createPrivacyRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {
@@ -424,12 +427,19 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "rpc endpoint update failed");
     },
-    async setStrk20ProverUrl(url: string): Promise<void> {
-      const response = await sendMessage({ type: "wallet.setStrk20ProverUrl", url });
+    async setStrk20NetworkConfig(
+      networkId: string,
+      config: Strk20NetworkConfig | null,
+    ): Promise<void> {
+      const response = await sendMessage({
+        config,
+        networkId,
+        type: "wallet.setStrk20NetworkConfig",
+      });
       if (isPreferencesResponse(response)) {
         return;
       }
-      throw responseError(response, "prover endpoint update failed");
+      throw responseError(response, "privacy service configuration failed");
     },
     async setActiveNetwork(networkId: string): Promise<WalletStatus> {
       const response = await sendMessage({ networkId, type: "wallet.setActiveNetwork" });

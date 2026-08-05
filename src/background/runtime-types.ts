@@ -10,7 +10,6 @@ import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { DiscoveredNft } from "../starknet/nft-metadata";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
-import type { Strk20BalanceEntry, Strk20CallAndProof } from "../starknet/strk20/schemas";
 import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
@@ -19,6 +18,13 @@ import type { AccountRef } from "../storage/vault-schema";
 import type { ConnectedSite, WalletStatus as VaultStatus } from "../wallet/vault-service";
 import type { PendingApproval } from "./approvals";
 import type { PendingLedgerSign } from "./ledger-sign-queue";
+import type {
+  Strk20BalancesResponse,
+  Strk20PrepareResponse,
+  Strk20SubaccountCommitmentResponse,
+  Strk20WalletPreparationResponse,
+  Strk20WalletStateResponse,
+} from "./runtime-strk20-types";
 import type { SwapPreparationReview } from "./swap-preparations";
 
 /**
@@ -349,22 +355,6 @@ export type RequestAccountsResponse =
     };
 
 /**
- * STRK20 private balances returned through the dapp provider bridge.
- */
-export type Strk20BalancesResponse = {
-  readonly balances: readonly Strk20BalanceEntry[];
-  readonly ok: true;
-};
-
-/**
- * STRK20 prepared call-and-proof returned through the dapp provider bridge.
- */
-export type Strk20PrepareResponse = {
-  readonly callAndProof: Strk20CallAndProof;
-  readonly ok: true;
-};
-
-/**
  * Watched multisigs and their tracked proposals for the active network.
  */
 export type MultisigsResponse = {
@@ -467,6 +457,9 @@ export type RuntimeResponse =
   | SignHashResponse
   | Strk20BalancesResponse
   | Strk20PrepareResponse
+  | Strk20SubaccountCommitmentResponse
+  | Strk20WalletPreparationResponse
+  | Strk20WalletStateResponse
   | SwapQuoteResponse
   | SwapPreparationResponse
   | SwapTokensResponse

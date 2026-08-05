@@ -138,14 +138,22 @@ a {
 }
 .navtabs {
   display: flex;
+  min-width: 0;
   gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.navtabs::-webkit-scrollbar {
+  display: none;
 }
 .navtab {
+  flex: none;
   padding: 7px 13px;
   border-radius: 8px;
   color: var(--text-2);
   font-weight: 600;
   font-size: 13px;
+  white-space: nowrap;
   transition: background 0.12s, color 0.12s;
 }
 .navtab:hover {

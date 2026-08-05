@@ -245,7 +245,8 @@ export const BASE_STYLES = `
   .action-row {
     display: grid;
     gap: ${SPACE.sm};
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
   }
   .action-tile {
     align-content: center;

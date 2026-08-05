@@ -18,9 +18,11 @@ sandboxes:
   toolchain (build Krusty KMS).
 - `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class
   hash pin is only reproducible on that version).
+- `bun run vendor:privacy` needs network access plus Node.js 24 and npm. It
+  builds the exact pinned official Privacy SDK browser bundle and verifies its digest.
 
-Without the vendored outputs, `check:krusty`, `check:multisig`, and `build`
-fail; that is expected offline. Run the rest of the gates and say so.
+Without the vendored outputs, `check:krusty`, `check:multisig`, `check:privacy`, and `build` fail;
+that is expected offline. Run the rest of the gates and say so.
 
 Contributors can enable the local pre-push hook to run the offline-fast checks
 (types, lint, file/config standards, extension manifest, unit tests) before
@@ -39,6 +41,7 @@ Run this before opening a pull request:
 ```bash
 bun run vendor:krusty
 bun run vendor:multisig
+bun run vendor:privacy
 bun run check
 bun run test:e2e:install
 bun run build
@@ -110,6 +113,9 @@ history.
   validation code.
 - Krusty KMS source must stay pinned in `scripts/vendor-krusty.ts`; update the pin only with the
   full required gates.
+- The official Privacy SDK source and browser bundle digest stay pinned in
+  `scripts/vendor-privacy-sdk.ts` and `scripts/check-privacy-sdk.ts`. Do not replace its proving,
+  note-discovery, or sub-account cryptography with local implementations.
 - No fallback signing implementation. If Krusty KMS is unavailable, fail closed.
 - Encrypted stores must validate decrypted data before use.
 - Stored data access must go through permission checks. Do not read browser storage directly from UI
@@ -123,6 +129,8 @@ history.
 ## Security Rules
 
 - Never log secrets, ciphertext keys, mnemonics, signatures, passphrases, or decrypted vault data.
+- STRK20 viewing keys stay inside the privileged vault/SDK boundary and are never persisted or
+  returned through extension messages.
 - Use Web Crypto for local store encryption. Use Krusty KMS for wallet/account cryptography.
 - Treat extension messages as untrusted input. Validate type, origin, and requested capability.
 - Request the smallest browser permissions possible.

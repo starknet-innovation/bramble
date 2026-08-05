@@ -130,17 +130,27 @@ const preferencesStub = (bump: Bump) => {
   };
 };
 
-const strk20Stub = (): Strk20Service => ({
+const strk20Stub = (bump: Bump): Strk20Service => ({
+  async prepare() {
+    return CALL_AND_PROOF;
+  },
   async privateBalances({ tokens }) {
     return tokens.map((token) => ({ balance: "0x64", token }));
   },
-  proving: {
-    async prove() {
-      return CALL_AND_PROOF;
-    },
+  async quoteActions() {
+    return {
+      feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" },
+    };
   },
-  async registered() {
-    return true;
+  async subaccountCommitment() {
+    return "0x1";
+  },
+  async submitActions() {
+    bump("submitInvoke");
+    return { transactionHash: "0x123" };
+  },
+  async submitPrepared() {
+    return { transactionHash: "0x123" };
   },
 });
 
@@ -177,7 +187,7 @@ const rpcStub = (bump: Bump): RuntimeRpc => ({
     bump("submitDeclare");
     return { classHash: "0xdef", transactionHash: "0x123" };
   },
-  strk20: strk20Stub(),
+  strk20: strk20Stub(bump),
 });
 
 /**

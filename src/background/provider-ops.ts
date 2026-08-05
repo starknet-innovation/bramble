@@ -9,8 +9,10 @@ import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { walletErrorMessage } from "../shared/errors";
 import { resolveFeeAffordability } from "../starknet/fee-funds";
-import { STARKNET_NETWORKS } from "../starknet/networks";
+import { canonicalFelt, STARKNET_NETWORKS } from "../starknet/networks";
 import type { FeeEstimate } from "../starknet/rpc";
+import { mapStrk20StageError } from "../starknet/strk20/official-sdk-errors";
+import { unavailableStrk20Service } from "../starknet/strk20/service";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
@@ -127,6 +129,18 @@ const resolveOriginAccount = async (
     return { error: "origin not connected" };
   }
   return { account, passphrase, preferences };
+};
+
+const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
+  if (!hasProof) {
+    return walletErrorMessage(error, "invoke request failed");
+  }
+  try {
+    mapStrk20StageError("submission", error);
+  } catch (mapped) {
+    return walletErrorMessage(mapped, "invoke request failed");
+  }
+  return "invoke request failed";
 };
 
 // Fail-closed perimeter shared by the dapp surfaces that error on a blocked
@@ -285,6 +299,9 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   if ("error" in resolved) {
     return resolved;
   }
+  if (input.proof && input.calls.length !== 1) {
+    return { error: "invalid invoke request" };
+  }
   const report = verifyCalls(
     input.calls,
     verificationContext(resolved.account, resolved.preferences),
@@ -295,10 +312,14 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   // request. Approval remains disabled while this initial estimate is pending.
   const approval = deps.approvals.requestInvoke({
     calls: input.calls,
-    context: await createApprovalContext(resolved.account, { calls: input.calls }),
+    context: await createApprovalContext(resolved.account, {
+      calls: input.calls,
+      ...(input.proof === undefined ? {} : { proof: input.proof }),
+    }),
     fee: PENDING_INVOKE_FEE,
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     origin: input.origin,
+    ...(input.proof === undefined ? {} : { proof: input.proof }),
     summaries: report.calls.map((call) => call.summary),
   });
   notifyApprovalsChanged();
@@ -400,6 +421,10 @@ export const executeInvokeApproval = async (
     return resolved;
   }
   const { account, passphrase, preferences } = resolved;
+  const preparedCall = calls.length === 1 ? calls[0] : undefined;
+  if (approval.payload.proof && !preparedCall) {
+    return { error: "invalid prepared strk20 invocation" };
+  }
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam the wallet-initiated
   // paths use. A device rejection/timeout/verify-failure, or a Ledger account
@@ -408,12 +433,37 @@ export const executeInvokeApproval = async (
   // settles the held dapp request with the real reason instead of leaving it to
   // hang on an unhandled throw. Fails closed — nothing is submitted on error.
   try {
-    const result = await runtimeRpc.submitInvokeTransaction({
-      account,
-      calls,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-      signHash: accountHashSigner(deps, account, passphrase),
-    });
+    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
+    const signHash = accountHashSigner(deps, account, passphrase);
+    const result = approval.payload.proof
+      ? await (runtimeRpc.strk20 ?? unavailableStrk20Service).submitPrepared({
+          account,
+          call: preparedCall as Call,
+          config: preferences.strk20Networks?.[account.networkId] ?? null,
+          proof: approval.payload.proof,
+          rpcUrls,
+          signHash,
+          viewingKey: async () => {
+            const derive = deps.wallet.deriveStrk20ViewingKey;
+            const config = preferences.strk20Networks?.[account.networkId] ?? null;
+            const poolAddress = config ? canonicalFelt(config.poolAddress) : null;
+            if (!derive || !poolAddress) {
+              throw new Error("strk20 services unavailable");
+            }
+            return derive({
+              accountId: account.id,
+              chainId: STARKNET_NETWORKS[account.networkId].chainId,
+              poolAddress,
+              vaultPassphrase: passphrase,
+            });
+          },
+        })
+      : await runtimeRpc.submitInvokeTransaction({
+          account,
+          calls,
+          rpcUrls,
+          signHash,
+        });
     await activity.record({
       accountId: account.id,
       hash: result.transactionHash,
@@ -424,6 +474,6 @@ export const executeInvokeApproval = async (
     await recordApproveAllowances(allowanceStore, calls, account);
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return { error: walletErrorMessage(error, "invoke request failed") };
+    return { error: invokeFailureMessage(error, approval.payload.proof !== undefined) };
   }
 };

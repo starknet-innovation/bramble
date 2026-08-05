@@ -1,16 +1,14 @@
 /**
  * Wallet connection context for the trade terminal.
  *
- * Wraps get-starknet-core to connect to the injected MC Wallet provider
- * (preferring window.starknet_mcWallet), exposes the connected account and
- * address, and drives the Connect / Disconnect buttons throughout the shell.
+ * Connects directly to the injected MC Wallet provider (preferring
+ * window.starknet_mcWallet), exposes the connected account and address, and
+ * drives the Connect / Disconnect buttons throughout the shell.
  *
  * Screens consume this via the `useWallet()` hook. Protocol calldata is handed
  * to `requestTransaction()` so every action receives the same terminal review,
  * wallet hand-off, rejection, retry, and submission feedback.
  */
-import { getStarknet } from "get-starknet-core";
-import type { StarknetWindowObject } from "get-starknet-core";
 import {
   createContext,
   type ReactNode,
@@ -24,7 +22,7 @@ import {
 import type { AccountInterface, InvokeFunctionResponse } from "starknet";
 import {
   INJECTION_TIMEOUT_MS,
-  pickMcWallet,
+  type StarknetWindowObject,
   waitForInjectedMcWallet,
 } from "./starknet-window";
 import {
@@ -46,51 +44,19 @@ import {
   walletRequestError,
   walletTransactionHash,
 } from "./wallet-request";
+import {
+  requestPrivateBalances,
+  requestPrivateInvoke,
+  requestPrivateProof,
+  requestPrivateRegistration,
+} from "./privacy-wallet";
+import type {
+  ContractDeclaration,
+  DeclarationResult,
+  WalletContextValue,
+} from "./wallet-context-types";
 
-/**
- * The wallet state + actions exposed to the app through `useWallet()`.
- */
-export type WalletContextValue = {
-  /** The connected wallet account, or null when disconnected. Read-only consumers may inspect it; actions use requestTransaction(). */
-  readonly account: AccountInterface | null;
-  /** The selected account address (canonical hex), or null when disconnected. */
-  readonly address: string | null;
-  /** The wallet's current chain id (e.g. "SN_MAIN"), or null when disconnected. */
-  readonly chainId: string | null;
-  /** The human-readable name of the connected wallet, or null. */
-  readonly walletName: string | null;
-  /** True once an account is connected. */
-  readonly isConnected: boolean;
-  /** True while a connect() call is in flight. */
-  readonly isConnecting: boolean;
-  /** The last connection error message, or null. */
-  readonly error: string | null;
-  /** Clears a surfaced connection error without changing the wallet session. */
-  readonly clearError: () => void;
-  /** Opens the wallet and connects an account. Prefers the MC Wallet provider. */
-  readonly connect: () => Promise<void>;
-  /** Reviews and executes Starknet calls through the connected wallet. */
-  readonly requestTransaction: (
-    input: WalletTransactionRequest,
-  ) => Promise<InvokeFunctionResponse>;
-  /** Requests wallet tracking for an ERC20; the wallet re-reads metadata and requires approval. */
-  readonly watchAsset: (input: WatchAssetInput) => Promise<void>;
-  /** Requests an approved Sierra class declaration through the connected wallet. */
-  readonly declareContract: (input: ContractDeclaration) => Promise<DeclarationResult>;
-  /** Disconnects the current wallet and clears the last-connected hint. */
-  readonly disconnect: () => Promise<void>;
-};
-
-export type ContractDeclaration = {
-  readonly classHash: string;
-  readonly compiledClassHash: string;
-  readonly contractClass: Readonly<Record<string, unknown>>;
-};
-
-export type DeclarationResult = {
-  readonly classHash: string;
-  readonly transactionHash: string;
-};
+export type { ContractDeclaration, DeclarationResult, WalletContextValue };
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
@@ -185,7 +151,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
 
   const disconnect = useCallback(async () => {
     try {
-      await getStarknet().disconnect({ clearLastWallet: true });
+      await walletRef.current?.disconnect?.();
     } catch {
       // Ignore disconnect failures — we clear local state regardless.
     }
@@ -310,6 +276,23 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     [wallet],
   );
 
+  const privateBalances = useCallback(
+    (tokens: readonly string[]) => requestPrivateBalances(wallet, tokens),
+    [wallet],
+  );
+
+  const preparePrivateInvoke = useCallback(
+    (actions: readonly unknown[]) => requestPrivateProof(wallet, actions),
+    [wallet],
+  );
+
+  const invokePrivate = useCallback(
+    (actions: readonly unknown[]) => requestPrivateInvoke(wallet, actions),
+    [wallet],
+  );
+
+  const registerPrivate = useCallback(() => requestPrivateRegistration(wallet), [wallet]);
+
   const declareContract = useCallback(
     async (input: ContractDeclaration): Promise<DeclarationResult> => {
       if (wallet === null || typeof wallet.request !== "function") {
@@ -360,9 +343,7 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
     let cancelled = false;
     void (async () => {
       try {
-        const injected = await waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
-        const target =
-          injected ?? pickMcWallet(await getStarknet().getPreAuthorizedWallets());
+        const target = await waitForInjectedMcWallet(INJECTION_TIMEOUT_MS);
         if (cancelled || target === null) {
           return;
         }
@@ -447,6 +428,10 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       error,
       clearError,
       connect,
+      invokePrivate,
+      preparePrivateInvoke,
+      privateBalances,
+      registerPrivate,
       requestTransaction,
       watchAsset,
       declareContract,
@@ -461,6 +446,10 @@ export const WalletProvider = ({ children }: { readonly children: ReactNode }): 
       error,
       clearError,
       connect,
+      invokePrivate,
+      preparePrivateInvoke,
+      privateBalances,
+      registerPrivate,
       requestTransaction,
       watchAsset,
       declareContract,

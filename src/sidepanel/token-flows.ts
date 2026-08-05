@@ -12,7 +12,9 @@ import { emptyState, receipt } from "../ui/content";
 import { button } from "../ui/controls";
 import { textField } from "../ui/fields";
 import { formatFiat, tokenFiatValue } from "./fiat";
+import { icon } from "./icons";
 import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "./parts";
+import type { PrivacyDisclosureState } from "./privacy-model";
 import { sparklinePath, sparklineTrend } from "./sparkline";
 import { compactAmount, tokenGlyph } from "./token-row";
 
@@ -177,8 +179,19 @@ export const tokenDetailFlow = (
   chart: readonly number[],
   price: number | null,
   currency: DisplayCurrency,
+  privacy: PrivacyDisclosureState = {
+    enabled: false,
+    error: null,
+    loading: false,
+    value: null,
+  },
 ): string => {
   const fiat = balance ? tokenFiatValue(balance.formatted, price ?? undefined) : null;
+  const privateBalance = privacy.value?.balances.find((entry) => entry.tokenId === token.id);
+  const privateFiat = privateBalance
+    ? tokenFiatValue(privateBalance.formatted, price ?? undefined)
+    : null;
+  const registered = privacy.value?.registration === "registered";
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(
@@ -195,6 +208,23 @@ export const tokenDetailFlow = (
           <span class="token-amount">${escapeHtml(balance ? `${compactAmount(balance.formatted)} ${token.symbol}` : `0 ${token.symbol}`)}</span>
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
+        ${
+          privacy.enabled && registered
+            ? `<div class="private-balance-summary">
+                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="token-side">
+                  <strong class="token-amount">${escapeHtml(`${compactAmount(privateBalance?.formatted ?? "0")} ${token.symbol}`)}</strong>
+                  ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
+                </span>
+              </div>`
+            : ""
+        }
+        ${button({
+          attributes: { "data-privacy-open": token.id },
+          icon: "shield",
+          label: registered ? `Shield ${token.symbol}` : "Go private",
+        })}
+        ${privacy.error ? `<p class="hint">${escapeHtml(privacy.error)}</p>` : ""}
       </section>
       <section class="section">
         <p class="eyebrow">Contract</p>

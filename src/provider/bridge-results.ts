@@ -10,10 +10,18 @@ import { errorForMessage, unknownError, type WalletRpcError } from "../shared/rp
 import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
 import { isAccountRef } from "../storage/vault-schema";
 
-export { type ProviderInvokeCall, providerInvokeCalls } from "./invoke-params";
+export {
+  type ProviderInvokeCall,
+  providerInvokeCalls,
+  providerInvokeRequest,
+} from "./invoke-params";
 
 import type { ProviderMethod } from "./methods";
-import { providerStrk20Balances, providerStrk20CallAndProof } from "./strk20-bridge";
+import {
+  providerStrk20Balances,
+  providerStrk20CallAndProof,
+  providerStrk20Commitment,
+} from "./strk20-bridge";
 
 /**
  * Page-facing account view: only the already-public address and network id.
@@ -49,9 +57,11 @@ export type ProviderDeploymentData = {
 };
 
 /**
- * API_VERSION pattern accepted from dapps (`major.minor` with optional patch).
+ * API_VERSION pattern accepted from dapps (semantic version, including a
+ * prerelease suffix used by published Wallet-API release candidates).
  */
-export const API_VERSION_PATTERN = /^[0-9]+\.[0-9]+(\.[0-9]+)?$/;
+export const API_VERSION_PATTERN =
+  /^[0-9]+\.[0-9]+(?:\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?)?$/;
 
 /**
  * Spec declare result carried to the page (`{ transaction_hash, class_hash }`),
@@ -376,6 +386,7 @@ const switchChainPayload: ResultMapper = (result) =>
 const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
   mc_accounts: chainIdOr(accountsViewPayload),
   mc_requestAccounts: chainIdOr(accountsViewPayload),
+  mc_strk20Register: chainIdOr(invokeTxPayload),
   wallet_requestAccounts: chainIdOr(accountsAddressesPayload),
   wallet_requestChainId: chainIdOr(accountsViewPayload),
   wallet_switchStarknetChain: switchChainPayload,
@@ -394,6 +405,8 @@ const RESULT_MAPPERS: Record<ProviderResultMethod, ResultMapper> = {
   wallet_strk20Balances: (result) => okFieldPayload(result, "balances", providerStrk20Balances),
   wallet_strk20PrepareInvoke: (result) =>
     okFieldPayload(result, "callAndProof", providerStrk20CallAndProof),
+  wallet_strk20SubaccountCommitment: (result) =>
+    okFieldPayload(result, "commitment", providerStrk20Commitment),
 };
 
 const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
@@ -402,6 +415,8 @@ const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
       return RESULT_MAPPERS.mc_accounts;
     case "mc_requestAccounts":
       return RESULT_MAPPERS.mc_requestAccounts;
+    case "mc_strk20Register":
+      return RESULT_MAPPERS.mc_strk20Register;
     case "wallet_addDeclareTransaction":
       return RESULT_MAPPERS.wallet_addDeclareTransaction;
     case "wallet_addInvokeTransaction":
@@ -428,6 +443,8 @@ const resultMapperFor = (method: ProviderResultMethod): ResultMapper => {
       return RESULT_MAPPERS.wallet_strk20InvokeTransaction;
     case "wallet_strk20PrepareInvoke":
       return RESULT_MAPPERS.wallet_strk20PrepareInvoke;
+    case "wallet_strk20SubaccountCommitment":
+      return RESULT_MAPPERS.wallet_strk20SubaccountCommitment;
     case "wallet_switchStarknetChain":
       return RESULT_MAPPERS.wallet_switchStarknetChain;
     case "wallet_watchAsset":

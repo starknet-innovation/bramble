@@ -3,11 +3,29 @@
  *
  * The terminal is a dApp: it talks to the MC Wallet browser extension through
  * the wallet's injected `window.starknet_mcWallet` provider (a standard
- * get-starknet StarknetWindowObject). We prefer that provider specifically, but
+ * Starknet Wallet API object). We prefer that provider specifically, but
  * fall back to any other injected Starknet wallet so the terminal is usable for
  * development against Argent/Braavos too.
  */
-import type { StarknetWindowObject } from "get-starknet-core";
+/**
+ * Minimal injected-wallet shape consumed by the Terminal. Keeping this
+ * structural avoids bundling wallet catalogs or dynamic module loaders into the
+ * browser while preserving the standard Starknet Wallet API boundary.
+ */
+export type StarknetWindowObject = {
+  readonly account?: unknown;
+  readonly chainId?: string;
+  readonly disconnect?: () => Promise<void> | void;
+  readonly enable?: (options?: unknown) => Promise<unknown>;
+  readonly id: string;
+  readonly isPreauthorized?: () => Promise<boolean>;
+  readonly name?: string;
+  readonly off: (event: string, listener: (...args: never[]) => void) => void;
+  readonly on: (event: string, listener: (...args: never[]) => void) => void;
+  readonly request?: unknown;
+  readonly selectedAddress?: string;
+  readonly version?: string;
+};
 
 /**
  * The window key the MC Wallet extension injects its provider under.
@@ -16,7 +34,7 @@ export const MC_WALLET_WINDOW_KEY = "starknet_mcWallet" as const;
 
 /**
  * Substring used to recognise the MC Wallet among discovered providers when the
- * exact injected key is unavailable (e.g. behind get-starknet discovery).
+ * exact injected key is unavailable.
  */
 export const MC_WALLET_NAME_MATCH = /mc\s*wallet/i;
 
@@ -68,6 +86,7 @@ const isStarknetWindowObject = (value: unknown): value is StarknetWindowObject =
   return (
     typeof candidate.id === "string" &&
     typeof candidate.on === "function" &&
+    typeof candidate.off === "function" &&
     (typeof candidate.request === "function" || typeof candidate.enable === "function")
   );
 };

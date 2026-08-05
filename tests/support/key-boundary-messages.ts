@@ -1,14 +1,14 @@
 /**
- * Key-boundary scan catalog: one request payload per handled background
- * message type, plus a source-derived list of every wallet.* type the
+ * Key-boundary scan catalog: one request payload per handled background message
+ * type, plus a source-derived list of every wallet.* type the
  * background actually handles. The key-boundary suite asserts the catalog
- * covers the derived list, so a new message type cannot ship without entering
- * the secret-leak scan — the list can never silently go stale again.
+ * covers the derived list, so new message types cannot bypass the secret scan.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RuntimeSender } from "../../src/background/senders";
 import type { AccountRef } from "../../src/storage/vault-schema";
+import { type KeyBoundaryMessage, strk20KeyBoundaryMessages } from "./key-boundary-strk20-messages";
 
 /**
  * Recognizable secrets salted into the stub vault; the scan greps serialized
@@ -87,15 +87,8 @@ export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
   return handled;
 };
 
-/**
- * One request per handled message type. Payloads are best-effort valid so
- * responses exercise real handler paths; even rejected inputs are scanned,
- * since error strings must not echo secret material either.
- */
-export const KEY_BOUNDARY_MESSAGES: readonly {
-  readonly message: Record<string, unknown>;
-  readonly sender: RuntimeSender;
-}[] = [
+/** One best-effort-valid request per handled type; rejected responses are also secret-scanned. */
+export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.status" }, sender: extensionSender },
   {
     message: { type: "wallet.unlock", vaultPassphrase: SECRET_PASSPHRASE },
@@ -466,22 +459,14 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   {
-    message: { type: "wallet.setStrk20ProverUrl", url: "https://prover.example" },
-    sender: extensionSender,
-  },
-  {
     message: { hidden: true, id: "tok-1", type: "wallet.setTokenHidden" },
     sender: extensionSender,
   },
-  { message: { origin: ORIGIN, type: "wallet.strk20Balances" }, sender: contentSender },
-  {
-    message: { origin: ORIGIN, params: {}, type: "wallet.strk20InvokeTransaction" },
-    sender: contentSender,
-  },
-  {
-    message: { origin: ORIGIN, params: {}, type: "wallet.strk20PrepareInvoke" },
-    sender: contentSender,
-  },
+  ...strk20KeyBoundaryMessages({
+    contentSender,
+    extensionSender,
+    origin: ORIGIN,
+  }),
   { message: { origin: ORIGIN, type: "wallet.supportedSpecs" }, sender: contentSender },
   { message: { origin: ORIGIN, type: "wallet.supportedWalletApi" }, sender: contentSender },
 ];

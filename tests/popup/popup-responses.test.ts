@@ -225,6 +225,109 @@ describe("popup response validators", () => {
     expect(isPendingApprovalsResponse({ ok: true, pending: [null] })).toBe(false);
   });
 
+  test("requires an account/network/payload binding on STRK20 disclosure approvals", () => {
+    const context = {
+      accountId: account.id,
+      chainId: "0x534e5f5345504f4c4941",
+      networkId: "SN_SEPOLIA",
+      payloadDigest: `sha256:${"a".repeat(64)}`,
+    };
+    for (const kind of [
+      "strk20-balances",
+      "strk20-prepare",
+      "strk20-register",
+      "strk20-subaccount",
+    ] as const) {
+      const actionReviews =
+        kind === "strk20-prepare"
+          ? [{ calldata: ["0x1"], contract: "0x2", type: "invoke" }]
+          : undefined;
+      expect(
+        isPendingApprovalsResponse({
+          ok: true,
+          pending: [
+            {
+              ...(actionReviews ? { actionReviews } : {}),
+              context,
+              id: approvalId,
+              kind,
+              origin: "https://example.com",
+            },
+          ],
+        }),
+      ).toBe(true);
+      expect(
+        isPendingApprovalsResponse({
+          ok: true,
+          pending: [{ id: approvalId, kind, origin: "https://example.com" }],
+        }),
+      ).toBe(false);
+    }
+  });
+
+  test("requires exact action parameters on STRK20 proof and invoke reviews", () => {
+    const context = {
+      accountId: account.id,
+      chainId: "0x534e5f5345504f4c4941",
+      networkId: "SN_SEPOLIA",
+      payloadDigest: `sha256:${"a".repeat(64)}`,
+    };
+    const actionReviews = [{ calldata: ["0x1"], contract: "0x2", type: "invoke" }];
+    for (const kind of ["strk20-invoke", "strk20-prepare"] as const) {
+      expect(
+        isPendingApprovalsResponse({
+          ok: true,
+          pending: [
+            { actionReviews, context, id: approvalId, kind, origin: "https://example.com" },
+          ],
+        }),
+      ).toBe(true);
+      expect(
+        isPendingApprovalsResponse({
+          ok: true,
+          pending: [{ context, id: approvalId, kind, origin: "https://example.com" }],
+        }),
+      ).toBe(false);
+    }
+  });
+
+  test("accepts only an exact withdrawal as the private relay fee review", () => {
+    const base = {
+      actionReviews: [{ calldata: ["0x1"], contract: "0x2", type: "invoke" }],
+      context: {
+        accountId: account.id,
+        chainId: "0x534e5f5345504f4c4941",
+        networkId: "SN_SEPOLIA",
+        payloadDigest: `sha256:${"a".repeat(64)}`,
+      },
+      id: approvalId,
+      kind: "strk20-invoke",
+      origin: "https://example.com",
+    };
+    const relayFeeAction = {
+      amount: "0x1",
+      recipient: "0x2",
+      token: "0x3",
+      type: "withdraw",
+    };
+
+    expect(isPendingApprovalsResponse({ ok: true, pending: [{ ...base, relayFeeAction }] })).toBe(
+      true,
+    );
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [{ ...base, relayFeeAction: { ...relayFeeAction, type: "transfer" } }],
+      }),
+    ).toBe(false);
+    expect(
+      isPendingApprovalsResponse({
+        ok: true,
+        pending: [{ ...base, relayFeeAction: { ...relayFeeAction, recipient: "not-a-felt" } }],
+      }),
+    ).toBe(false);
+  });
+
   test("validates watch-asset pending approvals and shared-origin prompts", () => {
     const token = {
       address: "0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",

@@ -23,6 +23,10 @@ import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
 import { unavailablePreferencesStore } from "./runtime-state";
 import type { UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
+import {
+  createStrk20WalletPreparationStore,
+  type Strk20WalletPreparationStore,
+} from "./strk20-wallet-preparations";
 import { createSwapPreparationStore, type SwapPreparationStore } from "./swap-preparations";
 import type { WalletStatusReader } from "./wallet-reader";
 
@@ -46,6 +50,7 @@ export type RouterContext = {
   readonly session: UnlockSession;
   readonly swap: SwapService;
   readonly swapPreparations: SwapPreparationStore;
+  readonly strk20Preparations: Strk20WalletPreparationStore;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
 };
@@ -73,6 +78,7 @@ export type MessageHandlerOptions = {
   readonly session?: UnlockSession;
   readonly swap?: SwapService;
   readonly swapPreparations?: SwapPreparationStore;
+  readonly strk20Preparations?: Strk20WalletPreparationStore;
 };
 
 // Abandon a parked sign after a generous timeout interval.
@@ -92,6 +98,10 @@ const runtimeLedgerSignQueue = (
   createLedgerSignQueue(notifyApprovalsChanged, LEDGER_SIGN_TIMEOUT, () =>
     session.isUnlocked() ? session.generation() : null,
   );
+
+const strk20PreparationsFor = (
+  provided: Strk20WalletPreparationStore | undefined,
+): Strk20WalletPreparationStore => provided ?? createStrk20WalletPreparationStore();
 
 /**
  * Resolves every optional collaborator into the fully wired router context.
@@ -120,6 +130,7 @@ export const routerContext = (
   session,
   swap: options.swap ?? unavailableSwapService,
   swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
+  strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
   waiters: createSignatureWaiters(),
   wallet,
 });

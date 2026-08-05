@@ -31,6 +31,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/ledger/grant-window.ts",
+  "src/sidepanel/scene-renderer.ts",
   "src/sidepanel/settings-ui.ts",
   "src/sidepanel/transfer-ui.ts",
   "src/storage/browser-storage.ts",
@@ -66,7 +67,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/messages.ts",
   "src/background/provider-ops.ts",
   "src/background/origins-ops.ts",
+  "src/background/strk20-account-context.ts",
   "src/background/strk20-ops.ts",
+  "src/background/strk20-wallet-ops.ts",
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
   "src/background/session.ts",
@@ -99,10 +102,18 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/starknet/ledger-verify.ts",
   "src/starknet/provider.ts",
   "src/starknet/rpc.ts",
+  "src/starknet/strk20/call-set-signer.ts",
+  "src/starknet/strk20/official-sdk-service.ts",
+  // CallSet signing and viewing-key wiring extracted from official-sdk-service;
+  // same Krusty-delegated boundary, no secret ever stored or logged here.
+  "src/starknet/strk20/official-sdk-transfers.ts",
+  "src/starknet/strk20/paymaster.ts",
+  "src/starknet/strk20/service.ts",
   "src/storage/encrypted-store.ts",
   "src/storage/migrations.ts",
   "src/storage/vault-schema.ts",
   "src/wallet/accounts.ts",
+  "src/wallet/strk20-viewing-key.ts",
   "src/wallet/vault-service.ts",
   "src/wallet/vault-service-types.ts",
 ]);
@@ -141,6 +152,9 @@ const HTML_SINK_FILES = new Set([
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
   "src/sidepanel/swap-ui.ts",
   "src/sidepanel/swap-picker.ts",
+  // Shell replacement extracted from the sidepanel entrypoint; it receives
+  // fully escaped production templates and owns no dynamic template content.
+  "src/sidepanel/scene-renderer.ts",
   // Collectible animation renderer: document.write of the untrusted on-chain
   // data:text/html, confined by the manifest sandbox page's isolated security
   // principal and egress-blocking CSP (never executed in a privileged page) —

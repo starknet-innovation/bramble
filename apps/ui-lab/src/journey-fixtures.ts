@@ -240,6 +240,13 @@ export const approvalFixtures: Readonly<Record<string, PendingApproval>> = {
     },
   },
   strk20: {
+    actionReviews: [
+      {
+        calldata: ["0x19", "0x2a"],
+        contract: "0x123",
+        type: "invoke",
+      },
+    ],
     context: approvalContext,
     id: approvalId("146"),
     insights: ["Private balance proofs remain fixture-only in this lab."],

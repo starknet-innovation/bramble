@@ -45,7 +45,7 @@ describe("privileged message gate", () => {
     // Known-privileged operations, including the one that once drifted out of
     // the hand-maintained list and became content-script reachable.
     for (const type of [
-      "wallet.setStrk20ProverUrl",
+      "wallet.setStrk20NetworkConfig",
       "wallet.revealSecrets",
       "wallet.unlock",
       "wallet.transfer",
@@ -67,7 +67,7 @@ describe("privileged message gate", () => {
   test("content scripts cannot reach a privileged settings mutation", async () => {
     await expect(
       handleMessage(
-        { type: "wallet.setStrk20ProverUrl", url: "https://attacker.example" },
+        { config: null, networkId: "SN_MAIN", type: "wallet.setStrk20NetworkConfig" },
         contentSender,
       ),
     ).resolves.toEqual({ error: "privileged sender required" });

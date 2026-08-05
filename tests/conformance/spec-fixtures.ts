@@ -84,7 +84,7 @@ export const TYPED_DATA: Json = {
 
 /** A spec STRK20_CALL_AND_PROOF as the proving backend returns it. */
 export const CALL_AND_PROOF = {
-  call: { calldata: ["0x1"], contract_address: TOKEN, entry_point: "shielded_execute" },
+  call: { calldata: ["0x1"], contract_address: TOKEN, entry_point: "apply_actions" },
   proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
 };
 

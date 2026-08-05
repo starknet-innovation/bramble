@@ -45,6 +45,7 @@ import {
 } from "./senders";
 import { createUnlockSession } from "./session";
 import { handleStrk20Ops } from "./strk20-ops";
+import { handleStrk20WalletOps } from "./strk20-wallet-ops";
 import { handleSwapOps } from "./swap-ops";
 import { handleTokenOps } from "./token-ops";
 import { unlockFailureError } from "./unlock-errors";
@@ -331,6 +332,15 @@ const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message, sender) => handleAddChainOps(ctx, messageType, message, sender),
   (ctx, messageType, message, sender) => handleDeclareOps(ctx, messageType, message, sender),
   (ctx, messageType, message, sender) => handleStrk20Ops(ctx, messageType, message, sender),
+  (ctx, messageType, message) =>
+    handleStrk20WalletOps(
+      {
+        ...buildOpsDeps(ctx),
+        strk20Preparations: ctx.strk20Preparations,
+      },
+      messageType,
+      message,
+    ),
   (ctx, messageType, message) => handleOriginOps(ctx, messageType, message),
   (ctx, messageType, message) => handleTokenOps(ctx, messageType, message),
   handleCreateAccount,

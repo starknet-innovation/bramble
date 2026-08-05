@@ -6,6 +6,8 @@
   "description": "MC Wallet Trade Terminal — a standalone Starknet trade terminal that connects to the MC Wallet browser extension as a dApp.",
   "scripts": {
     "dev": "vite",
+    "dev:full": "vercel dev",
+    "dev:gateway": "bun run scripts/dev-strk20-gateway.ts",
     "build": "tsc --noEmit && vite build",
     "build:contract": "bun run scripts/build-punk-contract.ts",
     "assets:avnu": "bun run scripts/sync-avnu-token-assets.ts",
@@ -16,7 +18,8 @@
     "check:api": "bun run scripts/check-api.ts"
   },
   "dependencies": {
-    "get-starknet-core": "^3.3.5",
+    "@avnu/avnu-sdk": "4.2.0",
+    "ethers": "6.17.0",
     "lightweight-charts": "^5.2.0",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
@@ -26,12 +29,15 @@
   "devDependencies": {
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.1.0",
+    "@types/node": "26.1.1",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/ws": "8.18.1",
+    "@vercel/node": "5.9.3",
     "@vitejs/plugin-react": "6.0.4",
     "jsdom": "^25.0.1",
     "typescript": "~5.6.3",
+    "vercel": "58.4.4",
     "vite": "^8.1.5",
     "vitest": "^4.1.10",
     "ws": "8.21.0"

@@ -81,7 +81,7 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async setRpcOverride() {
     throw new Error("preferences unavailable");
   },
-  async setStrk20ProverUrl() {
+  async setStrk20NetworkConfig() {
     throw new Error("preferences unavailable");
   },
   async setTokenHidden() {

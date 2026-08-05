@@ -9,11 +9,15 @@ import { readFile } from "node:fs/promises";
 import { escapeRegExp } from "./regexp";
 
 const RUST_TOOLCHAIN_ACTION = "dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30";
+const NODE_SETUP_ACTION = "actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f";
 const GITHUB_EXPRESSION = "$" + "{{";
 const SHELL_EXPANSION = "$" + "{";
 const RUST_TOOLCHAIN_BLOCK = `uses: ${RUST_TOOLCHAIN_ACTION} # stable
         with:
           toolchain: 1.96.1`;
+const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v6.3.0
+        with:
+          node-version: 24`;
 
 const WORKFLOW_PATHS = {
   ci: ".github/workflows/ci.yml",
@@ -71,6 +75,25 @@ const rustToolchainFailures = (sources: WorkflowSources): string[] => {
     if (occurrences !== 1) {
       failures.push(`${WORKFLOW_PATHS[name]} must use the pinned Rust action exactly once`);
     }
+  }
+  return failures;
+};
+
+const privacySdkWorkflowFailures = (sources: WorkflowSources): string[] => {
+  const failures: string[] = [];
+  for (const name of ["ci", "nightly", "releaseBuild", "releaseIntegration"] as const) {
+    requireText(
+      failures,
+      sources[name],
+      NODE_SETUP_BLOCK,
+      `${WORKFLOW_PATHS[name]} must pin Node.js 24 for privacy SDK vendoring`,
+    );
+    requireText(
+      failures,
+      sources[name],
+      "bun run vendor:privacy",
+      `${WORKFLOW_PATHS[name]} must vendor the pinned privacy SDK`,
+    );
   }
   return failures;
 };
@@ -325,6 +348,7 @@ const roadmapFailures = (source: string): string[] => {
  */
 export const workflowSecurityPolicyFailures = (sources: WorkflowSources): string[] => [
   ...rustToolchainFailures(sources),
+  ...privacySdkWorkflowFailures(sources),
   ...ciFailures(sources.ci),
   ...releaseBuildFailures(sources.releaseBuild),
   ...releaseFailures(sources.release),

@@ -25,6 +25,7 @@ import {
   onboardingScenario,
   unlockScenario,
 } from "./scenarios-onboarding";
+import { privacyScenario } from "./scenarios-privacy";
 import { settingsScenario } from "./scenarios-settings";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
@@ -286,6 +287,7 @@ export const walletScenarios: readonly WalletScenario[] = [
   portfolioScenario,
   sendScenario,
   swapScenario,
+  privacyScenario,
   ledgerScenario,
   ledgerOnboardingScenario,
   approvalsScenario,

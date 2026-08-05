@@ -284,7 +284,7 @@ describe("sidepanel styles", () => {
 
   test("home action tiles are four equal width-filling tools", () => {
     expect(SIDEPANEL_STYLES).toMatch(
-      /\.action-row \{[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/s,
+      /\.action-row \{[^}]*grid-auto-columns: minmax\(0, 1fr\);[^}]*grid-auto-flow: column/s,
     );
     expect(SIDEPANEL_STYLES).toMatch(/\.action-tile \{[^}]*background: var\(--mc-elevated\)/s);
     expect(SIDEPANEL_STYLES).toMatch(

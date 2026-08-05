@@ -4,11 +4,23 @@
  * screens so a security-sensitive task never competes with unrelated options.
  */
 import type { WalletStatus } from "../popup/responses";
+import { escapeHtml } from "../shared/html";
 import type { WalletPreferences } from "../storage/preferences-store";
 import { button, segmentedControl } from "../ui/controls";
 import { selectField, textField } from "../ui/fields";
 import { menuLink } from "../ui/navigation";
+import { type BuildInfo, buildInfo } from "./build-info";
 import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "./parts";
+
+// The build stamp under the menu: extension version, plus the source branch
+// when the bundle was built from an unreleased branch. Empty outside a built
+// bundle (unit tests), which hides the line entirely.
+const buildStampLine = (build: BuildInfo): string =>
+  build.version
+    ? `<p class="hint" id="settings-build">Version ${escapeHtml(build.version)}${
+        build.branch ? ` · ${escapeHtml(build.branch)}` : ""
+      }</p>`
+    : "";
 
 /**
  * Renders the settings dock as a short, grouped destination map.
@@ -16,6 +28,7 @@ import { dockScreen, flowHeader, flowScreen, walletMenuRow } from "./parts";
 export const settingsScreen = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
+  build: BuildInfo = buildInfo(),
 ): string =>
   dockScreen(
     "settings",
@@ -60,6 +73,7 @@ export const settingsScreen = (
           target: "_blank",
         })}
       </div>
+      ${buildStampLine(build)}
     </section>`,
   );
 

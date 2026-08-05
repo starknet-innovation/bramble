@@ -24,7 +24,7 @@ export const STARKNET_NETWORKS: Readonly<Record<StarknetNetworkId, StarknetNetwo
     chainId: "0x534e5f4d41494e",
     id: "SN_MAIN",
     name: "Starknet Mainnet",
-    rpcUrls: ["https://api.cartridge.gg/x/starknet/mainnet"],
+    rpcUrls: ["https://mainnet.nodes.starknet.org/rpc/v0_10"],
   },
   SN_SEPOLIA: {
     chainId: "0x534e5f5345504f4c4941",

@@ -63,7 +63,6 @@ import {
   createStarkscanPreferredBalances,
   createStarkscanPreferredHistory,
 } from "../starknet/starkscan-wallet";
-import { createHttpStrk20Service, type Strk20Http } from "../starknet/strk20/http-service";
 import type { Strk20Service } from "../starknet/strk20/service";
 import type { scanTransactionHistory, TransactionHistoryScan } from "../starknet/tx-history-scan";
 
@@ -179,10 +178,6 @@ export type RuntimeRpc = {
   readonly strk20?: Strk20Service;
 };
 
-// Real network transport for the STRK20 prover: a thin `fetch` wrapper matching
-// the {@link Strk20Http} shape the HTTP service expects.
-const strk20Http: Strk20Http = (url, init) => fetch(url, init);
-
 // Real network transport for the NFT indexer: a thin `fetch` wrapper matching
 // the {@link NftIndexerHttp} shape the discovery client expects.
 const nftIndexerHttp: NftIndexerHttp = (url) => fetch(url);
@@ -232,6 +227,5 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   submitDeclareTransaction,
   submitErc20Transfer,
   submitInvokeTransaction,
-  strk20: createHttpStrk20Service(strk20Http),
   verifyAccountClassHash,
 };

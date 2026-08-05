@@ -15,6 +15,8 @@ import "./styles/lending-manage.css";
 import "./styles/wallet-ui.css";
 import "./styles/nft-studio.css";
 import "./styles/nft-studio-finishing.css";
+import "./styles/privacy.css";
+import "./styles/privacy-registration.css";
 
 const container = document.getElementById("root");
 if (container === null) {

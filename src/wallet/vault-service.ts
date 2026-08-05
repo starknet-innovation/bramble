@@ -31,6 +31,8 @@ import {
   sameWalletKey,
 } from "./accounts";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
+import { deriveVaultStrk20ViewingKey } from "./strk20-viewing-key";
+import { findVaultAccount } from "./vault-account";
 import type { RevealedSecrets, WalletVaultService } from "./vault-service-types";
 
 /**
@@ -71,18 +73,6 @@ const writeVault = async (
   vaultPassphrase: string,
 ): Promise<void> => {
   await encryptedStore.write(vault, vaultPassphrase);
-};
-
-const findAccount = (vault: Vault, accountId: string): AccountRef => {
-  if (!isAccountId(accountId)) {
-    throw new WalletError("Invalid account id");
-  }
-
-  const account = vault.accounts.find((stored) => stored.id === accountId);
-  if (!account) {
-    throw new WalletError("Account not found");
-  }
-  return account;
 };
 
 // The wallet key to derive from when adding a network account: active, else first.
@@ -328,6 +318,16 @@ export const createWalletVaultService = ({
     deriveLedgerAccounts(input) {
       return deriveLedgerAccountRefs(kms, { entries: input.entries, networkId: input.networkId });
     },
+    async deriveStrk20ViewingKey(input) {
+      const vault = await readVault(input.vaultPassphrase);
+      return deriveVaultStrk20ViewingKey(
+        kms,
+        vault,
+        input.accountId,
+        input.chainId,
+        input.poolAddress,
+      );
+    },
     async ensureNetworkAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const source = selectSourceAccount(vault);
@@ -385,7 +385,7 @@ export const createWalletVaultService = ({
         throw new WalletError("No account selected");
       }
 
-      const account = findAccount(vault, accountId);
+      const account = findVaultAccount(vault, accountId);
       const grants = vault.originGrants.filter((grant) => grant.origin !== input.origin);
       const existing = vault.originGrants.find((grant) => grant.origin === input.origin);
       const accountIds = [...new Set([...(existing?.accountIds ?? []), account.id])];
@@ -407,7 +407,9 @@ export const createWalletVaultService = ({
       }
 
       const vault = await readVault(vaultPassphrase);
-      return grantedAccountIdsFor(vault, origin).map((accountId) => findAccount(vault, accountId));
+      return grantedAccountIdsFor(vault, origin).map((accountId) =>
+        findVaultAccount(vault, accountId),
+      );
     },
     readVault,
     async revokeOrigin(input) {
@@ -424,7 +426,7 @@ export const createWalletVaultService = ({
     },
     async setActiveAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const account = findAccount(vault, input.accountId);
+      const account = findVaultAccount(vault, input.accountId);
 
       await writeVault(
         encryptedStore,

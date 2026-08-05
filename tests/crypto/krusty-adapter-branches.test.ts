@@ -13,6 +13,9 @@ const createModule = (overrides: Record<string, unknown> = {}) => ({
   deriveOzAccountAddress() {
     return "0xabc";
   },
+  deriveStrk20ViewingKey() {
+    return "0x456";
+  },
   deriveStarknetKeypair() {
     return { private_key: "0x123", public_key_x: "0xabc", public_key_y: "0xdef" };
   },

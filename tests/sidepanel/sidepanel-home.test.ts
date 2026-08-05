@@ -7,7 +7,7 @@
 import { describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
 import { homeTabs } from "../../src/sidepanel/home-tabs";
-import { TERMINAL_PORTFOLIO_URL, TERMINAL_URL } from "../../src/sidepanel/terminal-link";
+import { TERMINAL_URL } from "../../src/sidepanel/terminal-link";
 import { dashboard } from "../../src/sidepanel/views";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
 import { account, preferences, secondAccount } from "../support/sidepanel-fixtures";
@@ -57,17 +57,14 @@ describe("sidepanel home", () => {
     expect(header).toContain('id="lock-button"');
   });
 
-  test("quick actions expose compact Send, Swap, Receive, and Terminal portfolio tools", () => {
+  test("quick actions expose compact Send, Swap, and Receive tools only", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).toMatch(/class="action-tile" data-view="send"/);
     expect(html).toMatch(/class="action-tile" data-view="swap"/);
     expect(html).toMatch(/class="action-tile" data-view="receive"/);
-    expect(html).toContain(
-      `class="action-tile" href="${TERMINAL_PORTFOLIO_URL}" target="_blank" rel="noopener noreferrer"`,
-    );
-    expect(html).toContain('aria-label="Open MC Terminal portfolio"');
-    expect(html).toMatch(/Open MC Terminal portfolio[\s\S]*Portfolio/);
+    expect(html).not.toContain('aria-label="Open MC Terminal portfolio"');
+    expect(html).not.toMatch(/class="action-tile" href=/);
     expect(html).not.toMatch(/class="action-tile" data-view="nfts"/);
 
     const noAccounts = dashboard(

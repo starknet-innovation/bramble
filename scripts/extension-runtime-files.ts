@@ -17,4 +17,5 @@ export const EXPECTED_RUNTIME_FILES = [
   "vendor/krusty-kms/pkg/krusty_kms_wasm.js",
   "vendor/krusty-kms/pkg/krusty_kms_wasm_bg.wasm",
   "vendor/multisig/multisig.contract_class.json",
+  "vendor/starknet-privacy/sdk/starknet-sdk.min.js",
 ] as const;

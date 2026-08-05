@@ -8,10 +8,10 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
-## [0.8.0] - 2026-08-03
+## [0.8.0] - 2026-08-05
 
-Safer dApp account boundaries, faster and more truthful transaction status, and
-opt-in support for fully on-chain animated collectibles.
+Safer dApp account boundaries, explicit STRK20 privacy, faster and more truthful
+transaction status, and opt-in support for fully on-chain animated collectibles.
 
 ### Added
 - An explicit multisig confirmation review that shows the exact decoded effect,
@@ -25,6 +25,11 @@ opt-in support for fully on-chain animated collectibles.
   with bounded delivery and visible status updates in the popup and side panel.
 - Explicit playback for self-contained on-chain NFT animations on collectible
   detail screens, including static fallbacks for gallery views.
+- Account- and network-scoped STRK20 registration, private balance disclosure,
+  shielding, transfer, withdrawal, and invoke journeys through the pinned
+  official Starknet Privacy SDK.
+- A mainnet Terminal privacy workspace for pool inspection, private portfolio
+  actions, and reviewed AVNU private swaps through bounded server gateways.
 
 ### Changed
 - Connected dApps now resolve a grant to at most the active account. Switching
@@ -37,6 +42,9 @@ opt-in support for fully on-chain animated collectibles.
   cannot regress when providers disagree or respond out of order.
 - Mainnet status reads prefer the Starknet Foundation v0.10 endpoint with a
   Cartridge fallback and bounded concurrency.
+- dApp invoke requests now take over the wallet before fee RPC work completes,
+  show an explicit estimating state, and share Send's unit-aware fee and
+  affordability review.
 
 ### Fixed
 - Multisig confirmation sheets keep focus contained, keep their final action
@@ -64,6 +72,11 @@ opt-in support for fully on-chain animated collectibles.
 - Transaction approvals remain bound to the exact account shown at review time
   and fail closed if active-account or origin-grant state changes before
   execution.
+- STRK20 disclosures require explicit consent; prepared operations are
+  one-time, kind- and digest-bound, and discovery/proving use OHTTP through
+  bounded gateways without embedding private upstream URLs or credentials.
+- Review-time invoke fee estimation skips account validation, so it cannot
+  exercise Krusty or open a Ledger signing prompt before approval.
 - Status reconciliation is fail-closed, concurrency-bounded, and capped to five
   sanitized alerts per drain, limiting provider-induced resource use and UI
   flooding.

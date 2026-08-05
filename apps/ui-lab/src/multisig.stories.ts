@@ -3,7 +3,7 @@ import { checkpointStory, LAB_META, type LabMeta } from "./story-helpers";
 const meta: LabMeta = {
   ...LAB_META,
   args: { checkpointId: "list", scenarioId: "multisig" },
-  title: "Wallet journeys/08 Multisig",
+  title: "Wallet journeys/09 Multisig",
 };
 
 export default meta;

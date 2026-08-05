@@ -79,7 +79,7 @@ export const unknownError = make(163, "The wallet request failed");
  * becomes UNKNOWN_ERROR — never a raw string on the dapp wire.
  */
 export const errorForMessage = (message: string): WalletRpcError => {
-  if (/reject|refus|deny|denied/i.test(message)) {
+  if (message === "request rejected" || message === "connection rejected") {
     return userRefusedOp();
   }
   if (/unsupported chain|chain (?:id )?not supported|unlisted network/i.test(message)) {
@@ -105,6 +105,9 @@ export const errorForMessage = (message: string): WalletRpcError => {
   }
   if (/^invalid\b/i.test(message) || /malformed|origin mismatch/i.test(message)) {
     return invalidRequestPayload();
+  }
+  if (/^strk20 (?:services unavailable|private submission unavailable)/i.test(message)) {
+    return unknownError(message);
   }
   return unknownError();
 };

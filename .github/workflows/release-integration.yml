@@ -28,6 +28,9 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.3
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.96.1
@@ -79,6 +82,20 @@ jobs:
               echo "pin is only reproducible on that version). A failure here is a"
               echo "toolchain/vendoring issue, not a wallet source-code failure."
               echo "See scripts/vendor-multisig.ts."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: Vendor Starknet privacy SDK
+        run: |
+          set -o pipefail
+          if ! bun run vendor:privacy; then
+            {
+              echo "### Release integration: \`vendor:privacy\` FAILED"
+              echo ""
+              echo "This step needs network access plus Node.js 24 and npm to"
+              echo "build the exact pinned official browser SDK. The runtime"
+              echo "digest is checked before it can enter the extension package."
+              echo "See scripts/vendor-privacy-sdk.ts."
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi

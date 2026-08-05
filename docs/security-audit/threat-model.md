@@ -21,6 +21,7 @@ permalink: /security-audit/threat-model/
 ## Assets
 
 - Seed phrase and imported/derived private keys.
+- STRK20 viewing keys, private note state, proof intent, and dapp-scoped sub-account commitments.
 - Vault passphrase-derived encryption state and decrypted vault contents.
 - Unlock session capability.
 - User approvals and origin-to-account permissions.
@@ -33,7 +34,8 @@ permalink: /security-audit/threat-model/
 
 - A malicious or compromised website running arbitrary page JavaScript.
 - A compromised legitimate dapp origin.
-- Malformed or adversarial RPC, token, NFT, price, swap, prover, or phishing-feed responses.
+- Malformed or adversarial RPC, token, NFT, price, swap, discovery, prover, paymaster, or
+  phishing-feed responses.
 - Another extension or local process attempting storage or message tampering.
 - A supply-chain attacker targeting dependencies, vendored KMS/contract artifacts, CI, or releases.
 - A user who is socially engineered into approving misleading content.
@@ -58,6 +60,7 @@ background service worker (privileged router)
     +--> approval UI / side panel
     +--> permissioned and encrypted storage
     +--> Krusty KMS WASM
+    +--> pinned Starknet Privacy SDK
     +--> Starknet and external HTTPS services
 ```
 
@@ -74,4 +77,6 @@ extension pages are privileged but remain subject to confused-deputy and stale-s
 - Can malformed storage or RPC data select a different key, calldata, class hash, or recipient?
 - Can dynamic text or remote metadata reach an executable DOM sink?
 - Can remote data alter executable behavior?
+- Can privacy warnings, service routing, fee actions, or proofs bypass review or target a
+  non-configured contract?
 - Can a build or release include an undeclared file or unpinned input?
