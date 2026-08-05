@@ -365,7 +365,6 @@ export const sendFlow = (
           <input name="recipient" type="hidden" value="" />
           <input name="recipientLabel" type="hidden" value="" />
           <input name="privateSend" type="hidden" value="" />
-          <input name="speed" type="hidden" value="standard" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />
           <input name="tokenBalance" type="hidden" value="${escapeHtml(asset?.balance ?? "0")}" />
           <input name="tokenDecimals" type="hidden" value="${asset?.decimals ?? 0}" />

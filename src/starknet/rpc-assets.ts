@@ -2,7 +2,15 @@
  * Starknet RPC helpers for ERC20 allowance approvals and ERC721 ownership.
  * Split from ./rpc.ts to keep each module within the size budget.
  */
-import { byteArray, type Call, CallData, type Calldata, cairo, type RpcProvider } from "starknet";
+import {
+  byteArray,
+  type Call,
+  CallData,
+  type Calldata,
+  cairo,
+  num,
+  type RpcProvider,
+} from "starknet";
 import { WalletError } from "../shared/errors";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
 import { isTransportRpcError, withRpcFallback } from "./provider";
@@ -20,7 +28,21 @@ export const buildErc20ApproveCall = (
     throw new WalletError("Invalid approval address");
   }
   return {
-    calldata: CallData.compile([spender, cairo.uint256(amountRaw)]),
+    // Two deliberate departures from raw `CallData.compile` output, neither of
+    // which changes a hashed or signed value (every hash is computed from the
+    // numeric felt, not its spelling):
+    //
+    // 1. Spread to a plain array. `compile` tags its result with a
+    //    non-enumerable `__compiled__` marker, and an approval payload carrying
+    //    it fails the review digest ("Invalid approval payload") because the
+    //    JSON normalizer rejects non-enumerable own properties.
+    // 2. Render each felt as 0x-hex. `compile` emits decimal, and these calls
+    //    are embedded verbatim in the paymaster's outside-execution typed data,
+    //    where the relay parses every felt as hex — a 77-digit decimal read as
+    //    hex is rejected as "hex string too big".
+    calldata: [...CallData.compile([spender, cairo.uint256(amountRaw)])].map((felt) =>
+      num.toHex(felt),
+    ),
     contractAddress: tokenAddress,
     entrypoint: "approve",
   };

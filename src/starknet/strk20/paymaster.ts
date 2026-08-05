@@ -6,7 +6,7 @@
  */
 
 import type { Call } from "starknet";
-import { CallData, hash } from "starknet";
+import { CallData, hash, num } from "starknet";
 import { WalletError } from "../../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../../shared/json";
 import { isNonZeroStarkFieldElement, isStarkFieldElement, sameFelt } from "../networks";
@@ -27,11 +27,40 @@ const PARAMETERS = { version: "0x1" } as const;
 const PAYMASTER_TIMEOUT_MS = 30_000;
 const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
 
+// The relay parses every felt as a 0x-prefixed hex string, while
+// `CallData.compile` emits decimal — sending its output verbatim is rejected
+// as "expected hex string to be prefixed by '0x'" before any signing happens.
 const paymasterCall = (call: Call): PaymasterCall => ({
-  calldata: CallData.compile(call.calldata ?? []).map(String),
+  calldata: CallData.compile(call.calldata ?? []).map((felt) => num.toHex(felt)),
   selector: hash.getSelectorFromName(call.entrypoint),
-  to: call.contractAddress,
+  to: num.toHex(call.contractAddress),
 });
+
+// Keys a `paymaster_buildTransaction` result may carry. Only `fee_action` and
+// `typed_data` are consumed; `type`, `parameters`, and `fee` are the relay's
+// informational echo of the request and its gas estimate. They are listed so an
+// otherwise valid quote is not rejected wholesale, while a genuinely unknown
+// field still fails closed before anything is signed.
+const QUOTE_KEYS = ["fee", "fee_action", "parameters", "type", "typed_data"];
+
+// Names which part of a relay quote was unusable. The relay itself answered, so
+// a bare "submission unavailable" would point the user at the wrong layer.
+const quoteRejected = (reason: string): WalletError =>
+  new WalletError(`${STRK20_SUBMISSION_UNAVAILABLE}: ${reason}`);
+
+// The one piece of a JSON-RPC error worth showing is the reason, and the relay
+// nests it: an execution rejection arrives as `data.execution_error`, not as a
+// plain string. Reading only string `data` reduced every such rejection to a
+// bare "TRANSACTION_EXECUTION_ERROR" with the actual cause thrown away.
+const reportedDetails = (data: unknown): readonly string[] => {
+  if (typeof data === "string") {
+    return [data];
+  }
+  if (!isRecord(data)) {
+    return [];
+  }
+  return Object.values(data).filter((value): value is string => typeof value === "string");
+};
 
 const feeMode = (config: Strk20PaymasterConfig) => ({
   mode: "sponsored_private",
@@ -126,9 +155,7 @@ const rpc = async (
   if (reported !== undefined) {
     const detail = sanitizeStrk20Detail(
       isRecord(reported)
-        ? [reported["message"], reported["data"]]
-            .filter((part) => typeof part === "string")
-            .join(": ")
+        ? [reported["message"], ...reportedDetails(reported["data"])].join(": ")
         : String(reported),
     );
     throw new WalletError(
@@ -191,8 +218,8 @@ export const buildStrk20PaymasterPlan = async (input: {
           type: "apply_action",
         },
   });
-  if (!isRecord(result) || !hasOnlyKnownKeys(result, ["fee_action", "typed_data"])) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  if (!isRecord(result) || !hasOnlyKnownKeys(result, QUOTE_KEYS)) {
+    throw quoteRejected("the relay returned an unexpected quote shape");
   }
   const feeAction = readFeeAction(result["fee_action"]);
   const boundTypedData = hasApprovals
@@ -205,13 +232,13 @@ export const buildStrk20PaymasterPlan = async (input: {
       })
     : undefined;
   if (!feeAction || !sameFelt(feeAction.token, input.config.feeToken)) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    throw quoteRejected("the relay quoted its fee in an unexpected token");
   }
   if (!hasApprovals) {
     return { feeAction, mode: "private-relay" };
   }
   if (!boundTypedData) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    throw quoteRejected("the relay returned no usable typed data for the public approvals");
   }
   return {
     authorization: boundTypedData.review,
@@ -270,13 +297,16 @@ export const submitStrk20PaymasterPlan = async (input: {
       type: invoke ? "invoke_and_apply_action" : "apply_action",
     },
   });
+  // The hash itself is still validated strictly, but extra informational fields
+  // are tolerated here: by this point the transaction is already broadcast, and
+  // discarding a valid hash over an unrecognized sibling key would lose the only
+  // handle the wallet has on a live submission.
   if (
     !isRecord(result) ||
-    !hasOnlyKnownKeys(result, ["transaction_hash"]) ||
     typeof result["transaction_hash"] !== "string" ||
     !isNonZeroStarkFieldElement(result["transaction_hash"])
   ) {
-    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+    throw quoteRejected("the relay accepted the submission without a usable transaction hash");
   }
   return { transactionHash: result["transaction_hash"] };
 };

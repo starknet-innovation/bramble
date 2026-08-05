@@ -5,6 +5,7 @@
  */
 import type { DiscoveredNft, TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { explorerAccountUrl, STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { formatFiat, portfolioDelta, portfolioTotal } from "./fiat";
@@ -13,7 +14,7 @@ import { icon } from "./icons";
 import { dockScreen, noAccountEmpty } from "./parts";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import type { BalanceState } from "./runtime";
-import { actionTile, deployNotice, pendingCallout, terminalCta } from "./wallet-shell";
+import { actionTile, deployNotice, explorerTile, pendingCallout } from "./wallet-shell";
 
 const heroDelta = (
   balances: readonly TokenBalance[],
@@ -58,6 +59,11 @@ export const homeScreen = (
   const shieldedIncluded = visiblePrivateHomeBalances(privacy, preferences).some(
     (token) => BigInt(token.balance) > 0n,
   );
+  // Fees are paid in STRK, and only a public balance can pay them: an
+  // undeployed account cannot have shielded anything anyway.
+  const fundedForFees = ("balances" in balances ? balances.balances : []).some(
+    (token) => sameFelt(token.address, STRK_TOKEN_ADDRESS) && BigInt(token.balance) > 0n,
+  );
   const showTotal = account !== null && Object.keys(prices).length > 0;
   const total = showTotal ? portfolioTotal(unified, prices) : 0;
   return dockScreen(
@@ -69,15 +75,15 @@ export const homeScreen = (
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
       ${account !== null ? heroPriceNotice(priceStale, showTotal) : ""}
       ${account ? "" : noAccountEmpty(status)}
-      ${deployNotice(account, deployment)}
+      ${deployNotice(account, deployment, fundedForFees)}
     </section>
     <section class="home-actions" aria-label="Wallet actions">
       <div class="action-row">
         ${actionTile("send", "Send", "send", account !== null)}
         ${actionTile("swap", "Swap", "shuffle", account !== null)}
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
+        ${explorerTile(account ? explorerAccountUrl(status.networkId, account.address) : null)}
       </div>
-      ${terminalCta()}
     </section>
     ${homeTabs(balances, preferences, prices, changes, currency, status, discoveredNfts, privacy)}`,
   );

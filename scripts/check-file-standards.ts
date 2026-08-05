@@ -27,6 +27,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/provider/inpage.ts",
   "src/sandbox/render.ts",
   "src/sidepanel/dom.ts",
+  "src/sidepanel/focus-memo.ts",
   "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/ledger/grant-window.ts",
@@ -86,6 +87,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/provider/bridge-results.ts",
   "src/provider/bridge.ts",
   "src/sidepanel/dom.ts",
+  "src/sidepanel/focus-memo.ts",
   "src/sidepanel/gate-views.ts",
   "src/sidepanel/ledger/client.ts",
   "src/sidepanel/ledger/errors.ts",
@@ -147,6 +149,7 @@ const DYNAMIC_CODE_PATTERN =
 const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 const HTML_SINK_FILES = new Set([
   "src/sidepanel/dom.ts",
+  "src/sidepanel/focus-memo.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/tokens-ui.ts",
   "src/sidepanel/transfer-ui.ts",

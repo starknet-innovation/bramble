@@ -65,6 +65,85 @@ describe("STRK20 paymaster boundary", () => {
     expect(requests[0]?.["method"]).toBe("paymaster_buildTransaction");
   });
 
+  test("serializes every public call felt as 0x hex, never compiled decimal", async () => {
+    let body = "";
+    // An ERC20 approve of 6 STRK: the u256 low limb compiles to a 19-digit
+    // decimal, which the relay rejects outright unless converted to hex.
+    const approve: Call = {
+      calldata: ["0x2", "6000000000000000000", "0"],
+      contractAddress: "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+      entrypoint: "approve",
+    };
+    await buildStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      approveCalls: [approve],
+      chainId,
+      config,
+      http: async (_url, init) => {
+        body = String(init?.body);
+        return response({
+          fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+          typed_data: outsideTypedData([approve]),
+        });
+      },
+      nowSeconds: 2,
+      poolAddress: "0x2",
+    });
+
+    const sent = JSON.parse(body) as {
+      params: { transaction: { invoke: { calls: { calldata: string[]; to: string }[] } } };
+    };
+    const sentCall = sent.params.transaction.invoke.calls[0];
+    expect(sentCall?.calldata).toEqual(["0x2", "0x53444835ec580000", "0x0"]);
+    expect(sentCall?.to.startsWith("0x")).toBe(true);
+    expect(body).not.toContain("6000000000000000000");
+  });
+
+  test("accepts the relay's real quote shape, echo and gas estimate included", async () => {
+    // Exactly what starknet.paymaster.avnu.fi answers: the two fields the wallet
+    // consumes plus its own echo of the request and a sponsored gas estimate.
+    const plan = await buildStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      approveCalls: [],
+      chainId,
+      config,
+      http: async () =>
+        response({
+          fee: {
+            estimated_fee_in_strk: "0x79e7f095ac3e5000",
+            gas_token_price_in_strk: "0xde0b6b3a7640000",
+            suggested_max_fee_in_strk: "0xc72f41552c0af000",
+          },
+          fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+          parameters: { fee_mode: { mode: "sponsored_private" }, version: "0x1" },
+          type: "apply_action",
+        }),
+      nowSeconds: 2,
+      poolAddress: "0x2",
+    });
+
+    expect(plan.mode).toBe("private-relay");
+    expect(plan.feeAction.amount).toBe("0x5");
+  });
+
+  test("a genuinely unknown quote field still fails closed and says so", async () => {
+    await expect(
+      buildStrk20PaymasterPlan({
+        accountAddress: "0x1",
+        approveCalls: [],
+        chainId,
+        config,
+        http: async () =>
+          response({
+            fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+            surprise: "unexpected",
+          }),
+        nowSeconds: 2,
+        poolAddress: "0x2",
+      }),
+    ).rejects.toThrow("unexpected quote shape");
+  });
+
   test("rejects a fee action for a token other than the configured fee token", async () => {
     await expect(
       buildStrk20PaymasterPlan({

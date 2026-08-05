@@ -26,7 +26,23 @@ export type PrivacyJourneyState =
       readonly stage: "activate-review" | "deposit-review";
       readonly tokenId: string;
     }
-  | { readonly stage: "compose"; readonly tokenId: string }
+  | {
+      /**
+       * What the user has composed so far. All three live here rather than in
+       * the DOM because the card is rebuilt by every repaint — picking a
+       * destination, deriving an account, a background balance refresh — and a
+       * DOM-only card would snap back to an empty "Shield" mid-edit.
+       *
+       * `destinationAccountId` is the owned account a withdrawal lands in
+       * (absent means the active account); `unshielding` is which balance is the
+       * source; `amount` is the typed amount.
+       */
+      readonly amount?: string;
+      readonly destinationAccountId?: string;
+      readonly stage: "compose";
+      readonly tokenId: string;
+      readonly unshielding?: boolean;
+    }
   | {
       readonly kind: "deposit" | "register" | "withdraw";
       readonly preparation: PrivacyPreparation;

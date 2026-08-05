@@ -10,6 +10,7 @@
  */
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { byteArray, RpcProvider } from "starknet";
+import { digestApprovalPayload } from "../../src/background/approval-context";
 import { WalletError } from "../../src/shared/errors";
 import {
   buildErc20ApproveCall,
@@ -251,7 +252,7 @@ describe("getNftOwnership", () => {
 describe("buildErc20ApproveCall", () => {
   test("builds an approve call for valid addresses", () => {
     expect(buildErc20ApproveCall("0x1", "0x2", 5n)).toEqual({
-      calldata: ["2", "5", "0"],
+      calldata: ["0x2", "0x5", "0x0"],
       contractAddress: "0x1",
       entrypoint: "approve",
     });
@@ -260,5 +261,19 @@ describe("buildErc20ApproveCall", () => {
   test("rejects a zero token or spender address", () => {
     expect(() => buildErc20ApproveCall("0x0", "0x2", 5n)).toThrow(WalletError);
     expect(() => buildErc20ApproveCall("0x1", "0x0", 5n)).toThrow("Invalid approval address");
+  });
+
+  test("returns plain calldata a review digest can hash", async () => {
+    const call = buildErc20ApproveCall("0x1", "0x2", 6000000000000000000n);
+
+    // `CallData.compile` tags its result with a non-enumerable `__compiled__`
+    // property. The approval-payload normalizer rejects non-enumerable own
+    // properties, so a tagged array reaches the user as "Invalid approval
+    // payload" and blocks every relay submission that carries an approval.
+    expect(Object.getOwnPropertyNames(call.calldata)).toEqual(["0", "1", "2", "length"]);
+    await expect(digestApprovalPayload(call)).resolves.toContain("sha256:");
+    // The values themselves must not change: the CallSet signature depends on
+    // recompiling this calldata to the identical felts.
+    expect(call.calldata).toEqual(["0x2", "0x53444835ec580000", "0x0"]);
   });
 });

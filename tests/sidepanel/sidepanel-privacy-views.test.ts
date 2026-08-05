@@ -186,10 +186,11 @@ describe("privacy journey templates", () => {
       symbol: "ETH",
       tokenId: token.id,
     });
-    expect(registered).toContain("Activation accepted");
+    expect(registered).toContain("Registered");
+    expect(registered).toContain("You'll soon be able to shield your assets.");
     expect(registered).toContain('class="send-success-ring"');
     expect(registered).toContain('class="send-success-check"');
-    expect(registered).toContain('id="privacy-check-activation"');
+    expect(registered).not.toContain('id="privacy-check-activation"');
 
     const shielded = privacyFlow(status, preferences, [balance], {
       hash: "0x12345678901234567890",
@@ -199,7 +200,7 @@ describe("privacy journey templates", () => {
       tokenId: token.id,
     });
     expect(shielded).toContain("&lt;ETH&gt; shielding accepted");
-    expect(shielded).toContain('id="privacy-check-balance"');
+    expect(shielded).not.toContain('id="privacy-check-balance"');
     expect(shielded).toContain('id="privacy-done"');
     expect(shielded).toContain("Back to wallet");
     expect(shielded).not.toContain("Back to asset");

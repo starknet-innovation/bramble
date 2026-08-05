@@ -3,6 +3,7 @@
  * module changes only extension-owned form state and delegates journey stages
  * to the parent transfer state machine.
  */
+import { STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
 import { formatFiat } from "./fiat";
 import { accountLabel } from "./parts";
 import { balanceShortcut, fiatInputToken, sendCurrencySymbol, tokenInputFiat } from "./send-model";
@@ -206,6 +207,18 @@ const bindAssetControls = (
       goTo("details");
     });
   });
+  // Open on STRK rather than "Select": it pays every fee on Starknet, so it is
+  // the asset a send most often means. Only applied when nothing is chosen yet,
+  // so a repaint never overwrites the user's own pick.
+  if (!sendFormInput(form, "tokenId")?.value) {
+    const strk = Array.from(form.querySelectorAll<HTMLElement>("[data-send-asset]")).find((row) =>
+      sameFelt(row.dataset["sendAddress"] ?? "0x0", STRK_TOKEN_ADDRESS),
+    );
+    if (strk) {
+      applySelectedAsset(form, strk);
+      onFields(transferFields(form));
+    }
+  }
 };
 
 const bindAmountControls = (

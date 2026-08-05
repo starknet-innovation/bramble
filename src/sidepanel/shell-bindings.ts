@@ -82,18 +82,34 @@ export const watchDeployment = async (
   deps: DeploymentWatchDeps,
   options: { readonly attempts?: number; readonly intervalMs?: number } = {},
 ): Promise<void> => {
+  if (await awaitDeployment(deps.wallet, options)) {
+    await deps.render(await deps.wallet.loadStatus());
+  }
+};
+
+/**
+ * Waits for a submitted deployment to report deployed, answering whether it
+ * did within the attempt budget. THE deployment poll — `watchDeployment` adds a
+ * re-render on top, and a caller that must sequence work after deployment (the
+ * deploy-then-register journey) needs the answer rather than a repaint. A failed
+ * status load counts as "not yet".
+ */
+export const awaitDeployment = async (
+  wallet: Pick<SidepanelWallet, "loadDeploymentStatus">,
+  options: { readonly attempts?: number; readonly intervalMs?: number } = {},
+): Promise<boolean> => {
   const attempts = options.attempts ?? DEPLOY_WATCH_ATTEMPTS;
   const intervalMs = options.intervalMs ?? DEPLOY_WATCH_INTERVAL_MS;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, intervalMs);
     });
-    const deployment = await deps.wallet.loadDeploymentStatus().catch(() => null);
+    const deployment = await wallet.loadDeploymentStatus().catch(() => null);
     if (deployment?.deployed) {
-      await deps.render(await deps.wallet.loadStatus());
-      return;
+      return true;
     }
   }
+  return false;
 };
 
 /**

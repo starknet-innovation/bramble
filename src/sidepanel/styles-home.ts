@@ -307,7 +307,7 @@ export const HOME_STYLES = `
     #refresh-button[data-busy] .icon, #activity-refresh[data-busy] .icon,
     #detect-tokens[data-busy] .icon,
     #swap-confirm-button[data-busy] .icon { animation: none; }
-    button, input, select, textarea, .terminal-cta, .terminal-cta-arrow {
+    button, input, select, textarea {
       transition:
         background ${MOTION.pressMs}ms ${MOTION.ease},
         color ${MOTION.pressMs}ms ${MOTION.ease},
@@ -319,7 +319,6 @@ export const HOME_STYLES = `
       transition: opacity ${MOTION.pressMs}ms ${MOTION.ease};
     }
     button.collectible-card:not(:disabled):hover,
-    .terminal-cta:hover, .terminal-cta:active, .terminal-cta:hover .terminal-cta-arrow,
     .account-trigger[aria-expanded="true"] .account-name .icon { transform: none; }
     .swap-success-ring, .swap-success-check { animation: none; stroke-dashoffset: 0; }
     .swap-success h2, .swap-success .swap-success-summary, .swap-success .hint { animation: none; }

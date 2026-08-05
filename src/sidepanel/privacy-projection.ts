@@ -29,6 +29,13 @@ export type ProjectionInput = {
 export type Projection = {
   /** Fee sentence for the line under the card; empty when nothing is known. */
   readonly feeNote: string;
+  /**
+   * How the sentence should read: a fee the user simply pays is neutral
+   * information, while an amount that cannot cover the fee is a blocker. Only
+   * the latter earns a warning treatment — a fee shown in alarm colours reads as
+   * a problem on every well-formed shield.
+   */
+  readonly feeTone: "info" | "warning";
   /** Destination amount, already net of any fee taken from the moved value. */
   readonly received: string;
 };
@@ -54,7 +61,7 @@ const safeParse = (amount: string, decimals: number): bigint | null => {
 export const projectPrivacyMove = (input: ProjectionInput): Projection => {
   const parsed = safeParse(input.amount, input.decimals);
   if (parsed === null) {
-    return { feeNote: "", received: "0" };
+    return { feeNote: "", feeTone: "info", received: "0" };
   }
   const received = compactAmount(formatTokenAmount(parsed, input.decimals));
   if (input.unshielding) {
@@ -63,30 +70,36 @@ export const projectPrivacyMove = (input: ProjectionInput): Projection => {
         parsed === 0n
           ? ""
           : "A relay fee is taken from your private balance. The exact amount is quoted on the next screen.",
+      feeTone: "info",
       received,
     };
   }
   // No amount yet means no fee sentence: an idle card stays quiet.
   if (parsed === 0n || input.poolFeeFri === undefined) {
-    return { feeNote: "", received };
+    return { feeNote: "", feeTone: "info", received };
   }
   let fee: bigint;
   try {
     fee = BigInt(input.poolFeeFri);
   } catch {
-    return { feeNote: "", received };
+    return { feeNote: "", feeTone: "info", received };
   }
   if (fee === 0n) {
-    return { feeNote: "", received };
+    return { feeNote: "", feeTone: "info", received };
   }
   const feeAmount = `${compactAmount(formatTokenAmount(fee, 18))} STRK`;
   const affordable = !input.feeInSameToken || parsed + fee <= BigInt(input.sourceBalanceRaw || "0");
-  return {
-    feeNote: affordable
-      ? `Plus a ${feeAmount} pool fee from your public balance.`
-      : `Not enough to cover the ${feeAmount} pool fee as well. Lower the amount.`,
-    received,
-  };
+  return affordable
+    ? {
+        feeNote: `${feeAmount} get deducted from your public balance to cover pool fees`,
+        feeTone: "info",
+        received,
+      }
+    : {
+        feeNote: `Not enough to cover the ${feeAmount} pool fee as well. Lower the amount.`,
+        feeTone: "warning",
+        received,
+      };
 };
 
 /**

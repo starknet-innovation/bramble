@@ -8,6 +8,36 @@ import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens
  * Privacy styles inherit every color from the active skin.
  */
 export const PRIVACY_STYLES = `
+  /* Receive: an unregistered account can only be paid publicly, so the whole
+     notice is the activation control rather than a message beside a link. */
+  button.privacy-pool-notice {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    color: var(--mc-muted);
+    display: grid;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.xs};
+    justify-items: start;
+    line-height: ${TYPE.caption.line};
+    padding: ${SPACE.md};
+    text-align: left;
+    width: 100%;
+  }
+  button.privacy-pool-notice strong { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; }
+  button.privacy-pool-notice:not(:disabled):hover { background: var(--mc-hover); }
+  /* The same notice with nothing to act on yet: same surface, no affordance. */
+  .privacy-pool-notice.is-static {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    color: var(--mc-muted);
+    display: grid;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.xs};
+    line-height: ${TYPE.caption.line};
+    margin: 0;
+    padding: ${SPACE.md};
+  }
+
   /* Unified balance rows: the summary is the row, the dropdown carries the
      public/private split and the asset-screen link. The private line doubles
      as the registration entry while the account is unregistered. */
@@ -88,29 +118,6 @@ export const PRIVACY_STYLES = `
     gap: ${SPACE.xs};
   }
   .send-private-copy .icon { height: 12px; width: 12px; }
-  .token-breakdown-side { align-items: center; display: inline-flex; gap: ${SPACE.sm}; }
-  .shield-stepper { display: inline-flex; flex: none; gap: ${SPACE.xs}; }
-  button.shield-step {
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.full};
-    color: var(--mc-text);
-    font-size: ${TYPE.label.size};
-    font-weight: ${WEIGHT.bold};
-    height: 22px;
-    line-height: 1;
-    min-height: 0;
-    padding: 0;
-    width: 22px;
-  }
-  button.shield-step:not(:disabled):hover { background: var(--mc-hover); }
-  button.shield-confirm {
-    background: var(--mc-accent);
-    color: var(--mc-accent-text);
-    font-size: ${TYPE.caption.size};
-    min-height: ${CONTROL.hitSmall};
-    width: 100%;
-  }
-  button.shield-confirm:disabled { cursor: not-allowed; opacity: 0.55; }
   .privacy-inline-error {
     align-items: center;
     color: var(--mc-muted);
@@ -223,12 +230,85 @@ export const PRIVACY_STYLES = `
     font-weight: ${WEIGHT.semibold};
     padding: ${SPACE.sm} ${SPACE.md};
   }
-  .privacy-withdraw-recipient { display: grid; gap: ${SPACE.sm}; }
-  .privacy-withdraw-recipient > span:first-child {
+  /* Unshield destination: the account the withdrawal makes public. The current
+     choice reads as an identity (avatar + name), not an address field, so the
+     link being created is recognizable before signing. */
+  .privacy-destination { display: grid; gap: ${SPACE.sm}; }
+  .privacy-destination-label { color: var(--mc-muted); font-size: ${TYPE.label.size}; }
+  .privacy-destination-current {
+    align-items: center;
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.md};
+    display: flex;
+    gap: ${SPACE.sm};
+    padding: ${SPACE.sm} ${SPACE.md};
+  }
+  .privacy-destination-avatar { display: inline-flex; flex: none; }
+  .privacy-destination-avatar svg { border-radius: 50%; height: 28px; width: 28px; }
+  .privacy-destination-copy { display: grid; gap: 1px; min-width: 0; }
+  .privacy-destination-copy strong {
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.semibold};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-wrap: nowrap;
+  }
+  .privacy-destination-copy code, .privacy-destination-copy span {
     color: var(--mc-muted);
     font-size: ${TYPE.label.size};
   }
-  .privacy-withdraw-recipient input { font-size: ${TYPE.caption.size}; }
+  .privacy-destination-badge {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.sm};
+    color: var(--mc-muted);
+    font-size: ${TYPE.label.size};
+    padding: 2px ${SPACE.xs};
+  }
+  button.privacy-destination-pill {
+    background: var(--mc-soft);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-text);
+    font-size: ${TYPE.label.size};
+    font-weight: ${WEIGHT.semibold};
+    margin-left: auto;
+    min-height: ${CONTROL.hitSmall};
+    padding: 0 ${SPACE.md};
+  }
+  button.privacy-destination-pill:not(:disabled):hover { background: var(--mc-hover); }
+  .privacy-destination-options { display: grid; gap: ${SPACE.xs}; }
+  button.privacy-destination-option, button.privacy-destination-new {
+    align-items: center;
+    background: transparent;
+    border-radius: ${RADIUS.md};
+    color: var(--mc-text);
+    display: flex;
+    gap: ${SPACE.sm};
+    padding: ${SPACE.sm} ${SPACE.md};
+    text-align: left;
+    width: 100%;
+  }
+  button.privacy-destination-option:not(:disabled):hover,
+  button.privacy-destination-new:not(:disabled):hover { background: var(--mc-hover); }
+  button.privacy-destination-option[aria-pressed="true"] { background: var(--mc-soft); }
+  .privacy-destination-mark { color: var(--mc-text); display: inline-flex; margin-left: auto; }
+  .privacy-destination-mark .icon { height: 16px; width: 16px; }
+  .privacy-destination-new-mark {
+    align-items: center;
+    background: var(--mc-soft);
+    border-radius: 50%;
+    display: inline-flex;
+    flex: none;
+    height: 28px;
+    justify-content: center;
+    width: 28px;
+  }
+  .privacy-destination-new-mark .icon { height: 16px; width: 16px; }
+  .privacy-destination-manual { display: grid; gap: ${SPACE.xs}; }
+  .privacy-destination-manual > span:first-child {
+    color: var(--mc-muted);
+    font-size: ${TYPE.label.size};
+  }
+  .privacy-destination-manual input { font-size: ${TYPE.caption.size}; }
   .privacy-amount { display: grid; gap: ${SPACE.sm}; }
   .privacy-amount > span:first-child { color: var(--mc-muted); font-size: ${TYPE.label.size}; }
   .privacy-amount-control {

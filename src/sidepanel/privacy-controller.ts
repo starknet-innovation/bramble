@@ -5,13 +5,11 @@
 
 import type { WalletStatus } from "../popup/responses";
 import type { WalletPreferences } from "../storage/preferences-store";
-import { errorMessage, showToast } from "./dom";
 import {
   emptyPrivacyDisclosure,
   type PrivacyDisclosureState,
   type PrivacyJourneyState,
 } from "./privacy-model";
-import { bindShieldSteppers } from "./privacy-stepper";
 import { bindPrivacy } from "./privacy-ui";
 import type { BalanceState, SidepanelWallet } from "./runtime";
 
@@ -22,8 +20,6 @@ export type PrivacyControllerOptions = {
   readonly app: Element | null;
   readonly balances: () => BalanceState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
-  /** Monotonic milliseconds injected by the entrypoint for stepper pacing. */
-  readonly nowMs: () => number;
   readonly paint: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly status: () => WalletStatus;
@@ -38,32 +34,8 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
   let disclosure: PrivacyDisclosureState = emptyPrivacyDisclosure();
   let generation = 0;
   let journey: PrivacyJourneyState = { stage: "idle" };
-  // Hands a stepper-chosen shield amount to the standard deposit review; a
-  // slow preparation is dropped when the account/network scope changed.
-  const openShieldReview = (tokenId: string, amount: string): void => {
-    const startGeneration = generation;
-    const scope = options.status();
-    void options.wallet.preparePrivacyDeposit(tokenId, amount).then(
-      (preparation) => {
-        const current = options.status();
-        if (
-          generation !== startGeneration ||
-          current.activeAccountId !== scope.activeAccountId ||
-          current.networkId !== scope.networkId
-        ) {
-          return;
-        }
-        journey = { preparation, stage: "deposit-review", tokenId };
-        options.navigate("privacy");
-      },
-      (error: unknown) => {
-        showToast(errorMessage(error, "Shielding preparation failed"), "error");
-      },
-    );
-  };
   return {
     bind(): void {
-      bindShieldSteppers({ app: options.app, now: options.nowMs, openShieldReview });
       bindPrivacy({
         ...options,
         balances: () => {
@@ -82,6 +54,16 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
       });
     },
     disclosure: (): PrivacyDisclosureState => disclosure,
+    /**
+     * Drops the cached private-balance reading without disturbing an in-flight
+     * journey, so the next paint re-reads it. Call after any settled operation
+     * that moved private value from outside this controller — a private send
+     * confirms in the Send flow, not on the journey surface. Unlike `reset` this
+     * does not bump the generation: a concurrent preparation stays valid.
+     */
+    invalidate(): void {
+      disclosure = emptyPrivacyDisclosure();
+    },
     journey: (): PrivacyJourneyState => journey,
     reset(): void {
       generation += 1;

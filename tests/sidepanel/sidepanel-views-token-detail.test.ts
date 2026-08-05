@@ -131,4 +131,24 @@ describe("dashboard token-detail arm", () => {
     expect(html).toContain("Go private");
     expect(html).not.toContain('class="private-balance-summary"\n');
   });
+
+  test("a pending registration replaces the activation call with its own state", () => {
+    const privacy: PrivacyDisclosureState = {
+      error: null,
+      loading: false,
+      value: {
+        accountId: account.id,
+        balances: [],
+        networkId: "SN_MAIN",
+        registration: "pending",
+      },
+    };
+
+    const html = tokenDetailFlow(status, token, balance, [10, 20, 30], 2_000, "usd", privacy);
+
+    expect(html).toContain("Registration pending…");
+    expect(html).toContain("Registration pending");
+    expect(html).not.toContain("Go private");
+    expect(html).not.toContain("Register to start shielding");
+  });
 });

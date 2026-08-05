@@ -48,7 +48,12 @@ export type Strk20WalletStateResponse = {
     readonly networkId: StarknetNetworkId;
     /** Pool action fee in FRI, when the service could read it. */
     readonly poolFeeFri?: string;
-    readonly registration: "registered" | "unregistered";
+    /**
+     * `pending` is derived locally, not read from the privacy service: a
+     * registration this wallet broadcast that the indexer has not reflected yet.
+     * Callers must treat it as "not shieldable, do not register again".
+     */
+    readonly registration: "pending" | "registered" | "unregistered";
   };
 };
 

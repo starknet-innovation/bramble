@@ -34,7 +34,13 @@ export type PrivacyAccountState = {
   readonly networkId: string;
   /** Pool action fee in FRI when known, for pre-quote fee display. */
   readonly poolFeeFri?: string;
-  readonly registration: "registered" | "unregistered";
+  /**
+   * `pending` means the wallet broadcast a registration that the privacy
+   * indexer has not reflected yet. It is not a shieldable state, but it must
+   * never be treated as `unregistered` either: offering to register again in
+   * that window is how a duplicate registration gets broadcast.
+   */
+  readonly registration: "pending" | "registered" | "unregistered";
 };
 
 /**
@@ -226,7 +232,9 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     !isStarknetNetworkId(state["networkId"]) ||
     (state["poolFeeFri"] !== undefined &&
       (typeof state["poolFeeFri"] !== "string" || !isStarkFieldElement(state["poolFeeFri"]))) ||
-    (state["registration"] !== "registered" && state["registration"] !== "unregistered") ||
+    (state["registration"] !== "pending" &&
+      state["registration"] !== "registered" &&
+      state["registration"] !== "unregistered") ||
     !Array.isArray(state["balances"]) ||
     state["balances"].length > STRK20_LIMITS.balances
   ) {

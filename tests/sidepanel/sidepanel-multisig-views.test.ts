@@ -152,7 +152,7 @@ describe("multisig views", () => {
     expect(home).toContain(">Tokens</button>");
     expect(home).toContain(">Collectibles</button>");
     expect(home).toContain("Proposals<span");
-    expect(home).toContain("Join MC Terminal");
+    expect(home).not.toContain("Join MC Terminal");
     expect(home).not.toContain("Copy multisig address");
     expect(home).not.toContain('id="multisig-refresh"');
     expect(home).not.toContain("Synced from chain");

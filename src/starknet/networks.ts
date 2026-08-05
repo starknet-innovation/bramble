@@ -6,9 +6,12 @@ export type StarknetNetworkId = "SN_MAIN" | "SN_SEPOLIA" | "SN_DEVNET";
 /**
  * Starknet network metadata used for account derivation and display.
  * `rpcUrls` is an ordered failover list; the first entry is the primary.
+ * `explorerBaseUrl` is the public block explorer for outbound transaction
+ * links; networks without one (devnet) simply omit it and are never linked.
  */
 export type StarknetNetwork = {
   readonly chainId: string;
+  readonly explorerBaseUrl?: string;
   readonly id: StarknetNetworkId;
   readonly name: string;
   readonly rpcUrls: readonly [string, ...string[]];
@@ -26,12 +29,14 @@ export type StarknetNetwork = {
 export const STARKNET_NETWORKS: Readonly<Record<StarknetNetworkId, StarknetNetwork>> = {
   SN_MAIN: {
     chainId: "0x534e5f4d41494e",
+    explorerBaseUrl: "https://starkscan.co",
     id: "SN_MAIN",
     name: "Starknet Mainnet",
     rpcUrls: ["https://mainnet.nodes.starknet.org/rpc/v0_10"],
   },
   SN_SEPOLIA: {
     chainId: "0x534e5f5345504f4c4941",
+    explorerBaseUrl: "https://sepolia.starkscan.co",
     id: "SN_SEPOLIA",
     name: "Starknet Sepolia",
     rpcUrls: [
@@ -159,6 +164,32 @@ export const isStarkFieldElement = (value: string): boolean =>
  */
 export const isNonZeroStarkFieldElement = (value: string): boolean =>
   isStarkFieldElement(value) && BigInt(value) > 0n;
+
+// One gate for every explorer link: a network with no explorer (devnet) and a
+// felt that is not well formed both yield null, so no caller can build a URL
+// that cannot resolve.
+const explorerUrl = (networkId: string, path: string, felt: string): string | null => {
+  const base = isStarknetNetworkId(networkId)
+    ? STARKNET_NETWORKS[networkId].explorerBaseUrl
+    : undefined;
+  return base === undefined || !isNonZeroStarkFieldElement(felt) ? null : `${base}/${path}/${felt}`;
+};
+
+/**
+ * Builds the public explorer URL for a transaction, or `null` when the network
+ * has no explorer (devnet) or the hash is not a well-formed field element. A
+ * caller that receives `null` must render no link rather than a broken one.
+ */
+export const explorerTransactionUrl = (networkId: string, hash: string): string | null =>
+  explorerUrl(networkId, "tx", hash);
+
+/**
+ * Builds the public explorer URL for an account, or `null` under the same rules
+ * as {@link explorerTransactionUrl}. Starknet accounts are contracts, so the
+ * account view lives under the explorer's contract path.
+ */
+export const explorerAccountUrl = (networkId: string, address: string): string | null =>
+  explorerUrl(networkId, "contract", address);
 
 /**
  * Stark curve group order (n). Valid Stark signing scalars live in [1, n).

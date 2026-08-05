@@ -9,7 +9,7 @@ import { escapeHtml } from "../shared/html";
 import { knownAccountType } from "../starknet/account-types";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
-import { isStarknetNetworkId } from "../starknet/networks";
+import { isStarknetNetworkId, STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
 import type { Strk20NetworkConfig } from "../starknet/strk20/config";
 import type { MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
@@ -32,8 +32,27 @@ import {
   type WalletView,
   walletMenuRow,
 } from "./parts";
+import type { PrivacyDisclosureState } from "./privacy-model";
 import { strk20ServicesForm } from "./privacy-settings-view";
-import { receiveAddressView } from "./receive-view";
+import { type PoolNoticeAction, privacyPoolNotice, receiveAddressView } from "./receive-view";
+
+// Fees are paid in STRK, and registration is an invoke from a deployed account:
+// with no STRK there is nothing to offer, and with STRK but no contract the
+// deployment has to run first. Deployment is only blocking on a conclusive
+// `false`, so a fresh read does not flicker into the static form.
+const poolNoticeAction = (ctx: {
+  readonly balances: readonly TokenBalance[];
+  readonly deployment: boolean | null;
+}): PoolNoticeAction => {
+  const funded = ctx.balances.some(
+    (token) => sameFelt(token.address, STRK_TOKEN_ADDRESS) && BigInt(token.balance) > 0n,
+  );
+  if (!funded) {
+    return "fund-first";
+  }
+  return ctx.deployment === false ? "deploy-first" : "register";
+};
+
 import { sendFlow } from "./send-views";
 import {
   appearanceFlow,
@@ -52,7 +71,12 @@ export { addressBookFlow, connectedSitesFlow } from "./support-flows";
 /**
  * Receive flow: show and copy the active account address.
  */
-export const receiveFlow = (status: WalletStatus, account: AccountRef | null): string =>
+export const receiveFlow = (
+  status: WalletStatus,
+  account: AccountRef | null,
+  privacy: PrivacyDisclosureState,
+  poolAction: PoolNoticeAction,
+): string =>
   flowHeader("Receive", status) +
   flowScreen(
     "receive",
@@ -67,6 +91,7 @@ export const receiveFlow = (status: WalletStatus, account: AccountRef | null): s
             })
           : noAccountEmpty(status)
       }
+      ${account ? privacyPoolNotice(privacy, poolAction) : ""}
       <p id="receive-result" role="status"></p>
     </section>`,
   );
@@ -401,10 +426,12 @@ export const simpleFlowScreen = (
     readonly classHashVerification: ClassHashVerification | null;
     readonly connectedSites: readonly ConnectedSite[];
     readonly currency: DisplayCurrency;
+    readonly deployment: boolean | null;
     readonly expandedGroupId: string | null;
     readonly multisigs?: readonly MultisigRecord[];
     readonly preferences: WalletPreferences | null;
     readonly prices: Readonly<Record<string, number>>;
+    readonly privacy: PrivacyDisclosureState;
     readonly status: WalletStatus;
   },
 ): string | null => {
@@ -423,7 +450,7 @@ export const simpleFlowScreen = (
     case "swap":
       return swapFlow(ctx.status, ctx.account);
     case "receive":
-      return receiveFlow(ctx.status, ctx.account);
+      return receiveFlow(ctx.status, ctx.account, ctx.privacy, poolNoticeAction(ctx));
     case "network":
       return networkFlow(ctx.status, ctx.preferences);
     case "advanced-network":

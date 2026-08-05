@@ -179,6 +179,17 @@ const CONFIRMATION_OUTCOMES: Partial<Record<ActivityEntry["status"], Confirmatio
 };
 
 /**
+ * Confirmation checkpoints in milliseconds, paired with the outcome table above:
+ * a tight burst for the common case, then ten-second checks out to roughly a
+ * minute. Every checkpoint is a live chain read, so this is the journey's
+ * patience rather than the chain's — it completes on PRE_CONFIRMED, but a
+ * proposer can take longer than a ten-second burst to report even that.
+ */
+export const CONFIRMATION_DELAYS_MS: readonly number[] = [
+  0, 250, 500, 900, 1_500, 2_500, 4_000, 5_000, 7_500, 10_000, 10_000, 10_000,
+];
+
+/**
  * Maps the latest observed status onto that decision.
  */
 export const confirmationOutcome = (

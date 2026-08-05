@@ -86,6 +86,6 @@ export type PrivacySdkRuntime = {
     },
   ) => unknown;
   readonly Open: symbol;
-  readonly SetupRequirement?: { readonly Register: number };
+  readonly SetupRequirement?: { readonly Ready: number; readonly Register: number };
   readonly createPrivateTransfers: (input: unknown) => SdkTransfers;
 };

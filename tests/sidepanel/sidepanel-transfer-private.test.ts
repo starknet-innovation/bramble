@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import type { PrivacyDisclosureState } from "../../src/sidepanel/privacy-model";
 import type { SidepanelWallet } from "../../src/sidepanel/runtime";
 import { bindPrivateSendToggle } from "../../src/sidepanel/transfer-private-ui";
+import { privateRelayFeeHtml } from "../../src/sidepanel/transfer-review-markup";
 import { registerDom, unregisterDom } from "../support/groups-harness";
 
 beforeAll(registerDom);
@@ -117,6 +118,19 @@ describe("private send toggle", () => {
     );
   });
 
+  test("reads a pending registration as an in-flight wait, not a refusal", () => {
+    const { form, toggle } = bind(RECIPIENT, {
+      error: null,
+      loading: false,
+      value: { accountId: "a", balances: [], networkId: "SN_MAIN", registration: "pending" },
+    });
+
+    expect(toggle.disabled).toBe(true);
+    expect(form.querySelector("#send-private-toggle")?.getAttribute("title")).toBe(
+      "Waiting for your registration to be indexed…",
+    );
+  });
+
   test("stays greyed when the recipient turns out to be unregistered", async () => {
     const { checks, form, toggle } = bind(RECIPIENT, registeredDisclosure(), "unregistered");
     await flush();
@@ -195,6 +209,44 @@ describe("private send toggle", () => {
     expect(toggle.disabled).toBe(true);
     expect(form.querySelector("#send-private-toggle")?.getAttribute("title")).toBe(
       "No private balance of this asset yet",
+    );
+  });
+});
+
+describe("private send fee lines", () => {
+  // 6 STRK: the mainnet pool's per-action charge, which the relay pays on the
+  // sender's behalf and recovers from the shielded balance.
+  const POOL_FEE = "0x53444835ec580000";
+
+  test("splits the withdrawn amount into the pool fee and the relay's own cut", () => {
+    const html = privateRelayFeeHtml({ amount: POOL_FEE }, POOL_FEE);
+
+    // The pool's charge is named as such rather than billed as the relay's price.
+    expect(html).toContain("Pool fee: 6 STRK");
+    expect(html).toContain("Relay fee: Sponsored");
+    expect(html).not.toContain("Relay fee (paid privately)");
+  });
+
+  test("shows a relay cut when the fee action exceeds the pool fee", () => {
+    // 6 STRK pool fee inside a 6.5 STRK fee action leaves 0.5 STRK for the relay.
+    const html = privateRelayFeeHtml({ amount: "0x5a34a38fc00a0000" }, POOL_FEE);
+
+    expect(html).toContain("Pool fee: 6 STRK");
+    expect(html).toContain("Relay fee: 0.5 STRK");
+  });
+
+  test("falls back to one unattributed line rather than inventing a split", () => {
+    // No pool fee read yet.
+    expect(privateRelayFeeHtml({ amount: POOL_FEE })).toContain(
+      "Fee taken from your private balance: 6 STRK",
+    );
+    // A fee action below the pool fee contradicts the split, so it is not shown.
+    expect(privateRelayFeeHtml({ amount: "0x1" }, POOL_FEE)).toContain(
+      "Fee taken from your private balance",
+    );
+    // A malformed amount must not throw or render a negative fee.
+    expect(privateRelayFeeHtml({ amount: "nope" }, POOL_FEE)).toContain(
+      "Fee taken from your private balance",
     );
   });
 });

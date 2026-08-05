@@ -10,6 +10,7 @@ import { isLikelySpam } from "../starknet/token-registry";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { CURRENCY_SYMBOLS } from "./fiat";
+import { compareStrkFirst } from "./token-flows";
 import { compactAmount } from "./token-row";
 
 /**
@@ -51,7 +52,7 @@ export const sendAssets = (
         ...(change === undefined ? {} : { change }),
       };
     })
-    .sort((left, right) => Number(left.spam) - Number(right.spam));
+    .sort((left, right) => Number(left.spam) - Number(right.spam) || compareStrkFirst(left, right));
 
 /**
  * Returns accounts on the active network except the account sending funds.

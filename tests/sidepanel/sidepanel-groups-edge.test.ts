@@ -10,13 +10,13 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { accountDrawer } from "../../src/sidepanel/account-drawer";
+import { accountFlow } from "../../src/sidepanel/flows";
 import {
   captureRepaintFocus,
   focusMemo,
   restoreFocus,
   restoreRepaintFocus,
-} from "../../src/sidepanel/dom";
-import { accountFlow } from "../../src/sidepanel/flows";
+} from "../../src/sidepanel/focus-memo";
 import { healTransientGroupState } from "../../src/sidepanel/group-state";
 import { type IconName, icon } from "../../src/sidepanel/icons";
 import type { AccountGroups } from "../../src/storage/account-groups";

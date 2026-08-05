@@ -4,12 +4,19 @@
  */
 import { describe, expect, test } from "bun:test";
 import { readStrk20WalletExecuteInput } from "../../src/background/strk20-wallet-inputs";
+import { STRK20_REGISTRATION_SUMMARY } from "../../src/background/strk20-wallet-ops";
 import type { Strk20Action } from "../../src/starknet/strk20/schemas";
 import type { Strk20Service, Strk20SubmissionPlan } from "../../src/starknet/strk20/service";
+import {
+  type ActivityLog,
+  type ActivityStatus,
+  memoryActivityLog,
+} from "../../src/storage/activity-store";
 import {
   defaultWalletPreferences,
   type WalletPreferences,
 } from "../../src/storage/preferences-store";
+import { account } from "../support/background-wallet-stub";
 import {
   buildStrk20Handler,
   STRK20_CALL_AND_PROOF,
@@ -31,6 +38,31 @@ const preferences = (): WalletPreferences => ({
     },
   },
 });
+
+const SUBMITTED_AT = 1_700_000_000_000;
+
+// One broadcast registration in the log, exactly as `wallet.strk20Execute`
+// records it. The status is advanced through the store rather than fabricated so
+// the fixture cannot drift from what reconciliation actually writes.
+const activityWithRegistration = async (
+  status: ActivityStatus = "pending",
+): Promise<ActivityLog> => {
+  const log = memoryActivityLog(() => SUBMITTED_AT);
+  await log.record({
+    accountId: account.id,
+    hash: "0x111",
+    kind: "invoke",
+    networkId: "SN_SEPOLIA",
+    summary: STRK20_REGISTRATION_SUMMARY,
+  });
+  if (status !== "pending") {
+    await log.updateStatuses(
+      { "0x111": { status } },
+      { accountId: account.id, networkId: "SN_SEPOLIA" },
+    );
+  }
+  return log;
+};
 
 const token = preferences().tokens.find(
   (candidate) => candidate.networkId === "SN_SEPOLIA" && candidate.address === STRK20_TOKEN,
@@ -157,6 +189,80 @@ describe("background wallet STRK20 operations", () => {
       error: "Privacy preparation not found",
     });
     expect(capture.registrations.value).toBe(1);
+  });
+
+  test("an unindexed registration reads as pending and refuses a duplicate preparation", async () => {
+    const capture = {
+      registered: { value: false },
+      registrations: { value: 0 },
+      submissions: [],
+    };
+    const handler = buildStrk20Handler({
+      activity: await activityWithRegistration(),
+      now: () => SUBMITTED_AT + 5_000,
+      preferences: preferences(),
+      strk20: service(capture),
+    });
+
+    const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
+      readonly strk20State: {
+        readonly balances: readonly unknown[];
+        readonly registration: string;
+      };
+    };
+    expect(response.strk20State.registration).toBe("pending");
+    // Pending is not shieldable: no private balances are claimed for it.
+    expect(response.strk20State.balances).toEqual([]);
+
+    await expect(
+      handler({ type: "wallet.strk20PrepareRegistration" }, STRK20_EXTENSION_SENDER),
+    ).resolves.toEqual({ error: "A registration is already on its way for this account" });
+    expect(capture.registrations.value).toBe(0);
+  });
+
+  test("a pending registration stops shadowing the service reading once its window lapses", async () => {
+    const capture = {
+      registered: { value: false },
+      registrations: { value: 0 },
+      submissions: [],
+    };
+    const handler = buildStrk20Handler({
+      activity: await activityWithRegistration(),
+      now: () => SUBMITTED_AT + 31 * 60_000,
+      preferences: preferences(),
+      strk20: service(capture),
+    });
+
+    const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
+      readonly strk20State: { readonly registration: string };
+    };
+    expect(response.strk20State.registration).toBe("unregistered");
+    // A registration that never landed must stay retryable rather than locking
+    // the account out of the flow forever.
+    const prepared = (await handler(
+      { type: "wallet.strk20PrepareRegistration" },
+      STRK20_EXTENSION_SENDER,
+    )) as { readonly strk20Preparation?: { readonly id: string } };
+    expect(prepared.strk20Preparation?.id).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  test("a rejected registration never reads as pending", async () => {
+    const capture = {
+      registered: { value: false },
+      registrations: { value: 0 },
+      submissions: [],
+    };
+    const handler = buildStrk20Handler({
+      activity: await activityWithRegistration("rejected"),
+      now: () => SUBMITTED_AT + 5_000,
+      preferences: preferences(),
+      strk20: service(capture),
+    });
+
+    const response = (await handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)) as {
+      readonly strk20State: { readonly registration: string };
+    };
+    expect(response.strk20State.registration).toBe("unregistered");
   });
 
   test("prepares and submits an exact public-to-private deposit only after registration", async () => {

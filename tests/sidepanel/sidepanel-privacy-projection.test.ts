@@ -25,7 +25,11 @@ describe("privacy move projection", () => {
     });
 
     expect(projection.received).toBe("10");
-    expect(projection.feeNote).toBe("Plus a 4 STRK pool fee from your public balance.");
+    expect(projection.feeNote).toBe(
+      "4 STRK get deducted from your public balance to cover pool fees",
+    );
+    // A fee the user simply pays is information, not an alarm.
+    expect(projection.feeTone).toBe("info");
   });
 
   test("shielding warns when the balance cannot cover amount plus fee", () => {
@@ -38,6 +42,8 @@ describe("privacy move projection", () => {
     });
 
     expect(projection.feeNote).toContain("Not enough to cover the 4 STRK pool fee");
+    // Only a blocker earns the warning treatment.
+    expect(projection.feeTone).toBe("warning");
   });
 
   test("a non-STRK asset shields without touching its own amount", () => {
@@ -52,7 +58,11 @@ describe("privacy move projection", () => {
     });
 
     expect(projection.received).toBe("1.25");
-    expect(projection.feeNote).toBe("Plus a 4 STRK pool fee from your public balance.");
+    expect(projection.feeNote).toBe(
+      "4 STRK get deducted from your public balance to cover pool fees",
+    );
+    // A fee the user simply pays is information, not an alarm.
+    expect(projection.feeTone).toBe("info");
   });
 
   test("unshielding defers the relay fee to the review", () => {
