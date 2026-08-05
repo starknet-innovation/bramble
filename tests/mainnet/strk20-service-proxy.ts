@@ -11,6 +11,78 @@ const HOST = "127.0.0.1";
 const PORT = 5_050;
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 
+type ProxyService = "discovery" | "prover" | "rpc";
+
+const ALLOWED_PATHS: Readonly<Record<ProxyService, ReadonlySet<string>>> = {
+  discovery: new Set([
+    "",
+    "health",
+    "ohttp-keys",
+    "v1/history",
+    "v1/sync/incoming_state",
+    "v1/sync/outgoing_state",
+    "v1/sync/preflight_check",
+  ]),
+  prover: new Set(["", "ohttp-keys"]),
+  rpc: new Set([""]),
+};
+
+type ProxyRoute = {
+  readonly path: string;
+  readonly service: ProxyService;
+};
+
+/**
+ * Parses only the fixed STRK20 test-proxy routes and methods. Request data is
+ * reduced to an allowlisted route key before any upstream URL is selected.
+ */
+export const readStrk20ProxyRoute = (
+  pathname: string,
+  method: string | undefined,
+): ProxyRoute | null => {
+  const match =
+    /^\/strk20-e2e\/(discovery|prover|rpc)(?:\/([A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*))?\/?$/.exec(
+      pathname,
+    );
+  if (!match) {
+    return null;
+  }
+  const service = match[1] as ProxyService;
+  const path = match[2] ?? "";
+  if (!ALLOWED_PATHS[service].has(path)) {
+    return null;
+  }
+  if (service === "rpc") {
+    return method === "POST" && path === "" ? { path, service } : null;
+  }
+  if (path === "ohttp-keys" || path === "health") {
+    return method === "GET" ? { path, service } : null;
+  }
+  return method === "POST" ? { path, service } : null;
+};
+
+const readRequestRoute = (request: IncomingMessage): ProxyRoute | null => {
+  const rawTarget = request.url ?? "/";
+  if (rawTarget.includes("..") || /%2e/i.test(rawTarget)) {
+    return null;
+  }
+  const requestUrl = new URL(rawTarget, `http://${HOST}:${PORT}`);
+  return requestUrl.search === ""
+    ? readStrk20ProxyRoute(requestUrl.pathname, request.method)
+    : null;
+};
+
+const routeTargets = (base: URL, paths: ReadonlySet<string>): ReadonlyMap<string, URL> =>
+  new Map(
+    [...paths].map((path) => {
+      const target = new URL(base);
+      if (path !== "") {
+        target.pathname = `${target.pathname.replace(/\/+$/, "")}/${path}`;
+      }
+      return [path, target] as const;
+    }),
+  );
+
 export type Strk20ServiceProxy = {
   readonly activity: () => readonly string[];
   readonly close: () => Promise<void>;
@@ -106,10 +178,10 @@ export const startStrk20ServiceProxy = async (input: {
 }): Promise<Strk20ServiceProxy> => {
   const activity: string[] = [];
   const sockets = new Set<Socket>();
-  const upstreams = {
-    discovery: new URL(input.discoveryUpstream),
-    prover: new URL(input.proverUpstream),
-    rpc: new URL(input.rpcUpstream),
+  const upstreamTargets = {
+    discovery: routeTargets(new URL(input.discoveryUpstream), ALLOWED_PATHS.discovery),
+    prover: routeTargets(new URL(input.proverUpstream), ALLOWED_PATHS.prover),
+    rpc: routeTargets(new URL(input.rpcUpstream), ALLOWED_PATHS.rpc),
   } as const;
   const server = createServer(async (request, response) => {
     if (request.method === "OPTIONS") {
@@ -117,17 +189,14 @@ export const startStrk20ServiceProxy = async (input: {
       response.end();
       return;
     }
-    const requestUrl = new URL(request.url ?? "/", `http://${HOST}:${PORT}`);
-    const match = /^\/strk20-e2e\/(discovery|prover|rpc)(\/.*)?$/.exec(requestUrl.pathname);
-    if (!match) {
+    const route = readRequestRoute(request);
+    const target = route ? upstreamTargets[route.service].get(route.path) : undefined;
+    if (!route || !target) {
       response.writeHead(404, { ...corsHeaders, "content-type": "application/json" });
       response.end('{"error":"not_found"}');
       return;
     }
-    const service = match[1] as keyof typeof upstreams;
-    const suffix = (match[2] ?? "").replace(/^\//, "");
-    const target = new URL(suffix, upstreams[service]);
-    target.search = requestUrl.search;
+    const { service } = route;
     try {
       const body = await readBody(request);
       const upstream = await fetch(target, {

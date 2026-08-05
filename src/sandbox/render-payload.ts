@@ -4,8 +4,8 @@
  * `data:text/html` (base64 or raw/percent-encoded utf8) within a fixed size cap
  * and returns the decoded HTML, or null when the URI is malformed, the wrong
  * media type, or oversized. It performs no rendering and confers no trust: the
- * returned HTML is only ever written into the manifest-sandboxed render page,
- * whose isolated security principal and egress-blocking CSP contain it.
+ * returned HTML is only ever loaded into the render page's nested sandbox,
+ * whose isolated security principals and egress-blocking CSP contain it.
  */
 
 // Matches MAX_IMAGE_DATA_URI_LENGTH / MAX_DATA_URI_BYTES: the animation can never
