@@ -162,6 +162,7 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       ${reviewFeeSection(
         {
           fee: approval.fee ?? null,
+          feeAffordability: approval.feeAffordability ?? "unknown",
           feeEstimateFailed: approval.feeEstimateFailed === true,
           requiresDeployment: approval.requiresDeployment === true,
         },

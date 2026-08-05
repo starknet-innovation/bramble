@@ -333,6 +333,7 @@ describe("dApp invoke decode/risk parity with Send review (#19)", () => {
 // Queued approval snapshot fields the fee suite inspects.
 type FeePending = {
   readonly fee?: { readonly overallFee: string; readonly unit: string } | null;
+  readonly feeAffordability?: string;
   readonly feeEstimateFailed?: boolean;
   readonly id: string;
   readonly requiresDeployment?: boolean;
@@ -463,5 +464,32 @@ describe("dApp invoke fee estimate (#189)", () => {
 
     await handler({ id: pending.id, type: "wallet.denyOrigin" }, extensionSender);
     await expect(held).resolves.toEqual({ error: "request rejected" });
+  });
+});
+
+// Fee-affordability guard (issue 191) on the dApp journey: the queued approval
+// carries the shared predicate's verdict, and an unreadable balance fails open.
+describe("dApp invoke fee affordability (issue 191)", () => {
+  test("the verdict rides the fee review and fails open on a balance error", async () => {
+    const short = makeHarness([account], unavailablePreferencesStore, {
+      async getTokenBalances({ tokens }) {
+        return tokens.map((token) => ({ ...token, balance: "0", formatted: "0" }));
+      },
+    });
+    const first = await queueInvoke(short.handler);
+    expect(first.pending.fee).toEqual({ overallFee: "1", unit: "FRI" });
+    expect(first.pending.feeAffordability).toBe("insufficient");
+    await short.handler({ id: first.pending.id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(first.held).resolves.toEqual({ error: "request rejected" });
+
+    const unreadable = makeHarness([account], unavailablePreferencesStore, {
+      async getTokenBalances(): Promise<never> {
+        throw new WalletError("balance unavailable");
+      },
+    });
+    const second = await queueInvoke(unreadable.handler);
+    expect(second.pending.feeAffordability).toBe("unknown");
+    await unreadable.handler({ id: second.pending.id, type: "wallet.denyOrigin" }, extensionSender);
+    await expect(second.held).resolves.toEqual({ error: "request rejected" });
   });
 });

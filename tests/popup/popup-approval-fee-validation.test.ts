@@ -100,3 +100,33 @@ describe("PendingApproval fee review validation (#189)", () => {
     expect(isPendingApprovalsResponse(response(invokeApproval({ surprise: true })))).toBe(false);
   });
 });
+
+// Affordability verdict validation (issue 191): the verdict is one of the
+// predicate's three values, needs an estimate to claim anything, and stays
+// invoke-only like the rest of the fee review.
+describe("PendingApproval fee affordability validation (issue 191)", () => {
+  test("accepts every predicate verdict alongside an estimate", () => {
+    for (const feeAffordability of ["insufficient", "ok", "unknown"]) {
+      expect(isPendingApprovalsResponse(response(invokeApproval({ feeAffordability })))).toBe(true);
+    }
+  });
+
+  test("rejects an unknown verdict value", () => {
+    expect(
+      isPendingApprovalsResponse(response(invokeApproval({ feeAffordability: "maybe" }))),
+    ).toBe(false);
+  });
+
+  test("rejects a claim without an estimate to compare against", () => {
+    for (const feeAffordability of ["insufficient", "ok"]) {
+      expect(
+        isPendingApprovalsResponse(response(invokeApproval({ fee: null, feeAffordability }))),
+      ).toBe(false);
+    }
+    expect(
+      isPendingApprovalsResponse(
+        response(invokeApproval({ fee: null, feeAffordability: "unknown" })),
+      ),
+    ).toBe(true);
+  });
+});

@@ -164,6 +164,7 @@ const prepareNft =
             ok: true,
             review: {
               fee: { overallFee: "1800000000000000", unit: "FRI" },
+              feeAffordability: "ok",
               feeEstimateFailed: false,
               flags: blocked
                 ? [{ code: "address-poisoning", message: "Recipient resembles a recent address." }]

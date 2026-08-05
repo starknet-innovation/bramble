@@ -158,7 +158,12 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
   test("invoke approval passes the executor error through", async () => {
     const approvals = createApprovalQueue();
     const { id } = approvals.requestInvoke({
-      fee: { fee: null, feeEstimateFailed: false, requiresDeployment: false },
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        requiresDeployment: false,
+      },
       calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "transfer" }],
       context: CONTEXT,
       flags: [],

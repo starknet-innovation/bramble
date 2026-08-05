@@ -67,6 +67,7 @@ export type PendingApproval = {
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
   readonly fee?: { readonly overallFee: string; readonly unit: string } | null;
+  readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
@@ -204,6 +205,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "context",
       "declaration",
       "fee",
+      "feeAffordability",
       "feeEstimateFailed",
       "flags",
       "id",
@@ -250,14 +252,24 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   const feeValid =
     value["kind"] === "invoke"
       ? (value["fee"] === undefined || value["fee"] === null || isFee(value["fee"])) &&
+        (value["feeAffordability"] === undefined ||
+          value["feeAffordability"] === "insufficient" ||
+          value["feeAffordability"] === "ok" ||
+          value["feeAffordability"] === "unknown") &&
         (value["feeEstimateFailed"] === undefined ||
           typeof value["feeEstimateFailed"] === "boolean") &&
         (value["requiresDeployment"] === undefined ||
           typeof value["requiresDeployment"] === "boolean") &&
         (value["requiresDeployment"] !== true ||
           ((value["fee"] ?? null) === null && value["feeEstimateFailed"] !== true)) &&
-        (value["feeEstimateFailed"] !== true || (value["fee"] ?? null) === null)
+        (value["feeEstimateFailed"] !== true || (value["fee"] ?? null) === null) &&
+        // An affordability claim without an estimate is a contradiction: the
+        // predicate can only compare a fee that exists.
+        ((value["fee"] ?? null) !== null ||
+          value["feeAffordability"] === undefined ||
+          value["feeAffordability"] === "unknown")
       : value["fee"] === undefined &&
+        value["feeAffordability"] === undefined &&
         value["feeEstimateFailed"] === undefined &&
         value["requiresDeployment"] === undefined;
   const needsContext =

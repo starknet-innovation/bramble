@@ -23,9 +23,23 @@ import { formatFri } from "./parts";
  */
 export type ReviewFeeState = {
   readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  /**
+   * Verdict of the shared fee-affordability predicate (issue 191). Only
+   * "insufficient" renders a warning; "ok"/"unknown"/absent render nothing
+   * extra, and no surface gates a decision on it — the guard is warn-only and
+   * fails open.
+   */
+  readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
   readonly requiresDeployment?: boolean;
 };
+
+// Warn-only shortfall notice appended under the fee line when the shared
+// predicate says the STRK balance cannot cover the transaction (issue 191).
+const shortfallHtml = (state: ReviewFeeState): string =>
+  state.feeAffordability === "insufficient"
+    ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
+    : "";
 
 /**
  * Formats a fee estimate in the unit the estimate actually returned: `FRI`
@@ -46,7 +60,7 @@ export const formatFeeEstimate = (fee: NonNullable<ReviewFeeState["fee"]>): stri
  */
 export const reviewFeeSection = (state: ReviewFeeState, retryAttributes: UiAttributes): string => {
   if (state.fee) {
-    return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>`;
+    return `<p class="review-fee">Estimated fee: ${escapeHtml(formatFeeEstimate(state.fee))}</p>${shortfallHtml(state)}`;
   }
   if (state.requiresDeployment === true) {
     return '<p class="review-fee">The network fee is estimated once this account is deployed.</p>';
