@@ -20,7 +20,6 @@ export type PrivacyUiDeps = {
   readonly generation: () => number;
   readonly journey: () => PrivacyJourneyState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
-  readonly openToken: (tokenId: string) => void;
   readonly paint: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly setDisclosure: (state: PrivacyDisclosureState) => void;
@@ -286,7 +285,7 @@ const bindOutcome = (deps: PrivacyUiDeps, journey: PrivacyJourneyState): void =>
       });
     });
     deps.app?.querySelector("#privacy-done")?.addEventListener("click", () => {
-      deps.openToken(journey.tokenId);
+      deps.navigate("home");
     });
   }
   if (journey.stage === "failure") {
@@ -294,7 +293,7 @@ const bindOutcome = (deps: PrivacyUiDeps, journey: PrivacyJourneyState): void =>
       void startJourney(deps, journey.tokenId);
     });
     deps.app?.querySelector("#privacy-cancel")?.addEventListener("click", () => {
-      deps.openToken(journey.tokenId);
+      deps.navigate("home");
     });
   }
 };

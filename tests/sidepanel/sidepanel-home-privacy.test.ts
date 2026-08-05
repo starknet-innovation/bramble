@@ -115,13 +115,20 @@ describe("private portfolio scope", () => {
     );
 
     expect(publicHtml).toContain(
-      '<input name="privateBalances" type="checkbox" aria-label="Show private balances" data-privacy-toggle />',
+      '<input name="privateBalances" type="checkbox" data-privacy-toggle />',
     );
     expect(privateHtml).toContain(
-      '<input name="privateBalances" type="checkbox" checked aria-label="Show private balances" data-privacy-toggle />',
+      '<input name="privateBalances" type="checkbox" checked data-privacy-toggle />',
     );
     expect(publicHtml).not.toContain("privacy-switch");
     expect(privateHtml).not.toContain('role="switch"');
+    // One static clickable label in both states — no state-dependent copy.
+    for (const html of [publicHtml, privateHtml]) {
+      expect(html).toContain("Display shielded balances");
+      expect(html).not.toContain("Public balances");
+      expect(html).not.toContain("Read directly from Starknet");
+      expect(html).not.toContain("Visible only inside this wallet");
+    }
   });
 
   test("private mode replaces the public hero total and removes public 24h change", () => {

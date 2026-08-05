@@ -103,6 +103,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/starknet/rpc.ts",
   "src/starknet/strk20/call-set-signer.ts",
   "src/starknet/strk20/official-sdk-service.ts",
+  // CallSet signing and viewing-key wiring extracted from official-sdk-service;
+  // same Krusty-delegated boundary, no secret ever stored or logged here.
+  "src/starknet/strk20/official-sdk-transfers.ts",
   "src/starknet/strk20/paymaster.ts",
   "src/starknet/strk20/service.ts",
   "src/storage/encrypted-store.ts",

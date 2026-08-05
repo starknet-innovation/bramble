@@ -162,6 +162,8 @@ describe("privacy journey templates", () => {
     expect(shielded).toContain("&lt;ETH&gt; shielding accepted");
     expect(shielded).toContain('id="privacy-check-balance"');
     expect(shielded).toContain('id="privacy-done"');
+    expect(shielded).toContain("Back to wallet");
+    expect(shielded).not.toContain("Back to asset");
 
     const failed = privacyFlow(status, preferences, [balance], {
       error: "<prover unavailable>",

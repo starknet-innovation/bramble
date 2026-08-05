@@ -13,13 +13,7 @@ import { icon } from "./icons";
 import { dockScreen, noAccountEmpty } from "./parts";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import type { BalanceState } from "./runtime";
-import {
-  actionTile,
-  deployNotice,
-  pendingCallout,
-  terminalCta,
-  terminalPortfolioTile,
-} from "./wallet-shell";
+import { actionTile, deployNotice, pendingCallout, terminalCta } from "./wallet-shell";
 
 const heroDelta = (
   balances: BalanceState,
@@ -86,7 +80,6 @@ export const homeScreen = (
         ${actionTile("send", "Send", "send", account !== null)}
         ${actionTile("swap", "Swap", "shuffle", account !== null)}
         ${actionTile("receive", "Receive", "qrCode", account !== null)}
-        ${terminalPortfolioTile()}
       </div>
       ${terminalCta()}
     </section>

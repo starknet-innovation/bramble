@@ -20,7 +20,6 @@ export type PrivacyControllerOptions = {
   readonly app: Element | null;
   readonly balances: () => BalanceState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
-  readonly openToken: (tokenId: string) => void;
   readonly paint: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly status: () => WalletStatus;

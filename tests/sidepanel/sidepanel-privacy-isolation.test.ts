@@ -77,7 +77,6 @@ describe("privacy UI async scope isolation", () => {
       generation: () => 0,
       journey: () => ({ stage: "idle" }),
       navigate: () => undefined,
-      openToken: () => undefined,
       paint: () => {
         paints += 1;
       },
@@ -123,7 +122,6 @@ describe("privacy UI async scope isolation", () => {
       generation: () => 0,
       journey: () => ({ stage: "idle" }),
       navigate: () => undefined,
-      openToken: () => undefined,
       paint: () => {
         paints += 1;
       },
@@ -172,7 +170,6 @@ describe("privacy UI async scope isolation", () => {
       generation: () => 0,
       journey: () => ({ stage: "idle" }),
       navigate: () => undefined,
-      openToken: () => undefined,
       paint: () => {
         paints += 1;
       },
@@ -230,7 +227,6 @@ describe("privacy UI async scope isolation", () => {
       generation: () => generation,
       journey: () => ({ stage: "idle" }),
       navigate: () => undefined,
-      openToken: () => undefined,
       paint: () => undefined,
       preferences: () => preferences,
       setDisclosure: () => undefined,
@@ -264,7 +260,6 @@ describe("privacy UI async scope isolation", () => {
       generation: () => generation,
       journey: () => ({ stage: "compose", tokenId: preparation.tokenId }) as PrivacyJourneyState,
       navigate: () => undefined,
-      openToken: () => undefined,
       paint: () => undefined,
       preferences: () => preferences,
       setDisclosure: () => undefined,
@@ -300,7 +295,6 @@ describe("privacy UI async scope isolation", () => {
         tokenId: preparation.tokenId,
       }),
       navigate: () => undefined,
-      openToken: () => undefined,
       paint: () => undefined,
       preferences: () => preferences,
       setDisclosure: () => undefined,

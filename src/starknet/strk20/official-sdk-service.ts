@@ -3,13 +3,12 @@
  * Wallet's narrow STRK20 middleware contract.
  */
 
-import type { Signature, TypedData } from "starknet";
+import type { TypedData } from "starknet";
 import { num, RpcProvider, typedData } from "starknet";
 import { WalletError } from "../../shared/errors";
 import { isJson } from "../../shared/json";
 import { STARKNET_NETWORKS, sameFelt } from "../networks";
 import { submitInvokeTransaction } from "../rpc-submit";
-import { Strk20CallSetSigner } from "./call-set-signer";
 import type { Strk20NetworkConfig } from "./config";
 import type { Strk20MaturityScope, Strk20MaturityStore } from "./maturity";
 import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
@@ -23,7 +22,13 @@ import { createStrk20MaturityRuntime, type Strk20MaturityRuntime } from "./offic
 import { areHistoricalDepositsReady, isHistoricalAccountReady } from "./official-sdk-readiness";
 import { assertNoSdkWarnings, readCallAndProof } from "./official-sdk-results";
 import type { PrivacySdkRuntime, SdkBuilder, SdkTransfers } from "./official-sdk-runtime";
-import { approveCalls, balancesFrom, requireStrk20Config } from "./official-sdk-values";
+import { transfersFor } from "./official-sdk-transfers";
+import {
+  approveCalls,
+  balancesFrom,
+  readStrk20PoolFee,
+  requireStrk20Config,
+} from "./official-sdk-values";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "./paymaster";
 import type { Strk20CallAndProof } from "./schemas";
 import {
@@ -61,60 +66,6 @@ const defaultServiceRetryPause = (attempt: number): Promise<void> =>
 
 const retryableServiceAttempt = (attempt: number, error: unknown): boolean =>
   attempt < MAX_SERVICE_ATTEMPTS && isRetryableStrk20ServiceError(error);
-
-const signatureFor = async (
-  context: Strk20AccountContext,
-  messageHash: string,
-): Promise<Signature> => {
-  const signature = await context.signHash(messageHash);
-  return [signature.r, signature.s];
-};
-
-const transfersFor = (sdk: PrivacySdkRuntime, context: Strk20AccountContext): SdkTransfers => {
-  const config = requireStrk20Config(context);
-  const chainId = STARKNET_NETWORKS[context.account.networkId].chainId;
-  const nodeUrl = context.rpcUrls[0];
-  if (!nodeUrl) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  const signer = new Strk20CallSetSigner({
-    accountAddress: context.account.address,
-    chainId,
-    sign: (messageHash) => signatureFor(context, messageHash),
-  });
-  const ohttp =
-    config.ohttpEnabled || config.ohttpRelayUrl
-      ? config.ohttpRelayUrl
-        ? { relayUrl: config.ohttpRelayUrl }
-        : true
-      : undefined;
-  if (ohttp && !sdk.IndexerDiscoveryProvider) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  const discoveryProvider =
-    ohttp && sdk.IndexerDiscoveryProvider
-      ? new sdk.IndexerDiscoveryProvider(config.discoveryUrl, config.poolAddress, { ohttp })
-      : { url: config.discoveryUrl };
-  return sdk.createPrivateTransfers({
-    account: { address: context.account.address, signer },
-    discoveryProvider,
-    poolContractAddress: config.poolAddress,
-    provingProvider: {
-      chainId,
-      nodeUrl,
-      ...(ohttp ? { ohttp } : {}),
-      url: config.proverUrl,
-    },
-    ...(config.subaccountAnonymizerAddress
-      ? { subAccountAnonymizerAddress: config.subaccountAnonymizerAddress }
-      : {}),
-    viewingKeyProvider: {
-      async getViewingKey() {
-        return context.viewingKey();
-      },
-    },
-  });
-};
 
 const maturityScope = (input: Strk20AccountContext, poolAddress: string) => ({
   accountId: input.account.id,
@@ -313,9 +264,11 @@ export const createOfficialStrk20Service = ({
         // stage so the on-chain reason survives, sanitized, to the user.
         async (callAndProof) => {
           try {
+            const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
             const result = await submitInvoke({
               account: input.account,
               calls: [
+                ...approveCalls([], config.poolAddress, poolFee),
                 {
                   calldata: [...callAndProof.call.calldata],
                   contractAddress: config.poolAddress,
@@ -344,9 +297,10 @@ export const createOfficialStrk20Service = ({
       if (!nowSeconds) {
         throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
       }
+      const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
       return buildStrk20PaymasterPlan({
         accountAddress: input.account.address,
-        approveCalls: approveCalls(input.actions, config.poolAddress),
+        approveCalls: approveCalls(input.actions, config.poolAddress, poolFee),
         chainId: STARKNET_NETWORKS[input.account.networkId].chainId,
         config: config.paymaster,
         ...(http ? { http } : {}),
@@ -392,10 +346,11 @@ export const createOfficialStrk20Service = ({
               pauseForServiceRetry,
             ),
           async (callAndProof) => {
+            const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
             const result = await submitInvoke({
               account: input.account,
               calls: [
-                ...approveCalls(input.actions, config.poolAddress),
+                ...approveCalls(input.actions, config.poolAddress, poolFee),
                 {
                   calldata: [...callAndProof.call.calldata],
                   contractAddress: callAndProof.call.contract_address,

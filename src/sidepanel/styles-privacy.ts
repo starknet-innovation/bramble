@@ -16,9 +16,6 @@ export const PRIVACY_STYLES = `
     min-height: ${CONTROL.hit};
     padding: ${SPACE.sm} 0 ${SPACE.md};
   }
-  .privacy-toggle-copy { display: grid; gap: 2px; }
-  .privacy-toggle-copy strong { font-size: ${TYPE.label.size}; }
-  .privacy-toggle-copy span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .privacy-toggle-row > label {
     color: var(--mc-text);
     cursor: pointer;

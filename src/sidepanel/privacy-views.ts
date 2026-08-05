@@ -149,7 +149,7 @@ const success = (journey: Extract<PrivacyJourneyState, { readonly stage: "succes
     <code>${escapeHtml(shortAddress(journey.hash))}</code>
     <div class="privacy-actions">
       ${journey.kind === "register" ? button({ attributes: { id: "privacy-check-activation" }, icon: "refresh", label: "Check activation" }) : button({ attributes: { id: "privacy-check-balance" }, icon: "refresh", label: "Check private balance" })}
-      ${button({ attributes: { id: "privacy-done" }, label: "Back to asset", variant: "secondary" })}
+      ${button({ attributes: { id: "privacy-done" }, label: "Back to wallet", variant: "secondary" })}
       ${button({ attributes: { "data-view": "activity" }, icon: "activity", label: "View activity", variant: "secondary" })}
     </div>
   </section>`;
@@ -162,7 +162,7 @@ const failure = (journey: Extract<PrivacyJourneyState, { readonly stage: "failur
     <p class="hint">No retry was submitted automatically. Check that your account is deployed and recent balance changes have settled, then try again.</p>
     <div class="privacy-actions">
       ${button({ attributes: { id: "privacy-retry" }, label: "Try again" })}
-      ${button({ attributes: { id: "privacy-cancel" }, label: "Back to asset", variant: "secondary" })}
+      ${button({ attributes: { id: "privacy-cancel" }, label: "Back to wallet", variant: "secondary" })}
     </div>
   </section>`;
 
