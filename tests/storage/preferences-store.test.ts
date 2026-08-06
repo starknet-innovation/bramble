@@ -169,7 +169,7 @@ describe("createPreferencesStore", () => {
 
     const preferences = createPreferencesStore({ store });
     const bundled = (await preferences.read()).strk20Networks?.SN_MAIN;
-    expect(bundled?.ohttpEnabled).toBe(true);
+    expect(bundled?.ohttpEnabled).toBe(false);
     expect(bundled?.poolAddress).toMatch(/^0x[0-9a-f]+$/);
     await preferences.setStrk20NetworkConfig({ config: null, networkId: "SN_MAIN" });
     expect((await preferences.read()).strk20Networks?.SN_MAIN).toBeUndefined();

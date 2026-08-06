@@ -100,7 +100,7 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
 export const DEFAULT_STRK20_NETWORKS: Strk20NetworkConfigs = {
   SN_MAIN: {
     discoveryUrl: `${STRK20_GATEWAY_BASE}/discovery`,
-    ohttpEnabled: true,
+    ohttpEnabled: false,
     paymaster: {
       feeToken: STRK_TOKEN_ADDRESS,
       url: `${STRK20_GATEWAY_BASE}/paymaster`,
