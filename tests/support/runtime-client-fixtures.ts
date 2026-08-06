@@ -127,6 +127,7 @@ export const transferReviewResponse = {
   ok: true as const,
   review: {
     fee: { overallFee: "1000", unit: "WEI" },
+    feeAffordability: "unknown" as const,
     feeEstimateFailed: false,
     flags: [{ code: "high-value", message: "Large transfer" }],
     requiresDeployment: false,

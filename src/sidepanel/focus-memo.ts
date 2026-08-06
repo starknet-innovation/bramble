@@ -207,21 +207,25 @@ export const restoreGroupNameDraft = (root: Element | null, draft: GroupNameDraf
 
 /**
  * Everything a full-shell repaint must carry across the DOM swap: the ordered
- * focus selectors and, when a group-name field is being edited, its in-progress
- * value and caret. Bundled so the paint loop captures and restores both in one
- * step rather than juggling the two concerns at the call site.
+ * focus selectors, the scroll position, and, when a group-name field is being
+ * edited, its in-progress value and caret. Bundled so the paint loop captures
+ * and restores all of it in one step rather than juggling the concerns at the
+ * call site.
  */
 export type RepaintFocus = {
   readonly groupNameDraft: GroupNameDraft | null;
+  readonly scrollTop: number;
   readonly selectors: readonly string[];
 };
 
 /**
- * Captures the focus target and any in-progress group-name edit before a shell
- * swap. Pair with {@link restoreRepaintFocus} around the innerHTML replacement.
+ * Captures the focus target, scroll position, and any in-progress group-name
+ * edit before a shell swap. Pair with {@link restoreRepaintFocus} around the
+ * innerHTML replacement.
  */
 export const captureRepaintFocus = (): RepaintFocus => ({
   groupNameDraft: groupNameDraftMemo(),
+  scrollTop: document.scrollingElement?.scrollTop ?? document.documentElement.scrollTop,
   selectors: focusMemo(),
 });
 
@@ -230,6 +234,11 @@ export const captureRepaintFocus = (): RepaintFocus => ({
  * shell swap, so neither keyboard focus nor mid-typed text jumps under the user.
  */
 export const restoreRepaintFocus = (root: Element | null, focus: RepaintFocus): void => {
+  // Replacing the shell can make the document snap to the top before fresh
+  // async state lands. Restore position before focus so polling never moves the
+  // user's current proposal or account row under their pointer.
+  document.documentElement.scrollTop = focus.scrollTop;
+  document.body.scrollTop = focus.scrollTop;
   restoreFocus(root, focus.selectors);
   restoreGroupNameDraft(root, focus.groupNameDraft);
 };

@@ -11,6 +11,12 @@ export type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
     readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+    /**
+     * Fee-affordability verdict from the shared predicate (issue 191).
+     * "unknown" means no claim was possible; surfaces warn only on
+     * "insufficient" and never block on this field.
+     */
+    readonly feeAffordability: "insufficient" | "ok" | "unknown";
     readonly feeEstimateFailed: boolean;
     readonly flags: readonly { readonly code: string; readonly message: string }[];
     readonly requiresDeployment: boolean;
@@ -27,7 +33,10 @@ const isRiskFlagShape = (value: unknown): value is { code: string; message: stri
   value["message"].length > 0 &&
   value["message"].length <= 300;
 
-const isFeeShape = (value: unknown): value is { overallFee: string; unit: string } =>
+/**
+ * Checks a fee estimate before any extension page renders it.
+ */
+export const isFeeShape = (value: unknown): value is { overallFee: string; unit: string } =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["overallFee", "unit"]) &&
   typeof value["overallFee"] === "string" &&
@@ -47,6 +56,7 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     !isRecord(value["review"]) ||
     !hasOnlyKnownKeys(value["review"], [
       "fee",
+      "feeAffordability",
       "feeEstimateFailed",
       "flags",
       "requiresDeployment",
@@ -58,6 +68,11 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
   const review = value["review"];
   return (
     (review["fee"] === null || isFeeShape(review["fee"])) &&
+    (review["feeAffordability"] === "insufficient" ||
+      review["feeAffordability"] === "ok" ||
+      review["feeAffordability"] === "unknown") &&
+    // An affordability claim requires an estimate to compare against.
+    (review["fee"] !== null || review["feeAffordability"] === "unknown") &&
     typeof review["feeEstimateFailed"] === "boolean" &&
     Array.isArray(review["flags"]) &&
     review["flags"].every(isRiskFlagShape) &&

@@ -195,8 +195,11 @@ export const multisigDetailFlow = (
     );
   }
   const tracked = proposals.filter((proposal) => proposal.multisigId === record.id);
-  const canSign =
-    account !== null && record.signers.some((signer) => sameFelt(signer, account.address));
+  const canSign = status.accounts.some(
+    (stored) =>
+      stored.networkId === record.networkId &&
+      record.signers.some((signer) => sameFelt(signer, stored.address)),
+  );
   const openCount = tracked.filter((proposal) => proposal.state !== "executed").length;
   return (
     (view === "multisig-home"

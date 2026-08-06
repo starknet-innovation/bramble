@@ -1,33 +1,53 @@
 /**
- * STRK20 catalog entries for the key-boundary scan, split from
- * ./key-boundary-messages to keep both files under the size budget. Same
- * enforcement: every handled wallet.strk20* type must appear here.
+ * STRK20 requests for the exhaustive background key-boundary scan.
  */
 import type { RuntimeSender } from "../../src/background/senders";
 
-const ORIGIN = "https://dapp.example";
+/** One request and the runtime sender that is allowed to issue it. */
+export type KeyBoundaryMessage = {
+  readonly message: Record<string, unknown>;
+  readonly sender: RuntimeSender;
+};
 
-/**
- * Builds one best-effort-valid request per handled STRK20 message type.
- */
-export const strk20KeyBoundaryMessages = (
-  extensionSender: RuntimeSender,
-  contentSender: RuntimeSender,
-): readonly { readonly message: Record<string, unknown>; readonly sender: RuntimeSender }[] => [
-  { message: { origin: ORIGIN, type: "wallet.strk20Balances" }, sender: contentSender },
-  { message: { origin: ORIGIN, type: "wallet.strk20Register" }, sender: contentSender },
+type Strk20MessageFixtures = {
+  readonly contentSender: RuntimeSender;
+  readonly extensionSender: RuntimeSender;
+  readonly origin: string;
+};
+
+/** Builds the STRK20 portion of the key-boundary message catalog. */
+export const strk20KeyBoundaryMessages = ({
+  contentSender,
+  extensionSender,
+  origin,
+}: Strk20MessageFixtures): readonly KeyBoundaryMessage[] => [
   {
-    message: { origin: ORIGIN, params: {}, type: "wallet.strk20InvokeTransaction" },
+    message: {
+      config: {
+        discoveryUrl: "https://discovery.example",
+        poolAddress: "0x1",
+        proverUrl: "https://prover.example",
+        subaccountAnonymizerAddress: "0x2",
+      },
+      networkId: "SN_MAIN",
+      type: "wallet.setStrk20NetworkConfig",
+    },
+    sender: extensionSender,
+  },
+  { message: { origin, type: "wallet.strk20Balances" }, sender: contentSender },
+  { message: { origin, type: "wallet.strk20Register" }, sender: contentSender },
+  {
+    message: { origin, params: {}, type: "wallet.strk20InvokeTransaction" },
     sender: contentSender,
   },
   {
-    message: { origin: ORIGIN, params: {}, type: "wallet.strk20PrepareInvoke" },
+    message: { origin, params: {}, type: "wallet.strk20PrepareInvoke" },
     sender: contentSender,
   },
   {
     message: {
       dappName: "mc-terminal",
-      origin: ORIGIN,
+      origin,
       type: "wallet.strk20SubaccountCommitment",
     },
     sender: contentSender,
@@ -35,7 +55,11 @@ export const strk20KeyBoundaryMessages = (
   { message: { type: "wallet.strk20State" }, sender: extensionSender },
   { message: { type: "wallet.strk20PrepareRegistration" }, sender: extensionSender },
   {
-    message: { amount: "1", tokenId: "SN_MAIN:0x1", type: "wallet.strk20PrepareDeposit" },
+    message: {
+      amount: "1",
+      tokenId: "SN_MAIN:0x1",
+      type: "wallet.strk20PrepareDeposit",
+    },
     sender: extensionSender,
   },
   {

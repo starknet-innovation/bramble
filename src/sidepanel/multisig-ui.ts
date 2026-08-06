@@ -3,31 +3,20 @@
  * proposals, confirm/revoke/execute them, and deploy or declare through the
  * background message client. Pure templates live in multisig-views.ts.
  */
-import type { WalletStatus } from "../popup/responses";
 import { normalizeFeltInput } from "../starknet/networks";
 import { buttonBusy, errorMessage, showToast } from "./dom";
+import { bindMultisigConfirmation } from "./multisig-confirmation-ui";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
 import { parseMultisigReviewPackage } from "./multisig-model";
 import { bindMultisigProposalForm } from "./multisig-proposal-ui";
 import { bindMultisigReviewTools } from "./multisig-review-ui";
-import type { MultisigClient } from "./multisig-runtime";
 import { isMultisigSyncFailure, multisigSyncActionMessage } from "./multisig-sync";
-import type { SidepanelWallet } from "./runtime";
+import type { MultisigUiDeps } from "./multisig-ui-deps";
 
 /**
- * Dependencies the multisig bindings close over. `openDetail` navigates to
- * the detail screen for a watched multisig id; `openList` returns to the
- * multisig list (after a remove).
+ * Re-exports the multisig binder contract for existing callers.
  */
-export type MultisigUiDeps = {
-  readonly app: Element | null;
-  readonly multisig: MultisigClient;
-  readonly openDetail: (id: string) => void;
-  readonly openList: () => void;
-  readonly render: (status: WalletStatus) => Promise<void>;
-  readonly selectedMultisigId: () => string | null;
-  readonly wallet: SidepanelWallet;
-};
+export type { MultisigUiDeps } from "./multisig-ui-deps";
 
 const rerender = async (deps: MultisigUiDeps): Promise<void> => {
   await deps.render(await deps.wallet.loadStatus());
@@ -218,121 +207,6 @@ const bindPortfolioTabs = (deps: MultisigUiDeps): void => {
   });
 };
 
-const bindProposalConfirmation = (deps: MultisigUiDeps): void => {
-  const panelFor = (proposalId: string): HTMLElement | undefined =>
-    [...(deps.app?.querySelectorAll<HTMLElement>("[data-ms-confirm-panel]") ?? [])].find(
-      (panel) => panel.dataset["msConfirmPanel"] === proposalId,
-    );
-  const close = (panel: HTMLElement, restoreFocus = true): void => {
-    const target = panel;
-    const proposalId = target.dataset["msConfirmPanel"];
-    target.hidden = true;
-    if (restoreFocus && proposalId) {
-      [...(deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-open]") ?? [])]
-        .find((button) => button.dataset["msConfirmOpen"] === proposalId)
-        ?.focus();
-    }
-  };
-
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-open]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const panel = panelFor(button.dataset["msConfirmOpen"] ?? "");
-      if (!panel) {
-        return;
-      }
-      panel.hidden = false;
-      panel
-        .querySelector<HTMLButtonElement>('[data-ms-confirm-signer][aria-pressed="true"]')
-        ?.focus();
-    });
-  });
-
-  deps.app?.querySelectorAll<HTMLElement>("[data-ms-confirm-panel]").forEach((panel) => {
-    panel.addEventListener("click", (event) => {
-      if (event.target === panel) {
-        close(panel);
-      }
-    });
-    panel.addEventListener("keydown", (event) => {
-      if (event instanceof KeyboardEvent && event.key === "Escape") {
-        close(panel);
-      }
-    });
-  });
-
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-cancel]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const panel = button.closest<HTMLElement>("[data-ms-confirm-panel]");
-      if (panel) {
-        close(panel);
-      }
-    });
-  });
-
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-signer]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const panel = button.closest<HTMLElement>("[data-ms-confirm-panel]");
-      const signerId = button.dataset["msConfirmSigner"];
-      const submit = panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]");
-      if (!panel || !signerId || !submit) {
-        return;
-      }
-      panel.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-signer]").forEach((option) => {
-        option.setAttribute("aria-pressed", String(option === button));
-      });
-      submit.dataset["msSelectedSigner"] = signerId;
-    });
-  });
-
-  deps.app?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-submit]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const proposalId = button.dataset["msConfirmSubmit"];
-      const signerId = button.dataset["msSelectedSigner"];
-      const panel = button.closest<HTMLElement>("[data-ms-confirm-panel]");
-      const row = button.closest(".allowance-row");
-      const acknowledgment = row?.querySelector<HTMLInputElement>("[data-ms-ack]");
-      const selected = [
-        ...(panel?.querySelectorAll<HTMLButtonElement>("[data-ms-confirm-signer]") ?? []),
-      ].find((option) => option.dataset["msConfirmSigner"] === signerId);
-      const result = panel?.querySelector<HTMLElement>("[data-ms-confirm-status]");
-      if (!proposalId || !signerId || !panel || !selected || !result) {
-        return;
-      }
-      if (acknowledgment && !acknowledgment.checked) {
-        showToast("Verify the proposal and check the acknowledgment first", "error");
-        return;
-      }
-      buttonBusy(button, true);
-      result.textContent =
-        selected.dataset["msConfirmSignerActive"] === "true"
-          ? "Refreshing signer permission…"
-          : "Switching signer…";
-      void (async () => {
-        if (selected.dataset["msConfirmSignerActive"] !== "true") {
-          await deps.wallet.setActiveAccount(signerId);
-        }
-        result.textContent = "Submitting confirmation…";
-        await deps.multisig.confirmProposal(
-          proposalId,
-          acknowledgment?.checked === true ? true : undefined,
-        );
-      })().then(
-        async () => {
-          showToast("Confirmation submitted", "success");
-          close(panel, false);
-          await rerender(deps);
-        },
-        (error: unknown) => {
-          const failed = errorMessage(error, "Confirmation failed");
-          result.textContent = failed;
-          showToast(failed, "error");
-          buttonBusy(button, false);
-        },
-      );
-    });
-  });
-};
-
 const bindProposalActions = (deps: MultisigUiDeps): void => {
   const syncAcknowledgment = (row: Element, checked: boolean): void => {
     row.querySelectorAll<HTMLButtonElement>("[data-ms-requires-ack]").forEach((button) => {
@@ -357,19 +231,24 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
   const actions: readonly {
     readonly attribute: string;
     readonly key: "msExecute" | "msRevoke";
-    readonly run: (proposalId: string, untrackedVerified?: boolean) => Promise<string>;
+    readonly run: (
+      proposalId: string,
+      signerAccountId: string,
+      untrackedVerified?: boolean,
+    ) => Promise<string>;
     readonly success: string;
   }[] = [
     {
       attribute: "[data-ms-revoke]",
       key: "msRevoke",
-      run: (id, untrackedVerified) => deps.multisig.revokeConfirmation(id, untrackedVerified),
+      run: (id, signerAccountId, untrackedVerified) =>
+        deps.multisig.revokeConfirmation(id, signerAccountId, untrackedVerified),
       success: "Revocation submitted",
     },
     {
       attribute: "[data-ms-execute]",
       key: "msExecute",
-      run: (id) => deps.multisig.executeProposal(id),
+      run: (id, signerAccountId) => deps.multisig.executeProposal(id, signerAccountId),
       success: "Execution submitted",
     },
   ];
@@ -377,7 +256,8 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
     deps.app?.querySelectorAll<HTMLButtonElement>(action.attribute).forEach((button) => {
       button.addEventListener("click", () => {
         const proposalId = button.dataset[action.key];
-        if (!proposalId) {
+        const signerAccountId = button.dataset["msSignerId"];
+        if (!proposalId || !signerAccountId) {
           return;
         }
         const row = button.closest(".allowance-row");
@@ -390,7 +270,7 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
           return;
         }
         runAction(deps, button, "multisig-proposal-result", "Submitting…", async () => {
-          await action.run(proposalId, ack ? true : undefined);
+          await action.run(proposalId, signerAccountId, ack ? true : undefined);
           return action.success;
         });
       });
@@ -441,7 +321,7 @@ export const bindMultisigs = (deps: MultisigUiDeps): void => {
   bindAddForm(deps);
   bindListActions(deps);
   bindPortfolioTabs(deps);
-  bindProposalConfirmation(deps);
+  bindMultisigConfirmation(deps);
   bindProposalActions(deps);
   bindMultisigReviewTools(deps.app);
   bindTrackForm(deps);

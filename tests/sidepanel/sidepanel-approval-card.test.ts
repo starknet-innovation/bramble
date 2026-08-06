@@ -77,3 +77,63 @@ describe("watch-asset approval card insights (A-L1)", () => {
     expect(html).toContain(`data-approval-id="${WATCH_ID}" type="button" disabled`);
   });
 });
+
+// The fee review renders on the invoke card in every wallet state: a locked
+// wallet still shows the fee estimated at queue time (no passphrase is ever
+// needed merely to display a fee), and a failed estimate offers a retry
+// without disabling Approve (#189).
+describe("invoke approval card fee review (#189)", () => {
+  const withFee: PendingApproval = {
+    fee: { overallFee: "2500000000000000", unit: "FRI" },
+    feeEstimateFailed: false,
+    id: INVOKE_ID,
+    kind: "invoke",
+    origin: "https://dapp.example",
+    requiresDeployment: false,
+    summaries: ["Send 1000 units to 0x0005…0005"],
+  };
+
+  test("renders the estimated fee in the card", () => {
+    expect(activity([withFee])).toContain("Estimated fee: 0.0025 STRK");
+  });
+
+  test("still renders the queued fee while the wallet is locked", () => {
+    const locked = dashboard("activity", { ...status, locked: true }, [withFee], preferences, {
+      balances: [],
+    });
+    expect(locked).toContain("Estimated fee: 0.0025 STRK");
+    expect(locked).toContain(`data-approval-id="${INVOKE_ID}" type="button" disabled`);
+  });
+
+  test("a failed estimate offers retry and keeps Approve enabled", () => {
+    const failed: PendingApproval = { ...withFee, fee: null, feeEstimateFailed: true };
+    const html = activity([failed]);
+
+    expect(html).toContain("Couldn't estimate the network fee right now.");
+    expect(html).toContain(`data-approval-retry-fee="${INVOKE_ID}"`);
+    expect(html).not.toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
+    );
+  });
+
+  test("a pending estimate is visible and prevents approval until review is complete", () => {
+    const pending: PendingApproval = {
+      ...withFee,
+      fee: null,
+      feeEstimatePending: true,
+    };
+    const html = activity([pending]);
+
+    expect(html).toContain("Estimating network fee…");
+    expect(html).toContain(
+      `data-approval-action="approve" data-approval-id="${INVOKE_ID}" type="button" disabled`,
+    );
+  });
+
+  test("an undeployed account reuses the Send wording instead of a fee amount", () => {
+    const undeployed: PendingApproval = { ...withFee, fee: null, requiresDeployment: true };
+    expect(activity([undeployed])).toContain(
+      "The network fee is estimated once this account is deployed.",
+    );
+  });
+});

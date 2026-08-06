@@ -42,6 +42,7 @@ export const EMPTY_MULTISIG_PORTFOLIO: MultisigPortfolioData = {
 };
 
 const portfolioHero = (
+  record: MultisigRecord,
   preferences: WalletPreferences | null,
   data: MultisigPortfolioData,
 ): string => {
@@ -50,7 +51,7 @@ const portfolioHero = (
   const total = hasPrices ? portfolioTotal(visible, data.prices) : null;
   const delta = hasPrices ? portfolioDelta(visible, data.prices, data.changes) : null;
   return `<section class="hero multisig-portfolio-hero" aria-label="Shared account balance">
-    <p class="hero-total">${total === null ? "—" : escapeHtml(formatFiat(total, data.currency))}</p>
+    <p class="hero-total" data-live-key="multisig-total:${escapeHtml(record.id)}" data-live-value="${total ?? "unknown"}">${total === null ? "—" : escapeHtml(formatFiat(total, data.currency))}</p>
     ${
       delta
         ? `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
@@ -129,7 +130,7 @@ export const multisigPortfolio = (input: {
   readonly proposals: string;
   readonly record: MultisigRecord;
 }): string => `
-  ${portfolioHero(input.preferences, input.data)}
+  ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
       ${actionTile("multisig-propose", "Propose", "plus", input.canSign)}
@@ -137,6 +138,7 @@ export const multisigPortfolio = (input: {
       ${actionTile("multisig-signers", "Signers", "users", true)}
       ${actionTile("multisig-track", "Track", "search", true)}
     </div>
+    ${input.canSign ? "" : '<p class="hint">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'}
   </section>
   <section class="home-tabs multisig-portfolio-tabs" data-active-tab="assets" aria-label="Shared account">
     <div class="tab-bar">

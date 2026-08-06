@@ -17,6 +17,7 @@ const EXCLUDED = new Set([
   "node_modules",
   "output",
   "playwright-report",
+  "target",
   "test-results",
   "vendor",
 ]);
@@ -31,6 +32,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/ledger/grant-window.ts",
+  "src/sidepanel/ledger/mounts.ts",
   "src/sidepanel/scene-renderer.ts",
   "src/sidepanel/settings-ui.ts",
   "src/sidepanel/transfer-ui.ts",
@@ -92,6 +94,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/sidepanel/ledger/client.ts",
   "src/sidepanel/ledger/errors.ts",
   "src/sidepanel/ledger/first-run.ts",
+  "src/sidepanel/ledger/mounts.ts",
   "src/sidepanel/ledger/onboard-entry.ts",
   "src/sidepanel/ledger/runtime-client.ts",
   "src/sidepanel/ledger/sign-runtime.ts",

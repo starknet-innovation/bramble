@@ -41,6 +41,7 @@ Runs on **Starknet mainnet** by default (Sepolia and a local devnet are also ava
 | Rust (stable) | 1.96+ | [rustup](https://rustup.rs) | `vendor:krusty` |
 | [wasm-pack](https://github.com/rustwasm/wasm-pack) | 0.13.1 | `cargo install wasm-pack --locked --version 0.13.1` | `vendor:krusty` |
 | [Scarb](https://docs.swmansion.com/scarb/) | 2.18.0 **exactly** | `asdf install scarb 2.18.0` (pinned in `.tool-versions`) | `vendor:multisig` |
+| [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/getting-started/installation.html) | 0.59.0 **exactly** | `asdf install starknet-foundry 0.59.0` | `test:multisig-contract` |
 
 ```bash
 bun install --frozen-lockfile
@@ -58,6 +59,7 @@ Day to day:
 ```bash
 bun run check     # types, lint, standards, unit tests
 bun run format    # Biome autofix
+bun run test:multisig-contract # Cairo atomic confirm/execute + rollback invariants
 bun run test:e2e  # Playwright end-to-end (run test:e2e:install once first)
 ```
 

@@ -2,6 +2,7 @@
  * Typed runtime message client for the side panel UI.
  */
 
+import { isOkResponse } from "../popup/multisig-responses";
 import {
   type ActivityResponse,
   type AllowancesResponse,
@@ -174,6 +175,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "approval failed");
+    },
+    async retryApprovalFee(id: string): Promise<void> {
+      const response = await sendMessage({ id, type: "wallet.retryApprovalFee" });
+      if (isOkResponse(response)) {
+        return;
+      }
+      throw responseError(response, "fee estimate failed");
     },
     async connectedSites(): Promise<ConnectedSitesResponse["sites"]> {
       const response = await sendMessage({ type: "wallet.connectedSites" });

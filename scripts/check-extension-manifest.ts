@@ -20,10 +20,11 @@ const expectedExtensionCsp =
 // NFT's untrusted on-chain data:text/html in an isolated security principal:
 // `allow-scripts` (no `allow-same-origin`) lets the canvas animate but grants no
 // privileged extension-API or parent-DOM access, and `default-src 'none'` (no
-// connect-src/frame-src) blocks all network egress so an opened collectible can
-// never phone home.
+// connect-src) blocks all network egress so an opened collectible can never
+// phone home. `frame-src blob:` permits only the renderer-created nested
+// sandbox document; it does not grant a remote network destination.
 const expectedSandboxCsp =
-  "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'";
+  "sandbox allow-scripts; default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; frame-src blob:; base-uri 'none'; form-action 'none'";
 const expectedSandboxPage = "sandbox/render.html";
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
 const expectedHostPermissions = [

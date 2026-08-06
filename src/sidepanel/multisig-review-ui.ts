@@ -5,6 +5,7 @@
 import { escapeHtml } from "../shared/html";
 import { renderFragment, showToast } from "./dom";
 import { parseMultisigReviewPackage } from "./multisig-model";
+import { closeMultisigSheet, openMultisigSheet } from "./multisig-sheet-motion";
 import { accountLabel } from "./parts";
 
 /**
@@ -16,16 +17,33 @@ export const bindMultisigReviewTools = (root: Element | null): void => {
     [...(root?.querySelectorAll<HTMLElement>("[data-ms-review-panel]") ?? [])].find(
       (panel) => panel.dataset["msReviewPanel"] === proposalId,
     );
+  const triggerFor = (proposalId: string): HTMLButtonElement | undefined =>
+    [...(root?.querySelectorAll<HTMLButtonElement>("[data-ms-review-open]") ?? [])].find(
+      (button) => button.dataset["msReviewOpen"] === proposalId,
+    );
   root?.querySelectorAll<HTMLButtonElement>("[data-ms-review-open]").forEach((button) => {
     button.addEventListener("click", () => {
       const panel = panelFor(button.dataset["msReviewOpen"] ?? "");
-      if (panel) panel.hidden = false;
+      if (panel) {
+        openMultisigSheet(panel, panel.querySelector<HTMLButtonElement>("[data-ms-review-close]"));
+      }
     });
   });
   root?.querySelectorAll<HTMLButtonElement>("[data-ms-review-close]").forEach((button) => {
     button.addEventListener("click", () => {
       const panel = panelFor(button.dataset["msReviewClose"] ?? "");
-      if (panel) panel.hidden = true;
+      const trigger = triggerFor(button.dataset["msReviewClose"] ?? "");
+      if (panel) closeMultisigSheet(panel, trigger);
+    });
+  });
+  root?.querySelectorAll<HTMLElement>("[data-ms-review-panel]").forEach((panel) => {
+    panel.addEventListener("click", (event) => {
+      if (event.target !== panel) return;
+      closeMultisigSheet(panel, triggerFor(panel.dataset["msReviewPanel"] ?? ""));
+    });
+    panel.addEventListener("keydown", (event) => {
+      if (!(event instanceof KeyboardEvent) || event.key !== "Escape") return;
+      closeMultisigSheet(panel, triggerFor(panel.dataset["msReviewPanel"] ?? ""));
     });
   });
   root?.querySelectorAll<HTMLButtonElement>("[data-ms-review-decode]").forEach((button) => {

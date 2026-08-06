@@ -1,4 +1,4 @@
-import { expect, userEvent, within } from "storybook/test";
+import { expect, userEvent, waitFor, within } from "storybook/test";
 import {
   assertCheckpointReady,
   checkpointStory,
@@ -49,9 +49,9 @@ export const InteractiveWalkthrough: LabStory = {
 
     await step("Open Verify elsewhere from the decoded proposal", async () => {
       await userEvent.click(wallet.getByRole("button", { name: "Verify elsewhere" }));
-      await expect(
-        wallet.getByRole("dialog", { name: "Independent proposal review" }),
-      ).toBeVisible();
+      await waitFor(() =>
+        expect(wallet.getByRole("dialog", { name: "Independent proposal review" })).toBeVisible(),
+      );
       await expect(wallet.getByText("Verify on another device")).toBeVisible();
     });
 

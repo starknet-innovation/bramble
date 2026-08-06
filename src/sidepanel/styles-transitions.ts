@@ -21,33 +21,33 @@ import { EASE } from "../ui/tokens";
  */
 export const TRANSITION_STYLES = `
   ::view-transition-old(root), ::view-transition-new(root) {
-    animation-duration: 220ms;
+    animation-duration: 200ms;
     animation-timing-function: ${EASE.out};
   }
-  ::view-transition-old(root) { animation-duration: 160ms; }
+  ::view-transition-old(root) { animation-duration: 120ms; }
 
   html[data-nav-direction="forward"]::view-transition-new(root) { animation-name: mc-vt-in-right; }
   html[data-nav-direction="forward"]::view-transition-old(root) { animation-name: mc-vt-out-left; }
   html[data-nav-direction="back"]::view-transition-new(root) { animation-name: mc-vt-in-left; }
   html[data-nav-direction="back"]::view-transition-old(root) { animation-name: mc-vt-out-right; }
-  html[data-nav-direction="swap"]::view-transition-new(root) { animation-name: mc-vt-fade-in; }
-  html[data-nav-direction="swap"]::view-transition-old(root) { animation-name: mc-vt-fade-out; }
+  html[data-nav-direction="swap"]::view-transition-new(root) { animation-duration: 140ms; animation-name: mc-vt-fade-in; }
+  html[data-nav-direction="swap"]::view-transition-old(root) { animation-duration: 100ms; animation-name: mc-vt-fade-out; }
 
   @keyframes mc-vt-in-right {
-    from { opacity: 0; transform: translateX(6%); }
+    from { opacity: 0; transform: translateX(12px); }
     to { opacity: 1; transform: translateX(0); }
   }
   @keyframes mc-vt-out-left {
     from { opacity: 1; transform: translateX(0); }
-    to { opacity: 0; transform: translateX(-4%); }
+    to { opacity: 0; transform: translateX(-8px); }
   }
   @keyframes mc-vt-in-left {
-    from { opacity: 0; transform: translateX(-6%); }
+    from { opacity: 0; transform: translateX(-12px); }
     to { opacity: 1; transform: translateX(0); }
   }
   @keyframes mc-vt-out-right {
     from { opacity: 1; transform: translateX(0); }
-    to { opacity: 0; transform: translateX(4%); }
+    to { opacity: 0; transform: translateX(8px); }
   }
   @keyframes mc-vt-fade-in { from { opacity: 0; } to { opacity: 1; } }
   @keyframes mc-vt-fade-out { from { opacity: 1; } to { opacity: 0; } }

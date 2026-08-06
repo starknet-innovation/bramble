@@ -4,14 +4,9 @@
 
 import { captureRepaintFocus, restoreRepaintFocus } from "./focus-memo";
 import { animateLiveValueChanges, captureLiveValues } from "./live-updates";
-import { prefersReducedMotion } from "./motion";
 import type { NavDirection } from "./nav-direction";
+import { transitionScene } from "./scene-transition";
 import { SIDEPANEL_STYLES } from "./styles";
-
-type ViewTransition = { readonly finished: Promise<void> };
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (callback: () => void) => ViewTransition;
-};
 
 /**
  * Creates the scene renderer around one mount and its post-render binder.
@@ -33,19 +28,15 @@ export const createSceneRenderer = (
   };
 
   return (content, animate, direction) => {
-    const doc = document as ViewTransitionDocument;
-    if (!animate || prefersReducedMotion() || typeof doc.startViewTransition !== "function") {
+    const doc = mount?.ownerDocument;
+    if (!animate || doc === undefined) {
       renderShell(content, animate);
       bind();
       return;
     }
-    document.documentElement.dataset["navDirection"] = direction;
-    const transition = doc.startViewTransition(() => {
-      renderShell(content, false);
+    transitionScene(doc, direction, (animateFallback) => {
+      renderShell(content, animateFallback);
       bind();
-    });
-    void transition.finished.finally(() => {
-      delete document.documentElement.dataset["navDirection"];
     });
   };
 };

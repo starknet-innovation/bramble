@@ -290,11 +290,13 @@ describe("group control focus restoration", () => {
     // The user has typed past the stored value but not yet saved.
     input.value = "Work travel";
     input.setSelectionRange(11, 11);
+    document.documentElement.scrollTop = 184;
     const focus = captureRepaintFocus();
 
     // A streaming repaint tears the field down and re-renders it from the
     // unchanged stored value ("Work"); focus + text must be reinstated.
     paintApp(manage(groups, "work"));
+    document.documentElement.scrollTop = 0;
     restoreRepaintFocus(app, focus);
 
     const after = app.querySelector<HTMLInputElement>(selector);
@@ -303,5 +305,6 @@ describe("group control focus restoration", () => {
     // reset the field to "Work".
     expect(after?.value).toBe("Work travel");
     expect(after?.selectionStart).toBe(11);
+    expect(document.documentElement.scrollTop).toBe(184);
   });
 });

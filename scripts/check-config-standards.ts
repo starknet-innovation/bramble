@@ -140,6 +140,7 @@ if (
     "!.playwright-cli",
     "!apps",
     "!bun.lock",
+    "!contracts/multisig/target",
     "!dist",
     "!node_modules",
     "!output",

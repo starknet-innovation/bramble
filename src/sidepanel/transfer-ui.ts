@@ -367,6 +367,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
               requiresDeployment: false,
               review: {
                 fee: null,
+                // The relay pays the network fee and recovers the pool's charge
+                // from the shielded balance, so the public STRK affordability
+                // guard has nothing to say here; "unknown" renders no notice.
+                feeAffordability: "unknown",
                 feeEstimateFailed: false,
                 flags: [],
                 requiresDeployment: false,

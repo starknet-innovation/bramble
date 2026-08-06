@@ -3,6 +3,10 @@
  * responses.ts so that file stays within the size budget.
  */
 import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
+import {
+  isMultisigConfirmationMode,
+  type MultisigConfirmationMode,
+} from "../shared/multisig-confirmation";
 import { isMultisigSyncWarning, type MultisigSyncWarning } from "../shared/multisig-sync";
 import { isStarkFieldElement } from "../starknet/networks";
 import {
@@ -11,6 +15,56 @@ import {
   type MultisigProposalRecord,
   type MultisigRecord,
 } from "../storage/multisig-store";
+import { isAccountId } from "../storage/vault-schema";
+import { isFeeShape } from "./responses-transfer";
+
+/**
+ * Fee review for one exact signer, proposal, and confirmation mode.
+ */
+export type MultisigConfirmationReviewResponse = {
+  readonly confirmationReview: {
+    readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+    readonly feeEstimateFailed: boolean;
+    readonly mode: MultisigConfirmationMode;
+    readonly proposalId: string;
+    readonly signerAccountId: string;
+  };
+  readonly ok: true;
+};
+
+/**
+ * Checks a pre-sign multisig fee review returned by the background.
+ */
+export const isMultisigConfirmationReviewResponse = (
+  value: unknown,
+): value is MultisigConfirmationReviewResponse => {
+  if (
+    !isRecord(value) ||
+    !isJson(value) ||
+    !hasOnlyKnownKeys(value, ["confirmationReview", "ok"]) ||
+    value["ok"] !== true ||
+    !isRecord(value["confirmationReview"]) ||
+    !hasOnlyKnownKeys(value["confirmationReview"], [
+      "fee",
+      "feeEstimateFailed",
+      "mode",
+      "proposalId",
+      "signerAccountId",
+    ])
+  ) {
+    return false;
+  }
+  const review = value["confirmationReview"];
+  return (
+    (review["fee"] === null || isFeeShape(review["fee"])) &&
+    typeof review["feeEstimateFailed"] === "boolean" &&
+    isMultisigConfirmationMode(review["mode"]) &&
+    typeof review["proposalId"] === "string" &&
+    review["proposalId"].length > 0 &&
+    review["proposalId"].length <= 200 &&
+    isAccountId(review["signerAccountId"])
+  );
+};
 
 /**
  * Watched multisigs and proposals accepted from the background boundary.

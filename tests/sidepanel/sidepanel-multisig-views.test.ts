@@ -15,6 +15,7 @@ import {
 import {
   multisigDeployFlow,
   multisigDetailFlow,
+  multisigProposeFlow,
   multisigsFlow,
 } from "../../src/sidepanel/multisig-views";
 import { dashboard } from "../../src/sidepanel/views";
@@ -112,6 +113,17 @@ describe("multisig views", () => {
     expect(render("security")).toContain('data-view="multisigs"');
   });
 
+  test("shows multisigs as first-class identities in account management", () => {
+    const html = render("account");
+    expect(html).toContain(`data-multisig-open="${multisig.id}"`);
+    expect(html).toContain("Treasury");
+    expect(html).toContain("Multisig · 2 of 2 signers");
+    expect(html).toContain('class="option-avatar"');
+    expect(html).toContain(`data-multisig-open="${multisig.id}" type="button" aria-pressed="true"`);
+    expect(html).toContain(`data-account-id="${account.id}" type="button" aria-pressed="false"`);
+    expect(html).toContain("Current signer");
+  });
+
   test("lists watched multisigs with focused watch and deploy entries", () => {
     const html = render("multisigs");
     expect(html).toContain("Treasury");
@@ -183,6 +195,7 @@ describe("multisig views", () => {
     expect(html).toContain("Verify elsewhere");
     expect(html).toContain(`data-ms-confirm-open="${proposal.id}"`);
     expect(html).toContain(`data-ms-execute="${proposal.id}"`);
+    expect(html).toContain(`data-ms-signer-id="${account.id}"`);
     expect(html).toContain('class="allowance-row proposal-row"');
     expect(html).toContain('class="proposal-actions"');
     expect(html).toContain('class="proposal-head"');
@@ -264,6 +277,39 @@ describe("multisig views", () => {
     expect(html).toContain("Build an advanced contract call");
     expect(html).toContain("Proposal options");
     expect(html).toContain("Choose a token and amount");
+    expect(html).toContain("Proposal signer");
+    expect(html).toContain(`data-signer-account-id="${account.id}"`);
+  });
+
+  test("enables proposing when an owned signer is not the active portfolio account", () => {
+    const nonSigner: AccountRef = {
+      ...account,
+      address: "0x777",
+      derivation: { accountIndex: 1, addressIndex: 0, kind: "starknet-bip44" },
+      id: "SN_MAIN:0x777",
+      publicKeyX: "0x778",
+      publicKeyY: "0x779",
+    };
+    const inactiveSignerStatus: WalletStatus = {
+      ...status,
+      accountCount: 2,
+      accounts: [nonSigner, account],
+      activeAccountId: nonSigner.id,
+    };
+    const home = multisigDetailFlow(
+      inactiveSignerStatus,
+      nonSigner,
+      multisig,
+      [],
+      false,
+      null,
+      null,
+      "multisig-home",
+    );
+    expect(home).toMatch(/data-view="multisig-propose"(?![^>]*disabled)/);
+    const propose = multisigProposeFlow(inactiveSignerStatus, multisig);
+    expect(propose).toContain(`data-signer-account-id="${account.id}"`);
+    expect(propose).not.toContain("does not own a current signer");
   });
 
   test("deploy screen gates on the declared class", () => {

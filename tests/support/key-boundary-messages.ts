@@ -8,7 +8,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { RuntimeSender } from "../../src/background/senders";
 import type { AccountRef } from "../../src/storage/vault-schema";
-import { strk20KeyBoundaryMessages } from "./key-boundary-strk20-messages";
+import { type KeyBoundaryMessage, strk20KeyBoundaryMessages } from "./key-boundary-strk20-messages";
 
 /**
  * Recognizable secrets salted into the stub vault; the scan greps serialized
@@ -87,13 +87,8 @@ export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
   return handled;
 };
 
-const STRK20_KEY_BOUNDARY_MESSAGES = strk20KeyBoundaryMessages(extensionSender, contentSender);
-
 /** One best-effort-valid request per handled type; rejected responses are also secret-scanned. */
-export const KEY_BOUNDARY_MESSAGES: readonly {
-  readonly message: Record<string, unknown>;
-  readonly sender: RuntimeSender;
-}[] = [
+export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
   { message: { type: "wallet.status" }, sender: extensionSender },
   {
     message: { type: "wallet.unlock", vaultPassphrase: SECRET_PASSPHRASE },
@@ -104,6 +99,10 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
   { message: { type: "wallet.verifyClassHash" }, sender: extensionSender },
   { message: { type: "wallet.deployAccount" }, sender: extensionSender },
   { message: { type: "wallet.pendingApprovals" }, sender: extensionSender },
+  {
+    message: { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", type: "wallet.retryApprovalFee" },
+    sender: extensionSender,
+  },
   { message: { type: "wallet.preferences" }, sender: extensionSender },
   { message: { origin: ORIGIN, type: "wallet.requestAccounts" }, sender: contentSender },
   { message: { origin: ORIGIN, type: "wallet.getGrantedAccounts" }, sender: contentSender },
@@ -366,7 +365,19 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   {
-    message: { proposalId: `SN_MAIN:${MULTISIG}:0xabc`, type: "wallet.confirmMultisigProposal" },
+    message: {
+      mode: "confirm-only",
+      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
+      type: "wallet.confirmMultisigProposal",
+    },
+    sender: extensionSender,
+  },
+  {
+    message: {
+      mode: "confirm-only",
+      proposalId: `SN_MAIN:${MULTISIG}:0xabc`,
+      type: "wallet.prepareMultisigConfirmation",
+    },
     sender: extensionSender,
   },
   {
@@ -448,23 +459,14 @@ export const KEY_BOUNDARY_MESSAGES: readonly {
     sender: extensionSender,
   },
   {
-    message: {
-      config: {
-        discoveryUrl: "https://discovery.example",
-        poolAddress: "0x1",
-        proverUrl: "https://prover.example",
-        subaccountAnonymizerAddress: "0x2",
-      },
-      networkId: "SN_MAIN",
-      type: "wallet.setStrk20NetworkConfig",
-    },
-    sender: extensionSender,
-  },
-  {
     message: { hidden: true, id: "tok-1", type: "wallet.setTokenHidden" },
     sender: extensionSender,
   },
-  ...STRK20_KEY_BOUNDARY_MESSAGES,
+  ...strk20KeyBoundaryMessages({
+    contentSender,
+    extensionSender,
+    origin: ORIGIN,
+  }),
   { message: { origin: ORIGIN, type: "wallet.supportedSpecs" }, sender: contentSender },
   { message: { origin: ORIGIN, type: "wallet.supportedWalletApi" }, sender: contentSender },
 ];

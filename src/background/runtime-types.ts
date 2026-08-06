@@ -2,6 +2,7 @@
  * Shared background runtime response and service types.
  */
 import type { StarkSignature } from "../crypto/krusty";
+import type { MultisigConfirmationMode } from "../shared/multisig-confirmation";
 import type { MultisigSyncWarning } from "../shared/multisig-sync";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { SwapCatalogToken } from "../starknet/avnu";
@@ -248,11 +249,30 @@ export type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
     readonly fee: FeeEstimate | null;
+    /**
+     * Warn-only fee-affordability verdict from the shared predicate (issue
+     * 191); "unknown" means no claim was possible and must never block.
+     */
+    readonly feeAffordability: "insufficient" | "ok" | "unknown";
     readonly feeEstimateFailed: boolean;
     readonly flags: readonly RiskFlag[];
     readonly requiresDeployment: boolean;
     readonly summaries: readonly string[];
   };
+};
+
+/**
+ * Pre-sign fee review for one exact multisig confirmation operation.
+ */
+export type MultisigConfirmationReviewResponse = {
+  readonly confirmationReview: {
+    readonly fee: FeeEstimate | null;
+    readonly feeEstimateFailed: boolean;
+    readonly mode: MultisigConfirmationMode;
+    readonly proposalId: string;
+    readonly signerAccountId: string;
+  };
+  readonly ok: true;
 };
 
 /**
@@ -423,6 +443,7 @@ export type RuntimeResponse =
   | LedgerAccountStatusResponse
   | LedgerSignPendingResponse
   | MultisigClassStatusResponse
+  | MultisigConfirmationReviewResponse
   | MultisigDeployResponse
   | MultisigProposalResponse
   | MultisigResponse

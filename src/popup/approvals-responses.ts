@@ -64,14 +64,19 @@ export type ApprovalContext = {
 /**
  * Pending dapp approval item shown in the popup. `kind` defaults to a
  * connection prompt when absent; watch-asset prompts also carry `token`; invoke
- * prompts carry decoded call `summaries` and risk `flags`; `blocked`/`insights`
- * carry phishing and site-reputation signals.
+ * prompts carry decoded call `summaries`, risk `flags`, and the fee review
+ * (`fee`/`feeEstimateFailed`/`requiresDeployment`, classified like the Send
+ * review); `blocked`/`insights` carry phishing and site-reputation signals.
  */
 export type PendingApproval = {
   readonly actionReviews?: readonly Strk20Action[];
   readonly blocked?: boolean;
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
+  readonly fee?: { readonly overallFee: string; readonly unit: string } | null;
+  readonly feeAffordability?: "insufficient" | "ok" | "unknown";
+  readonly feeEstimateFailed?: boolean;
+  readonly feeEstimatePending?: boolean;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
@@ -90,6 +95,7 @@ export type PendingApproval = {
     | "watch-asset";
   readonly origin: string;
   readonly relayFeeAction?: Strk20WithdrawAction;
+  readonly requiresDeployment?: boolean;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
   readonly typedData?: Json;
@@ -204,6 +210,26 @@ const isDeclarationReview = (value: unknown): value is DeclarationReview =>
   value["feeEstimateFailed"] === (value["fee"] === null) &&
   isCount(value["sierraProgramLength"]);
 
+const isInvokeFeeReview = (value: Readonly<Record<string, unknown>>): boolean =>
+  (value["fee"] === undefined || value["fee"] === null || isFee(value["fee"])) &&
+  (value["feeAffordability"] === undefined ||
+    value["feeAffordability"] === "insufficient" ||
+    value["feeAffordability"] === "ok" ||
+    value["feeAffordability"] === "unknown") &&
+  (value["feeEstimateFailed"] === undefined || typeof value["feeEstimateFailed"] === "boolean") &&
+  (value["feeEstimatePending"] === undefined || typeof value["feeEstimatePending"] === "boolean") &&
+  (value["requiresDeployment"] === undefined || typeof value["requiresDeployment"] === "boolean") &&
+  (value["requiresDeployment"] !== true ||
+    ((value["fee"] ?? null) === null && value["feeEstimateFailed"] !== true)) &&
+  (value["feeEstimateFailed"] !== true || (value["fee"] ?? null) === null) &&
+  (value["feeEstimatePending"] !== true ||
+    ((value["fee"] ?? null) === null &&
+      value["feeEstimateFailed"] !== true &&
+      value["requiresDeployment"] !== true)) &&
+  ((value["fee"] ?? null) !== null ||
+    value["feeAffordability"] === undefined ||
+    value["feeAffordability"] === "unknown");
+
 const isPendingApproval = (value: unknown): value is PendingApproval => {
   if (
     !isRecord(value) ||
@@ -212,12 +238,17 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
       "blocked",
       "context",
       "declaration",
+      "fee",
+      "feeAffordability",
+      "feeEstimateFailed",
+      "feeEstimatePending",
       "flags",
       "id",
       "insights",
       "kind",
       "origin",
       "relayFeeAction",
+      "requiresDeployment",
       "summaries",
       "token",
       "typedData",
@@ -254,6 +285,18 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     value["kind"] === "watch-asset"
       ? isWatchAssetToken(value["token"])
       : value["token"] === undefined;
+  // The fee review travels only on invoke prompts and must be internally
+  // consistent, mirroring `resolveReviewFee`: an undeployed account has no
+  // estimate and no failure; a failed estimate carries no amount. Inconsistent
+  // combinations are rejected at the boundary rather than rendered.
+  const feeValid =
+    value["kind"] === "invoke"
+      ? isInvokeFeeReview(value)
+      : value["fee"] === undefined &&
+        value["feeAffordability"] === undefined &&
+        value["feeEstimateFailed"] === undefined &&
+        value["feeEstimatePending"] === undefined &&
+        value["requiresDeployment"] === undefined;
   const needsContext =
     value["kind"] === "declare" ||
     value["kind"] === "invoke" ||
@@ -280,6 +323,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     actionReviewValid &&
     relayFeeValid &&
     tokenValid &&
+    feeValid &&
     declarationValid &&
     (needsContext ? isApprovalContext(value["context"]) : value["context"] === undefined)
   );

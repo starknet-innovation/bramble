@@ -2,7 +2,13 @@
  * RPC-heavy wallet operations dispatched from the background message handler:
  * balances, deployment, transfer review and submission, and the activity feed.
  */
-import { STARKNET_NETWORKS, type StarknetNetworkId, sameFelt } from "../starknet/networks";
+import { resolveFeeAffordability } from "../starknet/fee-funds";
+import {
+  STARKNET_NETWORKS,
+  STRK_TOKEN_ADDRESS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "../starknet/networks";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "../starknet/rpc";
 import { mergeActivity } from "../starknet/tx-history";
 import { verifyCalls } from "../starknet/verify";
@@ -17,6 +23,7 @@ import type { MultisigStore } from "../storage/multisig-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
+import { readStrkBalance } from "./fee-guard";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import {
   readActivityInput,
@@ -210,11 +217,8 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
     return { error: context.error };
   }
   const { account, preferences, token, vaultPassphrase } = context;
-  const call = buildErc20TransferCall(
-    token.address,
-    input.recipient,
-    parseTokenAmount(input.amount, token.decimals),
-  );
+  const amountRaw = parseTokenAmount(input.amount, token.decimals);
+  const call = buildErc20TransferCall(token.address, input.recipient, amountRaw);
   const report = verifyCalls([call], verificationContext(account, preferences));
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
   const deployed = await deps.runtimeRpc
@@ -231,10 +235,20 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
         .catch(() => null)
     : null;
   const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  // Fee-affordability guard (issue 191): compare the estimate against the
+  // account's STRK balance, counting the transfer amount itself when the sent
+  // token is STRK (the fee competes with the amount). Warn-only and fail-open:
+  // an unreadable balance yields "unknown" and no claim is made.
+  const feeAffordability = resolveFeeAffordability({
+    balance: fee === null ? null : await readStrkBalance(deps, account, preferences),
+    fee,
+    sendAmount: sameFelt(token.address, STRK_TOKEN_ADDRESS) ? amountRaw : null,
+  });
   return {
     ok: true,
     review: {
       fee,
+      feeAffordability,
       feeEstimateFailed,
       flags: report.flags,
       requiresDeployment: !deployed,
