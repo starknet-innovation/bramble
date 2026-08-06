@@ -172,6 +172,58 @@ export const readStrk20PoolFee = async (
   return fee;
 };
 
+// Same shape as the pool-fee failures: fatal, and worth naming the cause
+// without ever echoing the node URL, which may carry an API key.
+const registrationUnreadable = (reason: string): WalletError =>
+  new WalletError(`${STRK20_SERVICE_UNAVAILABLE}: could not read pool registration (${reason})`);
+
+/**
+ * Reads whether an address has a viewing key registered with the pool
+ * (`get_public_key`, zero when unregistered).
+ *
+ * This is the only unambiguous registration answer available for a *third
+ * party*. The SDK's `discoverRequirement` cannot serve that purpose: the
+ * discovery service collapses "recipient has no public key" and "no
+ * sender→recipient channel exists yet" into the same `SetupChannel` response,
+ * and because a channel key is derived per sender/recipient pair, the first
+ * private transfer between any two accounts always reports `SetupChannel`.
+ * Reading the pool directly separates the two. An unreachable or malformed
+ * response fails closed rather than guessing a recipient is reachable.
+ */
+export const readStrk20Registered = async (
+  providerFor: (nodeUrl: string) => RpcProvider,
+  rpcUrls: readonly string[],
+  poolAddress: string,
+  address: string,
+): Promise<boolean> => {
+  const nodeUrl = rpcUrls[0];
+  if (!nodeUrl) {
+    throw registrationUnreadable("no RPC endpoint is configured");
+  }
+  if (!isNonZeroStarkFieldElement(address)) {
+    throw registrationUnreadable("the address is not a field element");
+  }
+  let response: readonly string[];
+  try {
+    response = await providerFor(nodeUrl).callContract({
+      calldata: [address],
+      contractAddress: poolAddress,
+      entrypoint: "get_public_key",
+    });
+  } catch {
+    throw registrationUnreadable("the node did not answer get_public_key");
+  }
+  const felt = response.length === 1 ? response[0] : undefined;
+  if (felt === undefined) {
+    throw registrationUnreadable("the pool returned an unexpected result shape");
+  }
+  try {
+    return BigInt(felt) !== 0n;
+  } catch {
+    throw registrationUnreadable("the pool returned a malformed public key");
+  }
+};
+
 /**
  * Aggregates deposit approvals by token so the public account route grants
  * only the exact amounts consumed by the reviewed batch. `poolFeeFri` is the

@@ -86,6 +86,7 @@ export const bindPrivateSendToggle = (deps: PrivateSendUiDeps): void => {
   const { form } = deps;
   const toggle = form.querySelector<HTMLInputElement>("#send-private-checkbox");
   const container = form.querySelector<HTMLElement>("#send-private-toggle");
+  const reason = form.querySelector<HTMLElement>("#send-private-reason");
   const flag = sendFormInput(form, "privateSend");
   if (!toggle || !container || !flag) {
     return;
@@ -141,6 +142,12 @@ export const bindPrivateSendToggle = (deps: PrivateSendUiDeps): void => {
     toggle.disabled = blocker !== null;
     container.title = blocker?.reason ?? "Send from your private balance to the recipient's";
     container.classList.toggle("muted", blocker !== null);
+    if (reason) {
+      // Spelled out next to the control: the tooltip alone left a disabled
+      // checkbox looking broken rather than gated.
+      reason.textContent = blocker?.reason ?? "";
+      reason.hidden = blocker === null;
+    }
     if (blocker !== null && !blocker.pending && flag.value === "1") {
       disablePrivateMode();
     }

@@ -1,5 +1,5 @@
 /**
- * Private-send toggle behavior on the Send screen: blocker gating with hover
+ * Private-send toggle behavior on the Send screen: blocker gating with visible
  * reasons, the debounced recipient registration check, and the public/private
  * swap of the balance backing display, Max, and Half.
  */
@@ -67,6 +67,7 @@ const mountForm = (recipient: string): HTMLFormElement => {
     <input name="tokenSymbol" type="hidden" value="ETH" />
     <label id="send-private-toggle" class="muted" title="">
       <input id="send-private-checkbox" type="checkbox" disabled />
+      <span id="send-private-reason"></span>
     </label>
     <span id="send-balance-label">Balance 1.25 ETH</span>`;
   document.body.append(form);
@@ -116,6 +117,11 @@ describe("private send toggle", () => {
     expect(form.querySelector("#send-private-toggle")?.getAttribute("title")).toBe(
       "Activate private balances before sending privately",
     );
+    // Shown next to the control, not only on hover: a disabled checkbox with no
+    // visible explanation reads as a broken control.
+    const reason = form.querySelector<HTMLElement>("#send-private-reason");
+    expect(reason?.textContent).toBe("Activate private balances before sending privately");
+    expect(reason?.hidden).toBe(false);
   });
 
   test("reads a pending registration as an in-flight wait, not a refusal", () => {
@@ -148,6 +154,8 @@ describe("private send toggle", () => {
     await flush();
 
     expect(toggle.disabled).toBe(false);
+    // Nothing to explain once the toggle is usable.
+    expect(form.querySelector<HTMLElement>("#send-private-reason")?.hidden).toBe(true);
     toggle.checked = true;
     toggle.dispatchEvent(new Event("change", { bubbles: true }));
 
