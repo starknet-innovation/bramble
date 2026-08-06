@@ -203,6 +203,7 @@ const amountStage = (
       <label class="send-private-toggle muted" id="send-private-toggle" title="Discovering shielded balances…">
         <input id="send-private-checkbox" type="checkbox" disabled />
         <span class="send-private-copy">${icon("lock")}Private</span>
+        <span class="send-private-reason" id="send-private-reason">Discovering shielded balances…</span>
       </label>
       <label class="send-amount-field">
         <span class="sr-only">Amount to send</span>

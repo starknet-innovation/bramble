@@ -337,8 +337,9 @@ export const submitStrk20Actions = async (
 /**
  * Discovers whether an address has registered its viewing key with the
  * configured pool — the active account by default, or `subject` (e.g. a send
- * recipient) when provided. The token scopes the SDK preflight request only;
- * setup of a token channel is not treated as account registration.
+ * recipient) when provided. The token scopes the SDK preflight request for the
+ * account's own status only; setup of a channel or token channel is never
+ * treated as registration, because the transfer builder opens those itself.
  */
 export const readStrk20RegistrationStatus = (
   service: Strk20Service,

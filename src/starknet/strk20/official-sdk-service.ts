@@ -29,6 +29,7 @@ import {
   balancesFrom,
   RELAY_PAYS_POOL_FEE,
   readStrk20PoolFee,
+  readStrk20Registered,
   requireStrk20Config,
 } from "./official-sdk-values";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "./paymaster";
@@ -190,26 +191,19 @@ const prepareWith = async (
 };
 
 /**
- * Reads the SDK's setup requirement as a registration answer.
+ * Reads the SDK's setup requirement as the account's *own* registration answer.
  *
- * The SDK reports four states — Register, SetupChannel, SetupToken, Ready — and
- * they mean different things to the two callers. A transfer *recipient* must be
- * fully `Ready` to receive this token: the middle two states are
- * registered-but-unreachable, and reporting them as registered let a private
- * send pass review and then be rejected on-chain at execution. The account's own
- * status keeps the looser reading, because it gates the activation entry and the
- * shielding journey, where anything past `Register` means registration is done.
+ * The SDK reports four states — Register, SetupChannel, SetupToken, Ready.
+ * `Register` means the caller has no viewing key registered with the pool;
+ * every later state means registration is done and only per-channel setup
+ * remains, which the transfer builder adds itself (`autoSetup`). Recipients are
+ * deliberately not answered from here — see `readStrk20Registered`.
  */
 const readSetupRequirement = (
-  states: { readonly Ready: number; readonly Register: number },
+  states: { readonly Register: number },
   requirement: number,
-  forRecipient: boolean,
-): "registered" | "unregistered" => {
-  if (forRecipient) {
-    return requirement === states.Ready ? "registered" : "unregistered";
-  }
-  return requirement === states.Register ? "unregistered" : "registered";
-};
+): "registered" | "unregistered" =>
+  requirement === states.Register ? "unregistered" : "registered";
 
 /**
  * Creates the production STRK20 service backed by the pinned official SDK.
@@ -258,15 +252,25 @@ export const createOfficialStrk20Service = ({
     },
     async registrationStatus(input) {
       try {
+        // A recipient is read straight from the pool: the discovery preflight
+        // cannot distinguish an unregistered recipient from a registered one
+        // this sender has never opened a channel to.
+        if (input.subject !== undefined) {
+          const config = requireStrk20Config(input);
+          const registered = await readStrk20Registered(
+            providerFor,
+            input.rpcUrls,
+            config.poolAddress,
+            input.subject,
+          );
+          return registered ? "registered" : "unregistered";
+        }
         const transfers = transfersFor(sdk, input);
         if (!transfers.discoverRequirement || !sdk.SetupRequirement) {
           throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
         }
-        const requirement = await transfers.discoverRequirement(
-          input.subject ?? input.account.address,
-          input.token,
-        );
-        return readSetupRequirement(sdk.SetupRequirement, requirement, input.subject !== undefined);
+        const requirement = await transfers.discoverRequirement(input.account.address, input.token);
+        return readSetupRequirement(sdk.SetupRequirement, requirement);
       } catch (error) {
         return mapStrk20ProtocolError(error);
       }

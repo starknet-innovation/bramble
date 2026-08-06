@@ -3,7 +3,7 @@
  * verifies registration, approval, and proof boundaries without live services.
  */
 import { describe, expect, test } from "bun:test";
-import type { Call } from "starknet";
+import type { Call, RpcProvider } from "starknet";
 import { num } from "starknet";
 import { WalletError } from "../../../src/shared/errors";
 import { STRK_TOKEN_ADDRESS } from "../../../src/starknet/networks";
@@ -18,6 +18,7 @@ import {
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
   sdkRuntime as runtime,
+  strk20ProviderFor,
   STRK20_SDK_TOKEN as token,
 } from "../../support/strk20-official-sdk";
 
@@ -89,34 +90,61 @@ describe("official STRK20 SDK submission boundary", () => {
     await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
   });
 
-  test("a recipient must be fully Ready, not merely past registration", async () => {
-    // Register=0, SetupChannel=1, SetupToken=2, Ready=3. Only Ready can receive
-    // a private transfer of this token; the middle two are registered but
-    // unreachable, and calling them registered let a private send pass review
-    // and then be rejected on-chain.
-    let requirement = 0;
+  test("reads a recipient from the pool, never from the setup requirement", async () => {
+    // The discovery preflight answers SetupChannel both for an unregistered
+    // recipient and for a registered one this sender has no channel to yet, and
+    // a channel key is derived per sender/recipient pair — so the first private
+    // transfer between any two accounts reports SetupChannel. Deriving the
+    // recipient's registration from it therefore either blocks every first send
+    // or waves through an unregistered recipient. The pool's `get_public_key` is
+    // the only unambiguous answer, so the requirement must not be consulted.
     const subject = "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
     const sdk = runtime(() => ({
       build: () => builder(executeResult()),
       async discoverNotes() {
         return { notes: new Map() };
       },
-      async discoverRequirement(recipient) {
-        // The lookup is scoped to the subject, never the sending account.
-        expect(recipient).toBe(subject);
-        return requirement;
+      async discoverRequirement() {
+        throw new Error("recipient registration must not come from the setup requirement");
       },
       executeWithInvocation: async () => executeResult(),
     }));
-    const service = createOfficialStrk20Service({ providerFor, sdk });
-    const statusFor = () => service.registrationStatus?.({ ...context, subject, token });
+    const statusFrom = (publicKey: string) =>
+      createOfficialStrk20Service({
+        providerFor: strk20ProviderFor({ publicKey }),
+        sdk,
+      }).registrationStatus?.({ ...context, subject, token });
 
-    for (const unreachable of [0, 1, 2]) {
-      requirement = unreachable;
-      await expect(statusFor()).resolves.toBe("unregistered");
-    }
-    requirement = 3;
-    await expect(statusFor()).resolves.toBe("registered");
+    // A registered recipient stays reachable with no channel of any kind yet;
+    // the transfer builder opens the channel and token subchannel itself.
+    await expect(statusFrom("0x77")).resolves.toBe("registered");
+    await expect(statusFrom("0x0")).resolves.toBe("unregistered");
+  });
+
+  test("fails closed when the pool cannot answer for a recipient", async () => {
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({
+      providerFor: () =>
+        ({
+          callContract: async () => {
+            throw new Error("node down");
+          },
+        }) as unknown as RpcProvider,
+      sdk,
+    });
+    await expect(
+      service.registrationStatus?.({
+        ...context,
+        subject: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+        token,
+      }),
+    ).rejects.toThrow("could not read pool registration");
   });
 
   test("registers through the SDK builder and submits only the reviewed pool proof", async () => {

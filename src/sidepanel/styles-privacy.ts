@@ -97,8 +97,9 @@ export const PRIVACY_STYLES = `
   button.token-breakdown-more:not(:disabled):hover { background: transparent; }
   button.token-breakdown-more .icon { height: 14px; width: 14px; }
   /* Private-send toggle on the Send amount card: a plain labelled checkbox
-     under the token picker. Blocked states grey the label; the reason lives
-     in the container's title attribute. */
+     under the token picker. Blocked states grey the label and spell the reason
+     out beside it — a disabled checkbox whose only explanation was a title
+     tooltip read as a broken control. */
   .send-private-toggle {
     align-items: center;
     cursor: pointer;
@@ -110,6 +111,11 @@ export const PRIVACY_STYLES = `
   .send-private-toggle input[type="checkbox"] { cursor: pointer; }
   .send-private-toggle.muted { color: var(--mc-muted); cursor: not-allowed; }
   .send-private-toggle.muted input[type="checkbox"] { cursor: not-allowed; }
+  .send-private-reason {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+  }
+  .send-private-reason[hidden] { display: none; }
   .send-private-copy {
     align-items: center;
     display: inline-flex;
