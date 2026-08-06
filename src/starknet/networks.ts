@@ -39,10 +39,11 @@ export const STARKNET_RPC_SPEC_VERSION = "0.10.0";
  * re-probe `starknet_chainId` before signing (see `withRpcWrite`). Sepolia
  * keeps Cartridge as a last read/write resort.
  *
- * Every Foundation-operated endpoint carries the `v0_10` segment so the spec
- * the wallet talks is pinned on both the gateway and the direct path, and must
- * stay in step with {@link STARKNET_RPC_SPEC_VERSION}. Cartridge and local
- * devnet are not wallet-operated, so their spec is whatever that operator runs.
+ * Both wallet-operated gateway endpoints and direct Foundation-node fallbacks
+ * carry the `v0_10` segment, so the wallet pins its wire spec on every bundled
+ * path. They must stay in step with {@link STARKNET_RPC_SPEC_VERSION}.
+ * Cartridge and local devnet are not wallet-operated, so their spec is whatever
+ * that operator runs.
  * Requests originate in the MV3 service worker, where the manifest's explicit
  * host permissions apply — every host listed here needs an entry there.
  */

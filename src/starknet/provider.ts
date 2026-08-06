@@ -9,6 +9,10 @@ import { isRecord } from "../shared/json";
 import type { AccountRef } from "../storage/vault-schema";
 import { isStarkFieldElement, STARKNET_RPC_SPEC_VERSION, sameFelt } from "./networks";
 
+type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
+
+const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
+
 /**
  * Builds an RPC provider pinned to {@link STARKNET_RPC_SPEC_VERSION}.
  *
@@ -19,12 +23,14 @@ import { isStarkFieldElement, STARKNET_RPC_SPEC_VERSION, sameFelt } from "./netw
  * how the wallet *encodes* requests, and it makes starknet.js skip its lazy
  * `starknet_specVersion` probe, so a node serving a different spec is not
  * detected here. The pin's counterpart is the `v0_10` segment in the bundled
- * gateway URLs; both must move together.
+ * gateway URLs; both must move together. The optional factory is a test seam;
+ * it always receives the same pinned configuration as the production constructor.
  */
 export const createRpcProvider = (
   nodeUrl: string,
   options: Omit<RpcProviderOptions, "nodeUrl" | "specVersion"> = {},
-): RpcProvider => new RpcProvider({ ...options, nodeUrl, specVersion: STARKNET_RPC_SPEC_VERSION });
+  makeProvider: RpcProviderFactory = createStarknetProvider,
+): RpcProvider => makeProvider({ ...options, nodeUrl, specVersion: STARKNET_RPC_SPEC_VERSION });
 
 /**
  * Function that signs a Stark transaction hash through the vault service.
