@@ -30,6 +30,15 @@ describe("allowance store", () => {
     expect(allowanceId(input("1000"))).toBe(`${ACCOUNT_ID}:0x${BigInt(TOKEN).toString(16)}:0x5`);
   });
 
+  test("rejects an account id whose embedded network contradicts the record", () => {
+    const candidate = {
+      ...input("1000"),
+      id: `${ACCOUNT_ID}:${TOKEN}:0x5`,
+      networkId: "SN_SEPOLIA",
+    };
+    expect(isAllowanceRecord(candidate)).toBe(false);
+  });
+
   test("records, canonicalizes spender, and lists newest first", async () => {
     const store = createAllowanceStore({ store: createMemoryStore() });
     await store.record(input("1000"));

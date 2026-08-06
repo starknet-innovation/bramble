@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   activeAccountContext,
+  reconcileActiveAccount,
   statusResponse,
   switchActiveNetwork,
 } from "../../src/background/runtime-state";
@@ -151,7 +152,55 @@ describe("activeAccountContext", () => {
   });
 });
 
+describe("reconcileActiveAccount", () => {
+  test("durably selects the account belonging to the stored network", async () => {
+    const selected: string[] = [];
+    const wallet = makeWallet({
+      async readVault() {
+        return {
+          accounts: [sepoliaAccount, mainnetAccount],
+          activeAccountId: sepoliaAccount.id,
+        } as unknown as Vault;
+      },
+      async setActiveAccount(input) {
+        selected.push(input.accountId);
+        return mainnetAccount;
+      },
+    });
+    const store = makePreferencesStore({
+      ...defaultWalletPreferences(),
+      activeNetworkId: "SN_MAIN",
+    });
+
+    await expect(reconcileActiveAccount(wallet, store, vaultPassphrase)).resolves.toEqual(
+      mainnetAccount,
+    );
+    expect(selected).toEqual([mainnetAccount.id]);
+  });
+});
+
 describe("statusResponse", () => {
+  test("projects the selected network account when durable stores briefly disagree", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const wallet = makeWallet({
+      async readVault() {
+        return {
+          accounts: [sepoliaAccount, mainnetAccount],
+          activeAccountId: sepoliaAccount.id,
+        } as unknown as Vault;
+      },
+    });
+    const store = makePreferencesStore({
+      ...defaultWalletPreferences(),
+      activeNetworkId: "SN_MAIN",
+    });
+
+    const status = await statusResponse(wallet, session, store);
+    expect(status.activeAccountId).toBe(mainnetAccount.id);
+    expect(status.networkId).toBe("SN_MAIN");
+  });
+
   test("locks the session and degrades status when the vault read throws", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);

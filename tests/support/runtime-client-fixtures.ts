@@ -43,16 +43,16 @@ export const tokenBalance = {
   balance: "100",
   decimals: 6,
   formatted: "0.0001",
-  id: "SN_MAIN:0x53c9",
+  id: "SN_SEPOLIA:0x53c9",
   name: "USD Coin",
-  networkId: "SN_MAIN",
+  networkId: "SN_SEPOLIA",
   symbol: "USDC",
 };
 
 export const balancesResponse = {
   accountId: account.id,
   balances: [tokenBalance],
-  networkId: "SN_MAIN",
+  networkId: "SN_SEPOLIA",
   ok: true as const,
 };
 
@@ -97,7 +97,7 @@ export const activityEntry = {
   accountId: account.id,
   hash: "0xabc",
   kind: "transfer" as const,
-  networkId: "SN_MAIN" as const,
+  networkId: "SN_SEPOLIA" as const,
   status: "accepted" as const,
   submittedAt: 1,
   summary: "Sent 1 ETH",
@@ -107,7 +107,7 @@ export const allowanceView = {
   accountId: account.id,
   amount: "1000",
   id: `${account.id}:0x49d3657:0x5abcdef1234`,
-  networkId: "SN_MAIN" as const,
+  networkId: "SN_SEPOLIA" as const,
   source: "wallet" as const,
   spender: "0x5abcdef1234",
   token: "0x49d3657",

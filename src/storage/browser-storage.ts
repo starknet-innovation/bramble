@@ -99,3 +99,19 @@ export const hardenSessionAccess = async (): Promise<boolean> => {
   const storage = (globalThis as ExtensionGlobal).chrome?.storage?.session;
   return restrictToTrustedContexts(storage);
 };
+
+/**
+ * Requires both wallet storage areas to be unavailable to untrusted extension
+ * contexts before privileged startup may continue. Chrome exposes local
+ * storage to content scripts by default, while session storage may contain the
+ * live unlock capability; missing support or either failed lockdown is fatal.
+ */
+export const requireTrustedStorageAccess = async (): Promise<void> => {
+  const [localRestricted, sessionRestricted] = await Promise.all([
+    hardenLocalAccess(),
+    hardenSessionAccess(),
+  ]);
+  if (!localRestricted || !sessionRestricted) {
+    throw new Error("trusted browser storage access is unavailable");
+  }
+};

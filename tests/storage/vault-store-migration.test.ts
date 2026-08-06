@@ -3,7 +3,7 @@
  * interrupted-write recovery, idempotence, and fail-closed source validation.
  */
 import { describe, expect, test } from "bun:test";
-import { createEncryptedStore } from "../../src/storage/encrypted-store";
+import { createEncryptedStore, type EncryptedStore } from "../../src/storage/encrypted-store";
 import { createMemoryStore } from "../../src/storage/kv";
 import { migrateVault } from "../../src/storage/migrations";
 import { isVaultV4 } from "../../src/storage/vault-schema";
@@ -104,5 +104,59 @@ describe("readMigratedVault", () => {
     );
     expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
     expect(await staging.exists()).toBe(false);
+  });
+
+  test("never touches the primary when staged verification fails", async () => {
+    const { backend, primary, staging } = stores();
+    await primary.write(legacyV3, vaultPassphrase);
+    const before = await backend.get(VAULT_STORE_KEY);
+    const unreadableStage: EncryptedStore = {
+      ...staging,
+      async read() {
+        throw new Error("injected staging verification failure");
+      },
+    };
+
+    await expect(
+      readMigratedVault({ primary, staging: unreadableStage }, vaultPassphrase),
+    ).rejects.toThrow("injected staging verification failure");
+    expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
+    expect(await staging.exists()).toBe(true);
+  });
+
+  test("retains the old primary and verified stage when the primary write fails", async () => {
+    const { backend, primary, staging } = stores();
+    await primary.write(legacyV3, vaultPassphrase);
+    const before = await backend.get(VAULT_STORE_KEY);
+    const unwritablePrimary: EncryptedStore = {
+      ...primary,
+      async write() {
+        throw new Error("injected primary write failure");
+      },
+    };
+
+    await expect(
+      readMigratedVault({ primary: unwritablePrimary, staging }, vaultPassphrase),
+    ).rejects.toThrow("injected primary write failure");
+    expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
+    expect(isVaultV4(await staging.read(vaultPassphrase))).toBe(true);
+
+    await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toMatchObject({
+      schemaVersion: 4,
+    });
+    expect(await staging.exists()).toBe(false);
+  });
+
+  test("does not use an authenticated stage with the wrong passphrase", async () => {
+    const { backend, primary, staging } = stores();
+    await primary.write(legacyV3, vaultPassphrase);
+    await staging.write(migrateVault(legacyV3), vaultPassphrase);
+    const before = await backend.get(VAULT_STORE_KEY);
+
+    await expect(
+      readMigratedVault({ primary, staging }, "incorrect horse battery staple"),
+    ).rejects.toThrow();
+    expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
+    expect(await staging.exists()).toBe(true);
   });
 });

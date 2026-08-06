@@ -24,9 +24,11 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
   and re-checks the multisig on chain. Their ids use the same `networkId:canonical-address` identity
   convention, and proposals reference the multisig id.
 - Every authoritative read-modify-write store is mutation-serialized. Account/network identifiers
-  remain explicit at consumer boundaries even where an account id currently embeds the network.
-- Chrome persistent storage is restricted to `TRUSTED_CONTEXTS`; content scripts do not need direct
-  read or write access. Extension messages remain the validated capability boundary.
+  remain explicit at consumer boundaries, and validators prove the account id's embedded network
+  agrees with that explicit scope.
+- Chrome persistent and session storage are restricted to `TRUSTED_CONTEXTS` before unlock-session
+  restoration or request handling can begin. Missing or failed lockdown support stops privileged
+  startup; extension messages remain the validated capability boundary.
 - Vault v3 to v4 migration is adjacent, deterministic, staged, verified, restart-recoverable, and
   performed only after unlock. Invalid source data is rejected before the primary ciphertext is
   touched.
@@ -115,6 +117,8 @@ Release checks must retain tests for:
 - missing/v1/v2/v3/current/future/invalid sources;
 - unchanged primary ciphertext on invalid migration input;
 - stage verification and interrupted-worker recovery;
+- failed stage verification and failed primary writes leaving the old primary intact;
+- wrong-passphrase reads never restoring or deleting an authenticated stage;
 - account, grant, signing-key, and optional-secret preservation;
 - current-schema idempotence and public response non-disclosure.
 
@@ -197,6 +201,19 @@ Fixed in this change:
 - Medium, defense in depth: `storage.local` was not explicitly restricted away from extension
   content-script contexts. No page-reachable storage exploit was identified, but background-only
   ownership is now enforced by the browser as well as by code structure.
+- Medium: the initial lockdown was started as an unawaited best-effort side effect, so a privileged
+  request could race storage restriction and errors were hidden. Local and session lockdowns are
+  now one fail-closed startup gate ahead of session restore, wallet requests, phishing-cache refresh,
+  and transaction monitoring.
+- Medium, data integrity: activity, allowance, privacy-maturity, and multisig operation records
+  validated account and network fields separately but admitted contradictory pairs. One shared
+  account/network predicate now rejects those rows, malformed multisig owner ids, and contradictory
+  balance, private-state, and approval projections before UI rendering.
+- Medium, UX/data consistency: the selected network and encrypted active account live in separate
+  stores, so a locked switch or worker stop between writes could project an account from the wrong
+  network even though transaction operations chose the correct fallback. Startup and unlock now
+  reconcile the durable pointer when that network already has an account; passive status projects
+  the same network-scoped fallback without extending the unlock session.
 - Medium, robustness: decrypted schema migration was returned in memory but not durably persisted
   unless a later mutation happened.
 - Security design requirement: Ledger STRK20 had no retained viewing-key model; the new encrypted
@@ -205,10 +222,16 @@ Fixed in this change:
   to being dropped; current-schema mutations now preserve sibling collections and validate writes.
 - Medium: schema/KDF reads and writes now share the vault mutation queue and schema commits are
   staged and verified.
+- Defense in depth: the source standards scanner now treats `accountSecrets` and `viewingKey` as
+  secret-material identifiers, so introducing them in a new file requires explicit boundary review.
 
 Deliberately deferred:
 
 - The Ledger typed-data derivation/provisioning flow, pending the proof obligations above.
+- Moving `activeNetworkId` and `activeAccountId` into one atomic encrypted selection record. They
+  remain split between preferences and vault for schema compatibility; startup/unlock reconciliation
+  and network-scoped status projection cover interrupted writes, but a future schema may remove the
+  cross-store transaction entirely.
 - Persisting the currently open multisig portfolio. The durable multisig and proposal state already
   survives restarts; the selected screen is presentation state and safely returns to the active
   signer after a browser/update restart.

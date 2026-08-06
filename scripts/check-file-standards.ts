@@ -122,7 +122,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/wallet/vault-service-types.ts",
 ]);
 const SECRET_MATERIAL_PATTERN =
-  /\b(?:mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase)\b/i;
+  /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
 const SUPPRESSION_MARKERS = [
   "@ts-" + "expect-error",
   "@ts-" + "ignore",

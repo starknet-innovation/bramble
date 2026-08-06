@@ -35,7 +35,7 @@ import { handleOnboardingOps } from "./onboarding-ops";
 import { handleOriginOps } from "./origins-ops";
 import { handlePreferenceOps } from "./preference-ops";
 import { handleProviderOps } from "./provider-ops";
-import { statusResponse, switchActiveNetwork } from "./runtime-state";
+import { reconcileActiveAccount, statusResponse, switchActiveNetwork } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import {
   isClaimedSenderOrigin,
@@ -300,6 +300,7 @@ const handleUnlock: RouterHandler = async (ctx, messageType, message) => {
   }
   try {
     await ctx.wallet.readVault(input.vaultPassphrase);
+    await reconcileActiveAccount(ctx.wallet, ctx.preferencesStore, input.vaultPassphrase);
   } catch (error) {
     throw unlockFailureError(error);
   }

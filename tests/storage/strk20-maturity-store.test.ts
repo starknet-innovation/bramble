@@ -41,6 +41,7 @@ describe("STRK20 maturity store", () => {
     await backing.set("mc-wallet:strk20-maturity", [
       { ...scope, acceptedBlock: -1, transactionHash: "not-a-hash" },
       { ...scope, state: "submitting", transactionHash: "0x456" },
+      { ...scope, networkId: "SN_MAIN", state: "submitting" },
     ]);
     const store = createStrk20MaturityStore(backing);
 

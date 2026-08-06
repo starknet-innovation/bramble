@@ -20,6 +20,7 @@ import {
 const SIGNER_A = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const SIGNER_B = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const ADDRESS = "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+const OP_ACCOUNT_ID = "SN_MAIN:0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 
 const record: MultisigRecord = {
   address: ADDRESS,
@@ -45,8 +46,8 @@ const proposal: MultisigProposalRecord = {
 };
 
 const operation: MultisigOperationRecord = {
-  accountId: "account-1",
-  id: multisigOperationId("deploy", "SN_MAIN", "account-1", ADDRESS) ?? "",
+  accountId: OP_ACCOUNT_ID,
+  id: multisigOperationId("deploy", "SN_MAIN", OP_ACCOUNT_ID, ADDRESS) ?? "",
   kind: "deploy",
   networkId: "SN_MAIN",
   target: ADDRESS,
@@ -101,15 +102,17 @@ describe("multisig store", () => {
     );
     expect(isMultisigProposalRecord({ ...proposal, state: "unknown" })).toBe(false);
     expect(isMultisigProposalRecord({ ...proposal, id: "other" })).toBe(false);
+    expect(multisigProposalId("account-1", proposal.txId)).toBeNull();
     expect(isMultisigOperationRecord(operation)).toBe(true);
     expect(
       isMultisigOperationRecord({
         ...operation,
-        id: multisigOperationId("confirm", "SN_MAIN", "account-1", proposal.txId) ?? "",
+        id: multisigOperationId("confirm", "SN_MAIN", OP_ACCOUNT_ID, proposal.txId) ?? "",
         kind: "confirm",
         target: proposal.txId,
       }),
     ).toBe(true);
+    expect(isMultisigOperationRecord({ ...operation, networkId: "SN_SEPOLIA" })).toBe(false);
     expect(isMultisigOperationRecord({ ...operation, id: "other" })).toBe(false);
   });
 

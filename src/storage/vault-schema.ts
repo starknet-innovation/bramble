@@ -239,6 +239,16 @@ export const isAccountId = (value: unknown): value is string => {
   return parts.length === 2 && isStarknetNetworkId(networkId) && isNonZeroFelt(address);
 };
 
+/**
+ * Validates an account id and proves its embedded network agrees with the
+ * explicit store or request scope. Keeping this comparison next to the account
+ * id grammar prevents public caches from accepting contradictory identities.
+ */
+export const isAccountIdForNetwork = (
+  value: unknown,
+  networkId: StarknetNetworkId,
+): value is string => isAccountId(value) && value.startsWith(`${networkId}:`);
+
 const hasValidAccountCore = (value: Record<string, unknown>): boolean =>
   isNonZeroFelt(value["address"]) &&
   isNonZeroFelt(value["classHash"]) &&

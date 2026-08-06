@@ -3,7 +3,11 @@
  * store access out of untrusted content-script contexts.
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import { hardenLocalAccess, hardenSessionAccess } from "../../src/storage/browser-storage";
+import {
+  hardenLocalAccess,
+  hardenSessionAccess,
+  requireTrustedStorageAccess,
+} from "../../src/storage/browser-storage";
 
 type MutableGlobal = { chrome?: unknown };
 const globalWithChrome = globalThis as unknown as MutableGlobal;
@@ -55,5 +59,53 @@ describe("hardenSessionAccess", () => {
 
     expect(await hardenSessionAccess()).toBe(true);
     expect(calls).toEqual([{ accessLevel: "TRUSTED_CONTEXTS" }]);
+  });
+});
+
+describe("requireTrustedStorageAccess", () => {
+  test("requires both persistent and session lockdowns", async () => {
+    const calls: string[] = [];
+    const restrictedArea = (area: string) => ({
+      async setAccessLevel() {
+        calls.push(area);
+      },
+    });
+    globalWithChrome.chrome = {
+      storage: {
+        local: restrictedArea("local"),
+        session: restrictedArea("session"),
+      },
+    };
+
+    await expect(requireTrustedStorageAccess()).resolves.toBeUndefined();
+    expect(calls.sort()).toEqual(["local", "session"]);
+  });
+
+  test("fails closed when either browser area cannot be restricted", async () => {
+    globalWithChrome.chrome = {
+      storage: {
+        local: { async setAccessLevel() {} },
+        session: {},
+      },
+    };
+
+    await expect(requireTrustedStorageAccess()).rejects.toThrow(
+      "trusted browser storage access is unavailable",
+    );
+  });
+
+  test("propagates a browser lockdown failure", async () => {
+    globalWithChrome.chrome = {
+      storage: {
+        local: {
+          async setAccessLevel() {
+            throw new Error("browser rejected lockdown");
+          },
+        },
+        session: { async setAccessLevel() {} },
+      },
+    };
+
+    await expect(requireTrustedStorageAccess()).rejects.toThrow("browser rejected lockdown");
   });
 });

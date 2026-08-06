@@ -8,6 +8,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   emptyVault,
   isAccountId,
+  isAccountIdForNetwork,
   isKeylessAccount,
   isVaultV1,
   isVaultV3,
@@ -207,6 +208,8 @@ describe("isVaultV1", () => {
     expect(isAccountId("SN_SEPOLIA:0xABC")).toBe(false);
     expect(isAccountId("SN_SEPOLIA:0x0")).toBe(false);
     expect(isAccountId("toString:0x123")).toBe(false);
+    expect(isAccountIdForNetwork(account.id, "SN_SEPOLIA")).toBe(true);
+    expect(isAccountIdForNetwork(account.id, "SN_MAIN")).toBe(false);
   });
 
   test("rejects extra fields in current vault records", () => {

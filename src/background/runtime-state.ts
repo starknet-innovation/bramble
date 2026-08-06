@@ -117,6 +117,28 @@ const accountForNetwork = (
   null;
 
 /**
+ * Repairs the encrypted active-account pointer after a browser update, locked
+ * network switch, or interrupted cross-store switch. The caller supplies an
+ * already authenticated passphrase; if the selected network has an account,
+ * the mutation is serialized by the vault service and otherwise no account is
+ * created implicitly.
+ */
+export const reconcileActiveAccount = async (
+  wallet: WalletStatusReader,
+  preferencesStore: WalletPreferencesStore,
+  vaultPassphrase: string,
+): Promise<AccountRef | null> => {
+  const [preferences, vault] = await Promise.all([
+    preferencesStore.read(),
+    wallet.readVault(vaultPassphrase),
+  ]);
+  const account = accountForNetwork(vault, preferences.activeNetworkId, vault.activeAccountId);
+  return account && account.id !== vault.activeAccountId
+    ? wallet.setActiveAccount({ accountId: account.id, vaultPassphrase })
+    : account;
+};
+
+/**
  * Switches the active network and selects or derives the matching wallet account.
  */
 export const switchActiveNetwork = async (
@@ -208,10 +230,11 @@ export const statusResponse = async (
 
   try {
     const vault = await wallet.readVault(passphrase);
+    const activeAccount = accountForNetwork(vault, network.id, vault.activeAccountId);
     return {
       ...status,
       accountCount: vault.accounts.length,
-      activeAccountId: vault.activeAccountId,
+      activeAccountId: activeAccount?.id ?? null,
       accounts: vault.accounts,
       locked: false,
       network: network.name,

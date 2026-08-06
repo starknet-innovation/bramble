@@ -13,7 +13,7 @@ import {
   type Strk20Action,
   type Strk20WithdrawAction,
 } from "../starknet/strk20/schemas";
-import { isAccountId } from "../storage/vault-schema";
+import { isAccountIdForNetwork } from "../storage/vault-schema";
 
 /**
  * ERC20 token metadata carried by a watch-asset approval.
@@ -160,9 +160,8 @@ const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
 const isApprovalContext = (value: unknown): value is ApprovalContext =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountId", "chainId", "networkId", "payloadDigest"]) &&
-  typeof value["accountId"] === "string" &&
-  isAccountId(value["accountId"]) &&
   isStarknetNetworkId(value["networkId"]) &&
+  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   value["chainId"] === STARKNET_NETWORKS[value["networkId"]].chainId &&
   typeof value["payloadDigest"] === "string" &&
   /^sha256:[0-9a-f]{64}$/.test(value["payloadDigest"]);

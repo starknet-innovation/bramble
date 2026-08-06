@@ -20,8 +20,7 @@ import { createAllowanceStore } from "../storage/allowance-store";
 import {
   createBrowserLocalStore,
   createBrowserSessionStore,
-  hardenLocalAccess,
-  hardenSessionAccess,
+  requireTrustedStorageAccess,
 } from "../storage/browser-storage";
 import { createEncryptedStore, type EncryptedStore } from "../storage/encrypted-store";
 import { createMultisigStore } from "../storage/multisig-store";
@@ -45,6 +44,7 @@ import { walletEventBroadcasts } from "./events";
 import { createMessageHandler } from "./messages";
 import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboarding-surface";
 import { defaultRuntimeRpc } from "./runtime-rpc";
+import { reconcileActiveAccount } from "./runtime-state";
 import type { RuntimeSender } from "./senders";
 import { createUnlockSession, type UnlockSessionStore } from "./session";
 import { type AlarmsApi, startTransactionMonitor } from "./tx-monitor";
@@ -135,17 +135,12 @@ const session = createUnlockSession(undefined, undefined, sessionStore, () => {
     store?.clearKeys();
   }
 });
-const sessionReady = session.restore().catch(() => undefined);
-// Restrict the in-memory session area (which mirrors the unlock passphrase
-// across worker restarts) to trusted extension contexts, so content scripts
-// and web pages can never read it.
-void hardenSessionAccess().catch(() => undefined);
-// Persistent stores are background-owned as well. Chrome otherwise exposes
-// storage.local to content scripts by default, including write access to the
-// encrypted vault envelope and public registries.
-void hardenLocalAccess().catch(() => undefined);
+// Storage lockdown is a startup prerequisite, not a best-effort side effect.
+// Requests remain fail-closed if Chrome cannot remove content-script access.
+const storageReady = requireTrustedStorageAccess();
+const sessionReady = storageReady.then(() => session.restore());
 const wallet = vaultStores
-  ? Promise.resolve()
+  ? storageReady
       .then(() =>
         createWalletVaultService({
           encryptedStore: vaultStores.primary,
@@ -155,7 +150,7 @@ const wallet = vaultStores
       )
       .catch(() => null)
   : Promise.resolve(null);
-const preferences = Promise.resolve()
+const preferences = storageReady
   .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
   .catch(() => null);
 void preferences
@@ -228,7 +223,7 @@ const phishingFeed = (() => {
   }
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
-void phishingFeed?.refresh().catch(() => undefined);
+void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
 // Loads the bundled multisig Sierra class for the explicit declare flow. The
 // artifact ships inside the extension package, so this fetch never leaves the
 // extension origin; the ops handler re-verifies its class hash before use.
@@ -260,7 +255,15 @@ const runtimeRpc = {
       })
     : unavailableStrk20Service,
 };
-const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.id ?? "", {
+const walletReader = createWalletReader(wallet);
+const runtimeReady = sessionReady.then(async () => {
+  const vaultPassphrase = session.peekPassphrase();
+  const store = await preferences;
+  if (vaultPassphrase && store) {
+    await reconcileActiveAccount(walletReader, store, vaultPassphrase).catch(() => session.lock());
+  }
+});
+const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   approvals,
   session,
   preferencesStore: {
@@ -428,15 +431,19 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
 // finality after the side panel closes, and a failure detected then is queued
 // for the next time a panel opens.
 if (activityLog) {
-  startTransactionMonitor({
-    browser: extensionApi,
-    deps: {
-      activity: activityLog,
-      preferencesStore: { read: readPreferences },
-      runtimeRpc: defaultRuntimeRpc,
-    },
-    now: systemClock,
-  });
+  void storageReady
+    .then(() =>
+      startTransactionMonitor({
+        browser: extensionApi,
+        deps: {
+          activity: activityLog,
+          preferencesStore: { read: readPreferences },
+          runtimeRpc: defaultRuntimeRpc,
+        },
+        now: systemClock,
+      }),
+    )
+    .catch(() => undefined);
 }
 
 const broadcastEvent = (event: WalletEventMessage): void => {
@@ -468,7 +475,7 @@ runtime?.onInstalled.addListener((details) => {
 });
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   requestApprovalSurface(extensionApi, approvalSurfacePreference, runtime.id, message, sender);
-  void sessionReady
+  void runtimeReady
     .then(() => handleMessage(message, sender))
     .then(
       (response) => {
