@@ -6,6 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import type { TokenBalance, WalletStatus } from "../../src/popup/responses";
 import { activityEmptyCopy, homeTabs, visibleHomeBalances } from "../../src/sidepanel/home-tabs";
+import { settingsScreen } from "../../src/sidepanel/settings-views";
 import { dashboard, WALLET_VIEWS } from "../../src/sidepanel/views";
 import { account, preferences, secondAccount } from "../support/sidepanel-fixtures";
 
@@ -46,16 +47,14 @@ describe("sidepanel views", () => {
     expect(dock).not.toContain('class="tab-label"');
   });
 
-  test("home keeps four frequent actions together, not settings or activity", () => {
+  test("home keeps the frequent actions together, not settings or activity", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
     const actions = html.slice(html.indexOf("action-row"), html.indexOf("terminal-cta"));
 
     expect(actions).toContain('data-view="send"');
-    expect(actions).toMatch(
-      /data-view="send"[\s\S]*data-view="swap"[\s\S]*data-view="receive"[\s\S]*Open MC Terminal portfolio/,
-    );
+    expect(actions).toMatch(/data-view="send"[\s\S]*data-view="swap"[\s\S]*data-view="receive"/);
     expect(actions).toContain('data-view="receive"');
-    expect(actions).toContain(">Portfolio</span>");
+    expect(actions).not.toContain(">Portfolio</span>");
     expect(actions).not.toContain('data-view="settings"');
     expect(actions).not.toContain('data-view="activity"');
     expect(html).not.toContain('id="wallet-screen-receive"');
@@ -100,6 +99,22 @@ describe("sidepanel views", () => {
     expect(html).not.toContain('data-theme-id="system"');
     // The dock is a solid anchored bottom bar (Clean Mono — no glass material).
     expect(html).toContain('class="wallet-dock"');
+  });
+
+  test("settings stamps the build version and shows the branch only when unreleased", () => {
+    const stamped = settingsScreen(status, preferences, {
+      branch: "feature/68-strk20-privacy-sdk",
+      version: "0.8.0",
+    });
+    expect(stamped).toContain("Version 0.8.0 · feature/68-strk20-privacy-sdk");
+
+    const released = settingsScreen(status, preferences, { branch: "", version: "0.8.0" });
+    expect(released).toContain("Version 0.8.0");
+    expect(released).not.toContain("Version 0.8.0 ·");
+
+    // Outside a built bundle no stamp is injected, so the line disappears
+    // instead of showing an empty version.
+    expect(settingsScreen(status, preferences)).not.toContain('id="settings-build"');
   });
 
   test("network flow lists networks, marks the active one, and returns to settings", () => {

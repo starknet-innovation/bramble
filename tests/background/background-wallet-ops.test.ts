@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../../src/background/messages";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
+import type { TransactionStatusReport } from "../../src/starknet/rpc";
 import { type ActivityEntry, createActivityLog } from "../../src/storage/activity-store";
 import { createMemoryStore } from "../../src/storage/kv";
 import type { AccountRef, Vault } from "../../src/storage/vault-schema";
@@ -73,10 +74,13 @@ const walletStub = {
 };
 
 const makeHarness = (options?: {
+  readonly balanceThrows?: boolean;
   readonly deployed?: boolean;
   readonly estimateFails?: boolean;
   readonly onChainHistory?: readonly ActivityEntry[];
   readonly historyThrows?: boolean;
+  readonly statusReport?: TransactionStatusReport;
+  readonly strkBalance?: string;
 }) => {
   const history =
     options?.historyThrows || options?.onChainHistory
@@ -102,6 +106,10 @@ const makeHarness = (options?: {
   const statusRequests: string[][] = [];
   const handler = createMessageHandler(walletStub, "extension-id", {
     activity,
+    // The activity log stamps entries on its own monotonic test clock, so the
+    // reconciliation clock reads from the same tick counter — otherwise every
+    // recorded transaction looks older than its observation window.
+    now: () => tick,
     runtimeRpc: {
       async estimateInvokeFee() {
         if (options?.estimateFails) {
@@ -115,15 +123,30 @@ const makeHarness = (options?: {
       async getNftOwner() {
         return "0x0";
       },
-      async getTokenBalances() {
-        return [];
+      async getTokenBalances({ tokens }) {
+        if (options?.balanceThrows) {
+          throw new Error("balance unavailable");
+        }
+        if (options?.strkBalance === undefined) {
+          return [];
+        }
+        return tokens.map((token) => ({
+          ...token,
+          balance: options.strkBalance ?? "0",
+          formatted: options.strkBalance ?? "0",
+        }));
       },
       async getTokenMetadata() {
         return { decimals: 18, name: "Token", symbol: "TKN" };
       },
       async getTransactionStatuses({ hashes }) {
         statusRequests.push([...hashes]);
-        return Object.fromEntries(hashes.map((hash) => [hash, "accepted" as const]));
+        return Object.fromEntries(
+          hashes.map((hash) => [
+            hash,
+            options?.statusReport ?? { finalizedOnL1: false, found: true, status: "accepted" },
+          ]),
+        );
       },
       async submitDeclareTransaction() {
         return { classHash: "0x1", transactionHash: "0x1" };
@@ -148,7 +171,7 @@ const makeHarness = (options?: {
     },
     session,
   });
-  return { activity, handler, statusRequests };
+  return { activity, handler, session, statusRequests };
 };
 
 describe("wallet operations", () => {
@@ -218,6 +241,62 @@ describe("wallet operations", () => {
     });
   });
 
+  // Fee-affordability guard (issue 191): the review compares the estimate
+  // against the account's STRK balance via the shared predicate. Warn-only —
+  // nothing here changes what is submittable — and fail-open on missing data.
+  const reviewMessage = (overrides?: { amount?: string; tokenId?: string }) => ({
+    accountId: account.id,
+    amount: overrides?.amount ?? "1.5",
+    recipient: "0x777",
+    tokenId: overrides?.tokenId ?? tokenId,
+    type: "wallet.reviewTransfer",
+  });
+  const FEE = 2500000000000000n; // the harness estimate
+
+  test("review reports an insufficient STRK balance for the fee", async () => {
+    const { handler } = makeHarness({ strkBalance: (FEE - 1n).toString() });
+    const response = await handler(reviewMessage(), extensionSender);
+    expect(response).toMatchObject({
+      ok: true,
+      review: { feeAffordability: "insufficient" },
+    });
+  });
+
+  test("review reports ok when the STRK balance covers the fee", async () => {
+    const { handler } = makeHarness({ strkBalance: FEE.toString() });
+    const response = await handler(reviewMessage(), extensionSender);
+    expect(response).toMatchObject({ ok: true, review: { feeAffordability: "ok" } });
+  });
+
+  test("review fails open when the balance cannot be read", async () => {
+    const { handler } = makeHarness({ balanceThrows: true });
+    const response = await handler(reviewMessage(), extensionSender);
+    expect(response).toMatchObject({ ok: true, review: { feeAffordability: "unknown" } });
+  });
+
+  test("a STRK send checks amount plus fee against the balance", async () => {
+    const strkTokenId =
+      "SN_MAIN:STRK:0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+    const amount = 10n ** 18n; // "1" STRK in base units
+    const covers = (amount + FEE).toString();
+    const short = (amount + FEE - 1n).toString();
+
+    const ok = await makeHarness({ strkBalance: covers }).handler(
+      reviewMessage({ amount: "1", tokenId: strkTokenId }),
+      extensionSender,
+    );
+    expect(ok).toMatchObject({ ok: true, review: { feeAffordability: "ok" } });
+
+    const insufficient = await makeHarness({ strkBalance: short }).handler(
+      reviewMessage({ amount: "1", tokenId: strkTokenId }),
+      extensionSender,
+    );
+    expect(insufficient).toMatchObject({
+      ok: true,
+      review: { feeAffordability: "insufficient" },
+    });
+  });
+
   test("transfers are recorded and the activity feed refreshes their status", async () => {
     const { activity: activityLog, handler, statusRequests } = makeHarness();
     await activityLog.record({
@@ -259,6 +338,105 @@ describe("wallet operations", () => {
     const stored = await activityLog.list();
     expect(stored.find((entry) => entry.hash === "0x8ab")?.status).toBe("pending");
     expect(stored.find((entry) => entry.hash === "0x9ab")?.status).toBe("pending");
+  });
+
+  // A pre-confirmed transaction reaches the feed as its own provisional status
+  // rather than being flattened into accepted or left reading as pending.
+  test("surfaces a pre-confirmed transaction as provisional in the feed", async () => {
+    const { handler } = makeHarness({
+      statusReport: { finalizedOnL1: false, found: true, status: "preconfirmed" },
+    });
+    await handler(
+      {
+        accountId: account.id,
+        amount: "1.5",
+        recipient: "0x777",
+        speed: "fast",
+        tokenId,
+        type: "wallet.transfer",
+      },
+      extensionSender,
+    );
+    const response = await handler({ type: "wallet.activity" }, extensionSender);
+    const activity = (response as { activity: readonly { status: string }[] }).activity;
+    expect(activity[0]?.status).toBe("preconfirmed");
+  });
+
+  // The late-failure channel: a transaction that was pre-confirmed and then
+  // reverted owes the user one notice, delivered on the panel's next poll.
+  test("drains a late-failure notice exactly once through wallet.transactionAlerts", async () => {
+    const { activity: activityLog, handler } = makeHarness({
+      statusReport: { finalizedOnL1: false, found: true, status: "reverted" },
+    });
+    await activityLog.record({
+      accountId: account.id,
+      hash: "0x7ab",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send 1.5 ETH to 0x777",
+    });
+    await activityLog.updateStatuses(
+      { "0x7ab": { status: "preconfirmed" } },
+      { accountId: account.id, networkId: "SN_MAIN" },
+    );
+
+    expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
+      alerts: [],
+      ok: true,
+    });
+    await handler({ type: "wallet.activity" }, extensionSender);
+
+    const first = await handler({ type: "wallet.transactionAlerts" }, extensionSender);
+    expect((first as { alerts: readonly string[] }).alerts).toHaveLength(1);
+    expect((first as { alerts: readonly string[] }).alerts[0]).toContain("reverted");
+    expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
+      alerts: [],
+      ok: true,
+    });
+    expect((await activityLog.list())[0]?.status).toBe("reverted");
+  });
+
+  test("drains notices only for the active account", async () => {
+    const { activity: activityLog, handler } = makeHarness();
+    await activityLog.record({
+      accountId: OTHER_ACCOUNT_ID,
+      hash: "0x8ab",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Other account send",
+    });
+    await activityLog.updateStatuses(
+      { "0x8ab": { failureNotice: "pending", status: "reverted" } },
+      { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" },
+    );
+
+    expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
+      alerts: [],
+      ok: true,
+    });
+    expect((await activityLog.list())[0]?.failureNotice).toBe("pending");
+  });
+
+  test("does not drain a notice while the wallet is locked", async () => {
+    const { activity: activityLog, handler, session } = makeHarness();
+    await activityLog.record({
+      accountId: account.id,
+      hash: "0x9ab",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Locked account send",
+    });
+    await activityLog.updateStatuses(
+      { "0x9ab": { failureNotice: "pending", status: "reverted" } },
+      { accountId: account.id, networkId: "SN_MAIN" },
+    );
+    session.lock();
+
+    expect(await handler({ type: "wallet.transactionAlerts" }, extensionSender)).toEqual({
+      alerts: [],
+      ok: true,
+    });
+    expect((await activityLog.list())[0]?.failureNotice).toBe("pending");
   });
 
   test("merges real on-chain history into the feed, deduped against local records", async () => {

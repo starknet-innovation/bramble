@@ -11,8 +11,8 @@ permalink: /security-audit/methodology/
 The baseline review covers tracked source, configuration, contracts, build inputs, tests, and
 release automation at commit `8d91d78521deaada2b914b993b08c3c9d577b81e` (`v0.5.0`). Generated
 artifacts, local developer files, external RPC implementations, browser internals, and the upstream
-Krusty KMS implementation are out of source-review scope. Their integration boundaries remain in
-scope.
+Krusty KMS and Starknet Privacy SDK implementations are out of source-review scope. Their pinned
+source/artifact integrity and wallet integration boundaries remain in scope.
 
 Follow-on pull requests are reviewed after the baseline. Each PR is assessed against both its base
 branch and the trust-boundary assumptions established here. The v0.6 Ledger and multisig review
@@ -27,8 +27,8 @@ The audit combines:
 2. Manual review of every tracked directory, with untrusted inputs followed to privileged effects.
 3. Negative-path review for malformed messages, origin confusion, replay, approval bypass, secret
    exposure, unsafe rendering, and fail-open behavior.
-4. Dependency, compiler, lint, import-layer, cycle, manifest, KMS-pin, multisig-pin, unit, build,
-   package, and browser E2E checks where applicable.
+4. Dependency, compiler, lint, import-layer, cycle, manifest, KMS-pin, multisig-pin, privacy-SDK
+   pin, unit, build, package, and browser E2E checks where applicable.
 5. Package-content comparison against the declared runtime allowlist.
 6. Separate review of CI/release authority and secret handling.
 

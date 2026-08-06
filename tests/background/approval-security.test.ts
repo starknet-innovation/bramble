@@ -36,11 +36,14 @@ const decision = (id: string, type: "wallet.approveOrigin" | "wallet.denyOrigin"
 const makeDeps = ({
   activeNetworkId = "SN_MAIN",
   blocked = false,
+  granted = [account],
   onUpsert = async () => undefined,
   submit = async () => ({ calls: [], transactionHash: "0x1" }),
 }: {
   readonly activeNetworkId?: "SN_MAIN" | "SN_SEPOLIA";
   readonly blocked?: boolean;
+  /** What the origin may currently see; drives the account-drift cases. */
+  readonly granted?: readonly AccountRef[];
   readonly onUpsert?: () => Promise<void>;
   readonly submit?: () => Promise<{
     readonly calls: readonly never[];
@@ -51,6 +54,7 @@ const makeDeps = ({
   const session = createUnlockSession();
   session.unlock(PASSPHRASE);
   const settled: unknown[] = [];
+  const submitted: AccountRef[] = [];
   let submissions = 0;
   const deps = {
     activity: memoryActivityLog(),
@@ -67,8 +71,9 @@ const makeDeps = ({
       },
     },
     runtimeRpc: {
-      async submitInvokeTransaction() {
+      async submitInvokeTransaction(input: { readonly account: AccountRef }) {
         submissions += 1;
+        submitted.push(input.account);
         return submit();
       },
     },
@@ -80,11 +85,11 @@ const makeDeps = ({
     },
     wallet: {
       async getGrantedAccounts() {
-        return [account];
+        return granted;
       },
     },
   } as unknown as ApprovalDecisionDeps;
-  return { approvals, deps, settled, submissions: () => submissions };
+  return { approvals, deps, settled, submitted, submissions: () => submissions };
 };
 
 describe("approval execution security", () => {
@@ -158,6 +163,13 @@ describe("approval execution security", () => {
     const context = await createApprovalContext(account, { calls });
     const { approvals, deps, submissions } = makeDeps({ activeNetworkId: "SN_SEPOLIA" });
     const { id } = approvals.requestInvoke({
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
       calls,
       context,
       flags: [],
@@ -171,12 +183,80 @@ describe("approval execution security", () => {
     expect(submissions()).toBe(0);
   });
 
+  test("refuses account drift and settles the held request instead of hanging", async () => {
+    // Switching to an account the origin's grant does not cover disconnects it
+    // mid-approval — ordinary user action now that a grant only ever exposes
+    // the active account. The bound invoke must not submit, and the dapp's held
+    // promise must be settled with the reason rather than left open forever.
+    const calls = [{ calldata: [], contractAddress: "0x2", entrypoint: "transfer" }];
+    const context = await createApprovalContext(account, { calls });
+    const { approvals, deps, settled, submissions } = makeDeps({ granted: [] });
+    const { id } = approvals.requestInvoke({
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
+      calls,
+      context,
+      flags: [],
+      origin: ORIGIN,
+      summaries: ["Transfer"],
+    });
+
+    await expect(
+      handleApprovalDecision(deps, "wallet.approveOrigin", decision(id, "wallet.approveOrigin")),
+    ).resolves.toEqual({ error: "approval context changed" });
+    expect(submissions()).toBe(0);
+    expect(settled).toEqual([{ error: "approval context changed" }]);
+  });
+
+  test("executes a bound invoke against the approved account, not the first granted one", async () => {
+    // Binding is by exact id, never by position: a resolver "simplified" to
+    // granted[0] would sign the reviewed calls with a different account than
+    // the approval card showed. Both accounts are on the active network, so
+    // only the id match distinguishes them.
+    const other: AccountRef = { ...account, address: "0x9999", id: "SN_MAIN:0x9999" };
+    const calls = [{ calldata: [], contractAddress: "0x2", entrypoint: "transfer" }];
+    const context = await createApprovalContext(account, { calls });
+    const { approvals, deps, submitted } = makeDeps({ granted: [other, account] });
+    const { id } = approvals.requestInvoke({
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
+      calls,
+      context,
+      flags: [],
+      origin: ORIGIN,
+      summaries: ["Transfer"],
+    });
+
+    await expect(
+      handleApprovalDecision(deps, "wallet.approveOrigin", decision(id, "wallet.approveOrigin")),
+    ).resolves.toMatchObject({ ok: true });
+    expect(submitted).toEqual([account]);
+    expect(context.accountId).toBe(account.id);
+  });
+
   test("refuses a held payload that does not match the reviewed digest", async () => {
     const reviewed = [{ calldata: [], contractAddress: "0x2", entrypoint: "transfer" }];
     const substituted = [{ calldata: ["0xdead"], contractAddress: "0x3", entrypoint: "approve" }];
     const context = await createApprovalContext(account, { calls: reviewed });
     const { approvals, deps, submissions } = makeDeps();
     const { id } = approvals.requestInvoke({
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
       calls: substituted,
       context,
       flags: [],

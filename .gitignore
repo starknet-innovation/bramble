@@ -10,8 +10,10 @@ test-results/
 output/
 vendor/krusty-kms/
 vendor/multisig/
+vendor/starknet-privacy/
 contracts/multisig/target/
 *.log
+.env*.local
 .DS_Store
 /dist.zip
 .claude/*

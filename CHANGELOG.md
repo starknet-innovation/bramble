@@ -8,6 +8,81 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [0.8.0] - 2026-08-05
+
+Safer dApp account boundaries, explicit STRK20 privacy, faster and more truthful
+transaction status, and opt-in support for fully on-chain animated collectibles.
+
+### Added
+- An explicit multisig confirmation review that shows the exact decoded effect,
+  signer, network, mode, and estimated fee before hardware or software signing.
+- Atomic confirm-and-execute for the signer that reaches quorum, while retaining
+  a deliberate confirmation-only choice.
+- A background transaction monitor that recognizes Starknet pre-confirmation,
+  finality, and L1 acceptance, then reconciles submitted activity without
+  blocking the send flow on slow polling.
+- Account-scoped transaction alerts for late rejection, reversion, and expiry,
+  with bounded delivery and visible status updates in the popup and side panel.
+- Explicit playback for self-contained on-chain NFT animations on collectible
+  detail screens, including static fallbacks for gallery views.
+- Account- and network-scoped STRK20 registration, private balance disclosure,
+  shielding, transfer, withdrawal, and invoke journeys through the pinned
+  official Starknet Privacy SDK.
+- A mainnet Terminal privacy workspace for pool inspection, private portfolio
+  actions, and reviewed AVNU private swaps through bounded server gateways.
+
+### Changed
+- Connected dApps now resolve a grant to at most the active account. Switching
+  outside a site's approved accounts disconnects it and requires deliberate
+  reapproval instead of silently exposing or signing with a stale account.
+- Account creation, import, Ledger creation, and manual account selection now
+  notify connected pages of active-account changes consistently.
+- Submitted activity advances monotonically through pre-confirmed, accepted,
+  rejected, reverted, expired, and L1-confirmed states; terminal observations
+  cannot regress when providers disagree or respond out of order.
+- Mainnet status reads prefer the Starknet Foundation v0.10 endpoint with a
+  Cartridge fallback and bounded concurrency.
+- dApp invoke requests now take over the wallet before fee RPC work completes,
+  show an explicit estimating state, and share Send's unit-aware fee and
+  affordability review.
+
+### Fixed
+- Multisig confirmation sheets keep focus contained, keep their final action
+  visible at compact side-panel heights, and expose a working fee-estimate retry.
+- Impossible confirmation counts no longer qualify for atomic execution, and
+  concurrent extension surfaces cannot broadcast the same proposal action twice.
+- Late transaction failures are delivered only to the matching unlocked
+  account and network, preventing activity or alerts from bleeding between
+  account scopes.
+- Reconnecting after an account switch no longer returns the previously active
+  address, and a stale network-switch approval cannot reconnect an origin that
+  is no longer authorized.
+- Fully on-chain collectibles without a static image no longer stop at an empty
+  placeholder when their supported animation is opened deliberately.
+
+### Security
+- Multisig action messages require an exact confirmation mode and reject unknown
+  fields; the reviewed fee and submitted call batch are derived from that same
+  typed request. Durable pre-broadcast claims fail closed on unresolved duplicate
+  intent without blocking a valid later confirm/revoke state transition.
+- Untrusted animation HTML runs in a manifest sandbox with an egress-denying
+  CSP and a second opaque-origin iframe sandbox. Browser regression tests prove
+  it cannot access extension APIs or parent DOM state, beacon the network, load
+  remote images, or escape isolation through self-navigation.
+- Transaction approvals remain bound to the exact account shown at review time
+  and fail closed if active-account or origin-grant state changes before
+  execution.
+- STRK20 disclosures require explicit consent; prepared operations are
+  one-time, kind- and digest-bound, and discovery/proving use OHTTP through
+  bounded gateways without embedding private upstream URLs or credentials.
+- Review-time invoke fee estimation skips account validation, so it cannot
+  exercise Krusty or open a Ledger signing prompt before approval.
+- Status reconciliation is fail-closed, concurrency-bounded, and capped to five
+  sanitized alerts per drain, limiting provider-induced resource use and UI
+  flooding.
+- The final release head passes the repository's 95% coverage floor, extension
+  browser E2E suite, reproducible packaging, and high-severity dependency audit.
+
 ## [0.7.2] - 2026-07-28
 
 A focused interaction-design and security release: clearer onboarding and

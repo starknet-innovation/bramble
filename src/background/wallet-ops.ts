@@ -2,7 +2,13 @@
  * RPC-heavy wallet operations dispatched from the background message handler:
  * balances, deployment, transfer review and submission, and the activity feed.
  */
-import { STARKNET_NETWORKS, type StarknetNetworkId, sameFelt } from "../starknet/networks";
+import { resolveFeeAffordability } from "../starknet/fee-funds";
+import {
+  STARKNET_NETWORKS,
+  STRK_TOKEN_ADDRESS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "../starknet/networks";
 import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "../starknet/rpc";
 import { mergeActivity } from "../starknet/tx-history";
 import { verifyCalls } from "../starknet/verify";
@@ -10,13 +16,14 @@ import {
   type ActivityEntry,
   type ActivityLog,
   type ActivityScope,
-  activityForScope,
+  systemClock,
 } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
 import type { MultisigStore } from "../storage/multisig-store";
 import type { WalletPreferences, WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
+import { readStrkBalance } from "./fee-guard";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import {
   readActivityInput,
@@ -26,8 +33,11 @@ import {
 } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { activeAccountContext, networkRpcUrls, statusResponse } from "./runtime-state";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import type { UnlockSession } from "./session";
+import { failureNoticeMessage } from "./tx-observation";
+import { reconcileScope } from "./tx-reconcile";
+import type { WalletStatusReader } from "./wallet-reader";
 
 /**
  * Dependencies shared by the wallet, allowance, and NFT operations handlers.
@@ -45,6 +55,12 @@ export type WalletOpsDeps = {
    * read-only asset discovery. Signing paths resolve multisigs separately.
    */
   readonly multisigStore?: MultisigStore;
+  /**
+   * Wall-clock reader used to age transaction observation windows. Injected so
+   * reconciliation stays deterministic under test; defaults to the system
+   * clock boundary.
+   */
+  readonly now?: () => number;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -201,11 +217,8 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
     return { error: context.error };
   }
   const { account, preferences, token, vaultPassphrase } = context;
-  const call = buildErc20TransferCall(
-    token.address,
-    input.recipient,
-    parseTokenAmount(input.amount, token.decimals),
-  );
+  const amountRaw = parseTokenAmount(input.amount, token.decimals);
+  const call = buildErc20TransferCall(token.address, input.recipient, amountRaw);
   const report = verifyCalls([call], verificationContext(account, preferences));
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
   const deployed = await deps.runtimeRpc
@@ -222,10 +235,20 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
         .catch(() => null)
     : null;
   const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  // Fee-affordability guard (issue 191): compare the estimate against the
+  // account's STRK balance, counting the transfer amount itself when the sent
+  // token is STRK (the fee competes with the amount). Warn-only and fail-open:
+  // an unreadable balance yields "unknown" and no claim is made.
+  const feeAffordability = resolveFeeAffordability({
+    balance: fee === null ? null : await readStrkBalance(deps, account, preferences),
+    fee,
+    sendAmount: sameFelt(token.address, STRK_TOKEN_ADDRESS) ? amountRaw : null,
+  });
   return {
     ok: true,
     review: {
       fee,
+      feeAffordability,
       feeEstimateFailed,
       flags: report.flags,
       requiresDeployment: !deployed,
@@ -280,13 +303,32 @@ const handleActivity: WalletOpsHandler = async (deps, message) => {
   if (!target) {
     return { error: "activity scope unavailable" };
   }
-  const local = await reconcilePendingStatuses(deps, target.scope);
+  const local = await reconcileScope(deps, target.scope, (deps.now ?? systemClock)());
   const history = await accountHistory(deps, target);
   return {
     activity: mergeActivity(local, history.onChain),
     ...(history.unavailable ? { historyUnavailable: true } : {}),
     ok: true,
   };
+};
+
+/**
+ * Drains the failure notices background reconciliation recorded while the side
+ * panel was closed. Each notice is returned exactly once; the activity entry
+ * keeps its terminal status whether or not the notice was ever displayed.
+ */
+const handleTransactionAlerts: WalletOpsHandler = async (deps, message) => {
+  if (!readTypeOnlyInput(message, "wallet.transactionAlerts")) {
+    return { error: "invalid transaction alerts request" };
+  }
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) {
+    return { alerts: [], ok: true };
+  }
+  const entries = await deps.activity
+    .takeFailureNotices({ accountId: context.account.id, networkId: context.networkId })
+    .catch(() => []);
+  return { alerts: entries.map(failureNoticeMessage), ok: true };
 };
 
 const handleLock: WalletOpsHandler = async (deps, message) => {
@@ -310,6 +352,7 @@ const WALLET_OPS_HANDLERS: Readonly<Record<string, WalletOpsHandler>> = {
   "wallet.getBalances": handleGetBalances,
   "wallet.lock": handleLock,
   "wallet.reviewTransfer": handleReviewTransfer,
+  "wallet.transactionAlerts": handleTransactionAlerts,
   "wallet.transfer": handleTransfer,
   "wallet.verifyClassHash": handleVerifyClassHash,
 };
@@ -324,43 +367,6 @@ export const handleWalletOps = async (
 ): Promise<RuntimeResponse | null> => {
   const handler = WALLET_OPS_HANDLERS[messageType];
   return handler ? handler(deps, message) : null;
-};
-
-/**
- * Re-polls pending transactions for the active account/network scope and
- * returns only that scope. A status query failure leaves those hashes pending
- * rather than exposing or modifying another account's rows.
- */
-const reconcilePendingStatuses = async (
-  deps: WalletOpsDeps,
-  scope: ActivityScope,
-): Promise<readonly ActivityEntry[]> => {
-  const { activity, preferencesStore, runtimeRpc } = deps;
-  const entries = activityForScope(await activity.list(), scope);
-  const pendingByNetwork = new Map<StarknetNetworkId, string[]>();
-  for (const entry of entries) {
-    if (entry.status === "pending") {
-      pendingByNetwork.set(entry.networkId, [
-        ...(pendingByNetwork.get(entry.networkId) ?? []),
-        entry.hash,
-      ]);
-    }
-  }
-  if (pendingByNetwork.size === 0) {
-    return entries;
-  }
-  const preferences = await preferencesStore.read();
-  let statuses: Record<string, ActivityEntry["status"]> = {};
-  for (const [networkId, hashes] of pendingByNetwork) {
-    const result = await runtimeRpc
-      .getTransactionStatuses({
-        hashes,
-        rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
-      })
-      .catch(() => ({}));
-    statuses = { ...statuses, ...result };
-  }
-  return activity.updateStatuses(statuses, scope);
 };
 
 /**

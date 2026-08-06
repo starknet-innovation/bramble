@@ -146,6 +146,17 @@ const showConfirmationReview = (context: FrameContext): void => {
       async confirmProposal() {
         throw new Error("UI Lab blocks transaction submission");
       },
+      async prepareConfirmation(input: {
+        mode: "confirm-and-execute" | "confirm-only";
+        proposalId: string;
+        signerAccountId: string;
+      }) {
+        return {
+          fee: { overallFee: "240000000000000", unit: "FRI" },
+          feeEstimateFailed: false,
+          ...input,
+        };
+      },
     },
     openDetail: () => undefined,
     openList: () => undefined,

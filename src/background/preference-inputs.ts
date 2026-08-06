@@ -8,6 +8,7 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "../starknet/networks";
+import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "../starknet/strk20/config";
 import { type AccountGroupIcon, isAccountGroupIcon } from "../storage/account-groups";
 import { isApprovalSurfacePreference, isDisplayCurrency } from "../storage/preferences-entries";
 import { isAccountId } from "../storage/vault-schema";
@@ -220,18 +221,23 @@ export const readSetRpcOverrideInput = (
 };
 
 /**
- * Parses STRK20 prover endpoint updates. An empty url clears the override.
+ * Parses complete per-network STRK20 service routing. Null disables privacy
+ * operations for that network; partial configurations are rejected.
  */
-export const readSetStrk20ProverUrlInput = (message: unknown): { readonly url: string } | null => {
+export const readSetStrk20NetworkConfigInput = (
+  message: unknown,
+): {
+  readonly config: Strk20NetworkConfig | null;
+  readonly networkId: StarknetNetworkId;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["type", "url"]) ||
-    message["type"] !== "wallet.setStrk20ProverUrl" ||
-    typeof message["url"] !== "string" ||
-    message["url"].length > 2048
+    !hasOnlyKnownKeys(message, ["config", "networkId", "type"]) ||
+    message["type"] !== "wallet.setStrk20NetworkConfig" ||
+    !isStarknetNetworkId(message["networkId"]) ||
+    (message["config"] !== null && !isStrk20NetworkConfig(message["config"]))
   ) {
     return null;
   }
-
-  return { url: message["url"] };
+  return { config: message["config"], networkId: message["networkId"] };
 };

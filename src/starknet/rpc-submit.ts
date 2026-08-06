@@ -8,6 +8,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { ensureAccountDeployed } from "./deployment";
 import { STARKNET_NETWORKS } from "./networks";
 import { krustyAccount, type StarkHashSigner, withRpcWrite } from "./provider";
+import type { Strk20Proof } from "./strk20/schemas";
 
 /**
  * Fee speed control: standard uses node defaults, fast scales estimated
@@ -21,6 +22,8 @@ export type FeeSpeed = "fast" | "standard";
 export type InvokeInput = {
   readonly account: AccountRef;
   readonly calls: readonly Call[];
+  /** Optional STRK20 proof material attached to a prepared privacy call. */
+  readonly proof?: Strk20Proof;
   readonly rpcUrls: readonly string[];
   readonly signHash: StarkHashSigner;
   readonly speed?: FeeSpeed;
@@ -56,7 +59,7 @@ const scaledBounds = (value: unknown): unknown => {
  * is returned to the caller and never replayed against a fallback endpoint.
  */
 export const submitInvokeTransaction = async (
-  { account, calls, rpcUrls, signHash, speed = "standard" }: InvokeInput,
+  { account, calls, proof, rpcUrls, signHash, speed = "standard" }: InvokeInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<InvokeSubmission> => {
   if (calls.length === 0) {
@@ -68,7 +71,7 @@ export const submitInvokeTransaction = async (
     async (provider) => {
       const starknetAccount = krustyAccount(provider, account, signHash);
       await ensureAccountDeployed(provider, starknetAccount, account);
-      const details =
+      const feeDetails =
         speed === "fast"
           ? {
               resourceBounds: scaledBounds(
@@ -76,6 +79,10 @@ export const submitInvokeTransaction = async (
               ),
             }
           : {};
+      const details = {
+        ...feeDetails,
+        ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
+      };
       const result = await starknetAccount.execute(
         [...calls],
         details as Parameters<Account["execute"]>[1],

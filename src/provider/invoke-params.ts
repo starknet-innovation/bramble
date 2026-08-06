@@ -4,6 +4,7 @@
 import { hasOnlyKnownKeys, isRecord, type Json } from "../shared/json";
 import { INVOKE_LIMITS } from "../starknet/call-limits";
 import { canonicalFelt, isStarkFieldElement } from "../starknet/networks";
+import { isStrk20Proof, type Strk20Proof } from "../starknet/strk20/schemas";
 
 /**
  * Internal camelCase call shape the background consumes for an invoke.
@@ -12,6 +13,14 @@ export type ProviderInvokeCall = {
   readonly calldata: readonly string[];
   readonly contractAddress: string;
   readonly entrypoint: string;
+};
+
+/**
+ * Parsed invoke request, including optional STRK20 proof material.
+ */
+export type ProviderInvokeRequest = {
+  readonly calls: readonly ProviderInvokeCall[];
+  readonly proof?: Strk20Proof;
 };
 
 const toCalldataFelt = (value: unknown): string | null => {
@@ -79,9 +88,7 @@ const readInvokeCall = (call: unknown): ProviderInvokeCall | null => {
  * Parses invoke params in spec or legacy shape. The exact call/calldata limits
  * are enforced before mapping, and malformed inputs fail closed as `null`.
  */
-export const providerInvokeCalls = (
-  params: Json | undefined,
-): readonly ProviderInvokeCall[] | null => {
+export const providerInvokeRequest = (params: Json | undefined): ProviderInvokeRequest | null => {
   if (
     !isRecord(params) ||
     !hasOnlyKnownKeys(params, ["calls", "invoke_transaction", "proof"]) ||
@@ -94,5 +101,19 @@ export const providerInvokeCalls = (
     return null;
   }
   const calls = source.map(readInvokeCall);
-  return calls.every((call): call is ProviderInvokeCall => call !== null) ? calls : null;
+  if (!calls.every((call): call is ProviderInvokeCall => call !== null)) {
+    return null;
+  }
+  const proof = params["proof"];
+  if (proof !== undefined && !isStrk20Proof(proof)) {
+    return null;
+  }
+  return { calls, ...(proof === undefined ? {} : { proof }) };
 };
+
+/**
+ * Compatibility helper for callers that only need the validated call list.
+ */
+export const providerInvokeCalls = (
+  params: Json | undefined,
+): readonly ProviderInvokeCall[] | null => providerInvokeRequest(params)?.calls ?? null;

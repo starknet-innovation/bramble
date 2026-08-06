@@ -3,16 +3,19 @@
  * export stay validated and deterministic.
  */
 import { describe, expect, test } from "bun:test";
+import { MAX_TRANSACTION_ALERTS_PER_DRAIN } from "../../src/shared/transaction-alerts";
 import {
   activityForScope,
   activityToCsv,
   createActivityLog,
+  memoryActivityLog,
 } from "../../src/storage/activity-store";
 import { createMemoryStore } from "../../src/storage/kv";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER_ACCOUNT_ID =
   "SN_MAIN:0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+const MAIN_SCOPE = { accountId: ACCOUNT_ID, networkId: "SN_MAIN" as const };
 
 const makeLog = () => {
   let tick = 0;
@@ -58,7 +61,7 @@ describe("createActivityLog", () => {
       summary: "Send",
     });
     const updated = await log.updateStatuses(
-      { "0x1": "accepted", "0x9": "reverted" },
+      { "0x1": { status: "accepted" }, "0x9": { status: "reverted" } },
       { accountId: ACCOUNT_ID, networkId: "SN_MAIN" },
     );
 
@@ -91,7 +94,7 @@ describe("createActivityLog", () => {
     });
 
     const scope = { accountId: ACCOUNT_ID, networkId: "SN_MAIN" as const };
-    const updated = await log.updateStatuses({ "0x1": "accepted" }, scope);
+    const updated = await log.updateStatuses({ "0x1": { status: "accepted" } }, scope);
     expect(updated).toHaveLength(1);
     expect(updated[0]?.summary).toBe("First account send");
     expect(updated[0]?.status).toBe("accepted");
@@ -195,5 +198,227 @@ describe("activityToCsv", () => {
     expect(cells?.[6]).toBe("");
     expect(cells?.[7]).toBe("");
     expect(cells?.[9]).toBe("Deploy account contract");
+  });
+});
+
+describe("provisional status and tracking fields", () => {
+  test("stores preconfirmed as its own status and records L1 finality separately", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send",
+    });
+    const scope = { accountId: ACCOUNT_ID, networkId: "SN_MAIN" as const };
+
+    const provisional = await log.updateStatuses({ "0x1": { status: "preconfirmed" } }, scope);
+    expect(provisional[0]?.status).toBe("preconfirmed");
+    expect(provisional[0]?.finalizedOnL1).toBeUndefined();
+
+    // L1 finality never becomes a visible status of its own.
+    const final = await log.updateStatuses(
+      { "0x1": { finalizedOnL1: true, status: "accepted" } },
+      scope,
+    );
+    expect(final[0]?.status).toBe("accepted");
+    expect(final[0]?.finalizedOnL1).toBe(true);
+  });
+
+  test("hands each failure notice out exactly once", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send",
+    });
+    await log.updateStatuses(
+      { "0x1": { failureNotice: "pending", status: "reverted" } },
+      { accountId: ACCOUNT_ID, networkId: "SN_MAIN" },
+    );
+
+    const first = await log.takeFailureNotices(MAIN_SCOPE);
+    expect(first.map((entry) => entry.hash)).toEqual(["0x1"]);
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toEqual([]);
+    // The terminal status survives delivery: the record is the durable truth.
+    expect((await log.list())[0]?.status).toBe("reverted");
+    expect((await log.list())[0]?.failureNotice).toBe("delivered");
+  });
+
+  test("keeps the entry unchanged when an outcome would not revalidate", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send",
+    });
+    const updated = await log.updateStatuses(
+      { "0x1": { notFoundCount: -3, status: "rejected" } },
+      { accountId: ACCOUNT_ID, networkId: "SN_MAIN" },
+    );
+    expect(updated[0]?.status).toBe("pending");
+    expect(updated[0]?.notFoundCount).toBeUndefined();
+  });
+
+  test("the in-memory double drains notices with the same once-only contract", async () => {
+    const log = memoryActivityLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send",
+    });
+    await log.updateStatuses(
+      { "0x1": { failureNotice: "pending", status: "reverted" } },
+      { accountId: ACCOUNT_ID, networkId: "SN_MAIN" },
+    );
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toHaveLength(1);
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toEqual([]);
+  });
+
+  test("scopes and bounds each failure-notice drain", async () => {
+    const log = makeLog();
+    for (let index = 1; index <= MAX_TRANSACTION_ALERTS_PER_DRAIN + 2; index += 1) {
+      const hash = `0x${index.toString(16)}`;
+      await log.record({
+        accountId: ACCOUNT_ID,
+        hash,
+        kind: "transfer",
+        networkId: "SN_MAIN",
+        summary: `Send ${index}`,
+      });
+      await log.updateStatuses(
+        { [hash]: { failureNotice: "pending", status: "reverted" } },
+        MAIN_SCOPE,
+      );
+    }
+    await log.record({
+      accountId: OTHER_ACCOUNT_ID,
+      hash: "0xff",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Other account send",
+    });
+    const otherScope = { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" as const };
+    await log.updateStatuses(
+      { "0xff": { failureNotice: "pending", status: "reverted" } },
+      otherScope,
+    );
+
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toHaveLength(MAX_TRANSACTION_ALERTS_PER_DRAIN);
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toHaveLength(2);
+    expect((await log.takeFailureNotices(otherScope)).map((entry) => entry.hash)).toEqual(["0xff"]);
+  });
+
+  test("keeps terminal progress, L1 finality, and delivered notices monotonic", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Send",
+    });
+    await log.updateStatuses(
+      { "0x1": { failureNotice: "pending", finalizedOnL1: true, status: "reverted" } },
+      MAIN_SCOPE,
+    );
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toHaveLength(1);
+    const [stored] = await log.updateStatuses(
+      { "0x1": { failureNotice: "pending", finalizedOnL1: false, status: "accepted" } },
+      MAIN_SCOPE,
+    );
+    expect(stored).toMatchObject({
+      failureNotice: "delivered",
+      finalizedOnL1: true,
+      status: "reverted",
+    });
+    expect(await log.takeFailureNotices(MAIN_SCOPE)).toEqual([]);
+  });
+
+  test("never demotes accepted or pre-confirmed progress", async () => {
+    const log = makeLog();
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x1",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Accepted send",
+    });
+    await log.updateStatuses({ "0x1": { status: "accepted" } }, MAIN_SCOPE);
+    expect(
+      (await log.updateStatuses({ "0x1": { status: "preconfirmed" } }, MAIN_SCOPE))[0]?.status,
+    ).toBe("accepted");
+
+    await log.record({
+      accountId: ACCOUNT_ID,
+      hash: "0x2",
+      kind: "transfer",
+      networkId: "SN_MAIN",
+      summary: "Pre-confirmed send",
+    });
+    await log.updateStatuses({ "0x2": { status: "preconfirmed" } }, MAIN_SCOPE);
+    const next = await log.updateStatuses({ "0x2": { status: "pending" } }, MAIN_SCOPE);
+    expect(next.find((entry) => entry.hash === "0x2")?.status).toBe("preconfirmed");
+  });
+
+  test("loads entries stored before the tracking fields existed", async () => {
+    const store = createMemoryStore();
+    await store.set("mc-wallet:activity", [
+      {
+        accountId: ACCOUNT_ID,
+        hash: "0x1",
+        kind: "transfer",
+        networkId: "SN_MAIN",
+        status: "pending",
+        submittedAt: 1,
+        summary: "Old entry",
+      },
+    ]);
+    const log = createActivityLog({ now: () => 5, store });
+    expect((await log.list())[0]?.summary).toBe("Old entry");
+  });
+
+  test("rejects stored entries with a malformed tracking field", async () => {
+    const store = createMemoryStore();
+    await store.set("mc-wallet:activity", [
+      {
+        accountId: ACCOUNT_ID,
+        failureNotice: "shown",
+        hash: "0x1",
+        kind: "transfer",
+        networkId: "SN_MAIN",
+        status: "pending",
+        submittedAt: 1,
+        summary: "Bad notice",
+      },
+      {
+        accountId: ACCOUNT_ID,
+        hash: "0x2",
+        kind: "transfer",
+        networkId: "SN_MAIN",
+        notFoundCount: -1,
+        status: "pending",
+        submittedAt: 1,
+        summary: "Bad tally",
+      },
+      {
+        accountId: ACCOUNT_ID,
+        finalizedOnL1: "yes",
+        hash: "0x3",
+        kind: "transfer",
+        networkId: "SN_MAIN",
+        status: "pending",
+        submittedAt: 1,
+        summary: "Bad finality",
+      },
+    ]);
+    expect(await createActivityLog({ now: () => 5, store }).list()).toEqual([]);
   });
 });

@@ -4,6 +4,7 @@
  * entrypoint to keep it within the size budget.
  */
 import type { WalletStatus } from "../popup/responses";
+import type { Strk20NetworkConfig } from "../starknet/strk20/config";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { SidepanelWallet } from "./runtime";
 
@@ -52,6 +53,60 @@ const bindEndpointForm = (
   });
 };
 
+const bindStrk20Services = (deps: EndpointUiDeps): void => {
+  const form = deps.app?.querySelector<HTMLFormElement>("#strk20-services-form");
+  const result = deps.app?.querySelector<HTMLElement>("#strk20-services-result");
+  const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const field = (name: string): string => String(data.get(name) ?? "").trim();
+    const discoveryUrl = field("discoveryUrl");
+    const ohttpEnabled = data.get("ohttpEnabled") === "on";
+    const proverUrl = field("proverUrl");
+    const poolAddress = field("poolAddress");
+    const subaccountAnonymizerAddress = field("subaccountAnonymizerAddress");
+    const ohttpRelayUrl = field("ohttpRelayUrl");
+    const paymasterUrl = field("paymasterUrl");
+    const feeToken = field("feeToken");
+    const empty = [
+      discoveryUrl,
+      proverUrl,
+      poolAddress,
+      subaccountAnonymizerAddress,
+      ohttpRelayUrl,
+      paymasterUrl,
+      feeToken,
+    ].every((value) => value.length === 0);
+    const config: Strk20NetworkConfig | null = empty
+      ? null
+      : {
+          discoveryUrl,
+          ...(ohttpEnabled ? { ohttpEnabled: true } : {}),
+          poolAddress,
+          proverUrl,
+          ...(subaccountAnonymizerAddress ? { subaccountAnonymizerAddress } : {}),
+          ...(ohttpRelayUrl ? { ohttpRelayUrl } : {}),
+          ...(paymasterUrl || feeToken ? { paymaster: { feeToken, url: paymasterUrl } } : {}),
+        };
+    buttonBusy(submitButton, true);
+    void deps.wallet.setStrk20NetworkConfig(deps.networkId(), config).then(
+      async () => {
+        showToast(`Privacy services ${config ? "saved" : "disabled"}`, "success");
+        await deps.render(await deps.wallet.loadStatus());
+      },
+      (error: unknown) => {
+        const message = errorMessage(error, "Privacy service configuration failed");
+        showToast(message, "error");
+        if (result) {
+          result.textContent = message;
+        }
+        buttonBusy(submitButton, false);
+      },
+    );
+  });
+};
+
 /**
  * Binds the RPC-override, STRK20-prover, and NFT-indexer endpoint forms.
  */
@@ -59,9 +114,7 @@ export const bindEndpointSettings = (deps: EndpointUiDeps): void => {
   bindEndpointForm(deps, "#rpc-form", "rpcUrl", "RPC endpoint", (rpcUrl) =>
     deps.wallet.setRpcOverride(deps.networkId(), rpcUrl),
   );
-  bindEndpointForm(deps, "#strk20-prover-form", "proverUrl", "Prover endpoint", (proverUrl) =>
-    deps.wallet.setStrk20ProverUrl(proverUrl),
-  );
+  bindStrk20Services(deps);
   bindEndpointForm(deps, "#nft-indexer-form", "indexerUrl", "Indexer endpoint", (indexerUrl) =>
     deps.wallet.setNftIndexerUrl(indexerUrl),
   );

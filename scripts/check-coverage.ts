@@ -16,6 +16,8 @@ import process from "node:process";
 const MIN_FUNCTION_PERCENT = 95;
 const MIN_LINE_PERCENT = 95;
 
+// Keep the leading `./`: Bun treats a bare `tests` argument as a path filter,
+// which also matches tests inside ignored vendored source checkouts.
 const child = Bun.spawn(["bun", "test", "./tests", "--coverage"], {
   stderr: "pipe",
   stdout: "pipe",

@@ -13,8 +13,9 @@ import {
   type WalletPreferencesStore,
 } from "../storage/preferences-store";
 import type { AccountRef, Vault } from "../storage/vault-schema";
-import type { NetworkOption, WalletStatus, WalletStatusReader } from "./runtime-types";
+import type { NetworkOption, WalletStatus } from "./runtime-types";
 import type { UnlockSession } from "./session";
+import type { WalletStatusReader } from "./wallet-reader";
 
 const networkOptions = (): readonly NetworkOption[] =>
   Object.values(STARKNET_NETWORKS).map((network) => ({
@@ -80,7 +81,7 @@ export const unavailablePreferencesStore: WalletPreferencesStore = {
   async setRpcOverride() {
     throw new Error("preferences unavailable");
   },
-  async setStrk20ProverUrl() {
+  async setStrk20NetworkConfig() {
     throw new Error("preferences unavailable");
   },
   async setTokenHidden() {

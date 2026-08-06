@@ -14,6 +14,7 @@ import {
   isStarknetNetworkId,
   STARK_FIELD_PRIME,
 } from "../starknet/networks";
+import { isStrk20Proof, type Strk20Proof } from "../starknet/strk20/schemas";
 import { isVaultPassphrase } from "../storage/encrypted-store";
 import { isAccountId } from "../storage/vault-schema";
 import type { OriginGrantInput, SignHashInput } from "../wallet/vault-service";
@@ -199,10 +200,14 @@ export { readRequestAccountsInput } from "./request-accounts-input";
  */
 export const readAddInvokeTransactionInput = (
   message: unknown,
-): { readonly calls: readonly Call[]; readonly origin: string } | null => {
+): {
+  readonly calls: readonly Call[];
+  readonly origin: string;
+  readonly proof?: Strk20Proof;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["calls", "origin", "type"]) ||
+    !hasOnlyKnownKeys(message, ["calls", "origin", "proof", "type"]) ||
     message["type"] !== "wallet.addInvokeTransaction" ||
     !Array.isArray(message["calls"]) ||
     message["calls"].length === 0 ||
@@ -213,7 +218,12 @@ export const readAddInvokeTransactionInput = (
 
   const origin = normalizeWalletOrigin(message["origin"]);
   const calls = message["calls"].map(readInvokeCall);
-  return origin && calls.every((call): call is Call => call !== null) ? { calls, origin } : null;
+  const proof = message["proof"];
+  return origin &&
+    calls.every((call): call is Call => call !== null) &&
+    (proof === undefined || isStrk20Proof(proof))
+    ? { calls, origin, ...(proof === undefined ? {} : { proof }) }
+    : null;
 };
 
 /**
@@ -440,5 +450,5 @@ export {
   readSetDisplayInput,
   readSetGroupIconInput,
   readSetRpcOverrideInput,
-  readSetStrk20ProverUrlInput,
+  readSetStrk20NetworkConfigInput,
 } from "./preference-inputs";

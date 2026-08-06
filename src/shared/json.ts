@@ -44,6 +44,14 @@ export const JSON_BUDGETS = {
     maxObjectKeys: 2_048,
     maxStringLength: 512 * 1024,
   },
+  strk20Proof: {
+    maxArrayLength: 4_096,
+    maxBytes: 8 * 1024 * 1024,
+    maxDepth: 16,
+    maxNodes: 50_000,
+    maxObjectKeys: 32,
+    maxStringLength: 512 * 1024,
+  },
   typedData: {
     maxArrayLength: 1_024,
     maxBytes: 256 * 1024,

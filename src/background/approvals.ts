@@ -8,9 +8,24 @@ import { WalletError } from "../shared/errors";
 import { isUuid } from "../shared/ids";
 import { isWalletOrigin } from "../shared/origin";
 import type { DeclareFeeEstimate } from "../starknet/declare";
+import type { FeeAffordability } from "../starknet/fee-funds";
 import type { StarknetNetworkId } from "../starknet/networks";
-import type { Strk20Action } from "../starknet/strk20/schemas";
+import type { FeeEstimate } from "../starknet/rpc";
+import type { Strk20Action, Strk20Proof, Strk20WithdrawAction } from "../starknet/strk20/schemas";
+import type { Strk20SubmissionPlan } from "../starknet/strk20/service";
 import type { ApprovalContext } from "./approval-context";
+import {
+  type ApprovalKind,
+  type ApprovalPayload,
+  cloneApprovalCall,
+  cloneApprovalValue,
+  readStoredApprovalPayload,
+} from "./approval-payload";
+import {
+  matchesStrk20DisclosureKind,
+  type Strk20DisclosureApprovalKind,
+  type Strk20DisclosureRequest,
+} from "./strk20-approval-types";
 
 /**
  * Maximum queued dapp connection approvals kept in background memory.
@@ -18,18 +33,10 @@ import type { ApprovalContext } from "./approval-context";
 export const MAX_PENDING_APPROVALS = 50;
 
 /**
- * Approval kinds distinguishing a connection prompt, a watch-asset prompt, and
- * a per-transaction invoke prompt that must be signed off before it executes.
+ * Public approval discriminants and private payload shape used by background
+ * executors. Their definitions live with the total payload-reader map.
  */
-export type ApprovalKind =
-  | "add-chain"
-  | "connect"
-  | "declare"
-  | "invoke"
-  | "sign-typed-data"
-  | "strk20-invoke"
-  | "switch-chain"
-  | "watch-asset";
+export type { ApprovalKind, ApprovalPayload } from "./approval-payload";
 
 /**
  * ERC20 token metadata carried by a watch-asset approval, in the shape the
@@ -69,37 +76,38 @@ export type DeclarationReview = {
 };
 
 /**
- * Pending dapp approval. `kind` and `token` describe watch-asset prompts;
- * `summaries`/`flags` describe an invoke prompt's decoded calls and risk flags;
- * `blocked` and `insights` are attached by the reputation layer when the queue
- * is listed to the UI — the queue itself never sets them.
+ * Display-only invoke fee state, aligned with Send review classification.
+ */
+export type InvokeFeeReview = {
+  readonly fee: FeeEstimate | null;
+  readonly feeAffordability: FeeAffordability;
+  readonly feeEstimateFailed: boolean;
+  readonly feeEstimatePending: boolean;
+  readonly requiresDeployment: boolean;
+};
+
+/**
+ * Pending dapp approval snapshot. Kind-specific review fields are display-only;
+ * reputation fields are attached when listed and are not queue state.
  */
 export type PendingApproval = {
+  readonly actionReviews?: readonly Strk20Action[];
   readonly blocked?: boolean;
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
+  readonly fee?: FeeEstimate | null;
+  readonly feeAffordability?: FeeAffordability;
+  readonly feeEstimateFailed?: boolean;
+  readonly feeEstimatePending?: boolean;
   readonly flags?: readonly ApprovalRiskFlag[];
   readonly id: string;
   readonly insights?: readonly string[];
   readonly kind: ApprovalKind;
   readonly origin: string;
+  readonly relayFeeAction?: Strk20WithdrawAction;
+  readonly requiresDeployment?: boolean;
   readonly summaries?: readonly string[];
   readonly token?: WatchAssetToken;
-  readonly typedData?: unknown;
-};
-
-/**
- * Execution payload held privately until approve time. Invoke calls and the
- * switch-chain target never need to cross to the UI in raw form; typed data is
- * mirrored into the snapshot so the sign card can decode and display it.
- */
-export type ApprovalPayload = {
-  readonly actions?: readonly Strk20Action[];
-  readonly calls?: readonly Call[];
-  readonly chain?: ProviderChain;
-  readonly chainId?: string;
-  readonly declare?: ProviderDeclare;
-  readonly networkId?: StarknetNetworkId;
   readonly typedData?: unknown;
 };
 
@@ -140,8 +148,10 @@ export type ApprovalQueue = {
   readonly requestInvoke: (input: {
     readonly calls: readonly Call[];
     readonly context: ApprovalContext;
+    readonly fee: InvokeFeeReview;
     readonly flags: readonly ApprovalRiskFlag[];
     readonly origin: string;
+    readonly proof?: Strk20Proof;
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestSignTypedData: (input: {
@@ -150,11 +160,18 @@ export type ApprovalQueue = {
     readonly summary: string;
     readonly typedData: unknown;
   }) => PendingApproval;
+  readonly requestStrk20Disclosure: (input: {
+    readonly context: ApprovalContext;
+    readonly kind: Strk20DisclosureApprovalKind;
+    readonly origin: string;
+    readonly request: Strk20DisclosureRequest;
+    readonly summaries: readonly string[];
+  }) => PendingApproval;
   readonly requestStrk20Invoke: (input: {
     readonly actions: readonly Strk20Action[];
-    readonly calls: readonly Call[];
     readonly context: ApprovalContext;
     readonly origin: string;
+    readonly plan: Strk20SubmissionPlan;
     readonly summaries: readonly string[];
   }) => PendingApproval;
   readonly requestSwitchChain: (input: {
@@ -167,60 +184,33 @@ export type ApprovalQueue = {
     readonly origin: string;
     readonly token: WatchAssetToken;
   }) => PendingApproval;
+  readonly updateInvokeFee: (id: string, fee: InvokeFeeReview) => PendingApproval | null;
 };
 
-const cloneCall = (call: Call): Call =>
-  Array.isArray(call.calldata) ? { ...call, calldata: [...call.calldata] } : { ...call };
-
-const cloneValue = <T>(value: T): T => structuredClone(value);
-
-const readSwitchPayload = (approval: ApprovalEntry): ApprovalPayload | null => {
-  if (approval.chainId === undefined || approval.networkId === undefined) {
-    return null;
-  }
-  return { chainId: approval.chainId, networkId: approval.networkId };
-};
-
-const readStrk20Payload = (approval: ApprovalEntry): ApprovalPayload | null => {
-  if (approval.actions === undefined || approval.calls === undefined) {
-    return null;
-  }
-  return {
-    actions: cloneValue(approval.actions),
-    calls: approval.calls.map(cloneCall),
-  };
-};
-
-/**
- * Reconstructs the execution payload held on an entry, discriminating on which
- * private field is set. Typed data, a switch-chain target, a new chain, a
- * declare, and strk20 actions each map to their own payload shape; a plain
- * invoke falls through to its cloned calls. Returns null when no payload was
- * stored (a connection prompt, or an invoke with no calls).
- */
-const readApprovalPayload = (approval: ApprovalEntry): ApprovalPayload | null => {
-  switch (approval.kind) {
-    case "sign-typed-data":
-      return approval.typedData === undefined
-        ? null
-        : { typedData: cloneValue(approval.typedData) };
-    case "switch-chain":
-      return readSwitchPayload(approval);
-    case "add-chain":
-      return approval.chain === undefined ? null : { chain: cloneValue(approval.chain) };
-    case "declare":
-      return approval.declare === undefined ? null : { declare: cloneValue(approval.declare) };
-    case "strk20-invoke":
-      return readStrk20Payload(approval);
-    case "invoke":
-      return approval.calls === undefined ? null : { calls: approval.calls.map(cloneCall) };
-    default:
-      return null;
-  }
-};
+// Copies an invoke entry's fee review onto its snapshot without materializing
+// absent fields, so non-invoke snapshots stay byte-identical to before.
+const feeReviewSnapshot = (approval: ApprovalEntry): Partial<PendingApproval> => ({
+  ...(approval.fee === undefined ? {} : { fee: approval.fee && { ...approval.fee } }),
+  ...(approval.feeAffordability === undefined
+    ? {}
+    : { feeAffordability: approval.feeAffordability }),
+  ...(approval.feeEstimateFailed === undefined
+    ? {}
+    : { feeEstimateFailed: approval.feeEstimateFailed }),
+  ...(approval.feeEstimatePending === undefined
+    ? {}
+    : { feeEstimatePending: approval.feeEstimatePending }),
+  ...(approval.requiresDeployment === undefined
+    ? {}
+    : { requiresDeployment: approval.requiresDeployment }),
+});
 
 const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
+  ...(approval.actionReviews === undefined
+    ? {}
+    : { actionReviews: cloneApprovalValue(approval.actionReviews) }),
   ...(approval.context === undefined ? {} : { context: { ...approval.context } }),
+  ...feeReviewSnapshot(approval),
   ...(approval.declaration === undefined
     ? {}
     : {
@@ -235,10 +225,15 @@ const approvalSnapshot = (approval: ApprovalEntry): PendingApproval => ({
   id: approval.id,
   kind: approval.kind,
   origin: approval.origin,
+  ...(approval.relayFeeAction === undefined
+    ? {}
+    : { relayFeeAction: cloneApprovalValue(approval.relayFeeAction) }),
   ...(approval.token === undefined ? {} : { token: { ...approval.token } }),
   ...(approval.summaries === undefined ? {} : { summaries: [...approval.summaries] }),
   ...(approval.flags === undefined ? {} : { flags: approval.flags.map((flag) => ({ ...flag })) }),
-  ...(approval.typedData === undefined ? {} : { typedData: cloneValue(approval.typedData) }),
+  ...(approval.typedData === undefined
+    ? {}
+    : { typedData: cloneApprovalValue(approval.typedData) }),
 });
 
 /**
@@ -276,7 +271,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
     pending.delete(id);
     return {
       approval: approvalSnapshot(approval),
-      payload: readApprovalPayload(approval),
+      payload: readStoredApprovalPayload(approval),
     };
   };
 
@@ -298,7 +293,7 @@ export const createApprovalQueue = (): ApprovalQueue => {
     },
     payload(id) {
       const approval = entry(id);
-      return approval ? readApprovalPayload(approval) : null;
+      return approval ? readStoredApprovalPayload(approval) : null;
     },
     request(origin) {
       if (!isWalletOrigin(origin)) {
@@ -347,25 +342,31 @@ export const createApprovalQueue = (): ApprovalQueue => {
           deploymentFee: declaration.deploymentFee && { ...declaration.deploymentFee },
           fee: declaration.fee && { ...declaration.fee },
         },
-        declare: cloneValue(declare),
+        declare: cloneApprovalValue(declare),
         id: crypto.randomUUID(),
         kind: "declare",
         origin,
         summaries: [...summaries],
       });
     },
-    requestInvoke({ calls, context, flags, origin, summaries }) {
+    requestInvoke({ calls, context, fee, flags, origin, proof, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
       return enqueue({
-        calls: calls.map(cloneCall),
+        calls: calls.map(cloneApprovalCall),
         context: { ...context },
+        fee: fee.fee && { ...fee.fee },
+        feeAffordability: fee.feeAffordability,
+        feeEstimateFailed: fee.feeEstimateFailed,
+        feeEstimatePending: fee.feeEstimatePending,
         flags: flags.map((flag) => ({ ...flag })),
         id: crypto.randomUUID(),
         kind: "invoke",
         origin,
+        ...(proof === undefined ? {} : { proof: cloneApprovalValue(proof) }),
+        requiresDeployment: fee.requiresDeployment,
         summaries: [...summaries],
       });
     },
@@ -380,21 +381,42 @@ export const createApprovalQueue = (): ApprovalQueue => {
         kind: "sign-typed-data",
         origin,
         summaries: [summary],
-        typedData: cloneValue(typedData),
+        typedData: cloneApprovalValue(typedData),
       });
     },
-    requestStrk20Invoke({ actions, calls, context, origin, summaries }) {
+    requestStrk20Disclosure({ context, kind, origin, request, summaries }) {
+      if (!isWalletOrigin(origin)) {
+        throw new WalletError("Invalid origin");
+      }
+      if (!matchesStrk20DisclosureKind(kind, request)) {
+        throw new WalletError("Invalid STRK20 approval");
+      }
+      return enqueue({
+        ...(request.type === "prepare"
+          ? { actionReviews: cloneApprovalValue(request.actions) }
+          : {}),
+        context: { ...context },
+        id: crypto.randomUUID(),
+        kind,
+        origin,
+        strk20Request: cloneApprovalValue(request),
+        summaries: [...summaries],
+      });
+    },
+    requestStrk20Invoke({ actions, context, origin, plan, summaries }) {
       if (!isWalletOrigin(origin)) {
         throw new WalletError("Invalid origin");
       }
 
       return enqueue({
-        actions: cloneValue(actions),
-        calls: calls.map(cloneCall),
+        actionReviews: cloneApprovalValue(actions),
+        actions: cloneApprovalValue(actions),
         context: { ...context },
         id: crypto.randomUUID(),
         kind: "strk20-invoke",
         origin,
+        ...("feeAction" in plan ? { relayFeeAction: cloneApprovalValue(plan.feeAction) } : {}),
+        strk20Plan: cloneApprovalValue(plan),
         summaries: [...summaries],
       });
     },
@@ -437,6 +459,21 @@ export const createApprovalQueue = (): ApprovalQueue => {
         return approvalSnapshot(existing);
       }
       return enqueue({ id: crypto.randomUUID(), kind: "watch-asset", origin, token: { ...token } });
+    },
+    updateInvokeFee(id, fee) {
+      const approval = entry(id);
+      if (approval?.kind !== "invoke") {
+        return null;
+      }
+      pending.set(id, {
+        ...approval,
+        fee: fee.fee && { ...fee.fee },
+        feeAffordability: fee.feeAffordability,
+        feeEstimateFailed: fee.feeEstimateFailed,
+        feeEstimatePending: fee.feeEstimatePending,
+        requiresDeployment: fee.requiresDeployment,
+      });
+      return get(id);
     },
   };
 };

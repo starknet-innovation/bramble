@@ -9,8 +9,9 @@ import type { OriginHistoryStore } from "../storage/origin-history";
 import type { PendingApproval } from "./approvals";
 
 /**
- * Attaches `blocked` and `insights` to each pending approval. Pending approvals
- * are never for already-connected origins, so `connected` is always false here.
+ * Attaches `blocked` and `insights` to each pending approval. Privacy and
+ * transaction approvals may come from an already-connected origin; the
+ * reputation layer still treats the pending action as a fresh trust decision.
  *
  * First-seen history is read *before* being recorded, so the very first time an
  * origin surfaces a prompt it is correctly reported as never-before-seen; the

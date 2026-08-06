@@ -25,6 +25,7 @@ import {
   onboardingScenario,
   unlockScenario,
 } from "./scenarios-onboarding";
+import { privacyScenario } from "./scenarios-privacy";
 import { settingsScenario } from "./scenarios-settings";
 import { ledgerScenario, sendScenario } from "./scenarios-signing";
 import { swapScenario } from "./scenarios-swap";
@@ -164,6 +165,7 @@ const prepareNft =
             ok: true,
             review: {
               fee: { overallFee: "1800000000000000", unit: "FRI" },
+              feeAffordability: "ok",
               feeEstimateFailed: false,
               flags: blocked
                 ? [{ code: "address-poisoning", message: "Recipient resembles a recent address." }]
@@ -285,6 +287,7 @@ export const walletScenarios: readonly WalletScenario[] = [
   portfolioScenario,
   sendScenario,
   swapScenario,
+  privacyScenario,
   ledgerScenario,
   ledgerOnboardingScenario,
   approvalsScenario,

@@ -2,6 +2,7 @@
  * Typed runtime message client for the side panel UI.
  */
 
+import { isOkResponse } from "../popup/multisig-responses";
 import {
   type ActivityResponse,
   type AllowancesResponse,
@@ -24,6 +25,7 @@ import {
   isPricesResponse,
   isRevealSecretsResponse,
   isTokenChartResponse,
+  isTransactionAlertsResponse,
   isTransferResponse,
   isTransferReviewResponse,
   isWalletStatus,
@@ -33,10 +35,12 @@ import {
   type TransferReviewResponse,
   type WalletStatus,
 } from "../popup/responses";
+import type { Strk20NetworkConfig } from "../starknet/strk20/config";
 import type { AccountGroupIcon } from "../storage/account-groups";
 import type { AccountRef } from "../storage/vault-schema";
 import { createLedgerRuntimeClient } from "./ledger/runtime-client";
 import { createNftRuntimeClient } from "./nft-runtime";
+import { createPrivacyRuntimeClient } from "./privacy-runtime";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -88,6 +92,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   return {
     ...createLedgerRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
+    ...createPrivacyRuntimeClient(sendMessage),
     async addToken(address: string): Promise<void> {
       const response = await sendMessage({ address, type: "wallet.addToken" });
       if (isPreferencesResponse(response)) {
@@ -171,6 +176,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "approval failed");
     },
+    async retryApprovalFee(id: string): Promise<void> {
+      const response = await sendMessage({ id, type: "wallet.retryApprovalFee" });
+      if (isOkResponse(response)) {
+        return;
+      }
+      throw responseError(response, "fee estimate failed");
+    },
     async connectedSites(): Promise<ConnectedSitesResponse["sites"]> {
       const response = await sendMessage({ type: "wallet.connectedSites" });
       return isConnectedSitesResponse(response) ? response.sites : [];
@@ -211,6 +223,16 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         entries: response.activity,
         historyUnavailable: response.historyUnavailable ?? false,
       };
+    },
+    /**
+     * Drains the transaction failure notices background reconciliation
+     * recorded, including any raised while this panel was closed. The
+     * background hands each notice out once, so this is safe to call on every
+     * refresh; an unavailable background yields no notices rather than an error.
+     */
+    async loadTransactionAlerts(): Promise<readonly string[]> {
+      const response = await sendMessage({ type: "wallet.transactionAlerts" });
+      return isTransactionAlertsResponse(response) ? response.alerts : [];
     },
     async loadAllowances(): Promise<AllowancesResponse["allowances"]> {
       const response = await sendMessage({ type: "wallet.allowances" });
@@ -405,12 +427,19 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "rpc endpoint update failed");
     },
-    async setStrk20ProverUrl(url: string): Promise<void> {
-      const response = await sendMessage({ type: "wallet.setStrk20ProverUrl", url });
+    async setStrk20NetworkConfig(
+      networkId: string,
+      config: Strk20NetworkConfig | null,
+    ): Promise<void> {
+      const response = await sendMessage({
+        config,
+        networkId,
+        type: "wallet.setStrk20NetworkConfig",
+      });
       if (isPreferencesResponse(response)) {
         return;
       }
-      throw responseError(response, "prover endpoint update failed");
+      throw responseError(response, "privacy service configuration failed");
     },
     async setActiveNetwork(networkId: string): Promise<WalletStatus> {
       const response = await sendMessage({ networkId, type: "wallet.setActiveNetwork" });

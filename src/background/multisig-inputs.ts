@@ -6,6 +6,10 @@
  */
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import {
+  isMultisigConfirmationMode,
+  type MultisigConfirmationMode,
+} from "../shared/multisig-confirmation";
+import {
   isMultisigCallInput,
   isMultisigEntrypoint,
   MULTISIG_LIMITS,
@@ -161,14 +165,52 @@ export type MultisigProposalActionInput = {
 };
 
 /**
- * Parses a proposal action request (`confirm`, `revoke`, `execute`).
+ * Parsed confirmation review/submission. The discriminated mode makes a bare
+ * confirmation and an atomic confirmation-plus-execution impossible to mix up
+ * after the untrusted message boundary.
+ */
+export type ConfirmMultisigProposalInput = MultisigProposalActionInput & {
+  readonly mode: MultisigConfirmationMode;
+};
+
+/**
+ * Parses a confirmation review or submission. Both operations carry the same
+ * explicit mode so the fee shown in review is for the calls eventually sent.
+ */
+export const readConfirmMultisigProposalInput = (
+  message: unknown,
+  type: "wallet.confirmMultisigProposal" | "wallet.prepareMultisigConfirmation",
+): ConfirmMultisigProposalInput | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, [
+    "mode",
+    "proposalId",
+    "signerAccountId",
+    "type",
+    "untrackedVerified",
+  ]) &&
+  message["type"] === type &&
+  isMultisigConfirmationMode(message["mode"]) &&
+  isId(message["proposalId"]) &&
+  (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
+  (message["untrackedVerified"] === undefined || message["untrackedVerified"] === true)
+    ? {
+        mode: message["mode"],
+        proposalId: message["proposalId"],
+        ...(message["signerAccountId"] === undefined
+          ? {}
+          : { signerAccountId: message["signerAccountId"] }),
+        ...(message["untrackedVerified"] === true ? { untrackedVerified: true } : {}),
+      }
+    : null;
+
+/**
+ * Parses a revoke or execute request. Confirmation has its own discriminated
+ * parser above because its mode changes the exact calls being authorized.
  */
 export const readMultisigProposalActionInput = (
   message: unknown,
-  type:
-    | "wallet.confirmMultisigProposal"
-    | "wallet.executeMultisigProposal"
-    | "wallet.revokeMultisigConfirmation",
+  type: "wallet.executeMultisigProposal" | "wallet.revokeMultisigConfirmation",
 ): MultisigProposalActionInput | null => {
   const keys =
     type === "wallet.executeMultisigProposal"

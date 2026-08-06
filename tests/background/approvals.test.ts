@@ -201,22 +201,71 @@ describe("createApprovalQueue payload discrimination", () => {
 
   test("reconstructs strk20 actions", () => {
     const queue = createApprovalQueue();
-    const actions = [{ amount: "1", kind: "transfer", to: "0x2", token: "0x3" }] as never;
-    const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "execute" }];
+    const actions = [{ amount: "0x1", recipient: "0x2", token: "0x3", type: "transfer" as const }];
+    const plan = {
+      feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" as const },
+    };
     const { id } = queue.requestStrk20Invoke({
       actions,
-      calls,
       context: CONTEXT,
       origin: ORIGIN,
+      plan,
       summaries: ["Send"],
     });
-    expect(queue.payload(id)).toEqual({ actions, calls });
+    expect(queue.payload(id)).toEqual({ actions, strk20Plan: plan });
+    expect(queue.get(id)?.actionReviews).toEqual(actions);
+    expect(queue.get(id)?.relayFeeAction).toEqual(plan.feeAction);
   });
+
+  for (const input of [
+    {
+      kind: "strk20-balances",
+      request: { tokens: ["0x1"], type: "balances" },
+    },
+    {
+      kind: "strk20-prepare",
+      request: {
+        actions: [{ amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" }],
+        simulate: false,
+        type: "prepare",
+      },
+    },
+    {
+      kind: "strk20-subaccount",
+      request: { dappName: "Example", nonce: "0x1", type: "subaccount" },
+    },
+  ] as const) {
+    test(`reconstructs a deep-cloned ${input.kind} request`, () => {
+      const queue = createApprovalQueue();
+      const { id } = queue.requestStrk20Disclosure({
+        context: CONTEXT,
+        kind: input.kind,
+        origin: ORIGIN,
+        request: input.request,
+        summaries: ["Private request"],
+      });
+      const payload = queue.payload(id);
+
+      expect(payload).toEqual({ strk20Request: input.request });
+      expect(queue.get(id)?.actionReviews).toEqual(
+        input.kind === "strk20-prepare" ? input.request.actions : undefined,
+      );
+      (payload?.strk20Request as { type: string }).type = "changed";
+      expect(queue.payload(id)).toEqual({ strk20Request: input.request });
+    });
+  }
 
   test("reconstructs deep-cloned invoke calls", () => {
     const queue = createApprovalQueue();
     const calls = [{ calldata: ["0x1"], contractAddress: "0x2", entrypoint: "transfer" }];
     const { id } = queue.requestInvoke({
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
       calls,
       context: CONTEXT,
       flags: [],
@@ -282,6 +331,13 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
     const queue = createApprovalQueue();
     expect(() =>
       queue.requestInvoke({
+        fee: {
+          fee: null,
+          feeAffordability: "unknown",
+          feeEstimateFailed: false,
+          feeEstimatePending: false,
+          requiresDeployment: false,
+        },
         calls: [],
         context: CONTEXT,
         flags: [],
@@ -308,12 +364,36 @@ describe("createApprovalQueue per-kind origin guards and dedup", () => {
     expect(() =>
       queue.requestStrk20Invoke({
         actions,
-        calls: [],
         context: CONTEXT,
         origin: BAD_ORIGIN,
+        plan: {
+          feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" },
+        },
         summaries: ["Send"],
       }),
     ).toThrow("Invalid origin");
+  });
+
+  test("rejects strk20 disclosures with an invalid origin or mismatched kind", () => {
+    const queue = createApprovalQueue();
+    expect(() =>
+      queue.requestStrk20Disclosure({
+        context: CONTEXT,
+        kind: "strk20-balances",
+        origin: BAD_ORIGIN,
+        request: { tokens: ["0x1"], type: "balances" },
+        summaries: ["Share"],
+      }),
+    ).toThrow("Invalid origin");
+    expect(() =>
+      queue.requestStrk20Disclosure({
+        context: CONTEXT,
+        kind: "strk20-balances",
+        origin: ORIGIN,
+        request: { dappName: "Example", type: "subaccount" },
+        summaries: ["Share"],
+      }),
+    ).toThrow("Invalid STRK20 approval");
   });
 
   test("rejects switch-chain requests from an invalid origin", () => {

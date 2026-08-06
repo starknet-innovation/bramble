@@ -7,7 +7,7 @@ import type { Json } from "../shared/json";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
 import { unknownError, type WalletRpcError } from "../shared/rpc-errors";
-import { type ProviderChain, readProviderChain } from "./add-chain-params";
+import { readProviderChain } from "./add-chain-params";
 import {
   isRequestAccountsParams,
   type ProviderAccountsResult,
@@ -24,22 +24,23 @@ import {
   readTypedDataParam,
   toProviderPayload as toProviderPayloadResult,
 } from "./bridge-results";
-import { type ProviderDeclare, readProviderDeclare } from "./declare-params";
+import { readProviderDeclare } from "./declare-params";
 import { providerDeploymentResult } from "./deployment-bridge";
-import { type ProviderInvokeCall, providerInvokeCalls } from "./invoke-params";
+import { providerInvokeRequest } from "./invoke-params";
 import { isProviderMethod, type ProviderMethod } from "./methods";
 import { readProviderParams } from "./request-params";
+import type { RuntimeMessage } from "./runtime-message";
 import {
   providerStrk20Balances,
   providerStrk20CallAndProof,
   readStrk20BalancesParams,
   readStrk20InvokeParams,
   readStrk20PrepareParams,
-  type Strk20Action,
+  readStrk20SubaccountCommitmentParams,
   type Strk20BalanceEntry,
   type Strk20CallAndProof,
 } from "./strk20-bridge";
-import { type ProviderWatchAsset, readProviderWatchAsset } from "./watch-asset-params";
+import { readProviderWatchAsset } from "./watch-asset-params";
 
 /** Marker for page-to-content wallet provider requests.
  */
@@ -60,6 +61,10 @@ export const toProviderPayload = toProviderPayloadResult;
  * Provider method exposed to dapp pages.
  */
 export type { ProviderMethod } from "./methods";
+/**
+ * Re-exported provider-to-background capability union.
+ */
+export type { RuntimeMessage } from "./runtime-message";
 
 /**
  * Page-originated provider request shape.
@@ -134,89 +139,6 @@ export const walletRpcException = (error: WalletRpcError): Error => {
  * Minimal message-event fields needed for page trust checks.
  */
 export type PageMessageSource = Pick<MessageEvent<unknown>, "origin" | "source">;
-
-/**
- * Background runtime messages exposed through the dapp provider bridge.
- */
-export type RuntimeMessage =
-  | {
-      readonly chain: ProviderChain;
-      readonly origin: string;
-      readonly type: "wallet.addStarknetChain";
-    }
-  | {
-      readonly declare: ProviderDeclare;
-      readonly origin: string;
-      readonly type: "wallet.addDeclareTransaction";
-    }
-  | {
-      readonly calls: readonly ProviderInvokeCall[];
-      readonly origin: string;
-      readonly type: "wallet.addInvokeTransaction";
-    }
-  | {
-      readonly apiVersion?: string;
-      readonly origin: string;
-      readonly type: "wallet.deploymentData";
-    }
-  | {
-      readonly origin: string;
-      readonly type: "wallet.getChainId";
-    }
-  | {
-      readonly apiVersion?: string;
-      readonly origin: string;
-      readonly type: "wallet.supportedSpecs";
-    }
-  | {
-      readonly apiVersion?: string;
-      readonly origin: string;
-      readonly type: "wallet.supportedWalletApi";
-    }
-  | {
-      readonly origin: string;
-      readonly type: "wallet.getGrantedAccounts";
-    }
-  | {
-      readonly origin: string;
-      readonly type: "wallet.getPermissions";
-    }
-  | {
-      readonly origin: string;
-      readonly silent?: boolean;
-      readonly type: "wallet.requestAccounts";
-    }
-  | {
-      readonly origin: string;
-      readonly typedData: Json;
-      readonly type: "wallet.signTypedData";
-    }
-  | {
-      readonly origin: string;
-      readonly tokens: readonly string[];
-      readonly type: "wallet.strk20Balances";
-    }
-  | {
-      readonly actions: readonly Strk20Action[];
-      readonly origin: string;
-      readonly simulate: boolean;
-      readonly type: "wallet.strk20PrepareInvoke";
-    }
-  | {
-      readonly actions: readonly Strk20Action[];
-      readonly origin: string;
-      readonly type: "wallet.strk20InvokeTransaction";
-    }
-  | {
-      readonly chainId: string;
-      readonly origin: string;
-      readonly type: "wallet.switchChain";
-    }
-  | {
-      readonly asset: ProviderWatchAsset;
-      readonly origin: string;
-      readonly type: "wallet.watchAsset";
-    };
 
 /**
  * Checks that a window message came from the same page and origin.
@@ -376,6 +298,8 @@ const requestAccountsMessage: RuntimeBuilder = (params, origin) => {
 const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
   mc_accounts: (_params, origin) => ({ origin, type: "wallet.getGrantedAccounts" }),
   mc_requestAccounts: requestAccountsMessage,
+  mc_strk20Register: (params, origin) =>
+    params === undefined ? { origin, type: "wallet.strk20Register" } : null,
   wallet_requestAccounts: requestAccountsMessage,
   wallet_getPermissions: (params, origin) =>
     readApiVersionParam(params) === null ? null : { origin, type: "wallet.getPermissions" },
@@ -392,8 +316,15 @@ const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
     return asset ? { asset, origin, type: "wallet.watchAsset" } : null;
   },
   wallet_addInvokeTransaction: (params, origin) => {
-    const calls = providerInvokeCalls(params);
-    return calls ? { calls, origin, type: "wallet.addInvokeTransaction" } : null;
+    const input = providerInvokeRequest(params);
+    return input
+      ? {
+          calls: input.calls,
+          origin,
+          ...(input.proof === undefined ? {} : { proof: input.proof }),
+          type: "wallet.addInvokeTransaction",
+        }
+      : null;
   },
   wallet_addStarknetChain: (params, origin) => {
     const chain = readProviderChain(params);
@@ -426,6 +357,17 @@ const RUNTIME_BUILDERS: Record<ProviderMethod, RuntimeBuilder> = {
     const actions = readStrk20InvokeParams(params);
     return actions ? { actions, origin, type: "wallet.strk20InvokeTransaction" } : null;
   },
+  wallet_strk20SubaccountCommitment: (params, origin) => {
+    const input = readStrk20SubaccountCommitmentParams(params);
+    return input
+      ? {
+          dappName: input.dappName,
+          ...(input.nonce === undefined ? {} : { nonce: input.nonce }),
+          origin,
+          type: "wallet.strk20SubaccountCommitment",
+        }
+      : null;
+  },
   wallet_switchStarknetChain: (params, origin) => {
     const chainId = providerSwitchChainId(params);
     return chainId ? { chainId, origin, type: "wallet.switchChain" } : null;
@@ -438,6 +380,8 @@ const runtimeBuilderFor = (method: ProviderMethod): RuntimeBuilder => {
       return RUNTIME_BUILDERS.mc_accounts;
     case "mc_requestAccounts":
       return RUNTIME_BUILDERS.mc_requestAccounts;
+    case "mc_strk20Register":
+      return RUNTIME_BUILDERS.mc_strk20Register;
     case "wallet_addDeclareTransaction":
       return RUNTIME_BUILDERS.wallet_addDeclareTransaction;
     case "wallet_addInvokeTransaction":
@@ -464,6 +408,8 @@ const runtimeBuilderFor = (method: ProviderMethod): RuntimeBuilder => {
       return RUNTIME_BUILDERS.wallet_strk20InvokeTransaction;
     case "wallet_strk20PrepareInvoke":
       return RUNTIME_BUILDERS.wallet_strk20PrepareInvoke;
+    case "wallet_strk20SubaccountCommitment":
+      return RUNTIME_BUILDERS.wallet_strk20SubaccountCommitment;
     case "wallet_switchStarknetChain":
       return RUNTIME_BUILDERS.wallet_switchStarknetChain;
     case "wallet_watchAsset":

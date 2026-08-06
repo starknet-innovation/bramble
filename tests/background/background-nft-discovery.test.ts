@@ -181,6 +181,7 @@ describe("NFT auto-discovery messages", () => {
   test("discovers and hydrates an owned watch without an indexer", async () => {
     const contract = "0x511a2b3";
     const metadata: NftTokenMetadata = {
+      animationUrl: "",
       attributes: [{ traitType: "Punk ID", value: "0" }],
       collection: "MC Punks",
       description: "A test collectible",
@@ -229,6 +230,7 @@ describe("NFT auto-discovery messages", () => {
   test("loads watched artwork without waiting for or contacting the indexer", async () => {
     const contract = "0x511a2b3";
     const metadata: NftTokenMetadata = {
+      animationUrl: "",
       attributes: [],
       collection: "MC Punks",
       description: "",

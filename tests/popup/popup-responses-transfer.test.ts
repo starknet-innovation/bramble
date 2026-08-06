@@ -8,6 +8,7 @@ import { isTransferReviewResponse } from "../../src/popup/responses-transfer";
 
 const validReview = () => ({
   fee: { overallFee: "1000", unit: "FRI" },
+  feeAffordability: "ok",
   feeEstimateFailed: false,
   flags: [{ code: "unknown-contract", message: "Verify the contract." }],
   requiresDeployment: false,
@@ -25,7 +26,12 @@ describe("isTransferReviewResponse", () => {
     expect(
       isTransferReviewResponse({
         ok: true,
-        review: { ...validReview(), fee: null, feeEstimateFailed: true },
+        review: {
+          ...validReview(),
+          fee: null,
+          feeAffordability: "unknown",
+          feeEstimateFailed: true,
+        },
       }),
     ).toBe(true);
   });

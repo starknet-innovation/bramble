@@ -102,9 +102,30 @@ describe("approvalCard renders each approval kind", () => {
 
   test("strk20-invoke request shows the private-transaction copy and call summaries", () => {
     const approval: PendingApproval = {
+      actionReviews: [
+        {
+          calls: [
+            {
+              calldata: ["0x1", "0x2"],
+              contract_address: "0x471",
+              entry_point: "transfer",
+            },
+          ],
+          collect_policy: { amount: "0xa", type: "exact" },
+          dapp_name: "Example",
+          nonce: "0x7",
+          type: "subaccount_invoke",
+        },
+      ],
       id: ID,
       kind: "strk20-invoke",
       origin: ORIGIN,
+      relayFeeAction: {
+        amount: "0x1",
+        recipient: "0x99",
+        token: "0x49d",
+        type: "withdraw",
+      },
       summaries: ["Withdraw 10 to 0x0471…938d"],
     };
     const html = approvalCard(approval, status);
@@ -112,7 +133,83 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("Private transaction request");
     expect(html).toContain("Review each private action and the frozen execution call.");
     expect(html).toContain("Withdraw 10 to 0x0471…938d");
+    expect(html).toContain("Exact action parameters");
+    expect(html).toContain("Collect policy");
+    expect(html).toContain("0x7");
+    expect(html).toContain("0x1, 0x2");
+    expect(html).toContain("Relay fee action · Withdrawal");
+    expect(html).toContain("0x99");
+    expect(html).toContain("2 actions · including relay fee");
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${ID}"`);
+  });
+
+  for (const input of [
+    {
+      action: "Share balances",
+      hint: "reveals only the listed private token balances",
+      kind: "strk20-balances",
+      title: "Private balance request",
+    },
+    {
+      action: "Authorize",
+      hint: "site can submit a returned proof",
+      kind: "strk20-prepare",
+      title: "Private proof request",
+    },
+    {
+      action: "Activate",
+      hint: "publishes a viewing-key commitment",
+      kind: "strk20-register",
+      title: "Activate private balances",
+    },
+    {
+      action: "Share commitment",
+      hint: "may link sessions for this site",
+      kind: "strk20-subaccount",
+      title: "Private identity request",
+    },
+  ] as const) {
+    test(`${input.kind} explains the disclosure and binds the approval context`, () => {
+      const approval: PendingApproval = {
+        ...(input.kind === "strk20-prepare"
+          ? {
+              actionReviews: [{ calldata: ["0x1"], contract: "0x2", type: "invoke" as const }],
+            }
+          : {}),
+        context: {
+          accountId: account.id,
+          chainId: "0x534e5f4d41494e",
+          networkId: "SN_MAIN",
+          payloadDigest: `sha256:${"a".repeat(64)}`,
+        },
+        id: ID,
+        kind: input.kind,
+        origin: ORIGIN,
+        summaries: ["Exact private request"],
+      };
+      const html = approvalCard(approval, status);
+
+      expect(html).toContain(input.title);
+      expect(html).toContain(input.hint);
+      expect(html).toContain("Exact private request");
+      expect(html).toContain("Technical request identity");
+      expect(html).toContain(input.action);
+    });
+  }
+
+  test("empty-token balance disclosure explicitly means every private balance", () => {
+    const html = approvalCard(
+      {
+        id: ID,
+        kind: "strk20-balances",
+        origin: ORIGIN,
+        summaries: ["Share all private token balances"],
+      },
+      status,
+    );
+
+    expect(html).toContain("reveals every private token balance");
+    expect(html).not.toContain("only the listed private token balances");
   });
 
   test("switch-chain request shows the network-switch copy", () => {

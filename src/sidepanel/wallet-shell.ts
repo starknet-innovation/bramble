@@ -12,7 +12,7 @@ import { button, iconButton, iconLink } from "../ui/controls";
 import { dockNavigation } from "../ui/navigation";
 import { type IconName, icon } from "./icons";
 import { accountAvatar, accountDisplayName, type WalletView } from "./parts";
-import { TERMINAL_PORTFOLIO_URL, TERMINAL_URL } from "./terminal-link";
+import { TERMINAL_URL } from "./terminal-link";
 
 /**
  * Renders the unlocked account header and its trusted destinations.
@@ -130,15 +130,6 @@ export const actionTile = (
     <span class="tile-icon">${icon(name)}</span>
     <span class="tile-label">${escapeHtml(label)}</span>
   </button>`;
-
-/**
- * Renders the external fourth home action that opens the Terminal portfolio.
- */
-export const terminalPortfolioTile = (): string =>
-  `<a class="action-tile" href="${escapeHtml(TERMINAL_PORTFOLIO_URL)}" target="_blank" rel="noopener noreferrer" aria-label="Open MC Terminal portfolio">
-    <span class="tile-icon">${icon("briefcase")}</span>
-    <span class="tile-label">Portfolio</span>
-  </a>`;
 
 /**
  * Renders the trusted bridge from the compact wallet into MC Terminal.

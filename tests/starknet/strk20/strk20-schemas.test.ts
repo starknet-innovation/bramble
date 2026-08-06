@@ -1,5 +1,5 @@
 /**
- * STRK20 schema checks prove strict, spec-0.10.3 action validation and envelope
+ * STRK20 schema checks prove strict, spec-0.10.4-rc.0 action validation and envelope
  * shape guards. These exercise the request/response conformance surface (the
  * `type`-discriminated action union, required recipient, "OPEN" transfer, flat
  * invoke with placeholder calldata) and result shapes — not a live
@@ -70,6 +70,52 @@ describe("strk20 action schemas", () => {
       contract: token,
       type: "invoke",
     });
+  });
+
+  test("parses all sub-account collection policies and bounds their calls", () => {
+    const call = { calldata: ["0x1"], contract_address: token, entry_point: "swap" };
+    for (const collect_policy of [
+      { type: "all" },
+      { type: "diff" },
+      { amount: "0x2", type: "exact" },
+    ]) {
+      expect(
+        readStrk20Action({
+          calls: [call],
+          collect_policy,
+          dapp_name: "MC Terminal",
+          nonce: "0x1",
+          type: "subaccount_invoke",
+        }),
+      ).toMatchObject({ collect_policy, dapp_name: "MC Terminal", type: "subaccount_invoke" });
+    }
+    expect(
+      readStrk20Action({
+        calls: [],
+        collect_policy: { type: "all" },
+        dapp_name: "MC Terminal",
+        nonce: "0x1",
+        type: "subaccount_invoke",
+      }),
+    ).toBeNull();
+    expect(
+      readStrk20Action({
+        calls: [call],
+        collect_policy: { amount: "not-a-felt", type: "exact" },
+        dapp_name: "MC Terminal",
+        nonce: "0x1",
+        type: "subaccount_invoke",
+      }),
+    ).toBeNull();
+    expect(
+      readStrk20Action({
+        calls: Array.from({ length: 17 }, () => call),
+        collect_policy: { type: "all" },
+        dapp_name: "MC Terminal",
+        nonce: "0x1",
+        type: "subaccount_invoke",
+      }),
+    ).toBeNull();
   });
 
   test("requires recipient on withdraw", () => {
@@ -153,7 +199,7 @@ describe("strk20 action schemas", () => {
 
   test("validates the token list for balances queries", () => {
     expect(readStrk20Tokens([token, recipient])).toEqual([token, recipient]);
-    expect(readStrk20Tokens([])).toBeNull();
+    expect(readStrk20Tokens([])).toEqual([]);
     expect(readStrk20Tokens([token, "0x0"])).toBeNull();
   });
 });
@@ -162,6 +208,7 @@ describe("strk20 envelope schemas", () => {
   test("guards the proof, call-and-proof, and balance entry shapes", () => {
     const proof = { data: "abc", output: ["0x1"], proof_facts: ["0x2"] };
     expect(isStrk20Proof(proof)).toBe(true);
+    expect(isStrk20Proof({ data: "", output: [], proof_facts: [] })).toBe(true);
     expect(isStrk20Proof({ data: "", output: ["0x1"], proof_facts: [] })).toBe(false);
     expect(isStrk20Proof({ data: "abc", output: ["nope"], proof_facts: [] })).toBe(false);
 

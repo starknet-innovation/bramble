@@ -20,6 +20,23 @@ import {
 const MAX_TOKEN_ID_DIGITS = 78;
 const MAX_TEXT_LENGTH = 128;
 const MAX_IMAGE_URL_LENGTH = 2048;
+// Self-contained on-chain image data URIs (e.g. a Cairo-rendered SVG) can far
+// exceed the 2 KB https cap, so they get their own larger bound. It matches the
+// 32 KB ceiling the metadata document is decoded under elsewhere
+// (MAX_DATA_URI_BYTES / MAX_NFT_URI_BYTES), so an embedded image can never be
+// larger than the document that carried it.
+const MAX_IMAGE_DATA_URI_LENGTH = 32_768;
+// Image media types safe to hand to an <img>: an SVG is rendered there in the
+// browser's restricted mode (no scripts, no external fetches) and raster types
+// are inert. Anything outside this set collapses to the placeholder.
+const DATA_URI_IMAGE_TYPES = new Set([
+  "image/avif",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/svg+xml",
+  "image/webp",
+]);
 // Public IPFS gateway used to turn an `ipfs://` metadata URI into an https URL
 // the side panel can render in an <img>. Only the host is fixed; the CID path is
 // taken verbatim from the (untrusted) record and length-capped.
@@ -28,11 +45,13 @@ const IPFS_GATEWAY = "https://ipfs.io/ipfs/";
 /**
  * A collectible the wallet auto-discovered for the active account. `image` is
  * always either an empty string (render the placeholder) or an https URL safe to
- * drop into an <img src>; `id` is the deterministic
- * `${networkId}:${contract}:${tokenId}` key shared with watched NFTs so the two
- * lists dedupe cleanly.
+ * drop into an <img src>; `animationUrl`, when present, is a self-contained
+ * `data:text/html` renderer shown only inside the sandboxed iframe on explicit
+ * user action; `id` is the deterministic `${networkId}:${contract}:${tokenId}`
+ * key shared with watched NFTs so the two lists dedupe cleanly.
  */
 export type DiscoveredNft = {
+  readonly animationUrl?: string;
   readonly attributes?: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
@@ -134,17 +153,60 @@ const isNftAttribute = (value: unknown): value is NftAttribute =>
   value["value"].length > 0 &&
   value["value"].length <= 256;
 
+// Validates a safe image `data:` URI and returns it verbatim, or "" when it is
+// unsafe or malformed. The value is returned unchanged (original casing, so
+// case-sensitive base64 survives) which keeps this idempotent and lets it pass
+// the `normalizeImageUrl(image) === image` round-trip check in isDiscoveredNft.
+// The URI is only ever placed in an <img src> (via escapeHtml), where an SVG
+// runs script-less and cannot fetch external resources — so a strict media-type
+// allowlist and size cap are the whole safety contract.
+const normalizeImageDataUri = (value: string): string => {
+  if (value.length > MAX_IMAGE_DATA_URI_LENGTH) {
+    return "";
+  }
+  // Split on the first comma: SVG payloads contain commas, but the header never
+  // does, so indexOf finds the true header/payload boundary.
+  const comma = value.indexOf(",");
+  if (comma < 0) {
+    return "";
+  }
+  const payload = value.slice(comma + 1);
+  if (payload.length === 0) {
+    return "";
+  }
+  const params = value.slice("data:".length, comma).toLowerCase().split(";");
+  const mediaType = params[0] ?? "";
+  if (!DATA_URI_IMAGE_TYPES.has(mediaType)) {
+    return "";
+  }
+  const isBase64 = params.includes("base64");
+  // Raster payloads must be base64; only SVG may also arrive as raw/percent-
+  // encoded utf8.
+  if (!isBase64 && mediaType !== "image/svg+xml") {
+    return "";
+  }
+  if (isBase64 && !/^[A-Za-z0-9+/]+={0,2}$/.test(payload)) {
+    return "";
+  }
+  return value;
+};
+
 /**
- * Normalizes an untrusted image reference into an https URL the panel can
- * render, or "" when it is unusable. `ipfs://<cid>` is rewritten through a fixed
- * public gateway; https URLs pass through; everything else (http, data, gopher,
- * empty) collapses to "" so the gallery falls back to its placeholder.
+ * Normalizes an untrusted image reference into a string the panel can render in
+ * an <img>, or "" when it is unusable. `ipfs://<cid>` is rewritten through a
+ * fixed public gateway; https URLs pass through; a safe image `data:` URI (an
+ * SVG, or a base64 raster within the size cap) passes through verbatim;
+ * everything else (http, javascript, non-image data URIs, empty) collapses to
+ * "" so the gallery falls back to its placeholder.
  */
 export const normalizeImageUrl = (value: unknown): string => {
   if (typeof value !== "string") {
     return "";
   }
   const trimmed = value.trim();
+  if (trimmed.startsWith("data:")) {
+    return normalizeImageDataUri(trimmed);
+  }
   if (trimmed.startsWith("ipfs://")) {
     const path = trimmed.slice("ipfs://".length).replace(/^ipfs\//, "");
     const gatewayed = `${IPFS_GATEWAY}${path}`;
@@ -154,11 +216,44 @@ export const normalizeImageUrl = (value: unknown): string => {
 };
 
 /**
+ * Normalizes an untrusted NFT `animation_url` into a self-contained
+ * `data:text/html` URI the wallet may render inside the sandboxed iframe, or ""
+ * when it is unusable. Only `data:text/html` (base64 or raw/percent-encoded
+ * utf8) within the size cap is accepted — remote (`https`/`ipfs`) animations are
+ * rejected so an opened collectible can never make a network request. The value
+ * is returned verbatim (idempotent, so it round-trips through isDiscoveredNft),
+ * and its isolation is guaranteed downstream by the manifest sandbox's separate
+ * security principal and egress-blocking CSP, never by inspecting the HTML here.
+ */
+export const normalizeAnimationUri = (value: unknown): string => {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("data:") || trimmed.length > MAX_IMAGE_DATA_URI_LENGTH) {
+    return "";
+  }
+  const comma = trimmed.indexOf(",");
+  if (comma < 0 || comma + 1 >= trimmed.length) {
+    return "";
+  }
+  const params = trimmed.slice("data:".length, comma).toLowerCase().split(";");
+  if (params[0] !== "text/html") {
+    return "";
+  }
+  if (params.includes("base64") && !/^[A-Za-z0-9+/]+={0,2}$/.test(trimmed.slice(comma + 1))) {
+    return "";
+  }
+  return trimmed;
+};
+
+/**
  * Checks a discovered-NFT record before it is trusted at the runtime boundary.
  */
 export const isDiscoveredNft = (value: unknown): value is DiscoveredNft =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, [
+    "animationUrl",
     "attributes",
     "collection",
     "contract",
@@ -170,6 +265,9 @@ export const isDiscoveredNft = (value: unknown): value is DiscoveredNft =>
     "name",
     "tokenId",
   ]) &&
+  (value["animationUrl"] === undefined ||
+    (typeof value["animationUrl"] === "string" &&
+      normalizeAnimationUri(value["animationUrl"]) === value["animationUrl"])) &&
   (value["attributes"] === undefined ||
     (Array.isArray(value["attributes"]) &&
       value["attributes"].length <= 32 &&

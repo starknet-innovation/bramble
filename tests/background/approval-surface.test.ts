@@ -31,6 +31,36 @@ describe("approval surface", () => {
     expect(opened).toEqual([{ tabId: 42 }]);
   });
 
+  test("opens immediately for every STRK20 private disclosure request", () => {
+    const opened: number[] = [];
+    for (const type of [
+      "wallet.strk20Balances",
+      "wallet.strk20PrepareInvoke",
+      "wallet.strk20Register",
+      "wallet.strk20SubaccountCommitment",
+    ]) {
+      requestApprovalSurface(
+        {
+          sidePanel: {
+            async open({ tabId }) {
+              opened.push(tabId);
+            },
+          },
+        },
+        "side-panel",
+        "extension-id",
+        { type },
+        {
+          id: "extension-id",
+          tab: { id: 42 },
+          url: "https://dapp.example/app",
+        },
+      );
+    }
+
+    expect(opened).toEqual([42, 42, 42, 42]);
+  });
+
   test("does not open for non-approval messages or untrusted senders", () => {
     const opened: { tabId: number }[] = [];
     const surface = {

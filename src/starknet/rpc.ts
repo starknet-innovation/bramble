@@ -7,11 +7,13 @@ import type { TokenConfig } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
 import {
+  isTransactionNotFoundError,
   isTransportRpcError,
   krustyAccount,
   type StarkHashSigner,
   withRpcFallback,
 } from "./provider";
+import { decodeUint256Response } from "./rpc-assets";
 import { type FeeSpeed, type InvokeInput, submitInvokeTransaction } from "./rpc-submit";
 
 /**
@@ -43,6 +45,7 @@ export {
  */
 export {
   isContractNotFoundError,
+  isTransactionNotFoundError,
   isTransportRpcError,
   type StarkHashSigner,
   withRpcFallback,
@@ -71,8 +74,6 @@ export {
   type InvokeSubmission,
   submitInvokeTransaction,
 } from "./rpc-submit";
-
-const UINT_128_SHIFT = 128n;
 
 /**
  * Token balance returned to the side panel.
@@ -130,8 +131,33 @@ export type TransactionStatusInput = {
 
 /**
  * Chain-derived transaction status used by the activity feed.
+ *
+ * `preconfirmed` is Starknet's `PRE_CONFIRMED` finality: the block proposer has
+ * executed the transaction in the block it is building, so its outcome
+ * (including a revert) is already known, but consensus has not committed that
+ * block. Provisional — a real outcome the user can act on, never final.
+ * `ACCEPTED_ON_L1` and `ACCEPTED_ON_L2` both map to `accepted`; L1 finality is
+ * tracked out of band (see {@link TransactionStatusReport}).
  */
-export type TransactionStatus = "accepted" | "pending" | "rejected" | "reverted";
+export type TransactionStatus = "accepted" | "pending" | "preconfirmed" | "rejected" | "reverted";
+
+/**
+ * One hash's chain observation.
+ *
+ * - `found` is false only when the node answered that it has no record of the
+ *   hash (`TXN_HASH_NOT_FOUND`); a transport failure fails over or throws
+ *   instead, so this means "the node says it is gone", not "we could not ask".
+ *   A pre-confirmed transaction whose block proposal never commits disappears
+ *   exactly this way, but a single not-found is ordinary noise — callers must
+ *   require several consecutive observations before treating it as failure.
+ * - `finalizedOnL1` is true only for `ACCEPTED_ON_L1`: the reconciliation
+ *   loop's terminal condition, deliberately not a {@link TransactionStatus}.
+ */
+export type TransactionStatusReport = {
+  readonly finalizedOnL1: boolean;
+  readonly found: boolean;
+  readonly status: TransactionStatus;
+};
 
 const pow10 = (decimals: number): bigint => 10n ** BigInt(decimals);
 
@@ -171,17 +197,11 @@ export const formatTokenAmount = (raw: bigint, decimals: number): string => {
 };
 
 const parseUint256Response = (response: readonly string[]): bigint => {
-  const low = response[0];
-  const high = response[1];
-  if (
-    typeof low !== "string" ||
-    typeof high !== "string" ||
-    !isStarkFieldElement(low) ||
-    !isStarkFieldElement(high)
-  ) {
+  const value = decodeUint256Response(response);
+  if (value === null) {
     throw new WalletError("Invalid token balance response");
   }
-  return BigInt(low) + (BigInt(high) << UINT_128_SHIFT);
+  return value;
 };
 
 /**
@@ -369,7 +389,8 @@ export const submitErc20Transfer = async (
 };
 
 /**
- * Estimates the fee for invoke calls without broadcasting anything.
+ * Estimates invoke fees without broadcasting or signing. Validation is skipped
+ * so review-time estimation cannot open a Ledger prompt before user approval.
  */
 export const estimateInvokeFee = async (
   { account, calls, rpcUrls, signHash }: InvokeInput,
@@ -382,7 +403,7 @@ export const estimateInvokeFee = async (
     rpcUrls,
     async (provider) => {
       const starknetAccount = krustyAccount(provider, account, signHash);
-      const estimate = await starknetAccount.estimateInvokeFee([...calls]);
+      const estimate = await starknetAccount.estimateInvokeFee([...calls], { skipValidate: true });
       return {
         overallFee: BigInt(estimate.overall_fee).toString(),
         unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
@@ -395,43 +416,76 @@ export const estimateInvokeFee = async (
 const FINALITY_TO_STATUS: Readonly<Record<string, TransactionStatus>> = {
   ACCEPTED_ON_L1: "accepted",
   ACCEPTED_ON_L2: "accepted",
+  PRE_CONFIRMED: "preconfirmed",
   REJECTED: "rejected",
 };
-// Maps a receipt to a wallet status. REVERTED execution wins (a reverted tx can
-// still be ACCEPTED_ON_L2); the rest is pending.
+
+// Unclassified, RECEIVED, and CANDIDATE answers deliberately stay pending.
+const PENDING_REPORT: TransactionStatusReport = {
+  finalizedOnL1: false,
+  found: true,
+  status: "pending",
+};
+const NOT_FOUND_REPORT: TransactionStatusReport = {
+  finalizedOnL1: false,
+  found: false,
+  status: "pending",
+};
+
+/**
+ * Maximum status reads in flight against one RPC endpoint.
+ */
+export const TRANSACTION_STATUS_CONCURRENCY = 8;
+
+const transactionStatusEntry = async (
+  provider: RpcProvider,
+  transactionHash: string,
+): Promise<readonly [string, TransactionStatusReport]> => {
+  try {
+    return [transactionHash, classifyStatus(await provider.getTransactionStatus(transactionHash))];
+  } catch (error) {
+    if (isTransportRpcError(error)) {
+      throw error;
+    }
+    return [transactionHash, isTransactionNotFoundError(error) ? NOT_FOUND_REPORT : PENDING_REPORT];
+  }
+};
+
+// REVERTED execution wins over finality, including PRE_CONFIRMED.
 const classifyStatus = (receipt: {
   readonly execution_status?: unknown;
   readonly finality_status?: unknown;
-}): TransactionStatus =>
-  String(receipt.execution_status ?? "") === "REVERTED"
-    ? "reverted"
-    : (FINALITY_TO_STATUS[String(receipt.finality_status ?? "")] ?? "pending");
+}): TransactionStatusReport => {
+  const finality = String(receipt.finality_status ?? "");
+  if (String(receipt.execution_status ?? "") === "REVERTED") {
+    return { finalizedOnL1: finality === "ACCEPTED_ON_L1", found: true, status: "reverted" };
+  }
+  const status = FINALITY_TO_STATUS[finality];
+  return status === undefined
+    ? PENDING_REPORT
+    : { finalizedOnL1: finality === "ACCEPTED_ON_L1", found: true, status };
+};
+
 /**
- * Reads finality/execution status for submitted transactions.
+ * Reads transaction status with bounded fanout and transport failover. Explicit
+ * not-found answers remain distinct so callers can tally disappearances.
  */
 export const getTransactionStatuses = async (
   { hashes, rpcUrls }: TransactionStatusInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
-): Promise<Readonly<Record<string, TransactionStatus>>> =>
+): Promise<Readonly<Record<string, TransactionStatusReport>>> =>
   withRpcFallback(
     rpcUrls,
     async (provider) => {
-      const entries = await Promise.all(
-        hashes.map(async (transactionHash): Promise<readonly [string, TransactionStatus]> => {
-          try {
-            return [
-              transactionHash,
-              classifyStatus(await provider.getTransactionStatus(transactionHash)),
-            ];
-          } catch (error) {
-            // Transport failures propagate to fail over; semantic errors → pending.
-            if (isTransportRpcError(error)) {
-              throw error;
-            }
-            return [transactionHash, "pending"];
-          }
-        }),
-      );
+      const entries: (readonly [string, TransactionStatusReport])[] = [];
+      for (let offset = 0; offset < hashes.length; offset += TRANSACTION_STATUS_CONCURRENCY) {
+        const batch = hashes.slice(offset, offset + TRANSACTION_STATUS_CONCURRENCY);
+        entries.push(
+          ...(await Promise.all(
+            batch.map((transactionHash) => transactionStatusEntry(provider, transactionHash)),
+          )),
+        );
+      }
       return Object.fromEntries(entries);
     },
     makeProvider,

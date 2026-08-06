@@ -5,16 +5,19 @@
  */
 import {
   isMultisigClassStatusResponse,
+  isMultisigConfirmationReviewResponse,
   isMultisigDeployResponse,
   isMultisigProposalResponse,
   isMultisigResponse,
   isMultisigsResponse,
   isOkResponse,
   type MultisigClassState,
+  type MultisigConfirmationReviewResponse,
   type MultisigDeployResponse,
   type MultisigsResponse,
 } from "../popup/multisig-responses";
 import { isBalancesResponse, isErrorResponse, isTransferResponse } from "../popup/responses";
+import type { MultisigConfirmationMode } from "../shared/multisig-confirmation";
 import type { MultisigProposalCall } from "../storage/multisig-store";
 import type { MultisigSyncState } from "./multisig-sync";
 import type { BalanceState, RuntimeApi } from "./runtime";
@@ -44,21 +47,41 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "add multisig failed");
       }
     },
-    async confirmProposal(
-      proposalId: string,
-      signerAccountId: string,
-      untrackedVerified?: boolean,
-    ): Promise<string> {
+    async confirmProposal(input: {
+      readonly mode: MultisigConfirmationMode;
+      readonly proposalId: string;
+      readonly signerAccountId: string;
+      readonly untrackedVerified?: boolean;
+    }): Promise<string> {
       const response = await sendMessage({
-        proposalId,
-        signerAccountId,
+        mode: input.mode,
+        proposalId: input.proposalId,
+        signerAccountId: input.signerAccountId,
         type: "wallet.confirmMultisigProposal",
-        ...(untrackedVerified ? { untrackedVerified: true } : {}),
+        ...(input.untrackedVerified ? { untrackedVerified: true } : {}),
       });
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
       throw responseError(response, "confirm failed");
+    },
+    async prepareConfirmation(input: {
+      readonly mode: MultisigConfirmationMode;
+      readonly proposalId: string;
+      readonly signerAccountId: string;
+      readonly untrackedVerified?: boolean;
+    }): Promise<MultisigConfirmationReviewResponse["confirmationReview"]> {
+      const response = await sendMessage({
+        mode: input.mode,
+        proposalId: input.proposalId,
+        signerAccountId: input.signerAccountId,
+        type: "wallet.prepareMultisigConfirmation",
+        ...(input.untrackedVerified ? { untrackedVerified: true } : {}),
+      });
+      if (isMultisigConfirmationReviewResponse(response)) {
+        return response.confirmationReview;
+      }
+      throw responseError(response, "confirmation review failed");
     },
     async declareClass(): Promise<string> {
       const response = await sendMessage({ type: "wallet.declareMultisigClass" });

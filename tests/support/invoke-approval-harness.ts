@@ -1,0 +1,126 @@
+/**
+ * Shared dApp invoke-approval harness. Centralizes the connected account,
+ * sender identities, wallet double, and injectable RPC so approval tests do
+ * not drift on their security boundary setup.
+ */
+import { createApprovalQueue } from "../../src/background/approvals";
+import { createMessageHandler } from "../../src/background/messages";
+import type { RuntimeRpc } from "../../src/background/runtime-rpc";
+import type { RuntimeSender } from "../../src/background/senders";
+import { createUnlockSession } from "../../src/background/session";
+import type { InvokeInput } from "../../src/starknet/rpc";
+import { memoryActivityLog } from "../../src/storage/activity-store";
+import type {
+  WalletPreferences,
+  WalletPreferencesStore,
+} from "../../src/storage/preferences-store";
+import type { AccountRef } from "../../src/storage/vault-schema";
+import { makeRuntimeRpc } from "./runtime-rpc-stub";
+
+export const invokeAccount: AccountRef = {
+  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
+  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  networkId: "SN_MAIN",
+  publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+};
+export const invokeVaultPassphrase = "correct horse battery staple";
+export const invokeOrigin = "https://dapp.example";
+export const invokeContentSender: RuntimeSender = {
+  id: "extension-id",
+  url: `${invokeOrigin}/app`,
+};
+export const invokeExtensionSender: RuntimeSender = {
+  id: "extension-id",
+  url: "chrome-extension://extension-id/sidepanel.html",
+};
+const call = {
+  calldata: ["0x5", "1000", "0"],
+  contractAddress: "0x123",
+  entrypoint: "transfer",
+};
+
+export const invokeWalletStub = (connected: readonly AccountRef[]) => ({
+  async addDerivedAccount() {
+    return invokeAccount;
+  },
+  async createAccount() {
+    return invokeAccount;
+  },
+  async ensureNetworkAccount() {
+    return invokeAccount;
+  },
+  async getGrantedAccounts(target: string) {
+    return target === invokeOrigin ? connected : [];
+  },
+  async generateMnemonic() {
+    return "unused";
+  },
+  async grantOrigin() {
+    return connected;
+  },
+  async readVault() {
+    return {
+      accounts: [invokeAccount],
+      activeAccountId: invokeAccount.id,
+      mnemonic: null,
+      originGrants: [{ accountIds: [invokeAccount.id], origin: invokeOrigin }],
+      schemaVersion: 3 as const,
+      signingKeys: [{ accountId: invokeAccount.id, privateKey: "0x123456" }],
+    };
+  },
+  async setActiveAccount() {
+    return invokeAccount;
+  },
+  async signHash() {
+    return { publicKey: invokeAccount.publicKeyX, r: "0x1", s: "0x2" };
+  },
+  async status() {
+    return {
+      accountCount: 1,
+      activeAccountId: invokeAccount.id,
+      hasVault: true,
+      locked: false,
+      ready: true,
+    };
+  },
+});
+
+export const fixedInvokePreferences = (preferences: WalletPreferences): WalletPreferencesStore =>
+  ({ read: async () => preferences }) as unknown as WalletPreferencesStore;
+
+export const makeInvokeHarness = (
+  connected: readonly AccountRef[] = [invokeAccount],
+  preferencesStore?: WalletPreferencesStore,
+  rpcOverrides: Partial<RuntimeRpc> = {},
+) => {
+  const session = createUnlockSession();
+  session.unlock(invokeVaultPassphrase);
+  const approvals = createApprovalQueue();
+  const activity = memoryActivityLog();
+  const invoked: InvokeInput[] = [];
+  const rpc = makeRuntimeRpc({
+    async submitInvokeTransaction(input: InvokeInput) {
+      invoked.push(input);
+      return { calls: input.calls, transactionHash: "0x7cd" };
+    },
+    ...rpcOverrides,
+  });
+  const options = {
+    activity,
+    approvals,
+    ...(preferencesStore === undefined ? {} : { preferencesStore }),
+    runtimeRpc: rpc,
+    session,
+  };
+  const handler = createMessageHandler(invokeWalletStub(connected), "extension-id", options);
+  return { activity, handler, invoked, session };
+};
+
+export const invokeMessage = (target = invokeOrigin) => ({
+  calls: [call],
+  origin: target,
+  type: "wallet.addInvokeTransaction" as const,
+});

@@ -59,6 +59,7 @@ type Calls = {
 const mount = (
   review: Awaited<ReturnType<NftUiDeps["wallet"]["reviewNftTransfer"]>> = {
     fee: { overallFee: "1000", unit: "FRI" },
+    feeAffordability: "unknown",
     feeEstimateFailed: false,
     flags: [],
     requiresDeployment: false,
@@ -166,6 +167,7 @@ describe("NFT send review", () => {
   test("shows a poisoning warning but never enables confirmation", async () => {
     const { app, calls } = mount({
       fee: { overallFee: "1000", unit: "FRI" },
+      feeAffordability: "unknown",
       feeEstimateFailed: false,
       flags: [
         {
@@ -219,6 +221,7 @@ describe("NFT send review", () => {
   test("requires a successful fee retry before confirmation", async () => {
     const review = {
       fee: null,
+      feeAffordability: "unknown",
       feeEstimateFailed: true,
       flags: [],
       requiresDeployment: false,

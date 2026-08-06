@@ -28,6 +28,7 @@ import { accountLabel, flowHeader, flowScreen, noAccountEmpty, walletMenuRow } f
  * images that wallet surfaces may load without weakening the privacy boundary.
  */
 export type NftGalleryItem = {
+  readonly animationUrl: string;
   readonly attributes: readonly NftAttribute[];
   readonly collection: string;
   readonly contract: string;
@@ -85,6 +86,7 @@ export const visibleNftItems = (
     }
     const attributes = nft.attributes ?? [];
     items.push({
+      animationUrl: nft.animationUrl ?? "",
       attributes,
       collection: nft.collection,
       contract: nft.contract,
@@ -126,6 +128,22 @@ export const nftImageMarkup = (item: NftGalleryItem, reveal: boolean, eager = fa
 const nftArt = (item: NftGalleryItem, reveal: boolean, eager = false): string =>
   `<span class="nft-art">${nftImageMarkup(item, reveal, eager)}${icon("image")}</span>`;
 
+/**
+ * The tile play affordance for a collectible with an on-chain animation: a button
+ * that overlays the art square (revealed on hover/focus) plus the hidden
+ * sandboxed iframe it drives. Shared by the NFTs gallery card and the home
+ * Collectibles tile so both surface one identical, audited control; nft-ui's
+ * `bindAnimation` wires the click. It sits outside the tile's open button (no
+ * nested buttons) and is emitted only for watched, solicited tokens carrying an
+ * `animationUrl`, so it never runs on gallery paint. The host `<li>` must be
+ * positioned (`.nft-card`/`.collectible-tile`) for the overlay to cover the art.
+ */
+export const nftTilePlay = (item: NftGalleryItem): string =>
+  item.animationUrl
+    ? `<button class="nft-play-tile" data-nft-play="${escapeHtml(item.animationUrl)}" type="button" aria-label="Play animation">${icon("gamepad")}<span>Play animation</span></button>
+      <iframe class="nft-animation nft-animation--tile" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>`
+    : "";
+
 // The Hide control: a watched entry toggles its stored spam flag; a
 // discovered-only entry is persisted-as-spam by nft-ui using the data-* target.
 const hideButton = (item: NftGalleryItem): string =>
@@ -162,6 +180,7 @@ export const nftGalleryCard = (item: NftGalleryItem, eager: boolean): string => 
         <code>${escapeHtml(item.collection || accountLabel(item.contract))} · #${escapeHtml(item.tokenId)}</code>
       </span>
     </button>
+    ${nftTilePlay(item)}
     <div class="nft-actions">
       ${hideButton(item)}
       ${
@@ -357,6 +376,7 @@ export const selectedNftDetail = (
   const discovered = discoveredNfts.find((nft) => nft.id === selectedNftId);
   if (discovered) {
     return {
+      animationUrl: discovered.animationUrl ?? "",
       attributes: discovered.attributes ?? [],
       collection: discovered.collection,
       contract: discovered.contract,
@@ -372,6 +392,23 @@ export const selectedNftDetail = (
   }
   return null;
 };
+
+// The on-chain animation section: shown only when the resolved metadata carries a
+// self-contained data:text/html animation. Nothing renders until the user presses
+// play (preserving the anti-phone-home reveal boundary); on click, nft-ui points
+// the iframe at the manifest-sandboxed sandbox/render.html page (no privileged
+// extension APIs or parent-DOM access, egress-blocking CSP) which renders the
+// untrusted HTML in isolation. The URI is carried on the button's data-* and
+// escaped into it here.
+const nftAnimationSection = (item: NftGalleryItem): string =>
+  item.animationUrl
+    ? `<section class="section">
+        <h2>Animation</h2>
+        <span class="hint">This collectible renders its own animation on-chain. It runs isolated in a sandbox with no network access — nothing loads until you press play.</span>
+        <button class="secondary small" data-nft-play="${escapeHtml(item.animationUrl)}" type="button">${icon("gamepad")}Play animation</button>
+        <iframe class="nft-animation" title="Collectible animation" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
+      </section>`
+    : "";
 
 /**
  * NFT detail flow: artwork, identifiers, and attributes with one explicit
@@ -417,6 +454,7 @@ export const nftDetailFlow = (
                   )}
                 </section>`
           }
+          ${nftAnimationSection(nft)}
           <section class="section">
             ${account ? "" : noAccountEmpty(status)}
             ${button({

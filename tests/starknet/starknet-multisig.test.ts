@@ -10,6 +10,7 @@ import {
   buildMultisigExecuteCall,
   buildMultisigRevokeCall,
   buildMultisigSubmitCall,
+  confirmationCompletesQuorum,
   decodeMultisigState,
   isMultisigEntrypoint,
 } from "../../src/starknet/multisig";
@@ -80,6 +81,47 @@ describe("multisig call builders", () => {
     expect(decodeMultisigState(2)).toBe("confirmed");
     expect(decodeMultisigState(3)).toBe("executed");
     expect(() => decodeMultisigState(4)).toThrow("Invalid multisig state response");
+  });
+});
+
+describe("confirmationCompletesQuorum", () => {
+  const base = {
+    confirmations: 1,
+    quorum: 2,
+    signerHasConfirmed: false,
+    state: "pending",
+  } as const;
+
+  test("is true only when this signer is the last confirmation quorum needs", () => {
+    expect(confirmationCompletesQuorum(base)).toBe(true);
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 0, quorum: 1 })).toBe(true);
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 0 })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, quorum: 4 })).toBe(false);
+  });
+
+  test("fails closed for an incoherent pending snapshot at or above quorum", () => {
+    // The component would resolve these counts as confirmed. Separate RPC
+    // reads can straddle a block, so impossible tuples must never offer a batch.
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 2 })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 5, quorum: 2 })).toBe(false);
+  });
+
+  test("is false for a signer who already confirmed", () => {
+    expect(confirmationCompletesQuorum({ ...base, signerHasConfirmed: true })).toBe(false);
+  });
+
+  test("is false for any state other than pending", () => {
+    // `confirmed` already has quorum, so it is executed rather than confirmed
+    // again; `executed` and `not-found` admit no action at all.
+    expect(confirmationCompletesQuorum({ ...base, state: "confirmed" })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, state: "executed" })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, state: "not-found" })).toBe(false);
+  });
+
+  test("is false for a zero quorum, which no confirmation can complete", () => {
+    expect(confirmationCompletesQuorum({ ...base, confirmations: 0, quorum: 0 })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, confirmations: -1 })).toBe(false);
+    expect(confirmationCompletesQuorum({ ...base, quorum: Number.NaN })).toBe(false);
   });
 });
 

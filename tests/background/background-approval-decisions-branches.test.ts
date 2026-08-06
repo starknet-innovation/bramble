@@ -85,6 +85,7 @@ const doubleQueue = (approval: PendingApproval | null, payload: unknown): Approv
     requestDeclare: () => approval as PendingApproval,
     requestInvoke: () => approval as PendingApproval,
     requestSignTypedData: () => approval as PendingApproval,
+    requestStrk20Disclosure: () => approval as PendingApproval,
     requestStrk20Invoke: () => approval as PendingApproval,
     requestSwitchChain: () => approval as PendingApproval,
     requestWatchAsset: () => approval as PendingApproval,
@@ -127,7 +128,10 @@ describe("handleApprovalDecision missing-payload guards", () => {
   const cases: { kind: PendingApproval["kind"]; payload: unknown }[] = [
     { kind: "watch-asset", payload: null },
     { kind: "invoke", payload: null },
+    { kind: "strk20-balances", payload: {} },
     { kind: "strk20-invoke", payload: {} },
+    { kind: "strk20-prepare", payload: {} },
+    { kind: "strk20-subaccount", payload: {} },
     { kind: "sign-typed-data", payload: {} },
     { kind: "switch-chain", payload: {} },
     { kind: "add-chain", payload: {} },
@@ -158,6 +162,13 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
   test("invoke approval passes the executor error through", async () => {
     const approvals = createApprovalQueue();
     const { id } = approvals.requestInvoke({
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: false,
+        requiresDeployment: false,
+      },
       calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "transfer" }],
       context: CONTEXT,
       flags: [],
@@ -173,15 +184,50 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
     const approvals = createApprovalQueue();
     const { id } = approvals.requestStrk20Invoke({
       actions: [{ amount: "1", kind: "transfer", to: "0x2", token: "0x3" } as never],
-      calls: [{ calldata: [], contractAddress: "0x1", entrypoint: "execute" }],
       context: CONTEXT,
       origin: ORIGIN,
+      plan: {
+        feeAction: { amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" },
+      },
       summaries: ["Send"],
     });
     await expect(
       handleApprovalDecision(lockedDeps(approvals), "wallet.approveOrigin", approve(id)),
     ).resolves.toEqual({ error: "wallet locked" });
   });
+
+  for (const input of [
+    {
+      kind: "strk20-balances",
+      request: { tokens: ["0x1"], type: "balances" },
+    },
+    {
+      kind: "strk20-prepare",
+      request: {
+        actions: [{ amount: "0x1", recipient: "0x2", token: "0x3", type: "withdraw" }],
+        simulate: false,
+        type: "prepare",
+      },
+    },
+    {
+      kind: "strk20-subaccount",
+      request: { dappName: "Example", type: "subaccount" },
+    },
+  ] as const) {
+    test(`${input.kind} approval passes a locked-context error through`, async () => {
+      const approvals = createApprovalQueue();
+      const { id } = approvals.requestStrk20Disclosure({
+        context: CONTEXT,
+        kind: input.kind,
+        origin: ORIGIN,
+        request: input.request,
+        summaries: ["Private request"],
+      });
+      await expect(
+        handleApprovalDecision(lockedDeps(approvals), "wallet.approveOrigin", approve(id)),
+      ).resolves.toEqual({ error: "wallet locked" });
+    });
+  }
 
   test("sign-typed-data approval passes the executor error through", async () => {
     const approvals = createApprovalQueue();

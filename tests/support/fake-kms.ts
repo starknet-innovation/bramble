@@ -7,6 +7,9 @@ export const fakeKms = (validMnemonic = true): KrustyKms => ({
   async deriveOzAccountAddress(publicKeyX, classHash) {
     return `0x${publicKeyX.slice(2)}${classHash.slice(2, 8)}`;
   },
+  async deriveStrk20ViewingKey() {
+    return "0x654321";
+  },
   async deriveStarknetKeypair(): Promise<StarkKeypair> {
     return {
       privateKey: "0x123456",

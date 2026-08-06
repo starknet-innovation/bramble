@@ -18,7 +18,6 @@ import type {
   TokenBalance,
   WalletStatus,
 } from "../popup/responses";
-import { escapeHtml } from "../shared/html";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { ActivityEntry } from "../storage/activity-store";
@@ -28,10 +27,8 @@ import type { AccountRef } from "../storage/vault-schema";
 import { accountDrawer } from "./account-drawer";
 import { activityScreen, requestsFlow } from "./activity-views";
 import { actionableApprovals, approvalTakeover } from "./approval-screen";
-import { formatFiat, portfolioDelta, portfolioTotal } from "./fiat";
 import { backupFlow, simpleFlowScreen } from "./flows";
-import { homeTabs, visibleHomeBalances } from "./home-tabs";
-import { icon } from "./icons";
+import { homeScreen } from "./home-view";
 import {
   multisigAddFlow,
   multisigReceiveFlow,
@@ -49,14 +46,9 @@ import {
 } from "./multisig-views";
 import { nftSendFlow } from "./nft-send-view";
 import { nftDetailFlow, nftGalleryFlow, nftHiddenFlow, nftWatchFlow } from "./nft-views";
-import {
-  activeAccount,
-  dockScreen,
-  isWalletView,
-  noAccountEmpty,
-  WALLET_VIEWS,
-  type WalletView,
-} from "./parts";
+import { activeAccount, isWalletView, WALLET_VIEWS, type WalletView } from "./parts";
+import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-model";
+import { privacyFlow } from "./privacy-views";
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
 import { settingsScreen } from "./settings-views";
@@ -67,90 +59,12 @@ import {
   tokenDiscoverFlow,
   tokensFlow,
 } from "./token-flows";
-import {
-  actionTile,
-  deployNotice,
-  pendingCallout,
-  terminalCta,
-  terminalPortfolioTile,
-  walletDock,
-  walletHeader,
-} from "./wallet-shell";
+import { walletDock, walletHeader } from "./wallet-shell";
 
 /**
  * Re-exported screen contract so entrypoints and tests import one module.
  */
 export { isWalletView, WALLET_VIEWS, type WalletView };
-
-// The portfolio 24h delta line under the balance: a green/red arrow and
-// magnitude beside a muted "percent · 24h" trailing label. Empty when nothing
-// is priced yet (no baseline), so it never renders a misleading zero-change.
-const heroDelta = (
-  balances: BalanceState,
-  preferences: WalletPreferences | null,
-  prices: Readonly<Record<string, number>>,
-  changes: Readonly<Record<string, number>>,
-  currency: DisplayCurrency,
-): string => {
-  const delta = portfolioDelta(visibleHomeBalances(balances, preferences), prices, changes);
-  if (delta === null) {
-    return "";
-  }
-  const arrow = delta.direction === "up" ? "↑" : "↓";
-  return `<p class="hero-change${delta.direction === "down" ? " down" : ""}">
-      <span class="hero-change-amt">${arrow} ${escapeHtml(formatFiat(delta.absolute, currency))}</span>
-      <span class="hero-change-win">${delta.percent.toFixed(2)}% · 24h</span>
-    </p>`;
-};
-
-// A degraded-mode notice under the hero total. Saved prices continue to render
-// without an error-like caveat; only a genuinely empty cache needs an explicit
-// unavailable hint.
-const heroPriceNotice = (priceStale: boolean, hasPrices: boolean): string => {
-  if (!priceStale || hasPrices) {
-    return "";
-  }
-  return `<p class="hero-stale" role="status">${icon("alert")}<span>Live prices unavailable right now</span></p>`;
-};
-
-const homeScreen = (
-  status: WalletStatus,
-  account: AccountRef | null,
-  balances: BalanceState,
-  pendingCount: number,
-  deployment: boolean | null,
-  preferences: WalletPreferences | null,
-  prices: Readonly<Record<string, number>>,
-  changes: Readonly<Record<string, number>>,
-  currency: DisplayCurrency,
-  priceStale: boolean,
-  discoveredNfts: readonly DiscoveredNft[],
-): string => {
-  const nfts = discoveredNfts;
-  const showTotal = account !== null && Object.keys(prices).length > 0;
-  const total = showTotal ? portfolioTotal(visibleHomeBalances(balances, preferences), prices) : 0;
-  return dockScreen(
-    "home",
-    `${pendingCallout(pendingCount)}
-    <section class="hero">
-      <p class="hero-total" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
-      ${showTotal ? heroDelta(balances, preferences, prices, changes, currency) : ""}
-      ${account !== null ? heroPriceNotice(priceStale, showTotal) : ""}
-      ${account ? "" : noAccountEmpty(status)}
-      ${deployNotice(account, deployment)}
-    </section>
-    <section class="home-actions" aria-label="Wallet actions">
-      <div class="action-row">
-        ${actionTile("send", "Send", "send", account !== null)}
-        ${actionTile("swap", "Swap", "shuffle", account !== null)}
-        ${actionTile("receive", "Receive", "qrCode", account !== null)}
-        ${terminalPortfolioTile()}
-      </div>
-      ${terminalCta()}
-    </section>
-    ${homeTabs(balances, preferences, prices, changes, currency, status, nfts)}`,
-  );
-};
 
 type JourneyContext = {
   readonly account: AccountRef | null;
@@ -165,6 +79,8 @@ type JourneyContext = {
   readonly multisigsError: boolean;
   readonly preferences: WalletPreferences | null;
   readonly prices: Readonly<Record<string, number>>;
+  readonly privacy: PrivacyDisclosureState;
+  readonly privacyJourney: PrivacyJourneyState;
   readonly selectedMultisigId: string | null;
   readonly selectedNftId: string | null;
   readonly selectedTokenId: string | null;
@@ -320,6 +236,7 @@ const assetJourneyScreen = (activeView: WalletView, context: JourneyContext): st
     context.chart,
     price,
     context.currency,
+    context.privacy,
   );
 };
 
@@ -362,6 +279,13 @@ export const dashboard = (
   multisigBalanceId: string | null = null,
   multisigNfts: readonly DiscoveredNft[] = [],
   multisigNftId: string | null = null,
+  privacy: PrivacyDisclosureState = {
+    enabled: false,
+    error: null,
+    loading: false,
+    value: null,
+  },
+  privacyJourney: PrivacyJourneyState = { stage: "idle" },
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -390,6 +314,8 @@ export const dashboard = (
     multisigsError,
     preferences,
     prices,
+    privacy,
+    privacyJourney,
     selectedMultisigId,
     selectedNftId,
     selectedTokenId,
@@ -442,6 +368,9 @@ export const dashboard = (
   if (activeView === "reveal") {
     return revealFlow(status);
   }
+  if (activeView === "privacy") {
+    return privacyFlow(status, preferences, trackedBalances, privacyJourney);
+  }
   const sharedIdentity =
     activeView === "multisig-home" || activeView === "activity" || activeView === "settings"
       ? selectedMultisig(journeyContext)
@@ -475,6 +404,7 @@ export const dashboard = (
               currency,
               priceStale,
               discoveredNfts,
+              privacy,
             );
   return `
     ${walletHeader(status, account, preferences, sharedIdentity)}

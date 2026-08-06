@@ -1,7 +1,7 @@
 /**
  * Source-of-truth conformance table for the Starknet Wallet JSON-RPC surface,
  * distilled from starkware-libs/starknet-specs wallet-api/wallet_rpc.json. Every
- * one of the 15 spec methods is encoded here exactly once: the wire method name,
+ * one of the 16 spec methods is encoded here exactly once: the wire method name,
  * its snake_case param shape (with optional api_version), the runtime message it
  * must map to, a well-formed background result, a machine-checkable validator of
  * the spec result shape/pattern, the numeric error codes it can return, and
@@ -49,7 +49,7 @@ export {
 } from "./spec-fixtures";
 
 /**
- * The 15 wallet_rpc.json methods, each with its exact conformance contract.
+ * The 16 wallet_rpc.json methods, each with its exact conformance contract.
  */
 export const SPEC_METHODS: readonly SpecMethod[] = [
   {
@@ -422,6 +422,34 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
           ADDRESS.test((e as { token: string }).token) &&
           ADDRESS.test((e as { balance: string }).balance),
       ),
+  },
+  {
+    method: "wallet_strk20SubaccountCommitment",
+    resultMethod: "wallet_strk20SubaccountCommitment",
+    runtimeType: "wallet.strk20SubaccountCommitment",
+    paramKeys: ["dapp_name", "nonce"],
+    optionalApiVersion: true,
+    stateChanging: false,
+    errorCodes: [
+      ERROR_CODES.NOT_REGISTERED,
+      ERROR_CODES.INVALID_REQUEST_PAYLOAD,
+      ERROR_CODES.USER_REFUSED_OP,
+      ERROR_CODES.API_VERSION_NOT_SUPPORTED,
+      ERROR_CODES.UNKNOWN_ERROR,
+    ],
+    request: {
+      id: REQUEST_ID,
+      method: "wallet_strk20SubaccountCommitment",
+      params: { dapp_name: "MC Terminal", nonce: "0x1" },
+    },
+    expectedRuntime: {
+      dappName: "MC Terminal",
+      nonce: "0x1",
+      origin: ORIGIN,
+      type: "wallet.strk20SubaccountCommitment",
+    },
+    backgroundResult: { commitment: "0x123", ok: true },
+    validateResult: (r) => isString(r) && ADDRESS.test(r),
   },
   {
     method: "wallet_signTypedData",

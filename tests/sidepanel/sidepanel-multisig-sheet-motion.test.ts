@@ -43,6 +43,36 @@ const installAnimations = (element: HTMLElement, queue: DeferredAnimation[]): vo
 };
 
 describe("multisig sheet motion", () => {
+  test("contains keyboard focus until the modal closes", () => {
+    const outside = document.createElement("button");
+    const panel = document.createElement("section");
+    panel.tabIndex = -1;
+    panel.hidden = true;
+    const card = document.createElement("div");
+    card.className = "multisig-review-card";
+    const first = document.createElement("button");
+    const last = document.createElement("button");
+    card.append(first, last);
+    panel.append(card);
+    document.body.append(outside, panel);
+
+    openMultisigSheet(panel, first);
+    first.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, key: "Tab", shiftKey: true }),
+    );
+    expect(document.activeElement).toBe(last);
+    last.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Tab" }));
+    expect(document.activeElement).toBe(first);
+    outside.focus();
+    expect(document.activeElement).toBe(first);
+
+    closeMultisigSheet(panel);
+    outside.focus();
+    expect(document.activeElement).toBe(outside);
+    panel.remove();
+    outside.remove();
+  });
+
   test("a stale close completion cannot hide a reopened sheet", async () => {
     const panel = document.createElement("section");
     const card = document.createElement("div");

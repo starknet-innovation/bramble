@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 const outdir = "dist";
 const krustyModule = "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+const privacySdkModule = "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 const vendorOutdir = join(outdir, "vendor/krusty-kms/pkg");
 const LEDGER_BUFFER_MODULES =
   /[\\/]node_modules[\\/]@ledgerhq[\\/](?:hw-app-starknet|hw-transport|hw-transport-web-ble|hw-transport-webhid|hw-transport-webusb)[\\/].*\.js$/;
@@ -53,16 +54,41 @@ const run = async (cmd: string[]): Promise<void> => {
   }
 };
 
+// Stamp the sidepanel bundle with the manifest version and source branch so
+// the settings screen can show exactly what build is loaded. Released builds
+// (main, or a detached tag checkout reporting HEAD) carry no branch.
+const gitBranch = async (): Promise<string> => {
+  try {
+    const child = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
+      stderr: "ignore",
+      stdout: "pipe",
+    });
+    const branch = (await new Response(child.stdout).text()).trim();
+    return (await child.exited) === 0 ? branch : "";
+  } catch {
+    return "";
+  }
+};
+const manifestVersion = (
+  JSON.parse(await readFile("public/manifest.json", "utf8")) as { version?: string }
+).version;
+const branch = await gitBranch();
+const buildStamp = {
+  __MC_BUILD_BRANCH__: JSON.stringify(branch === "main" || branch === "HEAD" ? "" : branch),
+  __MC_BUILD_VERSION__: JSON.stringify(manifestVersion ?? ""),
+};
+
 await run(["bun", "run", "check:extension"]);
 await run(["bun", "run", "check:krusty"]);
 await run(["bun", "run", "check:multisig"]);
+await run(["bun", "run", "check:privacy"]);
 await rm(outdir, { force: true, recursive: true });
 await mkdir(outdir, { recursive: true });
 
 requireBuild(
   await Bun.build({
     entrypoints: ["src/background/index.ts"],
-    external: [krustyModule],
+    external: [krustyModule, privacySdkModule],
     format: "esm",
     minify: true,
     outdir: join(outdir, "background"),
@@ -72,6 +98,7 @@ requireBuild(
 
 requireBuild(
   await Bun.build({
+    define: buildStamp,
     entrypoints: ["src/sidepanel/index.ts"],
     format: "esm",
     minify: true,
@@ -112,11 +139,23 @@ requireBuild(
   }),
 );
 
+requireBuild(
+  await Bun.build({
+    entrypoints: ["src/sandbox/render.ts"],
+    format: "esm",
+    minify: true,
+    outdir: join(outdir, "sandbox"),
+    target: "browser",
+  }),
+);
+
 await cp("public/manifest.json", join(outdir, "manifest.json"));
 await cp("public/onboarding.html", join(outdir, "onboarding.html"));
 await cp("public/popup.html", join(outdir, "popup.html"));
 await cp("public/sidepanel.html", join(outdir, "sidepanel.html"));
 await cp("public/ledger-grant.html", join(outdir, "ledger-grant.html"));
+await mkdir(join(outdir, "sandbox"), { recursive: true });
+await cp("public/sandbox/render.html", join(outdir, "sandbox/render.html"));
 await mkdir(vendorOutdir, { recursive: true });
 await cp(
   "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js",
@@ -125,6 +164,11 @@ await cp(
 await cp(
   "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm_bg.wasm",
   join(vendorOutdir, "krusty_kms_wasm_bg.wasm"),
+);
+await mkdir(join(outdir, "vendor/starknet-privacy/sdk"), { recursive: true });
+await cp(
+  "vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js",
+  join(outdir, "vendor/starknet-privacy/sdk/starknet-sdk.min.js"),
 );
 await mkdir(join(outdir, "vendor/multisig"), { recursive: true });
 await cp(

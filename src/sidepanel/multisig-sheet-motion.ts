@@ -5,6 +5,57 @@ type SheetState = "closed" | "closing" | "open" | "opening";
 
 const sheetSerials = new WeakMap<HTMLElement, number>();
 const sheetStates = new WeakMap<HTMLElement, SheetState>();
+const focusGuardCleanup = new WeakMap<HTMLElement, () => void>();
+
+const focusableIn = (panel: HTMLElement): readonly HTMLElement[] =>
+  [
+    ...panel.querySelectorAll<HTMLElement>(
+      'button:not([disabled]):not([hidden]), [href], input:not([disabled]):not([hidden]), select:not([disabled]):not([hidden]), summary, textarea:not([disabled]):not([hidden]), [tabindex]:not([tabindex="-1"]):not([hidden])',
+    ),
+  ].filter(
+    (element) => !element.closest("[hidden]") && element.getAttribute("aria-hidden") !== "true",
+  );
+
+const deactivateFocusGuard = (panel: HTMLElement): void => {
+  focusGuardCleanup.get(panel)?.();
+  focusGuardCleanup.delete(panel);
+};
+
+const activateFocusGuard = (panel: HTMLElement): void => {
+  deactivateFocusGuard(panel);
+  const ownerDocument = panel.ownerDocument;
+  const ownerWindow = ownerDocument.defaultView;
+  if (!ownerWindow) return;
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== "Tab") return;
+    const focusable = focusableIn(panel);
+    const first = focusable[0] ?? panel;
+    const last = focusable.at(-1) ?? panel;
+    const active = ownerDocument.activeElement;
+    if (event.shiftKey && (active === first || !panel.contains(active))) {
+      event.preventDefault();
+      last.focus({ preventScroll: true });
+    } else if (!event.shiftKey && (active === last || !panel.contains(active))) {
+      event.preventDefault();
+      first.focus({ preventScroll: true });
+    }
+  };
+  const onFocusIn = (event: FocusEvent): void => {
+    if (
+      panel.hidden ||
+      (event.target instanceof ownerWindow.Node && panel.contains(event.target))
+    ) {
+      return;
+    }
+    (focusableIn(panel)[0] ?? panel).focus({ preventScroll: true });
+  };
+  panel.addEventListener("keydown", onKeyDown);
+  ownerDocument.addEventListener("focusin", onFocusIn);
+  focusGuardCleanup.set(panel, () => {
+    panel.removeEventListener("keydown", onKeyDown);
+    ownerDocument.removeEventListener("focusin", onFocusIn);
+  });
+};
 
 const nextSheetSerial = (panel: HTMLElement): number => {
   const serial = (sheetSerials.get(panel) ?? 0) + 1;
@@ -41,6 +92,7 @@ export const openMultisigSheet = (panel: HTMLElement, focusTarget?: HTMLElement 
   sheetStates.set(panel, "opening");
   const target = panel;
   target.hidden = false;
+  activateFocusGuard(target);
   target.style.willChange = "opacity";
   const overlay = animate(
     target,
@@ -58,7 +110,7 @@ export const openMultisigSheet = (panel: HTMLElement, focusTarget?: HTMLElement 
     const cardElement = target.querySelector<HTMLElement>(".multisig-review-card");
     if (cardElement) cardElement.style.willChange = "";
   });
-  focusTarget?.focus({ preventScroll: true });
+  (focusTarget ?? focusableIn(target)[0] ?? target).focus({ preventScroll: true });
 };
 
 /**
@@ -66,6 +118,7 @@ export const openMultisigSheet = (panel: HTMLElement, focusTarget?: HTMLElement 
  */
 export const closeMultisigSheet = (panel: HTMLElement, restoreFocus?: HTMLElement | null): void => {
   if (panel.hidden || sheetStates.get(panel) === "closing") return;
+  deactivateFocusGuard(panel);
   const serial = nextSheetSerial(panel);
   sheetStates.set(panel, "closing");
   const target = panel;

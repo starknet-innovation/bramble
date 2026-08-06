@@ -12,7 +12,7 @@ import { readProviderRequestArguments, toRuntimeMessage } from "../../src/provid
 import type { ProviderResultMethod } from "../../src/provider/bridge-results";
 import { ORIGIN, SPEC_METHOD_NAMES, SPEC_METHODS } from "./wallet-rpc-spec";
 
-// The 15 spec method names, written out literally so the table itself cannot
+// The 16 spec method names, written out literally so the table itself cannot
 // silently drop or rename one without this list disagreeing.
 const REQUIRED_SPEC_METHODS: readonly ProviderMethod[] = [
   "wallet_supportedSpecs",
@@ -29,6 +29,7 @@ const REQUIRED_SPEC_METHODS: readonly ProviderMethod[] = [
   "wallet_strk20InvokeTransaction",
   "wallet_strk20PrepareInvoke",
   "wallet_strk20Balances",
+  "wallet_strk20SubaccountCommitment",
   "wallet_signTypedData",
 ];
 
@@ -38,6 +39,7 @@ const REQUIRED_SPEC_METHODS: readonly ProviderMethod[] = [
 const METHOD_CLASSIFICATION: Record<ProviderMethod, "legacy" | "spec"> = {
   mc_accounts: "legacy",
   mc_requestAccounts: "legacy",
+  mc_strk20Register: "legacy",
   wallet_addDeclareTransaction: "spec",
   wallet_addInvokeTransaction: "spec",
   wallet_addStarknetChain: "spec",
@@ -49,6 +51,7 @@ const METHOD_CLASSIFICATION: Record<ProviderMethod, "legacy" | "spec"> = {
   wallet_strk20Balances: "spec",
   wallet_strk20InvokeTransaction: "spec",
   wallet_strk20PrepareInvoke: "spec",
+  wallet_strk20SubaccountCommitment: "spec",
   wallet_supportedSpecs: "spec",
   wallet_supportedWalletApi: "spec",
   wallet_switchStarknetChain: "spec",
@@ -61,6 +64,7 @@ const METHOD_CLASSIFICATION: Record<ProviderMethod, "legacy" | "spec"> = {
 const RESULT_METHOD_CLASSIFICATION: Record<ProviderResultMethod, "legacy" | "spec"> = {
   mc_accounts: "legacy",
   mc_requestAccounts: "legacy",
+  mc_strk20Register: "legacy",
   wallet_addDeclareTransaction: "spec",
   wallet_addInvokeTransaction: "spec",
   wallet_addStarknetChain: "spec",
@@ -72,6 +76,7 @@ const RESULT_METHOD_CLASSIFICATION: Record<ProviderResultMethod, "legacy" | "spe
   wallet_strk20Balances: "spec",
   wallet_strk20InvokeTransaction: "spec",
   wallet_strk20PrepareInvoke: "spec",
+  wallet_strk20SubaccountCommitment: "spec",
   wallet_supportedSpecs: "spec",
   wallet_supportedWalletApi: "spec",
   wallet_switchStarknetChain: "spec",
@@ -86,9 +91,9 @@ const specClassified = (record: Record<string, "legacy" | "spec">): ReadonlySet<
   );
 
 describe("wallet_rpc dispatch coverage guard", () => {
-  test("the spec table encodes exactly the 15 spec methods, once each", () => {
-    expect(SPEC_METHODS).toHaveLength(15);
-    expect(SPEC_METHOD_NAMES.size).toBe(15);
+  test("the spec table encodes exactly the 16 spec methods, once each", () => {
+    expect(SPEC_METHODS).toHaveLength(16);
+    expect(SPEC_METHOD_NAMES.size).toBe(16);
     expect([...SPEC_METHOD_NAMES].sort()).toEqual([...REQUIRED_SPEC_METHODS].sort());
   });
 

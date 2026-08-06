@@ -113,32 +113,42 @@ describe("createPreferencesStore", () => {
     ).resolves.toMatchObject({ rpcOverrides: { SN_DEVNET: "http://127.0.0.1:5050/rpc" } });
   });
 
-  test("stores, prefers, and clears the STRK20 prover endpoint", async () => {
+  test("stores and clears complete per-network STRK20 service routing", async () => {
     const store = createMemoryStore();
     const preferences = createPreferencesStore({ store });
-
-    await preferences.setStrk20ProverUrl({ url: " https://prover.example/strk20 " });
+    const config = {
+      discoveryUrl: "https://discovery.example/strk20",
+      paymaster: {
+        feeToken: "0x3",
+        url: "https://paymaster.example/strk20",
+      },
+      poolAddress: "0x1",
+      proverUrl: "https://prover.example/strk20",
+      subaccountAnonymizerAddress: "0x2",
+    };
+    await preferences.setStrk20NetworkConfig({ config, networkId: "SN_MAIN" });
     await expect(preferences.read()).resolves.toMatchObject({
-      strk20ProverUrl: "https://prover.example/strk20",
+      strk20Networks: { SN_MAIN: config },
     });
 
-    await preferences.setStrk20ProverUrl({ url: "" });
+    await preferences.setStrk20NetworkConfig({ config: null, networkId: "SN_MAIN" });
     const cleared = await preferences.read();
-    expect(cleared.strk20ProverUrl).toBeUndefined();
+    expect(cleared.strk20Networks?.SN_MAIN).toBeUndefined();
   });
 
-  test("rejects an unsafe STRK20 prover endpoint", async () => {
+  test("rejects incomplete or unsafe STRK20 service routing", async () => {
     const preferences = createPreferencesStore({ store: createMemoryStore() });
-
-    await expect(preferences.setStrk20ProverUrl({ url: "http://prover.example" })).rejects.toThrow(
-      "Invalid prover endpoint",
-    );
-    await expect(preferences.setStrk20ProverUrl({ url: "not a url" })).rejects.toThrow(
-      "Invalid prover endpoint",
-    );
     await expect(
-      preferences.setStrk20ProverUrl({ url: "http://127.0.0.1:8080/strk20" }),
-    ).resolves.toMatchObject({ strk20ProverUrl: "http://127.0.0.1:8080/strk20" });
+      preferences.setStrk20NetworkConfig({
+        config: {
+          discoveryUrl: "https://discovery.example",
+          poolAddress: "0x1",
+          proverUrl: "http://prover.example",
+          subaccountAnonymizerAddress: "0x2",
+        },
+        networkId: "SN_MAIN",
+      }),
+    ).rejects.toThrow("Invalid STRK20 network configuration");
   });
 
   test("accepts preferences stored before the STRK20 prover existed", async () => {
@@ -149,6 +159,20 @@ describe("createPreferencesStore", () => {
 
     const preferences = await createPreferencesStore({ store }).read();
     expect(preferences.strk20ProverUrl).toBeUndefined();
+  });
+
+  test("adds the bundled privacy gateway to legacy preferences exactly once", async () => {
+    const store = createMemoryStore();
+    const legacy = { ...defaultWalletPreferences() };
+    delete (legacy as Record<string, unknown>)["strk20Networks"];
+    await store.set(PREFERENCES_STORE_KEY, JSON.parse(JSON.stringify(legacy)));
+
+    const preferences = createPreferencesStore({ store });
+    const bundled = (await preferences.read()).strk20Networks?.SN_MAIN;
+    expect(bundled?.ohttpEnabled).toBe(true);
+    expect(bundled?.poolAddress).toMatch(/^0x[0-9a-f]+$/);
+    await preferences.setStrk20NetworkConfig({ config: null, networkId: "SN_MAIN" });
+    expect((await preferences.read()).strk20Networks?.SN_MAIN).toBeUndefined();
   });
 
   test("accepts preferences stored before rpc overrides existed", async () => {

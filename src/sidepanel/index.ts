@@ -10,7 +10,7 @@ import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { createDeploymentCache } from "./deployment-cache";
 import { bindDisclosures } from "./disclosures";
-import { bindCopyButtons, captureRepaintFocus, restoreRepaintFocus, showToast } from "./dom";
+import { bindCopyButtons, showToast } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
 import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
@@ -22,7 +22,6 @@ import { bindLedgerFirstRun } from "./ledger/first-run";
 import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
 import { ledgerConnector } from "./ledger/sign-connector";
 import { createLedgerSignRuntime } from "./ledger/sign-runtime";
-import { animateLiveValueChanges, captureLiveValues } from "./live-updates";
 import { createMultisigClient } from "./multisig-runtime";
 import { shouldPreserveMultisigProposalSurface } from "./multisig-surface";
 import { bindMultisigs } from "./multisig-ui";
@@ -35,6 +34,7 @@ import {
   onboardingLaunch,
 } from "./onboarding-surface";
 import { bindOnboarding, bindUnlock } from "./onboarding-ui";
+import { createPrivacyController } from "./privacy-controller";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import {
   emptyRenderCache,
@@ -45,7 +45,7 @@ import {
 import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { createMutationRuntime } from "./runtime-refresh";
-import { transitionScene } from "./scene-transition";
+import { createSceneRenderer } from "./scene-renderer";
 import {
   bindAccountLabel,
   bindAddAccount,
@@ -55,10 +55,10 @@ import {
   bindGroups,
 } from "./settings-ui";
 import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
-import { SIDEPANEL_STYLES } from "./styles";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
 import * as transfer from "./transfer-bindings";
+import { withTransactionAlerts } from "./tx-alerts-ui";
 import { dashboard, isWalletView, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {
@@ -109,31 +109,11 @@ const bindBack = (): void => {
   });
 };
 
-const renderShell = (content: string, animate: boolean): void => {
-  if (!app) {
-    return;
-  }
-  const focus = captureRepaintFocus();
-  const liveValues = captureLiveValues(app);
-  app.innerHTML = `<style>${SIDEPANEL_STYLES}</style><section class="shell${animate ? " shell-animate" : ""}">${content}</section>`;
-  restoreRepaintFocus(app, focus);
-  animateLiveValueChanges(app, liveValues);
-};
-
-const renderScene = (content: string, animate: boolean, direction: NavDirection): void => {
-  if (!animate) {
-    renderShell(content, animate);
-    bindAll();
-    return;
-  }
-  transitionScene(document, direction, (animateFallback) => {
-    renderShell(content, animateFallback);
-    bindAll();
-  });
-};
+const renderScene = createSceneRenderer(app, () => bindAll());
 
 const deployment = createDeploymentCache(wallet);
 const cache: RenderData = emptyRenderCache();
+let privacy: ReturnType<typeof createPrivacyController>;
 const ledgerSignMount = document.createElement("div");
 ledgerSignMount.className = "ledger-sign-overlay";
 ledgerSignMount.hidden = true;
@@ -286,6 +266,7 @@ const bindAll = (): void => {
     render,
     wallet,
   });
+  privacy.bind();
   bindMultisigs({
     app,
     multisig,
@@ -400,6 +381,8 @@ const paint = (): void => {
               cache.multisigBalanceId,
               cache.multisigNfts,
               cache.multisigNftId,
+              privacy.disclosure(),
+              privacy.journey(),
             );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -408,11 +391,24 @@ const paint = (): void => {
   lastContent = content;
   renderScene(content, animate, direction);
 };
+privacy = createPrivacyController({
+  app,
+  balances: () => cache.balances,
+  navigate: (view) => navigate(view),
+  paint,
+  preferences: () => cache.preferences,
+  status: () => cache.status,
+  wallet,
+});
 let renderGeneration = 0;
 const render = async (status: WalletStatus): Promise<void> => {
   const generation = ++renderGeneration;
   const isCurrent = (): boolean => generation === renderGeneration;
-  if (updateRenderScope(cache, status) === "network" && selectedMultisigId !== null) {
+  const scopeChanged = updateRenderScope(cache, status);
+  if (scopeChanged) {
+    privacy.reset();
+  }
+  if (scopeChanged === "network" && selectedMultisigId !== null) {
     selectedMultisigId = null;
     activeView = "home";
     viewHistory = [];
@@ -429,6 +425,9 @@ const render = async (status: WalletStatus): Promise<void> => {
   cache.pending = pending;
   cache.preferences = nextPreferences;
   if (!status.hasVault || status.locked) {
+    privacy.reset();
+    // Reset every view-scoped field from one source so stale state cannot leak
+    // across a lock; preserve the status/pending/preferences just refreshed.
     Object.assign(cache, emptyRenderCache(), {
       pending: cache.pending,
       preferences: cache.preferences,
@@ -477,15 +476,13 @@ const goBack = (): void => {
 };
 
 const refreshScheduler = createRefreshScheduler({
-  refresh: async () => render(await wallet.loadStatus()),
+  refresh: withTransactionAlerts(wallet, async () => render(await wallet.loadStatus())),
   visible: () => document.visibilityState === "visible",
 });
 mutationRuntime.setListener(refreshScheduler.afterAction);
 
 runtime?.onMessage?.addListener((message) => {
-  if (isWalletEventMessage(message)) {
-    refreshScheduler.afterAction();
-  }
+  if (isWalletEventMessage(message)) refreshScheduler.afterAction();
 });
 document.addEventListener("visibilitychange", refreshScheduler.visibilityChanged);
 window.addEventListener("focus", () => {

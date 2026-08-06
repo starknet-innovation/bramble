@@ -20,9 +20,10 @@ through every immediate package under `src/`. The baseline review covered 186 Ty
 33,163 lines across 12 packages.
 
 All nine confirmed findings are resolved without removing a wallet feature. Remote-produced swap
-and STRK20 calls are frozen and committed before confirmation; approvals have one-time,
-context-bound semantics; write RPC failover stops before submission; plain stores serialize
-mutations; and hostile payloads are bounded before expensive work.
+calls are frozen and committed before confirmation; STRK20 intent and fee plans are frozen before
+approval and proved afterward with a call-set-bound signer; approvals have one-time, context-bound
+semantics; write RPC failover stops before submission; plain stores serialize mutations; and
+hostile payloads are bounded before expensive work.
 
 | Severity | Identified | Resolved | Open |
 | --- | ---: | ---: | ---: |
@@ -38,7 +39,7 @@ extension release contains the fixes.
 ## Resolution checklist
 
 - [x] [MCW-SRC-001](#mcw-src-001) — freeze and re-review the final AVNU call bundle.
-- [x] [MCW-SRC-002](#mcw-src-002) — freeze the prover-produced STRK20 call before approval.
+- [x] [MCW-SRC-002](#mcw-src-002) — bind approved STRK20 intent to proving and submission.
 - [x] [MCW-SRC-003](#mcw-src-003) — prohibit write replay after submission begins.
 - [x] [MCW-SRC-004](#mcw-src-004) — bind sensitive approvals to account, network, chain, and digest.
 - [x] [MCW-SRC-005](#mcw-src-005) — atomically claim every approval before awaited work.
@@ -56,7 +57,7 @@ fixed release is available.
 | ID | Severity | Status | Affected packages | Summary |
 | --- | --- | --- | --- | --- |
 | [MCW-SRC-001](#mcw-src-001) | High | Resolved | `background`, `sidepanel`, `starknet` | Swap executes only a one-time, reviewed, committed call bundle |
-| [MCW-SRC-002](#mcw-src-002) | High | Resolved | `background`, `starknet` | STRK20 executes the exact prover call frozen before approval |
+| [MCW-SRC-002](#mcw-src-002) | High | Resolved | `background`, `starknet`, `wallet` | STRK20 proves frozen intent after approval and validates the resulting configured-pool call |
 | [MCW-SRC-003](#mcw-src-003) | Medium | Resolved | `background`, `starknet` | State-changing RPC work is never failed over after execution starts |
 | [MCW-SRC-004](#mcw-src-004) | Medium | Resolved | `background` | Sensitive approvals carry an immutable execution context |
 | [MCW-SRC-005](#mcw-src-005) | Medium | Resolved | `background` | Approval execution atomically claims the pending item |
@@ -203,9 +204,9 @@ verification, tokens, swaps, NFTs, multisig, deployment, declarations, and STRK2
 - NFT indexer results are re-proved against on-chain ownership before persistence.
 - Remote scans and selected response lists are bounded.
 
-**Resolved findings:** MCW-SRC-001, MCW-SRC-002, MCW-SRC-003, and MCW-SRC-009. Remote calls are
-frozen before approval, write endpoints are selected with read-only probes and invoked once, and
-opaque remote responses are bounded before mapping.
+**Resolved findings:** MCW-SRC-001, MCW-SRC-002, MCW-SRC-003, and MCW-SRC-009. Remote swap calls
+and STRK20 public intent are frozen before approval, write endpoints are selected with read-only
+probes and invoked once, and opaque remote responses are bounded before mapping.
 
 ### `src/storage/`
 
@@ -284,7 +285,6 @@ rechecks account/network/chain/digest, and submits the frozen calls without cont
 and reject an unexpected approval token or allowance before signing.
 
 <a id="mcw-src-002"></a>
-
 ### MCW-SRC-002 — STRK20 prover output is not bound to the approved private actions
 
 **Severity:** High; **Status:** Resolved
@@ -298,19 +298,20 @@ STRK20 contracts.
 **Impact.** A compromised or malicious configured prover can substitute a structurally valid call
 for the private operation the user reviewed.
 
-**Resolution.** The prover is now called before the approval is queued. The approval privately
-holds both the validated actions and the exact executable call, and its account/network/chain
-context includes a SHA-256 commitment over both. The approval card shows the final contract,
-entrypoint, and calldata count alongside the action summaries. Execution revalidates the
-commitment and live context and submits only the frozen call; it never contacts the prover after
-the user decides.
+**Resolution.** The official pinned Privacy SDK now owns discovery, transaction assembly, and proving.
+Before approval the wallet validates the actions and balances, freezes the paymaster fee and typed
+data, binds those values plus account/network/chain into the approval digest, and produces no proof
+or signature. After approval it repeats affordability checks and gives the exact actions plus fee
+to the SDK. Its SNIP-12 signer commits the account, chain, and complete call set. The wallet rejects
+warnings, non-`apply_actions` output, and unconfigured pool targets, and submits non-empty proofs
+only through the configured private paymaster. Prepared proofs are also retained in the digest and
+restricted to that pool entry point.
 
-**Validation.** `tests/background/background-strk20-messages.test.ts` asserts one prover call occurs before
-approval and no second call occurs at execution. `tests/background/approval-security.test.ts` proves a
-substituted held payload fails before submission.
+**Validation.** Background tests prove no signing/proving before approval and reuse of the held
+intent. Call-set, SDK, paymaster, schema, provider, key-boundary, and vault suites cover the
+official hash vector, warning/target rejection, proof retention, fees, commitments, and viewing keys.
 
 <a id="mcw-src-003"></a>
-
 ### MCW-SRC-003 — Ambiguous state-changing RPC submissions use general endpoint failover
 
 **Severity:** Medium; **Status:** Resolved
@@ -481,8 +482,9 @@ rejection. The full boundary suites verify valid maximum-shape behavior remains 
 ## Scope limits
 
 This was a source, unit-assurance, build, and browser-E2E review. It did not re-audit the upstream
-Krusty KMS implementation, external RPC nodes, AVNU, user-configured STRK20 provers, browser
-internals, or generated artifacts. Their wallet-facing inputs and failure behavior were in scope.
+Krusty KMS or official Privacy SDK implementations, external RPC nodes, AVNU, privacy discovery,
+prover, paymaster/relay deployments, browser internals, or generated artifacts. Their pinned
+artifact and wallet-facing input/failure boundaries were in scope.
 
 CI/release authority, build and packaging scripts, contracts, and the terminal app remain separate
 review stages. The v0.6 Ledger and multisig changes are covered by the

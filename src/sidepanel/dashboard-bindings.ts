@@ -124,6 +124,26 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
       );
     });
   });
+  // Fee-estimate retry on a queued invoke card: asks the background to
+  // re-estimate against the approval's pinned account/network, then repaints so
+  // the card shows the refreshed fee state. Failures surface as a toast and
+  // re-enable the button; the approval itself is untouched either way.
+  app?.querySelectorAll<HTMLButtonElement>("[data-approval-retry-fee]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const id = button.dataset["approvalRetryFee"];
+      if (!id) {
+        return;
+      }
+      buttonBusy(button, true);
+      void wallet.retryApprovalFee(id).then(
+        async () => render(await wallet.loadStatus()),
+        (error: unknown) => {
+          showToast(errorMessage(error, "Fee estimate failed"), "error");
+          buttonBusy(button, false);
+        },
+      );
+    });
+  });
   app?.querySelectorAll<HTMLButtonElement>("[data-approval-later]").forEach((button) => {
     button.addEventListener("click", () => {
       const id = button.dataset["approvalLater"];

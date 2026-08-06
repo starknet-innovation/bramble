@@ -4,12 +4,14 @@
  * verification + invoke path. Removing and spam-hiding watched NFTs are plain
  * preference mutations handled in preference-ops.ts.
  */
+import { resolveFeeAffordability } from "../starknet/fee-funds";
 import { STARKNET_NETWORKS, sameFelt } from "../starknet/networks";
 import { buildErc721TransferCall, buildErc1155TransferCall } from "../starknet/nft";
 import { unavailableNftIndexer } from "../starknet/nft-indexer";
 import type { DiscoveredNft } from "../starknet/nft-metadata";
 import type { NftStandard } from "../starknet/rpc";
 import { verifyCalls } from "../starknet/verify";
+import { readStrkBalance } from "./fee-guard";
 import { readTypeOnlyInput } from "./message-inputs";
 import {
   type NftTarget,
@@ -161,6 +163,7 @@ const enrichWatchedNft = async (
       ? nft
       : {
           ...nft,
+          ...(metadata.animationUrl ? { animationUrl: metadata.animationUrl } : {}),
           attributes: metadata.attributes,
           collection: metadata.collection || nft.collection,
           description: metadata.description,
@@ -298,10 +301,18 @@ const handleReviewNftTransfer = async (
         .catch(() => null)
     : null;
   const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  // Fee-affordability guard (issue 191): the NFT itself never spends STRK, so
+  // only the estimate is compared against the balance. Warn-only, fail-open.
+  const feeAffordability = resolveFeeAffordability({
+    balance:
+      fee === null ? null : await readStrkBalance(deps, context.account, prepared.preferences),
+    fee,
+  });
   return {
     ok: true,
     review: {
       fee,
+      feeAffordability,
       feeEstimateFailed,
       // The target is an on-chain ownership-proven NFT contract, so the generic
       // "unknown token contract" warning is inapplicable. Recipient warnings

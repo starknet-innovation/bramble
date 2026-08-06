@@ -5,6 +5,11 @@ import { WalletError } from "../shared/errors";
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
 import { DEFAULT_NETWORK, DEFAULT_TOKENS, isStarknetNetworkId } from "../starknet/networks";
 import {
+  DEFAULT_STRK20_NETWORKS,
+  isStrk20NetworkConfig,
+  isStrk20NetworkConfigs,
+} from "../starknet/strk20/config";
+import {
   createGroup as createGroupPure,
   isAccountGroups,
   normalizeAccountGroups,
@@ -78,6 +83,7 @@ const PREFERENCE_KEYS: readonly string[] = [
   "nfts",
   "rpcOverrides",
   "schemaVersion",
+  "strk20Networks",
   "strk20ProverUrl",
   "theme",
   "tokens",
@@ -100,6 +106,7 @@ const hasValidOptionalEntries = (value: Record<string, unknown>): boolean =>
 const hasValidUrlAndNftFields = (value: Record<string, unknown>): boolean =>
   (value["strk20ProverUrl"] === undefined ||
     (typeof value["strk20ProverUrl"] === "string" && isCustomRpcUrl(value["strk20ProverUrl"]))) &&
+  (value["strk20Networks"] === undefined || isStrk20NetworkConfigs(value["strk20Networks"])) &&
   (value["nftIndexerUrl"] === undefined ||
     (typeof value["nftIndexerUrl"] === "string" && isCustomRpcUrl(value["nftIndexerUrl"]))) &&
   (value["nfts"] === undefined ||
@@ -141,6 +148,7 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   nfts: [],
   rpcOverrides: {},
   schemaVersion: 1,
+  strk20Networks: DEFAULT_STRK20_NETWORKS,
   theme: "dark",
   tokens: DEFAULT_TOKENS.map(withTokenId),
 });
@@ -172,14 +180,23 @@ export const createPreferencesStore = ({
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
     }
+    // Stored preferences created before the bundled gateway existed inherit it
+    // once. Clearing Mainnet later persists an explicit empty map, so the
+    // user's decision to disable privacy routing remains durable.
+    const withPrivacyDefaults =
+      stored.strk20Networks === undefined
+        ? { ...stored, strk20Networks: DEFAULT_STRK20_NETWORKS }
+        : stored;
     // Self-heal legacy multi-group membership on read (the validator stays
     // permissive so old data loads rather than erroring): collapse each account
     // to a single folder so every consumer sees the single-group invariant.
-    if (stored.groups === undefined) {
-      return stored;
+    if (withPrivacyDefaults.groups === undefined) {
+      return withPrivacyDefaults;
     }
-    const groups = normalizeAccountGroups(stored.groups);
-    return groups === stored.groups ? stored : { ...stored, groups };
+    const groups = normalizeAccountGroups(withPrivacyDefaults.groups);
+    return groups === withPrivacyDefaults.groups
+      ? withPrivacyDefaults
+      : { ...withPrivacyDefaults, groups };
   };
 
   return serializeStoreMutations<WalletPreferencesStore>(
@@ -383,18 +400,21 @@ export const createPreferencesStore = ({
         await writePreferences(store, next);
         return next;
       },
-      async setStrk20ProverUrl({ url }) {
-        const trimmed = url.trim();
-        if (trimmed.length > 0 && !isCustomRpcUrl(trimmed)) {
-          throw new WalletError("Invalid prover endpoint");
+      async setStrk20NetworkConfig({ config, networkId }) {
+        if (
+          !isStarknetNetworkId(networkId) ||
+          (config !== null && !isStrk20NetworkConfig(config))
+        ) {
+          throw new WalletError("Invalid STRK20 network configuration");
         }
         const preferences = await read();
-        const next = { ...preferences };
-        if (trimmed.length === 0) {
-          delete (next as { strk20ProverUrl?: string }).strk20ProverUrl;
+        const strk20Networks = { ...preferences.strk20Networks };
+        if (config === null) {
+          delete strk20Networks[networkId];
         } else {
-          (next as { strk20ProverUrl?: string }).strk20ProverUrl = trimmed;
+          strk20Networks[networkId] = config;
         }
+        const next = { ...preferences, strk20Networks };
         await writePreferences(store, next);
         return next;
       },

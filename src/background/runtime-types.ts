@@ -2,6 +2,7 @@
  * Shared background runtime response and service types.
  */
 import type { StarkSignature } from "../crypto/krusty";
+import type { MultisigConfirmationMode } from "../shared/multisig-confirmation";
 import type { MultisigSyncWarning } from "../shared/multisig-sync";
 import type { AllowanceView } from "../starknet/allowance-discovery";
 import type { SwapCatalogToken } from "../starknet/avnu";
@@ -9,30 +10,21 @@ import type { ClassHashVerification } from "../starknet/class-hash-verify";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { DiscoveredNft } from "../starknet/nft-metadata";
 import type { FeeEstimate, TokenBalance } from "../starknet/rpc";
-import type { Strk20BalanceEntry, Strk20CallAndProof } from "../starknet/strk20/schemas";
 import type { RiskFlag } from "../starknet/verify";
 import type { ActivityEntry } from "../storage/activity-store";
 import type { MultisigProposalRecord, MultisigRecord } from "../storage/multisig-store";
 import type { DisplayCurrency, WalletPreferences } from "../storage/preferences-store";
-import type { AccountRef, LedgerAccountRef, Vault } from "../storage/vault-schema";
-import type { AccountDerivationInput } from "../wallet/accounts";
-import type {
-  AddDerivedAccountInput,
-  AddLedgerAccountInput,
-  ConnectedSite,
-  CreateLedgerVaultInput,
-  CreateVaultAccountInput,
-  DeriveLedgerAccountsInput,
-  EnsureNetworkAccountInput,
-  ImportRawKeyAccountInput,
-  OriginGrantInput,
-  RevokeOriginInput,
-  SetActiveAccountInput,
-  SignHashInput,
-  WalletStatus as VaultStatus,
-} from "../wallet/vault-service";
+import type { AccountRef } from "../storage/vault-schema";
+import type { ConnectedSite, WalletStatus as VaultStatus } from "../wallet/vault-service";
 import type { PendingApproval } from "./approvals";
 import type { PendingLedgerSign } from "./ledger-sign-queue";
+import type {
+  Strk20BalancesResponse,
+  Strk20PrepareResponse,
+  Strk20SubaccountCommitmentResponse,
+  Strk20WalletPreparationResponse,
+  Strk20WalletStateResponse,
+} from "./runtime-strk20-types";
 import type { SwapPreparationReview } from "./swap-preparations";
 
 /**
@@ -256,6 +248,11 @@ export type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
     readonly fee: FeeEstimate | null;
+    /**
+     * Warn-only fee-affordability verdict from the shared predicate (issue
+     * 191); "unknown" means no claim was possible and must never block.
+     */
+    readonly feeAffordability: "insufficient" | "ok" | "unknown";
     readonly feeEstimateFailed: boolean;
     readonly flags: readonly RiskFlag[];
     readonly requiresDeployment: boolean;
@@ -264,10 +261,33 @@ export type TransferReviewResponse = {
 };
 
 /**
+ * Pre-sign fee review for one exact multisig confirmation operation.
+ */
+export type MultisigConfirmationReviewResponse = {
+  readonly confirmationReview: {
+    readonly fee: FeeEstimate | null;
+    readonly feeEstimateFailed: boolean;
+    readonly mode: MultisigConfirmationMode;
+    readonly proposalId: string;
+    readonly signerAccountId: string;
+  };
+  readonly ok: true;
+};
+
+/**
  * Activity feed returned to extension pages.
  */
 export type ActivityResponse = {
   readonly activity: readonly ActivityEntry[];
+  readonly ok: true;
+};
+
+/**
+ * Undelivered transaction failure notices returned to extension pages. Each
+ * notice is handed out exactly once, so an empty list is the normal case.
+ */
+export type TransactionAlertsResponse = {
+  readonly alerts: readonly string[];
   readonly ok: true;
 };
 
@@ -333,22 +353,6 @@ export type RequestAccountsResponse =
       readonly ok: false;
       readonly pending: PendingApproval;
     };
-
-/**
- * STRK20 private balances returned through the dapp provider bridge.
- */
-export type Strk20BalancesResponse = {
-  readonly balances: readonly Strk20BalanceEntry[];
-  readonly ok: true;
-};
-
-/**
- * STRK20 prepared call-and-proof returned through the dapp provider bridge.
- */
-export type Strk20PrepareResponse = {
-  readonly callAndProof: Strk20CallAndProof;
-  readonly ok: true;
-};
 
 /**
  * Watched multisigs and their tracked proposals for the active network.
@@ -438,6 +442,7 @@ export type RuntimeResponse =
   | LedgerAccountStatusResponse
   | LedgerSignPendingResponse
   | MultisigClassStatusResponse
+  | MultisigConfirmationReviewResponse
   | MultisigDeployResponse
   | MultisigProposalResponse
   | MultisigResponse
@@ -452,48 +457,15 @@ export type RuntimeResponse =
   | SignHashResponse
   | Strk20BalancesResponse
   | Strk20PrepareResponse
+  | Strk20SubaccountCommitmentResponse
+  | Strk20WalletPreparationResponse
+  | Strk20WalletStateResponse
   | SwapQuoteResponse
   | SwapPreparationResponse
   | SwapTokensResponse
   | TokenChartResponse
+  | TransactionAlertsResponse
   | TransferResponse
   | WalletStatus
   | WatchAssetResponse
   | { readonly error: string };
-
-/**
- * Narrow wallet service surface consumed by background message dispatch.
- */
-export type WalletStatusReader = {
-  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
-  /** Stores a keyless Ledger account; optional only for partial test stubs. */
-  readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
-  readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
-  /** Creates a mnemonic-less Ledger vault; fails closed over an existing vault. */
-  readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
-  /** Derives Ledger picker candidates; optional only for partial test stubs. */
-  readonly deriveLedgerAccounts?: (
-    input: DeriveLedgerAccountsInput,
-  ) => Promise<readonly LedgerAccountRef[]>;
-  readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
-  readonly generateMnemonic: () => Promise<string>;
-  /**
-   * Imports an account from a raw private key. Optional on this narrow dispatch
-   * type so partial test stubs stay valid; the wired vault service always
-   * provides it.
-   */
-  readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
-  /** Derives public metadata without writing; optional only for partial test stubs. */
-  readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
-  readonly getGrantedAccounts: (
-    origin: string,
-    vaultPassphrase: string,
-  ) => Promise<readonly AccountRef[]>;
-  readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
-  readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
-  /** Removes origin grants; optional only for partial test stubs. */
-  readonly revokeOrigin?: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
-  readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
-  readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
-  readonly status: () => Promise<VaultStatus>;
-};

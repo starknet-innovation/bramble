@@ -4,9 +4,9 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import type { WalletStatusReader } from "../../src/background/runtime-types";
 import type { UnlockSession } from "../../src/background/session";
 import { handleTokenOps, type TokenOpsDeps } from "../../src/background/token-ops";
+import type { WalletStatusReader } from "../../src/background/wallet-reader";
 import type { PriceService } from "../../src/starknet/prices";
 import type { TokenMetadata } from "../../src/starknet/rpc";
 import { createMemoryStore } from "../../src/storage/kv";

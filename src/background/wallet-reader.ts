@@ -1,13 +1,81 @@
 /**
- * Adapts the privileged vault service (which may have failed to construct) into
- * the narrow {@link WalletStatusReader} the message dispatcher consumes. Every
- * method fails closed with "wallet unavailable" when the service is null, except
- * `status`, which reports an unavailable-but-defined status so the UI can render
- * a locked shell instead of erroring. Holds no state and no secrets; it only
- * forwards already-validated inputs to the service behind the vault boundary.
+ * The narrow wallet service surface background message dispatch consumes, and
+ * the adapter that produces it from the privileged vault service (which may
+ * have failed to construct).
+ *
+ * The contract and its only implementation live together so a method cannot be
+ * added to one without the other. Every method fails closed with "wallet
+ * unavailable" when the service is null, except `status`, which reports an
+ * unavailable-but-defined status so the UI can render a locked shell instead of
+ * erroring. Holds no state and no secrets; it only forwards already-validated
+ * inputs to the service behind the vault boundary.
  */
-import type { WalletVaultService } from "../wallet/vault-service";
-import type { WalletStatusReader } from "./runtime-types";
+import type { StarkSignature } from "../crypto/krusty";
+import type { AccountRef, LedgerAccountRef, Vault } from "../storage/vault-schema";
+import type { AccountDerivationInput } from "../wallet/accounts";
+import type {
+  AddDerivedAccountInput,
+  AddLedgerAccountInput,
+  ConnectedSite,
+  CreateLedgerVaultInput,
+  CreateVaultAccountInput,
+  DeriveLedgerAccountsInput,
+  EnsureNetworkAccountInput,
+  ImportRawKeyAccountInput,
+  OriginGrantInput,
+  RevokeOriginInput,
+  SetActiveAccountInput,
+  SignHashInput,
+  WalletStatus as VaultStatus,
+  WalletVaultService,
+} from "../wallet/vault-service";
+
+/**
+ * Narrow wallet service surface consumed by background message dispatch.
+ */
+export type WalletStatusReader = {
+  readonly addDerivedAccount: (input: AddDerivedAccountInput) => Promise<AccountRef>;
+  /** Stores a keyless Ledger account; optional only for partial test stubs. */
+  readonly addLedgerAccount?: (input: AddLedgerAccountInput) => Promise<LedgerAccountRef>;
+  readonly createAccount: (input: CreateVaultAccountInput) => Promise<AccountRef>;
+  /** Creates a mnemonic-less Ledger vault; fails closed over an existing vault. */
+  readonly createLedgerVault?: (input: CreateLedgerVaultInput) => Promise<LedgerAccountRef>;
+  /** Derives Ledger picker candidates; optional only for partial test stubs. */
+  readonly deriveLedgerAccounts?: (
+    input: DeriveLedgerAccountsInput,
+  ) => Promise<readonly LedgerAccountRef[]>;
+  /**
+   * Derives the account-scoped STRK20 viewing key inside the vault boundary.
+   * Optional only for partial test stubs; production fails closed when absent.
+   */
+  readonly deriveStrk20ViewingKey?: (input: {
+    readonly accountId: string;
+    readonly chainId: string;
+    readonly poolAddress: string;
+    readonly vaultPassphrase: string;
+  }) => Promise<string>;
+  readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
+  readonly generateMnemonic: () => Promise<string>;
+  /**
+   * Imports an account from a raw private key. Optional on this narrow dispatch
+   * type so partial test stubs stay valid; the wired vault service always
+   * provides it.
+   */
+  readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
+  /** Derives public metadata without writing; optional only for partial test stubs. */
+  readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
+  readonly getGrantedAccounts: (
+    origin: string,
+    vaultPassphrase: string,
+  ) => Promise<readonly AccountRef[]>;
+  readonly grantOrigin: (input: OriginGrantInput) => Promise<readonly AccountRef[]>;
+  readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
+  /** Removes origin grants; optional only for partial test stubs. */
+  readonly revokeOrigin?: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
+  readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
+  readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
+  readonly status: () => Promise<VaultStatus>;
+};
 
 /**
  * Wraps the (possibly null) vault service in the dispatcher's reader interface.
@@ -37,6 +105,9 @@ export const createWalletReader = (
     },
     async deriveLedgerAccounts(input) {
       return (await required()).deriveLedgerAccounts(input);
+    },
+    async deriveStrk20ViewingKey(input) {
+      return (await required()).deriveStrk20ViewingKey(input);
     },
     async ensureNetworkAccount(input) {
       return (await required()).ensureNetworkAccount(input);

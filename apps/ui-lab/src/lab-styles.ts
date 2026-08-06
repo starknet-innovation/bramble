@@ -191,13 +191,20 @@ export const LAB_STYLES = `
     position: absolute;
     transform: translateX(-50%);
   }
-  .lab-rail { display: grid; gap: 12px; min-width: 0; }
+  .lab-rail {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
   .lab-card {
+    align-content: start;
     background: var(--lab-panel);
     border: 1px solid var(--lab-border);
     border-radius: 13px;
     display: grid;
     gap: 12px;
+    min-width: 0;
     padding: 14px;
   }
   .lab-card h2, .lab-card h3 { margin: 0; }
@@ -226,7 +233,14 @@ export const LAB_STYLES = `
     background: var(--lab-elevated);
     border-color: var(--lab-border);
   }
-  .tuning-grid { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+  .tuning-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tuning-grid > .lab-field:first-child { grid-column: 1 / -1; }
+  .tuning-grid .lab-select { min-width: 0; width: 100%; }
+  [data-lab-theme] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reduced-toggle { align-items: center; color: var(--lab-muted); display: flex; font-size: 11px; gap: 8px; }
   .checkpoint-list { display: grid; gap: 6px; }
   .checkpoint-button {
@@ -256,7 +270,11 @@ export const LAB_STYLES = `
     background: var(--lab-accent);
     color: var(--lab-accent-text);
   }
-  .evidence-grid { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+  .evidence-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .event-log, .state-view {
     background: var(--lab-sunken);
     border: 1px solid var(--lab-border);
@@ -302,8 +320,8 @@ export const LAB_STYLES = `
   [data-lab-surface="fullpage"] .lab-card:last-child { grid-column: 1 / -1; }
   @media (max-width: 980px) {
     .lab-main { grid-template-columns: 1fr; }
-    .lab-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .lab-card:first-child, .lab-card:last-child { grid-column: 1 / -1; }
+    .lab-rail { grid-template-columns: minmax(0, 1fr); }
+    .checkpoint-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 620px) {
     .lab-topbar { align-items: stretch; flex-direction: column; }
@@ -314,6 +332,7 @@ export const LAB_STYLES = `
     .device-stand { overflow: auto; padding-inline: 8px; }
     .lab-rail { grid-template-columns: 1fr; }
     .lab-card:first-child, .lab-card:last-child { grid-column: auto; }
+    .checkpoint-list { grid-template-columns: 1fr; }
     .evidence-grid { grid-template-columns: 1fr; }
   }
   @media (prefers-reduced-motion: reduce) {

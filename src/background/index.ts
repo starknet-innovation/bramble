@@ -2,6 +2,7 @@
  * MV3 background entrypoint. All privileged wallet state stays behind this worker.
  */
 import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
 import { createKrustyKms } from "../crypto/krusty";
 import type { WalletEventMessage } from "../provider/events";
 import { createOriginGuard } from "../security/blocklist";
@@ -9,6 +10,11 @@ import { createPhishingFeed } from "../security/phishing-feed";
 import { createSwapService, unavailableSwapService } from "../starknet/avnu";
 import { MULTISIG_CLASS_ARTIFACT } from "../starknet/multisig-deploy";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
+import {
+  createOfficialStrk20Service,
+  type PrivacySdkRuntime,
+} from "../starknet/strk20/official-sdk-service";
+import { unavailableStrk20Service } from "../starknet/strk20/service";
 import { createActivityLog, systemClock } from "../storage/activity-store";
 import { createAllowanceStore } from "../storage/allowance-store";
 import {
@@ -22,7 +28,9 @@ import { createOriginHistoryStore } from "../storage/origin-history";
 import {
   type ApprovalSurfacePreference,
   createPreferencesStore,
+  type WalletPreferences,
 } from "../storage/preferences-store";
+import { createStrk20MaturityStore } from "../storage/strk20-maturity-store";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { setApprovalNotifier } from "./approval-notifier";
 import {
@@ -37,6 +45,7 @@ import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboar
 import { defaultRuntimeRpc } from "./runtime-rpc";
 import type { RuntimeSender } from "./senders";
 import { createUnlockSession, type UnlockSessionStore } from "./session";
+import { type AlarmsApi, startTransactionMonitor } from "./tx-monitor";
 import { createWalletReader } from "./wallet-reader";
 
 type RuntimeApi = {
@@ -57,6 +66,8 @@ type RuntimeApi = {
   readonly sendMessage?: (message: unknown) => Promise<unknown>;
 };
 
+type AlarmsGlobal = { readonly alarms?: AlarmsApi };
+
 type TabsApi = {
   readonly query: (
     queryInfo: Record<string, never>,
@@ -66,7 +77,8 @@ type TabsApi = {
 
 type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: ApprovalSurfaceBrowser &
-    OnboardingSurfaceBrowser & {
+    OnboardingSurfaceBrowser &
+    AlarmsGlobal & {
       readonly runtime?: RuntimeApi;
       readonly tabs?: TabsApi;
     };
@@ -137,6 +149,13 @@ void preferences
     updateApprovalSurface((await store?.read())?.approvalSurface ?? "side-panel");
   })
   .catch(() => undefined);
+const readPreferences = async (): Promise<WalletPreferences> => {
+  const store = await preferences;
+  if (!store) {
+    throw new Error("preferences unavailable");
+  }
+  return store.read();
+};
 const activityLog = (() => {
   try {
     return createActivityLog({ store: createBrowserLocalStore() });
@@ -210,6 +229,23 @@ const loadMultisigClass = async (): Promise<unknown> => {
   }
   return response.json();
 };
+const strk20MaturityStore = (() => {
+  try {
+    return createStrk20MaturityStore(createBrowserSessionStore());
+  } catch {
+    return undefined;
+  }
+})();
+const runtimeRpc = {
+  ...defaultRuntimeRpc,
+  strk20: strk20MaturityStore
+    ? createOfficialStrk20Service({
+        maturityStore: strk20MaturityStore,
+        nowSeconds: () => Math.floor(systemClock() / 1_000),
+        sdk: privacySdkModule as unknown as PrivacySdkRuntime,
+      })
+    : unavailableStrk20Service,
+};
 const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.id ?? "", {
   approvals,
   session,
@@ -244,13 +280,7 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
       updateApprovalSurface(next.approvalSurface ?? "side-panel");
       return next;
     },
-    async read() {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.read();
-    },
+    read: readPreferences,
     async removeAddress(input) {
       const store = await preferences;
       if (!store) {
@@ -346,12 +376,12 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
       }
       return store.setRpcOverride(input);
     },
-    async setStrk20ProverUrl(input) {
+    async setStrk20NetworkConfig(input) {
       const store = await preferences;
       if (!store) {
         throw new Error("preferences unavailable");
       }
-      return store.setStrk20ProverUrl(input);
+      return store.setStrk20NetworkConfig(input);
     },
     async setTokenHidden(input) {
       const store = await preferences;
@@ -368,7 +398,7 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
       return store.upsertToken(input);
     },
   },
-  runtimeRpc: defaultRuntimeRpc,
+  runtimeRpc,
   originGuard,
   ...(activityLog ? { activity: activityLog } : {}),
   ...(originHistory ? { originHistory } : {}),
@@ -378,6 +408,22 @@ const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.
   ...(multisigLog ? { multisigStore: multisigLog } : {}),
   loadMultisigClass,
 });
+
+// Background verification of submitted transactions. Runs on its own alarm
+// cadence so a pre-confirmed transaction keeps being checked through to L1
+// finality after the side panel closes, and a failure detected then is queued
+// for the next time a panel opens.
+if (activityLog) {
+  startTransactionMonitor({
+    browser: extensionApi,
+    deps: {
+      activity: activityLog,
+      preferencesStore: { read: readPreferences },
+      runtimeRpc: defaultRuntimeRpc,
+    },
+    now: systemClock,
+  });
+}
 
 const broadcastEvent = (event: WalletEventMessage): void => {
   void runtime?.sendMessage?.(event).catch(() => undefined);

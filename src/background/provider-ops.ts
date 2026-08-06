@@ -5,9 +5,14 @@
  * verifies the claimed origin and re-checks the phishing blocklist — a blocked
  * origin gets nothing back even if it still holds an old connection grant.
  */
+import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { walletErrorMessage } from "../shared/errors";
-import { STARKNET_NETWORKS } from "../starknet/networks";
+import { resolveFeeAffordability } from "../starknet/fee-funds";
+import { canonicalFelt, STARKNET_NETWORKS } from "../starknet/networks";
+import type { FeeEstimate } from "../starknet/rpc";
+import { mapStrk20StageError } from "../starknet/strk20/official-sdk-errors";
+import { unavailableStrk20Service } from "../starknet/strk20/service";
 import { verifyCalls } from "../starknet/verify";
 import type { ActivityLog } from "../storage/activity-store";
 import type { AllowanceStore } from "../storage/allowance-store";
@@ -17,17 +22,23 @@ import { accountHashSigner } from "./account-hash-signer";
 import { recordApproveAllowances } from "./allowance-ops";
 import { type ApprovalContext, createApprovalContext } from "./approval-context";
 import { notifyApprovalsChanged } from "./approval-notifier";
-import type { ApprovalPayload, ApprovalQueue } from "./approvals";
+import type { ApprovalPayload, ApprovalQueue, InvokeFeeReview } from "./approvals";
+import { readStrkBalance } from "./fee-guard";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { readAddInvokeTransactionInput } from "./message-inputs";
-import { readGetPermissionsInput, readWatchAssetInput } from "./provider-inputs";
+import {
+  readGetPermissionsInput,
+  readRetryApprovalFeeInput,
+  readWatchAssetInput,
+} from "./provider-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
-import type { RuntimeResponse, WalletStatusReader } from "./runtime-types";
+import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
-import { verificationContext } from "./wallet-ops";
+import { resolveReviewFee, verificationContext } from "./wallet-ops";
+import type { WalletStatusReader } from "./wallet-reader";
 import { canonicalTokenAddress, watchAssetToken } from "./watch-asset";
 
 /**
@@ -37,6 +48,13 @@ export type ProviderOpsDeps = {
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
   readonly guard?: OriginGuard;
+  /**
+   * Panel round-trip queue for keyless Ledger accounts. Optional so partial
+   * test stubs stay valid. Production invoke estimation skips account
+   * validation and does not call this queue; the seam remains part of the RPC
+   * input shape shared with submit paths and narrow test doubles.
+   */
+  readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -113,6 +131,18 @@ const resolveOriginAccount = async (
   return { account, passphrase, preferences };
 };
 
+const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
+  if (!hasProof) {
+    return walletErrorMessage(error, "invoke request failed");
+  }
+  try {
+    mapStrk20StageError("submission", error);
+  } catch (mapped) {
+    return walletErrorMessage(mapped, "invoke request failed");
+  }
+  return "invoke request failed";
+};
+
 // Fail-closed perimeter shared by the dapp surfaces that error on a blocked
 // origin: a claimed-origin mismatch or a blocklisted origin yields the error
 // response, otherwise null so the caller proceeds.
@@ -186,6 +216,76 @@ const handleWatchAsset: ProviderOpsHandler = async (deps, message, sender) => {
   return deps.waiters.register(approval.id);
 };
 
+// Estimates the fee for a queued dapp invoke, mirroring the Send review's
+// shape (deployment status → estimate → resolveReviewFee) so both journeys
+// classify fee outcomes identically. Nothing is broadcast or signed because
+// the RPC estimate skips account validation. Any failure — transport, RPC, or
+// signer construction — degrades to a retryable "estimate failed" state.
+const estimateInvokeApprovalFee = async (
+  deps: Pick<ProviderOpsDeps, "ledgerSignQueue" | "runtimeRpc" | "wallet">,
+  resolved: ResolvedOriginAccount,
+  calls: readonly Call[],
+): Promise<InvokeFeeReview> => {
+  const rpcUrls = networkRpcUrls(
+    STARKNET_NETWORKS[resolved.account.networkId],
+    resolved.preferences,
+  );
+  let deployed = true;
+  try {
+    deployed = await deps.runtimeRpc.getDeploymentStatus({
+      accountAddress: resolved.account.address,
+      rpcUrls,
+    });
+  } catch {
+    deployed = true;
+  }
+  let estimated: FeeEstimate | null = null;
+  if (deployed) {
+    try {
+      estimated = await deps.runtimeRpc.estimateInvokeFee({
+        account: resolved.account,
+        calls: [...calls],
+        rpcUrls,
+        signHash: accountHashSigner(deps, resolved.account, resolved.passphrase),
+      });
+    } catch {
+      estimated = null;
+    }
+  }
+  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  // Fee-affordability guard (issue 191): compare the estimate against the
+  // account's STRK balance via the shared predicate. Warn-only and fail-open —
+  // an unreadable balance yields "unknown" and never blocks the approval.
+  const feeAffordability = resolveFeeAffordability({
+    balance:
+      fee === null ? null : await readStrkBalance(deps, resolved.account, resolved.preferences),
+    fee,
+  });
+  return {
+    fee,
+    feeAffordability,
+    feeEstimateFailed,
+    feeEstimatePending: false,
+    requiresDeployment: !deployed,
+  };
+};
+
+const PENDING_INVOKE_FEE: InvokeFeeReview = {
+  fee: null,
+  feeAffordability: "unknown",
+  feeEstimateFailed: false,
+  feeEstimatePending: true,
+  requiresDeployment: false,
+};
+
+const FAILED_INVOKE_FEE: InvokeFeeReview = {
+  fee: null,
+  feeAffordability: "unknown",
+  feeEstimateFailed: true,
+  feeEstimatePending: false,
+  requiresDeployment: false,
+};
+
 const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sender) => {
   const input = readAddInvokeTransactionInput(message);
   if (!input) {
@@ -199,19 +299,76 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   if ("error" in resolved) {
     return resolved;
   }
+  if (input.proof && input.calls.length !== 1) {
+    return { error: "invalid invoke request" };
+  }
   const report = verifyCalls(
     input.calls,
     verificationContext(resolved.account, resolved.preferences),
   );
+  // Queue and foreground the request before any network work. Fee estimation
+  // can involve deployment, fee, and balance RPCs; awaiting those
+  // here previously left the dapp on "Waiting for wallet" with no visible
+  // request. Approval remains disabled while this initial estimate is pending.
   const approval = deps.approvals.requestInvoke({
     calls: input.calls,
-    context: await createApprovalContext(resolved.account, { calls: input.calls }),
+    context: await createApprovalContext(resolved.account, {
+      calls: input.calls,
+      ...(input.proof === undefined ? {} : { proof: input.proof }),
+    }),
+    fee: PENDING_INVOKE_FEE,
     flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
     origin: input.origin,
+    ...(input.proof === undefined ? {} : { proof: input.proof }),
     summaries: report.calls.map((call) => call.summary),
   });
   notifyApprovalsChanged();
+  void estimateInvokeApprovalFee(deps, resolved, input.calls).then(
+    (fee) => {
+      if (deps.approvals.updateInvokeFee(approval.id, fee)) {
+        notifyApprovalsChanged();
+      }
+    },
+    () => {
+      if (deps.approvals.updateInvokeFee(approval.id, FAILED_INVOKE_FEE)) {
+        notifyApprovalsChanged();
+      }
+    },
+  );
   return deps.waiters.register(approval.id);
+};
+
+// Re-estimates the fee for a queued invoke approval on the panel's request
+// (the retry affordance on the approval card). Privileged-sender only — the
+// message type is not dapp-reachable. Re-resolves the origin's account against
+// the approval's pinned context so a network or account switch since queueing
+// fails safely instead of estimating against the wrong account.
+const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
+  const input = readRetryApprovalFeeInput(message);
+  if (!input) {
+    return { error: "invalid fee retry request" };
+  }
+  const approval = deps.approvals.get(input.id);
+  const payload = deps.approvals.payload(input.id);
+  if (approval?.kind !== "invoke" || !payload?.calls) {
+    return { error: "approval not found" };
+  }
+  const resolved = await resolveOriginAccount(deps, approval.origin, approval.context);
+  if ("error" in resolved) {
+    return resolved;
+  }
+  if (!deps.approvals.updateInvokeFee(input.id, PENDING_INVOKE_FEE)) {
+    return { error: "approval not found" };
+  }
+  notifyApprovalsChanged();
+  const fee = await estimateInvokeApprovalFee(deps, resolved, payload.calls).catch(
+    () => FAILED_INVOKE_FEE,
+  );
+  if (!deps.approvals.updateInvokeFee(input.id, fee)) {
+    return { error: "approval not found" };
+  }
+  notifyApprovalsChanged();
+  return { ok: true };
 };
 
 /**
@@ -221,6 +378,7 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
 const PROVIDER_OPS_HANDLERS: Readonly<Record<string, ProviderOpsHandler>> = {
   "wallet.addInvokeTransaction": handleAddInvokeTransaction,
   "wallet.getPermissions": handleGetPermissions,
+  "wallet.retryApprovalFee": handleRetryApprovalFee,
   "wallet.watchAsset": handleWatchAsset,
 };
 
@@ -263,6 +421,10 @@ export const executeInvokeApproval = async (
     return resolved;
   }
   const { account, passphrase, preferences } = resolved;
+  const preparedCall = calls.length === 1 ? calls[0] : undefined;
+  if (approval.payload.proof && !preparedCall) {
+    return { error: "invalid prepared strk20 invocation" };
+  }
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam the wallet-initiated
   // paths use. A device rejection/timeout/verify-failure, or a Ledger account
@@ -271,12 +433,37 @@ export const executeInvokeApproval = async (
   // settles the held dapp request with the real reason instead of leaving it to
   // hang on an unhandled throw. Fails closed — nothing is submitted on error.
   try {
-    const result = await runtimeRpc.submitInvokeTransaction({
-      account,
-      calls,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-      signHash: accountHashSigner(deps, account, passphrase),
-    });
+    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
+    const signHash = accountHashSigner(deps, account, passphrase);
+    const result = approval.payload.proof
+      ? await (runtimeRpc.strk20 ?? unavailableStrk20Service).submitPrepared({
+          account,
+          call: preparedCall as Call,
+          config: preferences.strk20Networks?.[account.networkId] ?? null,
+          proof: approval.payload.proof,
+          rpcUrls,
+          signHash,
+          viewingKey: async () => {
+            const derive = deps.wallet.deriveStrk20ViewingKey;
+            const config = preferences.strk20Networks?.[account.networkId] ?? null;
+            const poolAddress = config ? canonicalFelt(config.poolAddress) : null;
+            if (!derive || !poolAddress) {
+              throw new Error("strk20 services unavailable");
+            }
+            return derive({
+              accountId: account.id,
+              chainId: STARKNET_NETWORKS[account.networkId].chainId,
+              poolAddress,
+              vaultPassphrase: passphrase,
+            });
+          },
+        })
+      : await runtimeRpc.submitInvokeTransaction({
+          account,
+          calls,
+          rpcUrls,
+          signHash,
+        });
     await activity.record({
       accountId: account.id,
       hash: result.transactionHash,
@@ -287,6 +474,6 @@ export const executeInvokeApproval = async (
     await recordApproveAllowances(allowanceStore, calls, account);
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return { error: walletErrorMessage(error, "invoke request failed") };
+    return { error: invokeFailureMessage(error, approval.payload.proof !== undefined) };
   }
 };

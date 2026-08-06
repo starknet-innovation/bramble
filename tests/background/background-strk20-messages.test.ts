@@ -1,226 +1,151 @@
 /**
- * Background STRK20 message checks prove private reads, prepare, and the
- * held-approval invoke keep spec error codes and never auto-submit.
+ * Background STRK20 message checks prove private reads, proof preparation,
+ * identity commitments, and invokes stay held until explicit approval.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
 import { toProviderPayload } from "../../src/provider/bridge";
 import type { InvokeInput } from "../../src/starknet/rpc";
 import type { Strk20Service } from "../../src/starknet/strk20/service";
 import { defaultWalletPreferences } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
-import type { WalletStatus } from "../../src/wallet/vault-service";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
+import {
+  approveHeldStrk20,
+  buildStrk20Handler,
+  STRK20_CALL_AND_PROOF,
+  STRK20_CONTENT_SENDER,
+  STRK20_EXTENSION_SENDER,
+  STRK20_ORIGIN,
+  STRK20_RECIPIENT,
+  STRK20_TOKEN,
+} from "../support/strk20-background";
 
-const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-const recipient = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-const origin = "https://example.com";
+const token = STRK20_TOKEN;
+const recipient = STRK20_RECIPIENT;
+const origin = STRK20_ORIGIN;
+const sender = STRK20_EXTENSION_SENDER;
+const contentSender = STRK20_CONTENT_SENDER;
+const callAndProof = STRK20_CALL_AND_PROOF;
 // The spec's literal `${openNoteIds[0]}` calldata placeholder, assembled by
 // interpolation so the source carries no bare "${" template token.
 const openNotePlaceholder = `${"$"}{openNoteIds[0]}`;
-const vaultPassphrase = "correct horse battery staple";
-const account: AccountRef = {
-  address: "0xabcabcdef",
-  classHash: "0xabcdef",
-  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
-  id: "SN_SEPOLIA:0xabcabcdef",
-  networkId: "SN_SEPOLIA",
-  publicKeyX: "0xabc",
-  publicKeyY: "0xdef",
-};
-const sender: RuntimeSender = {
-  id: "extension-id",
-  url: "chrome-extension://extension-id/popup.html",
-};
-const contentSender: RuntimeSender = { id: "extension-id", url: `${origin}/app` };
-const status: WalletStatus = {
-  accountCount: 1,
-  activeAccountId: account.id,
-  hasVault: true,
-  locked: false,
-  ready: true,
-};
-
-const callAndProof = {
-  call: { calldata: ["0x1"], contract_address: token, entry_point: "shielded_execute" },
-  proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
-};
-
-const walletStub = () => ({
-  async createAccount() {
-    return account;
-  },
-  async addDerivedAccount() {
-    return account;
-  },
-  async ensureNetworkAccount() {
-    return account;
-  },
-  async getGrantedAccounts(target: string) {
-    return target === origin ? [account] : [];
-  },
-  async generateMnemonic() {
-    return "habit hope tip crystal because grunt nation idea electric witness alert like";
-  },
-  async grantOrigin() {
-    return [account];
-  },
-  async readVault() {
-    return {
-      accounts: [account],
-      activeAccountId: account.id,
-      mnemonic: null,
-      originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 3 as const,
-      signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
-    };
-  },
-  async setActiveAccount() {
-    return account;
-  },
-  async signHash() {
-    return { publicKey: "0xabc", r: "0x1", s: "0x2" };
-  },
-  async status() {
-    return status;
-  },
-});
-
-const rpcStub = (strk20: Strk20Service, invoked: InvokeInput[]): RuntimeRpc => ({
-  async estimateInvokeFee() {
-    return { overallFee: "1", unit: "FRI" };
-  },
-  async getDeploymentStatus() {
-    return true;
-  },
-  async getNftOwner() {
-    return "0x0";
-  },
-  async getTransactionStatuses() {
-    return {};
-  },
-  async getTokenBalances() {
-    return [];
-  },
-  async getTokenMetadata() {
-    return { decimals: 18, name: "Token", symbol: "TKN" };
-  },
-  async submitAccountDeployment() {
-    throw new Error("unused");
-  },
-  async submitErc20Transfer() {
-    throw new Error("unused");
-  },
-  async submitInvokeTransaction(input) {
-    invoked.push(input);
-    return { calls: input.calls, transactionHash: "0x123" };
-  },
-  async submitDeclareTransaction() {
-    return { classHash: "0x1", transactionHash: "0x1" };
-  },
-  strk20,
-});
-
-const buildHandler = (options?: {
-  readonly registered?: boolean;
-  readonly balance?: string;
-  readonly invoked?: InvokeInput[];
-  readonly proveCalls?: { value: number };
-}) => {
-  const session = createUnlockSession();
-  session.unlock(vaultPassphrase);
-  const preferences = { ...defaultWalletPreferences(), activeNetworkId: "SN_SEPOLIA" as const };
-  const proveCalls = options?.proveCalls;
-  const strk20: Strk20Service = {
-    async privateBalances({ tokens }) {
-      return tokens.map((entry) => ({ balance: options?.balance ?? "0x64", token: entry }));
-    },
-    proving: {
-      async prove() {
-        if (proveCalls) {
-          proveCalls.value += 1;
-        }
-        return callAndProof;
-      },
-    },
-    async registered() {
-      return options?.registered ?? true;
-    },
-  };
-  return createMessageHandler(walletStub(), "extension-id", {
-    preferencesStore: {
-      ...unavailablePreferencesStore,
-      async read() {
-        return preferences;
-      },
-    },
-    runtimeRpc: rpcStub(strk20, options?.invoked ?? []),
-    session,
-  });
-};
+const buildHandler = buildStrk20Handler;
+const approveHeld = approveHeldStrk20;
 
 describe("background strk20 messages", () => {
-  test("reads private balances for a connected account", async () => {
-    const handler = buildHandler();
-    const result = await handler(
+  test("registers only after an account, network, pool, and token-bound approval", async () => {
+    const registerCalls = { value: 0 };
+    const handler = buildHandler({ registerCalls, registered: false });
+    const result = await approveHeld(
+      handler,
+      { origin, type: "wallet.strk20Register" },
+      "strk20-register",
+      () => expect(registerCalls.value).toBe(0),
+    );
+    expect(result).toEqual({ ok: true, transactionHash: "0x123" });
+    expect(registerCalls.value).toBe(1);
+    expect(toProviderPayload(result, "mc_strk20Register")).toEqual({
+      result: { transaction_hash: `0x${"123".padStart(64, "0")}` },
+    });
+  });
+
+  test("does not submit registration when the user denies activation", async () => {
+    const registerCalls = { value: 0 };
+    const handler = buildHandler({ registerCalls, registered: false });
+    const held = handler({ origin, type: "wallet.strk20Register" }, contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    const result = await held;
+    expect(toProviderPayload(result, "mc_strk20Register").error?.code).toBe(113);
+    expect(registerCalls.value).toBe(0);
+  });
+
+  test("reads private balances only after approval", async () => {
+    const balanceCalls = { value: 0 };
+    const handler = buildHandler({ balanceCalls });
+    const result = await approveHeld(
+      handler,
       { origin, tokens: [token], type: "wallet.strk20Balances" },
-      contentSender,
+      "strk20-balances",
+      () => expect(balanceCalls.value).toBe(0),
     );
     expect(result).toEqual({ balances: [{ balance: "0x64", token }], ok: true });
+    expect(balanceCalls.value).toBe(1);
     expect(toProviderPayload(result, "wallet_strk20Balances")).toEqual({
       result: [{ balance: "0x64", token }],
     });
   });
 
+  test("describes an empty token list as disclosure of every private balance", async () => {
+    const handler = buildHandler();
+    const held = handler({ origin, tokens: [], type: "wallet.strk20Balances" }, contentSender);
+    await flushHeld();
+    const listed = await waitForPendingApprovals<{
+      readonly id: string;
+      readonly kind?: string;
+      readonly summaries?: readonly string[];
+    }>(handler, sender);
+    expect(listed.at(-1)).toMatchObject({
+      kind: "strk20-balances",
+      summaries: ["Share all private token balances"],
+    });
+    const id = await latestApprovalId(handler, sender);
+    await handler({ id, type: "wallet.denyOrigin" }, sender);
+    await held;
+  });
+
   test("maps an unregistered account to NOT_REGISTERED (118)", async () => {
     const handler = buildHandler({ registered: false });
-    const result = await handler(
+    const result = await approveHeld(
+      handler,
       { origin, tokens: [token], type: "wallet.strk20Balances" },
-      contentSender,
+      "strk20-balances",
     );
     expect(toProviderPayload(result, "wallet_strk20Balances").error?.code).toBe(118);
   });
 
-  test("prepares a call-and-proof envelope without submitting", async () => {
+  test("prepares a call-and-proof envelope only after approval without submitting", async () => {
     const invoked: InvokeInput[] = [];
-    const handler = buildHandler({ invoked });
-    const result = await handler(
+    const proveCalls = { value: 0 };
+    const handler = buildHandler({ invoked, proveCalls });
+    const result = await approveHeld(
+      handler,
       {
         actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
         origin,
         simulate: false,
         type: "wallet.strk20PrepareInvoke",
       },
-      contentSender,
+      "strk20-prepare",
+      () => expect(proveCalls.value).toBe(0),
     );
     expect(result).toEqual({ callAndProof, ok: true });
     expect(toProviderPayload(result, "wallet_strk20PrepareInvoke")).toEqual({
       result: callAndProof,
     });
     expect(invoked).toHaveLength(0);
+    expect(proveCalls.value).toBe(1);
   });
 
   test("rejects an action exceeding the private balance (119)", async () => {
     const handler = buildHandler({ balance: "0x1" });
-    const result = await handler(
+    const result = await approveHeld(
+      handler,
       {
         actions: [{ amount: "0x3e8", recipient, token, type: "withdraw" }],
         origin,
         simulate: false,
         type: "wallet.strk20PrepareInvoke",
       },
-      contentSender,
+      "strk20-prepare",
     );
     expect(toProviderPayload(result, "wallet_strk20PrepareInvoke").error?.code).toBe(119);
   });
 
   test("rejects a leaking deposit/withdraw batch (120)", async () => {
     const handler = buildHandler();
-    const result = await handler(
+    const result = await approveHeld(
+      handler,
       {
         actions: [
           { amount: "0x05", token, type: "deposit" },
@@ -230,7 +155,7 @@ describe("background strk20 messages", () => {
         simulate: false,
         type: "wallet.strk20PrepareInvoke",
       },
-      contentSender,
+      "strk20-prepare",
     );
     expect(toProviderPayload(result, "wallet_strk20PrepareInvoke").error?.code).toBe(120);
   });
@@ -247,7 +172,8 @@ describe("background strk20 messages", () => {
 
   test("prepares an OPEN transfer plus a placeholder-bearing invoke in simulate mode", async () => {
     const handler = buildHandler();
-    const result = await handler(
+    const result = await approveHeld(
+      handler,
       {
         actions: [
           { amount: "OPEN", recipient, token, type: "transfer" },
@@ -257,7 +183,7 @@ describe("background strk20 messages", () => {
         simulate: true,
         type: "wallet.strk20PrepareInvoke",
       },
-      contentSender,
+      "strk20-prepare",
     );
     expect(result).toEqual({ callAndProof, ok: true });
     expect(toProviderPayload(result, "wallet_strk20PrepareInvoke")).toEqual({
@@ -267,16 +193,35 @@ describe("background strk20 messages", () => {
 
   test("prepares a numeric transfer within the private balance", async () => {
     const handler = buildHandler();
-    const result = await handler(
+    const result = await approveHeld(
+      handler,
       {
         actions: [{ amount: "0x0a", recipient, token, type: "transfer" }],
         origin,
         simulate: false,
         type: "wallet.strk20PrepareInvoke",
       },
-      contentSender,
+      "strk20-prepare",
     );
     expect(result).toEqual({ callAndProof, ok: true });
+  });
+
+  test("derives a dapp-scoped commitment only after approval", async () => {
+    const subaccountCalls = { value: 0 };
+    const handler = buildHandler({ subaccountCalls });
+    const result = await approveHeld(
+      handler,
+      {
+        dappName: "Example",
+        nonce: "0x1",
+        origin,
+        type: "wallet.strk20SubaccountCommitment",
+      },
+      "strk20-subaccount",
+      () => expect(subaccountCalls.value).toBe(0),
+    );
+    expect(result).toEqual({ commitment: "0x123", ok: true });
+    expect(subaccountCalls.value).toBe(1);
   });
 
   test("rejects the old `action`-discriminated shape at routing (114)", async () => {
@@ -296,8 +241,9 @@ describe("background strk20 messages", () => {
 
   test("holds the invoke until approval, then submits a padded hash", async () => {
     const invoked: InvokeInput[] = [];
+    const balanceCalls = { value: 0 };
     const proveCalls = { value: 0 };
-    const handler = buildHandler({ invoked, proveCalls });
+    const handler = buildHandler({ balanceCalls, invoked, proveCalls });
     const held = handler(
       {
         actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
@@ -317,10 +263,11 @@ describe("background strk20 messages", () => {
       context: { payloadDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/) },
       kind: "strk20-invoke",
       origin,
-      summaries: expect.arrayContaining([expect.stringContaining("shielded_execute")]),
+      summaries: expect.arrayContaining([expect.stringContaining("Private relay fee")]),
     });
     expect(invoked).toHaveLength(0);
-    expect(proveCalls.value).toBe(1);
+    expect(balanceCalls.value).toBe(0);
+    expect(proveCalls.value).toBe(0);
 
     const id = await latestApprovalId(handler, sender);
     await expect(handler({ id, type: "wallet.approveOrigin" }, sender)).resolves.toMatchObject({
@@ -332,56 +279,100 @@ describe("background strk20 messages", () => {
     expect(toProviderPayload(result, "wallet_strk20InvokeTransaction")).toEqual({
       result: { transaction_hash: `0x${"123".padStart(64, "0")}` },
     });
-    expect(invoked).toHaveLength(1);
+    expect(invoked).toHaveLength(0);
+    expect(balanceCalls.value).toBeGreaterThan(0);
     expect(proveCalls.value).toBe(1);
-    expect(invoked[0]?.calls[0]).toEqual({
-      calldata: ["0x1"],
-      contractAddress: token,
-      entrypoint: "shielded_execute",
-    });
   });
 
-  test("threads the configured prover url from preferences into the service", async () => {
-    const session = createUnlockSession();
-    session.unlock(vaultPassphrase);
+  test("threads the complete active-network service config into the SDK adapter", async () => {
     const preferences = {
       ...defaultWalletPreferences(),
       activeNetworkId: "SN_SEPOLIA" as const,
-      strk20ProverUrl: "https://prover.example/strk20",
+      strk20Networks: {
+        SN_SEPOLIA: {
+          discoveryUrl: "https://discovery.example/strk20",
+          poolAddress: token,
+          proverUrl: "https://prover.example/strk20",
+          subaccountAnonymizerAddress: recipient,
+        },
+      },
     };
-    const seenProverUrls: (string | null)[] = [];
+    const seenConfigs: unknown[] = [];
     const strk20: Strk20Service = {
-      async privateBalances({ proverUrl, tokens }) {
-        seenProverUrls.push(proverUrl);
+      async prepare() {
+        return callAndProof;
+      },
+      async privateBalances({ config, tokens }) {
+        seenConfigs.push(config);
         return tokens.map((entry) => ({ balance: "0x64", token: entry }));
       },
-      proving: {
-        async prove() {
-          return callAndProof;
-        },
+      async quoteActions() {
+        return {
+          feeAction: { amount: "0x1", recipient, token, type: "withdraw" },
+        };
       },
-      async registered({ proverUrl }) {
-        seenProverUrls.push(proverUrl);
-        return true;
+      async subaccountCommitment() {
+        return "0x123";
+      },
+      async submitActions() {
+        return { transactionHash: "0x123" };
+      },
+      async submitPrepared() {
+        return { transactionHash: "0x123" };
       },
     };
-    const handler = createMessageHandler(walletStub(), "extension-id", {
-      preferencesStore: {
-        ...unavailablePreferencesStore,
-        async read() {
-          return preferences;
-        },
-      },
-      runtimeRpc: rpcStub(strk20, []),
-      session,
-    });
+    const handler = buildHandler({ preferences, strk20 });
 
-    await handler({ origin, tokens: [token], type: "wallet.strk20Balances" }, contentSender);
-    expect(seenProverUrls).toEqual([
-      "https://prover.example/strk20",
-      "https://prover.example/strk20",
-    ]);
+    await approveHeld(
+      handler,
+      { origin, tokens: [token], type: "wallet.strk20Balances" },
+      "strk20-balances",
+    );
+    expect(seenConfigs).toEqual([preferences.strk20Networks.SN_SEPOLIA]);
   });
+
+  for (const request of [
+    {
+      kind: "strk20-balances",
+      method: "wallet_strk20Balances",
+      payload: { origin, tokens: [token], type: "wallet.strk20Balances" },
+    },
+    {
+      kind: "strk20-prepare",
+      method: "wallet_strk20PrepareInvoke",
+      payload: {
+        actions: [{ amount: "0x0a", recipient, token, type: "withdraw" }],
+        origin,
+        simulate: false,
+        type: "wallet.strk20PrepareInvoke",
+      },
+    },
+    {
+      kind: "strk20-subaccount",
+      method: "wallet_strk20SubaccountCommitment",
+      payload: {
+        dappName: "Example",
+        origin,
+        type: "wallet.strk20SubaccountCommitment",
+      },
+    },
+  ] as const) {
+    test(`maps a denied ${request.kind} request to USER_REFUSED_OP (113)`, async () => {
+      const balanceCalls = { value: 0 };
+      const proveCalls = { value: 0 };
+      const subaccountCalls = { value: 0 };
+      const handler = buildHandler({ balanceCalls, proveCalls, subaccountCalls });
+      const held = handler(request.payload, contentSender);
+      await flushHeld();
+      const id = await latestApprovalId(handler, sender);
+      await handler({ id, type: "wallet.denyOrigin" }, sender);
+      const result = await held;
+      expect(toProviderPayload(result, request.method).error?.code).toBe(113);
+      expect(balanceCalls.value).toBe(0);
+      expect(proveCalls.value).toBe(0);
+      expect(subaccountCalls.value).toBe(0);
+    });
+  }
 
   test("maps a denied invoke to USER_REFUSED_OP (113)", async () => {
     const invoked: InvokeInput[] = [];

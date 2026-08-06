@@ -4,8 +4,8 @@
  */
 import { describe, expect, test } from "bun:test";
 import { handleOriginOps, type OriginOpsDeps } from "../../src/background/origins-ops";
-import type { WalletStatusReader } from "../../src/background/runtime-types";
 import { createUnlockSession } from "../../src/background/session";
+import type { WalletStatusReader } from "../../src/background/wallet-reader";
 
 // Wallet stub whose methods must never run on the branches under test.
 const unusedWallet = new Proxy(

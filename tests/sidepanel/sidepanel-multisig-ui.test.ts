@@ -5,40 +5,15 @@
  */
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { serializeMultisigReviewPackage } from "../../src/sidepanel/multisig-model";
-import { bindMultisigs, type MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
+import type { MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
 import { multisigDetailFlow } from "../../src/sidepanel/multisig-views";
 import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
 import type { AccountRef } from "../../src/storage/vault-schema";
 import { registerDom, unregisterDom } from "../support/groups-harness";
+import { mountMultisigUi as mount } from "../support/multisig-ui-harness";
 
 beforeAll(registerDom);
 afterAll(unregisterDom);
-
-const mount = (
-  html: string,
-  render: () => Promise<void> = async () => {},
-  overrides: Partial<MultisigUiDeps> = {},
-) => {
-  document.body.replaceChildren();
-  const app = document.createElement("div");
-  app.append(document.createRange().createContextualFragment(html));
-  document.body.append(app);
-  bindMultisigs({
-    app,
-    multisig: {},
-    openDetail() {},
-    openList() {},
-    render,
-    selectedMultisigId: () => null,
-    wallet: {
-      async loadStatus() {
-        return {};
-      },
-    },
-    ...overrides,
-  } as unknown as MultisigUiDeps);
-  return app;
-};
 
 describe("bindMultisigs", () => {
   test("acknowledgement enables only actions allowed by signer state", () => {
@@ -355,9 +330,20 @@ describe("bindMultisigs", () => {
       },
       {
         multisig: {
-          async confirmProposal(id: string, signerAccountId: string) {
-            calls.push(`confirm:${id}:${signerAccountId}`);
+          async confirmProposal(input: { proposalId: string; signerAccountId: string }) {
+            calls.push(`confirm:${input.proposalId}:${input.signerAccountId}`);
             return "0xabc";
+          },
+          async prepareConfirmation(input: {
+            mode: "confirm-and-execute" | "confirm-only";
+            proposalId: string;
+            signerAccountId: string;
+          }) {
+            return {
+              fee: { overallFee: "1", unit: "FRI" },
+              feeEstimateFailed: false,
+              ...input,
+            };
           },
         } as unknown as MultisigUiDeps["multisig"],
         wallet: {
@@ -377,9 +363,10 @@ describe("bindMultisigs", () => {
       panel?.querySelector(`[data-ms-confirm-signer="${second.id}"]`)?.getAttribute("aria-pressed"),
     ).toBe("true");
 
+    for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
     panel?.querySelector<HTMLButtonElement>("[data-ms-confirm-submit]")?.click();
     expect(panel?.querySelector("[data-ms-confirm-status]")?.textContent).toBe(
-      "Submitting confirmation…",
+      "Authorizing one atomic confirmation and execution…",
     );
     for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
     expect(calls).toEqual([`confirm:${proposal.id}:${second.id}`, "render"]);

@@ -11,6 +11,7 @@ import { isRecord } from "../shared/json";
 import {
   clampNftText,
   type NftAttribute,
+  normalizeAnimationUri,
   normalizeImageUrl,
   normalizeNftHttpsUrl,
 } from "./nft-metadata";
@@ -23,6 +24,7 @@ const MAX_ATTRIBUTES = 32;
  * Display-safe metadata resolved for one ERC721 or ERC1155 token.
  */
 export type NftTokenMetadata = {
+  readonly animationUrl: string;
   readonly attributes: readonly NftAttribute[];
   readonly collection: string;
   readonly description: string;
@@ -115,6 +117,7 @@ const metadataFromJson = (text: string): NftTokenMetadata | null => {
           .filter((attribute): attribute is NftAttribute => attribute !== null)
       : [];
     const metadata: NftTokenMetadata = {
+      animationUrl: normalizeAnimationUri(value["animation_url"]),
       attributes,
       collection,
       description: clampNftText(value["description"], 1_024),

@@ -77,7 +77,7 @@ export type MultisigProposalRecord = {
 };
 
 /**
- * Durable claim for a declare or deploy submission. Claims are public
+ * Durable claim for a fee-paying multisig submission. Claims are public
  * bookkeeping only: they contain no signing material and never authorize a
  * transaction. A claim is written before broadcast so two extension surfaces
  * cannot submit the same fee-paying operation concurrently.
@@ -85,7 +85,7 @@ export type MultisigProposalRecord = {
 export type MultisigOperationRecord = {
   readonly accountId: string;
   readonly id: string;
-  readonly kind: "declare" | "deploy";
+  readonly kind: "confirm" | "declare" | "deploy" | "execute" | "revoke";
   readonly networkId: StarknetNetworkId;
   readonly target: string;
   readonly transactionHash?: string;
@@ -127,8 +127,8 @@ export const multisigProposalId = (ownerId: string, txId: string): string | null
 };
 
 /**
- * Builds the deterministic key used to serialize one declare or deploy
- * configuration. Returns null for malformed account ids or targets.
+ * Builds the deterministic key used to serialize one setup or proposal action.
+ * Returns null for malformed account ids or targets.
  */
 export const multisigOperationId = (
   kind: MultisigOperationRecord["kind"],
@@ -243,7 +243,11 @@ export const isMultisigOperationRecord = (value: unknown): value is MultisigOper
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountId", "id", "kind", "networkId", "target", "transactionHash"]) &&
   typeof value["accountId"] === "string" &&
-  (value["kind"] === "declare" || value["kind"] === "deploy") &&
+  (value["kind"] === "confirm" ||
+    value["kind"] === "declare" ||
+    value["kind"] === "deploy" ||
+    value["kind"] === "execute" ||
+    value["kind"] === "revoke") &&
   isStarknetNetworkId(value["networkId"]) &&
   typeof value["target"] === "string" &&
   isStarkFieldElement(value["target"]) &&

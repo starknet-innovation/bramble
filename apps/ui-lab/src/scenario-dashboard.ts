@@ -6,6 +6,10 @@ import type {
   WalletStatus,
 } from "../../../src/popup/responses";
 import type { MultisigSyncState } from "../../../src/sidepanel/multisig-sync";
+import type {
+  PrivacyDisclosureState,
+  PrivacyJourneyState,
+} from "../../../src/sidepanel/privacy-model";
 import type { BalanceState } from "../../../src/sidepanel/runtime";
 import { dashboard, type WalletView } from "../../../src/sidepanel/views";
 import type { AllowanceView } from "../../../src/starknet/allowance-discovery";
@@ -46,6 +50,8 @@ export type DashboardOptions = {
   readonly priceAsOf?: number | null;
   readonly priceStale?: boolean;
   readonly prices?: Readonly<Record<string, number>>;
+  readonly privacy?: PrivacyDisclosureState;
+  readonly privacyJourney?: PrivacyJourneyState;
   readonly selectedMultisigId?: string | null;
   readonly selectedNftId?: string | null;
   readonly selectedTokenId?: string | null;
@@ -94,4 +100,6 @@ export const walletDashboard = (options: DashboardOptions = {}): string =>
     options.selectedMultisigId ?? null,
     options.multisigNfts ?? [],
     options.selectedMultisigId ?? null,
+    options.privacy ?? { enabled: false, error: null, loading: false, value: null },
+    options.privacyJourney ?? { stage: "idle" },
   );

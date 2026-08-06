@@ -105,6 +105,7 @@ describe("multisig tx handler proposalById failures", () => {
         {
           proposalId: proposal.id,
           signerAccountId: "SN_MAIN:0x999",
+          mode: "confirm-only",
           type: "wallet.confirmMultisigProposal",
         },
         harnessExtensionSender,
@@ -120,7 +121,11 @@ describe("multisig tx handler proposalById failures", () => {
     signers.splice(0, signers.length, HARNESS_OTHER_SIGNER);
     await expect(
       harness.handler(
-        { proposalId: proposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-only",
+          proposalId: proposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toEqual({ error: "the selected account is not a signer of this multisig" });
@@ -221,7 +226,7 @@ describe("multisig class-status and declare guards", () => {
       summary: "Declare multisig class",
     });
     await activity.updateStatuses(
-      { "0xdec": "rejected" },
+      { "0xdec": { status: "rejected" } },
       { accountId: harnessAccount.id, networkId: harnessAccount.networkId },
     );
     await expect(
@@ -460,7 +465,11 @@ describe("multisig proposalById multisig-context failure", () => {
     });
     await expect(
       handler(
-        { proposalId: orphanProposal.id, type: "wallet.confirmMultisigProposal" },
+        {
+          mode: "confirm-only",
+          proposalId: orphanProposal.id,
+          type: "wallet.confirmMultisigProposal",
+        },
         harnessExtensionSender,
       ),
     ).resolves.toEqual({ error: "multisig not found" });

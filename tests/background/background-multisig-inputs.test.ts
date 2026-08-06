@@ -7,6 +7,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   readAddMultisigInput,
+  readConfirmMultisigProposalInput,
   readDeployMultisigInput,
   readMultisigIdInput,
   readMultisigProposalActionInput,
@@ -131,11 +132,12 @@ describe("readProposeMultisigInput", () => {
   });
 });
 
-describe("readMultisigProposalActionInput", () => {
-  test("accepts a confirm carrying the untrackedVerified acknowledgement", () => {
+describe("readConfirmMultisigProposalInput", () => {
+  test("accepts each explicit mode with signer and acknowledgement", () => {
     expect(
-      readMultisigProposalActionInput(
+      readConfirmMultisigProposalInput(
         {
+          mode: "confirm-and-execute",
           proposalId: "SN_MAIN:0x1:0x2",
           signerAccountId: SIGNER_ACCOUNT_ID,
           type: "wallet.confirmMultisigProposal",
@@ -144,52 +146,102 @@ describe("readMultisigProposalActionInput", () => {
         "wallet.confirmMultisigProposal",
       ),
     ).toEqual({
+      mode: "confirm-and-execute",
       proposalId: "SN_MAIN:0x1:0x2",
       signerAccountId: SIGNER_ACCOUNT_ID,
       untrackedVerified: true,
     });
+    expect(
+      readConfirmMultisigProposalInput(
+        {
+          mode: "confirm-only",
+          proposalId: "SN_MAIN:0x1:0x2",
+          signerAccountId: SIGNER_ACCOUNT_ID,
+          type: "wallet.prepareMultisigConfirmation",
+        },
+        "wallet.prepareMultisigConfirmation",
+      ),
+    ).toEqual({
+      mode: "confirm-only",
+      proposalId: "SN_MAIN:0x1:0x2",
+      signerAccountId: SIGNER_ACCOUNT_ID,
+    });
   });
 
-  test("accepts an execute without the untrackedVerified flag", () => {
+  test("rejects absent/unknown modes, mismatched types, and malformed optional fields", () => {
+    expect(
+      readConfirmMultisigProposalInput(
+        { proposalId: "x", type: "wallet.confirmMultisigProposal" },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toBeNull();
+    expect(
+      readConfirmMultisigProposalInput(
+        { mode: "both", proposalId: "x", type: "wallet.confirmMultisigProposal" },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toBeNull();
+    expect(
+      readConfirmMultisigProposalInput(
+        { mode: "confirm-only", proposalId: "x", type: "wallet.prepareMultisigConfirmation" },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toBeNull();
+    expect(
+      readConfirmMultisigProposalInput(
+        {
+          mode: "confirm-only",
+          proposalId: "x",
+          type: "wallet.confirmMultisigProposal",
+          untrackedVerified: false,
+        },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toBeNull();
+    expect(
+      readConfirmMultisigProposalInput(
+        {
+          mode: "confirm-only",
+          proposalId: "x",
+          signerAccountId: "bad",
+          type: "wallet.confirmMultisigProposal",
+        },
+        "wallet.confirmMultisigProposal",
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("readMultisigProposalActionInput", () => {
+  test("accepts execute and revoke inputs", () => {
     expect(
       readMultisigProposalActionInput(
         { proposalId: "SN_MAIN:0x1:0x2", type: "wallet.executeMultisigProposal" },
         "wallet.executeMultisigProposal",
       ),
     ).toEqual({ proposalId: "SN_MAIN:0x1:0x2" });
-  });
-
-  test("returns null for a missing/empty proposal id or a mismatched type", () => {
-    expect(
-      readMultisigProposalActionInput(
-        { proposalId: "", type: "wallet.confirmMultisigProposal" },
-        "wallet.confirmMultisigProposal",
-      ),
-    ).toBeNull();
-    expect(
-      readMultisigProposalActionInput(
-        { proposalId: "x", type: "wallet.revokeMultisigConfirmation" },
-        "wallet.confirmMultisigProposal",
-      ),
-    ).toBeNull();
-    expect(readMultisigProposalActionInput("nope", "wallet.confirmMultisigProposal")).toBeNull();
-  });
-
-  test("returns null when untrackedVerified is present but not literally true", () => {
-    expect(
-      readMultisigProposalActionInput(
-        { proposalId: "x", type: "wallet.confirmMultisigProposal", untrackedVerified: false },
-        "wallet.confirmMultisigProposal",
-      ),
-    ).toBeNull();
     expect(
       readMultisigProposalActionInput(
         {
-          proposalId: "x",
-          signerAccountId: "bad",
-          type: "wallet.confirmMultisigProposal",
+          proposalId: "SN_MAIN:0x1:0x2",
+          signerAccountId: SIGNER_ACCOUNT_ID,
+          type: "wallet.revokeMultisigConfirmation",
+          untrackedVerified: true,
         },
-        "wallet.confirmMultisigProposal",
+        "wallet.revokeMultisigConfirmation",
+      ),
+    ).toEqual({
+      proposalId: "SN_MAIN:0x1:0x2",
+      signerAccountId: SIGNER_ACCOUNT_ID,
+      untrackedVerified: true,
+    });
+  });
+
+  test("rejects confirmation-only fields and malformed acknowledgements", () => {
+    expect(
+      readMultisigProposalActionInput(
+        { mode: "confirm-only", proposalId: "x", type: "wallet.revokeMultisigConfirmation" },
+        "wallet.revokeMultisigConfirmation",
       ),
     ).toBeNull();
     expect(

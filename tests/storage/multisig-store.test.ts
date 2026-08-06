@@ -102,6 +102,14 @@ describe("multisig store", () => {
     expect(isMultisigProposalRecord({ ...proposal, state: "unknown" })).toBe(false);
     expect(isMultisigProposalRecord({ ...proposal, id: "other" })).toBe(false);
     expect(isMultisigOperationRecord(operation)).toBe(true);
+    expect(
+      isMultisigOperationRecord({
+        ...operation,
+        id: multisigOperationId("confirm", "SN_MAIN", "account-1", proposal.txId) ?? "",
+        kind: "confirm",
+        target: proposal.txId,
+      }),
+    ).toBe(true);
     expect(isMultisigOperationRecord({ ...operation, id: "other" })).toBe(false);
   });
 
