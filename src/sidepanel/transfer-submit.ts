@@ -8,6 +8,7 @@
  * route rather than once per privacy feature.
  */
 
+import { sameFelt } from "../starknet/networks";
 import type { SendRoute } from "../starknet/send-routes";
 import type { PrivacyPreparation } from "./privacy-runtime";
 import type { SidepanelWallet } from "./runtime";
@@ -27,10 +28,20 @@ export const preparationFor = (
   route: SendRoute,
   fields: TransferFields,
   wallet: SidepanelWallet,
+  senderAddress: string,
 ): Promise<PrivacyPreparation> | null => {
   if (route.id === "public-private") {
-    // v1 deposits credit the depositor, so this carries no recipient: the
-    // recipient field is the account itself.
+    // A v1 deposit credits the depositor and takes no recipient, so a recipient
+    // other than the account itself cannot be honoured. Refusing here rather
+    // than dropping it is the point: this route once shielded to the sender
+    // while every screen reported a payment to the chosen recipient. The route
+    // resolver refuses this too; this is the backstop that makes the silent
+    // misdirection unreachable rather than merely gated.
+    if (!sameFelt(fields.recipient, senderAddress)) {
+      return Promise.reject(
+        new Error("Shielding credits your own private balance; choose your own account"),
+      );
+    }
     return wallet.preparePrivacyDeposit(fields.tokenId, fields.amount);
   }
   if (route.id === "private-private") {
