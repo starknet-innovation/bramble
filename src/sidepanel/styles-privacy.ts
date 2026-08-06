@@ -96,34 +96,56 @@ export const PRIVACY_STYLES = `
   }
   button.token-breakdown-more:not(:disabled):hover { background: transparent; }
   button.token-breakdown-more .icon { height: 14px; width: 14px; }
-  /* Private-send toggle on the Send amount card: a plain labelled checkbox
-     under the token picker. Blocked states grey the label and spell the reason
-     out beside it — a disabled checkbox whose only explanation was a title
-     tooltip read as a broken control. */
-  .send-private-toggle {
-    align-items: center;
-    cursor: pointer;
-    display: inline-flex;
+  /* Source and destination buckets on the Send amount card: two segmented
+     pairs reading "From [Public|Private] > To [Public|Private]", which is the
+     whole grid in one row. A blocked route greys the row and spells the reason
+     out beneath it — a dead control whose only explanation was a title tooltip
+     read as broken rather than gated. */
+  .send-route-controls {
+    align-items: flex-end;
+    display: flex;
     gap: ${SPACE.sm};
     justify-self: start;
-    min-height: ${CONTROL.hitSmall};
   }
-  .send-private-toggle input[type="checkbox"] { cursor: pointer; }
-  .send-private-toggle.muted { color: var(--mc-muted); cursor: not-allowed; }
-  .send-private-toggle.muted input[type="checkbox"] { cursor: not-allowed; }
-  .send-private-reason {
+  .send-route-controls > .icon {
+    color: var(--mc-muted);
+    height: 14px;
+    margin-bottom: ${SPACE.xs};
+    width: 14px;
+  }
+  .send-route-controls.muted { color: var(--mc-muted); }
+  .send-route-leg {
+    display: grid;
+    gap: ${SPACE.xs};
+  }
+  .send-route-legend {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};
   }
-  .send-private-reason[hidden] { display: none; }
-  .send-private-copy {
-    align-items: center;
+  .send-route-choice {
+    background: var(--mc-sunken);
+    border-radius: ${RADIUS.full};
     display: inline-flex;
+    padding: 2px;
+  }
+  .send-route-choice button {
+    background: transparent;
+    border-radius: ${RADIUS.full};
+    color: var(--mc-muted);
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};
-    gap: ${SPACE.xs};
+    min-height: ${CONTROL.hitSmall};
+    padding: 0 ${SPACE.sm};
   }
-  .send-private-copy .icon { height: 12px; width: 12px; }
+  .send-route-choice button[aria-pressed="true"] {
+    background: var(--mc-panel);
+    color: var(--mc-text);
+  }
+  .send-route-reason {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+  }
+  .send-route-reason[hidden] { display: none; }
   .privacy-inline-error {
     align-items: center;
     color: var(--mc-muted);

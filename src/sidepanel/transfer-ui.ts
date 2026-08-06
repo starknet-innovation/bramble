@@ -1,12 +1,13 @@
 /** Persistent recipient, review, authorization, confirmation, and receipt bindings. */
-import type { WalletStatus } from "../popup/responses";
-import { buttonBusy, errorMessage, showToast } from "./dom";
-import { accountLabel } from "./parts";
+import type { TokenBalance, WalletStatus } from "../popup/responses";
+import type { SendRouteResolution } from "../starknet/send-routes";
+import { errorMessage, showToast } from "./dom";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import type { SidepanelWallet } from "./runtime";
 import { transitionSendStage } from "./send-transition";
 import { watchDeployment } from "./shell-bindings";
-import { bindTransferCompose, restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
+import { bindTransferBuckets } from "./transfer-buckets-ui";
+import { bindTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import type { TransferState } from "./transfer-model";
 import {
   CONFIRMATION_DELAYS_MS,
@@ -15,26 +16,28 @@ import {
   friendlyReviewError,
   initialTransferState,
   recipientFieldError,
-  type TransferFields,
   type TransferStage,
   transferFields,
   transferKey,
-  transferStageTitle,
 } from "./transfer-model";
-import { bindPrivateSendToggle } from "./transfer-private-ui";
-import { setSendProgress, setTaskStatus, setText, workingStatus } from "./transfer-progress-ui";
+import { createRecipientStatus } from "./transfer-recipient-status";
+import { applyTransferUi } from "./transfer-render";
 import {
-  privateRelayFeeHtml,
-  reviewDetailsHtml,
-  reviewFeeHtml,
-  reviewSummaryHtml,
-} from "./transfer-review-markup";
+  balanceInBucket,
+  resolveTransferRoute,
+  type TransferRouteContext,
+  transferRoute,
+  transferSpendable,
+} from "./transfer-route";
+import { preparationFailure, preparationFor, preparedReview } from "./transfer-submit";
 
 export { activityExportToast, bindActivity } from "./activity-ui";
 export { friendlyReviewError, recipientFieldError } from "./transfer-model";
 export { reviewPanelHtml } from "./transfer-review-markup";
 
 type Review = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
+
+const EMPTY_BALANCES: readonly TokenBalance[] = [];
 
 /**
  * Dependencies the Send binding closes over. Confirmation timing is injected
@@ -48,7 +51,11 @@ export type TransferUiDeps = {
   /** Invalidates the cached private balance once a private send is accepted. */
   readonly onPrivateSendSettled?: () => void;
   readonly privacy?: () => PrivacyDisclosureState;
+  /** The account's public token balances, for bucket display and fee gating. */
+  readonly publicBalances?: () => readonly TokenBalance[];
   readonly render: (status: WalletStatus) => Promise<void>;
+  /** Active account address, so a send to yourself is recognised as such. */
+  readonly senderAddress?: () => string;
   readonly waitForConfirmation?: (delayMs: number) => Promise<void>;
   readonly wallet: SidepanelWallet;
 };
@@ -57,123 +64,6 @@ let transferState: TransferState<Review> = initialTransferState();
 let transferEpoch = 0;
 let repaintActiveTransfer: (() => void) | null = null;
 let transferApp: Element | null = null;
-
-const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | null): void => {
-  if (!fields) {
-    return;
-  }
-  const values: Readonly<Record<string, string>> = {
-    accountId: fields.accountId,
-    amount: fields.amount,
-    fiatEstimate: fields.fiatEstimate,
-    privateSend: fields.privateSend,
-    recipient: fields.recipient,
-    recipientLabel: fields.recipientLabel,
-    speed: fields.speed,
-    tokenAddress: fields.tokenAddress,
-    tokenBalance: fields.tokenBalance,
-    tokenDecimals: fields.tokenDecimals,
-    tokenFormatted: fields.tokenFormatted,
-    tokenId: fields.tokenId,
-    tokenPrice: fields.tokenPrice,
-    tokenSymbol: fields.tokenSymbol,
-  };
-  for (const [name, value] of Object.entries(values)) {
-    const control = sendFormInput(form, name);
-    if (control && control !== control.ownerDocument.activeElement) {
-      control.value = value;
-    }
-  }
-  restoreTransferCompose(form, fields);
-};
-
-// `poolFeeFri` is threaded in, not read here: the privacy reading belongs to the
-// binding, so this stays a function of its inputs.
-const applyTransferUi = (form: HTMLFormElement, poolFeeFri?: string): void => {
-  const currentForm = form;
-  const state = transferState;
-  const previousStage = currentForm.dataset["stage"];
-  const working = ["authorizing", "broadcasting", "confirming", "reviewing"].includes(state.stage);
-  currentForm.dataset["stage"] = state.stage;
-  currentForm.toggleAttribute("aria-busy", working);
-  const stageIds: Readonly<Record<string, TransferStage>> = {
-    "send-asset-stage": "asset",
-    "send-details": "details",
-    "send-failure": "failed",
-    "send-pending": "pending",
-    "send-recipient-stage": "recipient",
-    "send-review-stage": "review",
-    "send-success": "submitted",
-  };
-  for (const [id, stage] of Object.entries(stageIds)) {
-    form.querySelector(`#${id}`)?.toggleAttribute("hidden", state.stage !== stage);
-  }
-  form.querySelector("#send-working")?.toggleAttribute("hidden", !working);
-  setText(form.ownerDocument, "send-header-title", transferStageTitle(state.stage));
-  setSendProgress(form, state.stage);
-  restoreTransferFields(form, state.fields);
-
-  const confirmButton = form.querySelector<HTMLButtonElement>("#send-confirm-button");
-  buttonBusy(confirmButton, state.stage === "authorizing");
-  if (confirmButton && state.stage === "review") {
-    confirmButton.disabled = state.review?.feeEstimateFailed === true;
-  }
-  setText(
-    form,
-    "send-confirm-label",
-    state.fields?.signer === "ledger" ? "Approve with Ledger" : "Confirm and send",
-  );
-
-  const reviewPanel = form.querySelector<HTMLElement>("#review-panel");
-  if (reviewPanel) {
-    reviewPanel.innerHTML = state.review ? reviewDetailsHtml(state.review) : "";
-  }
-  const reviewFee = form.querySelector<HTMLElement>("#send-review-fee");
-  if (reviewFee) {
-    reviewFee.innerHTML = state.privatePreparation?.relayFee
-      ? privateRelayFeeHtml(state.privatePreparation.relayFee, poolFeeFri)
-      : state.review
-        ? reviewFeeHtml(state.review)
-        : "";
-  }
-  const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
-  if (reviewSummary) {
-    reviewSummary.innerHTML = state.fields ? reviewSummaryHtml(state.fields) : "";
-  }
-  reviewFee
-    ?.querySelector<HTMLButtonElement>("#review-retry-fee")
-    ?.addEventListener("click", () => form.requestSubmit());
-
-  if (working) {
-    const status = workingStatus(state);
-    setText(form, "send-working-title", status.title);
-    setText(form, "send-working-copy", status.copy);
-    setText(form, "send-liveness", status.liveness);
-    setTaskStatus(form, "review", status.labels[0], status.states[0]);
-    setTaskStatus(form, "authorize", status.labels[1], status.states[1]);
-    setTaskStatus(form, "broadcast", status.labels[2], status.states[2]);
-    setTaskStatus(form, "confirm", status.labels[3], status.states[3]);
-  }
-  if (state.fields && state.transactionHash) {
-    const summary = `${state.fields.amount} ${state.fields.tokenSymbol} sent to ${state.fields.recipientLabel || accountLabel(state.fields.recipient)}`;
-    setText(form, "send-success-summary", summary);
-    setText(form, "send-success-hash", state.transactionHash);
-    setText(form, "send-pending-hash", state.transactionHash);
-    setText(form, "send-failure-hash", state.transactionHash);
-  }
-  if (state.stage === "failed") {
-    setText(
-      form,
-      "send-failure-copy",
-      state.error || "The transaction was not sent. Your balance is unchanged.",
-    );
-  }
-  setText(form, "transfer-result", state.stage === "failed" ? "" : state.error);
-  if (previousStage && previousStage !== state.stage) {
-    form.ownerDocument.documentElement.scrollTop = 0;
-    form.ownerDocument.body.scrollTop = 0;
-  }
-};
 
 /**
  * Advances an in-wallet Ledger send from device authorization to network
@@ -213,7 +103,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   }
   const repaint = (): void =>
     transitionSendStage(form.ownerDocument, form.dataset["stage"], transferState.stage, () =>
-      applyTransferUi(form, deps.privacy?.().value?.poolFeeFri),
+      applyTransferUi(form, transferState, deps.privacy?.().value?.poolFeeFri),
     );
   repaintActiveTransfer = repaint;
   repaint();
@@ -229,29 +119,52 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     else if (transferState.stage === "review") goTo("details");
     else exit();
   });
+  const recipients = createRecipientStatus({
+    onSettled: () => repaintActiveTransfer?.(),
+    wallet,
+  });
+  const routeContext = (): TransferRouteContext => {
+    const fields = transferFields(form);
+    return {
+      fields,
+      privacy: deps.privacy?.() ?? { error: null, loading: false, value: null },
+      publicBalances: deps.publicBalances?.() ?? EMPTY_BALANCES,
+      recipientRegistration: recipients.status(fields.recipient),
+      senderAddress: deps.senderAddress?.() ?? "",
+    };
+  };
+  // The recipient answer is a network round trip, so it is only started once a
+  // route actually depends on it — a public destination never needs it.
+  const route = (): SendRouteResolution => {
+    const context = routeContext();
+    if (context.fields.destination === "private" && context.fields.recipient) {
+      recipients.check(context.fields.tokenId, context.fields.recipient);
+    }
+    return resolveTransferRoute(context);
+  };
+  const dropReview = (): void => {
+    transferState = {
+      ...transferState,
+      fields: transferFields(form),
+      privatePreparation: null,
+      review: null,
+      reviewedKey: null,
+    };
+  };
   bindTransferCompose({
     form,
     goTo,
     onFields: (fields) => {
       transferState = { ...transferState, fields };
     },
+    spendable: () => transferSpendable(routeContext()),
   });
-  if (deps.privacy) {
-    bindPrivateSendToggle({
-      form,
-      onModeChange: () => {
-        transferState = {
-          ...transferState,
-          fields: transferFields(form),
-          privatePreparation: null,
-          review: null,
-          reviewedKey: null,
-        };
-      },
-      privacy: deps.privacy,
-      wallet,
-    });
-  }
+  bindTransferBuckets({
+    balanceIn: (bucket) => balanceInBucket(bucket, routeContext()),
+    form,
+    onRouteChange: dropReview,
+    route,
+  });
 
   const editDetails = (): void => {
     transferEpoch += 1;
@@ -356,8 +269,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       const epoch = ++transferEpoch;
       transferState = { ...initialTransferState<Review>(), fields, stage: "reviewing" };
       repaint();
-      if (fields.privateSend === "1") {
-        void wallet.preparePrivacyTransfer(fields.tokenId, fields.recipient, fields.amount).then(
+      const composed = transferRoute(fields);
+      const preparing = preparationFor(composed, fields, wallet);
+      if (preparing) {
+        void preparing.then(
           (preparation) => {
             if (epoch !== transferEpoch) return;
             transferState = {
@@ -365,13 +280,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
               fields,
               privatePreparation: preparation,
               requiresDeployment: false,
-              review: {
-                fee: null,
-                feeEstimateFailed: false,
-                flags: [],
-                requiresDeployment: false,
-                summaries: [...preparation.summaries],
-              } as Review,
+              review: preparedReview(preparation),
               reviewedKey: key,
               stage: "review",
               transactionHash: null,
@@ -380,7 +289,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           },
           (error: unknown) => {
             if (epoch !== transferEpoch) return;
-            const message = errorMessage(error, "Private send preparation failed");
+            const message = errorMessage(error, preparationFailure(composed));
             showToast(message, "error");
             transferState = { ...initialTransferState(), error: message, fields, stage: "details" };
             repaintActiveTransfer?.();
@@ -423,11 +332,11 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     const privatePreparation = transferState.privatePreparation;
     transferState = { ...transferState, error: "", fields, stage: "authorizing" };
     repaint();
-    if (fields.privateSend === "1") {
+    if (transferRoute(fields).id !== "public-public") {
       if (!privatePreparation) {
         transferState = {
           ...transferState,
-          error: "Review the private send first",
+          error: "Review this send first",
           stage: "details",
         };
         repaint();
