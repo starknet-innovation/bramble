@@ -175,6 +175,50 @@ describe("createPreferencesStore", () => {
     expect((await preferences.read()).strk20Networks?.SN_MAIN).toBeUndefined();
   });
 
+  test("rebases only the retired bundled STRK20 Mainnet routing", async () => {
+    const store = createMemoryStore();
+    const defaults = defaultWalletPreferences();
+    const currentMainnet = defaults.strk20Networks?.SN_MAIN;
+    if (!currentMainnet?.paymaster) {
+      throw new Error("missing bundled STRK20 Mainnet routing");
+    }
+    const retiredMainnet = {
+      ...currentMainnet,
+      discoveryUrl: "https://mc-wallet-terminal.vercel.app/api/strk20/discovery",
+      ohttpEnabled: true,
+      paymaster: {
+        ...currentMainnet.paymaster,
+        url: "https://mc-wallet-terminal.vercel.app/api/strk20/paymaster",
+      },
+      proverUrl: "https://mc-wallet-terminal.vercel.app/api/strk20/prover",
+    };
+
+    await store.set(
+      PREFERENCES_STORE_KEY,
+      JSON.parse(JSON.stringify({ ...defaults, strk20Networks: { SN_MAIN: retiredMainnet } })),
+    );
+    await expect(createPreferencesStore({ store }).read()).resolves.toMatchObject({
+      strk20Networks: defaults.strk20Networks,
+    });
+
+    const customMainnet = { ...retiredMainnet, proverUrl: "https://prover.example/strk20" };
+    await store.set(
+      PREFERENCES_STORE_KEY,
+      JSON.parse(JSON.stringify({ ...defaults, strk20Networks: { SN_MAIN: customMainnet } })),
+    );
+    await expect(createPreferencesStore({ store }).read()).resolves.toMatchObject({
+      strk20Networks: { SN_MAIN: customMainnet },
+    });
+
+    await store.set(
+      PREFERENCES_STORE_KEY,
+      JSON.parse(JSON.stringify({ ...defaults, strk20Networks: {} })),
+    );
+    await expect(createPreferencesStore({ store }).read()).resolves.toMatchObject({
+      strk20Networks: {},
+    });
+  });
+
   test("accepts preferences stored before rpc overrides existed", async () => {
     const store = createMemoryStore();
     const legacy = { ...defaultWalletPreferences() };
