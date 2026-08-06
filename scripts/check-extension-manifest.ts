@@ -28,10 +28,15 @@ const expectedSandboxCsp =
 const expectedSandboxPage = "sandbox/render.html";
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
 const expectedHostPermissions = [
-  // Wallet-owned RPC and STRK20 gateway. It is the only mainnet endpoint the
-  // extension signs or broadcasts against by default; private upstream URLs
-  // and paymaster credentials remain deployment-only configuration.
+  // Wallet-owned RPC and STRK20 gateway: the preferred path for every signed
+  // or broadcast request. Private upstream URLs and paymaster credentials
+  // remain deployment-only configuration.
   "https://wallet.nodes.starknet.org/*",
+  // Starknet Foundation public RPC nodes, kept as the keyless transport
+  // fallback for when the gateway itself is unreachable. Same operator the
+  // gateway forwards to, so a gateway outage does not take the wallet offline.
+  "https://mainnet.nodes.starknet.org/*",
+  "https://sepolia.nodes.starknet.org/*",
   // Keyless availability fallback when a Foundation node is unreachable.
   "https://api.cartridge.gg/*",
   "https://api.coingecko.com/*",

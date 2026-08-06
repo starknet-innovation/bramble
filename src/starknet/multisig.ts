@@ -8,14 +8,14 @@
  * and malformed RPC responses throw rather than degrade.
  */
 
-import { type Call, hash, RpcProvider, type RpcProviderOptions } from "starknet";
+import { type Call, hash, type RpcProvider, type RpcProviderOptions } from "starknet";
 import { WalletError } from "../shared/errors";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   canonicalFelt as sharedCanonicalFelt,
 } from "./networks";
-import { withRpcFallback } from "./provider";
+import { createRpcProvider, withRpcFallback } from "./provider";
 
 /**
  * Shared multisig limits. These are the single source of truth consumed by
@@ -44,7 +44,7 @@ const timedMultisigFetch: NonNullable<RpcProviderOptions["baseFetch"]> = (input,
   fetch(input, { ...init, signal: AbortSignal.timeout(MULTISIG_READ_TIMEOUT_MS) });
 
 const multisigReadProvider = (nodeUrl: string): RpcProvider =>
-  new RpcProvider({ baseFetch: timedMultisigFetch, nodeUrl });
+  createRpcProvider(nodeUrl, { baseFetch: timedMultisigFetch });
 
 /**
  * One inner call a multisig proposal will execute, using the entrypoint name

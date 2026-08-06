@@ -126,7 +126,10 @@ describe("background deployment messages", () => {
     expect(statusCalls).toEqual([
       {
         accountAddress: account.address,
-        rpcUrls: ["https://wallet.nodes.starknet.org/rpc/mainnet"],
+        rpcUrls: [
+          "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
+          "https://mainnet.nodes.starknet.org/rpc/v0_10",
+        ],
       },
     ]);
   });

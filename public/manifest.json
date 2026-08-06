@@ -30,6 +30,8 @@
   },
   "host_permissions": [
     "https://wallet.nodes.starknet.org/*",
+    "https://mainnet.nodes.starknet.org/*",
+    "https://sepolia.nodes.starknet.org/*",
     "https://api.cartridge.gg/*",
     "https://api.coingecko.com/*",
     "https://starkscan.co/*",
