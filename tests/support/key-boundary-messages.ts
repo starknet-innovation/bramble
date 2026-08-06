@@ -17,6 +17,9 @@ import { type KeyBoundaryMessage, strk20KeyBoundaryMessages } from "./key-bounda
 export const SECRET_PRIVATE_KEY =
   "0x7e57ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8";
 
+/** Distinct optional account secret that must never enter runtime responses. */
+export const SECRET_VIEWING_KEY = "0x0757ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec8e7ab1e5ec";
+
 /**
  * Vault passphrase used by the stub vault and secret scan.
  */

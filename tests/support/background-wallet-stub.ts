@@ -99,10 +99,11 @@ export const createWallet = (options: WalletStubOptions = {}) => {
   const accounts = options.accounts ?? [account];
   const vault = (): Vault => ({
     accounts,
+    accountSecrets: [],
     activeAccountId: options.activeAccountId?.() ?? account.id,
     mnemonic: null,
     originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 3,
+    schemaVersion: 4,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
   return {

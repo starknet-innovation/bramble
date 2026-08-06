@@ -15,12 +15,17 @@ import { fakeKms } from "../support/fake-kms";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultKey = "mc-wallet:vault";
+const migrationKey = "mc-wallet:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 
 const makeService = (kms: KrustyKms = fakeKms()) => {
   const store = createMemoryStore();
   const encryptedStore = createEncryptedStore(store, vaultKey);
-  const service = createWalletVaultService({ encryptedStore, kms });
+  const service = createWalletVaultService({
+    encryptedStore,
+    kms,
+    migrationStore: createEncryptedStore(store, migrationKey),
+  });
   return { encryptedStore, service };
 };
 
@@ -31,7 +36,11 @@ const seedEmptyService = async () => {
   const store = createMemoryStore();
   const encryptedStore = createEncryptedStore(store, vaultKey);
   await encryptedStore.write(emptyVault(), vaultPassphrase);
-  return createWalletVaultService({ encryptedStore, kms: fakeKms() });
+  return createWalletVaultService({
+    encryptedStore,
+    kms: fakeKms(),
+    migrationStore: createEncryptedStore(store, migrationKey),
+  });
 };
 
 // Persists an arbitrary (schema-valid) vault, then wires a service over the same
@@ -40,7 +49,11 @@ const seedVaultService = async (vault: Vault, kms: KrustyKms = fakeKms()) => {
   const store = createMemoryStore();
   const encryptedStore = createEncryptedStore(store, vaultKey);
   await encryptedStore.write(vault, vaultPassphrase);
-  return createWalletVaultService({ encryptedStore, kms });
+  return createWalletVaultService({
+    encryptedStore,
+    kms,
+    migrationStore: createEncryptedStore(store, migrationKey),
+  });
 };
 
 describe("vault service guard branches", () => {
@@ -126,10 +139,11 @@ describe("vault service guard branches", () => {
     };
     const seeded: Vault = {
       accounts: [mainnet, foreignSepolia],
+      accountSecrets: [],
       activeAccountId: mainnet.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 3,
+      schemaVersion: 4,
       signingKeys: [
         { accountId: mainnet.id, privateKey: "0x123456" },
         { accountId: foreignSepolia.id, privateKey: "0x654321" },

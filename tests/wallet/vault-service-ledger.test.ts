@@ -9,18 +9,21 @@ import { describe, expect, test } from "bun:test";
 import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 import { createEncryptedStore } from "../../src/storage/encrypted-store";
 import { createMemoryStore } from "../../src/storage/kv";
-import { isVaultV3 } from "../../src/storage/vault-schema";
+import { MAX_LEDGER_STRK20_VIEWING_KEYS } from "../../src/storage/vault-account-secrets";
+import { isVaultV4 } from "../../src/storage/vault-schema";
 import { createWalletVaultService } from "../../src/wallet/vault-service";
 import { fakeKms } from "../support/fake-kms";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultKey = "mc-wallet:vault";
+const migrationKey = "mc-wallet:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 
 const makeService = (store = createMemoryStore()) => ({
   service: createWalletVaultService({
     encryptedStore: createEncryptedStore(store, vaultKey),
     kms: fakeKms(),
+    migrationStore: createEncryptedStore(store, migrationKey),
   }),
   store,
 });
@@ -49,7 +52,7 @@ describe("createLedgerVault", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([account]);
     expect(vault.activeAccountId).toBe(account.id);
-    expect(isVaultV3(vault)).toBe(true);
+    expect(isVaultV4(vault)).toBe(true);
     // The passphrase encrypts the registry; it is never persisted in the clear.
     expect(JSON.stringify(await store.get(vaultKey))).not.toContain(vaultPassphrase);
   });
@@ -104,7 +107,7 @@ describe("createLedgerVault", () => {
     ).rejects.toThrow("No recovery phrase stored for this wallet");
   });
 
-  test("a keyless Ledger account cannot derive a STRK20 viewing key", async () => {
+  test("a Ledger account fails closed until its scoped STRK20 viewing key is retained", async () => {
     const { service } = makeService();
     const account = await service.createLedgerVault({
       accountIndex: 0,
@@ -120,7 +123,187 @@ describe("createLedgerVault", () => {
         poolAddress: "0x123",
         vaultPassphrase,
       }),
-    ).rejects.toThrow("STRK20 is unavailable for keyless accounts");
+    ).rejects.toThrow("Ledger STRK20 viewing key unavailable");
+  });
+
+  test("retains a Ledger viewing key only in encrypted account secrets", async () => {
+    const { service, store } = makeService();
+    const account = await service.createLedgerVault({
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: "0xdef123",
+      vaultPassphrase,
+    });
+
+    await service.storeLedgerStrk20ViewingKey({
+      accountId: account.id,
+      chainId: "0x534e5f4d41494e",
+      poolAddress: "0x0123",
+      vaultPassphrase,
+      viewingKey: "0x0654321",
+    });
+
+    await expect(
+      service.deriveStrk20ViewingKey({
+        accountId: account.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "0x123",
+        vaultPassphrase,
+      }),
+    ).resolves.toBe("0x654321");
+
+    const vault = await service.readVault(vaultPassphrase);
+    expect(vault.accountSecrets).toEqual([
+      {
+        accountId: account.id,
+        ledgerStrk20ViewingKeys: [
+          {
+            chainId: "0x534e5f4d41494e",
+            poolAddress: "0x123",
+            scheme: "ledger-strk20-typed-data-v1",
+            viewingKey: "0x654321",
+          },
+        ],
+      },
+    ]);
+    expect(JSON.stringify(vault.accounts)).not.toContain("0x654321");
+    expect(JSON.stringify(await store.get(vaultKey))).not.toContain("0x654321");
+  });
+
+  test("isolates retained keys by account, chain, and pool and supports forgetting", async () => {
+    const { service } = makeService();
+    const first = await service.createLedgerVault({
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: "0xdef123",
+      vaultPassphrase,
+    });
+    const second = await service.addLedgerAccount({
+      accountIndex: 1,
+      networkId: "SN_MAIN",
+      publicKeyX: "0xdef456",
+      vaultPassphrase,
+    });
+    await service.storeLedgerStrk20ViewingKey({
+      accountId: first.id,
+      chainId: "0x534e5f4d41494e",
+      poolAddress: "0x123",
+      vaultPassphrase,
+      viewingKey: "0x654321",
+    });
+
+    await expect(
+      service.deriveStrk20ViewingKey({
+        accountId: second.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "0x123",
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("Ledger STRK20 viewing key unavailable");
+    await expect(
+      service.deriveStrk20ViewingKey({
+        accountId: first.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "0x456",
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("Ledger STRK20 viewing key unavailable");
+
+    await expect(
+      service.forgetLedgerStrk20ViewingKey({
+        accountId: first.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "0x123",
+        vaultPassphrase,
+      }),
+    ).resolves.toBe(true);
+    expect((await service.readVault(vaultPassphrase)).accountSecrets).toEqual([]);
+    await expect(
+      service.forgetLedgerStrk20ViewingKey({
+        accountId: first.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "0x123",
+        vaultPassphrase,
+      }),
+    ).resolves.toBe(false);
+  });
+
+  test("replaces one scope atomically and rejects capacity overflow without eviction", async () => {
+    const { service } = makeService();
+    const account = await service.createLedgerVault({
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: "0xdef123",
+      vaultPassphrase,
+    });
+    const retain = (poolAddress: string, viewingKey: string) =>
+      service.storeLedgerStrk20ViewingKey({
+        accountId: account.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress,
+        vaultPassphrase,
+        viewingKey,
+      });
+
+    await retain("0x100", "0x200");
+    await retain("0x100", "0x201");
+    await expect(
+      service.deriveStrk20ViewingKey({
+        accountId: account.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "0x100",
+        vaultPassphrase,
+      }),
+    ).resolves.toBe("0x201");
+
+    for (let index = 1; index < MAX_LEDGER_STRK20_VIEWING_KEYS; index += 1) {
+      await retain(`0x${(0x100 + index).toString(16)}`, `0x${(0x201 + index).toString(16)}`);
+    }
+    const before = await service.readVault(vaultPassphrase);
+    await expect(retain("0x200", "0x300")).rejects.toThrow(
+      "Ledger STRK20 viewing-key limit reached",
+    );
+    expect(await service.readVault(vaultPassphrase)).toEqual(before);
+  });
+
+  test("rejects wrong-network, malformed, and software-account key retention", async () => {
+    const { service } = makeService();
+    const ledger = await service.createLedgerVault({
+      accountIndex: 0,
+      networkId: "SN_MAIN",
+      publicKeyX: "0xdef123",
+      vaultPassphrase,
+    });
+    await expect(
+      service.storeLedgerStrk20ViewingKey({
+        accountId: ledger.id,
+        chainId: "0x534e5f5345504f4c4941",
+        poolAddress: "0x123",
+        vaultPassphrase,
+        viewingKey: "0x654321",
+      }),
+    ).rejects.toThrow("Invalid Ledger STRK20 viewing key");
+    await expect(
+      service.storeLedgerStrk20ViewingKey({
+        accountId: ledger.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "not-a-pool",
+        vaultPassphrase,
+        viewingKey: "0x654321",
+      }),
+    ).rejects.toThrow("Invalid Ledger STRK20 viewing key");
+
+    const softwareService = makeService().service;
+    const software = await softwareService.createAccount({ mnemonic, vaultPassphrase });
+    await expect(
+      softwareService.storeLedgerStrk20ViewingKey({
+        accountId: software.id,
+        chainId: "0x534e5f4d41494e",
+        poolAddress: "0x123",
+        vaultPassphrase,
+        viewingKey: "0x654321",
+      }),
+    ).rejects.toThrow("Account is not a Ledger account");
   });
 });
 
@@ -166,6 +349,6 @@ describe("ensureNetworkAccount for a keyless Ledger account", () => {
     expect(vault.signingKeys).toEqual([]);
     expect(vault.accounts).toEqual([mainnet, sepolia]);
     expect(vault.activeAccountId).toBe(sepolia.id);
-    expect(isVaultV3(vault)).toBe(true);
+    expect(isVaultV4(vault)).toBe(true);
   });
 });

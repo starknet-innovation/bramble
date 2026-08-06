@@ -112,8 +112,12 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/storage/encrypted-store.ts",
   "src/storage/migrations.ts",
   "src/storage/vault-schema.ts",
+  "src/storage/vault-account-secrets.ts",
+  "src/storage/vault-store-migration.ts",
   "src/wallet/accounts.ts",
   "src/wallet/strk20-viewing-key.ts",
+  "src/wallet/vault-network-account.ts",
+  "src/wallet/vault-reveal.ts",
   "src/wallet/vault-service.ts",
   "src/wallet/vault-service-types.ts",
 ]);

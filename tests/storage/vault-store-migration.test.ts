@@ -1,0 +1,108 @@
+/**
+ * Encrypted vault update lifecycle: first-unlock persistence, staged commit,
+ * interrupted-write recovery, idempotence, and fail-closed source validation.
+ */
+import { describe, expect, test } from "bun:test";
+import { createEncryptedStore } from "../../src/storage/encrypted-store";
+import { createMemoryStore } from "../../src/storage/kv";
+import { migrateVault } from "../../src/storage/migrations";
+import { isVaultV4 } from "../../src/storage/vault-schema";
+import {
+  readMigratedVault,
+  VAULT_MIGRATION_STORE_KEY,
+} from "../../src/storage/vault-store-migration";
+import { VAULT_STORE_KEY } from "../../src/wallet/vault-service";
+
+const vaultPassphrase = "correct horse battery staple";
+const account = {
+  address: "0x123",
+  classHash: "0xabc",
+  derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },
+  id: "SN_MAIN:0x123",
+  networkId: "SN_MAIN" as const,
+  publicKeyX: "0x456",
+  publicKeyY: "0x789",
+};
+const legacyV3 = {
+  accounts: [account],
+  activeAccountId: account.id,
+  mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+  originGrants: [],
+  schemaVersion: 3 as const,
+  signingKeys: [{ accountId: account.id, privateKey: "0x654321" }],
+};
+
+const stores = () => {
+  const backend = createMemoryStore();
+  return {
+    backend,
+    primary: createEncryptedStore(backend, VAULT_STORE_KEY),
+    staging: createEncryptedStore(backend, VAULT_MIGRATION_STORE_KEY),
+  };
+};
+
+describe("readMigratedVault", () => {
+  test("durably migrates schema v3 through a verified encrypted staging write", async () => {
+    const { backend, primary, staging } = stores();
+    await primary.write(legacyV3, vaultPassphrase);
+
+    const migrated = await readMigratedVault({ primary, staging }, vaultPassphrase);
+
+    expect(isVaultV4(migrated)).toBe(true);
+    expect(migrated.accountSecrets).toEqual([]);
+    expect(await primary.read(vaultPassphrase)).toEqual(migrated);
+    expect(await staging.exists()).toBe(false);
+    const raw = JSON.stringify(await backend.get(VAULT_STORE_KEY));
+    expect(raw).not.toContain(legacyV3.mnemonic);
+    expect(raw).not.toContain("0x654321");
+  });
+
+  test("keeps invalid legacy ciphertext unchanged and never creates staging output", async () => {
+    const { backend, primary, staging } = stores();
+    await primary.write({ ...legacyV3, accounts: [] }, vaultPassphrase);
+    const before = await backend.get(VAULT_STORE_KEY);
+
+    await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).rejects.toThrow(
+      "Unsupported vault schema",
+    );
+    expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
+    expect(await staging.exists()).toBe(false);
+  });
+
+  test("recovers an authenticated staged vault when the primary commit is unreadable", async () => {
+    const { backend, primary, staging } = stores();
+    const current = migrateVault(legacyV3);
+    await staging.write(current, vaultPassphrase);
+    await backend.set(VAULT_STORE_KEY, { corrupted: true });
+
+    await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toEqual(
+      current,
+    );
+    expect(await primary.read(vaultPassphrase)).toEqual(current);
+    expect(await staging.exists()).toBe(false);
+  });
+
+  test("leaves a current primary envelope byte-for-byte unchanged", async () => {
+    const { backend, primary, staging } = stores();
+    const current = migrateVault(legacyV3);
+    await primary.write(current, vaultPassphrase);
+    const before = await backend.get(VAULT_STORE_KEY);
+
+    await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toBeDefined();
+    expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
+  });
+
+  test("keeps a current primary authoritative and removes a stale authenticated stage", async () => {
+    const { backend, primary, staging } = stores();
+    const current = migrateVault(legacyV3);
+    await primary.write(current, vaultPassphrase);
+    await staging.write({ ...current, activeAccountId: null }, vaultPassphrase);
+    const before = await backend.get(VAULT_STORE_KEY);
+
+    await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toEqual(
+      current,
+    );
+    expect(await backend.get(VAULT_STORE_KEY)).toEqual(before);
+    expect(await staging.exists()).toBe(false);
+  });
+});

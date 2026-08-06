@@ -7,10 +7,10 @@ import { describe, expect, test } from "bun:test";
 import { CURRENT_SCHEMA_VERSION, migrateVault } from "../../src/storage/migrations";
 import {
   isVaultV1,
-  isVaultV3,
+  isVaultV4,
   type VaultV1,
   type VaultV2,
-  type VaultV3,
+  type VaultV4,
 } from "../../src/storage/vault-schema";
 
 const accountA = {
@@ -53,7 +53,7 @@ describe("MG1 migration chain", () => {
 
     const migrated = migrateVault(multiAccountV1);
 
-    expect(isVaultV3(migrated)).toBe(true);
+    expect(isVaultV4(migrated)).toBe(true);
     expect(migrated.schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
     expect(migrated.mnemonic).toBeNull();
     expect(migrated.accounts).toEqual(multiAccountV1.accounts);
@@ -64,8 +64,9 @@ describe("MG1 migration chain", () => {
   });
 
   test("v0 sources migrate through the full chain to an empty current vault", () => {
-    const expected: VaultV3 = {
+    const expected: VaultV4 = {
       accounts: [],
+      accountSecrets: [],
       activeAccountId: null,
       mnemonic: null,
       originGrants: [],
@@ -74,7 +75,7 @@ describe("MG1 migration chain", () => {
     };
     for (const source of [null, undefined, {}]) {
       const migrated = migrateVault(source);
-      expect(isVaultV3(migrated)).toBe(true);
+      expect(isVaultV4(migrated)).toBe(true);
       expect(migrated).toEqual(expected);
     }
   });
@@ -84,8 +85,12 @@ describe("MG1 migration chain", () => {
 
     const once = migrateVault(nullMnemonic);
     expect(once).not.toBe(nullMnemonic);
-    expect(isVaultV3(once)).toBe(true);
-    expect(once).toEqual({ ...nullMnemonic, schemaVersion: CURRENT_SCHEMA_VERSION });
+    expect(isVaultV4(once)).toBe(true);
+    expect(once).toEqual({
+      ...nullMnemonic,
+      accountSecrets: [],
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
     expect(migrateVault(once)).toBe(once);
   });
 
@@ -97,13 +102,17 @@ describe("MG1 migration chain", () => {
     };
 
     const migrated = migrateVault(withMnemonic);
-    expect(isVaultV3(migrated)).toBe(true);
+    expect(isVaultV4(migrated)).toBe(true);
     expect(migrated.mnemonic).toBe("correct horse battery staple");
-    expect(migrated).toEqual({ ...withMnemonic, schemaVersion: CURRENT_SCHEMA_VERSION });
+    expect(migrated).toEqual({
+      ...withMnemonic,
+      accountSecrets: [],
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+    });
   });
 
   test("rejects unsupported and newer schema versions instead of accepting them", () => {
-    for (const schemaVersion of [-1, 1.5, 4, 999, Number.MAX_SAFE_INTEGER]) {
+    for (const schemaVersion of [-1, 1.5, 5, 999, Number.MAX_SAFE_INTEGER]) {
       expect(() => migrateVault({ ...multiAccountV1, mnemonic: null, schemaVersion })).toThrow(
         "Unsupported vault schema",
       );
@@ -112,7 +121,7 @@ describe("MG1 migration chain", () => {
 
   test("rejects a well-formed current shell carrying a future schema version", () => {
     const future = { ...multiAccountV1, mnemonic: null, schemaVersion: CURRENT_SCHEMA_VERSION + 1 };
-    expect(isVaultV3(future)).toBe(false);
+    expect(isVaultV4(future)).toBe(false);
     expect(() => migrateVault(future)).toThrow("Unsupported vault schema");
   });
 });

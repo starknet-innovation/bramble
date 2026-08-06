@@ -20,6 +20,7 @@ import { createAllowanceStore } from "../storage/allowance-store";
 import {
   createBrowserLocalStore,
   createBrowserSessionStore,
+  hardenLocalAccess,
   hardenSessionAccess,
 } from "../storage/browser-storage";
 import { createEncryptedStore, type EncryptedStore } from "../storage/encrypted-store";
@@ -31,6 +32,7 @@ import {
   type WalletPreferences,
 } from "../storage/preferences-store";
 import { createStrk20MaturityStore } from "../storage/strk20-maturity-store";
+import { VAULT_MIGRATION_STORE_KEY } from "../storage/vault-store-migration";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { setApprovalNotifier } from "./approval-notifier";
 import {
@@ -116,27 +118,39 @@ const sessionStore: UnlockSessionStore | undefined = (() => {
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
-const vaultStore: EncryptedStore | null = (() => {
-  try {
-    return createEncryptedStore(createBrowserLocalStore(), VAULT_STORE_KEY);
-  } catch {
-    return null;
+const vaultStores: { readonly primary: EncryptedStore; readonly staging: EncryptedStore } | null =
+  (() => {
+    try {
+      const store = createBrowserLocalStore();
+      return {
+        primary: createEncryptedStore(store, VAULT_STORE_KEY),
+        staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY),
+      };
+    } catch {
+      return null;
+    }
+  })();
+const session = createUnlockSession(undefined, undefined, sessionStore, () => {
+  for (const store of [vaultStores?.primary, vaultStores?.staging]) {
+    store?.clearKeys();
   }
-})();
-const session = createUnlockSession(undefined, undefined, sessionStore, () =>
-  vaultStore?.clearKeys(),
-);
+});
 const sessionReady = session.restore().catch(() => undefined);
 // Restrict the in-memory session area (which mirrors the unlock passphrase
 // across worker restarts) to trusted extension contexts, so content scripts
 // and web pages can never read it.
 void hardenSessionAccess().catch(() => undefined);
-const wallet = vaultStore
+// Persistent stores are background-owned as well. Chrome otherwise exposes
+// storage.local to content scripts by default, including write access to the
+// encrypted vault envelope and public registries.
+void hardenLocalAccess().catch(() => undefined);
+const wallet = vaultStores
   ? Promise.resolve()
       .then(() =>
         createWalletVaultService({
-          encryptedStore: vaultStore,
+          encryptedStore: vaultStores.primary,
           kms: createKrustyKms(krustyModule),
+          migrationStore: vaultStores.staging,
         }),
       )
       .catch(() => null)
