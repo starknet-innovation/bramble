@@ -39,7 +39,9 @@ Each enabled network needs one complete routing configuration:
 - Dapp-specific anonymizers/executors are not global pool configuration. A Vesu, Ekubo, or other
   integration supplies its audited contract as an explicit invoke target inside the reviewed action
   plan, where it handles notes according to that dapp's rules.
-- OHTTP enabled at both the discovery and proving services. A separate OHTTP relay URL is optional.
+- Optional OHTTP, which must be supported by both the discovery and proving services. The bundled
+  Mainnet route has OHTTP disabled because the deployed proving service currently accepts standard
+  JSON-RPC only. A separate OHTTP relay URL is optional when OHTTP is enabled.
 - Optional private paymaster/relayer URL and its pool fee token.
 
 The bundled Mainnet configuration points only at the wallet-owned AWS gateway and the
@@ -53,17 +55,19 @@ An extension cannot protect a shared API secret or prove to a server that its Ja
 an official build: anything embedded in the bundle is extractable, and a non-browser client can
 spoof HTTP headers. The gateway therefore uses layered controls:
 
-- exact `chrome-extension://<production-id>` Origin allowlisting for browser requests;
+- credential-free wildcard CORS, so the extension can call the gateway before it has a stable
+  Chrome extension ID. This is compatibility behavior, not client authentication;
 - a fixed method/path/content-type allowlist and fixed Mainnet pool/paymaster fee token;
 - request/response size caps, timeouts, no redirects, generic upstream failures, and no request
   body logging;
-- OHTTP envelopes so the gateway relays discovery/proving traffic without seeing its contents;
+- OHTTP is disabled for the bundled route until both privacy upstreams support it. The gateway
+  therefore forwards standard discovery and proving requests and can observe their contents;
 - AWS WAF coarse edge limits plus DynamoDB-backed per-route client limits.
 
-Origin allowlisting is a browser isolation control, not cryptographic build attestation. A
-production deployment must not describe it as attestation. Stronger client authenticity requires
-an external enrollment or platform-attestation system; no generic Chrome Web Store attestation is
-available to this protocol today.
+Neither CORS nor an HTTP `Origin` header authenticates an extension: non-browser clients can
+spoof headers. Stronger client authenticity requires an extension-ID allowlist or an external
+enrollment or platform-attestation system; no generic Chrome Web Store attestation is available to
+this protocol today.
 
 The Discovery Service and Transaction Prover are required for live registration, balance
 discovery, and shielding. The paymaster is optional for entering the pool: registration and a
@@ -186,10 +190,10 @@ production deployments require their own audits and operations monitoring.
 - Set the discovery/prover upstream URLs only in the `mc-backend` ECS task configuration.
 - Store a valid `AVNU_PAYMASTER_API_KEY` in the backend runtime secret before enabling private
   transfer or withdrawal; the gateway adds it server-side and never returns it to the extension.
-- Set `allowed_extension_origins` to the exact released extension origin(s). The gateway fails
-  closed when this is absent or malformed.
-- Confirm both services expose OHTTP at `/ohttp-keys` and their service root before enabling the
-  bundled Mainnet route.
+- The gateway uses credential-free wildcard CORS and does not require an extension origin or ID.
+  Treat it as a public endpoint and rely on the WAF and per-client rate limits for abuse control.
+- Keep OHTTP disabled until both privacy upstreams expose OHTTP at `/ohttp-keys` and their service
+  root. The current proving service does not, so the bundled Mainnet configuration uses JSON-RPC.
 - Keep AWS WAF and the backend's DynamoDB rate-limit table enabled for `/rpc/*` and
   `/api/strk20/*`. Configure Vercel Firewall independently for Terminal-only
   `/api/private-swap/*` routes.
@@ -200,7 +204,8 @@ production deployments require their own audits and operations monitoring.
   without it.
 - Put credentials, quotas, and abuse controls behind a wallet-owned HTTPS relay; never add a shared
   API key to the extension.
-- Supply an OHTTP relay only when the discovery/prover deployment requires a separate relay.
+- Supply an OHTTP relay only when enabling OHTTP and the discovery/prover deployment requires a
+  separate relay.
 - Verify service health and network/contract alignment before enabling the configuration.
 - The adapter automatically waits for recently deployed or funded accounts at the SDK's safe
   historical block (currently ten blocks behind the RPC head), waits for each submitted privacy
