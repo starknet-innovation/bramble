@@ -200,11 +200,24 @@ const amountStage = (
         <strong id="send-selected-token-symbol">${escapeHtml(asset?.symbol ?? "Select")}</strong>
         ${icon("chevronDown")}
       </button>
-      <label class="send-private-toggle muted" id="send-private-toggle" title="Discovering shielded balances…">
-        <input id="send-private-checkbox" type="checkbox" disabled />
-        <span class="send-private-copy">${icon("lock")}Private</span>
-        <span class="send-private-reason" id="send-private-reason">Discovering shielded balances…</span>
-      </label>
+      <div class="send-route-controls" id="send-route-controls" title="Choose where the value moves">
+        <span class="send-route-leg">
+          <span class="send-route-legend">From</span>
+          <span class="send-route-choice" role="group" aria-label="Balance to send from">
+            <button data-send-bucket="source" data-send-bucket-value="public" type="button" aria-pressed="true">Public</button>
+            <button data-send-bucket="source" data-send-bucket-value="private" type="button" aria-pressed="false">Private</button>
+          </span>
+        </span>
+        ${icon("chevronRight")}
+        <span class="send-route-leg">
+          <span class="send-route-legend">To</span>
+          <span class="send-route-choice" role="group" aria-label="Balance to send into">
+            <button data-send-bucket="destination" data-send-bucket-value="public" type="button" aria-pressed="true">Public</button>
+            <button data-send-bucket="destination" data-send-bucket-value="private" type="button" aria-pressed="false">Private</button>
+          </span>
+        </span>
+      </div>
+      <span class="send-route-reason" id="send-route-reason" hidden></span>
       <label class="send-amount-field">
         <span class="sr-only">Amount to send</span>
         <span class="send-amount-prefix" id="send-amount-prefix" hidden></span>
@@ -365,7 +378,8 @@ export const sendFlow = (
           <input name="fiatEstimate" type="hidden" value="" />
           <input name="recipient" type="hidden" value="" />
           <input name="recipientLabel" type="hidden" value="" />
-          <input name="privateSend" type="hidden" value="" />
+          <input name="source" type="hidden" value="public" />
+          <input name="destination" type="hidden" value="public" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />
           <input name="tokenBalance" type="hidden" value="${escapeHtml(asset?.balance ?? "0")}" />
           <input name="tokenDecimals" type="hidden" value="${asset?.decimals ?? 0}" />

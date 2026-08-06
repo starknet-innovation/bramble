@@ -187,7 +187,11 @@ const bindAll = (): void => {
     navigate: (view) => navigate(view),
     onPrivateSendSettled: () => privacy.invalidate(),
     privacy: () => privacy.disclosure(),
+    publicBalances: () => ("balances" in cache.balances ? cache.balances.balances : []),
     render,
+    senderAddress: () =>
+      cache.status.accounts.find((account) => account.id === cache.status.activeAccountId)
+        ?.address ?? "",
     wallet,
   });
   const settingsDeps = {

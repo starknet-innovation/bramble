@@ -5,6 +5,7 @@
  */
 
 import { isStarkFieldElement, normalizeFeltInput, sameFelt } from "../starknet/networks";
+import type { ValueBucket } from "../starknet/send-routes";
 import type { ActivityEntry } from "../storage/activity-store";
 import { errorMessage } from "./dom";
 import type { PrivacyPreparation } from "./privacy-runtime";
@@ -56,11 +57,14 @@ export type TransferStage =
 export type TransferFields = {
   readonly accountId: string;
   readonly amount: string;
+  /** Balance the value lands in. With `source`, this names the send's route. */
+  readonly destination: ValueBucket;
   readonly fiatEstimate: string;
-  readonly privateSend: string;
   readonly recipient: string;
   readonly recipientLabel: string;
   readonly signer: "ledger" | "software";
+  /** Balance the value is spent from. */
+  readonly source: ValueBucket;
   readonly speed: "fast" | "standard";
   readonly tokenAddress: string;
   readonly tokenBalance: string;
@@ -99,6 +103,11 @@ export const initialTransferState = <Review>(): TransferState<Review> => ({
   transactionHash: null,
 });
 
+// Buckets default to public: an unreadable or absent field must never silently
+// promise privacy the send is not going to deliver.
+const bucket = (value: FormDataEntryValue | null): ValueBucket =>
+  value === "private" ? "private" : "public";
+
 /**
  * Reads the trusted extension form into the transaction snapshot submitted to
  * the privileged runtime. Hidden presentation fields are retained only so the
@@ -109,11 +118,12 @@ export const transferFields = (form: HTMLFormElement): TransferFields => {
   return {
     accountId: String(data.get("accountId") ?? ""),
     amount: String(data.get("amount") ?? "").trim(),
+    destination: bucket(data.get("destination")),
     fiatEstimate: String(data.get("fiatEstimate") ?? ""),
-    privateSend: data.get("privateSend") === "1" ? "1" : "",
     recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
     recipientLabel: String(data.get("recipientLabel") ?? "").trim(),
     signer: form.dataset["signer"] === "ledger" ? "ledger" : "software",
+    source: bucket(data.get("source")),
     speed: data.get("speed") === "fast" ? "fast" : "standard",
     tokenAddress: String(data.get("tokenAddress") ?? ""),
     tokenBalance: String(data.get("tokenBalance") ?? "0"),
@@ -128,13 +138,18 @@ export const transferFields = (form: HTMLFormElement): TransferFields => {
 /**
  * Stable review cache key. Presentation-only fiat data is excluded so a price
  * refresh cannot silently change the transaction being authorized.
+ *
+ * Both buckets are part of the key: flipping either one changes the route, the
+ * fee, and the submission path, so a review cached under the old pair must never
+ * be reused for the new one.
  */
 export const transferKey = (fields: TransferFields): string =>
   JSON.stringify({
     accountId: fields.accountId,
     amount: fields.amount,
-    privateSend: fields.privateSend,
+    destination: fields.destination,
     recipient: fields.recipient,
+    source: fields.source,
     speed: fields.speed,
     tokenId: fields.tokenId,
   });

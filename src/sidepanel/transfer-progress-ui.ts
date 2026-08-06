@@ -56,7 +56,10 @@ export type WorkingStatus = {
   readonly title: string;
 };
 
-const isPrivate = (fields: TransferFields | null): boolean => fields?.privateSend === "1";
+// Any route that spends a private balance is broadcast through the relay, so the
+// progress copy follows the source bucket rather than the whole route: shielding
+// is submitted by the account like any public transfer.
+const isPrivate = (fields: TransferFields | null): boolean => fields?.source === "private";
 
 /**
  * Derives the working-screen presentation for the current transfer state.

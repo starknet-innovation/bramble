@@ -224,6 +224,7 @@ const bindAssetControls = (
 const bindAmountControls = (
   form: HTMLFormElement,
   onFields: (fields: TransferFields) => void,
+  spendable?: () => bigint | null,
 ): void => {
   const currentForm = form;
   const visible = form.querySelector<HTMLInputElement>("#send-amount-input");
@@ -233,9 +234,14 @@ const bindAmountControls = (
   });
   const useBalance = (fraction: "half" | "max"): void => {
     if (!visible) return;
+    // The route decides what is actually spendable: a pool fee charged in the
+    // token being sent is reserved, and an unread fee withholds a maximum
+    // entirely rather than offering an amount the pool would reject.
+    const routeSpendable = spendable?.();
+    if (routeSpendable === null) return;
     currentForm.dataset["amountMode"] = "token";
     visible.value = balanceShortcut(
-      sendFormInput(form, "tokenBalance")?.value ?? "0",
+      (routeSpendable ?? sendFormInput(form, "tokenBalance")?.value ?? "0").toString(),
       Number(sendFormInput(form, "tokenDecimals")?.value ?? "0"),
       fraction,
     );
@@ -275,12 +281,15 @@ export const bindTransferCompose = ({
   form,
   goTo,
   onFields,
+  spendable,
 }: {
   readonly form: HTMLFormElement;
   readonly goTo: (stage: TransferStage) => void;
   readonly onFields: (fields: TransferFields) => void;
+  /** Raw spendable units for the composed route; `null` withholds Max/Half. */
+  readonly spendable?: () => bigint | null;
 }): void => {
   bindRecipientControls(form, goTo, onFields);
   bindAssetControls(form, goTo, onFields);
-  bindAmountControls(form, onFields);
+  bindAmountControls(form, onFields, spendable);
 };

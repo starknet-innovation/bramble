@@ -156,6 +156,9 @@ const HTML_SINK_FILES = new Set([
   "src/sidepanel/index.ts",
   "src/sidepanel/tokens-ui.ts",
   "src/sidepanel/transfer-ui.ts",
+  // Send-screen rendering split out of transfer-ui.ts; the review panels it
+  // writes come from the same escaped markup helpers that file used.
+  "src/sidepanel/transfer-render.ts",
   // Swap screen dynamic regions (chips, picker rows, receipts): every
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
   "src/sidepanel/swap-ui.ts",
