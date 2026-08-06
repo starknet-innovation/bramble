@@ -11,12 +11,9 @@ import { restoreTransferCompose, sendFormInput } from "./transfer-compose-ui";
 import type { TransferFields, TransferStage, TransferState } from "./transfer-model";
 import { transferStageTitle } from "./transfer-model";
 import { setSendProgress, setTaskStatus, setText, workingStatus } from "./transfer-progress-ui";
-import {
-  privateRelayFeeHtml,
-  reviewDetailsHtml,
-  reviewFeeHtml,
-  reviewSummaryHtml,
-} from "./transfer-review-markup";
+import { reviewDetailsHtml, reviewSummaryHtml } from "./transfer-review-markup";
+import { routeDisclosureHtml, routeFeeHtml } from "./transfer-review-routes";
+import { transferRoute } from "./transfer-route";
 import type { TransferReview } from "./transfer-submit";
 
 const restoreTransferFields = (form: HTMLFormElement, fields: TransferFields | null): void => {
@@ -92,17 +89,22 @@ export const applyTransferUi = (
     state.fields?.signer === "ledger" ? "Approve with Ledger" : "Confirm and send",
   );
 
+  const route = state.fields ? transferRoute(state.fields) : null;
   const reviewPanel = form.querySelector<HTMLElement>("#review-panel");
   if (reviewPanel) {
-    reviewPanel.innerHTML = state.review ? reviewDetailsHtml(state.review) : "";
+    // The disclosure leads: what a route publishes matters more than its decoded
+    // calls, and it is the one thing the four routes genuinely differ on.
+    reviewPanel.innerHTML = state.review
+      ? `${route ? routeDisclosureHtml(route) : ""}${reviewDetailsHtml(state.review)}`
+      : "";
   }
   const reviewFee = form.querySelector<HTMLElement>("#send-review-fee");
-  if (reviewFee) {
-    reviewFee.innerHTML = state.privatePreparation?.relayFee
-      ? privateRelayFeeHtml(state.privatePreparation.relayFee, poolFeeFri)
-      : state.review
-        ? reviewFeeHtml(state.review)
-        : "";
+  if (reviewFee && route) {
+    reviewFee.innerHTML = routeFeeHtml(route, {
+      ...(poolFeeFri === undefined ? {} : { poolFeeFri }),
+      preparation: state.privatePreparation,
+      review: state.review,
+    });
   }
   const reviewSummary = form.querySelector<HTMLElement>("#send-review-summary");
   if (reviewSummary) {
