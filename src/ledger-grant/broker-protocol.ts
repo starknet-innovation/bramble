@@ -50,6 +50,7 @@ export const ledgerBrokerChannelName = (sessionId: string): string =>
  * Device operation request accepted by the retained Ledger window
  */
 export type LedgerBrokerCommand =
+  | { readonly id: number; readonly kind: "command"; readonly method: "getOsVersion" }
   | { readonly id: number; readonly kind: "command"; readonly method: "getAppVersion" }
   | {
       readonly id: number;
@@ -107,7 +108,7 @@ export const isLedgerBrokerCommand = (value: unknown): value is LedgerBrokerComm
   ) {
     return false;
   }
-  if (value["method"] === "getAppVersion") {
+  if (value["method"] === "getOsVersion" || value["method"] === "getAppVersion") {
     return Object.keys(value).length === 3;
   }
   if (value["method"] === "getPubKey") {

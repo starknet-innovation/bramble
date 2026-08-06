@@ -34,6 +34,10 @@ type DeviceVersionResponse = DeviceResponseBase & {
   readonly minor: number;
   readonly patch: number;
 };
+type DeviceOsVersionResponse = {
+  readonly targetId: number;
+  readonly version: string;
+};
 type DevicePublicKeyResponse = DeviceResponseBase & { readonly publicKey: Uint8Array };
 type DeviceHashSignResponse = DeviceResponseBase & {
   readonly r: Uint8Array;
@@ -46,6 +50,12 @@ type DeviceHashSignResponse = DeviceResponseBase & {
  * `signHash`) does not depend on the clear-sign surface.
  */
 export type LedgerDeviceClient = {
+  /**
+   * Reads the device OS version through Ledger's built-in management APDU. The
+   * runtime transport parses the raw reply before it reaches this typed
+   * boundary; callers must still treat the model and version as untrusted.
+   */
+  getOsVersion(): Promise<DeviceOsVersionResponse>;
   getAppVersion(): Promise<DeviceVersionResponse>;
   getPubKey(path: string, show?: boolean): Promise<DevicePublicKeyResponse>;
   signHash(path: string, hash: string): Promise<DeviceHashSignResponse>;
@@ -61,13 +71,41 @@ export type LedgerAppVersion = {
 };
 
 /**
- * Pinned MINIMUM Starknet app compatibility line accepted by mc-wallet.
- * "Current" means at or above this 2.x floor, never "exactly the latest" (an
- * extension cannot see Ledger's release catalog). Legacy 1.x apps are outside
- * the supported product boundary. This is a compatibility gate, not a signing
- * trust decision: the background still verifies every returned signature.
+ * Ledger models whose current firmware line mc-wallet supports. The model is
+ * resolved from Ledger's device target id, never from a browser-provided label.
  */
-export const MC_LEDGER_STARKNET_APP_MIN: LedgerAppVersion = { major: 2, minor: 0, patch: 0 };
+export type LedgerDeviceModel = "nano-x" | "nano-s-plus" | "stax" | "flex" | "nano-gen5";
+
+/**
+ * A supported Ledger model and its parsed device OS version.
+ */
+export type LedgerFirmwareVersion = {
+  readonly model: LedgerDeviceModel;
+  readonly version: LedgerAppVersion;
+};
+
+/**
+ * Pinned current Starknet app release accepted by mc-wallet. This is an
+ * at-or-above compatibility floor, so a future app release does not block the
+ * user. Updated from Ledger Manager's release catalogue on 2026-08-06. This is
+ * a compatibility gate, not a signing trust decision: the background still
+ * verifies every returned signature.
+ */
+export const MC_LEDGER_STARKNET_APP_MIN: LedgerAppVersion = { major: 2, minor: 4, patch: 0 };
+
+/**
+ * Pinned current Ledger OS releases accepted by mc-wallet, by target-id model.
+ * These at-or-above floors were read from Ledger Manager's stable catalogue on
+ * 2026-08-06. Unknown models fail closed rather than receiving a firmware rule
+ * intended for a different secure element.
+ */
+export const MC_LEDGER_OS_MIN: Readonly<Record<LedgerDeviceModel, LedgerAppVersion>> = {
+  flex: { major: 1, minor: 6, patch: 1 },
+  "nano-gen5": { major: 1, minor: 1, patch: 1 },
+  "nano-s-plus": { major: 1, minor: 6, patch: 1 },
+  "nano-x": { major: 2, minor: 7, patch: 1 },
+  stax: { major: 1, minor: 10, patch: 1 },
+};
 
 // APDU status words from the Ledger Starknet app (@ledgerhq/hw-app-starknet
 // LedgerError). Kept as local constants so this module needs no runtime import
@@ -81,6 +119,23 @@ const STATUS_USER_REJECTED = 0x6e04;
 const STATUS_EXECUTION_ERROR = 0x6f00;
 const PUBLIC_KEY_BYTES = 64;
 const FELT_BYTES = 32;
+const MAX_VERSION_PART = 0xffff;
+
+// Target ids returned by Ledger's Get OS Version APDU. The lower word is the
+// product id; checking the complete target instead of a user-visible product
+// label avoids accidentally applying a firmware floor to another device line.
+const NANO_X_TARGET_ID = 0x33000004;
+const NANO_S_PLUS_TARGET_ID = 0x33100004;
+const STAX_TARGET_ID = 0x33200004;
+const FLEX_TARGET_ID = 0x33300004;
+const NANO_GEN5_TARGET_ID = 0x33400004;
+const LEDGER_MODELS_BY_TARGET_ID: Readonly<Record<number, LedgerDeviceModel>> = {
+  [NANO_X_TARGET_ID]: "nano-x",
+  [NANO_S_PLUS_TARGET_ID]: "nano-s-plus",
+  [STAX_TARGET_ID]: "stax",
+  [FLEX_TARGET_ID]: "flex",
+  [NANO_GEN5_TARGET_ID]: "nano-gen5",
+};
 
 const toHex = (bytes: Uint8Array): string => {
   let hex = "";
@@ -181,7 +236,22 @@ const requireDeviceBytes = (value: unknown, length: number): Uint8Array => {
 };
 
 const isVersionPart = (value: unknown): value is number =>
-  Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 0xff;
+  Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= MAX_VERSION_PART;
+
+const versionFromString = (value: unknown): LedgerAppVersion | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
+  if (!match) {
+    return null;
+  }
+  const [major, minor, patch] = match.slice(1).map(Number);
+  if (!isVersionPart(major) || !isVersionPart(minor) || !isVersionPart(patch)) {
+    return null;
+  }
+  return { major, minor, patch };
+};
 
 const meetsMinimum = (version: LedgerAppVersion, min: LedgerAppVersion): boolean =>
   version.major !== min.major
@@ -189,6 +259,54 @@ const meetsMinimum = (version: LedgerAppVersion, min: LedgerAppVersion): boolean
     : version.minor !== min.minor
       ? version.minor > min.minor
       : version.patch >= min.patch;
+
+const ledgerModelFromTargetId = (targetId: unknown): LedgerDeviceModel | null => {
+  if (
+    typeof targetId !== "number" ||
+    !Number.isSafeInteger(targetId) ||
+    targetId < 0 ||
+    targetId > 0xffffffff
+  ) {
+    return null;
+  }
+  return LEDGER_MODELS_BY_TARGET_ID[targetId] ?? null;
+};
+
+/**
+ * Reads and validates the device OS version. Only the known Ledger target ids
+ * in {@link MC_LEDGER_OS_MIN} are accepted; unknown models fail closed with an
+ * upgrade-compatible recovery message rather than borrowing another model's
+ * release line.
+ */
+export const ledgerFirmwareVersion = async (
+  client: LedgerDeviceClient,
+): Promise<LedgerFirmwareVersion> => {
+  const response = await runDevice(() => client.getOsVersion());
+  const model = ledgerModelFromTargetId(response.targetId);
+  const version = versionFromString(response.version);
+  if (!model) {
+    throw new LedgerRejection("unsupported-ledger-device");
+  }
+  if (!version) {
+    throw new LedgerRejection("unexpected-device-error");
+  }
+  return { model, version };
+};
+
+/**
+ * Reads the Ledger OS and rejects with `firmware-below-minimum` when it is
+ * below this model's pinned current release. Returns the validated device
+ * model/version so callers can avoid another firmware APDU in the same flow.
+ */
+export const assertLedgerFirmwareReady = async (
+  client: LedgerDeviceClient,
+): Promise<LedgerFirmwareVersion> => {
+  const firmware = await ledgerFirmwareVersion(client);
+  if (!meetsMinimum(firmware.version, MC_LEDGER_OS_MIN[firmware.model])) {
+    throw new LedgerRejection("firmware-below-minimum");
+  }
+  return firmware;
+};
 
 /**
  * Reads the device Starknet app version, mapping device/transport failures.
@@ -218,6 +336,19 @@ export const assertLedgerAppReady = async (
     throw new LedgerRejection("app-below-minimum");
   }
   return version;
+};
+
+/**
+ * Runs the two pinned compatibility gates in safe order: the device OS first,
+ * then the open Starknet app. This does not establish signing authority; the
+ * caller must still verify the public key and the background must verify every
+ * signature before broadcast.
+ */
+export const assertLedgerDeviceReady = async (
+  client: LedgerDeviceClient,
+): Promise<LedgerAppVersion> => {
+  await assertLedgerFirmwareReady(client);
+  return assertLedgerAppReady(client);
 };
 
 /**

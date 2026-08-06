@@ -193,6 +193,27 @@ describe("requestDeviceGrant", () => {
     await session.close();
   });
 
+  test("proxies and validates the read-only OS version response", async () => {
+    const fake = createFakeChannel();
+    const { browser } = createFakeBrowser({ id: 31 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
+    await tick();
+    fake.emit({ kind: "ready" });
+    const session = await pending;
+
+    const version = session.client.getOsVersion();
+    await tick();
+    expect(fake.posts[0]).toEqual({ id: 1, kind: "command", method: "getOsVersion" });
+    fake.emit({
+      id: 1,
+      kind: "response",
+      ok: true,
+      value: { targetId: 0x33000004, version: "2.7.1" },
+    });
+    await expect(version).resolves.toEqual({ targetId: 0x33000004, version: "2.7.1" });
+    await session.close();
+  });
+
   test("proxies validated public-key and signature responses", async () => {
     const fake = createFakeChannel();
     const { browser } = createFakeBrowser({ id: 12 });
@@ -293,6 +314,26 @@ describe("requestDeviceGrant", () => {
       value: { errorMessage: "", publicKey: new Uint8Array(63), returnCode: 0x9000 },
     });
     await expect(publicKey).rejects.toMatchObject({ code: "unexpected-device-error" });
+    await session.close();
+  });
+
+  test("fails closed on a malformed OS version response", async () => {
+    const fake = createFakeChannel();
+    const { browser } = createFakeBrowser({ id: 32 });
+    const pending = requestDeviceGrant(browser, createRuntime(fake));
+    await tick();
+    fake.emit({ kind: "ready" });
+    const session = await pending;
+
+    const version = session.client.getOsVersion();
+    await tick();
+    fake.emit({
+      id: 1,
+      kind: "response",
+      ok: true,
+      value: { targetId: -1, version: "2.7.1" },
+    });
+    await expect(version).rejects.toMatchObject({ code: "unexpected-device-error" });
     await session.close();
   });
 

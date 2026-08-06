@@ -15,6 +15,7 @@ import { ledgerUSBVendorId } from "@ledgerhq/devices";
 import { StarknetClient } from "@ledgerhq/hw-app-starknet";
 import TransportWebHID from "@ledgerhq/hw-transport-webhid";
 import TransportWebUSB from "@ledgerhq/hw-transport-webusb";
+import { Buffer } from "buffer";
 
 const deviceIds = new WeakMap();
 const knownDevices = new Map();
@@ -27,6 +28,44 @@ const ledgerHidUsagePage = 0xffa0;
 const transports = {
   hid: TransportWebHID,
   usb: TransportWebUSB,
+};
+
+// Ledger's built-in Get OS Version command. It is intentionally sent directly
+// through the already-open transport: the Starknet app client does not expose
+// this management read, and opening a second transport would race the device
+// pipe. The response ends in the APDU status word and starts with a u32 target
+// id followed by the length-prefixed secure-element version string.
+const OS_VERSION_APDU = { cla: 0xe0, ins: 0x01, p1: 0, p2: 0 };
+const APDU_OK = 0x9000;
+
+const readOsVersion = async (transport) => {
+  const response = await transport.send(
+    OS_VERSION_APDU.cla,
+    OS_VERSION_APDU.ins,
+    OS_VERSION_APDU.p1,
+    OS_VERSION_APDU.p2,
+    Buffer.alloc(0),
+    [APDU_OK],
+  );
+  if (!(response instanceof Uint8Array) || response.length < 8) {
+    throw new Error("Malformed Ledger OS version response");
+  }
+  const statusOffset = response.length - 2;
+  const status = (response[statusOffset] << 8) | response[statusOffset + 1];
+  if (status !== APDU_OK) {
+    throw new Error("Ledger OS version command failed");
+  }
+  const targetId =
+    response[0] * 0x1000000 + response[1] * 0x10000 + response[2] * 0x100 + response[3];
+  const versionLength = response[4];
+  const versionEnd = 5 + versionLength;
+  if (versionLength === 0 || versionEnd > statusOffset) {
+    throw new Error("Malformed Ledger OS version response");
+  }
+  return {
+    targetId,
+    version: new TextDecoder("utf-8", { fatal: true }).decode(response.slice(5, versionEnd)),
+  };
 };
 
 const idOf = (device) => {
@@ -158,4 +197,8 @@ export const requestTransportRaw = async (kind) => {
   return TransportWebUSB.open(device);
 };
 
-export const newStarknetClient = (transport) => new StarknetClient(transport);
+export const newStarknetClient = (transport) => {
+  const client = new StarknetClient(transport);
+  client.getOsVersion = () => readOsVersion(transport);
+  return client;
+};

@@ -24,7 +24,7 @@
 import type { LedgerSignRequestSummary } from "../../popup/responses";
 import { sameFelt } from "../../starknet/networks";
 import {
-  assertLedgerAppReady,
+  assertLedgerDeviceReady,
   type LedgerDeviceClient,
   ledgerPublicKeyX,
   ledgerSignHashOnDevice,
@@ -175,13 +175,13 @@ export const createLedgerSignController = (
     }
     const isActive = (): boolean => current?.id === request.id && operationEpoch === epoch;
     show({ kind: "checking" });
-    // Shared pre-check before the on-device confirm: assert the Starknet app is
-    // at/above the pinned floor (a locked/disconnected device surfaces here as a
-    // thrown transport error on the version read), then confirm the device holds
+    // Shared pre-check before the on-device confirm: assert the device OS and
+    // Starknet app are at/above the pinned floors (a locked/disconnected device
+    // surfaces here as a thrown transport error), then confirm the device holds
     // the account's key at `path` — a mismatch is the wrong Ledger and gets that
     // actionable copy instead of a post-sign verify failure. Fund safety still
     // rests on the background verify gate; this only fails faster and clearer.
-    await assertLedgerAppReady(client);
+    await assertLedgerDeviceReady(client);
     if (!isActive()) {
       return;
     }

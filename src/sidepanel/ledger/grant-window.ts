@@ -122,6 +122,7 @@ type PendingCommand = {
 };
 
 type LedgerBrokerCall =
+  | { readonly kind: "command"; readonly method: "getOsVersion" }
   | { readonly kind: "command"; readonly method: "getAppVersion" }
   | { readonly kind: "command"; readonly method: "getPubKey"; readonly path: string }
   | {
@@ -175,6 +176,21 @@ const requireVersionResponse = (value: unknown) => {
     patch: response["patch"] as number,
     returnCode: response.returnCode,
   };
+};
+
+const requireOsVersionResponse = (value: unknown) => {
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length !== 2 ||
+    typeof value["targetId"] !== "number" ||
+    !Number.isSafeInteger(value["targetId"]) ||
+    value["targetId"] < 0 ||
+    value["targetId"] > 0xffffffff ||
+    typeof value["version"] !== "string"
+  ) {
+    throw new LedgerRejection("unexpected-device-error");
+  }
+  return { targetId: value["targetId"], version: value["version"] };
 };
 
 const requirePublicKeyResponse = (value: unknown) => {
@@ -353,6 +369,8 @@ export const requestDeviceGrant = async (
 
   return {
     client: {
+      getOsVersion: async () =>
+        requireOsVersionResponse(await call({ kind: "command", method: "getOsVersion" })),
       getAppVersion: async () =>
         requireVersionResponse(await call({ kind: "command", method: "getAppVersion" })),
       getPubKey: async (path) =>

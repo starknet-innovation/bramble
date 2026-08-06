@@ -19,7 +19,7 @@
 import { ledgerAccountPath } from "../../starknet/ledger-path";
 import type { LedgerAccountRef } from "../../storage/vault-schema";
 import type { LedgerPubKeyEntry } from "../../wallet/accounts";
-import { assertLedgerAppReady, type LedgerDeviceClient, ledgerPublicKeyX } from "./client";
+import { assertLedgerDeviceReady, type LedgerDeviceClient, ledgerPublicKeyX } from "./client";
 import { asLedgerRejection, LedgerRejection, ledgerMessage } from "./errors";
 import {
   closeLedgerSessionQuietly,
@@ -36,8 +36,8 @@ import {
 export const LEDGER_PAGE_SIZE = 5;
 
 /**
- * Reads the app version (rejecting a below-minimum app with `app-below-minimum`)
- * on every call, then reads the public-key x-coordinate for one page of account
+ * Checks the pinned device OS and Starknet app releases on every call, then
+ * reads the public-key x-coordinate for one page of account
  * indices — `startIndex … startIndex + count - 1` — SILENTLY and one round-trip
  * at a time (the browser transport is a serial pipe). Returns the enumerated `(index,
  * publicKeyX)` pairs for {@link LedgerOnboardController} to derive into
@@ -49,7 +49,7 @@ export const enumerateLedgerPubKeys = async (
   startIndex = 0,
   count: number = LEDGER_PAGE_SIZE,
 ): Promise<readonly LedgerPubKeyEntry[]> => {
-  await assertLedgerAppReady(client);
+  await assertLedgerDeviceReady(client);
   const entries: LedgerPubKeyEntry[] = [];
   for (let offset = 0; offset < count; offset += 1) {
     const accountIndex = startIndex + offset;

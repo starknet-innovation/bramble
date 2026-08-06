@@ -26,11 +26,12 @@ const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0
 // A device whose pubkey per index is deterministic, so distinct indices produce
 // distinct entries and a page reads exactly its slice of indices.
 const enumerateClient: LedgerDeviceClient = {
+  getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
   getAppVersion: () =>
     Promise.resolve({
       errorMessage: "No errors",
       major: 2,
-      minor: 0,
+      minor: 4,
       patch: 0,
       returnCode: 0x9000,
     }),
