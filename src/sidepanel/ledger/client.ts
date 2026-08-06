@@ -52,8 +52,9 @@ type DeviceHashSignResponse = DeviceResponseBase & {
 export type LedgerDeviceClient = {
   /**
    * Reads the device OS version through Ledger's built-in management APDU. The
-   * runtime transport parses the raw reply before it reaches this typed
-   * boundary; callers must still treat the model and version as untrusted.
+   * runtime boundary temporarily returns to the dashboard for that command,
+   * then reopens Starknet before this resolves. It parses the raw reply before
+   * it reaches typed code; callers must still treat model/version as untrusted.
    */
   getOsVersion(): Promise<DeviceOsVersionResponse>;
   getAppVersion(): Promise<DeviceVersionResponse>;

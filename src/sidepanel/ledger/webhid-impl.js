@@ -30,15 +30,26 @@ const transports = {
   usb: TransportWebUSB,
 };
 
-// Ledger's built-in Get OS Version command. It is intentionally sent directly
-// through the already-open transport: the Starknet app client does not expose
-// this management read, and opening a second transport would race the device
-// pipe. The response ends in the APDU status word and starts with a u32 target
+// Ledger's built-in Get OS Version command is accepted only on the dashboard,
+// while the Starknet APDUs require the Starknet app. Use the existing transport
+// to make that transition atomically: quit the active app, read the OS, then
+// open Starknet again. Opening a second transport would race the device pipe.
+// The version response ends in the APDU status word and starts with a u32 target
 // id followed by the length-prefixed secure-element version string.
 const OS_VERSION_APDU = { cla: 0xe0, ins: 0x01, p1: 0, p2: 0 };
+const QUIT_APP_APDU = { cla: 0xb0, ins: 0xa7, p1: 0, p2: 0 };
+const OPEN_APP_APDU = { cla: 0xe0, ins: 0xd8, p1: 0, p2: 0 };
 const APDU_OK = 0x9000;
+const STARKNET_APP_NAME = "Starknet";
+
+const sendEmptyApdu = (transport, apdu) =>
+  transport.send(apdu.cla, apdu.ins, apdu.p1, apdu.p2, Buffer.alloc(0), [APDU_OK]);
 
 const readOsVersion = async (transport) => {
+  // Ledger's quit command is a no-op on the dashboard. Starting here therefore
+  // handles both an already-open Starknet app and Bluetooth's dashboard pairing
+  // state without an incompatible OS/app read sequence.
+  await sendEmptyApdu(transport, QUIT_APP_APDU);
   const response = await transport.send(
     OS_VERSION_APDU.cla,
     OS_VERSION_APDU.ins,
@@ -62,10 +73,19 @@ const readOsVersion = async (transport) => {
   if (versionLength === 0 || versionEnd > statusOffset) {
     throw new Error("Malformed Ledger OS version response");
   }
-  return {
+  const osVersion = {
     targetId,
     version: new TextDecoder("utf-8", { fatal: true }).decode(response.slice(5, versionEnd)),
   };
+  await transport.send(
+    OPEN_APP_APDU.cla,
+    OPEN_APP_APDU.ins,
+    OPEN_APP_APDU.p1,
+    OPEN_APP_APDU.p2,
+    Buffer.from(STARKNET_APP_NAME, "ascii"),
+    [APDU_OK],
+  );
+  return osVersion;
 };
 
 const idOf = (device) => {
