@@ -44,7 +44,7 @@ import { walletEventBroadcasts } from "./events";
 import { createMessageHandler } from "./messages";
 import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboarding-surface";
 import { defaultRuntimeRpc } from "./runtime-rpc";
-import { reconcileActiveAccount } from "./runtime-state";
+import { createActiveStateCoordinator, reconcileUnlockedActiveAccount } from "./runtime-state";
 import type { RuntimeSender } from "./senders";
 import { createUnlockSession, type UnlockSessionStore } from "./session";
 import { type AlarmsApi, startTransactionMonitor } from "./tx-monitor";
@@ -256,14 +256,15 @@ const runtimeRpc = {
     : unavailableStrk20Service,
 };
 const walletReader = createWalletReader(wallet);
+const activeStateCoordinator = createActiveStateCoordinator();
 const runtimeReady = sessionReady.then(async () => {
-  const vaultPassphrase = session.peekPassphrase();
   const store = await preferences;
-  if (vaultPassphrase && store) {
-    await reconcileActiveAccount(walletReader, store, vaultPassphrase).catch(() => session.lock());
+  if (store) {
+    await reconcileUnlockedActiveAccount(walletReader, session, store, activeStateCoordinator);
   }
 });
 const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
+  activeStateCoordinator,
   approvals,
   session,
   preferencesStore: {

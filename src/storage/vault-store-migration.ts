@@ -36,6 +36,13 @@ const readVerified = async (
   return candidate;
 };
 
+const removeVerified = async (store: EncryptedStore): Promise<void> => {
+  await store.remove();
+  if (await store.exists()) {
+    throw new WalletError("Vault migration cleanup failed");
+  }
+};
+
 const recoverStagedVault = async (
   stores: VaultMigrationStores,
   vaultPassphrase: string,
@@ -49,7 +56,7 @@ const recoverStagedVault = async (
   }
   await stores.primary.write(staged, vaultPassphrase);
   await readVerified(stores.primary, vaultPassphrase, staged);
-  await stores.staging.remove();
+  await removeVerified(stores.staging);
   return staged;
 };
 
@@ -86,7 +93,7 @@ export const readMigratedVault = async (
   }
   if (isVaultV4(stored)) {
     if (await stores.staging.exists()) {
-      await stores.staging.remove();
+      await removeVerified(stores.staging);
     }
     return vault;
   }
@@ -95,6 +102,6 @@ export const readMigratedVault = async (
   await readVerified(stores.staging, vaultPassphrase, vault);
   await stores.primary.write(vault, vaultPassphrase);
   await readVerified(stores.primary, vaultPassphrase, vault);
-  await stores.staging.remove();
+  await removeVerified(stores.staging);
   return vault;
 };

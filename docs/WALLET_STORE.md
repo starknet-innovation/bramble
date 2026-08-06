@@ -26,6 +26,9 @@ Review baseline: `main` at `4bdd457b216e1dd1a07df49db68b62b22675a6d9`; implement
 - Every authoritative read-modify-write store is mutation-serialized. Account/network identifiers
   remain explicit at consumer boundaries, and validators prove the account id's embedded network
   agrees with that explicit scope.
+- Every operation that can change the selected account or network shares one worker-level
+  coordinator. The plain selected-network preference is the durable intent written first; the
+  encrypted account pointer is repaired toward it after interruption or preference import.
 - Chrome persistent and session storage are restricted to `TRUSTED_CONTEXTS` before unlock-session
   restoration or request handling can begin. Missing or failed lockdown support stops privileged
   startup; extension messages remain the validated capability boundary.
@@ -103,13 +106,14 @@ The first authenticated vault operation after unlock performs the data update:
 3. Encrypt the migrated vault under the distinct migration-store AAD scope, read it back, validate
    it, and compare it with the expected value.
 4. Encrypt the same value under the primary AAD scope, read it back, validate it, and compare it.
-5. Remove staging only after the primary verification succeeds.
+5. Remove staging only after the primary verification succeeds, then read the staging scope back
+   and fail closed unless its absence is confirmed.
 
 If the MV3 worker stops before step 4, the old primary remains authoritative. If it stops after the
 primary write but before cleanup, both copies contain the same authenticated current vault. If the
 primary is unreadable while a valid stage exists, the next authenticated read restores and verifies
-the stage. A current primary wins over stale staging and removes it. Re-running the process is
-idempotent and does not rewrite a current envelope.
+the stage. A current primary wins over stale staging, removes it, and verifies its absence. Re-running
+the process is idempotent and does not rewrite a current envelope.
 
 Release checks must retain tests for:
 
@@ -118,6 +122,7 @@ Release checks must retain tests for:
 - unchanged primary ciphertext on invalid migration input;
 - stage verification and interrupted-worker recovery;
 - failed stage verification and failed primary writes leaving the old primary intact;
+- silent stage-cleanup failures retaining an authenticated recovery copy and surfacing an error;
 - wrong-passphrase reads never restoring or deleting an authenticated stage;
 - account, grant, signing-key, and optional-secret preservation;
 - current-schema idempotence and public response non-disclosure.
@@ -183,6 +188,10 @@ derivation protocol.
 
 - Vault mutations and KDF/schema upgrades share one queue. Passive reads cannot race a stale
   upgrade over account, grant, or optional-secret writes.
+- Account creation/import, Ledger additions, account selection, network switching, unlock/lock,
+  preference import, and dapp-approved chain switches share one active-state coordinator. The
+  preference write happens before the encrypted pointer mutation, so a partial failure leaves a
+  retryable intent rather than a hidden created account that makes the retry fail as a duplicate.
 - Preferences, activity, allowances, multisigs, origin history, and maturity use the shared
   `serializeStoreMutations` wrapper. New mutable stores must reuse it rather than create a sibling
   queue implementation.
@@ -211,9 +220,14 @@ Fixed in this change:
   balance, private-state, and approval projections before UI rendering.
 - Medium, UX/data consistency: the selected network and encrypted active account live in separate
   stores, so a locked switch or worker stop between writes could project an account from the wrong
-  network even though transaction operations chose the correct fallback. Startup and unlock now
-  reconcile the durable pointer when that network already has an account; passive status projects
-  the same network-scoped fallback without extending the unlock session.
+  network even though transaction operations chose the correct fallback. All selection mutations
+  now share one coordinator and use preference-first ordering. Startup, unlock, and preference
+  import reconcile the durable pointer when that network already has an account; passive status
+  projects the same network-scoped fallback without extending the unlock session. Reconciliation
+  is bound to the authorizing session generation, so stale work cannot clear a replacement unlock.
+- Medium, migration robustness: staging cleanup was not read back. A silent backend no-op could
+  leave an authenticated stale recovery candidate; cleanup is now verified and fails closed while
+  leaving the authoritative primary unchanged and the stage available for a later retry.
 - Medium, robustness: decrypted schema migration was returned in memory but not durably persisted
   unless a later mutation happened.
 - Security design requirement: Ledger STRK20 had no retained viewing-key model; the new encrypted
@@ -229,9 +243,9 @@ Deliberately deferred:
 
 - The Ledger typed-data derivation/provisioning flow, pending the proof obligations above.
 - Moving `activeNetworkId` and `activeAccountId` into one atomic encrypted selection record. They
-  remain split between preferences and vault for schema compatibility; startup/unlock reconciliation
-  and network-scoped status projection cover interrupted writes, but a future schema may remove the
-  cross-store transaction entirely.
+  remain split between preferences and vault for schema compatibility; serialized preference-first
+  mutations, startup/unlock/import reconciliation, and network-scoped status projection cover
+  interrupted writes, but a future schema may remove the cross-store transaction entirely.
 - Persisting the currently open multisig portfolio. The durable multisig and proposal state already
   survives restarts; the selected screen is presentation state and safely returns to the active
   signer after a browser/update restart.

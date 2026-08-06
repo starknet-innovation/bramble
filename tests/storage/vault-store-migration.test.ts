@@ -106,6 +106,28 @@ describe("readMigratedVault", () => {
     expect(await staging.exists()).toBe(false);
   });
 
+  test("fails closed when migration staging cleanup is a silent no-op", async () => {
+    const { primary, staging } = stores();
+    const current = migrateVault(legacyV3);
+    await primary.write(current, vaultPassphrase);
+    await staging.write({ ...current, activeAccountId: null }, vaultPassphrase);
+    const stickyStage: EncryptedStore = {
+      ...staging,
+      async remove() {},
+    };
+
+    await expect(
+      readMigratedVault({ primary, staging: stickyStage }, vaultPassphrase),
+    ).rejects.toThrow("Vault migration cleanup failed");
+    expect(await primary.read(vaultPassphrase)).toEqual(current);
+    expect(await staging.exists()).toBe(true);
+
+    await expect(readMigratedVault({ primary, staging }, vaultPassphrase)).resolves.toEqual(
+      current,
+    );
+    expect(await staging.exists()).toBe(false);
+  });
+
   test("never touches the primary when staged verification fails", async () => {
     const { backend, primary, staging } = stores();
     await primary.write(legacyV3, vaultPassphrase);

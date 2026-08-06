@@ -6,7 +6,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   activeAccountContext,
+  createActiveStateCoordinator,
   reconcileActiveAccount,
+  reconcileUnlockedActiveAccount,
   statusResponse,
   switchActiveNetwork,
 } from "../../src/background/runtime-state";
@@ -126,6 +128,81 @@ describe("switchActiveNetwork", () => {
     expect(selected).toBeNull();
     expect(switched).toEqual(["SN_MAIN"]);
   });
+
+  test("does not touch the vault when durable network intent cannot be written", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    let vaultReads = 0;
+    const wallet = makeWallet({
+      async readVault() {
+        vaultReads += 1;
+        throw new Error("vault should not be read");
+      },
+    });
+    const store = {
+      ...makePreferencesStore(defaultWalletPreferences()),
+      async setActiveNetwork() {
+        throw new Error("injected preference write failure");
+      },
+    };
+
+    await expect(switchActiveNetwork(wallet, session, store, "SN_MAIN")).rejects.toThrow(
+      "injected preference write failure",
+    );
+    expect(vaultReads).toBe(0);
+  });
+
+  test("serializes concurrent selections so the last network intent wins", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const firstReadStarted = Promise.withResolvers<void>();
+    const releaseFirstRead = Promise.withResolvers<void>();
+    let readCount = 0;
+    let activeAccountId = sepoliaAccount.id;
+    let preferences: WalletPreferences = {
+      ...defaultWalletPreferences(),
+      activeNetworkId: "SN_SEPOLIA",
+    };
+    const wallet = makeWallet({
+      async readVault() {
+        readCount += 1;
+        if (readCount === 1) {
+          firstReadStarted.resolve();
+          await releaseFirstRead.promise;
+        }
+        return {
+          accounts: [sepoliaAccount, mainnetAccount],
+          activeAccountId,
+        } as unknown as Vault;
+      },
+      async setActiveAccount(input) {
+        activeAccountId = input.accountId;
+        return input.accountId === mainnetAccount.id ? mainnetAccount : sepoliaAccount;
+      },
+    });
+    const store = {
+      ...makePreferencesStore(preferences),
+      async read() {
+        return preferences;
+      },
+      async setActiveNetwork(networkId: WalletPreferences["activeNetworkId"]) {
+        preferences = { ...preferences, activeNetworkId: networkId };
+        return preferences;
+      },
+    };
+    const coordinator = createActiveStateCoordinator();
+
+    const first = switchActiveNetwork(wallet, session, store, "SN_MAIN", coordinator);
+    await firstReadStarted.promise;
+    const second = switchActiveNetwork(wallet, session, store, "SN_SEPOLIA", coordinator);
+    await Promise.resolve();
+    expect(readCount).toBe(1);
+    releaseFirstRead.resolve();
+    await Promise.all([first, second]);
+
+    expect(preferences.activeNetworkId).toBe("SN_SEPOLIA");
+    expect(activeAccountId).toBe(sepoliaAccount.id);
+  });
 });
 
 describe("activeAccountContext", () => {
@@ -176,6 +253,83 @@ describe("reconcileActiveAccount", () => {
       mainnetAccount,
     );
     expect(selected).toEqual([mainnetAccount.id]);
+  });
+
+  test("repairs an unlocked session without renewing it", async () => {
+    let now = 0;
+    const session = createUnlockSession(100, () => now);
+    session.unlock(vaultPassphrase);
+    const selected: string[] = [];
+    const wallet = makeWallet({
+      async readVault() {
+        return {
+          accounts: [sepoliaAccount, mainnetAccount],
+          activeAccountId: sepoliaAccount.id,
+        } as unknown as Vault;
+      },
+      async setActiveAccount(input) {
+        selected.push(input.accountId);
+        return mainnetAccount;
+      },
+    });
+    const store = makePreferencesStore({
+      ...defaultWalletPreferences(),
+      activeNetworkId: "SN_MAIN",
+    });
+
+    now = 90;
+    await expect(reconcileUnlockedActiveAccount(wallet, session, store)).resolves.toEqual(
+      mainnetAccount,
+    );
+    expect(selected).toEqual([mainnetAccount.id]);
+    now = 101;
+    expect(session.isUnlocked()).toBe(false);
+  });
+
+  test("locks the authorizing session when reconciliation fails", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const wallet = makeWallet({
+      async readVault() {
+        throw new Error("injected vault read failure");
+      },
+    });
+
+    await expect(
+      reconcileUnlockedActiveAccount(
+        wallet,
+        session,
+        makePreferencesStore(defaultWalletPreferences()),
+      ),
+    ).resolves.toBeNull();
+    expect(session.isUnlocked()).toBe(false);
+  });
+
+  test("does not mutate or lock a replacement unlock session", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const selected: string[] = [];
+    const wallet = makeWallet({
+      async readVault() {
+        session.unlock("replacement horse battery staple");
+        return {
+          accounts: [sepoliaAccount, mainnetAccount],
+          activeAccountId: sepoliaAccount.id,
+        } as unknown as Vault;
+      },
+      async setActiveAccount(input) {
+        selected.push(input.accountId);
+        return mainnetAccount;
+      },
+    });
+    const store = makePreferencesStore({
+      ...defaultWalletPreferences(),
+      activeNetworkId: "SN_MAIN",
+    });
+
+    await expect(reconcileUnlockedActiveAccount(wallet, session, store)).resolves.toBeNull();
+    expect(selected).toEqual([]);
+    expect(session.peekPassphrase()).toBe("replacement horse battery staple");
   });
 });
 
