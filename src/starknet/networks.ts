@@ -17,25 +17,25 @@ export type StarknetNetwork = {
 /**
  * Supported Starknet networks and chain ids.
  *
- * Mainnet and Sepolia prefer the Starknet Foundation's public nodes on RPC
- * spec v0.10, which need no API key and report `PRE_CONFIRMED` finality.
- * Mainnet stays on the proof-facts-capable Foundation endpoint; Sepolia keeps
- * Cartridge as a read/write availability fallback. Requests originate in the
- * MV3 service worker, where the manifest's explicit host permissions apply.
+ * Mainnet and Sepolia use the wallet-owned gateway, which applies per-client
+ * rate limits before forwarding to the Starknet Foundation RPC nodes. Sepolia
+ * keeps Cartridge as a read/write availability fallback. Requests originate
+ * in the MV3 service worker, where the manifest's explicit host permissions
+ * apply.
  */
 export const STARKNET_NETWORKS: Readonly<Record<StarknetNetworkId, StarknetNetwork>> = {
   SN_MAIN: {
     chainId: "0x534e5f4d41494e",
     id: "SN_MAIN",
     name: "Starknet Mainnet",
-    rpcUrls: ["https://mainnet.nodes.starknet.org/rpc/v0_10"],
+    rpcUrls: ["https://wallet.nodes.starknet.org/rpc/mainnet"],
   },
   SN_SEPOLIA: {
     chainId: "0x534e5f5345504f4c4941",
     id: "SN_SEPOLIA",
     name: "Starknet Sepolia",
     rpcUrls: [
-      "https://sepolia.nodes.starknet.org/rpc/v0_10",
+      "https://wallet.nodes.starknet.org/rpc/sepolia",
       "https://api.cartridge.gg/x/starknet/sepolia",
     ],
   },

@@ -28,12 +28,10 @@ const expectedSandboxCsp =
 const expectedSandboxPage = "sandbox/render.html";
 const expectedMatches = ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"];
 const expectedHostPermissions = [
-  // Starknet Foundation public RPC nodes: the wallet's default mainnet and
-  // sepolia endpoints. Keyless, and the only endpoints the extension signs or
-  // broadcasts against by default. Every request originates in the MV3 service
-  // worker, where host permissions apply and CORS does not.
-  "https://mainnet.nodes.starknet.org/*",
-  "https://sepolia.nodes.starknet.org/*",
+  // Wallet-owned RPC and STRK20 gateway. It is the only mainnet endpoint the
+  // extension signs or broadcasts against by default; private upstream URLs
+  // and paymaster credentials remain deployment-only configuration.
+  "https://wallet.nodes.starknet.org/*",
   // Keyless availability fallback when a Foundation node is unreachable.
   "https://api.cartridge.gg/*",
   "https://api.coingecko.com/*",
@@ -45,9 +43,6 @@ const expectedHostPermissions = [
   // policy-checked in src/background/swap-ops.ts before anything is signed.
   "https://starknet.api.avnu.fi/*",
   "https://sepolia.api.avnu.fi/*",
-  // Wallet-owned STRK20 gateway. Private discovery/prover upstream URLs and
-  // paymaster credentials remain deployment-only environment variables.
-  "https://mc-wallet-terminal.vercel.app/*",
   // Maintained web3 phishing feed (issue #34): the default source for the live
   // malicious-origin blocklist. Configurable per deployment via the feed's
   // `source` option; pinned here so the manifest stays an explicit allowlist.
@@ -125,7 +120,7 @@ if (!Array.isArray(hostPermissions) || new Set(hostPermissions).size !== hostPer
   failures.push("manifest host_permissions must not contain duplicates");
 }
 if (!hasOnly(hostPermissions, expectedHostPermissions)) {
-  failures.push("manifest host_permissions must stay pinned to Starknet RPC endpoints");
+  failures.push("manifest host_permissions must stay pinned to reviewed service endpoints");
 }
 
 const contentSecurityPolicy = hasOnlyKeys(manifest["content_security_policy"], [

@@ -42,12 +42,12 @@ Each enabled network needs one complete routing configuration:
 - OHTTP enabled at both the discovery and proving services. A separate OHTTP relay URL is optional.
 - Optional private paymaster/relayer URL and its pool fee token.
 
-The bundled Mainnet configuration points only at the wallet-owned Terminal gateway and the
+The bundled Mainnet configuration points only at the wallet-owned AWS gateway and the
 deployed pool
 `0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`.
-The private discovery and prover upstream URLs and any paymaster key are server-only Vercel
-environment variables. They never appear in the extension source, preferences, source maps,
-logs, or browser requests. The public gateway URL is necessarily visible to clients.
+The private discovery and prover upstream URLs and any paymaster key are server-only ECS runtime
+configuration. They never appear in the extension source, preferences, source maps, logs, or
+browser requests. The public gateway URL is necessarily visible to clients.
 
 An extension cannot protect a shared API secret or prove to a server that its JavaScript came from
 an official build: anything embedded in the bundle is extractable, and a non-browser client can
@@ -58,7 +58,7 @@ spoof HTTP headers. The gateway therefore uses layered controls:
 - request/response size caps, timeouts, no redirects, generic upstream failures, and no request
   body logging;
 - OHTTP envelopes so the gateway relays discovery/proving traffic without seeing its contents;
-- Vercel Firewall rate limits and abuse rules at the public edge.
+- AWS WAF coarse edge limits plus DynamoDB-backed per-route client limits.
 
 Origin allowlisting is a browser isolation control, not cryptographic build attestation. A
 production deployment must not describe it as attestation. Stronger client authenticity requires
@@ -183,16 +183,16 @@ production deployments require their own audits and operations monitoring.
 
 ## Operator checklist
 
-- Set `STRK20_DISCOVERY_UPSTREAM` and `STRK20_PROVER_UPSTREAM` only in the Terminal deployment
-  environment. Do not use `VITE_` variables for them.
-- Set a valid `AVNU_PAYMASTER_API_KEY` in the Terminal deployment before enabling private transfer
-  or withdrawal; the gateway adds it server-side and never returns it to the extension.
-- Set `MC_WALLET_EXTENSION_ORIGINS` to the exact released extension origin(s). The gateway fails
+- Set the discovery/prover upstream URLs only in the `mc-backend` ECS task configuration.
+- Store a valid `AVNU_PAYMASTER_API_KEY` in the backend runtime secret before enabling private
+  transfer or withdrawal; the gateway adds it server-side and never returns it to the extension.
+- Set `allowed_extension_origins` to the exact released extension origin(s). The gateway fails
   closed when this is absent or malformed.
 - Confirm both services expose OHTTP at `/ohttp-keys` and their service root before enabling the
   bundled Mainnet route.
-- Configure Vercel Firewall rate limits for `/api/strk20/*` and `/api/private-swap/*`; serverless
-  in-memory counters are not durable rate limiting.
+- Keep AWS WAF and the backend's DynamoDB rate-limit table enabled for `/rpc/*` and
+  `/api/strk20/*`. Configure Vercel Firewall independently for Terminal-only
+  `/api/private-swap/*` routes.
 - Configure the SDK sub-account module only when supporting `subaccount_invoke`; keep each
   dapp-specific anonymizer/executor in that dapp's reviewed action plan.
 - Supply a private paymaster/relayer and fee token to enable private transfers, withdrawals,
