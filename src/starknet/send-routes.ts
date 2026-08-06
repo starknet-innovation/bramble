@@ -43,6 +43,12 @@ export type PoolRegistration = "pending" | "registered" | "unknown" | "unregiste
  * `sourceStrkBalanceRaw` is the STRK held in the *source* bucket, which is what
  * the pool fee is charged against, and equals `sourceTokenBalanceRaw` when the
  * token being sent is STRK.
+ *
+ * Either balance may be `null`, meaning not known yet — the account's balances
+ * have not loaded, or the selected asset is absent from the list. Affordability
+ * is then not asserted at all: an unknown balance is not a zero balance, and
+ * refusing on one would block real sends while state hydrates. The background
+ * validates the amount again, and the chain is the final word.
  */
 export type SendRouteInput = {
   readonly amountRaw: bigint;
@@ -54,8 +60,8 @@ export type SendRouteInput = {
   readonly senderAddress: string;
   readonly senderRegistration: PoolRegistration;
   readonly source: ValueBucket;
-  readonly sourceStrkBalanceRaw: bigint;
-  readonly sourceTokenBalanceRaw: bigint;
+  readonly sourceStrkBalanceRaw: bigint | null;
+  readonly sourceTokenBalanceRaw: bigint | null;
   readonly tokenAddress: string;
   readonly tokenSymbol: string;
 };
@@ -167,6 +173,15 @@ const recipientBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlo
   if (route.id === "private-private" && toSelf) {
     return refuse("Private sends to the sending account are not supported");
   }
+  // A v1 deposit credits the depositor and carries no recipient, so this route
+  // can only ever mean "shield into my own balance". Naming someone else has to
+  // be refused rather than quietly redirected: the funds would land in the
+  // sender's private balance while every screen said they were paying a friend.
+  if (route.id === "public-private" && !toSelf) {
+    return refuse(
+      "Shielding credits your own private balance; paying someone privately from a public balance is not supported yet",
+    );
+  }
   // Crediting your own private balance is covered by your own registration; a
   // third party needs their own viewing key registered with the pool.
   if (input.destination !== "private" || toSelf) {
@@ -181,12 +196,37 @@ const recipientBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlo
   return wait("Checking the recipient's privacy registration…");
 };
 
+// A shortfall is only assertable against a balance that has been read; `null`
+// means unknown, so no refusal is made.
+const shortOf = (balance: bigint | null, needed: bigint): boolean =>
+  balance !== null && needed > balance;
+
+// The pool fee is charged in STRK out of the source bucket. When the token being
+// sent is not STRK, the fee competes with a different balance, so it gets its own
+// check and its own wording.
+const feeBlocker = (
+  input: SendRouteInput,
+  poolFeeFri: bigint,
+  tokenIsStrk: boolean,
+): SendRouteBlocker | null => {
+  if (tokenIsStrk || !shortOf(input.sourceStrkBalanceRaw, poolFeeFri)) {
+    return null;
+  }
+  return refuse(
+    input.source === "private"
+      ? "Not enough private STRK to cover the pool fee"
+      : "Not enough STRK to cover the pool fee",
+  );
+};
+
 const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocker | null => {
   if (input.amountRaw <= 0n) {
     return refuse("Enter an amount to send");
   }
   if (!route.poolFeeRequired) {
-    return input.amountRaw > input.sourceTokenBalanceRaw ? refuse(shortfall(input, route)) : null;
+    return shortOf(input.sourceTokenBalanceRaw, input.amountRaw)
+      ? refuse(shortfall(input, route))
+      : null;
   }
   if (input.poolFeeFri === null) {
     // The fee is governance-set and read live, so an unknown fee cannot be
@@ -198,17 +238,10 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
   // The fee always leaves the source bucket, so when the token *is* STRK the
   // amount and the fee come out of one pot and must fit together.
   const needed = input.amountRaw + (tokenIsStrk ? input.poolFeeFri : 0n);
-  if (needed > input.sourceTokenBalanceRaw) {
+  if (shortOf(input.sourceTokenBalanceRaw, needed)) {
     return refuse(shortfall(input, route));
   }
-  if (!tokenIsStrk && input.poolFeeFri > input.sourceStrkBalanceRaw) {
-    return refuse(
-      input.source === "private"
-        ? "Not enough private STRK to cover the pool fee"
-        : "Not enough STRK to cover the pool fee",
-    );
-  }
-  return null;
+  return feeBlocker(input, input.poolFeeFri, tokenIsStrk);
 };
 
 const shortfall = (input: SendRouteInput, route: SendRoute): string => {
@@ -245,6 +278,9 @@ export const spendableForRoute = (
   route: SendRoute,
   input: Pick<SendRouteInput, "poolFeeFri" | "sourceTokenBalanceRaw" | "tokenAddress">,
 ): bigint | null => {
+  if (input.sourceTokenBalanceRaw === null) {
+    return null;
+  }
   if (!route.poolFeeRequired) {
     return input.sourceTokenBalanceRaw;
   }

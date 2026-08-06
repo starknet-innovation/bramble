@@ -264,13 +264,22 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       repaint();
       return;
     }
+    // The route gate is enforced here, not just rendered: a refusal the user can
+    // read is still a refusal they can click past. This covers both the move to
+    // review and the final confirm, because both arrive through this handler.
+    const gate = route().blocked;
+    if (gate) {
+      transferState = { ...transferState, error: gate.reason, fields, stage: "details" };
+      repaint();
+      return;
+    }
     const key = transferKey(fields);
     if (transferState.reviewedKey !== key) {
       const epoch = ++transferEpoch;
       transferState = { ...initialTransferState<Review>(), fields, stage: "reviewing" };
       repaint();
       const composed = transferRoute(fields);
-      const preparing = preparationFor(composed, fields, wallet);
+      const preparing = preparationFor(composed, fields, wallet, deps.senderAddress?.() ?? "");
       if (preparing) {
         void preparing.then(
           (preparation) => {

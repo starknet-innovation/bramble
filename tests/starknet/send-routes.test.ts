@@ -18,7 +18,9 @@ const RECIPIENT = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e0
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc8";
 const SIX_STRK = 6_000_000_000_000_000_000n;
 
-// A composed send that clears every gate; each test perturbs one field.
+// A composed send that clears every gate — a private transfer to a third party
+// — so each test perturbs one field. Deliberately not a deposit: a deposit to
+// anyone but the sender is refused, so it cannot be the baseline.
 const ready = (overrides: Partial<SendRouteInput> = {}): SendRouteInput => ({
   amountRaw: 10n * SIX_STRK,
   destination: "private",
@@ -28,7 +30,7 @@ const ready = (overrides: Partial<SendRouteInput> = {}): SendRouteInput => ({
   relayConfigured: true,
   senderAddress: SENDER,
   senderRegistration: "registered",
-  source: "public",
+  source: "private",
   sourceStrkBalanceRaw: 100n * SIX_STRK,
   sourceTokenBalanceRaw: 100n * SIX_STRK,
   tokenAddress: STRK_TOKEN_ADDRESS,
@@ -91,7 +93,7 @@ describe("route table", () => {
 describe("gates", () => {
   test("resolves a fully composed send", () => {
     const resolution = resolveSendRoute(ready());
-    expect(resolution.route?.id).toBe("public-private");
+    expect(resolution.route?.id).toBe("private-private");
     expect(resolution.blocked).toBeUndefined();
   });
 
@@ -129,12 +131,15 @@ describe("gates", () => {
   });
 
   test("refuses to spend a private balance with no relay configured", () => {
-    expect(blockerFor({ relayConfigured: false, source: "private" })).toEqual({
+    expect(blockerFor({ relayConfigured: false })).toEqual({
       pending: false,
       reason: "No private relay is configured for this network",
     });
     // A public source needs no unlinkable broadcast route.
-    expect(resolveSendRoute(ready({ relayConfigured: false })).route?.id).toBe("public-private");
+    expect(
+      resolveSendRoute(ready({ recipient: SENDER, relayConfigured: false, source: "public" })).route
+        ?.id,
+    ).toBe("public-private");
   });
 
   test("requires a recipient on every route, including into your own balance", () => {
@@ -162,13 +167,14 @@ describe("gates", () => {
     // Shielding into your own balance is covered by your own registration, so an
     // unknown answer for yourself-as-recipient must not gate it.
     expect(
-      resolveSendRoute(ready({ recipient: SENDER, recipientRegistration: "unknown" })).route?.id,
+      resolveSendRoute(
+        ready({ recipient: SENDER, recipientRegistration: "unknown", source: "public" }),
+      ).route?.id,
     ).toBe("public-private");
     // A public destination never needs the recipient in the pool at all.
     expect(
-      resolveSendRoute(
-        ready({ destination: "public", recipientRegistration: "unregistered", source: "private" }),
-      ).route?.id,
+      resolveSendRoute(ready({ destination: "public", recipientRegistration: "unregistered" }))
+        .route?.id,
     ).toBe("private-public");
   });
 
@@ -189,9 +195,10 @@ describe("gates", () => {
       reason: "Checking the pool fee…",
     });
     // A route with no pool call does not wait on a fee it never pays.
-    expect(resolveSendRoute(ready({ destination: "public", poolFeeFri: null })).route?.id).toBe(
-      "public-public",
-    );
+    expect(
+      resolveSendRoute(ready({ destination: "public", poolFeeFri: null, source: "public" })).route
+        ?.id,
+    ).toBe("public-public");
   });
 
   test("requires the amount and the fee to fit together when sending STRK", () => {
@@ -199,32 +206,35 @@ describe("gates", () => {
     // the amount is not enough.
     expect(blockerFor({ amountRaw: 100n * SIX_STRK })).toEqual({
       pending: false,
-      reason: "Not enough STRK for this amount plus the pool fee",
+      reason: "Not enough private STRK for this amount plus the pool fee",
     });
     // Exactly balance-minus-fee is sendable.
-    expect(resolveSendRoute(ready({ amountRaw: 99n * SIX_STRK })).route?.id).toBe("public-private");
+    expect(resolveSendRoute(ready({ amountRaw: 99n * SIX_STRK })).route?.id).toBe(
+      "private-private",
+    );
   });
 
   test("checks a non-STRK amount and the STRK fee against their own balances", () => {
     const eth = { tokenAddress: ETH, tokenSymbol: "ETH" } as const;
     // The full token balance is sendable, because the fee comes out of STRK.
     expect(resolveSendRoute(ready({ ...eth, amountRaw: 100n * SIX_STRK })).route?.id).toBe(
-      "public-private",
+      "private-private",
     );
-    expect(blockerFor({ ...eth, amountRaw: 101n * SIX_STRK }).reason).toBe("Not enough ETH");
+    expect(blockerFor({ ...eth, amountRaw: 101n * SIX_STRK }).reason).toBe(
+      "Not enough private ETH",
+    );
     expect(blockerFor({ ...eth, sourceStrkBalanceRaw: 0n }).reason).toBe(
-      "Not enough STRK to cover the pool fee",
+      "Not enough private STRK to cover the pool fee",
     );
   });
 
   test("names a private shortfall as private", () => {
-    expect(
-      blockerFor({ amountRaw: 200n * SIX_STRK, destination: "public", source: "private" }).reason,
-    ).toBe("Not enough private STRK for this amount plus the pool fee");
+    expect(blockerFor({ amountRaw: 200n * SIX_STRK, destination: "public" }).reason).toBe(
+      "Not enough private STRK for this amount plus the pool fee",
+    );
     expect(
       blockerFor({
         destination: "public",
-        source: "private",
         sourceStrkBalanceRaw: 0n,
         tokenAddress: ETH,
         tokenSymbol: "ETH",
@@ -276,5 +286,70 @@ describe("spendableForRoute", () => {
         tokenAddress: STRK_TOKEN_ADDRESS,
       }),
     ).toBe(0n);
+  });
+});
+
+describe("shielding to someone else", () => {
+  // A v1 deposit credits the depositor and carries no recipient. Naming someone
+  // else once shielded to the sender while every screen reported a payment, so
+  // the route is refused rather than redirected.
+  test("refuses a public -> private send to anyone but the sender", () => {
+    expect(blockerFor({ destination: "private", recipient: RECIPIENT, source: "public" })).toEqual({
+      pending: false,
+      reason:
+        "Shielding credits your own private balance; paying someone privately from a public balance is not supported yet",
+    });
+  });
+
+  test("allows shielding into the sender's own balance", () => {
+    expect(
+      resolveSendRoute(ready({ destination: "private", recipient: SENDER, source: "public" })).route
+        ?.id,
+    ).toBe("public-private");
+  });
+
+  test("refuses before asking whether that recipient is registered", () => {
+    // The recipient's pool status is irrelevant on this route, so the reason
+    // names the real limitation instead of sending the user to register.
+    expect(
+      blockerFor({
+        destination: "private",
+        recipient: RECIPIENT,
+        recipientRegistration: "registered",
+        source: "public",
+      }).reason,
+    ).toContain("Shielding credits your own private balance");
+  });
+});
+
+describe("unknown balances", () => {
+  // An absent balance is not a zero balance. Refusing on one blocked every send
+  // while the account's balances were still loading.
+  test("does not assert affordability against a balance it has not read", () => {
+    expect(
+      resolveSendRoute(ready({ amountRaw: 10_000n * SIX_STRK, sourceTokenBalanceRaw: null })).route
+        ?.id,
+    ).toBe("private-private");
+  });
+
+  test("still refuses when the balance is known and short", () => {
+    expect(blockerFor({ amountRaw: 10_000n * SIX_STRK }).reason).toContain("Not enough private");
+  });
+
+  test("skips the STRK fee check when the STRK balance is unknown", () => {
+    expect(
+      resolveSendRoute(ready({ sourceStrkBalanceRaw: null, tokenAddress: ETH, tokenSymbol: "ETH" }))
+        .route?.id,
+    ).toBe("private-private");
+  });
+
+  test("withholds a maximum rather than offering one from an unread balance", () => {
+    expect(
+      spendableForRoute(routeFor("public", "public"), {
+        poolFeeFri: SIX_STRK,
+        sourceTokenBalanceRaw: null,
+        tokenAddress: STRK_TOKEN_ADDRESS,
+      }),
+    ).toBeNull();
   });
 });

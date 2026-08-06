@@ -4,9 +4,14 @@
  */
 import { describe, expect, test } from "bun:test";
 import type { PrivacyPreparation } from "../../src/sidepanel/privacy-runtime";
+import type { SidepanelWallet } from "../../src/sidepanel/runtime";
+import type { TransferFields } from "../../src/sidepanel/transfer-model";
 import { routeDisclosureHtml, routeFeeHtml } from "../../src/sidepanel/transfer-review-routes";
-import type { TransferReview } from "../../src/sidepanel/transfer-submit";
+import { preparationFor, type TransferReview } from "../../src/sidepanel/transfer-submit";
 import { routeFor } from "../../src/starknet/send-routes";
+
+const SENDER = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+const RECIPIENT = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 
 // 6 STRK: the mainnet pool's per-action charge.
 const POOL_FEE = "0x53444835ec580000";
@@ -112,5 +117,46 @@ describe("route fee lines", () => {
     });
     expect(html).toContain("Couldn't estimate the network fee");
     expect(html).toContain("review-retry-fee");
+  });
+});
+
+describe("dispatch backstop", () => {
+  const fields = (recipient: string): TransferFields =>
+    ({
+      amount: "1",
+      destination: "private",
+      recipient,
+      source: "public",
+      tokenId: "SN_MAIN:STRK:0x1",
+    }) as TransferFields;
+
+  test("refuses to shield to anyone but the sender instead of dropping the recipient", async () => {
+    // preparePrivacyDeposit takes no recipient, so an unchecked call here shielded
+    // to the sender while every screen reported a payment to the chosen account.
+    let deposits = 0;
+    const wallet = {
+      preparePrivacyDeposit: async () => {
+        deposits += 1;
+        return {} as never;
+      },
+    } as unknown as SidepanelWallet;
+
+    await expect(
+      preparationFor(routeFor("public", "private"), fields(RECIPIENT), wallet, SENDER),
+    ).rejects.toThrow("Shielding credits your own private balance");
+    expect(deposits).toBe(0);
+  });
+
+  test("prepares the deposit when the recipient is the sender", async () => {
+    let deposits = 0;
+    const wallet = {
+      preparePrivacyDeposit: async () => {
+        deposits += 1;
+        return {} as never;
+      },
+    } as unknown as SidepanelWallet;
+
+    await preparationFor(routeFor("public", "private"), fields(SENDER), wallet, SENDER);
+    expect(deposits).toBe(1);
   });
 });

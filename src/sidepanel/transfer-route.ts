@@ -55,22 +55,30 @@ const rawBalance = (value: string | undefined): bigint => {
   }
 };
 
+// A missing entry means "not known", not "zero": the balances may not have
+// loaded, and refusing a send as unaffordable on that basis would be wrong.
 const privateBalanceOf = (
   privacy: PrivacyDisclosureState,
   match: (entry: { readonly token: string; readonly tokenId: string }) => boolean,
-): bigint => rawBalance(privacy.value?.balances.find((entry) => match(entry))?.balance);
+): bigint | null => {
+  const entry = privacy.value?.balances.find((candidate) => match(candidate));
+  return entry === undefined ? null : rawBalance(entry.balance);
+};
 
 const publicBalanceOf = (
   balances: readonly TokenBalance[],
   match: (entry: TokenBalance) => boolean,
-): bigint => rawBalance(balances.find((entry) => match(entry))?.balance);
+): bigint | null => {
+  const entry = balances.find((candidate) => match(candidate));
+  return entry === undefined ? null : rawBalance(entry.balance);
+};
 
-const tokenBalanceIn = (bucket: ValueBucket, context: TransferRouteContext): bigint =>
+const tokenBalanceIn = (bucket: ValueBucket, context: TransferRouteContext): bigint | null =>
   bucket === "private"
     ? privateBalanceOf(context.privacy, (entry) => entry.tokenId === context.fields.tokenId)
     : publicBalanceOf(context.publicBalances, (entry) => entry.id === context.fields.tokenId);
 
-const strkBalanceIn = (bucket: ValueBucket, context: TransferRouteContext): bigint =>
+const strkBalanceIn = (bucket: ValueBucket, context: TransferRouteContext): bigint | null =>
   bucket === "private"
     ? privateBalanceOf(context.privacy, (entry) => sameFelt(entry.token, STRK_TOKEN_ADDRESS))
     : publicBalanceOf(context.publicBalances, (entry) =>
