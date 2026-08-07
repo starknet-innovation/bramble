@@ -34,37 +34,29 @@ export const SEND_COMPOSE_STYLES = `
     margin: 0;
   }
 
-  .send-network-context {
-    align-items: center;
+  /* Which account the value leaves. Same row layout as a recipient option so
+     both ends of the send read alike, but it is static: the origin is the
+     active account, changed by switching accounts rather than from here. */
+  .send-origin-context {
     background: var(--mc-panel);
     border-radius: ${RADIUS.lg};
-    display: flex;
-    gap: ${SPACE.md};
-    min-height: ${SIZE.tile};
+    display: grid;
+    gap: ${SPACE.sm};
     padding: ${SPACE.md};
   }
-  .send-network-mark {
+  .send-origin-account {
     align-items: center;
-    color: var(--mc-text);
-    display: inline-flex;
-    flex: none;
-    height: ${SIZE.mark};
-    justify-content: center;
-    width: ${SIZE.mark};
+    display: flex;
+    gap: ${SPACE.md};
   }
-  .send-network-mark .token-logo {
-    height: ${SIZE.mark};
-    width: ${SIZE.mark};
-  }
-  .send-network-context > span:last-child { display: grid; gap: 2px; }
-  .send-network-context small,
+  .send-origin-context small,
   .send-asset-copy span,
   .send-recipient-copy code,
   .send-asset-value span {
     color: var(--mc-muted);
     font-size: ${TYPE.caption.size};
   }
-  .send-network-context strong { font-size: ${TYPE.body.size}; }
+  .send-origin-context strong { font-size: ${TYPE.body.size}; }
   .network-inline-value {
     align-items: center;
     display: inline-flex;
