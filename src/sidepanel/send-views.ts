@@ -211,10 +211,7 @@ const amountStage = (
             <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
             <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
           </span>
-          <span class="send-route-choice" role="group" aria-label="Balance to send from">
-            <button data-send-bucket="source" data-send-bucket-value="public" type="button" aria-pressed="true">${icon("globe")}Public</button>
-            <button data-send-bucket="source" data-send-bucket-value="private" type="button" aria-pressed="false">${icon("lock")}Private</button>
-          </span>
+          <button class="send-route-toggle" data-send-bucket="source" data-bucket="public" type="button" title="Switch to the private balance">Public</button>
         </dd>
       </div>
       <div>
@@ -224,10 +221,7 @@ const amountStage = (
             <strong id="send-recipient-name">Not selected</strong>
             <code id="send-recipient-label">—</code>
           </span>
-          <span class="send-route-choice" role="group" aria-label="Balance to send into">
-            <button data-send-bucket="destination" data-send-bucket-value="public" type="button" aria-pressed="true">${icon("globe")}Public</button>
-            <button data-send-bucket="destination" data-send-bucket-value="private" type="button" aria-pressed="false">${icon("lock")}Private</button>
-          </span>
+          <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button" title="Switch to the private balance">Public</button>
         </dd>
       </div>
       <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(status.network)}</strong></dd></div>

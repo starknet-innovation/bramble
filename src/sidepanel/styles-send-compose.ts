@@ -321,7 +321,7 @@ export const SEND_COMPOSE_STYLES = `
   .send-review-facts dt { color: var(--mc-muted); font-size: ${TYPE.label.size}; }
   /* An account row in the receipt: identity on the left, and for the two
      accounts, the balance that account's value moves through on the right. */
-  .send-context-receipt dd:has(.send-route-choice) {
+  .send-context-receipt dd:has(.send-route-toggle) {
     align-items: center;
     display: flex;
     gap: ${SPACE.md};
