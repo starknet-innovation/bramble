@@ -181,11 +181,11 @@ describe("gates", () => {
   test("asks for an amount before anything about fees", () => {
     expect(blockerFor({ amountRaw: 0n, poolFeeFri: null })).toEqual({
       pending: false,
-      reason: "Enter an amount to send",
+      reason: "Enter an amount to send. Toggle the public/private button to shield or unshield.",
     });
     expect(blockerFor({ amountRaw: -1n })).toEqual({
       pending: false,
-      reason: "Enter an amount to send",
+      reason: "Enter an amount to send. Toggle the public/private button to shield or unshield.",
     });
   });
 

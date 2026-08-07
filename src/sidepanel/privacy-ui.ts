@@ -6,6 +6,7 @@
 import type { TokenBalance, WalletStatus } from "../popup/responses";
 import type { WalletPreferences } from "../storage/preferences-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
+import { accountDisplayName } from "./parts";
 import { bindDeployAndRegister } from "./privacy-activation-ui";
 import { bindComposeCard } from "./privacy-compose-ui";
 import { bindWithdrawDestination, withdrawRecipientFor } from "./privacy-destination-ui";
@@ -16,6 +17,7 @@ import {
 } from "./privacy-model";
 import { createPendingRegistrationPoll } from "./privacy-pending-poll";
 import type { SidepanelWallet } from "./runtime";
+import type { SendIntent } from "./send-model";
 
 /**
  * Current render state and callbacks consumed by privacy bindings.
@@ -27,6 +29,8 @@ export type PrivacyUiDeps = {
   readonly generation: () => number;
   readonly journey: () => PrivacyJourneyState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
+  /** Opens Send pre-configured for a shield or unshield shortcut. */
+  readonly openSend?: (intent: SendIntent) => void;
   readonly paint: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly setDisclosure: (state: PrivacyDisclosureState) => void;
@@ -211,6 +215,36 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
       }
     });
   });
+  bindShieldShortcuts(deps);
+};
+
+// Shield and unshield are sends between one account's two balances, so both
+// shortcuts open Send already configured rather than a separate journey: the
+// active account on both ends, and the buckets that name the direction.
+const bindShieldShortcuts = (deps: PrivacyUiDeps): void => {
+  const account = deps
+    .status()
+    .accounts.find((candidate) => candidate.id === deps.status().activeAccountId);
+  for (const [attribute, key, source, destination] of [
+    ["data-send-shield", "sendShield", "public", "private"],
+    ["data-send-unshield", "sendUnshield", "private", "public"],
+  ] as const) {
+    deps.app?.querySelectorAll<HTMLButtonElement>(`[${attribute}]`).forEach((button) => {
+      button.addEventListener("click", () => {
+        const tokenId = button.dataset[key];
+        if (!tokenId || !account) {
+          return;
+        }
+        deps.openSend?.({
+          destination,
+          recipient: account.address,
+          recipientLabel: accountDisplayName(account, deps.preferences()),
+          source,
+          tokenId,
+        });
+      });
+    });
+  }
 };
 
 const bindReviewAmount = (

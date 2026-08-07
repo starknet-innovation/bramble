@@ -232,7 +232,9 @@ const feeBlocker = (
 
 const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocker | null => {
   if (input.amountRaw <= 0n) {
-    return refuse("Enter an amount to send");
+    return refuse(
+      "Enter an amount to send. Toggle the public/private button to shield or unshield.",
+    );
   }
   if (!route.poolFeeRequired) {
     return shortOf(input.sourceTokenBalanceRaw, input.amountRaw)
