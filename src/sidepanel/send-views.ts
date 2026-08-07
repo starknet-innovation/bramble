@@ -116,12 +116,18 @@ const recipientStage = (
   const contacts =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return `<section class="send-stage send-recipient-stage" id="send-recipient-stage">
-    <div class="send-network-context">
-      <span class="send-network-mark">${starknetNetworkGlyph()}</span>
-      <span><small>Destination network</small><strong>${escapeHtml(status.network)}</strong></span>
+    <div class="send-origin-context">
+      <small>Sending from</small>
+      <div class="send-origin-account">
+        <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
+        <span class="send-recipient-copy">
+          <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
+          <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
+        </span>
+      </div>
     </div>
     <label class="send-search">
-      <span>Recipient</span>
+      <span>Sending to</span>
       <span class="send-search-control">${icon("search")}${inputControl({
         ariaLabel: "Recipient address or saved name",
         attributes: { id: "send-recipient-search" },
@@ -193,6 +199,14 @@ const amountStage = (
   preferences: WalletPreferences | null,
 ): string => `
   <section class="send-stage send-amount-stage" id="send-details" hidden>
+    <dl class="send-context-receipt">
+      <div><dt>From</dt><dd><strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong></dd></div>
+      <div>
+        <dt>To</dt>
+        <dd><strong id="send-recipient-name">Not selected</strong><code id="send-recipient-label">—</code></dd>
+      </div>
+      <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(status.network)}</strong></dd></div>
+    </dl>
     <p class="send-stage-kicker">Asset</p>
     <div class="send-amount-card">
       <button class="send-token-trigger" id="send-token-trigger" type="button" ${asset ? "" : "disabled"}>
@@ -239,14 +253,6 @@ const amountStage = (
       </div>
       <p class="send-fiat-estimate" id="send-fiat-estimate">Estimated value —</p>
     </div>
-    <dl class="send-context-receipt">
-      <div>
-        <dt>Recipient</dt>
-        <dd><strong id="send-recipient-name">Not selected</strong><code id="send-recipient-label">—</code></dd>
-      </div>
-      <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(status.network)}</strong></dd></div>
-      <div><dt>From</dt><dd><strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong></dd></div>
-    </dl>
     ${button({
       attributes: { id: "send-review-button" },
       disabled: account === null || asset === undefined,

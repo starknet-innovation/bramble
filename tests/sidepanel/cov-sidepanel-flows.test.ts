@@ -84,9 +84,18 @@ describe("sendFlow list callbacks", () => {
     expect(html).toContain('data-send-recipient="0xaaa1"');
     expect(html).toContain('data-send-recipient-label="Ada"');
     expect(html).not.toContain("Grace");
-    expect(html).toMatch(/send-network-context[\s\S]*?send-network-mark[\s\S]*?class="token-logo"/);
+    // The recipient screen leads with where the value is coming from, rendered
+    // like a recipient row but static — the origin is the active account.
+    expect(html).toMatch(
+      /send-origin-context[\s\S]*?Sending from[\s\S]*?send-recipient-avatar[\s\S]*?Amber Walrus/,
+    );
+    expect(html).toContain("<span>Sending to</span>");
     expect(html).toMatch(
       /<dt>Network<\/dt><dd class="network-inline-value">[\s\S]*?class="token-logo"/,
+    );
+    // From, To, Network in that order, above the amount card.
+    expect(html).toMatch(
+      /<dt>From<\/dt>[\s\S]*?<dt>To<\/dt>[\s\S]*?<dt>Network<\/dt>[\s\S]*?send-amount-card/,
     );
     // With a token available the form is enabled (canSend).
     expect(html).not.toMatch(/id="send-token-trigger"[^>]*disabled/);
