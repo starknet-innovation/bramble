@@ -179,6 +179,34 @@ describe("bindTransfer", () => {
     expect(app.querySelector('[data-send-step="sent"]')?.getAttribute("data-state")).toBe("active");
   });
 
+  // Back out of the review and the next Review send must show the review again,
+  // not submit. The reviewed marker is what separates the two, so a return to
+  // the amount step that kept it turned one click into a send.
+  test("re-reviews rather than submitting after backing out of the review", async () => {
+    const { app, calls, deps } = mount();
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
+
+    app.ownerDocument.querySelector("#send-header-back")?.dispatchEvent(new Event("click"));
+    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(false);
+
+    submit(app);
+    await flush();
+    expect(calls.submitTransfer).toHaveLength(0);
+    expect(calls.reviewTransfer).toHaveLength(2);
+    expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
+
+    // Only the confirm from the re-shown review sends.
+    submit(app);
+    await flush();
+    expect(calls.submitTransfer).toHaveLength(1);
+  });
+
   test("watches for deployment after confirming a first send", async () => {
     const { app, calls, deps } = mount({
       async reviewTransfer() {

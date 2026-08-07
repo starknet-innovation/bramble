@@ -118,6 +118,22 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     transferState = { ...transferState, fields: transferFields(form), stage };
     repaint();
   };
+  // Leaving the review discards it. `reviewedKey` is what the submit handler
+  // reads to tell "show me the review" from "I have read it, send it", so a
+  // return to the amount step that kept it made the next Review send button
+  // submit immediately. Every path out of review goes through here.
+  const editDetails = (): void => {
+    transferEpoch += 1;
+    transferState = {
+      ...transferState,
+      error: "",
+      review: null,
+      reviewedKey: null,
+      stage: "details",
+    };
+    repaint();
+    form.querySelector<HTMLInputElement>("#send-amount-input")?.focus();
+  };
   // Closing Send abandons what was composed. Without this, the module-level
   // journey survived the close and the next visit resumed mid-flow — a cancelled
   // shield reopened as a half-filled shield. A submitted transaction is kept, so
@@ -137,7 +153,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
   form.ownerDocument.querySelector("#send-header-back")?.addEventListener("click", () => {
     if (transferState.stage === "asset") goTo("details");
     else if (transferState.stage === "details") goTo("recipient");
-    else if (transferState.stage === "review") goTo("details");
+    else if (transferState.stage === "review") editDetails();
     else exit();
   });
   const recipients = createRecipientStatus({
@@ -187,18 +203,6 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     route,
   });
 
-  const editDetails = (): void => {
-    transferEpoch += 1;
-    transferState = {
-      ...transferState,
-      error: "",
-      review: null,
-      reviewedKey: null,
-      stage: "details",
-    };
-    repaint();
-    form.querySelector<HTMLInputElement>("#send-amount-input")?.focus();
-  };
   form.querySelector("#send-edit")?.addEventListener("click", editDetails);
   form.querySelector("#send-failure-edit")?.addEventListener("click", editDetails);
   form.querySelector("#send-another")?.addEventListener("click", () => {
