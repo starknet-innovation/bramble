@@ -8,9 +8,10 @@ import type { TokenBalance } from "../../src/popup/responses";
 import type { PrivacyDisclosureState } from "../../src/sidepanel/privacy-model";
 import { bindTransferBuckets } from "../../src/sidepanel/transfer-buckets-ui";
 import { transferFields } from "../../src/sidepanel/transfer-model";
-import { privateRelayFeeHtml } from "../../src/sidepanel/transfer-review-markup";
+import { routeFeeHtml } from "../../src/sidepanel/transfer-review-routes";
 import { balanceInBucket, resolveTransferRoute } from "../../src/sidepanel/transfer-route";
 import { STRK_TOKEN_ADDRESS } from "../../src/starknet/networks";
+import { routeFor } from "../../src/starknet/send-routes";
 import { registerDom, unregisterDom } from "../support/groups-harness";
 
 beforeAll(registerDom);
@@ -232,35 +233,44 @@ describe("private send fee lines", () => {
   // sender's behalf and recovers from the shielded balance.
   const POOL_FEE = "0x53444835ec580000";
 
-  test("splits the withdrawn amount into the pool fee and the relay's own cut", () => {
-    const html = privateRelayFeeHtml({ amount: POOL_FEE }, POOL_FEE);
+  const relayFeeHtml = (amount: string, poolFeeFri?: string): string =>
+    routeFeeHtml(routeFor("private", "private"), {
+      ...(poolFeeFri === undefined ? {} : { poolFeeFri }),
+      preparation: { relayFee: { amount } } as never,
+      review: null,
+    });
 
-    // The pool's charge is named as such rather than billed as the relay's price.
-    expect(html).toContain("Pool fee: 6 STRK");
-    expect(html).toContain("Relay fee: Sponsored");
-    expect(html).not.toContain("Relay fee (paid privately)");
+  test("reports gas as sponsored and names the pool's charge separately", () => {
+    const html = relayFeeHtml(POOL_FEE, POOL_FEE);
+
+    // Gas is the paymaster's, so the sender's own broadcast cost is nil.
+    expect(html).toContain("Estimated fee: Sponsored");
+    // The pool's charge is named as such rather than billed as network gas.
+    expect(html).toContain("Pool fee: 6 STRK from your private balance");
   });
 
-  test("shows a relay cut when the fee action exceeds the pool fee", () => {
+  test("charges the relay's own cut as the network fee when it keeps one", () => {
     // 6 STRK pool fee inside a 6.5 STRK fee action leaves 0.5 STRK for the relay.
-    const html = privateRelayFeeHtml({ amount: "0x5a34a38fc00a0000" }, POOL_FEE);
+    const html = relayFeeHtml("0x5a34a38fc00a0000", POOL_FEE);
 
-    expect(html).toContain("Pool fee: 6 STRK");
-    expect(html).toContain("Relay fee: 0.5 STRK");
+    expect(html).toContain("Estimated fee: 0.5 STRK");
+    expect(html).toContain("Pool fee: 6 STRK from your private balance");
   });
 
   test("falls back to one unattributed line rather than inventing a split", () => {
-    // No pool fee read yet.
-    expect(privateRelayFeeHtml({ amount: POOL_FEE })).toContain(
-      "Fee taken from your private balance: 6 STRK",
-    );
     // A fee action below the pool fee contradicts the split, so it is not shown.
-    expect(privateRelayFeeHtml({ amount: "0x1" }, POOL_FEE)).toContain(
-      "Fee taken from your private balance",
-    );
+    expect(relayFeeHtml("0x1", POOL_FEE)).toContain("Fee taken from your private balance");
     // A malformed amount must not throw or render a negative fee.
-    expect(privateRelayFeeHtml({ amount: "nope" }, POOL_FEE)).toContain(
-      "Fee taken from your private balance",
-    );
+    expect(relayFeeHtml("nope", POOL_FEE)).toContain("Fee taken from your private balance");
+  });
+
+  test("reports the whole withdrawal before the pool fee has been read", () => {
+    // The sender's total is known; how it splits between the pool and the relay
+    // is not, so neither part is claimed and no pool line is invented.
+    const html = relayFeeHtml(POOL_FEE);
+
+    expect(html).toContain("Fee taken from your private balance: 6 STRK");
+    expect(html).not.toContain("Pool fee:");
+    expect(html).not.toContain("Estimated fee:");
   });
 });

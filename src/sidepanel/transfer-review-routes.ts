@@ -2,12 +2,12 @@
  * Route-keyed review blocks: the fee lines a route actually charges, and what it
  * publishes on Starknet.
  *
- * The four routes pay differently — a public transfer pays network gas only, a
- * deposit pays gas plus the pool's per-batch STRK charge out of the public
- * balance, and the two relayed routes pay the pool charge out of the private
- * balance with the relay covering gas. Deriving both blocks from the route
- * rather than from three separate review screens is what stops a pool charge
- * being billed as a relay price again.
+ * Every charge leaves the sending account, and always the bucket the send comes
+ * from: an account route pays network gas — and, on a deposit, the pool's
+ * per-batch charge — out of the public balance, while a relayed route pays the
+ * pool charge out of the private balance with the paymaster sponsoring gas.
+ * Deriving both blocks from the route rather than from three separate review
+ * screens is what stops a pool charge being billed as a relay price again.
  */
 
 import { escapeHtml } from "../shared/html";
@@ -15,7 +15,6 @@ import type { SendDisclosure, SendRoute } from "../starknet/send-routes";
 import { formatFri } from "./parts";
 import type { PrivacyPreparation } from "./privacy-runtime";
 import { reviewFeeSection } from "./review-render";
-import { privateRelayFeeHtml } from "./transfer-review-markup";
 import type { TransferReview } from "./transfer-submit";
 
 const DISCLOSURE_LABELS: Readonly<Record<SendDisclosure, string>> = {
@@ -53,33 +52,73 @@ export const routeDisclosureHtml = (route: SendRoute): string => {
 };
 
 /**
- * Renders the fee lines for one route.
- *
- * A relayed route reports what the relay withdraws, split into the pool's charge
- * and the relay's own cut. A deposit adds the pool charge to the account's own
- * network-fee estimate, because both leave the public balance in the same
- * transaction. A public transfer is the estimate alone.
+ * The review state the fee lines are built from.
  */
-export const routeFeeHtml = (
-  route: SendRoute,
-  state: {
-    readonly poolFeeFri?: string;
-    readonly preparation: PrivacyPreparation | null;
-    readonly review: TransferReview | null;
-  },
-): string => {
-  if (state.preparation?.relayFee) {
-    return privateRelayFeeHtml(state.preparation.relayFee, state.poolFeeFri);
+export type RouteFeeState = {
+  readonly poolFeeFri?: string;
+  readonly preparation: PrivacyPreparation | null;
+  readonly review: TransferReview | null;
+};
+
+const feeLine = (label: string, value: string): string =>
+  `<p class="review-fee">${escapeHtml(label)}: ${escapeHtml(value)}</p>`;
+
+// What the relay withdraws beyond the pool's own charge. `null` when the two
+// cannot be compared, so no split is invented from an unusable pair.
+const relayCut = (total: string, poolFeeFri: string): bigint | null => {
+  try {
+    const cut = BigInt(total) - BigInt(poolFeeFri);
+    return cut < 0n ? null : cut;
+  } catch {
+    return null;
+  }
+};
+
+// "Estimated fee" names the network fee on every route, so the label means one
+// thing in all four flows. A relayed route pays no gas — the paymaster sponsors
+// it, and the sender's only broadcast cost is whatever the relay keeps above the
+// pool's charge. A deposit's gas is not knowable here at all: its proof, and so
+// the calldata being estimated, is built at submission.
+const networkFeeHtml = (route: SendRoute, state: RouteFeeState): string => {
+  if (route.submission === "relay") {
+    const total = state.preparation?.relayFee?.amount;
+    const cut =
+      total !== undefined && state.poolFeeFri !== undefined
+        ? relayCut(total, state.poolFeeFri)
+        : null;
+    if (total !== undefined && cut === null) {
+      // The withdrawal does not decompose against the known pool fee, so it is
+      // reported whole rather than split into parts that were guessed.
+      return feeLine("Fee taken from your private balance", formatFri(total));
+    }
+    return feeLine(
+      "Estimated fee",
+      cut === null || cut === 0n ? "Sponsored" : formatFri(`0x${cut.toString(16)}`),
+    );
   }
   const estimate = state.review ? reviewFeeSection(state.review, { id: "review-retry-fee" }) : "";
-  if (route.feeBucket !== "public" || !state.poolFeeFri) {
-    return estimate;
-  }
-  // Neutral, not an alert: it is a protocol charge like any other fee line.
-  return `${estimate}<p class="review-fee">${escapeHtml(
-    `${formatFri(state.poolFeeFri)} is deducted from your public balance to cover pool fees`,
-  )}</p>`;
+  return estimate || feeLine("Estimated fee", "charged at submission");
 };
+
+// The pool's per-batch charge, always named separately and always attributed to
+// the balance it leaves. Keeping it off the "Estimated fee" line is what stops a
+// protocol charge reading as network gas or as the relay's price.
+const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
+  route.poolFeeRequired && route.feeBucket !== "none" && poolFeeFri !== undefined
+    ? feeLine("Pool fee", `${formatFri(poolFeeFri)} from your ${route.feeBucket} balance`)
+    : "";
+
+/**
+ * Renders the fee lines for one route: the network fee, then the pool's charge
+ * when the route pays one.
+ *
+ * Both lines are present on every route that incurs them and carry the same
+ * labels throughout, so the four flows read alike — the previous rendering gave
+ * a deposit no network-fee line at all and named the relayed routes' charges
+ * differently again.
+ */
+export const routeFeeHtml = (route: SendRoute, state: RouteFeeState): string =>
+  `${networkFeeHtml(route, state)}${poolFeeHtml(route, state.poolFeeFri)}`;
 
 /**
  * The fee lines followed by the disclosure, which is what the review screen

@@ -2,7 +2,7 @@
  * Shared decoded-transfer review markup used by Send and NFT transfer flows.
  */
 import { escapeHtml } from "../shared/html";
-import { accountLabel, formatFri } from "./parts";
+import { accountLabel } from "./parts";
 import { reviewCallsList, reviewFeeSection, reviewPanel, riskFlagMessages } from "./review-render";
 import type { SidepanelWallet } from "./runtime";
 import { tokenGlyph } from "./token-row";
@@ -22,42 +22,6 @@ export const reviewSummaryHtml = (fields: TransferFields): string => `
   <dl class="send-review-facts">
     <div><dt>Recipient</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><code>${escapeHtml(accountLabel(fields.recipient))}</code></dd></div>
   </dl>`;
-
-const feeLine = (label: string, value: string): string =>
-  `<p class="review-fee">${escapeHtml(label)}: ${escapeHtml(value)}</p>`;
-
-const feeDifference = (total: string, poolFeeFri: string): bigint | null => {
-  try {
-    const relay = BigInt(total) - BigInt(poolFeeFri);
-    return relay < 0n ? null : relay;
-  } catch {
-    return null;
-  }
-};
-
-/**
- * Renders the fee lines for a private send. The relay withdraws one amount from
- * the sender's shielded balance, and that amount is not all the relay's: the
- * privacy pool charges a fixed fee per action batch (`get_fee_amount`) which the
- * relay pays on the sender's behalf. Splitting them keeps the pool's protocol
- * charge from reading as the relay's price.
- *
- * With no pool fee known, or a fee action smaller than it, the total is shown as
- * a single unattributed line rather than an invented split.
- */
-export const privateRelayFeeHtml = (
-  relayFee: { readonly amount: string },
-  poolFeeFri?: string,
-): string => {
-  const relay = poolFeeFri === undefined ? null : feeDifference(relayFee.amount, poolFeeFri);
-  if (relay === null || poolFeeFri === undefined) {
-    return feeLine("Fee taken from your private balance", formatFri(relayFee.amount));
-  }
-  return `${feeLine("Pool fee", formatFri(poolFeeFri))}${feeLine(
-    "Relay fee",
-    relay === 0n ? "Sponsored" : formatFri(`0x${relay.toString(16)}`),
-  )}`;
-};
 
 /**
  * Renders the transfer fee state — the estimated amount, the pending-deployment
