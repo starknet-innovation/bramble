@@ -32,13 +32,12 @@ const statusFor = (accountId: string): WalletStatus => ({
 
 const digest = `sha256:${"a".repeat(64)}`;
 const preparation = {
-  amount: "1",
   id: digest,
-  kind: "deposit" as const,
+  kind: "register" as const,
   payloadDigest: digest,
   poolAddress: "0x123",
   route: "public-account" as const,
-  summaries: ["Shield 1 ETH"],
+  summaries: ["Register viewing-key commitment"],
   symbol: "ETH",
   tokenId: preferences.tokens[0]?.id ?? "",
 };
@@ -272,39 +271,6 @@ describe("privacy UI async scope isolation", () => {
     expect(journeys).toEqual([]);
   });
 
-  test("drops a deposit review that resolves after network generation reset", async () => {
-    const pending = deferred<typeof preparation>();
-    let generation = 0;
-    const journeys: PrivacyJourneyState[] = [];
-    const app = mount(
-      `<form id="privacy-deposit-form"><input name="amount" value="1"><button type="submit">Review</button></form><p id="privacy-compose-result"></p>`,
-    );
-    const deps = {
-      app,
-      balances: () => [],
-      disclosure: () => ({ error: null, loading: true, value: null }),
-      generation: () => generation,
-      journey: () => ({ stage: "compose", tokenId: preparation.tokenId }) as PrivacyJourneyState,
-      navigate: () => undefined,
-      paint: () => undefined,
-      preferences: () => preferences,
-      setDisclosure: () => undefined,
-      setJourney: (journey: PrivacyJourneyState) => journeys.push(journey),
-      status: () => statusFor(account.id),
-      wallet: {
-        preparePrivacyDeposit: () => pending.promise,
-      } as unknown as SidepanelWallet,
-    } satisfies PrivacyUiDeps;
-    bindPrivacy(deps);
-
-    app.querySelector<HTMLFormElement>("form")?.requestSubmit();
-    generation += 1;
-    pending.resolve(preparation);
-    await tick();
-
-    expect(journeys).toEqual([]);
-  });
-
   test("drops execution success after the reviewed account scope is reset", async () => {
     const pending = deferred<string>();
     let generation = 0;
@@ -317,7 +283,7 @@ describe("privacy UI async scope isolation", () => {
       generation: () => generation,
       journey: () => ({
         preparation,
-        stage: "deposit-review",
+        stage: "activate-review" as const,
         tokenId: preparation.tokenId,
       }),
       navigate: () => undefined,

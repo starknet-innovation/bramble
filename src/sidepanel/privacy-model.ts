@@ -17,41 +17,28 @@ export type PrivacyDisclosureState = {
 };
 
 /**
- * Deterministic checkpoint in the registration or shielding journey.
+ * Deterministic checkpoint in the pool-registration journey.
+ *
+ * Registration is all this surface does. Every movement of value — shielding,
+ * unshielding, private sends — is composed in the Send flow as a send between
+ * two balances, so the journey has no compose or amount step of its own.
  */
 export type PrivacyJourneyState =
   | { readonly stage: "idle" }
   | {
       readonly preparation: PrivacyPreparation;
-      readonly stage: "activate-review" | "deposit-review";
+      readonly stage: "activate-review";
       readonly tokenId: string;
     }
   | {
-      /**
-       * What the user has composed so far. All three live here rather than in
-       * the DOM because the card is rebuilt by every repaint — picking a
-       * destination, deriving an account, a background balance refresh — and a
-       * DOM-only card would snap back to an empty "Shield" mid-edit.
-       *
-       * `destinationAccountId` is the owned account a withdrawal lands in
-       * (absent means the active account); `unshielding` is which balance is the
-       * source; `amount` is the typed amount.
-       */
-      readonly amount?: string;
-      readonly destinationAccountId?: string;
-      readonly stage: "compose";
-      readonly tokenId: string;
-      readonly unshielding?: boolean;
-    }
-  | {
-      readonly kind: "deposit" | "register" | "withdraw";
+      readonly kind: "register";
       readonly preparation: PrivacyPreparation;
       readonly stage: "working";
       readonly tokenId: string;
     }
   | {
       readonly hash: string;
-      readonly kind: "deposit" | "register" | "withdraw";
+      readonly kind: "register";
       readonly stage: "success";
       readonly symbol: string;
       readonly tokenId: string;
