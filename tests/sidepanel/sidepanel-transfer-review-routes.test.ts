@@ -100,7 +100,7 @@ describe("route fee lines", () => {
     expect(html).not.toContain("pool fees");
   });
 
-  test("a deposit adds the pool charge to the network estimate", () => {
+  test("a deposit names the pool charge beside the network fee", () => {
     // Both leave the public balance in the same transaction, so both are shown.
     const html = routeFeeHtml(routeFor("public", "private"), {
       poolFeeFri: POOL_FEE,
@@ -108,7 +108,20 @@ describe("route fee lines", () => {
       review: review(),
     });
     expect(html).toContain("Estimated fee:");
-    expect(html).toContain("6 STRK is deducted from your public balance to cover pool fees");
+    expect(html).toContain("Pool fee: 6 STRK from your public balance");
+  });
+
+  // A deposit's gas is not knowable at review time — the proof, and so the
+  // calldata being estimated, is built at submission — but the line is still
+  // present, because "Estimated fee" means the same thing on all four routes.
+  test("a deposit still shows a network fee line with no estimate to give", () => {
+    const html = routeFeeHtml(routeFor("public", "private"), {
+      poolFeeFri: POOL_FEE,
+      preparation: null,
+      review: review({ fee: null }),
+    });
+    expect(html).toContain("Estimated fee: charged at submission");
+    expect(html).toContain("Pool fee: 6 STRK from your public balance");
   });
 
   test("a deposit omits the pool line when the fee has not been read", () => {
@@ -117,19 +130,35 @@ describe("route fee lines", () => {
       review: review(),
     });
     expect(html).toContain("Estimated fee:");
-    expect(html).not.toContain("pool fees");
+    expect(html).not.toContain("Pool fee:");
   });
 
-  test("a relayed route reports the split the relay actually withdraws", () => {
+  test("a relayed route reports sponsored gas and the pool charge it withdraws", () => {
     const html = routeFeeHtml(routeFor("private", "public"), {
       poolFeeFri: POOL_FEE,
       preparation: relayed(),
       review: review(),
     });
-    // The pool's charge is named as such rather than billed as the relay's price.
-    expect(html).toContain("Pool fee: 6 STRK");
-    expect(html).toContain("Relay fee: Sponsored");
-    expect(html).not.toContain("Estimated fee:");
+    // Gas is the paymaster's; the pool's charge is named as such rather than
+    // billed as network gas.
+    expect(html).toContain("Estimated fee: Sponsored");
+    expect(html).toContain("Pool fee: 6 STRK from your private balance");
+  });
+
+  test("every route leads with a network fee line", () => {
+    for (const [source, destination] of [
+      ["private", "private"],
+      ["private", "public"],
+      ["public", "private"],
+      ["public", "public"],
+    ] as const) {
+      const html = routeFeeHtml(routeFor(source, destination), {
+        poolFeeFri: POOL_FEE,
+        preparation: source === "private" ? relayed() : null,
+        review: review(),
+      });
+      expect(html).toContain("Estimated fee:");
+    }
   });
 
   test("surfaces a failed estimate through the shared fee section", () => {
