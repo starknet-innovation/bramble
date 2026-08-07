@@ -118,7 +118,21 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     transferState = { ...transferState, fields: transferFields(form), stage };
     repaint();
   };
-  const exit = (): void => (back ? back() : navigate?.("home"));
+  // Closing Send abandons what was composed. Without this, the module-level
+  // journey survived the close and the next visit resumed mid-flow — a cancelled
+  // shield reopened as a half-filled shield. A submitted transaction is kept, so
+  // its receipt or pending screen is still reachable on return.
+  const exit = (): void => {
+    if (transferState.transactionHash === null) {
+      transferEpoch += 1;
+      transferState = initialTransferState();
+    }
+    if (back) {
+      back();
+      return;
+    }
+    navigate?.("home");
+  };
   form.ownerDocument.querySelector("#send-close")?.addEventListener("click", exit);
   form.ownerDocument.querySelector("#send-header-back")?.addEventListener("click", () => {
     if (transferState.stage === "asset") goTo("details");

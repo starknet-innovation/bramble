@@ -300,6 +300,14 @@ const paint = (): void => {
   const { status } = cache;
   lastNetworkId = status.networkId;
   lastAccountId = status.activeAccountId;
+  // A shortcut's configuration seeds Send's first render and nothing else. Any
+  // paint of another view means it was abandoned, so it cannot resurface on a
+  // later visit to Send. Enforced here because this is the one place every view
+  // transition passes through — five of the six assign activeView directly, and
+  // guarding only `navigate` let a closed shield leak into the next send.
+  if (activeView !== "send") {
+    sendIntent = null;
+  }
   applyTheme();
   const scene =
     fullPageOnboarding && status.hasVault
@@ -467,11 +475,6 @@ const render = async (status: WalletStatus): Promise<void> => {
 const navigate = (view: WalletView): void => {
   if (view !== activeView) {
     viewHistory = pushView(viewHistory, activeView);
-  }
-  // Leaving Send discards a shortcut's configuration, so opening Send again from
-  // anywhere else starts from an empty form rather than a stale shield.
-  if (activeView === "send" && view !== "send") {
-    sendIntent = null;
   }
   activeView = view;
   drawerOpen = false;
