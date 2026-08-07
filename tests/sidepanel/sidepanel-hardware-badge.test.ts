@@ -60,4 +60,25 @@ describe("accountDrawer badge", () => {
     // Exactly one badge — only the Ledger row carries it.
     expect(html.match(/pill-hardware/g)?.length).toBe(1);
   });
+
+  test("keeps the badge outside the name's truncating element", () => {
+    const status: WalletStatus = {
+      accountCount: 1,
+      accounts: [ledgerAccount],
+      activeAccountId: ledgerAccount.id,
+      hasVault: true,
+      locked: false,
+      network: "Starknet Mainnet",
+      networkId: "SN_MAIN",
+      networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+      ready: true,
+    };
+    const html = accountDrawer(status, ledgerAccount, preferences);
+    // `.drawer-copy strong` ellipsises, so a badge inside it is clipped away by
+    // any name wide enough to fill the row. It has to be a sibling, inside the
+    // flex name line that lets the name shrink instead.
+    const name = html.match(/<span class="drawer-name">(.*?)<\/span>\s*<code>/s)?.[1] ?? "";
+    expect(name).toContain("pill-hardware");
+    expect(name.slice(0, name.indexOf("pill-hardware"))).toContain("</strong>");
+  });
 });

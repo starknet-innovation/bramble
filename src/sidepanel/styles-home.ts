@@ -100,6 +100,13 @@ export const HOME_STYLES = `
   button.drawer-account:not(:disabled):active { background: var(--mc-soft-press); transform: scale(0.985); }
   button.drawer-account[aria-pressed="true"] { background: var(--mc-accent-soft); }
   .drawer-copy { display: grid; flex: 1; gap: 1px; min-width: 0; }
+  /* The name line is a flex row so the account name absorbs the truncation and
+     the hardware badge beside it never does. As inline content the badge sat
+     after the name in the same ellipsised line, so any name wide enough to fill
+     a 300px drawer row clipped the badge away entirely — the one row where
+     knowing the account is a device matters most. The badge's own margin spaces
+     the row; no gap here, or it would be spaced twice. */
+  .drawer-name { align-items: center; display: flex; min-width: 0; }
   .drawer-copy strong { font-size: ${TYPE.body.size}; font-weight: 650; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
   .drawer-copy code { color: var(--mc-muted); font-size: ${TYPE.caption.size}; }
   .drawer-foot { display: grid; gap: ${SPACE.sm}; margin-top: auto; padding-top: ${SPACE.sm}; }
