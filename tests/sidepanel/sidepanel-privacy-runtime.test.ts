@@ -7,12 +7,16 @@ import { createPrivacyRuntimeClient } from "../../src/sidepanel/privacy-runtime"
 
 const digest = `sha256:${"a".repeat(64)}`;
 const RECIPIENT = "0xabc";
+// Mirrors what the background actually returns for a deposit, recipient
+// included: a fixture missing it would let the client's own validator reject
+// every real shield while the suite stayed green.
 const preparation = {
   amount: "1.25",
   id: digest,
   kind: "deposit" as const,
   payloadDigest: digest,
   poolAddress: "0x123",
+  recipient: RECIPIENT,
   route: "public-account" as const,
   summaries: ["Shield 1.25 ETH"],
   symbol: "ETH",
@@ -105,6 +109,29 @@ describe("privacy runtime client", () => {
     await expect(client.executePrivacyPreparation(digest)).rejects.toThrow(
       "Private transaction failed",
     );
+  });
+
+  test("requires a credited recipient on a deposit review", async () => {
+    const { recipient: _recipient, ...withoutRecipient } = preparation;
+    const client = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20Preparation: withoutRecipient,
+    }));
+
+    await expect(
+      client.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
+    ).rejects.toThrow("Shielding preparation failed");
+  });
+
+  test("rejects a deposit review that names a different recipient shape", async () => {
+    const client = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20Preparation: { ...preparation, recipient: "0x0" },
+    }));
+
+    await expect(
+      client.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
+    ).rejects.toThrow("Shielding preparation failed");
   });
 
   test("rejects a malformed balance inside an otherwise valid state", async () => {

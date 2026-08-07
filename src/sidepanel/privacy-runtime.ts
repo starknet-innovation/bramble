@@ -181,8 +181,11 @@ const readPreparation = (
     (value["recipient"] !== undefined &&
       (typeof value["recipient"] !== "string" ||
         !isNonZeroStarkFieldElement(value["recipient"]))) ||
+    // A deposit names whose private balance it credits — the depositor for a
+    // shield, a registered third party otherwise — so the recipient is required
+    // here exactly as it is for a transfer or a withdrawal.
     (value["kind"] === "deposit" &&
-      (typeof value["amount"] !== "string" || value["recipient"] !== undefined)) ||
+      (typeof value["amount"] !== "string" || typeof value["recipient"] !== "string")) ||
     ((value["kind"] === "transfer" || value["kind"] === "withdraw") &&
       (typeof value["amount"] !== "string" ||
         typeof value["recipient"] !== "string" ||
