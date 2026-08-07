@@ -19,7 +19,9 @@ export type SdkCallBuilderArgs = {
  * Token-scoped action builder methods used by the wallet adapter.
  */
 export type SdkTokenBuilder = {
-  readonly deposit: (...inputs: readonly { readonly amount: bigint }[]) => SdkTokenBuilder;
+  readonly deposit: (
+    ...inputs: readonly { readonly amount: bigint; readonly recipient?: string }[]
+  ) => SdkTokenBuilder;
   readonly done: () => SdkBuilder;
   readonly transfer: (
     ...outputs: readonly { readonly amount: bigint | symbol; readonly recipient: string }[]

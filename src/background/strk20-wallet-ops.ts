@@ -1,20 +1,18 @@
 /**
- * Extension-owned STRK20 registration, private-balance, and shielding flows.
+ * Extension-owned STRK20 registration and private-balance state, plus the shared
+ * submission path every wallet-owned privacy preparation is executed through.
  * These messages are privileged by default and never enter the dapp bridge.
  * Review payloads are frozen in a one-time store before any proof or authorization
  * is produced.
  */
 
 import { sameFelt } from "../starknet/networks";
-import { formatTokenAmount, parseTokenAmount } from "../starknet/rpc";
-import { isStrk20Felt } from "../starknet/strk20/schemas";
+import { formatTokenAmount } from "../starknet/rpc";
 import {
-  quoteStrk20Actions,
   readStrk20Balances,
   readStrk20RegistrationStatus,
   registerStrk20Account,
   submitStrk20Actions,
-  summarizeStrk20Plan,
 } from "../starknet/strk20/service";
 import { systemClock } from "../storage/activity-store";
 import { approvalPayloadMatchesContext, createApprovalContext } from "./approval-context";
@@ -24,14 +22,12 @@ import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
   errorText,
+  publicBalance,
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { handleStrk20SendOps } from "./strk20-send-ops";
-import {
-  readStrk20DepositPreparationInput,
-  readStrk20WalletExecuteInput,
-} from "./strk20-wallet-inputs";
+import { readStrk20WalletExecuteInput } from "./strk20-wallet-inputs";
 import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
@@ -78,18 +74,6 @@ const hasPendingRegistration = async (
       entry.status !== "reverted" &&
       now - entry.submittedAt < REGISTRATION_PENDING_WINDOW_MS,
   );
-};
-
-const publicBalance = async (
-  deps: Strk20WalletOpsDeps,
-  context: ActivePrivacyContext,
-): Promise<bigint> => {
-  const [balance] = await deps.runtimeRpc.getTokenBalances({
-    accountAddress: context.accountContext.account.address,
-    rpcUrls: context.accountContext.rpcUrls,
-    tokens: [context.token],
-  });
-  return balance ? BigInt(balance.balance) : 0n;
 };
 
 const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
@@ -205,78 +189,6 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
   }
 };
 
-const depositPreparation = async (
-  deps: Strk20WalletOpsDeps,
-  input: { readonly amount: string; readonly tokenId: string },
-): Promise<RuntimeResponse> => {
-  const context = await resolvePrivacyContext(deps, input.tokenId);
-  if ("error" in context) {
-    return { error: context.error };
-  }
-  try {
-    const status = await readStrk20RegistrationStatus(strk20ServiceForRuntime(deps.runtimeRpc), {
-      ...context.accountContext,
-      token: context.token.address,
-    });
-    if (status !== "registered") {
-      return { error: "Activate private balances before shielding an asset" };
-    }
-    const amountRaw = parseTokenAmount(input.amount, context.token.decimals);
-    if (amountRaw <= 0n) {
-      return { error: "Enter an amount to shield" };
-    }
-    if (!isStrk20Felt(`0x${amountRaw.toString(16)}`)) {
-      return { error: "Amount is outside the Starknet field range" };
-    }
-    if (amountRaw > (await publicBalance(deps, context))) {
-      return { error: `Not enough ${context.token.symbol}` };
-    }
-    const actions = [
-      {
-        amount: `0x${amountRaw.toString(16)}`,
-        token: context.token.address,
-        type: "deposit" as const,
-      },
-    ];
-    const plan = await quoteStrk20Actions(strk20ServiceForRuntime(deps.runtimeRpc), {
-      ...context.accountContext,
-      actions,
-    });
-    const config = context.accountContext.config;
-    if (!config) {
-      return { error: "Private balances are not configured for this network" };
-    }
-    const unsigned = {
-      actions,
-      amount: input.amount,
-      amountRaw: `0x${amountRaw.toString(16)}`,
-      kind: "deposit" as const,
-      plan,
-      poolAddress: config.poolAddress,
-      summaries: [
-        `Shield ${input.amount} ${context.token.symbol}`,
-        summarizeStrk20Plan(plan),
-        "The deposit is public; the resulting balance can be spent privately",
-      ],
-      token: context.token,
-    };
-    const approvalContext = await createApprovalContext(
-      context.accountContext.account,
-      strk20WalletPreparationPayload(unsigned),
-    );
-    return {
-      ok: true,
-      strk20Preparation: deps.strk20Preparations.put({
-        ...unsigned,
-        context: approvalContext,
-        id: approvalContext.payloadDigest,
-      }),
-    };
-  } catch (error) {
-    return { error: errorText(error, "Shielding preparation failed") };
-  }
-};
-
 const preparationStillMatches = async (
   preparation: Strk20WalletPreparation,
   context: ActivePrivacyContext,
@@ -299,6 +211,28 @@ const preparationStillMatches = async (
       strk20WalletPreparationPayload(preparation),
     ))
   );
+};
+
+// What the activity log records for a settled privacy operation. A deposit
+// crediting someone else names them, because "Shield 5 STRK" in a history beside
+// a payment to a friend is the same ambiguity that once hid a misdirected send.
+const activitySummary = (
+  preparation: Strk20WalletPreparation,
+  context: ActivePrivacyContext,
+): string => {
+  if (preparation.kind === "register") {
+    return STRK20_REGISTRATION_SUMMARY;
+  }
+  const value = `${preparation.amount} ${preparation.token.symbol}`;
+  if (preparation.kind === "transfer") {
+    return `Send ${value} privately`;
+  }
+  if (preparation.kind === "withdraw") {
+    return `Unshield ${value}`;
+  }
+  return sameFelt(preparation.recipient, context.accountContext.account.address)
+    ? `Shield ${value}`
+    : `Shield ${value} to ${preparation.recipient}`;
 };
 
 const executePreparation = async (
@@ -325,14 +259,7 @@ const executePreparation = async (
       hash: result.transactionHash,
       kind: "invoke",
       networkId: context.accountContext.account.networkId,
-      summary:
-        preparation.kind === "register"
-          ? STRK20_REGISTRATION_SUMMARY
-          : preparation.kind === "transfer"
-            ? `Send ${preparation.amount} ${preparation.token.symbol} privately`
-            : preparation.kind === "withdraw"
-              ? `Unshield ${preparation.amount} ${preparation.token.symbol}`
-              : `Shield ${preparation.amount} ${preparation.token.symbol}`,
+      summary: activitySummary(preparation, context),
       ...(preparation.kind === "register" ? {} : { token: preparation.token.symbol }),
     });
     return { ok: true, transactionHash: result.transactionHash };
@@ -432,10 +359,6 @@ export const handleStrk20WalletOps = async (
     return readTypeOnlyInput(message, messageType)
       ? registrationPreparation(deps)
       : { error: "Invalid privacy registration request" };
-  }
-  if (messageType === "wallet.strk20PrepareDeposit") {
-    const input = readStrk20DepositPreparationInput(message);
-    return input ? depositPreparation(deps, input) : { error: "Invalid shield request" };
   }
   if (messageType === "wallet.strk20Execute") {
     const input = readStrk20WalletExecuteInput(message);

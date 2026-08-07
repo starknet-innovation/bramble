@@ -55,6 +55,7 @@ const privateDeposit = async (): Promise<Strk20DepositPreparation> => {
       mode: "private-relay" as const,
     },
     poolAddress: "0x123",
+    recipient: account.address,
     summaries: ["Shield 1 ETH"],
     token,
   };

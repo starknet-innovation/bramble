@@ -142,7 +142,7 @@ describe("route fee lines", () => {
   });
 });
 
-describe("dispatch backstop", () => {
+describe("deposit dispatch", () => {
   const fields = (recipient: string): TransferFields =>
     ({
       amount: "1",
@@ -152,33 +152,38 @@ describe("dispatch backstop", () => {
       tokenId: "SN_MAIN:STRK:0x1",
     }) as TransferFields;
 
-  test("refuses to shield to anyone but the sender instead of dropping the recipient", async () => {
-    // preparePrivacyDeposit takes no recipient, so an unchecked call here shielded
-    // to the sender while every screen reported a payment to the chosen account.
-    let deposits = 0;
-    const wallet = {
-      preparePrivacyDeposit: async () => {
-        deposits += 1;
-        return {} as never;
-      },
-    } as unknown as SidepanelWallet;
+  const recordingWallet = (): {
+    readonly deposits: readonly (readonly string[])[];
+    readonly wallet: SidepanelWallet;
+  } => {
+    const deposits: string[][] = [];
+    return {
+      deposits,
+      wallet: {
+        preparePrivacyDeposit: async (tokenId: string, amount: string, recipient: string) => {
+          deposits.push([tokenId, amount, recipient]);
+          return {} as never;
+        },
+      } as unknown as SidepanelWallet,
+    };
+  };
 
-    await expect(
-      preparationFor(routeFor("public", "private"), fields(RECIPIENT), wallet, SENDER),
-    ).rejects.toThrow("Shielding credits your own private balance");
-    expect(deposits).toBe(0);
+  // The composed recipient must reach the deposit rather than being dropped: a
+  // deposit that ignored it credited the sender while the screens reported a
+  // payment to the chosen account.
+  test("passes a third-party recipient through to the deposit", async () => {
+    const { deposits, wallet } = recordingWallet();
+
+    await preparationFor(routeFor("public", "private"), fields(RECIPIENT), wallet);
+
+    expect(deposits).toEqual([["SN_MAIN:STRK:0x1", "1", RECIPIENT]]);
   });
 
-  test("prepares the deposit when the recipient is the sender", async () => {
-    let deposits = 0;
-    const wallet = {
-      preparePrivacyDeposit: async () => {
-        deposits += 1;
-        return {} as never;
-      },
-    } as unknown as SidepanelWallet;
+  test("passes the sender through unchanged when shielding to self", async () => {
+    const { deposits, wallet } = recordingWallet();
 
-    await preparationFor(routeFor("public", "private"), fields(SENDER), wallet, SENDER);
-    expect(deposits).toBe(1);
+    await preparationFor(routeFor("public", "private"), fields(SENDER), wallet);
+
+    expect(deposits).toEqual([["SN_MAIN:STRK:0x1", "1", SENDER]]);
   });
 });

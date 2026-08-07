@@ -300,7 +300,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
       transferState = { ...initialTransferState<Review>(), fields, stage: "reviewing" };
       repaint();
       const composed = transferRoute(fields);
-      const preparing = preparationFor(composed, fields, wallet, deps.senderAddress?.() ?? "");
+      const preparing = preparationFor(composed, fields, wallet);
       if (preparing) {
         void preparing.then(
           (preparation) => {

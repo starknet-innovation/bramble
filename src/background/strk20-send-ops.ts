@@ -1,9 +1,11 @@
 /**
- * Extension-owned private-send operations: recipient registration lookup and
- * one-time shielded-transfer preparation. Transfers move private balance to
- * the recipient's private balance through the paymaster relay only; the side
- * panel receives review metadata (summaries, relay fee), never the executable
- * batch. These messages are privileged and never enter the dapp bridge.
+ * Extension-owned value-moving operations: recipient registration lookup and the
+ * three one-time preparations that move balance between a public and a private
+ * side — deposit, private transfer, and withdrawal. Relayed routes go through
+ * the paymaster only; a deposit is public by construction and pays from the
+ * account. The side panel receives review metadata (summaries, relay fee), never
+ * the executable batch. These messages are privileged and never enter the dapp
+ * bridge.
  */
 
 import { canonicalFelt, isNonZeroStarkFieldElement, sameFelt } from "../starknet/networks";
@@ -18,8 +20,15 @@ import {
 import { createApprovalContext } from "./approval-context";
 import type { RuntimeResponse } from "./runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
-import { errorText, resolvePrivacyContext, type Strk20WalletOpsDeps } from "./strk20-op-context";
 import {
+  type ActivePrivacyContext,
+  errorText,
+  publicBalance,
+  resolvePrivacyContext,
+  type Strk20WalletOpsDeps,
+} from "./strk20-op-context";
+import {
+  readStrk20DepositPreparationInput,
   readStrk20RecipientStatusInput,
   readStrk20TransferPreparationInput,
   readStrk20WithdrawPreparationInput,
@@ -221,6 +230,116 @@ const withdrawPreparation = async (
   }
 };
 
+// Both parties a deposit touches must be in the pool: the depositor to own the
+// batch, and the credited account because the note lands in a channel derived
+// from its registered viewing key. Re-checked here rather than trusted from the
+// side panel's gate, because this message is untrusted like any other. A
+// self-credit needs only the one check.
+const depositRegistrationError = async (
+  service: ReturnType<typeof strk20ServiceForRuntime>,
+  context: ActivePrivacyContext,
+  recipient: string,
+): Promise<string | null> => {
+  const status = await readStrk20RegistrationStatus(service, {
+    ...context.accountContext,
+    token: context.token.address,
+  });
+  if (status !== "registered") {
+    return "Activate private balances before shielding an asset";
+  }
+  if (sameFelt(recipient, context.accountContext.account.address)) {
+    return null;
+  }
+  const recipientStatus = await readStrk20RegistrationStatus(service, {
+    ...context.accountContext,
+    subject: recipient,
+    token: context.token.address,
+  });
+  return recipientStatus === "registered"
+    ? null
+    : "The recipient has not activated private balances";
+};
+
+const depositPreparation = async (
+  deps: Strk20WalletOpsDeps,
+  input: { readonly amount: string; readonly recipient: string; readonly tokenId: string },
+): Promise<RuntimeResponse> => {
+  const recipient = canonicalFelt(input.recipient);
+  if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
+    return { error: "Enter a valid Starknet address" };
+  }
+  const context = await resolvePrivacyContext(deps, input.tokenId);
+  if ("error" in context) {
+    return { error: context.error };
+  }
+  try {
+    const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    const registrationError = await depositRegistrationError(service, context, recipient);
+    if (registrationError !== null) {
+      return { error: registrationError };
+    }
+    const toSelf = sameFelt(recipient, context.accountContext.account.address);
+    const amountRaw = parseTokenAmount(input.amount, context.token.decimals);
+    if (amountRaw <= 0n) {
+      return { error: "Enter an amount to shield" };
+    }
+    if (!isStrk20Felt(`0x${amountRaw.toString(16)}`)) {
+      return { error: "Amount is outside the Starknet field range" };
+    }
+    if (amountRaw > (await publicBalance(deps, context))) {
+      return { error: `Not enough ${context.token.symbol}` };
+    }
+    const actions = [
+      {
+        amount: `0x${amountRaw.toString(16)}`,
+        // A self-credit is the batch's implicit surplus, so it names no
+        // recipient and stays the batch the pool already receives for a shield.
+        ...(toSelf ? {} : { recipient }),
+        token: context.token.address,
+        type: "deposit" as const,
+      },
+    ];
+    const plan = await quoteStrk20Actions(service, { ...context.accountContext, actions });
+    const config = context.accountContext.config;
+    if (!config) {
+      return { error: "Private balances are not configured for this network" };
+    }
+    const unsigned = {
+      actions,
+      amount: input.amount,
+      amountRaw: `0x${amountRaw.toString(16)}`,
+      kind: "deposit" as const,
+      plan,
+      poolAddress: config.poolAddress,
+      recipient,
+      summaries: [
+        toSelf
+          ? `Shield ${input.amount} ${context.token.symbol}`
+          : `Shield ${input.amount} ${context.token.symbol} into ${recipient}'s private balance`,
+        summarizeStrk20Plan(plan),
+        toSelf
+          ? "The deposit is public; the resulting balance can be spent privately"
+          : "The deposit is public: your address and the amount are on chain, and only the recipient stays hidden",
+      ],
+      token: context.token,
+    };
+    const approvalContext = await createApprovalContext(
+      context.accountContext.account,
+      strk20WalletPreparationPayload(unsigned),
+    );
+    return {
+      ok: true,
+      strk20Preparation: deps.strk20Preparations.put({
+        ...unsigned,
+        context: approvalContext,
+        id: approvalContext.payloadDigest,
+      }),
+    };
+  } catch (error) {
+    return { error: errorText(error, "Shielding preparation failed") };
+  }
+};
+
 /**
  * Handles privileged private-send messages and returns null for other types.
  */
@@ -232,6 +351,10 @@ export const handleStrk20SendOps = async (
   if (messageType === "wallet.strk20RecipientStatus") {
     const input = readStrk20RecipientStatusInput(message);
     return input ? recipientStatus(deps, input) : { error: "Invalid recipient check request" };
+  }
+  if (messageType === "wallet.strk20PrepareDeposit") {
+    const input = readStrk20DepositPreparationInput(message);
+    return input ? depositPreparation(deps, input) : { error: "Invalid shield request" };
   }
   if (messageType === "wallet.strk20PrepareTransfer") {
     const input = readStrk20TransferPreparationInput(message);

@@ -57,6 +57,7 @@ export const strk20KeyBoundaryMessages = ({
   {
     message: {
       amount: "1",
+      recipient: "0x123",
       tokenId: "SN_MAIN:0x1",
       type: "wallet.strk20PrepareDeposit",
     },

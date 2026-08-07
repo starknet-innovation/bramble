@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { readStrk20WalletExecuteInput } from "../../src/background/strk20-wallet-inputs";
 import { STRK20_REGISTRATION_SUMMARY } from "../../src/background/strk20-wallet-ops";
+import { canonicalFelt } from "../../src/starknet/networks";
 import type { Strk20Action } from "../../src/starknet/strk20/schemas";
 import type { Strk20Service, Strk20SubmissionPlan } from "../../src/starknet/strk20/service";
 import {
@@ -64,6 +65,13 @@ const activityWithRegistration = async (
   return log;
 };
 
+// The background canonicalizes the recipient before it reaches the action, so
+// the fixture asserts against that form rather than the padded input.
+const CANONICAL_RECIPIENT = canonicalFelt(STRK20_RECIPIENT);
+if (CANONICAL_RECIPIENT === null) {
+  throw new Error("recipient fixture is not a field element");
+}
+
 const token = preferences().tokens.find(
   (candidate) => candidate.networkId === "SN_SEPOLIA" && candidate.address === STRK20_TOKEN,
 );
@@ -72,6 +80,9 @@ if (!token) {
 }
 
 const service = (capture: {
+  // Separate from `registered` so a deposit crediting someone else can be tested
+  // against a registered sender and an unregistered recipient independently.
+  readonly recipientRegistered?: { value: boolean };
   readonly registered: { value: boolean };
   readonly registrations: { value: number };
   readonly submissions: {
@@ -79,7 +90,7 @@ const service = (capture: {
     plan: Strk20SubmissionPlan;
   }[];
 }): Strk20Service => {
-  const { registered, registrations, submissions } = capture;
+  const { recipientRegistered, registered, registrations, submissions } = capture;
   return {
     async prepare() {
       return STRK20_CALL_AND_PROOF;
@@ -95,7 +106,10 @@ const service = (capture: {
       registered.value = true;
       return { transactionHash: "0x111" };
     },
-    async registrationStatus() {
+    async registrationStatus(input) {
+      if (input.subject !== undefined) {
+        return recipientRegistered?.value === false ? "unregistered" : "registered";
+      }
       return registered.value ? "registered" : "unregistered";
     },
     async subaccountCommitment() {
@@ -282,6 +296,7 @@ describe("background wallet STRK20 operations", () => {
     const prepared = (await handler(
       {
         amount: "1.5",
+        recipient: account.address,
         tokenId: token.id,
         type: "wallet.strk20PrepareDeposit",
       },
@@ -306,6 +321,8 @@ describe("background wallet STRK20 operations", () => {
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ ok: true, transactionHash: "0x222" });
+    // A self-credit rides the batch's implicit surplus, so it stays a bare
+    // deposit — naming the sender would add a redundant note to the batch.
     expect(capture.submissions).toEqual([
       {
         actions: [
@@ -318,6 +335,91 @@ describe("background wallet STRK20 operations", () => {
         plan: { mode: "account" },
       },
     ]);
+  });
+
+  test("carries a third-party recipient into the deposit action", async () => {
+    const capture = {
+      registered: { value: true },
+      registrations: { value: 0 },
+      submissions: [] as {
+        actions: readonly Strk20Action[];
+        plan: Strk20SubmissionPlan;
+      }[],
+    };
+    const handler = buildStrk20Handler({
+      preferences: preferences(),
+      publicBalance: "2000000000000000000",
+      strk20: service(capture),
+    });
+    const prepared = (await handler(
+      {
+        amount: "1.5",
+        recipient: STRK20_RECIPIENT,
+        tokenId: token.id,
+        type: "wallet.strk20PrepareDeposit",
+      },
+      STRK20_EXTENSION_SENDER,
+    )) as {
+      readonly strk20Preparation: {
+        readonly id: string;
+        readonly recipient: string;
+        readonly summaries: readonly string[];
+      };
+    };
+
+    // The credited party is reviewable and committed, not inferred at submission.
+    expect(prepared.strk20Preparation.recipient).toBe(CANONICAL_RECIPIENT);
+    expect(prepared.strk20Preparation.summaries[0]).toBe(
+      `Shield 1.5 ETH into ${CANONICAL_RECIPIENT}'s private balance`,
+    );
+    await expect(
+      handler(
+        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ ok: true, transactionHash: "0x222" });
+    expect(capture.submissions).toEqual([
+      {
+        actions: [
+          {
+            amount: "0x14d1120d7b160000",
+            recipient: CANONICAL_RECIPIENT,
+            token: STRK20_TOKEN,
+            type: "deposit",
+          },
+        ],
+        plan: { mode: "account" },
+      },
+    ]);
+  });
+
+  // The side panel gates this too, but the message is untrusted: the note lands
+  // in a channel derived from the recipient's registered viewing key.
+  test("refuses a deposit crediting an unregistered third party", async () => {
+    const capture = {
+      recipientRegistered: { value: false },
+      registered: { value: true },
+      registrations: { value: 0 },
+      submissions: [],
+    };
+    const handler = buildStrk20Handler({
+      preferences: preferences(),
+      publicBalance: "2000000000000000000",
+      strk20: service(capture),
+    });
+
+    await expect(
+      handler(
+        {
+          amount: "1",
+          recipient: STRK20_RECIPIENT,
+          tokenId: token.id,
+          type: "wallet.strk20PrepareDeposit",
+        },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: "The recipient has not activated private balances" });
+    expect(capture.submissions).toEqual([]);
   });
 
   test("blocks shielding before registration and rejects malformed requests", async () => {
@@ -334,16 +436,38 @@ describe("background wallet STRK20 operations", () => {
 
     await expect(
       handler(
-        { amount: "1", tokenId: token.id, type: "wallet.strk20PrepareDeposit" },
+        {
+          amount: "1",
+          recipient: account.address,
+          tokenId: token.id,
+          type: "wallet.strk20PrepareDeposit",
+        },
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "Activate private balances before shielding an asset" });
     await expect(
       handler(
-        { amount: 1, tokenId: token.id, type: "wallet.strk20PrepareDeposit" },
+        {
+          amount: 1,
+          recipient: account.address,
+          tokenId: token.id,
+          type: "wallet.strk20PrepareDeposit",
+        },
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "Invalid shield request" });
+    // A recipient that is not a field element is refused rather than coerced.
+    await expect(
+      handler(
+        {
+          amount: "1",
+          recipient: "not-an-address",
+          tokenId: token.id,
+          type: "wallet.strk20PrepareDeposit",
+        },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: "Enter a valid Starknet address" });
     await expect(
       handler({ preparationId: "bad", type: "wallet.strk20Execute" }, STRK20_EXTENSION_SENDER),
     ).resolves.toEqual({ error: "Invalid privacy execution request" });

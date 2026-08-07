@@ -184,17 +184,10 @@ const recipientBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlo
   if (route.id === "private-private" && toSelf) {
     return refuse("Private sends to the sending account are not supported");
   }
-  // A v1 deposit credits the depositor and carries no recipient, so this route
-  // can only ever mean "shield into my own balance". Naming someone else has to
-  // be refused rather than quietly redirected: the funds would land in the
-  // sender's private balance while every screen said they were paying a friend.
-  if (route.id === "public-private" && !toSelf) {
-    return refuse(
-      "Shielding credits your own private balance; paying someone privately from a public balance is not supported yet",
-    );
-  }
   // Crediting your own private balance is covered by your own registration; a
-  // third party needs their own viewing key registered with the pool.
+  // third party needs their own viewing key registered with the pool, for a
+  // deposit exactly as for a private transfer — both write a note into the
+  // recipient's channel, which is derived from that key.
   if (input.destination !== "private" || toSelf) {
     return null;
   }
