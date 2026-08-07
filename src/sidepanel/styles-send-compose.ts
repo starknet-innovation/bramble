@@ -37,17 +37,15 @@ export const SEND_COMPOSE_STYLES = `
   /* Which account the value leaves. Same row layout as a recipient option so
      both ends of the send read alike, but it is static: the origin is the
      active account, changed by switching accounts rather than from here. */
-  .send-origin-context {
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.lg};
-    display: grid;
-    gap: ${SPACE.sm};
-    padding: ${SPACE.md};
-  }
+  .send-origin-context { display: grid; gap: ${SPACE.sm}; }
   .send-origin-account {
     align-items: center;
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
     display: flex;
     gap: ${SPACE.md};
+    min-height: ${SIZE.tile};
+    padding: ${SPACE.md};
   }
   .send-origin-context small,
   .send-asset-copy span,
@@ -74,9 +72,11 @@ export const SEND_COMPOSE_STYLES = `
   }
 
   .send-search { gap: ${SPACE.sm}; }
+  .send-section-title,
   .send-search > span:first-child:not(.sr-only) {
     color: var(--mc-text);
     font-size: ${TYPE.title.size};
+    margin: 0;
   }
   .send-search-control {
     align-items: center;
@@ -318,6 +318,15 @@ export const SEND_COMPOSE_STYLES = `
   }
   .send-context-receipt dt,
   .send-review-facts dt { color: var(--mc-muted); font-size: ${TYPE.label.size}; }
+  /* An account row in the receipt: identity on the left, and for the two
+     accounts, the balance that account's value moves through on the right. */
+  .send-context-receipt dd:has(.send-route-choice) {
+    align-items: center;
+    display: flex;
+    gap: ${SPACE.md};
+    justify-content: flex-end;
+  }
+  .send-context-account { display: grid; justify-items: end; }
   .send-context-receipt dd,
   .send-review-facts dd {
     display: grid;

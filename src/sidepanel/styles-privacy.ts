@@ -96,32 +96,11 @@ export const PRIVACY_STYLES = `
   }
   button.token-breakdown-more:not(:disabled):hover { background: transparent; }
   button.token-breakdown-more .icon { height: 14px; width: 14px; }
-  /* Source and destination buckets on the Send amount card: two segmented
-     pairs reading "From [Public|Private] > To [Public|Private]", which is the
-     whole grid in one row. A blocked route greys the row and spells the reason
-     out beneath it — a dead control whose only explanation was a title tooltip
-     read as broken rather than gated. */
-  .send-route-controls {
-    align-items: flex-end;
-    display: flex;
-    gap: ${SPACE.sm};
-    justify-self: start;
-  }
-  .send-route-controls > .icon {
-    color: var(--mc-muted);
-    height: 14px;
-    margin-bottom: ${SPACE.xs};
-    width: 14px;
-  }
-  .send-route-controls.muted { color: var(--mc-muted); }
-  .send-route-leg {
-    display: grid;
-    gap: ${SPACE.xs};
-  }
-  .send-route-legend {
-    color: var(--mc-muted);
-    font-size: ${TYPE.caption.size};
-  }
+  /* Which balance each end of a send uses, chosen on the account it belongs to
+     in the Accounts receipt. A blocked route greys the receipt and spells the
+     reason out beneath it — a dead control whose only explanation was a title
+     tooltip read as broken rather than gated. */
+  .send-context-receipt.muted { color: var(--mc-muted); }
   .send-route-choice {
     background: var(--mc-sunken);
     border-radius: ${RADIUS.full};
