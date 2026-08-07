@@ -69,13 +69,16 @@ export type SendRouteInput = {
 /**
  * A route and the properties every surface needs from it. `feeBucket` is always
  * the source bucket when a pool fee is charged — the pool pulls its STRK from
- * whoever spends — and `"none"` when no pool call is involved.
+ * whoever spends — and `"none"` when no pool call is involved. The two buckets
+ * are carried as data so copy can name them without parsing the id.
  */
 export type SendRoute = {
+  readonly destination: ValueBucket;
   readonly feeBucket: ValueBucket | "none";
   readonly id: SendRouteId;
   readonly poolFeeRequired: boolean;
   readonly reveals: readonly SendDisclosure[];
+  readonly source: ValueBucket;
   readonly submission: "account" | "relay";
 };
 
@@ -101,33 +104,41 @@ const ROUTES: Readonly<Record<SendRouteId, SendRoute>> = {
   // Spending private notes must never take the public account route: the pool
   // rejects it, and it would put the sender's address next to the spend.
   "private-private": {
+    destination: "private",
     feeBucket: "private",
     id: "private-private",
     poolFeeRequired: true,
     reveals: [],
+    source: "private",
     submission: "relay",
   },
   "private-public": {
+    destination: "public",
     feeBucket: "private",
     id: "private-public",
     poolFeeRequired: true,
     reveals: ["amount", "recipient"],
+    source: "private",
     submission: "relay",
   },
   // A deposit reveals who paid and how much; the note's owner stays hidden.
   "public-private": {
+    destination: "private",
     feeBucket: "public",
     id: "public-private",
     poolFeeRequired: true,
     reveals: ["amount", "sender"],
+    source: "public",
     submission: "account",
   },
   // A plain ERC-20 transfer: no pool call, so no pool fee.
   "public-public": {
+    destination: "public",
     feeBucket: "none",
     id: "public-public",
     poolFeeRequired: false,
     reveals: ["amount", "recipient", "sender"],
+    source: "public",
     submission: "account",
   },
 };

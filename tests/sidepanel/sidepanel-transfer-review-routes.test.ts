@@ -6,7 +6,11 @@ import { describe, expect, test } from "bun:test";
 import type { PrivacyPreparation } from "../../src/sidepanel/privacy-runtime";
 import type { SidepanelWallet } from "../../src/sidepanel/runtime";
 import type { TransferFields } from "../../src/sidepanel/transfer-model";
-import { routeDisclosureHtml, routeFeeHtml } from "../../src/sidepanel/transfer-review-routes";
+import {
+  routeDisclosureHtml,
+  routeFeeHtml,
+  routeReviewFeeHtml,
+} from "../../src/sidepanel/transfer-review-routes";
 import { preparationFor, type TransferReview } from "../../src/sidepanel/transfer-submit";
 import { routeFor } from "../../src/starknet/send-routes";
 
@@ -41,29 +45,47 @@ const relayed = (): PrivacyPreparation =>
   }) as PrivacyPreparation;
 
 describe("route disclosure", () => {
-  test("says a fully private transfer publishes nothing", () => {
-    expect(routeDisclosureHtml(routeFor("private", "private"))).toContain(
-      "Nothing about this transfer is published on Starknet.",
+  test("names the movement and what stays confidential on an unshield", () => {
+    expect(routeDisclosureHtml(routeFor("private", "public"))).toContain(
+      "You are sending from a private balance to a public balance. Sender address is confidential. Amount and recipient address are public.",
     );
   });
 
-  test("names what a deposit exposes and what it does not", () => {
-    const html = routeDisclosureHtml(routeFor("public", "private"));
-    expect(html).toContain("Published on Starknet: your address and the amount.");
-    // The credited note's owner stays inside the pool.
-    expect(html).toContain("Not published: the recipient.");
+  test("names the movement and what stays confidential on a shield", () => {
+    expect(routeDisclosureHtml(routeFor("public", "private"))).toContain(
+      "You are sending from a public balance to a private balance. Recipient address is confidential. Sender address and amount are public.",
+    );
   });
 
-  test("names what a withdrawal exposes and what it does not", () => {
-    const html = routeDisclosureHtml(routeFor("private", "public"));
-    expect(html).toContain("Published on Starknet: the recipient and the amount.");
-    expect(html).toContain("Not published: your address.");
+  test("reports a fully private transfer as exposing nothing", () => {
+    const html = routeDisclosureHtml(routeFor("private", "private"));
+    expect(html).toContain(
+      "You are sending from a private balance to a private balance. Sender address, amount and recipient address are confidential.",
+    );
+    // Nothing is public, so no public clause is invented.
+    expect(html).not.toContain("public.");
   });
 
-  test("stays silent on a plain public transfer", () => {
-    // Everything about it has always been public; annotating the common case
-    // would be noise rather than news.
-    expect(routeDisclosureHtml(routeFor("public", "public"))).toBe("");
+  test("says so plainly when a public transfer hides nothing", () => {
+    const html = routeDisclosureHtml(routeFor("public", "public"));
+    expect(html).toContain(
+      "You are sending from a public balance to a public balance. Sender address, amount and recipient address are public.",
+    );
+    expect(html).not.toContain("confidential");
+  });
+
+  test("renders in the fee line style, under the estimate", () => {
+    // Same style as "Estimated fee" so the cost and its consequences read as one
+    // block rather than as a warning bolted on.
+    expect(routeDisclosureHtml(routeFor("private", "public"))).toContain('class="review-fee"');
+  });
+
+  test("pairs the fee lines with the disclosure in that order", () => {
+    const html = routeReviewFeeHtml(routeFor("public", "public"), {
+      preparation: null,
+      review: review(),
+    });
+    expect(html.indexOf("Estimated fee:")).toBeLessThan(html.indexOf("You are sending from"));
   });
 });
 

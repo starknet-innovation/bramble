@@ -162,9 +162,14 @@ describe("bindTransfer", () => {
     expect(feeText(app)).toContain("Estimated fee");
     expect(app.querySelector(".send-review-disclosure #send-review-fee")).toBeNull();
     expect(reviewText(app)).not.toContain("Estimated fee");
-    expect(
-      app.querySelectorAll("#send-review-stage .review-fee, #send-review-stage .review-flag"),
-    ).toHaveLength(1);
+    const feeLines = [
+      ...app.querySelectorAll("#send-review-stage .review-fee, #send-review-stage .review-flag"),
+    ].map((node) => node.textContent ?? "");
+    expect(feeLines.filter((line) => line.includes("Estimated fee"))).toHaveLength(1);
+    // Beside it, in the same style, what this configuration exposes on chain.
+    expect(feeLines).toContainEqual(
+      "You are sending from a public balance to a public balance. Sender address, amount and recipient address are public.",
+    );
 
     submit(app);
     await flush();

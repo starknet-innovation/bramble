@@ -76,10 +76,10 @@ const mountForm = (recipient = RECIPIENT): HTMLFormElement => {
     <input name="tokenId" type="hidden" value="${TOKEN_ID}" />
     <input name="tokenSymbol" type="hidden" value="STRK" />
     <div id="send-route-controls">
-      <button data-send-bucket="source" data-send-bucket-value="public" type="button"></button>
-      <button data-send-bucket="source" data-send-bucket-value="private" type="button"></button>
-      <button data-send-bucket="destination" data-send-bucket-value="public" type="button"></button>
-      <button data-send-bucket="destination" data-send-bucket-value="private" type="button"></button>
+      <button data-send-bucket="source" data-send-bucket-value="public" type="button"><svg class="icon"></svg>Public</button>
+      <button data-send-bucket="source" data-send-bucket-value="private" type="button"><svg class="icon"></svg>Private</button>
+      <button data-send-bucket="destination" data-send-bucket-value="public" type="button"><svg class="icon"></svg>Public</button>
+      <button data-send-bucket="destination" data-send-bucket-value="private" type="button"><svg class="icon"></svg>Private</button>
     </div>
     <span id="send-route-reason" hidden></span>
     <span id="send-balance-label"></span>`;
@@ -165,6 +165,22 @@ describe("bucket controls", () => {
       .filter((button) => button.getAttribute("aria-pressed") === "true")
       .map((button) => `${button.dataset["sendBucket"]}:${button.dataset["sendBucketValue"]}`);
     expect(pressed).toEqual(["source:private", "destination:public"]);
+  });
+
+  test("keeps each option's glyph and label across a re-gate", () => {
+    // The pressed state is the only thing written back. Rewriting a button's text
+    // would strip the lock and globe glyphs that distinguish the two balances
+    // without relying on colour.
+    const form = mountForm();
+    bind(form);
+    pick(form, "source", "private");
+
+    for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
+      expect(button.querySelector("svg.icon")).not.toBeNull();
+      expect(button.textContent).toBe(
+        button.dataset["sendBucketValue"] === "private" ? "Private" : "Public",
+      );
+    }
   });
 
   test("spells a blocked route out beside the controls", () => {
