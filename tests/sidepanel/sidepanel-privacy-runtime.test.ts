@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { createPrivacyRuntimeClient } from "../../src/sidepanel/privacy-runtime";
 
 const digest = `sha256:${"a".repeat(64)}`;
+const RECIPIENT = "0xabc";
 const preparation = {
   amount: "1.25",
   id: digest,
@@ -66,14 +67,19 @@ describe("privacy runtime client", () => {
       balances: [{ balance: "0x2", symbol: "ETH" }],
       registration: "registered",
     });
-    await expect(client.preparePrivacyDeposit(preparation.tokenId, "1.25")).resolves.toEqual(
-      preparation,
-    );
+    await expect(
+      client.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
+    ).resolves.toEqual(preparation);
     await expect(client.preparePrivacyRegistration()).resolves.toEqual(registration);
     await expect(client.executePrivacyPreparation(digest)).resolves.toBe("0x789");
     expect(seen).toEqual([
       { type: "wallet.strk20State" },
-      { amount: "1.25", tokenId: preparation.tokenId, type: "wallet.strk20PrepareDeposit" },
+      {
+        amount: "1.25",
+        recipient: RECIPIENT,
+        tokenId: preparation.tokenId,
+        type: "wallet.strk20PrepareDeposit",
+      },
       { type: "wallet.strk20PrepareRegistration" },
       { preparationId: digest, type: "wallet.strk20Execute" },
     ]);
@@ -92,7 +98,7 @@ describe("privacy runtime client", () => {
     const client = createPrivacyRuntimeClient(async () => responses.shift());
 
     await expect(client.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
-    await expect(client.preparePrivacyDeposit(preparation.tokenId, "1")).rejects.toThrow(
+    await expect(client.preparePrivacyDeposit(preparation.tokenId, "1", RECIPIENT)).rejects.toThrow(
       "Shielding preparation failed",
     );
     await expect(client.preparePrivacyRegistration()).rejects.toThrow("registration refused");
@@ -148,7 +154,7 @@ describe("privacy runtime client", () => {
       ok: true,
       strk20Preparation: relayPreparation,
     }));
-    await expect(valid.preparePrivacyDeposit(preparation.tokenId, "1")).resolves.toEqual(
+    await expect(valid.preparePrivacyDeposit(preparation.tokenId, "1", RECIPIENT)).resolves.toEqual(
       relayPreparation,
     );
 
@@ -156,7 +162,7 @@ describe("privacy runtime client", () => {
       ok: true,
       strk20Preparation: { ...relayPreparation, executableProof: "hidden" },
     }));
-    await expect(extra.preparePrivacyDeposit(preparation.tokenId, "1")).rejects.toThrow(
+    await expect(extra.preparePrivacyDeposit(preparation.tokenId, "1", RECIPIENT)).rejects.toThrow(
       "Shielding preparation failed",
     );
   });

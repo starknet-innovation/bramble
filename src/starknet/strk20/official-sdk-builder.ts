@@ -44,9 +44,17 @@ const collectPolicy = (
 
 const addAction = (builder: SdkBuilder, action: Strk20Action, open: symbol): SdkBuilder => {
   if (action.type === "deposit") {
+    // Without a recipient the deposited value returns to the depositor as the
+    // batch's implicit surplus; with one, the SDK adds the note explicitly. The
+    // self case stays a bare deposit so it remains the exact batch the pool has
+    // always received for a shield.
     return builder
       .with(action.token)
-      .deposit({ amount: BigInt(action.amount) })
+      .deposit(
+        action.recipient === undefined
+          ? { amount: BigInt(action.amount) }
+          : { amount: BigInt(action.amount), recipient: action.recipient },
+      )
       .done();
   }
   if (action.type === "withdraw") {

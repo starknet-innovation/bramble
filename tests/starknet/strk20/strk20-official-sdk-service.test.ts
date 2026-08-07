@@ -144,6 +144,7 @@ describe("official STRK20 SDK adapter", () => {
     };
     const actions: readonly Strk20Action[] = [
       { amount: "0x2", token, type: "deposit" },
+      { amount: "0x6", recipient: "0x997", token, type: "deposit" },
       { amount: "0x3", recipient: "0x999", token, type: "withdraw" },
       { amount: "OPEN", recipient: "0x998", token, type: "transfer" },
       {
@@ -167,7 +168,10 @@ describe("official STRK20 SDK adapter", () => {
     });
 
     expect(seen).toEqual([
+      // A bare deposit passes no recipient key at all, so the SDK credits the
+      // depositor through the batch's implicit surplus; a named one is forwarded.
       ["deposit", token, [{ amount: 2n }]],
+      ["deposit", token, [{ amount: 6n, recipient: "0x997" }]],
       ["withdraw", token, [{ amount: 3n, recipient: "0x999" }]],
       ["transfer", token, [{ amount: open, recipient: "0x998" }]],
       [

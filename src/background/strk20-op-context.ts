@@ -39,6 +39,24 @@ const firstNetworkToken = (preferences: WalletPreferences, networkId: string): T
   preferences.tokens.find((token) => token.networkId === networkId) ?? null;
 
 /**
+ * Reads the active account's public balance of the context's token, in raw units.
+ *
+ * An unreadable balance is reported as zero, which fails closed: a deposit is
+ * refused rather than proposed against a balance that could not be confirmed.
+ */
+export const publicBalance = async (
+  deps: Strk20WalletOpsDeps,
+  context: ActivePrivacyContext,
+): Promise<bigint> => {
+  const [balance] = await deps.runtimeRpc.getTokenBalances({
+    accountAddress: context.accountContext.account.address,
+    rpcUrls: context.accountContext.rpcUrls,
+    tokens: [context.token],
+  });
+  return balance ? BigInt(balance.balance) : 0n;
+};
+
+/**
  * Builds the protected account context for one privacy operation, selecting
  * `tokenId` or the network's first tracked token. Returns a displayable error
  * instead of throwing so handlers stay single-shape.

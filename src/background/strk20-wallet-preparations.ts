@@ -31,6 +31,9 @@ export type Strk20RegistrationPreparation = BasePreparation & {
 
 /**
  * Frozen one-time deposit operation, including its reviewed submission route.
+ * `recipient` is whose private balance the deposit credits — the depositor for a
+ * shield, anyone registered with the pool otherwise — and is committed by the
+ * digest so the credited party cannot change between review and submission.
  */
 export type Strk20DepositPreparation = BasePreparation & {
   readonly actions: readonly Strk20Action[];
@@ -38,6 +41,7 @@ export type Strk20DepositPreparation = BasePreparation & {
   readonly amountRaw: string;
   readonly kind: "deposit";
   readonly plan: Strk20SubmissionPlan;
+  readonly recipient: string;
 };
 
 /**
@@ -123,7 +127,7 @@ export const strk20WalletPreparationPayload = (
         kind: preparation.kind,
         plan: preparation.plan,
         poolAddress: preparation.poolAddress,
-        ...(preparation.kind === "deposit" ? {} : { recipient: preparation.recipient }),
+        recipient: preparation.recipient,
         summaries: preparation.summaries,
         token: preparation.token,
       };
@@ -139,9 +143,7 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
   kind: preparation.kind,
   payloadDigest: preparation.context.payloadDigest,
   poolAddress: preparation.poolAddress,
-  ...(preparation.kind === "transfer" || preparation.kind === "withdraw"
-    ? { recipient: preparation.recipient }
-    : {}),
+  ...(preparation.kind === "register" ? {} : { recipient: preparation.recipient }),
   route:
     preparation.kind !== "register" && preparation.plan.mode !== "account"
       ? "private-relay"

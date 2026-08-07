@@ -45,6 +45,23 @@ describe("strk20 action schemas", () => {
     });
   });
 
+  test("carries an optional deposit recipient and rejects a malformed one", () => {
+    expect(readStrk20Action({ amount: "0x0a", recipient, token, type: "deposit" })).toEqual({
+      amount: "0x0a",
+      recipient,
+      token,
+      type: "deposit",
+    });
+    // Dropping a present-but-invalid recipient would credit the depositor while
+    // the caller expected a payment, so the whole action is refused instead.
+    expect(
+      readStrk20Action({ amount: "0x0a", recipient: "0x0", token, type: "deposit" }),
+    ).toBeNull();
+    expect(
+      readStrk20Action({ amount: "0x0a", recipient: "not-an-address", token, type: "deposit" }),
+    ).toBeNull();
+  });
+
   test("accepts a transfer with the literal OPEN amount", () => {
     expect(readStrk20Action({ amount: "OPEN", recipient, token, type: "transfer" })).toEqual({
       amount: "OPEN",

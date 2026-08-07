@@ -289,16 +289,18 @@ describe("spendableForRoute", () => {
   });
 });
 
-describe("shielding to someone else", () => {
-  // A v1 deposit credits the depositor and carries no recipient. Naming someone
-  // else once shielded to the sender while every screen reported a payment, so
-  // the route is refused rather than redirected.
-  test("refuses a public -> private send to anyone but the sender", () => {
-    expect(blockerFor({ destination: "private", recipient: RECIPIENT, source: "public" })).toEqual({
-      pending: false,
-      reason:
-        "Shielding credits your own private balance; paying someone privately from a public balance is not supported yet",
-    });
+describe("depositing into someone else's private balance", () => {
+  test("allows a public -> private send to a registered third party", () => {
+    expect(
+      resolveSendRoute(
+        ready({
+          destination: "private",
+          recipient: RECIPIENT,
+          recipientRegistration: "registered",
+          source: "public",
+        }),
+      ).route?.id,
+    ).toBe("public-private");
   });
 
   test("allows shielding into the sender's own balance", () => {
@@ -308,17 +310,43 @@ describe("shielding to someone else", () => {
     ).toBe("public-private");
   });
 
-  test("refuses before asking whether that recipient is registered", () => {
-    // The recipient's pool status is irrelevant on this route, so the reason
-    // names the real limitation instead of sending the user to register.
+  // The note lands in the recipient's channel, which is derived from their
+  // registered viewing key — the same requirement a private transfer has.
+  test("refuses an unregistered third party", () => {
     expect(
       blockerFor({
         destination: "private",
         recipient: RECIPIENT,
-        recipientRegistration: "registered",
+        recipientRegistration: "unregistered",
         source: "public",
-      }).reason,
-    ).toContain("Shielding credits your own private balance");
+      }),
+    ).toEqual({ pending: false, reason: "The recipient has not activated private balances" });
+  });
+
+  test("waits rather than refuses while the third party's status is unknown", () => {
+    expect(
+      blockerFor({
+        destination: "private",
+        recipient: RECIPIENT,
+        recipientRegistration: "unknown",
+        source: "public",
+      }),
+    ).toEqual({ pending: true, reason: "Checking the recipient's privacy registration…" });
+  });
+
+  // Shielding to yourself needs no recipient lookup: your own registration
+  // already covers the channel the surplus lands in.
+  test("does not gate a self-deposit on a recipient lookup", () => {
+    expect(
+      resolveSendRoute(
+        ready({
+          destination: "private",
+          recipient: SENDER,
+          recipientRegistration: "unregistered",
+          source: "public",
+        }),
+      ).route?.id,
+    ).toBe("public-private");
   });
 });
 

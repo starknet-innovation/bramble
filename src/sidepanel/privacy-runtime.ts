@@ -306,9 +306,14 @@ export const createPrivacyRuntimeClient = (
     }
     throw errorFrom(response, "Private balances unavailable");
   },
-  async preparePrivacyDeposit(tokenId: string, amount: string): Promise<PrivacyPreparation> {
+  async preparePrivacyDeposit(
+    tokenId: string,
+    amount: string,
+    recipient: string,
+  ): Promise<PrivacyPreparation> {
     const response = await sendMessage({
       amount,
+      recipient,
       tokenId,
       type: "wallet.strk20PrepareDeposit",
     });
