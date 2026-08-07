@@ -19,41 +19,37 @@ import { privateRelayFeeHtml } from "./transfer-review-markup";
 import type { TransferReview } from "./transfer-submit";
 
 const DISCLOSURE_LABELS: Readonly<Record<SendDisclosure, string>> = {
-  amount: "the amount",
-  recipient: "the recipient",
-  sender: "your address",
+  amount: "amount",
+  recipient: "recipient address",
+  sender: "sender address",
 };
 
-const ORDER: readonly SendDisclosure[] = ["sender", "recipient", "amount"];
+// Sender, amount, recipient: the order the sentences read most naturally in.
+const ORDER: readonly SendDisclosure[] = ["sender", "amount", "recipient"];
 
 const sentence = (parts: readonly string[]): string =>
   parts.length <= 1
     ? (parts[0] ?? "")
     : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 
+const clause = (items: readonly SendDisclosure[], predicate: string): string =>
+  items.length === 0
+    ? ""
+    : ` ${sentence(items.map((item) => DISCLOSURE_LABELS[item])).replace(/^./, (first) => first.toUpperCase())} ${items.length === 1 ? "is" : "are"} ${predicate}.`;
+
 /**
- * Describes what a route puts on chain, built from the route's own disclosure
- * list so the copy cannot drift from the table.
+ * States what the composed route does with the value and what it exposes, built
+ * from the route's own buckets and disclosure list so the copy cannot drift from
+ * the table.
  *
- * Rendered only for routes that call the pool: a plain public transfer publishes
- * everything and always has, so annotating it would add noise to the common case
- * rather than tell anyone something new.
+ * Every route gets a line, including a plain public transfer: "nothing is
+ * private here" is worth saying once the wallet can also do otherwise.
  */
 export const routeDisclosureHtml = (route: SendRoute): string => {
-  if (route.id === "public-public") {
-    return "";
-  }
-  const shown = ORDER.filter((item) => route.reveals.includes(item));
-  if (shown.length === 0) {
-    return '<p class="send-review-note">Nothing about this transfer is published on Starknet.</p>';
-  }
   const hidden = ORDER.filter((item) => !route.reveals.includes(item));
-  const published = `Published on Starknet: ${sentence(shown.map((item) => DISCLOSURE_LABELS[item]))}.`;
-  const withheld =
-    hidden.length === 0
-      ? ""
-      : ` Not published: ${sentence(hidden.map((item) => DISCLOSURE_LABELS[item]))}.`;
-  return `<p class="send-review-note">${escapeHtml(`${published}${withheld}`)}</p>`;
+  const shown = ORDER.filter((item) => route.reveals.includes(item));
+  const movement = `You are sending from a ${route.source} balance to a ${route.destination} balance.`;
+  return `<p class="review-fee">${escapeHtml(`${movement}${clause(hidden, "confidential")}${clause(shown, "public")}`)}</p>`;
 };
 
 /**
@@ -84,3 +80,17 @@ export const routeFeeHtml = (
     `${formatFri(state.poolFeeFri)} is deducted from your public balance to cover pool fees`,
   )}</p>`;
 };
+
+/**
+ * The fee lines followed by the disclosure, which is what the review screen
+ * shows: the cost of the move and its consequences read as one block, directly
+ * under the estimate rather than folded away in transaction details.
+ */
+export const routeReviewFeeHtml = (
+  route: SendRoute,
+  state: {
+    readonly poolFeeFri?: string;
+    readonly preparation: PrivacyPreparation | null;
+    readonly review: TransferReview | null;
+  },
+): string => `${routeFeeHtml(route, state)}${routeDisclosureHtml(route)}`;

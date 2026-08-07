@@ -12,7 +12,7 @@ import type { TransferFields, TransferStage, TransferState } from "./transfer-mo
 import { transferStageTitle } from "./transfer-model";
 import { setSendProgress, setTaskStatus, setText, workingStatus } from "./transfer-progress-ui";
 import { reviewDetailsHtml, reviewSummaryHtml } from "./transfer-review-markup";
-import { routeDisclosureHtml, routeFeeHtml } from "./transfer-review-routes";
+import { routeReviewFeeHtml } from "./transfer-review-routes";
 import { transferRoute } from "./transfer-route";
 import type { TransferReview } from "./transfer-submit";
 
@@ -92,15 +92,13 @@ export const applyTransferUi = (
   const route = state.fields ? transferRoute(state.fields) : null;
   const reviewPanel = form.querySelector<HTMLElement>("#review-panel");
   if (reviewPanel) {
-    // The disclosure leads: what a route publishes matters more than its decoded
-    // calls, and it is the one thing the four routes genuinely differ on.
-    reviewPanel.innerHTML = state.review
-      ? `${route ? routeDisclosureHtml(route) : ""}${reviewDetailsHtml(state.review)}`
-      : "";
+    reviewPanel.innerHTML = state.review ? reviewDetailsHtml(state.review) : "";
   }
   const reviewFee = form.querySelector<HTMLElement>("#send-review-fee");
   if (reviewFee && route) {
-    reviewFee.innerHTML = routeFeeHtml(route, {
+    // Fee lines and the disclosure together, directly under the estimate: what
+    // the move costs and what it exposes are one decision.
+    reviewFee.innerHTML = routeReviewFeeHtml(route, {
       ...(poolFeeFri === undefined ? {} : { poolFeeFri }),
       preparation: state.privatePreparation,
       review: state.review,

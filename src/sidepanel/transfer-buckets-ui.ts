@@ -29,11 +29,6 @@ export type TransferBucketsDeps = {
   readonly route: () => SendRouteResolution;
 };
 
-const LABELS: Readonly<Record<ValueBucket, string>> = {
-  private: "Private",
-  public: "Public",
-};
-
 const setBucket = (form: HTMLFormElement, name: "destination" | "source", value: ValueBucket) => {
   const field = sendFormInput(form, name);
   if (field) {
@@ -75,8 +70,10 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
     for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
       const name = button.dataset["sendBucket"] === "destination" ? "destination" : "source";
       const value = button.dataset["sendBucketValue"] === "private" ? "private" : "public";
+      // Only the pressed state is written here. The label and its glyph come from
+      // the template: rewriting textContent would strip the lock icon that makes
+      // the private option legible without relying on colour alone.
       button.setAttribute("aria-pressed", String(readBucket(form, name) === value));
-      button.textContent = LABELS[value];
     }
     container?.classList.toggle("muted", view.blocked !== undefined);
     container?.setAttribute("title", view.blocked?.reason ?? "Choose where the value moves");

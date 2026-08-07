@@ -212,8 +212,8 @@ const amountStage = (
             <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
           </span>
           <span class="send-route-choice" role="group" aria-label="Balance to send from">
-            <button data-send-bucket="source" data-send-bucket-value="public" type="button" aria-pressed="true">Public</button>
-            <button data-send-bucket="source" data-send-bucket-value="private" type="button" aria-pressed="false">Private</button>
+            <button data-send-bucket="source" data-send-bucket-value="public" type="button" aria-pressed="true">${icon("globe")}Public</button>
+            <button data-send-bucket="source" data-send-bucket-value="private" type="button" aria-pressed="false">${icon("lock")}Private</button>
           </span>
         </dd>
       </div>
@@ -225,8 +225,8 @@ const amountStage = (
             <code id="send-recipient-label">—</code>
           </span>
           <span class="send-route-choice" role="group" aria-label="Balance to send into">
-            <button data-send-bucket="destination" data-send-bucket-value="public" type="button" aria-pressed="true">Public</button>
-            <button data-send-bucket="destination" data-send-bucket-value="private" type="button" aria-pressed="false">Private</button>
+            <button data-send-bucket="destination" data-send-bucket-value="public" type="button" aria-pressed="true">${icon("globe")}Public</button>
+            <button data-send-bucket="destination" data-send-bucket-value="private" type="button" aria-pressed="false">${icon("lock")}Private</button>
           </span>
         </dd>
       </div>

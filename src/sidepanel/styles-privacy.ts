@@ -2,7 +2,7 @@
  * Private-balance disclosure, activation, and shielding journey styles.
  */
 
-import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens";
+import { CONTROL, MOTION, RADIUS, SHADOW, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens";
 
 /**
  * Privacy styles inherit every color from the active skin.
@@ -108,17 +108,33 @@ export const PRIVACY_STYLES = `
     padding: 2px;
   }
   .send-route-choice button {
+    align-items: center;
     background: transparent;
     border-radius: ${RADIUS.full};
     color: var(--mc-muted);
+    display: inline-flex;
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};
+    gap: ${SPACE.xs};
     min-height: ${CONTROL.hitSmall};
     padding: 0 ${SPACE.sm};
   }
+  .send-route-choice .icon { height: 12px; width: 12px; }
+  /* The selected side is filled, and the two sides are filled differently: an
+     account spending or receiving privately is the consequential state, so it
+     takes the accent, while public is the unremarkable default. The lock and
+     globe glyphs carry the same distinction without depending on colour. */
   .send-route-choice button[aria-pressed="true"] {
     background: var(--mc-panel);
+    box-shadow: ${SHADOW.xs};
     color: var(--mc-text);
+  }
+  /* Unselected private stays accent-tinted so the option is visibly available
+     rather than looking like disabled text. */
+  .send-route-choice button[data-send-bucket-value="private"] { color: var(--mc-accent); }
+  .send-route-choice button[data-send-bucket-value="private"][aria-pressed="true"] {
+    background: var(--mc-accent);
+    color: var(--mc-accent-text);
   }
   .send-route-reason {
     color: var(--mc-muted);
