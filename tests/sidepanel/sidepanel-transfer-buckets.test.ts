@@ -76,10 +76,8 @@ const mountForm = (recipient = RECIPIENT): HTMLFormElement => {
     <input name="tokenId" type="hidden" value="${TOKEN_ID}" />
     <input name="tokenSymbol" type="hidden" value="STRK" />
     <div id="send-route-controls">
-      <button data-send-bucket="source" data-send-bucket-value="public" type="button"><svg class="icon"></svg>Public</button>
-      <button data-send-bucket="source" data-send-bucket-value="private" type="button"><svg class="icon"></svg>Private</button>
-      <button data-send-bucket="destination" data-send-bucket-value="public" type="button"><svg class="icon"></svg>Public</button>
-      <button data-send-bucket="destination" data-send-bucket-value="private" type="button"><svg class="icon"></svg>Private</button>
+      <button class="send-route-toggle" data-send-bucket="source" data-bucket="public" type="button">Public</button>
+      <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button">Public</button>
     </div>
     <span id="send-route-reason" hidden></span>
     <span id="send-balance-label"></span>`;
@@ -112,12 +110,13 @@ const bind = (form: HTMLFormElement, privacy = registered()): { changes: number 
   return counter;
 };
 
+// Each leg is one toggle, so selecting a bucket means pressing until it reads
+// that bucket rather than picking from a pair.
 const pick = (form: HTMLFormElement, leg: "destination" | "source", value: string): void => {
-  form
-    .querySelector<HTMLButtonElement>(
-      `[data-send-bucket="${leg}"][data-send-bucket-value="${value}"]`,
-    )
-    ?.click();
+  const button = form.querySelector<HTMLButtonElement>(`[data-send-bucket="${leg}"]`);
+  if (button && button.dataset["bucket"] !== value) {
+    button.click();
+  }
 };
 
 describe("bucket controls", () => {
@@ -156,31 +155,36 @@ describe("bucket controls", () => {
     );
   });
 
-  test("reflects the active bucket on the controls themselves", () => {
+  test("names the balance in use on the toggle itself", () => {
     const form = mountForm();
     bind(form);
     pick(form, "source", "private");
 
-    const pressed = [...form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")]
-      .filter((button) => button.getAttribute("aria-pressed") === "true")
-      .map((button) => `${button.dataset["sendBucket"]}:${button.dataset["sendBucketValue"]}`);
-    expect(pressed).toEqual(["source:private", "destination:public"]);
+    const state = [...form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")].map(
+      (button) =>
+        `${button.dataset["sendBucket"]}:${button.textContent}:${button.dataset["bucket"]}`,
+    );
+    expect(state).toEqual(["source:Private:private", "destination:Public:public"]);
   });
 
-  test("keeps each option's glyph and label across a re-gate", () => {
-    // The pressed state is the only thing written back. Rewriting a button's text
-    // would strip the lock and globe glyphs that distinguish the two balances
-    // without relying on colour.
+  test("toggles back to public on a second press", () => {
     const form = mountForm();
     bind(form);
-    pick(form, "source", "private");
+    const button = form.querySelector<HTMLButtonElement>('[data-send-bucket="source"]');
+    button?.click();
+    expect(transferFields(form).source).toBe("private");
+    button?.click();
+    expect(transferFields(form).source).toBe("public");
+    expect(button?.textContent).toBe("Public");
+  });
 
-    for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
-      expect(button.querySelector("svg.icon")).not.toBeNull();
-      expect(button.textContent).toBe(
-        button.dataset["sendBucketValue"] === "private" ? "Private" : "Public",
-      );
-    }
+  test("says what pressing it will do, since it cannot show both states", () => {
+    const form = mountForm();
+    bind(form);
+    const button = form.querySelector<HTMLButtonElement>('[data-send-bucket="source"]');
+    expect(button?.title).toBe("Switch to the private balance");
+    button?.click();
+    expect(button?.title).toBe("Switch to the public balance");
   });
 
   test("spells a blocked route out beside the controls", () => {

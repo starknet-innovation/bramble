@@ -29,6 +29,21 @@ export type TransferBucketsDeps = {
   readonly route: () => SendRouteResolution;
 };
 
+const LABELS: Readonly<Record<ValueBucket, string>> = {
+  private: "Private",
+  public: "Public",
+};
+
+// The button states which balance is in use; its title states what pressing it
+// does, since a self-labelling toggle cannot show both at once.
+const HINTS: Readonly<Record<ValueBucket, string>> = {
+  private: "Switch to the public balance",
+  public: "Switch to the private balance",
+};
+
+const legOf = (button: HTMLButtonElement): "destination" | "source" =>
+  button.dataset["sendBucket"] === "destination" ? "destination" : "source";
+
 const setBucket = (form: HTMLFormElement, name: "destination" | "source", value: ValueBucket) => {
   const field = sendFormInput(form, name);
   if (field) {
@@ -68,12 +83,10 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
   const applyGate = (): void => {
     const view = deps.route();
     for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
-      const name = button.dataset["sendBucket"] === "destination" ? "destination" : "source";
-      const value = button.dataset["sendBucketValue"] === "private" ? "private" : "public";
-      // Only the pressed state is written here. The label and its glyph come from
-      // the template: rewriting textContent would strip the lock icon that makes
-      // the private option legible without relying on colour alone.
-      button.setAttribute("aria-pressed", String(readBucket(form, name) === value));
+      const bucket = readBucket(form, legOf(button));
+      button.textContent = LABELS[bucket];
+      button.dataset["bucket"] = bucket;
+      button.title = HINTS[bucket];
     }
     container?.classList.toggle("muted", view.blocked !== undefined);
     container?.setAttribute("title", view.blocked?.reason ?? "Choose where the value moves");
@@ -85,11 +98,8 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
     }
   };
 
-  const choose = (name: "destination" | "source", value: ValueBucket): void => {
-    if (readBucket(form, name) === value) {
-      return;
-    }
-    setBucket(form, name, value);
+  const flip = (name: "destination" | "source"): void => {
+    setBucket(form, name, readBucket(form, name) === "private" ? "public" : "private");
     showBalance();
     deps.onRouteChange();
     applyGate();
@@ -98,8 +108,7 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
   for (const button of form.querySelectorAll<HTMLButtonElement>("[data-send-bucket]")) {
     button.addEventListener("click", (event) => {
       event.preventDefault();
-      const name = button.dataset["sendBucket"] === "destination" ? "destination" : "source";
-      choose(name, button.dataset["sendBucketValue"] === "private" ? "private" : "public");
+      flip(legOf(button));
     });
   }
 

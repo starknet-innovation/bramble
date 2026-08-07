@@ -2,7 +2,7 @@
  * Private-balance disclosure, activation, and shielding journey styles.
  */
 
-import { CONTROL, MOTION, RADIUS, SHADOW, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens";
+import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens";
 
 /**
  * Privacy styles inherit every color from the active skin.
@@ -101,40 +101,29 @@ export const PRIVACY_STYLES = `
      reason out beneath it — a dead control whose only explanation was a title
      tooltip read as broken rather than gated. */
   .send-context-receipt.muted { color: var(--mc-muted); }
-  .send-route-choice {
+  /* One self-labelling toggle per account: it names the balance in use rather
+     than offering both. The private state inverts to the skin's foreground as a
+     fill, which is the brightest surface a dark skin has and the darkest a light
+     one has — no single token is the same shade in both, so the inversion is what
+     travels. */
+  button.send-route-toggle {
     background: var(--mc-sunken);
     border-radius: ${RADIUS.full};
-    display: inline-flex;
-    padding: 2px;
-  }
-  .send-route-choice button {
-    align-items: center;
-    background: transparent;
-    border-radius: ${RADIUS.full};
     color: var(--mc-muted);
-    display: inline-flex;
     font-size: ${TYPE.caption.size};
     font-weight: ${WEIGHT.medium};
-    gap: ${SPACE.xs};
     min-height: ${CONTROL.hitSmall};
-    padding: 0 ${SPACE.sm};
+    min-width: 72px;
+    padding: 0 ${SPACE.md};
   }
-  .send-route-choice .icon { height: 12px; width: 12px; }
-  /* The selected side is filled, and the two sides are filled differently: an
-     account spending or receiving privately is the consequential state, so it
-     takes the accent, while public is the unremarkable default. The lock and
-     globe glyphs carry the same distinction without depending on colour. */
-  .send-route-choice button[aria-pressed="true"] {
-    background: var(--mc-panel);
-    box-shadow: ${SHADOW.xs};
-    color: var(--mc-text);
+  button.send-route-toggle[data-bucket="private"] {
+    background: var(--mc-text);
+    color: var(--mc-bg);
   }
-  /* Unselected private stays accent-tinted so the option is visibly available
-     rather than looking like disabled text. */
-  .send-route-choice button[data-send-bucket-value="private"] { color: var(--mc-accent); }
-  .send-route-choice button[data-send-bucket-value="private"][aria-pressed="true"] {
-    background: var(--mc-accent);
-    color: var(--mc-accent-text);
+  button.send-route-toggle:not(:disabled):hover { background: var(--mc-hover); }
+  button.send-route-toggle[data-bucket="private"]:not(:disabled):hover {
+    background: var(--mc-text);
+    opacity: 0.9;
   }
   .send-route-reason {
     color: var(--mc-muted);
