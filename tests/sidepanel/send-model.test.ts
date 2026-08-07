@@ -65,8 +65,16 @@ describe("Send view model", () => {
     expect(tokenInputFiat("0.025", 4_000)).toBe(100);
   });
 
-  test("excludes the active account from recipient account choices", () => {
+  test("offers the sending account as a recipient, for shielding into its own balance", () => {
+    // Sending to yourself is how value moves from a public balance into the same
+    // account's private one, so the origin has to be selectable. The view marks
+    // it; the model does not hide it.
     const second = { ...account, id: `${account.id}:second`, publicKeyX: "0x999" };
-    expect(sendRecipientAccounts([account, second], "SN_MAIN", account.id)).toEqual([second]);
+    expect(sendRecipientAccounts([account, second], "SN_MAIN")).toEqual([account, second]);
+  });
+
+  test("still keeps recipients to the active network", () => {
+    const elsewhere = { ...account, id: `${account.id}:sepolia`, networkId: "SN_SEPOLIA" } as const;
+    expect(sendRecipientAccounts([account, elsewhere], "SN_MAIN")).toEqual([account]);
   });
 });

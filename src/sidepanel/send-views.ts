@@ -62,6 +62,7 @@ const sendProgress = (): string => `
 const recipientAccountRow = (
   account: AccountRef,
   preferences: WalletPreferences | null,
+  isSender = false,
 ): string => `
   <button class="send-recipient-row" type="button"
     data-send-recipient="${escapeHtml(account.address)}"
@@ -71,6 +72,7 @@ const recipientAccountRow = (
     <span class="send-recipient-copy">
       <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
       <code>${escapeHtml(accountLabel(account.address))}</code>
+      ${isSender ? "<small>Current account · shield into its private balance</small>" : ""}
     </span>
     ${icon("chevronRight")}
   </button>`;
@@ -111,13 +113,13 @@ const recipientStage = (
   preferences: WalletPreferences | null,
   multisigs: readonly MultisigRecord[],
 ): string => {
-  const accounts = sendRecipientAccounts(status.accounts, status.networkId, account?.id ?? null);
+  const accounts = sendRecipientAccounts(status.accounts, status.networkId);
   const sharedAccounts = multisigs.filter((record) => record.networkId === status.networkId);
   const contacts =
     preferences?.addressBook.filter((entry) => entry.networkId === status.networkId) ?? [];
   return `<section class="send-stage send-recipient-stage" id="send-recipient-stage">
     <div class="send-origin-context">
-      <small>Sending from</small>
+      <p class="send-section-title">Sending from</p>
       <div class="send-origin-account">
         <span class="send-recipient-avatar">${accountAvatar(account?.address ?? "")}</span>
         <span class="send-recipient-copy">
@@ -146,8 +148,9 @@ const recipientStage = (
       <div class="send-list-heading">${icon("wallet")}<strong>My accounts</strong></div>
       ${
         accounts.length > 0 || sharedAccounts.length > 0
-          ? accounts.map((stored) => recipientAccountRow(stored, preferences)).join("") +
-            sharedAccounts.map(multisigRecipientRow).join("")
+          ? accounts
+              .map((stored) => recipientAccountRow(stored, preferences, stored.id === account?.id))
+              .join("") + sharedAccounts.map(multisigRecipientRow).join("")
           : emptyState("No other accounts are available on this network.")
       }
     </div>
@@ -199,39 +202,44 @@ const amountStage = (
   preferences: WalletPreferences | null,
 ): string => `
   <section class="send-stage send-amount-stage" id="send-details" hidden>
-    <dl class="send-context-receipt">
-      <div><dt>From</dt><dd><strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong></dd></div>
+    <p class="send-section-title">Accounts</p>
+    <dl class="send-context-receipt" id="send-route-controls" title="Choose where the value moves">
+      <div>
+        <dt>From</dt>
+        <dd>
+          <span class="send-context-account">
+            <strong>${escapeHtml(account ? accountDisplayName(account, preferences) : "No account")}</strong>
+            <code>${escapeHtml(account ? accountLabel(account.address) : "—")}</code>
+          </span>
+          <span class="send-route-choice" role="group" aria-label="Balance to send from">
+            <button data-send-bucket="source" data-send-bucket-value="public" type="button" aria-pressed="true">Public</button>
+            <button data-send-bucket="source" data-send-bucket-value="private" type="button" aria-pressed="false">Private</button>
+          </span>
+        </dd>
+      </div>
       <div>
         <dt>To</dt>
-        <dd><strong id="send-recipient-name">Not selected</strong><code id="send-recipient-label">—</code></dd>
+        <dd>
+          <span class="send-context-account">
+            <strong id="send-recipient-name">Not selected</strong>
+            <code id="send-recipient-label">—</code>
+          </span>
+          <span class="send-route-choice" role="group" aria-label="Balance to send into">
+            <button data-send-bucket="destination" data-send-bucket-value="public" type="button" aria-pressed="true">Public</button>
+            <button data-send-bucket="destination" data-send-bucket-value="private" type="button" aria-pressed="false">Private</button>
+          </span>
+        </dd>
       </div>
       <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(status.network)}</strong></dd></div>
     </dl>
-    <p class="send-stage-kicker">Asset</p>
+    <span class="send-route-reason" id="send-route-reason" hidden></span>
+    <p class="send-section-title">Asset</p>
     <div class="send-amount-card">
       <button class="send-token-trigger" id="send-token-trigger" type="button" ${asset ? "" : "disabled"}>
         <span id="send-selected-token-glyph">${asset ? tokenGlyph(asset.address, asset.symbol) : icon("coins")}</span>
         <strong id="send-selected-token-symbol">${escapeHtml(asset?.symbol ?? "Select")}</strong>
         ${icon("chevronDown")}
       </button>
-      <div class="send-route-controls" id="send-route-controls" title="Choose where the value moves">
-        <span class="send-route-leg">
-          <span class="send-route-legend">From</span>
-          <span class="send-route-choice" role="group" aria-label="Balance to send from">
-            <button data-send-bucket="source" data-send-bucket-value="public" type="button" aria-pressed="true">Public</button>
-            <button data-send-bucket="source" data-send-bucket-value="private" type="button" aria-pressed="false">Private</button>
-          </span>
-        </span>
-        ${icon("chevronRight")}
-        <span class="send-route-leg">
-          <span class="send-route-legend">To</span>
-          <span class="send-route-choice" role="group" aria-label="Balance to send into">
-            <button data-send-bucket="destination" data-send-bucket-value="public" type="button" aria-pressed="true">Public</button>
-            <button data-send-bucket="destination" data-send-bucket-value="private" type="button" aria-pressed="false">Private</button>
-          </span>
-        </span>
-      </div>
-      <span class="send-route-reason" id="send-route-reason" hidden></span>
       <label class="send-amount-field">
         <span class="sr-only">Amount to send</span>
         <span class="send-amount-prefix" id="send-amount-prefix" hidden></span>

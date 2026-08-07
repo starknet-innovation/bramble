@@ -55,14 +55,17 @@ export const sendAssets = (
     .sort((left, right) => Number(left.spam) - Number(right.spam) || compareStrkFirst(left, right));
 
 /**
- * Returns accounts on the active network except the account sending funds.
+ * Returns every account on the active network, the sending account included.
+ *
+ * The origin is a legitimate recipient rather than a mistake: shielding moves
+ * value from an account's public balance into its own private one, so the
+ * account has to be selectable. Callers mark it so it never reads as a
+ * different account.
  */
 export const sendRecipientAccounts = (
   accounts: readonly AccountRef[],
   networkId: string,
-  activeAccountId: string | null,
-): readonly AccountRef[] =>
-  accounts.filter((account) => account.networkId === networkId && account.id !== activeAccountId);
+): readonly AccountRef[] => accounts.filter((account) => account.networkId === networkId);
 
 const finitePositive = (value: string): number | null => {
   const parsed = Number(value);
