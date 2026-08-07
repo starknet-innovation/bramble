@@ -38,16 +38,17 @@ export const SEND_COMPOSE_STYLES = `
      both ends of the send read alike, but it is static: the origin is the
      active account, changed by switching accounts rather than from here. */
   .send-origin-context { display: grid; gap: ${SPACE.sm}; }
+  /* Matches the "Sending to" control it sits above: same surface, same height,
+     and the copy block supplies its own offset, so the avatar sits exactly where
+     it does in the recipient rows below. */
   .send-origin-account {
     align-items: center;
-    background: var(--mc-panel);
+    background: var(--mc-elevated);
     border-radius: ${RADIUS.lg};
     display: flex;
-    gap: ${SPACE.md};
-    min-height: ${SIZE.tile};
-    padding: ${SPACE.md};
+    min-height: ${SIZE.control};
+    padding-left: ${SPACE.md};
   }
-  .send-origin-context small,
   .send-asset-copy span,
   .send-recipient-copy code,
   .send-asset-value span {
