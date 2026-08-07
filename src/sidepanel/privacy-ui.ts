@@ -8,8 +8,6 @@ import type { WalletPreferences } from "../storage/preferences-store";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { accountDisplayName } from "./parts";
 import { bindDeployAndRegister } from "./privacy-activation-ui";
-import { bindComposeCard } from "./privacy-compose-ui";
-import { bindWithdrawDestination, withdrawRecipientFor } from "./privacy-destination-ui";
 import {
   emptyPrivacyDisclosure,
   type PrivacyDisclosureState,
@@ -128,15 +126,17 @@ const startJourney = async (
       buttonBusy(button, false);
       return;
     }
-    if (state.registration === "unregistered") {
-      const preparation = await deps.wallet.preparePrivacyRegistration();
-      if (!scopeMatches(deps, scope)) {
-        return;
-      }
-      deps.setJourney({ preparation, stage: "activate-review", tokenId });
-    } else {
-      deps.setJourney({ stage: "compose", tokenId });
+    if (state.registration !== "unregistered") {
+      // Nothing to do: an activated account shields and unshields from Send, and
+      // no surface offers this entry once registration has settled.
+      buttonBusy(button, false);
+      return;
     }
+    const preparation = await deps.wallet.preparePrivacyRegistration();
+    if (!scopeMatches(deps, scope)) {
+      return;
+    }
+    deps.setJourney({ preparation, stage: "activate-review", tokenId });
     deps.navigate("privacy");
   } catch (error) {
     showToast(errorMessage(error, "Private journey unavailable"), "error");
@@ -247,122 +247,18 @@ const bindShieldShortcuts = (deps: PrivacyUiDeps): void => {
   }
 };
 
-const bindReviewAmount = (
-  deps: PrivacyUiDeps,
-  journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" | "deposit-review" }>,
-): void => {
-  const input = deps.app?.querySelector<HTMLInputElement>("#privacy-review-amount");
-  const confirm = deps.app?.querySelector<HTMLButtonElement>("#privacy-confirm");
-  const result = deps.app?.querySelector<HTMLElement>("#privacy-review-result");
-  if (!input || !confirm) {
-    return;
-  }
-  input.addEventListener("change", () => {
-    const amount = input.value.trim();
-    if (amount === (journey.preparation.amount ?? "")) {
-      return;
-    }
-    const scope = captureScope(deps);
-    confirm.disabled = true;
-    if (result) {
-      result.textContent = "Re-checking this amount…";
-    }
-    const reprepared =
-      journey.preparation.kind === "withdraw" && journey.preparation.recipient
-        ? deps.wallet.preparePrivacyWithdraw(journey.tokenId, journey.preparation.recipient, amount)
-        : deps.wallet.preparePrivacyDeposit(journey.tokenId, amount);
-    void reprepared.then(
-      (preparation) => {
-        if (!scopeMatches(deps, scope)) {
-          return;
-        }
-        deps.setJourney({ preparation, stage: "deposit-review", tokenId: journey.tokenId });
-        deps.paint();
-      },
-      (error: unknown) => {
-        if (!scopeMatches(deps, scope)) {
-          return;
-        }
-        const message = errorMessage(error, "Shielding preparation failed");
-        if (result) {
-          result.textContent = message;
-        }
-        showToast(message, "error");
-      },
-    );
-  });
-};
-
-const bindCompose = (deps: PrivacyUiDeps, tokenId: string): void => {
-  bindComposeCard(deps);
-  bindWithdrawDestination(deps);
-  const form = deps.app?.querySelector<HTMLFormElement>("#privacy-deposit-form");
-  const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  const result = deps.app?.querySelector<HTMLElement>("#privacy-compose-result");
-  form?.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    const amount = String(data.get("amount") ?? "").trim();
-    const unshielding = form.dataset["direction"] === "unshield";
-    const recipient = withdrawRecipientFor(deps, String(data.get("withdrawRecipient") ?? ""));
-    // An unshield without a destination must fail, never silently fall through
-    // to a deposit: that would move public value in when the user asked to move
-    // shielded value out.
-    if (unshielding && !recipient) {
-      const message = "Enter a Starknet address to unshield into";
-      if (result) {
-        result.textContent = message;
-      }
-      showToast(message, "error");
-      return;
-    }
-    const scope = captureScope(deps);
-    buttonBusy(submit, true);
-    const prepared =
-      unshielding && recipient
-        ? deps.wallet.preparePrivacyWithdraw(tokenId, recipient, amount)
-        : deps.wallet.preparePrivacyDeposit(tokenId, amount);
-    void prepared.then(
-      (preparation) => {
-        if (!scopeMatches(deps, scope)) {
-          return;
-        }
-        deps.setJourney({ preparation, stage: "deposit-review", tokenId });
-        deps.paint();
-      },
-      (error: unknown) => {
-        if (!scopeMatches(deps, scope)) {
-          return;
-        }
-        const message = errorMessage(
-          error,
-          unshielding ? "Unshielding preparation failed" : "Shielding preparation failed",
-        );
-        if (result) {
-          result.textContent = message;
-        }
-        showToast(message, "error");
-        buttonBusy(submit, false);
-      },
-    );
-  });
-};
-
 const bindConfirmation = (
   deps: PrivacyUiDeps,
-  journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" | "deposit-review" }>,
+  journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>,
 ): void => {
-  if (journey.stage === "deposit-review") {
-    bindReviewAmount(deps, journey);
-  }
   const button = deps.app?.querySelector<HTMLButtonElement>("#privacy-confirm");
   button?.addEventListener("click", () => {
-    // Private sends run inside the Send flow, never this journey surface;
-    // registration, shielding, and unshielding all confirm here.
-    const kind = journey.preparation.kind;
-    if (kind === "transfer") {
+    // Registration is the only operation left on this surface: every movement of
+    // value — shield, unshield, private send — runs through the Send flow.
+    if (journey.preparation.kind !== "register") {
       return;
     }
+    const kind = "register" as const;
     const scope = captureScope(deps);
     deps.setJourney({
       kind,
@@ -428,9 +324,7 @@ const bindOutcome = (deps: PrivacyUiDeps, journey: PrivacyJourneyState): void =>
 export const bindPrivacy = (deps: PrivacyUiDeps): void => {
   bindDisclosure(deps);
   const journey = deps.journey();
-  if (journey.stage === "compose") {
-    bindCompose(deps, journey.tokenId);
-  } else if (journey.stage === "activate-review" || journey.stage === "deposit-review") {
+  if (journey.stage === "activate-review") {
     bindConfirmation(deps, journey);
   } else {
     bindOutcome(deps, journey);
