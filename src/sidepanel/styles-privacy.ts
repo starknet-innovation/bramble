@@ -85,6 +85,13 @@ export const PRIVACY_STYLES = `
     width: 100%;
   }
   button.token-breakdown-register:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+  /* Shield and Unshield sit side by side: one asset, two directions, neither
+     more default than the other. */
+  .token-privacy-actions {
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: 1fr 1fr;
+  }
   button.token-breakdown-more {
     background: transparent;
     color: var(--mc-text);

@@ -17,7 +17,6 @@ import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
 import { hydrateView } from "./hydrate";
-import { bindImportKey } from "./import-key-ui";
 import { bindLedgerFirstRun } from "./ledger/first-run";
 import { createLedgerMounts } from "./ledger/mounts";
 import { createMultisigClient } from "./multisig-runtime";
@@ -44,14 +43,8 @@ import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { createMutationRuntime } from "./runtime-refresh";
 import { createSceneRenderer } from "./scene-renderer";
-import {
-  bindAccountLabel,
-  bindAddAccount,
-  bindAppearance,
-  bindBackup,
-  bindContacts,
-  bindGroups,
-} from "./settings-ui";
+import type { SendIntent } from "./send-model";
+import { bindSettingsSurface } from "./settings-surface";
 import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
@@ -88,6 +81,9 @@ let drawerGroupFilter: string | null = null;
 let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 let snoozedApprovalIds: readonly string[] = [];
+// A shield/unshield shortcut's pre-configured send. Held only until Send is
+// left, so returning to Send by any other route starts from a clean form.
+let sendIntent: SendIntent | null = null;
 
 const bindNavigation = (): void => {
   app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
@@ -194,7 +190,7 @@ const bindAll = (): void => {
         ?.address ?? "",
     wallet,
   });
-  const settingsDeps = {
+  bindSettingsSurface({
     activeAccountId: () => lastAccountId,
     app,
     expandedGroup: () => expandedGroupId,
@@ -211,14 +207,7 @@ const bindAll = (): void => {
     },
     startAddAccount: ledgerOnboard.startAddAccount,
     wallet,
-  };
-  bindAccountLabel(settingsDeps);
-  bindAddAccount(settingsDeps);
-  bindImportKey(settingsDeps);
-  bindAppearance(settingsDeps);
-  bindBackup(settingsDeps);
-  bindContacts(settingsDeps);
-  bindGroups(settingsDeps);
+  });
   bindAddressBook({ app, render, wallet });
   bindApprovals({
     app,
@@ -377,6 +366,7 @@ const paint = (): void => {
               cache.multisigNftId,
               privacy.disclosure(),
               privacy.journey(),
+              sendIntent,
             );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -389,6 +379,11 @@ privacy = createPrivacyController({
   app,
   balances: () => cache.balances,
   navigate: (view) => navigate(view),
+  openSend: (intent) => {
+    sendIntent = intent;
+    selectedTokenId = intent.tokenId;
+    navigate("send");
+  },
   paint,
   preferences: () => cache.preferences,
   status: () => cache.status,
@@ -453,6 +448,11 @@ const render = async (status: WalletStatus): Promise<void> => {
 const navigate = (view: WalletView): void => {
   if (view !== activeView) {
     viewHistory = pushView(viewHistory, activeView);
+  }
+  // Leaving Send discards a shortcut's configuration, so opening Send again from
+  // anywhere else starts from an empty form rather than a stale shield.
+  if (activeView === "send" && view !== "send") {
+    sendIntent = null;
   }
   activeView = view;
   drawerOpen = false;

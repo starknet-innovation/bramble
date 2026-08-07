@@ -54,6 +54,7 @@ const poolNoticeAction = (ctx: {
   return ctx.deployment === false ? "deploy-first" : "register";
 };
 
+import type { SendIntent } from "./send-model";
 import { sendFlow } from "./send-views";
 import {
   appearanceFlow,
@@ -439,6 +440,7 @@ export const simpleFlowScreen = (
     readonly preferences: WalletPreferences | null;
     readonly prices: Readonly<Record<string, number>>;
     readonly privacy: PrivacyDisclosureState;
+    readonly sendIntent?: SendIntent | null;
     readonly status: WalletStatus;
   },
 ): string | null => {
@@ -453,6 +455,7 @@ export const simpleFlowScreen = (
         ctx.changes,
         ctx.currency,
         ctx.multisigs ?? [],
+        ctx.sendIntent ?? null,
       );
     case "swap":
       return swapFlow(ctx.status, ctx.account);

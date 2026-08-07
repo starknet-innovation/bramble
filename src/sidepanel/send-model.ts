@@ -6,12 +6,27 @@
 import type { TokenBalance } from "../popup/responses";
 import { sameFelt } from "../starknet/networks";
 import { formatTokenAmount } from "../starknet/rpc";
+import type { ValueBucket } from "../starknet/send-routes";
 import { isLikelySpam } from "../starknet/token-registry";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { CURRENCY_SYMBOLS } from "./fiat";
 import { compareStrkFirst } from "./token-flows";
 import { compactAmount } from "./token-row";
+
+/**
+ * A pre-configured send, handed to the Send screen by a shortcut that already
+ * knows what the user is doing — the asset screen's Shield and Unshield buttons.
+ * Seeds the recipient, the asset, and both buckets, so the screen opens on the
+ * amount rather than asking again for what was already chosen.
+ */
+export type SendIntent = {
+  readonly destination: ValueBucket;
+  readonly recipient: string;
+  readonly recipientLabel: string;
+  readonly source: ValueBucket;
+  readonly tokenId: string;
+};
 
 /**
  * One ERC20 option in the Send asset picker.

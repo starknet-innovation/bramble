@@ -182,11 +182,6 @@ export const unifiedBalanceRow = (
           <span class="token-breakdown-value">${escapeHtml(compactAmount(breakdown.publicFormatted, PORTFOLIO_FRACTION_PLACES))} ${escapeHtml(token.symbol)}</span>
         </div>
         ${privateBreakdownLine(token, breakdown.private)}
-        ${
-          breakdown.private.kind === "ready"
-            ? `<button class="token-breakdown-more" data-privacy-open="${escapeHtml(token.id)}" type="button">Shield / Unshield ${escapeHtml(token.symbol)}${icon("chevronRight")}</button>`
-            : ""
-        }
         <button class="token-breakdown-more" data-token-detail="${escapeHtml(token.id)}" type="button">See more about ${escapeHtml(token.symbol)}${icon("chevronRight")}</button>
       </div>
     </details>

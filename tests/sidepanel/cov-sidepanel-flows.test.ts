@@ -160,3 +160,44 @@ describe("backupFlow Ledger recovery warning", () => {
     expect(backupFlow(status)).not.toContain("Ledger accounts are not restored");
   });
 });
+
+describe("sendFlow shield shortcuts", () => {
+  const intent = {
+    destination: "private",
+    recipient: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+    recipientLabel: "Amber Walrus",
+    source: "public",
+    tokenId: "SN_MAIN:ETH",
+  } as const;
+
+  test("seeds both buckets, the recipient, and the asset from the intent", () => {
+    const withEth: WalletPreferences = {
+      ...preferences,
+      tokens: [
+        {
+          address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+          decimals: 18,
+          id: "SN_MAIN:ETH",
+          name: "Ether",
+          networkId: "SN_MAIN",
+          symbol: "ETH",
+        },
+      ],
+    };
+    const html = sendFlow(status, account, withEth, [], {}, {}, "usd", [], intent);
+
+    expect(html).toContain('name="source" type="hidden" value="public"');
+    expect(html).toContain('name="destination" type="hidden" value="private"');
+    expect(html).toContain(`name="recipient" type="hidden" value="${intent.recipient}"`);
+    expect(html).toContain('name="recipientLabel" type="hidden" value="Amber Walrus"');
+    expect(html).toContain('name="tokenId" type="hidden" value="SN_MAIN:ETH"');
+  });
+
+  test("defaults to a public transfer with no recipient when there is no intent", () => {
+    const html = sendFlow(status, account, preferences);
+
+    expect(html).toContain('name="source" type="hidden" value="public"');
+    expect(html).toContain('name="destination" type="hidden" value="public"');
+    expect(html).toContain('name="recipient" type="hidden" value=""');
+  });
+});

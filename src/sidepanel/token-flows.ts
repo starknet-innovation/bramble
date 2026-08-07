@@ -239,15 +239,23 @@ export const tokenDetailFlow = (
               </div>`
               : ""
         }
-        ${button({
-          attributes: { "data-privacy-open": token.id },
-          icon: "shield",
-          label: registered
-            ? "Shield/unshield"
-            : registrationPending
-              ? "Registration pending"
-              : "Go private",
-        })}
+        ${
+          registered
+            ? `<div class="token-privacy-actions">${button({
+                attributes: { "data-send-shield": token.id },
+                icon: "shield",
+                label: "Shield",
+              })}${button({
+                attributes: { "data-send-unshield": token.id },
+                label: "Unshield",
+                variant: "secondary",
+              })}</div>`
+            : button({
+                attributes: { "data-privacy-open": token.id },
+                icon: "shield",
+                label: registrationPending ? "Registration pending" : "Go private",
+              })
+        }
         ${privacy.error ? `<p class="hint">${escapeHtml(privacy.error)}</p>` : ""}
       </section>
       <section class="section">

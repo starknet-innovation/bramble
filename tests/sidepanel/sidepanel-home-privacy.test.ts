@@ -158,10 +158,10 @@ describe("unified portfolio scope", () => {
     expect(row).toContain("0.50 ETH");
     expect(row).toContain(`data-token-detail="${token.id}"`);
     expect(row).toContain("See more about ETH");
-    // A registered account gets the shield/unshield entry in the same style as
-    // the asset link, and it opens the compose journey for this token.
-    expect(row).toContain(`data-privacy-open="${token.id}"`);
-    expect(row).toContain("Shield / Unshield ETH");
+    // The row discloses the split and links to the asset; shielding is offered on
+    // the asset screen, as two explicit directions, rather than here.
+    expect(row).not.toContain("Shield / Unshield ETH");
+    expect(row).not.toContain("data-privacy-open");
     // The retired +/- stepper leaves nothing behind.
     expect(row).not.toContain("data-shield-step");
     expect(row).not.toContain("shield-confirm");

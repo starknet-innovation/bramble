@@ -101,6 +101,13 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     transferEpoch += 1;
     transferState = initialTransferState();
   }
+  // A shortcut arrives with the recipient, the asset, and both buckets already
+  // in the form, so the recipient step has nothing left to ask: open on the
+  // amount. Only on a fresh journey, or a repaint would drag the user back here
+  // from review.
+  if (transferState.fields === null && sendFormInput(form, "recipient")?.value) {
+    transferState = { ...transferState, fields: transferFields(form), stage: "details" };
+  }
   const repaint = (): void =>
     transitionSendStage(form.ownerDocument, form.dataset["stage"], transferState.stage, () =>
       applyTransferUi(form, transferState, deps.privacy?.().value?.poolFeeFri),

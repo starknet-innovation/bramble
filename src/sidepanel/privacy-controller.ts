@@ -12,6 +12,7 @@ import {
 } from "./privacy-model";
 import { bindPrivacy } from "./privacy-ui";
 import type { BalanceState, SidepanelWallet } from "./runtime";
+import type { SendIntent } from "./send-model";
 
 /**
  * Entrypoint-owned state and navigation supplied to the privacy controller.
@@ -20,6 +21,8 @@ export type PrivacyControllerOptions = {
   readonly app: Element | null;
   readonly balances: () => BalanceState;
   readonly navigate: (view: "activity" | "home" | "privacy" | "token-detail") => void;
+  /** Opens Send pre-configured for a shield or unshield shortcut. */
+  readonly openSend?: (intent: SendIntent) => void;
   readonly paint: () => void;
   readonly preferences: () => WalletPreferences | null;
   readonly status: () => WalletStatus;

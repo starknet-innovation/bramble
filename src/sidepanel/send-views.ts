@@ -23,7 +23,13 @@ import {
   noAccountEmpty,
 } from "./parts";
 import { liquidDots, liquidDotsFilter } from "./progress-motion";
-import { type SendAsset, sendAssets, sendBalanceLabel, sendRecipientAccounts } from "./send-model";
+import {
+  type SendAsset,
+  type SendIntent,
+  sendAssets,
+  sendBalanceLabel,
+  sendRecipientAccounts,
+} from "./send-model";
 import { starknetNetworkGlyph, tokenGlyph } from "./token-row";
 
 const sendHeader = (): string => `
@@ -363,9 +369,12 @@ export const sendFlow = (
   changes: Readonly<Record<string, number>> = {},
   currency: DisplayCurrency = preferences?.displayCurrency ?? "usd",
   multisigs: readonly MultisigRecord[] = [],
+  intent: SendIntent | null = null,
 ): string => {
   const assets = sendAssets(status.networkId, preferences, balances, prices, changes);
-  const asset = assets[0];
+  // A shortcut names its asset; otherwise the first tracked token leads.
+  const asset =
+    (intent ? assets.find((candidate) => candidate.id === intent.tokenId) : undefined) ?? assets[0];
   const canSend = account !== null && asset !== undefined;
   const signer = account?.derivation.kind === "ledger" ? "ledger" : "software";
   const initialFiat =
@@ -384,10 +393,10 @@ export const sendFlow = (
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
           <input name="fiatEstimate" type="hidden" value="" />
-          <input name="recipient" type="hidden" value="" />
-          <input name="recipientLabel" type="hidden" value="" />
-          <input name="source" type="hidden" value="public" />
-          <input name="destination" type="hidden" value="public" />
+          <input name="recipient" type="hidden" value="${escapeHtml(intent?.recipient ?? "")}" />
+          <input name="recipientLabel" type="hidden" value="${escapeHtml(intent?.recipientLabel ?? "")}" />
+          <input name="source" type="hidden" value="${intent?.source ?? "public"}" />
+          <input name="destination" type="hidden" value="${intent?.destination ?? "public"}" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />
           <input name="tokenBalance" type="hidden" value="${escapeHtml(asset?.balance ?? "0")}" />
           <input name="tokenDecimals" type="hidden" value="${asset?.decimals ?? 0}" />
@@ -402,7 +411,7 @@ export const sendFlow = (
             ${assetStage(assets, currency)}
             <section class="send-stage send-review-stage" id="send-review-stage" hidden>
               <div class="send-review-head">
-                <div><p class="context-label">Review send</p><h2>Check every detail</h2></div>
+                <div><p class="context-label">Review send</p></div>
                 ${button({ attributes: { id: "send-edit" }, label: "Edit", size: "small", variant: "ghost" })}
               </div>
               <div class="send-review-summary" id="send-review-summary"></div>
