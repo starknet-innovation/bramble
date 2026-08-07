@@ -261,7 +261,9 @@ export const sendScenario: WalletScenario = {
 const ledgerRequest = {
   accountId: ledgerAccount.id,
   id: "ledger-sign-fixture",
-  messageHash: "0x721",
+  // Full width on purpose: the sign screen shows this hash for comparison with
+  // the device, so the lab has to exercise how a real 32-byte value wraps.
+  messageHash: "0x0721ef90ad626dc13fb97cdc7e04499ee5fa1007f2c4e1a9439b22fc3755b912",
   path: ledgerAccount.derivation.kind === "ledger" ? ledgerAccount.derivation.path : "",
   publicKeyX: ledgerAccount.publicKeyX,
 };

@@ -287,6 +287,23 @@ export const canonicalFelt = (value: string): string | null => {
 };
 
 /**
+ * Normalizes a numeric string into the 32-byte `0x`-hex felt form — 64 hex
+ * digits, zero-padded — or null when the value is not numeric. This is the
+ * spelling a felt has on the wire and on a hardware-wallet screen, where the
+ * value is a fixed-width byte string rather than a shortest-form number, so it
+ * is what a user compares against. Prefer this over `canonicalFelt` whenever the
+ * output is compared character by character against something outside the
+ * wallet; use `sameFelt` for numeric equality and never pad locally.
+ */
+export const paddedFelt = (value: string): string | null => {
+  try {
+    return `0x${BigInt(value).toString(16).padStart(MAX_STARK_FIELD_HEX_DIGITS, "0")}`;
+  } catch {
+    return null;
+  }
+};
+
+/**
  * Checks whether a value is a chain id in lowercase `0x`-hex form. The loose
  * form used when reading an already-canonical chain id off an internal message
  * or a provider event: it accepts any length and `0x0`, matching how the

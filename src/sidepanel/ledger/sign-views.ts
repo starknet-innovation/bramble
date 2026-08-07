@@ -7,6 +7,7 @@
 import type { LedgerSignRequestSummary, WalletStatus } from "../../popup/responses";
 import { escapeHtml } from "../../shared/html";
 import { ledgerAccountIndexOfPath } from "../../starknet/ledger-path";
+import { paddedFelt } from "../../starknet/networks";
 import { pill } from "../../ui/content";
 import { button } from "../../ui/controls";
 import { menuRow } from "../../ui/navigation";
@@ -26,6 +27,19 @@ const signerLine = (request: LedgerSignRequestSummary): string => {
     ${suffix}
   </div>`;
 };
+
+// The exact value the device is asked to sign, shown so it can be compared with
+// the device screen — the only check that catches a host that computed a
+// different transaction than the one reviewed. Rendered in the padded 32-byte
+// form the device receives (see `paddedFelt`), so the comparison is digit for
+// digit rather than against a shortest-form felt that drops leading zeros.
+const hashLine = (request: LedgerSignRequestSummary): string => `
+  <section class="ledger-hash">
+    <p class="context-label">Hash being signed</p>
+    <code>${escapeHtml(paddedFelt(request.messageHash) ?? request.messageHash)}</code>
+    <p>Your Ledger shows this hash before you approve. Check that it matches, and
+    reject on the device if it does not.</p>
+  </section>`;
 
 const cancelButton = (): string =>
   button({
@@ -189,6 +203,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
         ${signerLine(view.request)}
       </div>
       ${ledgerProgress(view)}
+      ${hashLine(view.request)}
       <div class="ledger-phase-body">${phaseBody(view)}</div>
       <p class="ledger-liveness" role="status">
         <span class="ledger-liveness-mark">${livenessMark(view)}</span>

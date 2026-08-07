@@ -84,6 +84,25 @@ describe("ledgerSignScreen", () => {
     expect(render({ kind: "submitting" })).toContain("Signature received");
   });
 
+  test("discloses the padded hash in every phase so the device can be compared", () => {
+    // The device signs a fixed-width 32-byte value, so the screen shows the
+    // padded form; a shortest-form felt would differ from the device by its
+    // dropped leading zeros and defeat the comparison.
+    const padded = `0x${"0".repeat(61)}abc`;
+    const phases: readonly LedgerSignView["phase"][] = [
+      { kind: "connect" },
+      { kind: "confirming" },
+      { kind: "submitting" },
+      { code: "device-locked", kind: "error", message: "Unlock your Ledger." },
+    ];
+    for (const phase of phases) {
+      const html = render(phase);
+      expect(html).toContain("Hash being signed");
+      expect(html).toContain(padded);
+      expect(html).not.toContain(">0xabc<");
+    }
+  });
+
   test("a path with no recoverable index omits the index suffix", () => {
     const html = ledgerSignScreen(
       { phase: { kind: "confirming" }, request: { ...request, path: "m/not-a-path" } },

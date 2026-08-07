@@ -320,6 +320,26 @@ export const SEND_STYLES = `
   }
   .ledger-signer-line code { color: var(--mc-text); }
   .ledger-signer-line span:last-child::before { content: "·"; margin-right: 5px; }
+  /* The hash the device is signing. Wraps rather than truncates and is left
+     aligned against the centred hero: an ellipsised or centre-drifting hash
+     cannot be compared with the device screen, which is the only thing it is
+     here for. */
+  .ledger-hash {
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.md};
+    display: grid;
+    gap: ${SPACE.xs};
+    padding: ${SPACE.md};
+    text-align: left;
+  }
+  .ledger-hash code {
+    color: var(--mc-text);
+    font-size: ${TYPE.caption.size};
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: break-all;
+  }
+  .ledger-hash p:last-child { color: var(--mc-muted); font-size: ${TYPE.micro.size}; }
   .ledger-task-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     padding: ${SPACE.md};
