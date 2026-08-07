@@ -100,6 +100,6 @@ export const walletDashboard = (options: DashboardOptions = {}): string =>
     options.selectedMultisigId ?? null,
     options.multisigNfts ?? [],
     options.selectedMultisigId ?? null,
-    options.privacy ?? { enabled: false, error: null, loading: false, value: null },
+    options.privacy ?? { error: null, loading: false, value: null },
     options.privacyJourney ?? { stage: "idle" },
   );

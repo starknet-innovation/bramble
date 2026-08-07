@@ -33,27 +33,10 @@ const activation: PrivacyPreparation = {
   tokenId: ETH_TOKEN.id,
 };
 
-const deposit: PrivacyPreparation = {
-  amount: "0.5",
-  id: digest,
-  kind: "deposit",
-  payloadDigest: digest,
-  poolAddress: STRK20_MAINNET_POOL,
-  route: "public-account",
-  summaries: [
-    "Shield 0.5 ETH",
-    "Public account fee — first deposits are linked to this wallet",
-    "The deposit is public; the resulting balance can be spent privately",
-  ],
-  symbol: ETH_TOKEN.symbol,
-  tokenId: ETH_TOKEN.id,
-};
-
 const disclosure = (
   registration: "registered" | "unregistered",
   balances: readonly PrivateBalanceView[] = [],
 ): PrivacyDisclosureState => ({
-  enabled: true,
   error: null,
   loading: false,
   value: {
@@ -93,7 +76,7 @@ const privacyDashboard = (
 export const privacyScenario: WalletScenario = {
   checkpoints: [
     {
-      content: () => privacyDashboard({ enabled: false, error: null, loading: false, value: null }),
+      content: () => privacyDashboard({ error: null, loading: false, value: null }),
       id: "public-portfolio",
       label: "Public portfolio",
       narrative:
@@ -101,7 +84,7 @@ export const privacyScenario: WalletScenario = {
       state: { disclosure: "off", privateDataRead: false },
     },
     {
-      content: () => privacyDashboard({ enabled: true, error: null, loading: true, value: null }),
+      content: () => privacyDashboard({ error: null, loading: true, value: null }),
       id: "discovering",
       label: "Discovering balances",
       narrative:
@@ -111,7 +94,6 @@ export const privacyScenario: WalletScenario = {
     {
       content: () =>
         privacyDashboard({
-          enabled: true,
           error: "Private services are not configured for Starknet Mainnet.",
           loading: false,
           value: null,
@@ -125,7 +107,6 @@ export const privacyScenario: WalletScenario = {
     {
       content: () =>
         privacyDashboard({
-          enabled: true,
           error: "Ledger accounts cannot derive the STRK20 viewing key in this wallet.",
           loading: false,
           value: null,
@@ -139,7 +120,6 @@ export const privacyScenario: WalletScenario = {
     {
       content: () =>
         privacyDashboard({
-          enabled: true,
           error: "The privacy discovery service is unavailable. No private state was returned.",
           loading: false,
           value: null,
@@ -221,7 +201,7 @@ export const privacyScenario: WalletScenario = {
       id: "registered-empty",
       label: "Registered with no notes",
       narrative:
-        "A registered account with no discovered notes gets an asset-oriented shielding next step rather than a zero-value ambiguity.",
+        "A registered account with no discovered notes gets an asset-oriented next step into Send rather than a zero-value ambiguity.",
       state: { privateAssets: 0, registration: "ready" },
     },
     {
@@ -229,67 +209,8 @@ export const privacyScenario: WalletScenario = {
       id: "asset-entry",
       label: "Asset privacy action",
       narrative:
-        "The asset detail preserves token context and exposes one direct Shield ETH action.",
-      state: { asset: ETH_TOKEN.id, cta: "shield" },
-    },
-    {
-      content: () =>
-        privacyDashboard(privateReady, { stage: "compose", tokenId: ETH_TOKEN.id }, "privacy"),
-      id: "shield-compose",
-      label: "Choose shield amount",
-      narrative:
-        "Amount, available public balance, shortcuts, token identity, and destination network fit one task view.",
-      state: { amount: "editable", publicBalance: "1.25", token: "ETH" },
-    },
-    {
-      content: () =>
-        privacyDashboard(
-          privateReady,
-          { preparation: deposit, stage: "deposit-review", tokenId: ETH_TOKEN.id },
-          "privacy",
-        ),
-      id: "shield-review",
-      label: "Review shielding",
-      narrative:
-        "The user sees that this deposit and its fee route are public before authorizing the frozen amount.",
-      state: { amount: "0.5 ETH", route: "public-account", stage: "review" },
-    },
-    {
-      content: () =>
-        privacyDashboard(
-          privateReady,
-          {
-            kind: "deposit",
-            preparation: deposit,
-            stage: "working",
-            tokenId: ETH_TOKEN.id,
-          },
-          "privacy",
-        ),
-      id: "shielding",
-      label: "Shielding in progress",
-      narrative:
-        "The same liveness sequence makes remote proving and wallet authorization legible.",
-      state: { liveness: "visible", stage: "proving", task: "deposit" },
-    },
-    {
-      content: () =>
-        privacyDashboard(
-          privateReady,
-          {
-            hash: "0x05c4767aa1f10347767214ea38c518bfdf0d22aa5ad53f85669a887d96cacb2",
-            kind: "deposit",
-            stage: "success",
-            symbol: ETH_TOKEN.symbol,
-            tokenId: ETH_TOKEN.id,
-          },
-          "privacy",
-        ),
-      id: "shielded",
-      label: "Shielding submitted",
-      narrative:
-        "The wallet confirms broadcast and explains when the new private balance becomes visible.",
-      state: { indexer: "catching-up", stage: "success", task: "deposit" },
+        "The asset detail preserves token context and offers Shield and Unshield side by side; each opens Send already configured for that direction.",
+      state: { asset: ETH_TOKEN.id, cta: ["shield", "unshield"] },
     },
     {
       content: () =>
@@ -302,7 +223,7 @@ export const privacyScenario: WalletScenario = {
           },
           "privacy",
         ),
-      id: "shield-failed",
+      id: "activation-failed",
       label: "Recover from failure",
       narrative:
         "Failure is explicit, never auto-retries, and keeps retry or return choices close to the task.",
@@ -311,7 +232,7 @@ export const privacyScenario: WalletScenario = {
     ...privacyDappCheckpoints,
   ],
   description:
-    "Opt-in disclosure, registration, shielding, dapp approvals, private transfer and withdrawal, dapp anonymizers, AVNU private swap, sub-accounts, and fail-closed recovery.",
+    "Balance disclosure, pool registration, dapp approvals, dapp anonymizers, AVNU private swap, sub-accounts, and fail-closed recovery. Shielding, unshielding, and private sends are composed in Send, so they are checkpointed with the other send routes rather than here.",
   id: "privacy",
   surface: "sidepanel",
   title: "Private balances and actions",
