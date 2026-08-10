@@ -432,19 +432,16 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
 // finality after the side panel closes, and a failure detected then is queued
 // for the next time a panel opens.
 if (activityLog) {
-  void storageReady
-    .then(() =>
-      startTransactionMonitor({
-        browser: extensionApi,
-        deps: {
-          activity: activityLog,
-          preferencesStore: { read: readPreferences },
-          runtimeRpc: defaultRuntimeRpc,
-        },
-        now: systemClock,
-      }),
-    )
-    .catch(() => undefined);
+  startTransactionMonitor({
+    browser: extensionApi,
+    deps: {
+      activity: activityLog,
+      preferencesStore: { read: readPreferences },
+      runtimeRpc: defaultRuntimeRpc,
+    },
+    now: systemClock,
+    ready: storageReady,
+  });
 }
 
 const broadcastEvent = (event: WalletEventMessage): void => {

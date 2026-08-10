@@ -49,6 +49,9 @@ const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/conten
 const SECRET_MATERIAL_FILES = new Set([
   "src/background/account-hash-signer.ts",
   "src/background/account-creation-inputs.ts",
+  // Keeps the unlocked vault credential inside the privileged worker while
+  // coordinating fail-closed network/vault commits; never persists or emits it.
+  "src/background/active-network-mutation.ts",
   "src/background/add-chain-ops.ts",
   "src/background/approval-decisions.ts",
   "src/background/chain-ops.ts",

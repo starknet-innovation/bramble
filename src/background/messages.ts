@@ -3,9 +3,9 @@
  */
 
 import { DEFAULT_NETWORK } from "../starknet/networks";
-import { findVaultAccount } from "../wallet/vault-account";
 import { activeAccountSecrets } from "../wallet/vault-service";
 import { readCreateAccountInput } from "./account-creation-inputs";
+import { runUnlockedNetworkMutation, runVaultCreationWithNetwork } from "./active-network-mutation";
 import { handleAddChainOps } from "./add-chain-ops";
 import { handleAllowanceOps } from "./allowance-ops";
 import { handleApprovalDecision } from "./approval-decisions";
@@ -39,6 +39,7 @@ import { handleProviderOps } from "./provider-ops";
 import {
   reconcileActiveAccount,
   reconcileUnlockedActiveAccount,
+  selectActiveAccount,
   statusResponse,
   switchActiveNetwork,
 } from "./runtime-state";
@@ -94,8 +95,12 @@ const handleCreateAccount: RouterHandler = async (ctx, messageType, message) => 
   }
   const networkId = input.networkId ?? DEFAULT_NETWORK.id;
   return ctx.activeStateCoordinator.run(async () => {
-    await ctx.preferencesStore.setActiveNetwork(networkId);
-    const account = await ctx.wallet.createAccount(input);
+    const account = await runVaultCreationWithNetwork(
+      ctx.session,
+      ctx.preferencesStore,
+      networkId,
+      () => ctx.wallet.createAccount(input),
+    );
     ctx.session.unlock(input.vaultPassphrase);
     return { account, ok: true };
   });
@@ -110,16 +115,14 @@ const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
     return { error: "invalid add account request" };
   }
   return ctx.activeStateCoordinator.run(async () => {
-    const passphrase = ctx.session.getPassphrase();
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    await ctx.preferencesStore.setActiveNetwork(input.networkId);
-    const account = await ctx.wallet.addDerivedAccount({
-      networkId: input.networkId,
-      vaultPassphrase: passphrase,
-    });
-    return { account, ok: true };
+    const account = await runUnlockedNetworkMutation(
+      ctx.session,
+      ctx.preferencesStore,
+      input.networkId,
+      (vaultPassphrase) =>
+        ctx.wallet.addDerivedAccount({ networkId: input.networkId, vaultPassphrase }),
+    );
+    return account ? { account, ok: true } : { error: "wallet locked" };
   });
 };
 
@@ -136,17 +139,13 @@ const handleImportAccount: RouterHandler = async (ctx, messageType, message) => 
     return { error: "wallet unavailable" };
   }
   return ctx.activeStateCoordinator.run(async () => {
-    const passphrase = ctx.session.getPassphrase();
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    await ctx.preferencesStore.setActiveNetwork(input.networkId);
-    const account = await importRawKeyAccount({
-      networkId: input.networkId,
-      privateKey: input.privateKey,
-      vaultPassphrase: passphrase,
-    });
-    return { account, ok: true };
+    const account = await runUnlockedNetworkMutation(
+      ctx.session,
+      ctx.preferencesStore,
+      input.networkId,
+      (vaultPassphrase) => importRawKeyAccount({ ...input, vaultPassphrase }),
+    );
+    return account ? { account, ok: true } : { error: "wallet locked" };
   });
 };
 
@@ -267,16 +266,14 @@ const handleSetActiveAccount: RouterHandler = async (ctx, messageType, message) 
   if (!input) {
     return { error: "invalid active account request" };
   }
-  return ctx.activeStateCoordinator.run(async () => {
-    const passphrase = ctx.session.getPassphrase();
-    if (!passphrase) {
-      return { error: "wallet locked" };
-    }
-    const target = findVaultAccount(await ctx.wallet.readVault(passphrase), input.accountId);
-    await ctx.preferencesStore.setActiveNetwork(target.networkId);
-    const account = await ctx.wallet.setActiveAccount({ ...input, vaultPassphrase: passphrase });
-    return { account, ok: true };
-  });
+  const account = await selectActiveAccount(
+    ctx.wallet,
+    ctx.session,
+    ctx.preferencesStore,
+    input.accountId,
+    ctx.activeStateCoordinator,
+  );
+  return account ? { account, ok: true } : { error: "wallet locked" };
 };
 
 const handleSetActiveNetwork: RouterHandler = async (ctx, messageType, message) => {

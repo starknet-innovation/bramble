@@ -16,6 +16,8 @@ import {
   type WalletPreferencesStore,
 } from "../storage/preferences-store";
 import type { AccountRef, Vault } from "../storage/vault-schema";
+import { findVaultAccount } from "../wallet/vault-account";
+import { runGuardedNetworkMutation } from "./active-network-mutation";
 import type { NetworkOption, WalletStatus } from "./runtime-types";
 import type { UnlockSession } from "./session";
 import type { WalletStatusReader } from "./wallet-reader";
@@ -227,6 +229,46 @@ const requireCurrentNetworkSwitch = (authorized: () => boolean): void => {
   }
 };
 
+const requireCurrentAccountSelection = (authorized: () => boolean): void => {
+  if (!authorized()) {
+    throw new WalletError("Unlock session changed during account selection");
+  }
+};
+
+/**
+ * Selects an existing account and its network as one fail-closed cross-store
+ * mutation. The plain network preference records intent first; any subsequent
+ * failure locks only the session generation that authorized the operation so
+ * the provider cannot expose a different account under the new network.
+ */
+export const selectActiveAccount = async (
+  wallet: WalletStatusReader,
+  session: UnlockSession,
+  preferencesStore: WalletPreferencesStore,
+  accountId: string,
+  coordinator?: ActiveStateCoordinator,
+): Promise<AccountRef | null> =>
+  runActiveStateMutation(coordinator, async () => {
+    const passphrase = session.getPassphrase();
+    if (!passphrase) {
+      return null;
+    }
+    const generation = session.generation();
+    const authorized = (): boolean =>
+      session.generation() === generation && session.peekPassphrase() === passphrase;
+    const target = findVaultAccount(await wallet.readVault(passphrase), accountId);
+    requireCurrentAccountSelection(authorized);
+    return runGuardedNetworkMutation(
+      session,
+      preferencesStore,
+      target.networkId,
+      passphrase,
+      generation,
+      "Unlock session changed during account selection",
+      (vaultPassphrase) => wallet.setActiveAccount({ accountId, vaultPassphrase }),
+    );
+  });
+
 const selectNetworkAccount = async (
   wallet: WalletStatusReader,
   networkId: StarknetNetworkId,
@@ -272,28 +314,23 @@ export const switchActiveNetwork = async (
     // The plain preference is the durable selection intent. Writing it first
     // means a failed vault write can be retried/reconciled without creating a
     // hidden account that makes the user's retry fail as a duplicate.
-    await preferencesStore.setActiveNetwork(networkId);
     const passphrase = session.getPassphrase();
     if (!passphrase) {
+      await preferencesStore.setActiveNetwork(networkId);
       return null;
     }
     const generation = session.generation();
     const authorized = (): boolean =>
       session.generation() === generation && session.peekPassphrase() === passphrase;
-    try {
-      return await selectNetworkAccount(wallet, networkId, passphrase, authorized);
-    } catch (error) {
-      // The durable network intent was already written. If its matching vault
-      // mutation fails or the session changes mid-flight, leaving the old
-      // active account available would expose a chain/account mismatch to the
-      // provider. Lock only the generation that authorized this switch; a
-      // replacement unlock must never be revoked by stale work. The next
-      // unlock reconciles the vault pointer to the durable network intent.
-      if (session.generation() === generation) {
-        session.lock();
-      }
-      throw error;
-    }
+    return runGuardedNetworkMutation(
+      session,
+      preferencesStore,
+      networkId,
+      passphrase,
+      generation,
+      "Unlock session changed during network switch",
+      (vaultPassphrase) => selectNetworkAccount(wallet, networkId, vaultPassphrase, authorized),
+    );
   });
 
 /**

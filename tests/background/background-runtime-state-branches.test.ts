@@ -129,10 +129,13 @@ describe("switchActiveNetwork", () => {
     expect(switched).toEqual(["SN_MAIN"]);
   });
 
-  test("does not touch the vault when durable network intent cannot be written", async () => {
+  test("locks when a network-intent write commits and then rejects", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);
     let vaultReads = 0;
+    const durable: { networkId: WalletPreferences["activeNetworkId"] } = {
+      networkId: "SN_SEPOLIA",
+    };
     const wallet = makeWallet({
       async readVault() {
         vaultReads += 1;
@@ -141,7 +144,8 @@ describe("switchActiveNetwork", () => {
     });
     const store = {
       ...makePreferencesStore(defaultWalletPreferences()),
-      async setActiveNetwork() {
+      async setActiveNetwork(networkId: WalletPreferences["activeNetworkId"]) {
+        durable.networkId = networkId;
         throw new Error("injected preference write failure");
       },
     };
@@ -150,6 +154,8 @@ describe("switchActiveNetwork", () => {
       "injected preference write failure",
     );
     expect(vaultReads).toBe(0);
+    expect(durable.networkId).toBe("SN_MAIN");
+    expect(session.isUnlocked()).toBe(false);
   });
 
   test("locks the authorizing session when a vault-side network switch fails", async () => {
