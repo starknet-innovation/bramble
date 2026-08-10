@@ -122,7 +122,8 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       }
       return "0x123";
     },
-    async submitActions() {
+    async submitActions({ beforeProof }) {
+      await beforeProof?.();
       if (proveCalls) {
         proveCalls.value += 1;
       }

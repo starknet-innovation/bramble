@@ -154,6 +154,7 @@ export const createOfficialStrk20Service = ({
             maturity,
             providerFor,
             pauseForServiceRetry,
+            undefined,
             strk20RegistrationBuilderFor,
             "registration",
           ),
@@ -267,6 +268,7 @@ export const createOfficialStrk20Service = ({
               maturity,
               providerFor,
               pauseForServiceRetry,
+              input.beforeProof,
             ),
           // The account-mode broadcast ran unmapped, so a pool rejection of the
           // shielding deposit reached the message boundary as a raw starknet.js
@@ -317,6 +319,7 @@ export const createOfficialStrk20Service = ({
             maturity,
             providerFor,
             pauseForServiceRetry,
+            input.beforeProof,
           ),
         async (callAndProof) =>
           submitStrk20PaymasterPlan({

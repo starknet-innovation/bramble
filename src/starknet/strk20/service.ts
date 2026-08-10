@@ -156,6 +156,8 @@ export type Strk20Service = {
   readonly submitActions: (
     input: Strk20AccountContext & {
       readonly actions: readonly Strk20Action[];
+      /** Final wallet policy gate invoked immediately before proof creation. */
+      readonly beforeProof?: () => Promise<void>;
       readonly plan: Strk20SubmissionPlan;
     },
   ) => Promise<{ readonly transactionHash: string }>;
@@ -363,6 +365,7 @@ export const submitStrk20Actions = async (
   service: Strk20Service,
   input: Strk20AccountContext & {
     readonly actions: readonly Strk20Action[];
+    readonly beforeProof?: () => Promise<void>;
     readonly plan: Strk20SubmissionPlan;
   },
 ): Promise<{ readonly transactionHash: string }> => {
