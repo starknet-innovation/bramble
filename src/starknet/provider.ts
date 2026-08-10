@@ -136,12 +136,11 @@ export const isTransportRpcError = (error: unknown): boolean => {
   return !(isRecord(baseError) && typeof baseError["code"] === "number");
 };
 
-const PROVIDER_BROADCAST_METHODS = new Set([
-  "declareContract",
-  "deployAccountContract",
-  "invokeFunction",
+const BROADCAST_RPC_METHODS = new Set([
+  "starknet_addDeclareTransaction",
+  "starknet_addDeployAccountTransaction",
+  "starknet_addInvokeTransaction",
 ]);
-const CHANNEL_BROADCAST_METHODS = new Set(["declare", "deployAccount", "invoke"]);
 const PREPARATION_UNAVAILABLE =
   "Transaction could not be prepared. Check your connection or RPC endpoint.";
 
@@ -158,39 +157,54 @@ const runRpcBroadcast = async <T>(broadcast: () => Promise<T>): Promise<T> => {
   }
 };
 
-const guardedMember = (
-  target: object,
-  property: string | symbol,
-  broadcastMethods: ReadonlySet<string>,
-): unknown => {
+const memberFor = (target: object, receiver: object, property: string | symbol): unknown => {
   const value: unknown = Reflect.get(target, property, target);
   if (typeof value !== "function") {
     return value;
   }
-  const call = (...args: readonly unknown[]): unknown => Reflect.apply(value, target, args);
-  return typeof property === "string" && broadcastMethods.has(property)
-    ? (...args: readonly unknown[]) => runRpcBroadcast(() => Promise.resolve(call(...args)))
-    : call;
+  return (...args: readonly unknown[]): unknown => Reflect.apply(value, receiver, args);
 };
 
-// Account.execute/declare/deployAccount perform fee reads and signing before
-// calling these provider/channel methods. Guarding the methods, rather than the
-// whole Account operation, marks only the point at which a node can have
-// accepted a transaction.
+// RpcChannel's add-transaction methods build and normalize a signed transaction
+// before calling fetchEndpoint. Bind channel methods through the proxy so that
+// only those exact JSON-RPC fetches receive the ambiguity marker; a local build
+// or decompression failure remains safely pre-broadcast.
+const guardRpcChannel = (rawChannel: object): object => {
+  let guardedChannel: object;
+  guardedChannel = new Proxy(rawChannel, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      if (property === "fetchEndpoint") {
+        return (...args: readonly unknown[]) => {
+          const fetch = (): Promise<unknown> => Promise.resolve(Reflect.apply(value, target, args));
+          return typeof args[0] === "string" && BROADCAST_RPC_METHODS.has(args[0])
+            ? runRpcBroadcast(fetch)
+            : fetch();
+        };
+      }
+      return (...args: readonly unknown[]) => Reflect.apply(value, guardedChannel, args);
+    },
+  });
+  return guardedChannel;
+};
+
 const guardRpcBroadcasts = (provider: RpcProvider): RpcProvider => {
   const rawChannel: unknown = Reflect.get(provider, "channel", provider);
   const channel =
-    typeof rawChannel === "object" && rawChannel !== null
-      ? new Proxy(rawChannel, {
-          get: (target, property) => guardedMember(target, property, CHANNEL_BROADCAST_METHODS),
-        })
-      : null;
-  return new Proxy(provider, {
-    get: (target, property) =>
-      property === "channel" && channel !== null
-        ? channel
-        : guardedMember(target, property, PROVIDER_BROADCAST_METHODS),
+    typeof rawChannel === "object" && rawChannel !== null ? guardRpcChannel(rawChannel) : null;
+  let guardedProvider: RpcProvider;
+  guardedProvider = new Proxy(provider, {
+    get: (target, property): unknown => {
+      if (property === "channel" && channel !== null) {
+        return channel;
+      }
+      return memberFor(target, guardedProvider, property);
+    },
   });
+  return guardedProvider;
 };
 
 /**
@@ -219,8 +233,8 @@ export const withRpcFallback = async <T>(
 
 /**
  * Selects a chain-matching endpoint with read-only probes, then runs a
- * state-changing operation exactly once. The provider's transaction-broadcast
- * methods preserve response-loss ambiguity without retaining the raw error;
+ * state-changing operation exactly once. Only the three add-transaction JSON-
+ * RPC fetches preserve response-loss ambiguity without retaining the raw error;
  * earlier transport failures become a safe preparation error. Neither case is
  * retried against a fallback endpoint.
  */

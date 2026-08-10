@@ -150,14 +150,20 @@ describe("starknet RPC helpers", () => {
     expect(writes).toEqual(["https://selected.example"]);
   });
 
-  test("marks only provider transaction-broadcast methods as status unknown", async () => {
-    for (const method of ["declareContract", "deployAccountContract", "invokeFunction"] as const) {
+  test("marks only add-transaction fetches as status unknown", async () => {
+    for (const method of [
+      "starknet_addDeclareTransaction",
+      "starknet_addDeployAccountTransaction",
+      "starknet_addInvokeTransaction",
+    ] as const) {
       const provider = {
+        channel: {
+          async fetchEndpoint() {
+            throw new Error("connection reset with private request body");
+          },
+        },
         async getChainId() {
           return "0x534e5f4d41494e";
-        },
-        async [method]() {
-          throw new Error("connection reset with private request body");
         },
       } as unknown as import("starknet").RpcProvider;
 
@@ -165,8 +171,10 @@ describe("starknet RPC helpers", () => {
         ["https://selected.example"],
         "0x534e5f4d41494e",
         async (selected) => {
-          const broadcast = Reflect.get(selected, method) as () => Promise<never>;
-          return broadcast();
+          const fetchEndpoint = Reflect.get(selected.channel, "fetchEndpoint") as (
+            rpcMethod: string,
+          ) => Promise<never>;
+          return fetchEndpoint(method);
         },
         () => provider,
       ).catch((error: unknown) => error);

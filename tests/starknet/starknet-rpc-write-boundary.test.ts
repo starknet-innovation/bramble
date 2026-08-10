@@ -46,24 +46,46 @@ const responses: Readonly<Record<string, unknown>> = {
   specVersion: "0.8.1",
 };
 
-const accountProvider = (failAt: string): RpcProvider => {
-  const channel = new Proxy(
-    {},
-    {
-      get(_target, property) {
-        if (typeof property === "symbol") {
-          return undefined;
-        }
-        const method = String(property);
-        return async () => {
-          if (method === failAt) {
-            throw new Error(`${method} transport failed with private request body`);
-          }
-          return responses[method];
-        };
-      },
+const accountProvider = (failAt: string, fetches: string[]): RpcProvider => {
+  const implementations = {
+    async buildTransaction(invocation: unknown): Promise<unknown> {
+      if (failAt === "buildTransaction") {
+        throw new Error("buildTransaction failed with private request body");
+      }
+      return invocation;
     },
-  );
+    async fetchEndpoint(method: string): Promise<unknown> {
+      fetches.push(method);
+      if (failAt === method) {
+        throw new Error(`${method} transport failed with private request body`);
+      }
+      return responses["invoke"];
+    },
+    async invoke(this: {
+      buildTransaction: (invocation: unknown) => Promise<unknown>;
+      fetchEndpoint: (method: string) => Promise<unknown>;
+    }): Promise<unknown> {
+      await this.buildTransaction({ type: "INVOKE" });
+      return this.fetchEndpoint("starknet_addInvokeTransaction");
+    },
+  };
+  const channel = new Proxy(implementations, {
+    get(target, property, receiver) {
+      if (Reflect.has(target, property)) {
+        return Reflect.get(target, property, receiver);
+      }
+      if (typeof property === "symbol") {
+        return undefined;
+      }
+      const method = String(property);
+      return async () => {
+        if (method === failAt) {
+          throw new Error(`${method} transport failed with private request body`);
+        }
+        return responses[method];
+      };
+    },
+  });
   return {
     channel,
     async getChainId() {
@@ -78,26 +100,33 @@ const accountProvider = (failAt: string): RpcProvider => {
   } as unknown as RpcProvider;
 };
 
-const submitWithFailure = (failAt: string): Promise<unknown> =>
-  submitInvokeTransaction(
+const submitWithFailure = async (
+  failAt: string,
+): Promise<{ readonly fetches: readonly string[]; readonly rejection: unknown }> => {
+  const fetches: string[] = [];
+  const rejection = await submitInvokeTransaction(
     { account, calls: [call], rpcUrls: ["https://rpc.example"], signHash },
-    () => accountProvider(failAt),
+    () => accountProvider(failAt, fetches),
   ).catch((error: unknown) => error);
+  return { fetches, rejection };
+};
 
 describe("invoke RPC write boundary", () => {
   test("restores retry safety for deployment checks and fee-estimation failures", async () => {
-    for (const failure of ["getClassHashAt", "getEstimateFee"]) {
-      const rejection = await submitWithFailure(failure);
+    for (const failure of ["getClassHashAt", "getEstimateFee", "buildTransaction"]) {
+      const { fetches, rejection } = await submitWithFailure(failure);
       expect(rejection).toBeInstanceOf(WalletError);
       expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
       expect((rejection as Error).message).toContain("could not be prepared");
       expect((rejection as Error).message).not.toContain("private request body");
+      expect(fetches).toEqual([]);
     }
   });
 
   test("marks and redacts a lost response only after invoke reaches broadcast", async () => {
-    const rejection = await submitWithFailure("invoke");
+    const { fetches, rejection } = await submitWithFailure("starknet_addInvokeTransaction");
     expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
     expect((rejection as Error).message).not.toContain("private request body");
+    expect(fetches).toEqual(["starknet_addInvokeTransaction"]);
   });
 });
