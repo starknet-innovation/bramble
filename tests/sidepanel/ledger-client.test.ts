@@ -8,10 +8,14 @@
 import { describe, expect, test } from "bun:test";
 import {
   assertLedgerAppReady,
+  assertLedgerDeviceReady,
+  assertLedgerFirmwareReady,
   type LedgerDeviceClient,
   ledgerAppVersion,
+  ledgerFirmwareVersion,
   ledgerPublicKeyX,
   ledgerSignHashOnDevice,
+  MC_LEDGER_OS_MIN,
   MC_LEDGER_STARKNET_APP_MIN,
 } from "../../src/sidepanel/ledger/client";
 import { LedgerRejection } from "../../src/sidepanel/ledger/errors";
@@ -27,8 +31,11 @@ const bytes = (values: readonly number[]): Uint8Array => Uint8Array.from(values)
 const publicKey = bytes([...Array(31).fill(0), 0x02, ...Array(32).fill(0xff)]);
 
 const fakeClient = (overrides: Partial<LedgerDeviceClient> = {}): LedgerDeviceClient => ({
+  async getOsVersion() {
+    return { targetId: 0x33000004, version: "2.6.1" };
+  },
   async getAppVersion() {
-    return { ...OK, major: 2, minor: 1, patch: 0 };
+    return { ...OK, major: 2, minor: 4, patch: 0 };
   },
   async getPubKey() {
     return { ...OK, publicKey };
@@ -46,15 +53,19 @@ const fakeClient = (overrides: Partial<LedgerDeviceClient> = {}): LedgerDeviceCl
 
 describe("ledgerAppVersion / assertLedgerAppReady", () => {
   test("reads the version and passes at or above the minimum", async () => {
-    expect(await ledgerAppVersion(fakeClient())).toEqual({ major: 2, minor: 1, patch: 0 });
-    expect(await assertLedgerAppReady(fakeClient())).toEqual({ major: 2, minor: 1, patch: 0 });
+    expect(await ledgerAppVersion(fakeClient())).toEqual({ major: 2, minor: 4, patch: 0 });
+    expect(await assertLedgerAppReady(fakeClient())).toEqual({ major: 2, minor: 4, patch: 0 });
   });
 
   test("rejects an app below the pinned minimum", async () => {
-    const belowPatch = { ...MC_LEDGER_STARKNET_APP_MIN, patch: 0 };
     const client = fakeClient({
       async getAppVersion() {
-        return { ...OK, major: belowPatch.major - 1, minor: 9, patch: 9 };
+        return {
+          ...OK,
+          major: MC_LEDGER_STARKNET_APP_MIN.major,
+          minor: MC_LEDGER_STARKNET_APP_MIN.minor - 1,
+          patch: 9,
+        };
       },
     });
     await expect(assertLedgerAppReady(client)).rejects.toMatchObject({ code: "app-below-minimum" });
@@ -94,6 +105,123 @@ describe("ledgerAppVersion / assertLedgerAppReady", () => {
     await expect(ledgerAppVersion(client)).rejects.toMatchObject({
       code: "unexpected-device-error",
     });
+
+    const impossibleByte = fakeClient({
+      async getAppVersion() {
+        return { ...OK, major: 256, minor: 1, patch: 0 };
+      },
+    });
+    await expect(ledgerAppVersion(impossibleByte)).rejects.toMatchObject({
+      code: "unexpected-device-error",
+    });
+  });
+});
+
+describe("ledgerFirmwareVersion / assertLedgerFirmwareReady", () => {
+  test("reads a known device OS and passes at the model's compatibility floor", async () => {
+    expect(await ledgerFirmwareVersion(fakeClient())).toEqual({
+      model: "nano-x",
+      version: MC_LEDGER_OS_MIN["nano-x"],
+    });
+    await expect(assertLedgerFirmwareReady(fakeClient())).resolves.toEqual({
+      model: "nano-x",
+      version: MC_LEDGER_OS_MIN["nano-x"],
+    });
+  });
+
+  test("rejects an OS below its model's compatibility floor", async () => {
+    const client = fakeClient({
+      async getOsVersion() {
+        return { targetId: 0x33000004, version: "2.6.0" };
+      },
+    });
+    await expect(assertLedgerFirmwareReady(client)).rejects.toMatchObject({
+      code: "firmware-below-minimum",
+    });
+  });
+
+  test("uses Ledger's target masks across every supported model and hardware revision", async () => {
+    const cases = [
+      { model: "nano-x", targetId: 0x33001234 },
+      { model: "nano-s-plus", targetId: 0x3310abcd },
+      { model: "stax", targetId: 0x33200042 },
+      { model: "flex", targetId: 0x3330ffff },
+      { model: "nano-gen5", targetId: 0x33400099 },
+    ] as const;
+    for (const { model, targetId } of cases) {
+      const minimum = MC_LEDGER_OS_MIN[model];
+      const client = fakeClient({
+        async getOsVersion() {
+          return {
+            targetId,
+            version: `${minimum.major}.${minimum.minor}.${minimum.patch}`,
+          };
+        },
+      });
+      await expect(ledgerFirmwareVersion(client)).resolves.toEqual({
+        model,
+        version: minimum,
+      });
+    }
+  });
+
+  test("fails closed for an unknown device target or malformed OS version", async () => {
+    const unknownDevice = fakeClient({
+      async getOsVersion() {
+        return { targetId: 0x31100004, version: "2.7.1" };
+      },
+    });
+    await expect(ledgerFirmwareVersion(unknownDevice)).rejects.toMatchObject({
+      code: "unsupported-ledger-device",
+    });
+
+    const malformedVersion = fakeClient({
+      async getOsVersion() {
+        return { targetId: 0x33000004, version: "2.7" };
+      },
+    });
+    await expect(ledgerFirmwareVersion(malformedVersion)).rejects.toMatchObject({
+      code: "unexpected-device-error",
+    });
+  });
+});
+
+describe("assertLedgerDeviceReady", () => {
+  test("checks the OS before the Starknet app and returns the app version", async () => {
+    const calls: string[] = [];
+    const client = fakeClient({
+      async getAppVersion() {
+        calls.push("app");
+        return { ...OK, major: 2, minor: 4, patch: 0 };
+      },
+      async getOsVersion() {
+        calls.push("os");
+        return { targetId: 0x33000004, version: "2.6.1" };
+      },
+    });
+    await expect(assertLedgerDeviceReady(client)).resolves.toEqual({
+      major: 2,
+      minor: 4,
+      patch: 0,
+    });
+    expect(calls).toEqual(["os", "app"]);
+  });
+
+  test("does not query the app when the OS needs an update", async () => {
+    let appReads = 0;
+    const client = fakeClient({
+      async getAppVersion() {
+        appReads += 1;
+        return { ...OK, major: 2, minor: 4, patch: 0 };
+      },
+      async getOsVersion() {
+        return { targetId: 0x33000004, version: "2.6.0" };
+      },
+    });
+    await expect(assertLedgerDeviceReady(client)).rejects.toMatchObject({
+      code: "firmware-below-minimum",
+    });
+    expect(appReads).toBe(0);
   });
 });
 

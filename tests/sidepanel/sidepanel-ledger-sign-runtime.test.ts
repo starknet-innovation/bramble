@@ -49,7 +49,10 @@ const DEVICE_PUBLIC_KEY = Uint8Array.from([
 ]);
 
 const okVersion = (): ReturnType<LedgerDeviceClient["getAppVersion"]> =>
-  Promise.resolve({ errorMessage: "No errors", major: 2, minor: 1, patch: 0, returnCode: 0x9000 });
+  Promise.resolve({ errorMessage: "No errors", major: 2, minor: 4, patch: 0, returnCode: 0x9000 });
+
+const okOsVersion = (): ReturnType<LedgerDeviceClient["getOsVersion"]> =>
+  Promise.resolve({ targetId: 0x33000004, version: "2.7.1" });
 
 const okPubKey = (): ReturnType<LedgerDeviceClient["getPubKey"]> =>
   Promise.resolve({ errorMessage: "No errors", publicKey: DEVICE_PUBLIC_KEY, returnCode: 0x9000 });
@@ -58,6 +61,7 @@ const fakeClient = (
   signHash: LedgerDeviceClient["signHash"],
   overrides: Partial<LedgerDeviceClient> = {},
 ): LedgerDeviceClient => ({
+  getOsVersion: okOsVersion,
   getAppVersion: okVersion,
   getPubKey: okPubKey,
   signHash,

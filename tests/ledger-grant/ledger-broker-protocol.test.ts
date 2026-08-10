@@ -29,6 +29,7 @@ describe("Ledger broker session capability", () => {
 describe("isLedgerBrokerCommand", () => {
   test("accepts only exact canonical device operations", () => {
     const path = ledgerAccountPath(7);
+    expect(isLedgerBrokerCommand({ id: 1, kind: "command", method: "getOsVersion" })).toBe(true);
     expect(isLedgerBrokerCommand({ id: 1, kind: "command", method: "getAppVersion" })).toBe(true);
     expect(isLedgerBrokerCommand({ id: 2, kind: "command", method: "getPubKey", path })).toBe(true);
     expect(
@@ -64,6 +65,9 @@ describe("isLedgerBrokerCommand", () => {
     expect(
       isLedgerBrokerCommand({ extra: true, id: 3, kind: "command", method: "getAppVersion" }),
     ).toBe(false);
+    expect(isLedgerBrokerCommand({ id: 3, kind: "command", method: "getOsVersion", x: 1 })).toBe(
+      false,
+    );
     expect(isLedgerBrokerCommand({ id: 0, kind: "command", method: "getAppVersion" })).toBe(false);
   });
 });

@@ -22,7 +22,7 @@ import type { LedgerAccountRef } from "../../src/storage/vault-schema";
 const version = (major: number) => ({
   errorMessage: "No errors",
   major,
-  minor: 0,
+  minor: major === 2 ? 4 : 0,
   patch: 0,
   returnCode: 0x9000,
 });
@@ -30,6 +30,7 @@ const version = (major: number) => ({
 // A device whose pubkey per index is deterministic (0x1, 0x2, …), so the test
 // can assert the enumerated entries and that paths track their index.
 const enumerateClient = (appMajor: number): LedgerDeviceClient => ({
+  getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
   getAppVersion: () => Promise.resolve(version(appMajor)),
   getPubKey: (path: string) => {
     const index = Number(path.split("/").at(-1)?.replace(/'.*$/, "") ?? "0");
@@ -58,6 +59,7 @@ describe("enumerateLedgerPubKeys", () => {
   test("rejects a below-minimum app before reading any key", async () => {
     let reads = 0;
     const client: LedgerDeviceClient = {
+      getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
       getAppVersion: () => Promise.resolve(version(1)),
       getPubKey: () => {
         reads += 1;
