@@ -180,9 +180,9 @@ describe("repository sources", () => {
     expect(result.ok).toBe(true);
   });
 
-  test("the checked-in version matches the v0.8 release line", async () => {
+  test("the checked-in version matches the v0.9 release line", async () => {
     const packageJson = await readJson("package.json");
-    expect(packageJson["version"]).toBe("0.8.0");
+    expect(packageJson["version"]).toBe("0.9.0");
   });
 });
 
@@ -204,14 +204,14 @@ describe("main (CLI over the real repository sources)", () => {
   test("writes release/version/tag/kind to GITHUB_OUTPUT for this release promotion", async () => {
     const outPath = await outputPath();
     const code = await main({
-      HEAD_REF: "release/v0.8",
+      HEAD_REF: "release/v0.9",
       GITHUB_OUTPUT: outPath,
     });
     expect(code).toBe(0);
     const output = await readFile(outPath, "utf8");
     expect(output).toContain("release=true");
-    expect(output).toContain("version=0.8.0");
-    expect(output).toContain("tag=v0.8.0");
+    expect(output).toContain("version=0.9.0");
+    expect(output).toContain("tag=v0.9.0");
     expect(output).toContain("kind=release");
   });
 
