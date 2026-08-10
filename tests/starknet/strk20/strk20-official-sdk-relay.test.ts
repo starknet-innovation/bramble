@@ -39,24 +39,46 @@ const quotedTransaction = async (
       readonly params: { readonly transaction: Record<string, unknown> };
     };
     transaction = body.params.transaction;
+    const type = transaction["type"];
     return new Response(
       JSON.stringify({
         id: "mc-wallet-strk20",
         jsonrpc: "2.0",
         result: {
+          fee: {
+            estimated_fee_in_gas_token: "0x1",
+            estimated_fee_in_strk: "0x1",
+            gas_token_price_in_strk: "0x1",
+            suggested_max_fee_in_gas_token: "0x1",
+            suggested_max_fee_in_strk: "0x1",
+          },
           fee_action: {
             amount: "0x1",
             recipient: "0x2",
             token: STRK_TOKEN_ADDRESS,
             type: "withdraw",
           },
-          typed_data: outsideExecution.getTypedData(
-            "0x534e5f5345504f4c4941",
-            { caller: "0x99", execute_after: "0x3e7", execute_before: "0x7d0" },
-            "0x5",
-            [depositApproval],
-            OutsideExecutionVersion.V2,
-          ),
+          parameters: {
+            fee_mode: {
+              mode: "sponsored_private",
+              pool_fee_token: STRK_TOKEN_ADDRESS,
+              tip: "normal",
+            },
+            time_bounds: null,
+            version: "0x1",
+          },
+          type,
+          ...(type === "invoke_and_apply_action"
+            ? {
+                typed_data: outsideExecution.getTypedData(
+                  "0x534e5f5345504f4c4941",
+                  { caller: "0x99", execute_after: "0x3e7", execute_before: "0x7d0" },
+                  "0x5",
+                  [depositApproval],
+                  OutsideExecutionVersion.V2,
+                ),
+              }
+            : {}),
         },
       }),
       { headers: { "content-type": "application/json" }, status: 200 },
@@ -100,7 +122,7 @@ describe("relay quote approvals", () => {
     expect(transaction["type"]).toBe("invoke_and_apply_action");
     expect(invoke.user_address).toBe(context.account.address);
     expect(invoke.calls).toHaveLength(1);
-    expect(invoke.calls[0]?.calldata).toEqual(["291", "100", "0"]);
+    expect(invoke.calls[0]?.calldata).toEqual(["0x123", "0x64", "0x0"]);
     expect(sameFelt(invoke.calls[0]?.to ?? "", STRK_TOKEN_ADDRESS)).toBe(true);
   });
 });

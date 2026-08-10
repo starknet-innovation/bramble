@@ -9,7 +9,12 @@ import type { Call } from "starknet";
 import { CallData, hash } from "starknet";
 import { WalletError } from "../../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../../shared/json";
-import { isNonZeroStarkFieldElement, isStarkFieldElement, sameFelt } from "../networks";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  sameFelt,
+} from "../networks";
 import type { Strk20PaymasterConfig } from "./config";
 import { bindPaymasterTypedData, isPaymasterAuthorizationLive } from "./paymaster-typed-data";
 import type { Strk20Proof } from "./schemas";
@@ -26,17 +31,105 @@ const PARAMETERS = { version: "0x1" } as const;
 const PAYMASTER_TIMEOUT_MS = 30_000;
 const MAX_PAYMASTER_RESPONSE_BYTES = 1024 * 1024;
 
-const paymasterCall = (call: Call): PaymasterCall => ({
-  calldata: CallData.compile(call.calldata ?? []).map(String),
-  selector: hash.getSelectorFromName(call.entrypoint),
-  to: call.contractAddress,
-});
+const requirePaymasterFelt = (value: string, allowZero: boolean): string => {
+  const canonical = canonicalFelt(value);
+  if (
+    canonical === null ||
+    (allowZero ? !isStarkFieldElement(canonical) : !isNonZeroStarkFieldElement(canonical))
+  ) {
+    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
+  return canonical;
+};
+
+// AVNU's paymaster OpenRPC schema accepts felts only as canonical 0x-prefixed
+// hex strings. CallData.compile returns decimal strings, so normalize every
+// call field at this trust boundary rather than relying on caller formatting.
+const paymasterCall = (call: Call): PaymasterCall => {
+  try {
+    return {
+      calldata: CallData.compile(call.calldata ?? []).map((felt) =>
+        requirePaymasterFelt(String(felt), true),
+      ),
+      selector: requirePaymasterFelt(hash.getSelectorFromName(call.entrypoint), false),
+      to: requirePaymasterFelt(call.contractAddress, false),
+    };
+  } catch {
+    throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
+};
 
 const feeMode = (config: Strk20PaymasterConfig) => ({
   mode: "sponsored_private",
-  pool_fee_token: config.feeToken,
+  pool_fee_token: requirePaymasterFelt(config.feeToken, false),
   tip: "normal",
 });
+
+const QUOTE_KEYS = ["fee", "fee_action", "parameters", "type", "typed_data"] as const;
+const FEE_KEYS = [
+  "estimated_fee_in_gas_token",
+  "estimated_fee_in_strk",
+  "gas_token_price_in_strk",
+  "suggested_max_fee_in_gas_token",
+  "suggested_max_fee_in_strk",
+] as const;
+const REQUIRED_FEE_KEYS = [
+  "estimated_fee_in_strk",
+  "gas_token_price_in_strk",
+  "suggested_max_fee_in_strk",
+] as const;
+
+// The current OpenRPC response includes both gas-token fields. The deployed
+// sponsored-private service can omit that pair when STRK is also the fee token;
+// accept only those two complete, observed shapes so a partial estimate fails.
+const isQuoteFee = (value: unknown): boolean => {
+  if (!isRecord(value) || !hasOnlyKnownKeys(value, FEE_KEYS)) {
+    return false;
+  }
+  if (
+    !REQUIRED_FEE_KEYS.every(
+      (key) =>
+        Object.hasOwn(value, key) &&
+        typeof value[key] === "string" &&
+        isStarkFieldElement(value[key]),
+    )
+  ) {
+    return false;
+  }
+  const hasEstimatedGasToken = Object.hasOwn(value, "estimated_fee_in_gas_token");
+  const hasSuggestedGasToken = Object.hasOwn(value, "suggested_max_fee_in_gas_token");
+  return (
+    hasEstimatedGasToken === hasSuggestedGasToken &&
+    (!hasEstimatedGasToken ||
+      (typeof value["estimated_fee_in_gas_token"] === "string" &&
+        isStarkFieldElement(value["estimated_fee_in_gas_token"]) &&
+        typeof value["suggested_max_fee_in_gas_token"] === "string" &&
+        isStarkFieldElement(value["suggested_max_fee_in_gas_token"])))
+  );
+};
+
+// Execution parameters are an informational echo, but validating any echoed
+// values prevents a route or fee-token mismatch from being hidden in a quote.
+// Older deployed responses omit defaulted fee-mode fields; present fields must
+// still match the request exactly.
+const isQuoteParameters = (value: unknown, feeToken: string): boolean => {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["fee_mode", "time_bounds", "version"]) ||
+    value["version"] !== PARAMETERS.version ||
+    (value["time_bounds"] !== undefined && value["time_bounds"] !== null)
+  ) {
+    return false;
+  }
+  const mode = value["fee_mode"];
+  return (
+    isRecord(mode) &&
+    hasOnlyKnownKeys(mode, ["mode", "pool_fee_token", "tip"]) &&
+    mode["mode"] === "sponsored_private" &&
+    (mode["pool_fee_token"] === undefined || sameFelt(mode["pool_fee_token"], feeToken)) &&
+    (mode["tip"] === undefined || mode["tip"] === "normal")
+  );
+};
 
 const readBoundedResponse = async (response: Response): Promise<string | null> => {
   const declaredLength = response.headers.get("content-length");
@@ -154,23 +247,34 @@ export const buildStrk20PaymasterPlan = async (input: {
   readonly poolAddress: string;
 }): Promise<Strk20PrivateRelayPlan> => {
   const hasApprovals = input.approveCalls.length > 0;
+  const expectedType = hasApprovals ? "invoke_and_apply_action" : "apply_action";
   const result = await rpc(input.http ?? fetch, input.config.url, "paymaster_buildTransaction", {
     parameters: { ...PARAMETERS, fee_mode: feeMode(input.config) },
     transaction: hasApprovals
       ? {
-          apply_action: { pool_address: input.poolAddress },
+          apply_action: { pool_address: requirePaymasterFelt(input.poolAddress, false) },
           invoke: {
             calls: input.approveCalls.map(paymasterCall),
-            user_address: input.accountAddress,
+            user_address: requirePaymasterFelt(input.accountAddress, false),
           },
-          type: "invoke_and_apply_action",
+          type: expectedType,
         }
       : {
-          apply_action: { pool_address: input.poolAddress },
-          type: "apply_action",
+          apply_action: { pool_address: requirePaymasterFelt(input.poolAddress, false) },
+          type: expectedType,
         },
   });
-  if (!isRecord(result) || !hasOnlyKnownKeys(result, ["fee_action", "typed_data"])) {
+  if (
+    !isRecord(result) ||
+    !hasOnlyKnownKeys(result, QUOTE_KEYS) ||
+    result["type"] !== expectedType ||
+    !Object.hasOwn(result, "parameters") ||
+    !isQuoteParameters(result["parameters"], input.config.feeToken) ||
+    !Object.hasOwn(result, "fee") ||
+    !isQuoteFee(result["fee"]) ||
+    !Object.hasOwn(result, "fee_action") ||
+    hasApprovals !== Object.hasOwn(result, "typed_data")
+  ) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   const feeAction = readFeeAction(result["fee_action"]);
@@ -234,7 +338,7 @@ export const submitStrk20PaymasterPlan = async (input: {
     invoke = {
       signature: await input.signTypedData(typedData),
       typed_data: typedData,
-      user_address: input.accountAddress,
+      user_address: requirePaymasterFelt(input.accountAddress, false),
     };
   }
   const result = await rpc(input.http ?? fetch, input.config.url, "paymaster_executeTransaction", {

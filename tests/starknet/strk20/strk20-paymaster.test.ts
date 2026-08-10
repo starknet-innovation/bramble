@@ -31,20 +31,52 @@ const response = (result: unknown): Response =>
     status: 200,
   });
 
+const quoteResult = (input: {
+  readonly feeToken?: string;
+  readonly type: "apply_action" | "invoke_and_apply_action";
+  readonly typedData?: unknown;
+}): Record<string, unknown> => ({
+  fee: {
+    estimated_fee_in_gas_token: "0x2",
+    estimated_fee_in_strk: "0x2",
+    gas_token_price_in_strk: "0x1",
+    suggested_max_fee_in_gas_token: "0x3",
+    suggested_max_fee_in_strk: "0x3",
+  },
+  fee_action: {
+    amount: "0x5",
+    recipient: "0x4",
+    token: input.feeToken ?? "0x3",
+    type: "withdraw",
+  },
+  parameters: {
+    fee_mode: { mode: "sponsored_private", pool_fee_token: "0x3", tip: "normal" },
+    time_bounds: null,
+    version: "0x1",
+  },
+  type: input.type,
+  ...(input.type === "invoke_and_apply_action"
+    ? { typed_data: input.typedData ?? outsideTypedData() }
+    : {}),
+});
+
 describe("STRK20 paymaster boundary", () => {
   test("freezes a validated fee plan and outside-execution typed data", async () => {
     const requests: Record<string, unknown>[] = [];
+    const approvalCall = { ...call, calldata: ["291", "100", "0"] };
     const plan = await buildStrk20PaymasterPlan({
       accountAddress: "0x1",
-      approveCalls: [call],
+      approveCalls: [approvalCall],
       chainId,
       config,
       http: async (_url, init) => {
         requests.push(JSON.parse(String(init?.body)));
-        return response({
-          fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
-          typed_data: outsideTypedData(),
-        });
+        return response(
+          quoteResult({
+            type: "invoke_and_apply_action",
+            typedData: outsideTypedData([approvalCall]),
+          }),
+        );
       },
       nowSeconds: 2,
       poolAddress: "0x2",
@@ -63,6 +95,18 @@ describe("STRK20 paymaster boundary", () => {
       publicCallCount: 1,
     });
     expect(requests[0]?.["method"]).toBe("paymaster_buildTransaction");
+    expect(requests[0]?.["params"]).toMatchObject({
+      parameters: {
+        fee_mode: { pool_fee_token: "0x3" },
+      },
+      transaction: {
+        apply_action: { pool_address: "0x2" },
+        invoke: {
+          calls: [{ calldata: ["0x123", "0x64", "0x0"], to: "0x2" }],
+          user_address: "0x1",
+        },
+      },
+    });
   });
 
   test("rejects a fee action for a token other than the configured fee token", async () => {
@@ -72,10 +116,7 @@ describe("STRK20 paymaster boundary", () => {
         approveCalls: [],
         chainId,
         config,
-        http: async () =>
-          response({
-            fee_action: { amount: "0x5", recipient: "0x4", token: "0x99", type: "withdraw" },
-          }),
+        http: async () => response(quoteResult({ feeToken: "0x99", type: "apply_action" })),
         nowSeconds: 2,
         poolAddress: "0x2",
       }),
@@ -90,12 +131,14 @@ describe("STRK20 paymaster boundary", () => {
         chainId,
         config,
         http: async () =>
-          response({
-            fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
-            typed_data: outsideTypedData([
-              { calldata: ["0xdead"], contractAddress: "0x77", entrypoint: "transfer" },
-            ]),
-          }),
+          response(
+            quoteResult({
+              type: "invoke_and_apply_action",
+              typedData: outsideTypedData([
+                { calldata: ["0xdead"], contractAddress: "0x77", entrypoint: "transfer" },
+              ]),
+            }),
+          ),
         nowSeconds: 2,
         poolAddress: "0x2",
       }),
@@ -110,16 +153,18 @@ describe("STRK20 paymaster boundary", () => {
         chainId,
         config,
         http: async () =>
-          response({
-            fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
-            typed_data: outsideExecution.getTypedData(
-              chainId,
-              { caller: "0x99", execute_after: "0x100", execute_before: "0x100" },
-              "0x5",
-              [call],
-              OutsideExecutionVersion.V2,
-            ),
-          }),
+          response(
+            quoteResult({
+              type: "invoke_and_apply_action",
+              typedData: outsideExecution.getTypedData(
+                chainId,
+                { caller: "0x99", execute_after: "0x100", execute_before: "0x100" },
+                "0x5",
+                [call],
+                OutsideExecutionVersion.V2,
+              ),
+            }),
+          ),
         nowSeconds: 2,
         poolAddress: "0x2",
       }),
@@ -139,22 +184,103 @@ describe("STRK20 paymaster boundary", () => {
           chainId,
           config,
           http: async () =>
-            response({
-              fee_action: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
-              typed_data: outsideExecution.getTypedData(
-                chainId,
-                { caller: "0x99", execute_after: executeAfter, execute_before: executeBefore },
-                "0x5",
-                [call],
-                OutsideExecutionVersion.V2,
-              ),
-            }),
+            response(
+              quoteResult({
+                type: "invoke_and_apply_action",
+                typedData: outsideExecution.getTypedData(
+                  chainId,
+                  { caller: "0x99", execute_after: executeAfter, execute_before: executeBefore },
+                  "0x5",
+                  [call],
+                  OutsideExecutionVersion.V2,
+                ),
+              }),
+            ),
           nowSeconds,
           poolAddress: "0x2",
         }),
       ).rejects.toThrow("strk20 private submission unavailable");
     });
   }
+
+  test("accepts the deployed relay's compact fee and parameter metadata", async () => {
+    const result = quoteResult({ type: "apply_action" });
+    result["fee"] = {
+      estimated_fee_in_strk: "0x2",
+      gas_token_price_in_strk: "0x1",
+      suggested_max_fee_in_strk: "0x3",
+    };
+    result["parameters"] = { fee_mode: { mode: "sponsored_private" }, version: "0x1" };
+
+    const plan = await buildStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      approveCalls: [],
+      chainId,
+      config,
+      http: async () => response(result),
+      nowSeconds: 2,
+      poolAddress: "0x2",
+    });
+
+    expect(plan.mode).toBe("private-relay");
+  });
+
+  test("rejects mismatched or partially formed quote metadata", async () => {
+    const base = quoteResult({ type: "apply_action" });
+    for (const result of [
+      { ...base, type: "invoke_and_apply_action" },
+      { ...base, unexpected: "field" },
+      { ...base, parameters: { fee_mode: { mode: "sponsored" }, version: "0x1" } },
+      {
+        ...base,
+        parameters: {
+          fee_mode: { mode: "sponsored_private", pool_fee_token: "0x99" },
+          version: "0x1",
+        },
+      },
+      {
+        ...base,
+        fee: {
+          estimated_fee_in_gas_token: "0x2",
+          estimated_fee_in_strk: "0x2",
+          gas_token_price_in_strk: "0x1",
+          suggested_max_fee_in_strk: "0x3",
+        },
+      },
+      { ...base, typed_data: outsideTypedData() },
+    ]) {
+      await expect(
+        buildStrk20PaymasterPlan({
+          accountAddress: "0x1",
+          approveCalls: [],
+          chainId,
+          config,
+          http: async () => response(result),
+          nowSeconds: 2,
+          poolAddress: "0x2",
+        }),
+      ).rejects.toThrow("strk20 private submission unavailable");
+    }
+  });
+
+  test("rejects an invalid paymaster call before making a network request", async () => {
+    let requested = false;
+    await expect(
+      buildStrk20PaymasterPlan({
+        accountAddress: "0x1",
+        approveCalls: [{ ...call, contractAddress: "0x0" }],
+        chainId,
+        config,
+        http: async () => {
+          requested = true;
+          return response(quoteResult({ type: "invoke_and_apply_action" }));
+        },
+        nowSeconds: 2,
+        poolAddress: "0x2",
+      }),
+    ).rejects.toThrow("strk20 private submission unavailable");
+    expect(requested).toBe(false);
+  });
 
   test("submits the frozen proof and validates the returned transaction hash", async () => {
     const requests: Record<string, unknown>[] = [];
