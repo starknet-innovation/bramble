@@ -49,6 +49,48 @@ const expectedHash = async (chainId: string, poolAddress: string): Promise<strin
   fakeKms().strk20ViewingKeyMessageHash(chainId, poolAddress);
 
 describe("deriveLedgerStrk20ViewingKey", () => {
+  test("leaves the vault readable while the device is being confirmed", async () => {
+    // The ceremony must not hold the vault's mutation lock across the device
+    // round-trip. The surface that drives the device reads the vault to render
+    // itself, so a lock held here deadlocks the wallet: the ceremony waits for the
+    // panel to present the prompt, and the panel waits for the lock. Symptom is a
+    // dead button with nothing shown on screen or on the device.
+    const { account, service } = await ledgerVault();
+    let releaseDevice = (): void => undefined;
+    const deviceConfirmed = new Promise<void>((resolve) => {
+      releaseDevice = resolve;
+    });
+
+    const ceremony = service.deriveLedgerStrk20ViewingKey({
+      accountId: account.id,
+      chainId: CHAIN_MAIN,
+      poolAddress: POOL,
+      sign: async () => {
+        await deviceConfirmed;
+        return { publicKey: "0xdef123", r: "0x11", s: "0x22" };
+      },
+      vaultPassphrase,
+    });
+
+    // While the "device" is still pending, an ordinary vault read must complete.
+    const read = await Promise.race([
+      service.readVault(vaultPassphrase).then(() => "readable"),
+      new Promise((resolve) => setTimeout(() => resolve("deadlocked"), 250)),
+    ]);
+    expect(read).toBe("readable");
+
+    releaseDevice();
+    await ceremony;
+    await expect(
+      service.deriveStrk20ViewingKey({
+        accountId: account.id,
+        chainId: CHAIN_MAIN,
+        poolAddress: POOL,
+        vaultPassphrase,
+      }),
+    ).resolves.toBe(await expectedKey("0x11", "0x22"));
+  });
+
   test("signs the scope's message and retains the fold of the device signature", async () => {
     const { account, service } = await ledgerVault();
     const signed: string[] = [];

@@ -207,11 +207,6 @@ export const tokenDetailFlow = (
     : null;
   const registered = privacy.value?.registration === "registered";
   const registrationPending = privacy.value?.registration === "pending";
-  // A hardware account whose viewing key has not been derived on the device yet.
-  // Its balances are unknown rather than zero, so the line must not read as a
-  // balance, and the action unlocks the key instead of offering registration —
-  // registering publishes that key's commitment, so it cannot come first.
-  const setupRequired = privacy.value?.privateBalances === "setup-required";
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(
@@ -238,9 +233,9 @@ export const tokenDetailFlow = (
                 </span>
               </div>`
             : privacy.value
-              ? `<div class="private-balance-summary muted" title="${setupRequired ? "Confirm on your Ledger to unlock private balances for this pool" : registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
+              ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
-                <span class="token-fiat">${setupRequired ? "Unlock with your Ledger" : registrationPending ? "Registration pending…" : "Register to start shielding"}</span>
+                <span class="token-fiat">${registrationPending ? "Registration pending…" : "Register to start shielding"}</span>
               </div>`
               : ""
         }
@@ -258,11 +253,7 @@ export const tokenDetailFlow = (
             : button({
                 attributes: { "data-privacy-open": token.id },
                 icon: "shield",
-                label: setupRequired
-                  ? "Unlock private balances"
-                  : registrationPending
-                    ? "Registration pending"
-                    : "Go private",
+                label: registrationPending ? "Registration pending" : "Go private",
               })
         }
         ${privacy.error ? `<p class="hint">${escapeHtml(privacy.error)}</p>` : ""}

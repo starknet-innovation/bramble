@@ -31,7 +31,10 @@ import {
   nextAccountIndex,
 } from "./accounts";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
-import { deriveVaultStrk20ViewingKey, ledgerStrk20ViewingKeyCeremony } from "./strk20-viewing-key";
+import {
+  deriveVaultStrk20ViewingKey,
+  runLedgerStrk20ViewingKeyCeremony,
+} from "./strk20-viewing-key";
 import { findVaultAccount } from "./vault-account";
 import {
   deriveNetworkAccount,
@@ -261,11 +264,12 @@ export const createWalletVaultService = ({
     deriveLedgerAccounts(input) {
       return deriveLedgerAccountRefs(kms, { entries: input.entries, networkId: input.networkId });
     },
-    async deriveLedgerStrk20ViewingKey(input) {
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const next = await ledgerStrk20ViewingKeyCeremony(kms, vault, input);
-      await writeVault(encryptedStore, next, input.vaultPassphrase);
-    },
+    deriveLedgerStrk20ViewingKey: (input) =>
+      runLedgerStrk20ViewingKeyCeremony(kms, input, {
+        readVault: () => readVaultSnapshot(input.vaultPassphrase),
+        serialized,
+        writeVault: (vault) => writeVault(encryptedStore, vault, input.vaultPassphrase),
+      }),
     async deriveStrk20ViewingKey(input) {
       const vault = await readVault(input.vaultPassphrase);
       return deriveVaultStrk20ViewingKey(
@@ -482,8 +486,6 @@ export const createWalletVaultService = ({
     addLedgerAccount: (input) => serialized(() => service.addLedgerAccount(input)),
     createAccount: (input) => serialized(() => service.createAccount(input)),
     createLedgerVault: (input) => serialized(() => service.createLedgerVault(input)),
-    deriveLedgerStrk20ViewingKey: (input) =>
-      serialized(() => service.deriveLedgerStrk20ViewingKey(input)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
     forgetLedgerStrk20ViewingKey: (input) =>
       serialized(() => service.forgetLedgerStrk20ViewingKey(input)),

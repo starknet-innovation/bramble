@@ -131,14 +131,13 @@ export type PrivateBreakdown =
 
 const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown): string => {
   const symbol = token.symbol;
+  // `setup-required` shares the unregistered wording deliberately: a hardware
+  // account still has to derive its viewing key first, but that is a step inside
+  // the same journey, not a different destination the user should reason about.
   if (breakdown.kind === "setup-required" || breakdown.kind === "unregistered") {
-    const label =
-      breakdown.kind === "setup-required"
-        ? "Unlock with your Ledger"
-        : "Register to start shielding";
-    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="${escapeHtml(label)}">
+    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="Register to start shielding">
         <span class="token-breakdown-label">${icon("lock")}Private balance</span>
-        <span>${escapeHtml(label)}</span>
+        <span>Register to start shielding</span>
       </button>`;
   }
   const value =

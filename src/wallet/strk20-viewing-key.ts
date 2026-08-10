@@ -6,6 +6,7 @@ import { WalletError } from "../shared/errors";
 import { canonicalFelt } from "../starknet/networks";
 import {
   LEDGER_STRK20_VIEWING_KEY_SCHEME,
+  type LedgerStrk20Scope,
   ledgerStrk20ScopeFor,
   ledgerStrk20ViewingKeyFor,
   withLedgerStrk20ViewingKey,
@@ -63,7 +64,16 @@ export const deriveVaultStrk20ViewingKey = async (
 };
 
 /**
- * Runs the Ledger viewing-key ceremony and returns the vault to persist.
+ * A folded viewing key waiting to be written, with the scope it is bound to.
+ */
+export type PreparedLedgerStrk20ViewingKey = {
+  readonly accountId: string;
+  readonly scope: LedgerStrk20Scope;
+  readonly viewingKey: string;
+};
+
+/**
+ * Runs the device half of the Ledger viewing-key ceremony.
  *
  * The device cannot reveal its private key, so the wallet performs the two
  * hashing stages either side of the signature itself: it asks Krusty for the
@@ -73,17 +83,19 @@ export const deriveVaultStrk20ViewingKey = async (
  * the device's RFC-6979 variant.
  *
  * `sign` is injected rather than called here so the device round-trip — and its
- * verify-against-`publicKeyX` gate — stays in the caller that owns the
- * transport, while the key itself is folded and written without ever leaving this
- * privileged boundary. Nothing partial is persisted: the caller receives a whole
- * vault to write, so a rejected or unverifiable signature leaves storage
- * untouched.
+ * verify-against-`publicKeyX` gate — stays in the caller that owns the transport.
+ *
+ * This stage deliberately performs NO write and must not be run while holding the
+ * vault's mutation lock: `sign` waits on a human confirming on hardware, and the
+ * surface that drives that hardware needs to read the vault to render. Holding
+ * the lock across it deadlocks the wallet. {@link withLedgerStrk20CeremonyKey}
+ * applies the result under the lock against a freshly read vault.
  *
  * Fails closed on a software account, a scope that does not belong to the
  * account's network, a non-canonical scope, or a key the fold cannot produce in
  * range.
  */
-export const ledgerStrk20ViewingKeyCeremony = async (
+export const prepareLedgerStrk20ViewingKey = async (
   kms: KrustyKms,
   vault: Vault,
   input: {
@@ -92,7 +104,7 @@ export const ledgerStrk20ViewingKeyCeremony = async (
     readonly poolAddress: string;
     readonly sign: (messageHash: string) => Promise<StarkSignature>;
   },
-): Promise<Vault> => {
+): Promise<PreparedLedgerStrk20ViewingKey> => {
   const account = findVaultAccount(vault, input.accountId);
   if (!isKeylessAccount(account)) {
     throw new WalletError("Account is not a Ledger account");
@@ -107,12 +119,68 @@ export const ledgerStrk20ViewingKeyCeremony = async (
   if (!viewingKey) {
     throw new WalletError("Invalid Ledger STRK20 viewing key");
   }
+  return { accountId: account.id, scope, viewingKey };
+};
+
+/**
+ * Applies a prepared viewing key to a vault, returning the vault to persist.
+ *
+ * Takes the vault as an argument rather than closing over the one the ceremony
+ * started from, so the caller can re-read inside the mutation lock and not
+ * clobber a write that landed while the device was being confirmed. The account
+ * binding is re-checked by the vault validator at write time, so an account
+ * removed mid-ceremony fails closed instead of retaining an orphan secret.
+ */
+export const withLedgerStrk20CeremonyKey = (
+  vault: Vault,
+  prepared: PreparedLedgerStrk20ViewingKey,
+): Vault => {
   const accountSecrets = withLedgerStrk20ViewingKey(vault.accountSecrets, {
-    accountId: account.id,
-    ledgerStrk20ViewingKeys: [{ ...scope, scheme: LEDGER_STRK20_VIEWING_KEY_SCHEME, viewingKey }],
+    accountId: prepared.accountId,
+    ledgerStrk20ViewingKeys: [
+      {
+        ...prepared.scope,
+        scheme: LEDGER_STRK20_VIEWING_KEY_SCHEME,
+        viewingKey: prepared.viewingKey,
+      },
+    ],
   });
   if (!accountSecrets) {
     throw new WalletError("Ledger STRK20 viewing-key limit reached");
   }
   return { ...vault, accountSecrets };
+};
+
+/**
+ * Runs the whole Ledger viewing-key ceremony, in the one order that is safe.
+ *
+ * The ordering is the point, which is why it lives here rather than at the call
+ * site: `sign` waits on a human confirming on hardware, and the surface that
+ * drives that hardware has to read the vault to render itself. Holding the
+ * vault's mutation lock across the device round-trip therefore deadlocks the
+ * wallet — the ceremony waits for the panel, the panel waits for the lock.
+ *
+ * So the device half runs unlocked, and only the write is serialized, against a
+ * vault re-read inside the lock so a mutation that landed mid-ceremony is not
+ * clobbered. A refused or unverifiable signature throws before the lock is ever
+ * taken, leaving storage untouched.
+ */
+export const runLedgerStrk20ViewingKeyCeremony = async (
+  kms: KrustyKms,
+  input: {
+    readonly accountId: string;
+    readonly chainId: string;
+    readonly poolAddress: string;
+    readonly sign: (messageHash: string) => Promise<StarkSignature>;
+  },
+  io: {
+    readonly readVault: () => Promise<Vault>;
+    readonly serialized: (run: () => Promise<void>) => Promise<void>;
+    readonly writeVault: (vault: Vault) => Promise<void>;
+  },
+): Promise<void> => {
+  const prepared = await prepareLedgerStrk20ViewingKey(kms, await io.readVault(), input);
+  await io.serialized(async () => {
+    await io.writeVault(withLedgerStrk20CeremonyKey(await io.readVault(), prepared));
+  });
 };

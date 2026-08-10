@@ -51,18 +51,9 @@ export const privacyPoolNotice = (
   }
   const deploying = action === "deploy-first";
   const hook = deploying ? "data-privacy-deploy-register" : "data-privacy-register";
-  // A hardware account has to derive its viewing key on the device before it can
-  // register, since registering publishes that key's commitment. The same hook
-  // runs the ceremony first, so the label must not promise registration yet.
-  const call =
-    privacy.value.privateBalances === "setup-required"
-      ? "<strong>Unlock with your Ledger</strong>"
-      : deploying
-        ? `<span>${escapeHtml(DEPLOY_FIRST_COPY)}</span><strong>Deploy and register</strong>`
-        : "<strong>Register now</strong>";
   return `<button class="privacy-pool-notice" ${hook}="" type="button">
       <span>${escapeHtml(UNREGISTERED_COPY)}</span>
-      ${call}
+      ${deploying ? `<span>${escapeHtml(DEPLOY_FIRST_COPY)}</span><strong>Deploy and register</strong>` : "<strong>Register now</strong>"}
     </button>`;
 };
 
