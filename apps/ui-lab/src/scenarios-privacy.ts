@@ -28,6 +28,7 @@ const activation: PrivacyPreparation = {
   summaries: [
     "Register this account with the privacy pool",
     "Registration is public and links this wallet address to its viewing key",
+    "Opens this account's own private channel, so later private sends need no extra setup",
   ],
   symbol: ETH_TOKEN.symbol,
   tokenId: ETH_TOKEN.id,

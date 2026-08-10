@@ -212,6 +212,7 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
       summaries: [
         "Register this account with the privacy pool",
         "Registration is public and links this wallet address to its viewing key",
+        "Opens this account's own private channel, so later private sends need no extra setup",
         ...viewingKeyCustodyDisclosure(context),
         `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee from this account`,
       ],
