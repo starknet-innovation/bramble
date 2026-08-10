@@ -71,6 +71,13 @@ describe("workflow security policy", () => {
       failure: ".github/workflows/nightly.yml must pin Node.js 24 for privacy SDK vendoring",
     },
     {
+      name: "rejects an unreviewed setup-node action revision",
+      workflow: "ci",
+      search: "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+      replacement: "actions/setup-node@0000000000000000000000000000000000000000",
+      failure: ".github/workflows/ci.yml must pin Node.js 24 for privacy SDK vendoring",
+    },
+    {
       name: "rejects write permission in the self-hosted release build",
       workflow: "releaseBuild",
       search: "build-release:\n    permissions:\n      contents: read",
