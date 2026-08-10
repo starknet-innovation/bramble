@@ -5,6 +5,7 @@
 import { WalletError } from "../../shared/errors";
 import { isRecord } from "../../shared/json";
 import { friendlyNetworkError } from "../../shared/network-error";
+import { isTransportRpcError } from "../provider";
 import {
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_NOT_REGISTERED,
@@ -168,7 +169,10 @@ export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): 
   }
   const text = failureText(error);
   const detail = sanitizeStrk20Detail(text);
-  const networkFailure = friendlyNetworkError(text);
+  // A numeric RPC code proves the node returned a semantic response. Revert
+  // text is adversarial contract data and must not override that envelope just
+  // because it contains a phrase such as "network timeout".
+  const networkFailure = isTransportRpcError(error) && friendlyNetworkError(text);
   const category: Strk20ErrorCategory =
     (networkFailure ? "transport" : markerFor(text, CATEGORY_MARKERS)) ?? "service-unavailable";
   const base = markerFor(text, BASE_MARKERS) ?? STRK20_SERVICE_UNAVAILABLE;
