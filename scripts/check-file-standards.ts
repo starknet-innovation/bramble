@@ -14,6 +14,10 @@ const EXCLUDED = new Set([
   "artifacts",
   "bun.lock",
   "dist",
+  // The packaged build beside dist/. Git ignores it, but this walk does not read
+  // .gitignore, and the line-count rule applies to every file it finds — so a
+  // local `dist.zip` failed the standards check as a 5096-"line" file.
+  "dist.zip",
   "node_modules",
   "output",
   "playwright-report",
