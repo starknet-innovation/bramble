@@ -5,8 +5,10 @@
  */
 
 import { isStarkFieldElement, normalizeFeltInput, sameFelt } from "../starknet/networks";
+import type { ValueBucket } from "../starknet/send-routes";
 import type { ActivityEntry } from "../storage/activity-store";
 import { errorMessage } from "./dom";
+import type { PrivacyPreparation } from "./privacy-runtime";
 
 /**
  * Friendly validation copy shared by the recipient screen and review failures.
@@ -55,10 +57,14 @@ export type TransferStage =
 export type TransferFields = {
   readonly accountId: string;
   readonly amount: string;
+  /** Balance the value lands in. With `source`, this names the send's route. */
+  readonly destination: ValueBucket;
   readonly fiatEstimate: string;
   readonly recipient: string;
   readonly recipientLabel: string;
   readonly signer: "ledger" | "software";
+  /** Balance the value is spent from. */
+  readonly source: ValueBucket;
   readonly speed: "fast" | "standard";
   readonly tokenAddress: string;
   readonly tokenBalance: string;
@@ -75,6 +81,7 @@ export type TransferFields = {
 export type TransferState<Review> = {
   readonly error: string;
   readonly fields: TransferFields | null;
+  readonly privatePreparation: PrivacyPreparation | null;
   readonly requiresDeployment: boolean;
   readonly review: Review | null;
   readonly reviewedKey: string | null;
@@ -88,12 +95,18 @@ export type TransferState<Review> = {
 export const initialTransferState = <Review>(): TransferState<Review> => ({
   error: "",
   fields: null,
+  privatePreparation: null,
   requiresDeployment: false,
   review: null,
   reviewedKey: null,
   stage: "recipient",
   transactionHash: null,
 });
+
+// Buckets default to public: an unreadable or absent field must never silently
+// promise privacy the send is not going to deliver.
+const bucket = (value: FormDataEntryValue | null): ValueBucket =>
+  value === "private" ? "private" : "public";
 
 /**
  * Reads the trusted extension form into the transaction snapshot submitted to
@@ -105,10 +118,12 @@ export const transferFields = (form: HTMLFormElement): TransferFields => {
   return {
     accountId: String(data.get("accountId") ?? ""),
     amount: String(data.get("amount") ?? "").trim(),
+    destination: bucket(data.get("destination")),
     fiatEstimate: String(data.get("fiatEstimate") ?? ""),
     recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
     recipientLabel: String(data.get("recipientLabel") ?? "").trim(),
     signer: form.dataset["signer"] === "ledger" ? "ledger" : "software",
+    source: bucket(data.get("source")),
     speed: data.get("speed") === "fast" ? "fast" : "standard",
     tokenAddress: String(data.get("tokenAddress") ?? ""),
     tokenBalance: String(data.get("tokenBalance") ?? "0"),
@@ -123,12 +138,18 @@ export const transferFields = (form: HTMLFormElement): TransferFields => {
 /**
  * Stable review cache key. Presentation-only fiat data is excluded so a price
  * refresh cannot silently change the transaction being authorized.
+ *
+ * Both buckets are part of the key: flipping either one changes the route, the
+ * fee, and the submission path, so a review cached under the old pair must never
+ * be reused for the new one.
  */
 export const transferKey = (fields: TransferFields): string =>
   JSON.stringify({
     accountId: fields.accountId,
     amount: fields.amount,
+    destination: fields.destination,
     recipient: fields.recipient,
+    source: fields.source,
     speed: fields.speed,
     tokenId: fields.tokenId,
   });
@@ -171,6 +192,17 @@ const CONFIRMATION_OUTCOMES: Partial<Record<ActivityEntry["status"], Confirmatio
     toast: "Transaction was not confirmed",
   },
 };
+
+/**
+ * Confirmation checkpoints in milliseconds, paired with the outcome table above:
+ * a tight burst for the common case, then ten-second checks out to roughly a
+ * minute. Every checkpoint is a live chain read, so this is the journey's
+ * patience rather than the chain's — it completes on PRE_CONFIRMED, but a
+ * proposer can take longer than a ten-second burst to report even that.
+ */
+export const CONFIRMATION_DELAYS_MS: readonly number[] = [
+  0, 250, 500, 900, 1_500, 2_500, 4_000, 5_000, 7_500, 10_000, 10_000, 10_000,
+];
 
 /**
  * Maps the latest observed status onto that decision.

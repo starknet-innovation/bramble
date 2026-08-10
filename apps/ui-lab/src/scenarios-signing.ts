@@ -66,7 +66,7 @@ const fixtureReview = async (
       feeEstimateFailed,
       flags: [],
       requiresDeployment: false,
-      summaries: ["Transfer 24 ETH", `Recipient ${RECIPIENT_ADDRESS}`],
+      summaries: ["Transfer 0.24 ETH", `Recipient ${RECIPIENT_ADDRESS}`],
     },
   };
 };
@@ -100,7 +100,7 @@ const fixtureActivity = (
         networkId: "SN_MAIN",
         status,
         submittedAt: 1,
-        summary: "Sent 24 ETH",
+        summary: "Sent 0.24 ETH",
       },
     ],
     ok: true,
@@ -130,7 +130,9 @@ const prepareSend =
     bindTransfer({
       app: context.app,
       confirmationDelaysMs: [0],
+      publicBalances: () => journeyBalances,
       render: async () => undefined,
+      senderAddress: () => ledgerAccount.address,
       waitForConfirmation: async () => undefined,
       wallet,
     });
@@ -144,7 +146,7 @@ const prepareSend =
       context.app.querySelector<HTMLButtonElement>("#send-token-trigger")?.click();
       return;
     }
-    updateForm(context, "#send-amount-input", "24");
+    updateForm(context, "#send-amount-input", "0.24");
     const form = context.app.querySelector<HTMLFormElement>("#transfer-form");
     if (!form) {
       throw new Error("Missing production Send form");

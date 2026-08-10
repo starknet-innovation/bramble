@@ -32,7 +32,13 @@ import {
   readTypeOnlyInput,
 } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
-import { activeAccountContext, networkRpcUrls, statusResponse } from "./runtime-state";
+import {
+  type ActiveStateCoordinator,
+  activeAccountContext,
+  networkRpcUrls,
+  runActiveStateMutation,
+  statusResponse,
+} from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import type { UnlockSession } from "./session";
 import { failureNoticeMessage } from "./tx-observation";
@@ -43,6 +49,8 @@ import type { WalletStatusReader } from "./wallet-reader";
  * Dependencies shared by the wallet, allowance, and NFT operations handlers.
  */
 export type WalletOpsDeps = {
+  /** Serializes network/account selection writes; production always supplies it. */
+  readonly activeStateCoordinator?: ActiveStateCoordinator;
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   /**
@@ -335,10 +343,12 @@ const handleLock: WalletOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.lock")) {
     return { error: "invalid lock request" };
   }
-  // Revoke parked device signs before clearing the session.
-  deps.ledgerSignQueue?.rejectAll("wallet locked");
-  deps.session.lock();
-  return statusResponse(deps.wallet, deps.session, deps.preferencesStore);
+  return runActiveStateMutation(deps.activeStateCoordinator, async () => {
+    // Revoke parked device signs before clearing the session.
+    deps.ledgerSignQueue?.rejectAll("wallet locked");
+    deps.session.lock();
+    return statusResponse(deps.wallet, deps.session, deps.preferencesStore);
+  });
 };
 
 /**

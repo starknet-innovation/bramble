@@ -228,7 +228,8 @@ export const BASE_STYLES = `
   .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
   /* Degraded-price notice: a muted, low-key line so saved/unavailable prices
      read as an honest caveat under the total, never as an error state. */
-  .hero-stale {
+  .hero-stale,
+  .hero-partial {
     align-items: center;
     color: var(--mc-muted);
     display: inline-flex;
@@ -283,43 +284,6 @@ export const BASE_STYLES = `
     stroke-width: 1.85;
     width: ${CONTROL.majorIcon};
   }
-
-  /* MC Terminal is the one promotional surface on Home: a compact, trusted
-     handoff with a real monitor glyph and a quieter explanatory second line. */
-  .terminal-cta {
-    align-items: center;
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.xl};
-    color: var(--mc-text);
-    display: grid;
-    gap: ${SPACE.md};
-    grid-template-columns: 40px minmax(0, 1fr) 20px;
-    min-height: 76px;
-    padding: ${SPACE.md};
-    text-decoration: none;
-    transition:
-      background ${MOTION.pressMs}ms ${MOTION.ease},
-      transform ${MOTION.liftMs}ms var(--ease-out);
-  }
-  .terminal-cta-icon {
-    align-items: center;
-    color: var(--mc-text);
-    display: inline-flex;
-    height: 40px;
-    justify-content: center;
-    width: 40px;
-  }
-  .terminal-cta-icon .icon { height: 34px; stroke-width: 1.8; width: 34px; }
-  .terminal-cta-copy { display: grid; gap: 2px; min-width: 0; }
-  .terminal-cta-copy strong { font-size: ${TYPE.body.size}; font-weight: ${WEIGHT.bold}; }
-  .terminal-cta-copy span { color: var(--mc-muted); font-size: ${TYPE.caption.size}; line-height: ${TYPE.caption.line}; }
-  .terminal-cta-arrow { color: var(--mc-muted); display: inline-flex; transition: transform ${MOTION.liftMs}ms var(--ease-out); }
-  .terminal-cta-arrow .icon { height: 18px; width: 18px; }
-  @media (hover: hover) and (pointer: fine) {
-    .terminal-cta:hover { background: var(--mc-hover); transform: translateY(-1px); }
-    .terminal-cta:hover .terminal-cta-arrow { color: var(--mc-text); transform: translateX(2px); }
-  }
-  .terminal-cta:active { background: var(--mc-soft-press); transform: scale(0.985); }
 
   /* Flow screens: back control + goal title */
   .flow-header {

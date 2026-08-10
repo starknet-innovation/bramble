@@ -5,6 +5,7 @@
 import { WalletError } from "../../shared/errors";
 import { isRecord } from "../../shared/json";
 import { friendlyNetworkError } from "../../shared/network-error";
+import { isTransportRpcError } from "../provider";
 import {
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_NOT_REGISTERED,
@@ -154,6 +155,13 @@ export const mapStrk20ProtocolError = (error: unknown): never => {
  * revert reason, which is otherwise discarded at this boundary. Note material,
  * proofs, authorizing secrets, vault data, and service endpoints never survive
  * `sanitizeStrk20Detail`.
+ *
+ * Indeterminacy is recognised here, never minted: only `withRpcWrite` knows
+ * whether a write was actually in flight, and the marker it throws for that case
+ * is an `IndeterminateRpcWriteError` — a `WalletError`, so it reaches maturity
+ * unchanged through the passthrough below. A raw transport error arriving at
+ * `stage === "submission"` means the opposite: endpoint selection failed the
+ * chain-id probe, so nothing was broadcast and the scope must be released.
  */
 export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): never => {
   if (error instanceof WalletError) {
@@ -161,9 +169,12 @@ export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): 
   }
   const text = failureText(error);
   const detail = sanitizeStrk20Detail(text);
+  // A numeric RPC code proves the node returned a semantic response. Revert
+  // text is adversarial contract data and must not override that envelope just
+  // because it contains a phrase such as "network timeout".
+  const networkFailure = isTransportRpcError(error) && friendlyNetworkError(text);
   const category: Strk20ErrorCategory =
-    markerFor(text, CATEGORY_MARKERS) ??
-    (friendlyNetworkError(text) ? "transport" : "service-unavailable");
+    (networkFailure ? "transport" : markerFor(text, CATEGORY_MARKERS)) ?? "service-unavailable";
   const base = markerFor(text, BASE_MARKERS) ?? STRK20_SERVICE_UNAVAILABLE;
   const label = `${base} (${stage}/${category})`;
   throw new WalletError(detail === "" ? label : `${label}: ${detail}`);

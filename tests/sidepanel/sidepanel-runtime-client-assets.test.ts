@@ -272,7 +272,9 @@ describe("transfers and review", () => {
 describe("balances", () => {
   test("loadBalances returns the balances on success", async () => {
     expect(await runtimeReturning(balancesResponse).loadBalances()).toEqual({
+      accountId: balancesResponse.accountId,
       balances: balancesResponse.balances,
+      networkId: balancesResponse.networkId,
     });
   });
 

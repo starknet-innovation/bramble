@@ -149,11 +149,12 @@ describe("bindLedgerFirstRun", () => {
 });
 
 const enumerateClient: LedgerDeviceClient = {
+  getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
   getAppVersion: () =>
     Promise.resolve({
       errorMessage: "No errors",
       major: 2,
-      minor: 0,
+      minor: 4,
       patch: 0,
       returnCode: 0x9000,
     }),

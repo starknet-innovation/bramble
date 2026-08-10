@@ -57,14 +57,18 @@ describe("sidepanel home", () => {
     expect(header).toContain('id="lock-button"');
   });
 
-  test("quick actions expose compact Send, Swap, and Receive tools only", () => {
+  test("quick actions expose Send, Swap, Receive, and the account explorer", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
     expect(html).toMatch(/class="action-tile" data-view="send"/);
     expect(html).toMatch(/class="action-tile" data-view="swap"/);
     expect(html).toMatch(/class="action-tile" data-view="receive"/);
+    // Explorer is the one outbound tile: the active account on Starkscan, opened
+    // in an isolated tab.
+    expect(html).toContain(`href="https://starkscan.co/contract/${account.address}"`);
+    expect(html).toContain(">Explorer<");
+    expect(html).toContain('aria-label="Open this account on the block explorer"');
     expect(html).not.toContain('aria-label="Open MC Terminal portfolio"');
-    expect(html).not.toMatch(/class="action-tile" href=/);
     expect(html).not.toMatch(/class="action-tile" data-view="nfts"/);
 
     const noAccounts = dashboard(
@@ -79,14 +83,14 @@ describe("sidepanel home", () => {
     expect(noAccounts).toMatch(/data-view="receive"[^>]*disabled/);
   });
 
-  test("Terminal CTA opens the trusted webapp in an isolated tab", () => {
+  test("home promotes no Terminal card, only the header shortcut", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
 
-    expect(html).toContain('class="terminal-cta"');
-    expect(html).toContain(`href="${TERMINAL_URL}"`);
-    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
-    expect(html).toContain("Join MC Terminal");
-    expect(html).toContain("Your homebase for all Starknet activity");
+    expect(html).not.toContain("terminal-cta");
+    expect(html).not.toContain("Join MC Terminal");
+    expect(html).not.toContain("Your homebase for all Starknet activity");
+    // The compact header link is the remaining trusted handoff.
+    expect(html).toContain('id="terminal-button"');
   });
 
   test("portfolio has two text tabs and one accessible quick-actions menu", () => {
@@ -277,5 +281,32 @@ describe("sidepanel home", () => {
     expect(html).not.toContain("drawer-root");
     expect(html).not.toContain("home-tabs");
     expect(html).not.toContain('id="account-trigger"');
+  });
+});
+
+describe("explorer tile availability", () => {
+  test("is disabled rather than hidden when there is nothing to open", () => {
+    // No account yet: the row keeps its shape instead of reflowing.
+    const noAccounts = dashboard(
+      "home",
+      { ...status, accounts: [], activeAccountId: null },
+      [],
+      preferences,
+      { balances: [] },
+    );
+    expect(noAccounts).toContain('aria-label="Explorer unavailable on this network"');
+    expect(noAccounts).not.toContain("starkscan.co/contract");
+
+    // Devnet has no public explorer, so an account there gets the same disabled
+    // tile rather than a link that cannot resolve.
+    const devnet = dashboard(
+      "home",
+      { ...status, network: "Local Devnet", networkId: "SN_DEVNET" },
+      [],
+      preferences,
+      { balances: [] },
+    );
+    expect(devnet).toContain('aria-label="Explorer unavailable on this network"');
+    expect(devnet).not.toContain("starkscan.co/contract");
   });
 });

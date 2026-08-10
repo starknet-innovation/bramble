@@ -125,6 +125,27 @@ export type AddLedgerAccountInput = {
 export type CreateLedgerVaultInput = AddLedgerAccountInput;
 
 /**
+ * Background-only input for retaining a Ledger-derived STRK20 viewing key.
+ * The future hardware ceremony must produce the key inside trusted extension
+ * code; no provider or UI message accepts this secret-bearing shape.
+ */
+export type StoreLedgerStrk20ViewingKeyInput = {
+  readonly accountId: string;
+  readonly chainId: string;
+  readonly poolAddress: string;
+  readonly vaultPassphrase: string;
+  readonly viewingKey: string;
+};
+
+/**
+ * Exact account/chain/pool scope whose retained Ledger viewing key is removed.
+ */
+export type ForgetLedgerStrk20ViewingKeyInput = Omit<
+  StoreLedgerStrk20ViewingKeyInput,
+  "viewingKey"
+>;
+
+/**
  * Input for deriving addresses for a batch of enumerated Ledger (index, public
  * key) pairs to build the account picker. A public-key derivation only — it
  * reads no secrets and writes nothing to the vault.
@@ -156,8 +177,9 @@ export type WalletVaultService = {
     input: DeriveLedgerAccountsInput,
   ) => Promise<readonly LedgerAccountRef[]>;
   /**
-   * Derives a domain-separated STRK20 viewing key from encrypted account key
-   * material. Keyless accounts fail closed and the result is never persisted.
+   * Resolves a domain-separated STRK20 viewing key inside the encrypted vault
+   * boundary. Software accounts derive lazily; Ledger accounts require an
+   * exact retained chain/pool-scoped key.
    */
   readonly deriveStrk20ViewingKey: (input: {
     readonly accountId: string;
@@ -166,6 +188,10 @@ export type WalletVaultService = {
     readonly vaultPassphrase: string;
   }) => Promise<string>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
+  /** Removes one retained Ledger viewing-key scope without returning its value. */
+  readonly forgetLedgerStrk20ViewingKey: (
+    input: ForgetLedgerStrk20ViewingKeyInput,
+  ) => Promise<boolean>;
   readonly generateMnemonic: () => Promise<string>;
   readonly importRawKeyAccount: (input: ImportRawKeyAccountInput) => Promise<ImportedAccountRef>;
   /**
@@ -190,4 +216,9 @@ export type WalletVaultService = {
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
   readonly status: () => Promise<WalletStatus>;
+  /**
+   * Persists a validated Ledger viewing key only inside encrypted account
+   * secrets. This is intentionally absent from extension message surfaces.
+   */
+  readonly storeLedgerStrk20ViewingKey: (input: StoreLedgerStrk20ViewingKeyInput) => Promise<void>;
 };

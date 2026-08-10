@@ -14,6 +14,7 @@ import {
   getDeploymentStatus,
   submitAccountDeployment,
 } from "../../src/starknet/deployment";
+import { IndeterminateRpcWriteError } from "../../src/starknet/provider";
 import type { AccountRef } from "../../src/storage/vault-schema";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -113,6 +114,23 @@ describe("ensureAccountDeployed", () => {
         account,
       ),
     ).rejects.toThrow("automatic deployment failed");
+  });
+
+  test("does not conflate an ambiguous account deployment with the caller's later write", async () => {
+    const rejection = await ensureAccountDeployed(
+      provider({
+        async getClassHashAt() {
+          throw notFoundError();
+        },
+      }),
+      starknetAccount(async () => {
+        throw new IndeterminateRpcWriteError("safe inner deployment ambiguity");
+      }),
+      account,
+    ).catch((error: unknown) => error);
+
+    expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect((rejection as Error).message).toContain("Account deployment status is unknown");
   });
 
   test("re-throws a WalletError from deployment as-is (address mismatch)", async () => {

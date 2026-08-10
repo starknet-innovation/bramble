@@ -15,6 +15,8 @@ import { ledgerUSBVendorId } from "@ledgerhq/devices";
 import { StarknetClient } from "@ledgerhq/hw-app-starknet";
 import TransportWebHID from "@ledgerhq/hw-transport-webhid";
 import TransportWebUSB from "@ledgerhq/hw-transport-webusb";
+import { Buffer } from "buffer";
+import { exactLedgerDevice, readLedgerOsAndRestoreStarknet } from "./device-transition";
 
 const deviceIds = new WeakMap();
 const knownDevices = new Map();
@@ -28,6 +30,122 @@ const transports = {
   hid: TransportWebHID,
   usb: TransportWebUSB,
 };
+
+const reconnectAttempts = 40;
+const reconnectDelayMs = 250;
+const boundTransports = new WeakMap();
+
+const pause = () => new Promise((resolve) => setTimeout(resolve, reconnectDelayMs));
+
+const closeQuietly = async (transport) => {
+  try {
+    await transport.close();
+  } catch {
+    // A transition deliberately invalidates this transport. The exact-device
+    // reopen and post-transition state check are the authoritative result.
+  }
+};
+
+const reconnectBoundTransport = async (transport) => {
+  const state = boundTransports.get(transport);
+  if (!state || state.closed || state.reconnecting) {
+    throw new Error("Ledger exact-device session is unavailable");
+  }
+  state.reconnecting = true;
+  const generation = state.generation;
+  const previous = state.current;
+  state.current = null;
+  await closeQuietly(previous);
+
+  let lastError;
+  try {
+    for (let attempt = 0; attempt < reconnectAttempts; attempt += 1) {
+      if (state.closed || state.generation !== generation) {
+        break;
+      }
+      try {
+        const candidates = await state.binding.listDevices();
+        const selected = exactLedgerDevice(state.binding.selectedDevice, candidates);
+        if (selected) {
+          const reopened = await state.binding.openDevice(selected);
+          if (state.closed || state.generation !== generation) {
+            await closeQuietly(reopened);
+            break;
+          }
+          state.current = reopened;
+          return;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt + 1 < reconnectAttempts) {
+        await pause();
+      }
+    }
+  } finally {
+    state.reconnecting = false;
+  }
+  const error = new Error("Ledger disconnected before the exact device could reconnect");
+  error.name = "DisconnectedDevice";
+  if (lastError !== undefined) {
+    error.cause = lastError;
+  }
+  throw error;
+};
+
+/**
+ * Wraps a selected browser transport with an exact-device reconnection binding.
+ * Only the original browser object, its unique origin-scoped id, or its unique
+ * vendor-bound serial may be reopened; list order and product labels are never
+ * accepted as identity.
+ */
+export const bindLedgerTransportRaw = (initial, binding) => {
+  const state = { binding, closed: false, current: initial, generation: 0, reconnecting: false };
+  const transport = {
+    close: async () => {
+      if (state.closed) {
+        return;
+      }
+      state.closed = true;
+      state.generation += 1;
+      const current = state.current;
+      state.current = null;
+      let disconnectError;
+      try {
+        await binding.disconnect?.();
+      } catch (error) {
+        disconnectError = error;
+      }
+      if (current) {
+        try {
+          await current.close();
+        } catch (error) {
+          if (disconnectError === undefined) {
+            disconnectError = error;
+          }
+        }
+      }
+      if (disconnectError !== undefined) {
+        throw disconnectError;
+      }
+    },
+    send: (...args) => {
+      if (!state.current || state.closed) {
+        throw new Error("Ledger exact-device session is unavailable");
+      }
+      return state.current.send(...args);
+    },
+  };
+  boundTransports.set(transport, state);
+  return transport;
+};
+
+const bindCableTransport = async (kind, device) =>
+  bindLedgerTransportRaw(await transports[kind].open(device), {
+    listDevices: () => transports[kind].list(),
+    openDevice: (selected) => transports[kind].open(selected),
+    selectedDevice: device,
+  });
 
 const idOf = (device) => {
   const known = deviceIds.get(device);
@@ -104,10 +222,10 @@ export const listConnectedDevicesRaw = async () =>
 export const openConnectedTransportRaw = async (deviceId) => {
   if (deviceId !== undefined) {
     const selected = knownDevices.get(deviceId);
-    return selected ? transports[selected.kind].open(selected.device) : null;
+    return selected ? bindCableTransport(selected.kind, selected.device) : null;
   }
   const [connected] = await connectedDevices();
-  return connected ? transports[connected.kind].open(connected.device) : null;
+  return connected ? bindCableTransport(connected.kind, connected.device) : null;
 };
 
 export const supportedTransportKindsRaw = async () => {
@@ -145,7 +263,7 @@ export const requestTransportRaw = async (kind) => {
     if (!device) {
       throw new DOMException("No Ledger selected", "NotFoundError");
     }
-    return TransportWebHID.open(device);
+    return bindCableTransport("hid", device);
   }
   // Target the vendor transport interface rather than the composite device as
   // a whole. Modern Ledgers can expose Ledger APDU, vendor USB, and protected
@@ -155,7 +273,19 @@ export const requestTransportRaw = async (kind) => {
     filters: [{ classCode: 0xff, vendorId: ledgerUSBVendorId }],
   });
   const device = await requestedDevice;
-  return TransportWebUSB.open(device);
+  return bindCableTransport("usb", device);
 };
 
-export const newStarknetClient = (transport) => new StarknetClient(transport);
+export const newStarknetClient = (transport, onTransition) => {
+  const client = new StarknetClient(transport);
+  client.getOsVersion = () =>
+    readLedgerOsAndRestoreStarknet(
+      {
+        reconnect: () => reconnectBoundTransport(transport),
+        send: (cla, ins, p1, p2, data, statuses) =>
+          transport.send(cla, ins, p1, p2, Buffer.from(data), statuses),
+      },
+      onTransition,
+    );
+  return client;
+};

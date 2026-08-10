@@ -89,7 +89,7 @@ export const makeWallet = (
     },
     async loadDeploymentStatus() {
       calls.loadDeploymentStatus += 1;
-      return { deployed: true };
+      return { accountId: account.id, deployed: true, ok: true };
     },
     async loadStatus() {
       calls.loadStatus += 1;

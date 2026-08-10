@@ -16,6 +16,7 @@
  * and the app-probe session are unit-tested; this entrypoint stays the thin
  * browser/DOM boundary exercised against Chromium and physical hardware.
  */
+
 import { LedgerRejection, ledgerMessage } from "../sidepanel/ledger/errors";
 import { type LedgerTransport, newStarknetClient } from "../sidepanel/ledger/webhid-impl";
 import { darkSkin } from "../ui/dark-skin";
@@ -39,6 +40,7 @@ import {
   supportedGrantTransportKinds,
 } from "./grant-transport";
 import { LEDGER_GRANT_STYLES } from "./styles";
+import { ledgerTransitionProgress } from "./transition-progress";
 
 type GrantChrome = {
   readonly tabs?: {
@@ -246,11 +248,11 @@ const render = (): void => {
         ? [
             readinessStep("1", "Enable Bluetooth, then power your Ledger off and back on"),
             readinessStep("2", "Stay on the Ledger dashboard and pair it in Chrome"),
-            readinessStep("3", "Open Starknet after pairing when MC Wallet asks"),
+            readinessStep("3", "MC Wallet will check firmware, then open Starknet"),
           ]
         : [
             readinessStep("1", "Unlock your Ledger and connect a data-capable USB cable"),
-            readinessStep("2", "Open Starknet — its name must be visible on the device"),
+            readinessStep("2", "MC Wallet will check firmware, then open Starknet"),
             readinessStep("3", "Choose your Ledger in Chrome, then click Connect"),
           ]),
     );
@@ -272,7 +274,7 @@ const render = (): void => {
     activeTransportKind = null;
     const cleanup =
       transport && transportKind
-        ? closeGrantTransport(transportKind, transport).catch(() => undefined)
+        ? closeGrantTransport(transport).catch(() => undefined)
         : Promise.resolve();
     await closeThisTab();
     await cleanup;
@@ -282,7 +284,7 @@ const render = (): void => {
     stopBroker?.();
     brokerChannel?.close();
     if (activeTransport && activeTransportKind) {
-      void closeGrantTransport(activeTransportKind, activeTransport).catch(() => undefined);
+      void closeGrantTransport(activeTransport).catch(() => undefined);
     }
   });
 
@@ -408,12 +410,16 @@ const render = (): void => {
         activeTransportKind = transport;
       }
       setStatus(
-        "Checking the Starknet app",
-        "MC Wallet is verifying the app and reading a public account key. Nothing is signed.",
+        "Checking firmware and Starknet",
+        "MC Wallet is checking device software and reading a public account key. Nothing is signed.",
         "info",
-        `Transport · ${transportLabel(transport)} · App and key handshake`,
+        `Transport · ${transportLabel(transport)} · Firmware, app, and key handshake`,
       );
-      const client = newStarknetClient(activeTransport);
+      const client = newStarknetClient(activeTransport, (phase) => {
+        const { message, title } = ledgerTransitionProgress(phase);
+        buttonLabel.textContent = title;
+        setStatus(title, message, "info", `Transport · ${transportLabel(transport)}`);
+      });
       const version = await probeLedgerGrantClient(client);
       brokerChannel = new BroadcastChannel(ledgerBrokerChannelName(sessionId));
       stopBroker = serveLedgerBroker(brokerChannel, client, () => {
@@ -436,7 +442,7 @@ const render = (): void => {
           activeTransport = null;
           activeTransportKind = null;
           if (failedTransport && failedTransportKind) {
-            await closeGrantTransport(failedTransportKind, failedTransport).catch(() => undefined);
+            await closeGrantTransport(failedTransport).catch(() => undefined);
           }
         }
         showLedgerRejection(error, transport);
@@ -447,7 +453,7 @@ const render = (): void => {
       activeTransport = null;
       activeTransportKind = null;
       if (failedTransport && failedTransportKind) {
-        await closeGrantTransport(failedTransportKind, failedTransport).catch(() => undefined);
+        await closeGrantTransport(failedTransport).catch(() => undefined);
       }
       const methodTransports = supported.filter((kind) =>
         selectedMethod === "ble" ? kind === "ble" : kind !== "ble",

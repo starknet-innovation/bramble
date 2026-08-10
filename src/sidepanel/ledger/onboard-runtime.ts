@@ -15,6 +15,7 @@ import type { SidepanelWallet } from "../runtime";
 import {
   createLedgerOnboardController,
   enumerateLedgerPubKeys,
+  LEDGER_PAGE_SIZE,
   type LedgerCandidateState,
   type LedgerOnboardAddKind,
   type LedgerOnboardController,
@@ -177,7 +178,8 @@ export const createLedgerOnboardRuntime = (
     create,
     derive: (entries) => wallet.deriveLedgerAccounts(networkId(), entries),
     describe: (account) => describe(account.address, networkId()),
-    enumerate: (client, startIndex) => enumerateLedgerPubKeys(client, startIndex),
+    enumerate: (client, startIndex, readiness) =>
+      enumerateLedgerPubKeys(client, startIndex, LEDGER_PAGE_SIZE, readiness),
     existingIds,
     onCancel,
     openImport: () => deps.openImport(),

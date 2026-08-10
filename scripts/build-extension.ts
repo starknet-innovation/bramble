@@ -1,7 +1,7 @@
 /**
  * Builds the MV3 extension with Bun and copies static extension assets into dist.
  */
-import { cp, mkdir, readFile, rm } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const outdir = "dist";
@@ -73,8 +73,11 @@ const manifestVersion = (
   JSON.parse(await readFile("public/manifest.json", "utf8")) as { version?: string }
 ).version;
 const branch = await gitBranch();
+// One definition of "this is a dev build", used by both the settings stamp and
+// the manifest below; two copies of the main/HEAD test would drift.
+const devBranch = branch === "main" || branch === "HEAD" ? "" : branch;
 const buildStamp = {
-  __MC_BUILD_BRANCH__: JSON.stringify(branch === "main" || branch === "HEAD" ? "" : branch),
+  __MC_BUILD_BRANCH__: JSON.stringify(devBranch),
   __MC_BUILD_VERSION__: JSON.stringify(manifestVersion ?? ""),
 };
 
@@ -149,7 +152,30 @@ requireBuild(
   }),
 );
 
-await cp("public/manifest.json", join(outdir, "manifest.json"));
+// The browser's extension list is the only place a loaded build identifies
+// itself, and every dev build otherwise looks identical to a release. Stamp the
+// branch into `name` and `version_name` (Chrome shows `version_name` in place of
+// `version` when present) so a side-by-side load is unambiguous. `version` stays
+// the numeric manifest value Chrome requires, and released builds — main, or a
+// detached tag checkout — are copied through untouched.
+const manifestJson = JSON.parse(await readFile("public/manifest.json", "utf8")) as Record<
+  string,
+  unknown
+>;
+await writeFile(
+  join(outdir, "manifest.json"),
+  `${JSON.stringify(
+    devBranch === ""
+      ? manifestJson
+      : {
+          ...manifestJson,
+          name: `${String(manifestJson["name"] ?? "MC Wallet")} · ${devBranch}`.slice(0, 75),
+          version_name: `${manifestVersion ?? ""} · ${devBranch}`.slice(0, 75),
+        },
+    null,
+    2,
+  )}\n`,
+);
 await cp("public/onboarding.html", join(outdir, "onboarding.html"));
 await cp("public/popup.html", join(outdir, "popup.html"));
 await cp("public/sidepanel.html", join(outdir, "sidepanel.html"));

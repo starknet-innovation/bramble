@@ -67,6 +67,10 @@ background service worker (privileged router)
 The page, every message payload, every sender claim, browser storage, and every network response
 are treated as untrusted until parsed at their boundary. The background service worker and packaged
 extension pages are privileged but remain subject to confused-deputy and stale-session risks.
+Persistent and session Chrome storage are explicitly restricted to trusted extension contexts.
+Secret-bearing vault fields are additionally authenticated and encrypted; a retained Ledger STRK20
+viewing key is treated as privacy-sensitive even though it cannot authorize a spend, and remains in
+the v4 `accountSecrets` collection only.
 
 ## Primary review questions
 

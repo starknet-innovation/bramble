@@ -3,40 +3,35 @@
  * Wallet's narrow STRK20 middleware contract.
  */
 
-import type { TypedData } from "starknet";
-import { num, RpcProvider, typedData } from "starknet";
+import type { RpcProvider, TypedData } from "starknet";
+import { num, typedData } from "starknet";
 import { WalletError } from "../../shared/errors";
 import { isJson } from "../../shared/json";
-import { STARKNET_NETWORKS, sameFelt } from "../networks";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "../networks";
+import { createRpcProvider } from "../provider";
 import { submitInvokeTransaction } from "../rpc-submit";
-import type { Strk20NetworkConfig } from "./config";
 import type { Strk20MaturityScope, Strk20MaturityStore } from "./maturity";
-import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
-import {
-  isRetryableStrk20ServiceError,
-  mapStrk20ProtocolError,
-  mapStrk20StageError,
-  type Strk20FailureStage,
-} from "./official-sdk-errors";
-import { createStrk20MaturityRuntime, type Strk20MaturityRuntime } from "./official-sdk-maturity";
-import { areHistoricalDepositsReady, isHistoricalAccountReady } from "./official-sdk-readiness";
-import { assertNoSdkWarnings, readCallAndProof } from "./official-sdk-results";
-import type { PrivacySdkRuntime, SdkBuilder, SdkTransfers } from "./official-sdk-runtime";
+import { strk20RegistrationBuilderFor } from "./official-sdk-builder";
+import { mapStrk20ProtocolError, mapStrk20StageError } from "./official-sdk-errors";
+import { createStrk20MaturityRuntime } from "./official-sdk-maturity";
+import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
+import type { PrivacySdkRuntime } from "./official-sdk-runtime";
 import { transfersFor } from "./official-sdk-transfers";
 import {
   approveCalls,
   balancesFrom,
+  RELAY_PAYS_POOL_FEE,
   readStrk20PoolFee,
+  readStrk20Registered,
+  requireReviewedStrk20PoolFee,
   requireStrk20Config,
 } from "./official-sdk-values";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "./paymaster";
-import type { Strk20CallAndProof } from "./schemas";
 import {
   STRK20_PRIVACY_LEAK,
   STRK20_SERVICE_UNAVAILABLE,
   STRK20_SUBMISSION_UNAVAILABLE,
   type Strk20AccountContext,
-  type Strk20PrepareInput,
   type Strk20Service,
 } from "./service";
 
@@ -57,135 +52,20 @@ type OfficialServiceOptions = {
   readonly waitForAccepted?: (provider: RpcProvider, transactionHash: string) => Promise<number>;
 };
 
-const MAX_SERVICE_ATTEMPTS = 3;
-
-const defaultServiceRetryPause = (attempt: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, attempt * 1_000);
-  });
-
-const retryableServiceAttempt = (attempt: number, error: unknown): boolean =>
-  attempt < MAX_SERVICE_ATTEMPTS && isRetryableStrk20ServiceError(error);
-
-const maturityScope = (input: Strk20AccountContext, poolAddress: string) => ({
-  accountId: input.account.id,
-  networkId: input.account.networkId,
-  poolAddress,
-});
-
-// Discovery-provider construction and builder assembly ran outside any mapping,
-// so an SDK throw here reached the message boundary unmapped and lost its cause.
-const discoverWith = (
-  sdk: PrivacySdkRuntime,
-  input: Strk20PrepareInput,
-  builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
-): { readonly builder: SdkBuilder; readonly transfers: SdkTransfers } => {
-  const transfers = transfersFor(sdk, input);
-  return {
-    builder:
-      builderForTransfers?.(transfers) ??
-      strk20BuilderFor(sdk, transfers, input.actions, input.account.address),
-    transfers,
-  };
-};
-
-type HistoricalState = "deposits" | "registration";
-
-const historicalReadiness = (
-  kind: HistoricalState | undefined,
-  provider: RpcProvider,
-  input: Strk20PrepareInput,
-): ((block: number) => Promise<boolean>) | undefined => {
-  if (kind === "registration") {
-    return (block) => isHistoricalAccountReady(provider, input.account.address, block);
-  }
-  if (kind === "deposits") {
-    return (block) =>
-      areHistoricalDepositsReady(provider, input.account.address, input.actions, block);
-  }
-  return undefined;
-};
-
-const prepareOnce = async (input: {
-  readonly builder: SdkBuilder;
-  readonly config: Strk20NetworkConfig;
-  readonly historicalState: HistoricalState | undefined;
-  readonly maturity: Strk20MaturityRuntime;
-  readonly preparation: Strk20PrepareInput;
-  readonly provider: RpcProvider;
-  readonly transfers: SdkTransfers;
-}): Promise<Strk20CallAndProof> => {
-  const readinessKind =
-    input.historicalState ??
-    (input.preparation.actions.some((action) => action.type === "deposit")
-      ? "deposits"
-      : undefined);
-  const block = await input.maturity.provingBlock(
-    input.provider,
-    maturityScope(input.preparation, input.config.poolAddress),
-    historicalReadiness(readinessKind, input.provider, input.preparation),
-  );
-  let result: unknown;
-  if (input.preparation.simulate) {
-    result = await input.builder.simulate({
-      provider: input.provider,
-      provingBlockId: block,
-      validateSignature: false,
-    });
-  } else {
-    const invocation = await input.builder.createProofInvocation({ provingBlockId: block });
-    assertNoSdkWarnings(invocation);
-    result = await input.transfers.executeWithInvocation(invocation, block);
-  }
-  assertNoSdkWarnings(result);
-  return readCallAndProof(result, input.config, input.preparation.simulate);
-};
-
-const prepareWith = async (
-  sdk: PrivacySdkRuntime,
-  input: Strk20PrepareInput,
-  maturity: Strk20MaturityRuntime,
-  providerFor: (nodeUrl: string) => RpcProvider,
-  pauseForServiceRetry: (attempt: number) => Promise<void>,
-  builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
-  historicalState?: HistoricalState,
-): Promise<Strk20CallAndProof> => {
-  const config = requireStrk20Config(input);
-  if (
-    input.actions.some((action) => action.type === "subaccount_invoke") &&
-    !config.subaccountAnonymizerAddress
-  ) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  const nodeUrl = input.rpcUrls[0];
-  if (!nodeUrl) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  for (let attempt = 1; attempt <= MAX_SERVICE_ATTEMPTS; attempt += 1) {
-    let stage: Strk20FailureStage =
-      historicalState === "registration" ? "registration-preparation" : "discovery";
-    try {
-      const { builder, transfers } = discoverWith(sdk, input, builderForTransfers);
-      const provider = providerFor(nodeUrl);
-      stage = "proving";
-      return await prepareOnce({
-        builder,
-        config,
-        historicalState,
-        maturity,
-        preparation: input,
-        provider,
-        transfers,
-      });
-    } catch (error) {
-      if (!retryableServiceAttempt(attempt, error)) {
-        return mapStrk20StageError(stage, error);
-      }
-      await pauseForServiceRetry(attempt);
-    }
-  }
-  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-};
+/**
+ * Reads the SDK's setup requirement as the account's *own* registration answer.
+ *
+ * The SDK reports four states — Register, SetupChannel, SetupToken, Ready.
+ * `Register` means the caller has no viewing key registered with the pool;
+ * every later state means registration is done and only per-channel setup
+ * remains, which the transfer builder adds itself (`autoSetup`). Recipients are
+ * deliberately not answered from here — see `readStrk20Registered`.
+ */
+const readSetupRequirement = (
+  states: { readonly Register: number },
+  requirement: number,
+): "registered" | "unregistered" =>
+  requirement === states.Register ? "unregistered" : "registered";
 
 /**
  * Creates the production STRK20 service backed by the pinned official SDK.
@@ -196,7 +76,7 @@ export const createOfficialStrk20Service = ({
   nowSeconds,
   pauseForMaturity,
   pauseForServiceRetry = defaultServiceRetryPause,
-  providerFor = (nodeUrl) => new RpcProvider({ nodeUrl }),
+  providerFor = createRpcProvider,
   sdk,
   submitInvoke = submitInvokeTransaction,
   waitForAccepted,
@@ -234,18 +114,37 @@ export const createOfficialStrk20Service = ({
     },
     async registrationStatus(input) {
       try {
+        // A recipient is read straight from the pool: the discovery preflight
+        // cannot distinguish an unregistered recipient from a registered one
+        // this sender has never opened a channel to.
+        if (input.subject !== undefined) {
+          const config = requireStrk20Config(input);
+          const registered = await readStrk20Registered(
+            providerFor,
+            input.rpcUrls,
+            config.poolAddress,
+            input.subject,
+          );
+          return registered ? "registered" : "unregistered";
+        }
         const transfers = transfersFor(sdk, input);
         if (!transfers.discoverRequirement || !sdk.SetupRequirement) {
           throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
         }
         const requirement = await transfers.discoverRequirement(input.account.address, input.token);
-        return requirement === sdk.SetupRequirement.Register ? "unregistered" : "registered";
+        return readSetupRequirement(sdk.SetupRequirement, requirement);
       } catch (error) {
         return mapStrk20ProtocolError(error);
       }
     },
     async register(input) {
       const config = requireStrk20Config(input);
+      const reviewedPoolFee = await requireReviewedStrk20PoolFee(
+        providerFor,
+        input.rpcUrls,
+        config.poolAddress,
+        input.poolFeeFri,
+      );
       return submission(
         input,
         async () =>
@@ -255,6 +154,7 @@ export const createOfficialStrk20Service = ({
             maturity,
             providerFor,
             pauseForServiceRetry,
+            undefined,
             strk20RegistrationBuilderFor,
             "registration",
           ),
@@ -264,11 +164,10 @@ export const createOfficialStrk20Service = ({
         // stage so the on-chain reason survives, sanitized, to the user.
         async (callAndProof) => {
           try {
-            const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
             const result = await submitInvoke({
               account: input.account,
               calls: [
-                ...approveCalls([], config.poolAddress, poolFee),
+                ...approveCalls([], config.poolAddress, reviewedPoolFee),
                 {
                   calldata: [...callAndProof.call.calldata],
                   contractAddress: config.poolAddress,
@@ -289,20 +188,38 @@ export const createOfficialStrk20Service = ({
         },
       );
     },
+    async poolFee(input) {
+      const config = requireStrk20Config(input);
+      return num.toHex(await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress));
+    },
     async quoteActions(input) {
       const config = requireStrk20Config(input);
       if (!config.paymaster) {
-        throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+        throw new WalletError(
+          `${STRK20_SUBMISSION_UNAVAILABLE}: no private relay is configured for this network`,
+        );
       }
       if (!nowSeconds) {
         throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
       }
-      const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
+      // The upstream supports converted fee tokens, but its response does not
+      // expose enough independently-verifiable pricing data to cap that
+      // conversion. Restrict the wallet route to STRK, then bind the quoted
+      // withdrawal exactly to the pool's on-chain fee before proving.
+      if (!sameFelt(config.paymaster.feeToken, STRK_TOKEN_ADDRESS)) {
+        throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+      }
+      const expectedFeeAmount = await readStrk20PoolFee(
+        providerFor,
+        input.rpcUrls,
+        config.poolAddress,
+      );
       return buildStrk20PaymasterPlan({
         accountAddress: input.account.address,
-        approveCalls: approveCalls(input.actions, config.poolAddress, poolFee),
+        approveCalls: approveCalls(input.actions, config.poolAddress, RELAY_PAYS_POOL_FEE),
         chainId: STARKNET_NETWORKS[input.account.networkId].chainId,
         config: config.paymaster,
+        expectedFeeAmount,
         ...(http ? { http } : {}),
         nowSeconds: nowSeconds(),
         poolAddress: config.poolAddress,
@@ -329,12 +246,19 @@ export const createOfficialStrk20Service = ({
     async submitActions(input) {
       const config = requireStrk20Config(input);
       if (input.plan.mode === "account") {
+        const accountPlan = input.plan;
         if (
           input.actions.length === 0 ||
           input.actions.some((action) => action.type !== "deposit")
         ) {
           throw new WalletError(STRK20_PRIVACY_LEAK);
         }
+        const reviewedPoolFee = await requireReviewedStrk20PoolFee(
+          providerFor,
+          input.rpcUrls,
+          config.poolAddress,
+          accountPlan.poolFeeFri,
+        );
         return submission(
           input,
           async () =>
@@ -344,27 +268,36 @@ export const createOfficialStrk20Service = ({
               maturity,
               providerFor,
               pauseForServiceRetry,
+              input.beforeProof,
             ),
+          // The account-mode broadcast ran unmapped, so a pool rejection of the
+          // shielding deposit reached the message boundary as a raw starknet.js
+          // error whose message embeds the serialized request params — the
+          // invoke calldata and the proof blob. Map it with the submission
+          // stage so only the sanitized on-chain reason survives to the user.
           async (callAndProof) => {
-            const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
-            const result = await submitInvoke({
-              account: input.account,
-              calls: [
-                ...approveCalls(input.actions, config.poolAddress, poolFee),
-                {
-                  calldata: [...callAndProof.call.calldata],
-                  contractAddress: callAndProof.call.contract_address,
-                  entrypoint: callAndProof.call.entry_point,
+            try {
+              const result = await submitInvoke({
+                account: input.account,
+                calls: [
+                  ...approveCalls(input.actions, config.poolAddress, reviewedPoolFee),
+                  {
+                    calldata: [...callAndProof.call.calldata],
+                    contractAddress: callAndProof.call.contract_address,
+                    entrypoint: callAndProof.call.entry_point,
+                  },
+                ],
+                proof: callAndProof.proof,
+                rpcUrls: input.rpcUrls,
+                signHash: async (messageHash) => {
+                  const signature = await input.signHash(messageHash);
+                  return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
                 },
-              ],
-              proof: callAndProof.proof,
-              rpcUrls: input.rpcUrls,
-              signHash: async (messageHash) => {
-                const signature = await input.signHash(messageHash);
-                return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
-              },
-            });
-            return { transactionHash: result.transactionHash };
+              });
+              return { transactionHash: result.transactionHash };
+            } catch (error) {
+              return mapStrk20StageError("submission", error);
+            }
           },
         );
       }
@@ -386,6 +319,7 @@ export const createOfficialStrk20Service = ({
             maturity,
             providerFor,
             pauseForServiceRetry,
+            input.beforeProof,
           ),
         async (callAndProof) =>
           submitStrk20PaymasterPlan({

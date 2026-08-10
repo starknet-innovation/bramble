@@ -7,7 +7,7 @@
  * activity refresh/export suites live in `sidepanel-activity-ui.test.ts`.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { WalletStatus } from "../../src/popup/responses";
+import type { TokenBalance, WalletStatus } from "../../src/popup/responses";
 import { sendFlow } from "../../src/sidepanel/flows";
 import {
   bindTransfer,
@@ -53,18 +53,30 @@ const preferences: WalletPreferences = {
   ],
 };
 
+const publicBalance: TokenBalance = {
+  address: TOKEN_ADDRESS,
+  balance: "100000000000000000000",
+  decimals: 18,
+  formatted: "100",
+  id: `SN_MAIN:ETH:${TOKEN_ADDRESS}`,
+  name: "Ether",
+  networkId: "SN_MAIN",
+  symbol: "ETH",
+};
+
 const mount = (
   walletOverrides: Record<string, unknown> = {},
 ): { app: HTMLElement; calls: WalletCalls; renderCalls: WalletStatus[]; deps: TransferUiDeps } => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.id = "app";
-  paint(app, sendFlow(status, account, preferences));
+  paint(app, sendFlow(status, account, preferences, [publicBalance]));
   document.body.append(app);
   const { calls, wallet } = makeWallet(walletOverrides);
   const renderCalls: WalletStatus[] = [];
   const deps: TransferUiDeps = {
     app,
+    publicBalances: () => [publicBalance],
     render: async (next: WalletStatus) => {
       renderCalls.push(next);
     },
@@ -162,9 +174,14 @@ describe("bindTransfer", () => {
     expect(feeText(app)).toContain("Estimated fee");
     expect(app.querySelector(".send-review-disclosure #send-review-fee")).toBeNull();
     expect(reviewText(app)).not.toContain("Estimated fee");
-    expect(
-      app.querySelectorAll("#send-review-stage .review-fee, #send-review-stage .review-flag"),
-    ).toHaveLength(1);
+    const feeLines = [
+      ...app.querySelectorAll("#send-review-stage .review-fee, #send-review-stage .review-flag"),
+    ].map((node) => node.textContent ?? "");
+    expect(feeLines.filter((line) => line.includes("Estimated fee"))).toHaveLength(1);
+    // Beside it, in the same style, what this configuration exposes on chain.
+    expect(feeLines).toContainEqual(
+      "You are sending from a public balance to a public balance. Sender address, amount and recipient address are public.",
+    );
 
     submit(app);
     await flush();
@@ -172,6 +189,70 @@ describe("bindTransfer", () => {
     expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
     expect(app.querySelector('[data-send-step="sent"]')?.getAttribute("data-state")).toBe("active");
+  });
+
+  // Back out of the review and the next Review send must show the review again,
+  // not submit. The reviewed marker is what separates the two, so a return to
+  // the amount step that kept it turned one click into a send.
+  test("re-reviews rather than submitting after backing out of the review", async () => {
+    const { app, calls, deps } = mount();
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
+
+    app.ownerDocument.querySelector("#send-header-back")?.dispatchEvent(new Event("click"));
+    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(false);
+
+    submit(app);
+    await flush();
+    expect(calls.submitTransfer).toHaveLength(0);
+    expect(calls.reviewTransfer).toHaveLength(2);
+    expect(app.querySelector("#send-review-stage")?.hasAttribute("hidden")).toBe(false);
+
+    // Only the confirm from the re-shown review sends.
+    submit(app);
+    await flush();
+    expect(calls.submitTransfer).toHaveLength(1);
+  });
+
+  test("invalidates a review when the final route gate fails", async () => {
+    const token = preferences.tokens[0];
+    if (!token) throw new Error("transfer token fixture missing");
+    const balance = (raw: string): readonly TokenBalance[] => [
+      {
+        ...token,
+        balance: raw,
+        formatted: raw === "0" ? "0" : "2",
+      },
+    ];
+    let balances = balance("2000000000000000000");
+    const { app, calls, deps } = mount();
+    bindTransfer({ ...deps, publicBalances: () => balances });
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    expect(calls.reviewTransfer).toHaveLength(1);
+
+    // The reviewed amount is no longer affordable at final confirmation.
+    balances = balance("0");
+    submit(app);
+    await flush();
+    expect(calls.submitTransfer).toHaveLength(0);
+    expect(resultText(app)).toBe("Not enough ETH");
+
+    // Even if a refresh clears the gate, the stale review cannot submit. The
+    // next click must produce a new review and only its confirm may send.
+    balances = balance("2000000000000000000");
+    submit(app);
+    await flush();
+    expect(calls.reviewTransfer).toHaveLength(2);
+    expect(calls.submitTransfer).toHaveLength(0);
   });
 
   test("watches for deployment after confirming a first send", async () => {
@@ -352,6 +433,57 @@ describe("bindTransfer", () => {
     await flush();
     await flush();
     expect(app.querySelector("#transfer-form")?.getAttribute("data-stage")).toBe("submitted");
+    expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
+  });
+});
+
+describe("closing Send", () => {
+  test("abandons what was composed, so the next visit starts over", () => {
+    // Reported from the shield shortcut: open Send pre-configured, close it with
+    // the cross, then press Send from home — it reopened on the amount step with
+    // the shield still filled in, because the journey outlived the close.
+    const { app, deps } = mount();
+    bindTransfer(deps);
+    // Pick a recipient the way the screen does, which advances to the amount.
+    const search = app.querySelector<HTMLInputElement>("#send-recipient-search");
+    if (search) {
+      search.value = RECIPIENT;
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    app.querySelector<HTMLButtonElement>("#send-recipient-continue")?.click();
+    setField(app, "amount", "1");
+    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(false);
+    // Stored canonically, so compare loosely: the point is that it is set.
+    expect(app.querySelector<HTMLInputElement>('[name="recipient"]')?.value).not.toBe("");
+
+    app.querySelector<HTMLButtonElement>("#send-close")?.click();
+    // Re-entering rebinds against freshly rendered markup, as a repaint does.
+    paint(app, sendFlow(status, account, preferences));
+    bindTransfer(deps);
+
+    expect(app.querySelector("#send-recipient-stage")?.hasAttribute("hidden")).toBe(false);
+    expect(app.querySelector("#send-details")?.hasAttribute("hidden")).toBe(true);
+    expect(app.querySelector<HTMLInputElement>('[name="recipient"]')?.value).toBe("");
+  });
+
+  test("keeps a submitted transaction reachable after closing", async () => {
+    // The opposite case: once something is on chain, closing must not discard the
+    // receipt the user may come back for.
+    const { app, deps } = mount();
+    bindTransfer(deps);
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+    submit(app);
+    await flush();
+    submit(app);
+    await flush();
+    expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
+
+    app.querySelector<HTMLButtonElement>("#send-close")?.click();
+    paint(app, sendFlow(status, account, preferences));
+    bindTransfer(deps);
+
+    expect(app.querySelector("#send-success")?.hasAttribute("hidden")).toBe(false);
     expect(app.querySelector("#send-success-hash")?.textContent).toBe("0xdeadbeef");
   });
 });

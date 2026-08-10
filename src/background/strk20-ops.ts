@@ -36,6 +36,7 @@ import type {
   Strk20DisclosureApprovalKind,
   Strk20DisclosureRequest,
 } from "./strk20-approval-types";
+import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
 import {
   readStrk20BalancesMessage,
   readStrk20InvokeMessage,
@@ -192,17 +193,38 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
   if (!config || !token) {
     return { error: "strk20 services unavailable" };
   }
-  return queueDisclosure(deps, resolved, {
-    kind: "strk20-register",
-    origin: input.origin,
-    request: { poolAddress: config.poolAddress, token: token.address, type: "register" },
-    summaries: [
-      "Activate private balances for this account",
-      `Privacy pool ${config.poolAddress}`,
-      `Registration preflight token ${token.address}`,
-      "Publishes a viewing-key commitment, never the viewing key",
-    ],
-  });
+  try {
+    const accountContext = strk20AccountContext(deps, resolved);
+    const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    if (!service.poolFee) {
+      return { error: "strk20 services unavailable" };
+    }
+    const poolFeeFri = await service.poolFee(accountContext);
+    await assertPublicPoolSpendAffordable(
+      deps,
+      { accountContext, preferences: resolved.preferences, token },
+      poolFeeFri,
+    );
+    return queueDisclosure(deps, resolved, {
+      kind: "strk20-register",
+      origin: input.origin,
+      request: {
+        poolAddress: config.poolAddress,
+        poolFeeFri,
+        token: token.address,
+        type: "register",
+      },
+      summaries: [
+        "Activate private balances for this account",
+        `Privacy pool ${config.poolAddress}`,
+        `Registration preflight token ${token.address}`,
+        `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee`,
+        "Publishes a viewing-key commitment, never the viewing key",
+      ],
+    });
+  } catch (error) {
+    return { error: strk20ErrorMessage(error) };
+  }
 };
 
 const handleStrk20Balances: Strk20OpsHandler = async (deps, message, sender) => {
@@ -319,10 +341,7 @@ const handleStrk20SubaccountCommitment: Strk20OpsHandler = async (deps, message,
   });
 };
 
-/**
- * Dispatch table for STRK20 privacy messages, keyed by message type. Each branch
- * is a self-contained handler, leaving the router a pure lookup.
- */
+// Dispatch table kept explicit so the router defaults closed.
 const STRK20_OPS_HANDLERS: Readonly<Record<string, Strk20OpsHandler>> = {
   "wallet.strk20Balances": handleStrk20Balances,
   "wallet.strk20InvokeTransaction": handleStrk20InvokeTransaction,
@@ -390,7 +409,15 @@ export const executeStrk20DisclosureApproval = async (
       ) {
         return { error: "Private balances are already active" };
       }
-      const result = await registerStrk20Account(service, context);
+      await assertPublicPoolSpendAffordable(
+        deps,
+        { accountContext: context, preferences: resolved.preferences, token },
+        registration.poolFeeFri,
+      );
+      const result = await registerStrk20Account(service, {
+        ...context,
+        poolFeeFri: registration.poolFeeFri,
+      });
       await deps.activity.record({
         accountId: resolved.account.id,
         hash: result.transactionHash,

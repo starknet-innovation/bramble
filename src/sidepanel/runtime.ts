@@ -58,6 +58,22 @@ export type RuntimeApi = {
 export type BalanceState =
   | { readonly balances: readonly TokenBalance[]; readonly error?: never }
   | { readonly balances?: never; readonly error: string };
+/**
+ * Successful balances retain the account/network scope proven by the response.
+ */
+export type ScopedBalanceState =
+  | {
+      readonly accountId: string;
+      readonly balances: readonly TokenBalance[];
+      readonly error?: never;
+      readonly networkId: string;
+    }
+  | {
+      readonly accountId?: never;
+      readonly balances?: never;
+      readonly error: string;
+      readonly networkId?: never;
+    };
 
 /**
  * A locked, account-less status used before the first load resolves and as the
@@ -263,10 +279,14 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "transfer review failed");
     },
-    async loadBalances(): Promise<BalanceState> {
+    async loadBalances(): Promise<ScopedBalanceState> {
       const response = await sendMessage({ type: "wallet.getBalances" });
       if (isBalancesResponse(response)) {
-        return { balances: response.balances };
+        return {
+          accountId: response.accountId,
+          balances: response.balances,
+          networkId: response.networkId,
+        };
       }
       return { error: isErrorResponse(response) ? response.error : "balances unavailable" };
     },

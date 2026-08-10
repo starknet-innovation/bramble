@@ -32,7 +32,8 @@ const vaultPassphrase = "correct horse battery staple";
 const vault = { accounts: [account], activeAccountId: account.id } as unknown as Vault;
 const tokenId = `SN_MAIN:ETH:${ETH}`;
 const OTHER_ACCOUNT_ID =
-  "SN_MAIN:0x9234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+  "SN_MAIN:0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+const SEPOLIA_ACCOUNT_ID = `SN_SEPOLIA:${account.address}`;
 
 const walletStub = {
   async createAccount() {
@@ -307,7 +308,7 @@ describe("wallet operations", () => {
       summary: "Another account send",
     });
     await activityLog.record({
-      accountId: account.id,
+      accountId: SEPOLIA_ACCOUNT_ID,
       hash: "0x9ab",
       kind: "transfer",
       networkId: "SN_SEPOLIA",

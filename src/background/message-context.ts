@@ -20,7 +20,11 @@ import {
   type LedgerSignQueueTimeout,
 } from "./ledger-sign-queue";
 import { defaultRuntimeRpc, type RuntimeRpc } from "./runtime-rpc";
-import { unavailablePreferencesStore } from "./runtime-state";
+import {
+  type ActiveStateCoordinator,
+  createActiveStateCoordinator,
+  unavailablePreferencesStore,
+} from "./runtime-state";
 import type { UnlockSession } from "./session";
 import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
 import {
@@ -34,6 +38,7 @@ import type { WalletStatusReader } from "./wallet-reader";
  * Everything the runtime router hands to a sub-handler.
  */
 export type RouterContext = {
+  readonly activeStateCoordinator: ActiveStateCoordinator;
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
@@ -59,6 +64,7 @@ export type RouterContext = {
  * Named optional collaborators for {@link createMessageHandler}.
  */
 export type MessageHandlerOptions = {
+  readonly activeStateCoordinator?: ActiveStateCoordinator;
   readonly activity?: ActivityLog;
   readonly allowanceStore?: AllowanceStore;
   readonly approvals?: ApprovalQueue;
@@ -103,6 +109,10 @@ const strk20PreparationsFor = (
   provided: Strk20WalletPreparationStore | undefined,
 ): Strk20WalletPreparationStore => provided ?? createStrk20WalletPreparationStore();
 
+const activeStateCoordinatorFor = (
+  provided: ActiveStateCoordinator | undefined,
+): ActiveStateCoordinator => provided ?? createActiveStateCoordinator();
+
 /**
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
@@ -114,6 +124,7 @@ export const routerContext = (
   options: MessageHandlerOptions,
   session: UnlockSession,
 ): RouterContext => ({
+  activeStateCoordinator: activeStateCoordinatorFor(options.activeStateCoordinator),
   activity: options.activity ?? memoryActivityLog(),
   allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
   approvals: options.approvals ?? createApprovalQueue(),

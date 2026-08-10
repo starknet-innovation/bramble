@@ -41,7 +41,4 @@ export function readGrantTransportDiagnostics(
  * Releases the transport and explicitly disconnects retained Bluetooth GATT
  * state. Teardown errors never authorize or complete a wallet operation.
  */
-export function closeGrantTransport(
-  kind: LedgerTransportKind,
-  transport: LedgerTransport,
-): Promise<void>;
+export function closeGrantTransport(transport: LedgerTransport): Promise<void>;

@@ -8,6 +8,7 @@ import type { TokenBalance, WalletStatus } from "../../src/popup/responses";
 import { activityEmptyCopy, homeTabs, visibleHomeBalances } from "../../src/sidepanel/home-tabs";
 import { settingsScreen } from "../../src/sidepanel/settings-views";
 import { dashboard, WALLET_VIEWS } from "../../src/sidepanel/views";
+import { STRK_TOKEN_ADDRESS } from "../../src/starknet/networks";
 import { account, preferences, secondAccount } from "../support/sidepanel-fixtures";
 
 const status: WalletStatus = {
@@ -49,7 +50,7 @@ describe("sidepanel views", () => {
 
   test("home keeps the frequent actions together, not settings or activity", () => {
     const html = dashboard("home", status, [], preferences, { balances: [] });
-    const actions = html.slice(html.indexOf("action-row"), html.indexOf("terminal-cta"));
+    const actions = html.slice(html.indexOf("action-row"), html.indexOf("home-tabs"));
 
     expect(actions).toContain('data-view="send"');
     expect(actions).toMatch(/data-view="send"[\s\S]*data-view="swap"[\s\S]*data-view="receive"/);
@@ -177,7 +178,7 @@ describe("sidepanel views", () => {
     expect(html).toMatch(/id="send-review-button" type="submit" disabled/);
   });
 
-  test("shows a clickable deploy chip only when the account is not deployed", () => {
+  test("shows a deploy chip only when the account is not deployed", () => {
     const undeployed = dashboard("home", status, [], preferences, { balances: [] }, false);
     const deployed = dashboard("home", status, [], preferences, { balances: [] }, true);
     const unknown = dashboard("home", status, [], preferences, { balances: [] }, null);
@@ -188,11 +189,37 @@ describe("sidepanel views", () => {
     expect(unknown).not.toContain('id="deploy-button"');
   });
 
-  test("send flow reviews before it sends, with fee speed control", () => {
+  test("deploying stays disabled until the account can pay the fee in STRK", () => {
+    // Fees are paid in STRK, so only a STRK balance unlocks deployment.
+    const strkBalance = {
+      address: STRK_TOKEN_ADDRESS,
+      balance: "0x1",
+      decimals: 18,
+      formatted: "0.000000000000000001",
+      id: `SN_MAIN:STRK:${STRK_TOKEN_ADDRESS}`,
+      name: "Starknet Token",
+      networkId: "SN_MAIN" as const,
+      symbol: "STRK",
+    };
+    const empty = dashboard("home", status, [], preferences, { balances: [] }, false);
+    const funded = dashboard("home", status, [], preferences, { balances: [strkBalance] }, false);
+
+    // An empty account can only produce a failed fee estimate, so the action is
+    // present (the state still needs stating) but not actionable.
+    expect(empty).toMatch(/id="deploy-button"[^>]*disabled/);
+    expect(empty).toContain("Not deployed — receive STRK first");
+    expect(funded).toMatch(/id="deploy-button"(?![^>]*disabled)/);
+    expect(funded).toContain("Not deployed — deploy now");
+  });
+
+  test("send flow reviews before it sends, without a fee-speed control", () => {
     const html = dashboard("send", status, [], preferences, { balances: [] });
 
     expect(html).toContain('id="review-panel"');
-    expect(html).toContain('name="speed"');
+    // No speed choice is offered and none is submitted: every send used the
+    // node's standard fee anyway, so the control said nothing.
+    expect(html).not.toContain('name="speed"');
+    expect(html).not.toContain(">Speed<");
     expect(html).toContain("Review send");
     expect(html).toContain('class="liquid-dots"');
     expect(html).toContain('data-liquid-dots="send"');
@@ -464,7 +491,7 @@ describe("sidepanel views", () => {
     expect(html).toContain('id="refresh-button"');
     expect(html).toContain("ETH");
     // The token amount sits under the symbol; the fiat value fills the right side.
-    expect(html).toContain(">1</p>");
+    expect(html).toContain(">1.00</p>");
     expect(html).toContain('class="token-amount"');
   });
 });

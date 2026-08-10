@@ -34,6 +34,12 @@ impact, remediation, and retest condition.
 | [MCW-V06-004](../releases/v0.6/#mcw-v06-004) | Medium | Resolved | Multisig state | Read failures cannot fabricate settled, empty, or unconfirmed chain state |
 | [MCW-V06-005](../releases/v0.6/#mcw-v06-005) | Low | Resolved | Multisig UI | Signer actions and no-account deployment are rejected before doomed requests |
 | [MCW-V06-006](../releases/v0.6/#mcw-v06-006) | Informational | Resolved | Assurance/docs | Client guards, UI behavior, recovery scope, and artifact comments are covered |
+| [MCW-V09-001](../releases/v0.9/#mcw-v09-001) | Medium | Resolved | STRK20 relay | Private relay quotes cannot add a sender-linked public fee approval |
+| [MCW-V09-002](../releases/v0.9/#mcw-v09-002) | High | Resolved | RPC submission | Only an actual add-transaction response loss can retain the duplicate-broadcast guard |
+| [MCW-V09-003](../releases/v0.9/#mcw-v09-003) | Medium | Resolved | Store upgrades | Vault migrations and active scope changes are staged, verified, recoverable, and serialized |
+| [MCW-V09-004](../releases/v0.9/#mcw-v09-004) | Medium | Resolved | Unified Send | Account-scoped balances, routes, recipients, and pool fees are re-gated before execution |
+| [MCW-V09-005](../releases/v0.9/#mcw-v09-005) | High | Resolved | Proof privacy | Post-proof relay errors cannot echo proof material into the wallet surface |
+| [MCW-V09-006](../releases/v0.9/#mcw-v09-006) | Medium | Resolved | Ledger transport | Compatibility probing reconnects the exact device and parses bounded model responses |
 | MCW-DOC-001 | Informational | Resolved | Architecture docs | Raw-key import documentation now matches the shipped boundary |
 
 ## MCW-AUD-001 — Biome internal panics do not fail the lint gate
@@ -76,3 +82,4 @@ validation, storage behavior, and failure modes.
 See the [consolidated source package audit](../src-package-audit/) for the sanitized evidence,
 impact, resolution, and validation results for MCW-SRC-001 through MCW-SRC-009.
 See the [v0.6 release audit](../releases/v0.6/) for MCW-V06-001 through MCW-V06-006.
+See the [v0.9 release assurance](../releases/v0.9/) for MCW-V09-001 through MCW-V09-006.

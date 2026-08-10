@@ -85,11 +85,12 @@ Verified DECLARED on both networks with `starknet_getClass` against the
 Cartridge endpoints the wallet used at the time, on 2026-07-07 (RPC spec
 `0.10.2` mainnet, `0.9.0` sepolia); the class resolved with the
 `UpgradeableImpl` + `AccountMixinImpl` ABI on both. The wallet has since moved
-to the Starknet Foundation public nodes, so re-run against those:
+to the wallet-owned gateway in front of the Starknet Foundation public nodes,
+so re-run against those:
 
 ```bash
 for NET in mainnet sepolia; do
-  curl -s -X POST "https://$NET.nodes.starknet.org/rpc/v0_10" \
+  curl -s -X POST "https://wallet.nodes.starknet.org/rpc/$NET/v0_10" \
     -H 'content-type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"starknet_getClass","params":{"block_id":"latest","class_hash":"0x01d1777db36cdd06dd62cfde77b1b6ae06412af95d57a13dc40ac77b8a702381"}}' \
     | head -c 80; echo " <- $NET";
@@ -167,16 +168,21 @@ Recovery boundaries are deliberately explicit:
 1. Bump `CURRENT_SCHEMA_VERSION` in `src/storage/vault-schema.ts`.
 2. Add one adjacent step to `VAULT_MIGRATIONS` in `src/storage/migrations.ts`.
 3. Update schema validators and tests for old, current, and invalid vault data.
-4. Run `bun run check`, `bun run build`, and `bun run package:extension`.
+4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
+5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
 
-The vault schema is currently at **v3**. v2 added a `mnemonic: string | null` field so the wallet
-can derive more software accounts and reveal the recovery phrase after re-authentication. v3 keeps
-that shape and admits a `"ledger"` derivation whose path, index, and `LedgerW` application marker
-must agree; the account must not have a `signingKeys` entry. Vaults migrated from v1 (which never
-stored the phrase) carry `mnemonic: null` and cannot add software accounts or reveal a phrase until
-re-created, but may add a keyless Ledger account. Each migration step advances exactly one version
-(`v0 → v1 → v2 → v3`) and is deterministic. `mnemonic` and software signing keys only ever exist
-inside the encrypted vault envelope; Ledger secrets never enter it.
+The vault schema is currently at **v4**. v2 added `mnemonic: string | null`; v3 admits a `"ledger"`
+derivation whose path, index, and `LedgerW` marker must agree and which has no `signingKeys` entry.
+v4 adds encrypted `accountSecrets`; public `AccountRef` records cannot contain optional secrets.
+Ledger STRK20 viewing keys retain exact account, chain, pool, and scheme provenance. Vaults migrated
+from v1 carry `mnemonic: null`; they cannot add software accounts or reveal a phrase until re-created,
+but may add a keyless Ledger account. Every migration is adjacent and deterministic (`v0 → v1 → v2 → v3 → v4`).
+
+Chrome preserves `storage.local` across an update but clears `storage.session`. `runtime.onInstalled`
+therefore cannot migrate an encrypted vault: it has no passphrase. The first authenticated read runs
+the pure schema chain, verifies an encrypted `mc-wallet:vault-migration` stage, then verifies the
+primary before cleanup. A worker stop leaves either the old primary or an authenticated recovery
+copy; invalid data never reaches the primary write. See [Wallet store architecture](WALLET_STORE.md).
 
 ## Account Lifecycle and Secret Reveal
 

@@ -13,7 +13,7 @@ import type {
 } from "../starknet/strk20/maturity";
 import type { KeyValueStore } from "./kv";
 import { serializeStoreMutations } from "./mutation-queue";
-import { isAccountId } from "./vault-schema";
+import { isAccountIdForNetwork } from "./vault-schema";
 
 const STORE_KEY = "mc-wallet:strk20-maturity";
 const MAX_RECORDS = 100;
@@ -30,10 +30,9 @@ const isStoredMaturity = (value: unknown): value is StoredMaturity =>
     "state",
     "transactionHash",
   ]) &&
-  typeof value["accountId"] === "string" &&
-  isAccountId(value["accountId"]) &&
   typeof value["networkId"] === "string" &&
   isStarknetNetworkId(value["networkId"]) &&
+  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   typeof value["poolAddress"] === "string" &&
   isNonZeroStarkFieldElement(value["poolAddress"]) &&
   ((value["state"] === "submitting" &&

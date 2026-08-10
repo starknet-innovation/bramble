@@ -15,7 +15,7 @@ import {
 } from "../starknet/networks";
 import type { KeyValueStore } from "./kv";
 import { serializeStoreMutations } from "./mutation-queue";
-import { isAccountId } from "./vault-schema";
+import { isAccountIdForNetwork } from "./vault-schema";
 
 /**
  * Browser storage key for the allowance log.
@@ -74,10 +74,10 @@ export const allowanceId = (entry: AllowanceInput): string | null => {
  * field validation without re-deriving it.
  */
 export const hasValidAllowanceFields = (value: Record<string, unknown>): boolean =>
-  isAccountId(value["accountId"]) &&
+  isStarknetNetworkId(value["networkId"]) &&
+  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   isAmount(value["amount"]) &&
   typeof value["id"] === "string" &&
-  isStarknetNetworkId(value["networkId"]) &&
   typeof value["spender"] === "string" &&
   isNonZeroStarkFieldElement(value["spender"]) &&
   typeof value["token"] === "string" &&

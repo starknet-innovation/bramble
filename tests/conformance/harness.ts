@@ -86,10 +86,11 @@ const walletStub = (bump: Bump) => ({
   async readVault() {
     return {
       accounts: [ACCOUNT],
+      accountSecrets: [],
       activeAccountId: ACCOUNT.id,
       mnemonic: null,
       originGrants: [{ accountIds: [ACCOUNT.id], origin: ORIGIN }],
-      schemaVersion: 3 as const,
+      schemaVersion: 4 as const,
       signingKeys: [{ accountId: ACCOUNT.id, privateKey: "0x123456" }],
     };
   },

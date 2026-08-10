@@ -15,6 +15,8 @@ import { createMemoryStore } from "../../src/storage/kv";
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const OTHER_ACCOUNT_ID =
   "SN_MAIN:0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
+const SEPOLIA_ACCOUNT_ID =
+  "SN_SEPOLIA:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const MAIN_SCOPE = { accountId: ACCOUNT_ID, networkId: "SN_MAIN" as const };
 
 const makeLog = () => {
@@ -86,7 +88,7 @@ describe("createActivityLog", () => {
       summary: "Second account send",
     });
     await log.record({
-      accountId: ACCOUNT_ID,
+      accountId: SEPOLIA_ACCOUNT_ID,
       hash: "0x1",
       kind: "transfer",
       networkId: "SN_SEPOLIA",
@@ -105,7 +107,7 @@ describe("createActivityLog", () => {
       activityForScope(all, { accountId: OTHER_ACCOUNT_ID, networkId: "SN_MAIN" })[0]?.status,
     ).toBe("pending");
     expect(
-      activityForScope(all, { accountId: ACCOUNT_ID, networkId: "SN_SEPOLIA" })[0]?.status,
+      activityForScope(all, { accountId: SEPOLIA_ACCOUNT_ID, networkId: "SN_SEPOLIA" })[0]?.status,
     ).toBe("pending");
   });
 
@@ -120,6 +122,15 @@ describe("createActivityLog", () => {
         status: "pending",
         submittedAt: 1,
         summary: "ok",
+      },
+      {
+        accountId: ACCOUNT_ID,
+        hash: "0x3",
+        kind: "transfer",
+        networkId: "SN_SEPOLIA",
+        status: "pending",
+        submittedAt: 2,
+        summary: "contradictory account scope",
       },
       { hash: "0x2", nefarious: true },
     ]);

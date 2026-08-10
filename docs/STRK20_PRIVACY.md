@@ -39,31 +39,35 @@ Each enabled network needs one complete routing configuration:
 - Dapp-specific anonymizers/executors are not global pool configuration. A Vesu, Ekubo, or other
   integration supplies its audited contract as an explicit invoke target inside the reviewed action
   plan, where it handles notes according to that dapp's rules.
-- OHTTP enabled at both the discovery and proving services. A separate OHTTP relay URL is optional.
+- Optional OHTTP, which must be supported by both the discovery and proving services. The bundled
+  Mainnet route has OHTTP disabled because the deployed proving service currently accepts standard
+  JSON-RPC only. A separate OHTTP relay URL is optional when OHTTP is enabled.
 - Optional private paymaster/relayer URL and its pool fee token.
 
-The bundled Mainnet configuration points only at the wallet-owned Terminal gateway and the
+The bundled Mainnet configuration points only at the wallet-owned AWS gateway and the
 deployed pool
 `0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a`.
-The private discovery and prover upstream URLs and any paymaster key are server-only Vercel
-environment variables. They never appear in the extension source, preferences, source maps,
-logs, or browser requests. The public gateway URL is necessarily visible to clients.
+The private discovery and prover upstream URLs and any paymaster key are server-only ECS runtime
+configuration. They never appear in the extension source, preferences, source maps, logs, or
+browser requests. The public gateway URL is necessarily visible to clients.
 
 An extension cannot protect a shared API secret or prove to a server that its JavaScript came from
 an official build: anything embedded in the bundle is extractable, and a non-browser client can
 spoof HTTP headers. The gateway therefore uses layered controls:
 
-- exact `chrome-extension://<production-id>` Origin allowlisting for browser requests;
+- credential-free wildcard CORS, so the extension can call the gateway before it has a stable
+  Chrome extension ID. This is compatibility behavior, not client authentication;
 - a fixed method/path/content-type allowlist and fixed Mainnet pool/paymaster fee token;
 - request/response size caps, timeouts, no redirects, generic upstream failures, and no request
   body logging;
-- OHTTP envelopes so the gateway relays discovery/proving traffic without seeing its contents;
-- Vercel Firewall rate limits and abuse rules at the public edge.
+- OHTTP is disabled for the bundled route until both privacy upstreams support it. The gateway
+  therefore forwards standard discovery and proving requests and can observe their contents;
+- AWS WAF coarse edge limits plus DynamoDB-backed per-route client limits.
 
-Origin allowlisting is a browser isolation control, not cryptographic build attestation. A
-production deployment must not describe it as attestation. Stronger client authenticity requires
-an external enrollment or platform-attestation system; no generic Chrome Web Store attestation is
-available to this protocol today.
+Neither CORS nor an HTTP `Origin` header authenticates an extension: non-browser clients can
+spoof headers. Stronger client authenticity requires an extension-ID allowlist or an external
+enrollment or platform-attestation system; no generic Chrome Web Store attestation is available to
+this protocol today.
 
 The Discovery Service and Transaction Prover are required for live registration, balance
 discovery, and shielding. The paymaster is optional for entering the pool: registration and a
@@ -110,12 +114,15 @@ device.
    remain expandable in the approval. A private-relay review also lists the relayer-fee withdrawal
    as a separately labelled action with its exact token, amount, and recipient. Denial returns
    `USER_REFUSED_OP`; account, network, grant, or payload changes invalidate the request.
-3. Only after approval does the background lazily derive a domain-separated viewing key through
-   Krusty from the selected account's encrypted signing key. The derivation matches the pinned SDK
-   reference: deterministic Stark ECDSA over the canonical `chainId:poolAddress`, Poseidon of
-   `(r,s)`, and the privacy pool's lower-half curve-order fold. This produces a distinct identity
-   for every chain and pool. The key is never persisted, logged, or returned through a browser
-   message. Keyless Ledger accounts cannot currently use STRK20 and fail closed.
+3. Only after approval does the background resolve a domain-separated viewing key. Software
+   accounts derive it lazily through Krusty from the selected account's encrypted signing key. The
+   derivation matches the pinned SDK reference: deterministic Stark ECDSA over the canonical
+   `chainId:poolAddress`, Poseidon of `(r,s)`, and the privacy pool's lower-half curve-order fold.
+   Software-derived keys are never persisted. A Ledger account may resolve only an exact
+   account/chain/pool-scoped key retained in encrypted vault `accountSecrets`; if none exists it
+   fails closed. The typed-data hardware ceremony that provisions such a key is deliberately not
+   implemented until its domain, message, reduction, confirmation UI, and test vectors are
+   formally reviewed. No viewing key is logged or returned through a browser message.
 4. The SDK performs note discovery, transaction assembly, and proving. `USER_LINKAGE` warnings map
    to the Wallet API privacy-leak error; every other non-empty or malformed warning fails closed.
 5. Before a dapp invoke approval appears, the wallet runs only public/pure action checks, rejects a
@@ -183,16 +190,16 @@ production deployments require their own audits and operations monitoring.
 
 ## Operator checklist
 
-- Set `STRK20_DISCOVERY_UPSTREAM` and `STRK20_PROVER_UPSTREAM` only in the Terminal deployment
-  environment. Do not use `VITE_` variables for them.
-- Set a valid `AVNU_PAYMASTER_API_KEY` in the Terminal deployment before enabling private transfer
-  or withdrawal; the gateway adds it server-side and never returns it to the extension.
-- Set `MC_WALLET_EXTENSION_ORIGINS` to the exact released extension origin(s). The gateway fails
-  closed when this is absent or malformed.
-- Confirm both services expose OHTTP at `/ohttp-keys` and their service root before enabling the
-  bundled Mainnet route.
-- Configure Vercel Firewall rate limits for `/api/strk20/*` and `/api/private-swap/*`; serverless
-  in-memory counters are not durable rate limiting.
+- Set the discovery/prover upstream URLs only in the `mc-backend` ECS task configuration.
+- Store a valid `AVNU_PAYMASTER_API_KEY` in the backend runtime secret before enabling private
+  transfer or withdrawal; the gateway adds it server-side and never returns it to the extension.
+- The gateway uses credential-free wildcard CORS and does not require an extension origin or ID.
+  Treat it as a public endpoint and rely on the WAF and per-client rate limits for abuse control.
+- Keep OHTTP disabled until both privacy upstreams expose OHTTP at `/ohttp-keys` and their service
+  root. The current proving service does not, so the bundled Mainnet configuration uses JSON-RPC.
+- Keep AWS WAF and the backend's DynamoDB rate-limit table enabled for `/rpc/*` and
+  `/api/strk20/*`. Configure Vercel Firewall independently for Terminal-only
+  `/api/private-swap/*` routes.
 - Configure the SDK sub-account module only when supporting `subaccount_invoke`; keep each
   dapp-specific anonymizer/executor in that dapp's reviewed action plan.
 - Supply a private paymaster/relayer and fee token to enable private transfers, withdrawals,
@@ -200,7 +207,8 @@ production deployments require their own audits and operations monitoring.
   without it.
 - Put credentials, quotas, and abuse controls behind a wallet-owned HTTPS relay; never add a shared
   API key to the extension.
-- Supply an OHTTP relay only when the discovery/prover deployment requires a separate relay.
+- Supply an OHTTP relay only when enabling OHTTP and the discovery/prover deployment requires a
+  separate relay.
 - Verify service health and network/contract alignment before enabling the configuration.
 - The adapter automatically waits for recently deployed or funded accounts at the SDK's safe
   historical block (currently ten blocks behind the RPC head), waits for each submitted privacy

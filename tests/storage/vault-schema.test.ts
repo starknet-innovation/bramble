@@ -8,9 +8,11 @@ import {
   CURRENT_SCHEMA_VERSION,
   emptyVault,
   isAccountId,
+  isAccountIdForNetwork,
   isKeylessAccount,
   isVaultV1,
   isVaultV3,
+  isVaultV4,
 } from "../../src/storage/vault-schema";
 
 const account = {
@@ -35,38 +37,41 @@ const vault = {
   signingKeys: [{ accountId: account.id, privateKey: "0x456" }],
 };
 
-const currentVault = { ...vault, mnemonic: null, schemaVersion: 3 as const };
+const legacyV3 = { ...vault, mnemonic: null, schemaVersion: 3 as const };
+const currentVault = { ...legacyV3, accountSecrets: [], schemaVersion: 4 as const };
 
-describe("isVaultV3 (current schema)", () => {
+describe("isVaultV4 (current schema)", () => {
   test("accepts current vaults with or without a stored phrase", () => {
-    expect(isVaultV3(currentVault)).toBe(true);
-    expect(isVaultV3({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
+    expect(isVaultV4(currentVault)).toBe(true);
+    expect(isVaultV4({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
     expect(emptyVault().schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(isVaultV3(emptyVault())).toBe(true);
+    expect(isVaultV4(emptyVault())).toBe(true);
   });
 
   test("rejects legacy v1 vaults and version mismatches", () => {
-    expect(isVaultV3(vault)).toBe(false);
-    expect(isVaultV3({ ...currentVault, schemaVersion: 1 })).toBe(false);
+    expect(isVaultV4(vault)).toBe(false);
+    expect(isVaultV4({ ...currentVault, schemaVersion: 1 })).toBe(false);
     expect(isVaultV1(currentVault)).toBe(false);
+    expect(isVaultV3(legacyV3)).toBe(true);
   });
 
   test("rejects a missing or malformed recovery phrase", () => {
     const withoutMnemonic = {
       accounts: currentVault.accounts,
+      accountSecrets: currentVault.accountSecrets,
       activeAccountId: currentVault.activeAccountId,
       originGrants: currentVault.originGrants,
-      schemaVersion: 3 as const,
+      schemaVersion: 4 as const,
       signingKeys: currentVault.signingKeys,
     };
 
-    expect(isVaultV3(withoutMnemonic)).toBe(false);
-    expect(isVaultV3({ ...currentVault, mnemonic: "" })).toBe(false);
-    expect(isVaultV3({ ...currentVault, mnemonic: 42 })).toBe(false);
+    expect(isVaultV4(withoutMnemonic)).toBe(false);
+    expect(isVaultV4({ ...currentVault, mnemonic: "" })).toBe(false);
+    expect(isVaultV4({ ...currentVault, mnemonic: 42 })).toBe(false);
   });
 
   test("rejects unexpected keys", () => {
-    expect(isVaultV3({ ...currentVault, label: "unexpected" })).toBe(false);
+    expect(isVaultV4({ ...currentVault, label: "unexpected" })).toBe(false);
   });
 });
 
@@ -86,27 +91,104 @@ const ledgerAccount = {
 
 const ledgerOnlyVault = {
   accounts: [ledgerAccount],
+  accountSecrets: [],
   activeAccountId: ledgerAccount.id,
   mnemonic: null,
   originGrants: [],
-  schemaVersion: 3 as const,
+  schemaVersion: 4 as const,
   signingKeys: [],
 };
 
 describe("mnemonic-less Ledger-only vault", () => {
   test("validates a keyless Ledger vault that stores no recovery phrase", () => {
-    // The mnemonic-less Ledger-only wallet needs no schema bump beyond v3: a null
-    // mnemonic with an all-keyless account set and empty signing keys is already
-    // a valid v3 vault under the relaxed account↔signingKey bijection.
-    expect(isVaultV3(ledgerOnlyVault)).toBe(true);
+    expect(isVaultV4(ledgerOnlyVault)).toBe(true);
     expect(isKeylessAccount(ledgerAccount as AccountRef)).toBe(true);
   });
 
   test("still accepts the grandfathered legacy null-phrase seed vault", () => {
     // A v1-migrated wallet carries seed accounts with a null mnemonic; that shape
     // stays valid so those wallets never fail closed.
-    expect(isVaultV3(currentVault)).toBe(true);
+    expect(isVaultV4(currentVault)).toBe(true);
     expect(currentVault.mnemonic).toBeNull();
+  });
+
+  test("accepts only canonical Ledger-owned account-secret scopes", () => {
+    const key = {
+      chainId: "0x534e5f4d41494e",
+      poolAddress: "0x123",
+      scheme: "ledger-strk20-typed-data-v1" as const,
+      viewingKey: "0x654321",
+    };
+    const withSecret = {
+      ...ledgerOnlyVault,
+      accountSecrets: [
+        {
+          accountId: ledgerAccount.id,
+          ledgerStrk20ViewingKeys: [key],
+        },
+      ],
+    };
+
+    expect(isVaultV4(withSecret)).toBe(true);
+    expect(
+      isVaultV4({
+        ...withSecret,
+        accountSecrets: [{ ...withSecret.accountSecrets[0], accountId: "SN_MAIN:0x999" }],
+      }),
+    ).toBe(false);
+    expect(
+      isVaultV4({
+        ...withSecret,
+        accountSecrets: [
+          {
+            accountId: ledgerAccount.id,
+            ledgerStrk20ViewingKeys: [{ ...key, chainId: "0x534e5f5345504f4c4941" }],
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isVaultV4({
+        ...withSecret,
+        accountSecrets: [
+          {
+            accountId: ledgerAccount.id,
+            ledgerStrk20ViewingKeys: [{ ...key, poolAddress: "0x0123" }],
+          },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects optional viewing keys on software accounts or duplicate scopes", () => {
+    const key = {
+      chainId: "0x534e5f4d41494e",
+      poolAddress: "0x123",
+      scheme: "ledger-strk20-typed-data-v1" as const,
+      viewingKey: "0x654321",
+    };
+    expect(
+      isVaultV4({
+        ...currentVault,
+        accountSecrets: [
+          {
+            accountId: account.id,
+            ledgerStrk20ViewingKeys: [key],
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(
+      isVaultV4({
+        ...ledgerOnlyVault,
+        accountSecrets: [
+          {
+            accountId: ledgerAccount.id,
+            ledgerStrk20ViewingKeys: [key, key],
+          },
+        ],
+      }),
+    ).toBe(false);
   });
 });
 
@@ -126,6 +208,8 @@ describe("isVaultV1", () => {
     expect(isAccountId("SN_SEPOLIA:0xABC")).toBe(false);
     expect(isAccountId("SN_SEPOLIA:0x0")).toBe(false);
     expect(isAccountId("toString:0x123")).toBe(false);
+    expect(isAccountIdForNetwork(account.id, "SN_SEPOLIA")).toBe(true);
+    expect(isAccountIdForNetwork(account.id, "SN_MAIN")).toBe(false);
   });
 
   test("rejects extra fields in current vault records", () => {

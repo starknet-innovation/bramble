@@ -12,6 +12,7 @@ import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 const unusedBytes = new Uint8Array(64);
 
 const client = (getAppVersion: LedgerDeviceClient["getAppVersion"]): LedgerDeviceClient => ({
+  getOsVersion: () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" }),
   getAppVersion,
   getPubKey: () =>
     Promise.resolve({ errorMessage: "", publicKey: unusedBytes, returnCode: 0x9000 }),
@@ -34,7 +35,7 @@ describe("verifyLedgerGrantSession", () => {
           Promise.resolve({
             errorMessage: "",
             major: 2,
-            minor: 3,
+            minor: 4,
             patch: 1,
             returnCode: 0x9000,
           }),
@@ -54,7 +55,7 @@ describe("verifyLedgerGrantSession", () => {
       },
     });
 
-    expect(version).toEqual({ major: 2, minor: 3, patch: 1 });
+    expect(version).toEqual({ major: 2, minor: 4, patch: 1 });
     expect(keyReads).toEqual([{ path: ledgerAccountPath(0), show: false }]);
     expect(closed).toBe(1);
   });
@@ -65,7 +66,7 @@ describe("verifyLedgerGrantSession", () => {
         Promise.resolve({
           errorMessage: "Bad INS",
           major: 0,
-          minor: 0,
+          minor: 4,
           patch: 0,
           returnCode: 0x6e01,
         }),
@@ -84,7 +85,7 @@ describe("verifyLedgerGrantSession", () => {
         Promise.resolve({
           errorMessage: "",
           major: 2,
-          minor: 0,
+          minor: 4,
           patch: 0,
           returnCode: 0x9000,
         }),
@@ -103,7 +104,7 @@ describe("verifyLedgerGrantSession", () => {
       Promise.resolve({
         errorMessage: "",
         major: 2,
-        minor: 0,
+        minor: 4,
         patch: 0,
         returnCode: 0x9000,
       }),

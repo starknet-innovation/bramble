@@ -18,7 +18,8 @@ changes are reviewed in versioned release follow-ups rather than rewriting the h
 | Audit started | 2026-07-23 |
 | v0.6 runtime follow-up | `cf1b174a8297264141b0449b129c11c7ad1d44d0` |
 | v0.7 runtime follow-up | `7be9ab68788083c417e169d75c2a5a0bbf7b1afa` |
-| Current phase | Repository root, manifest, `.github/`, all `src/` packages, and v0.6/v0.7 release follow-ups complete |
+| v0.9 software follow-up | `e973d1d8ca761ad5f43b78598086966e484ea30d` |
+| Current phase | Repository root, manifest, `.github/`, all `src/` packages, and v0.6-v0.9 release follow-ups complete |
 | Open product security findings | 0 |
 | Open defense-in-depth and audit-assurance findings | 0 |
 | Open documentation findings | 0 |
@@ -32,6 +33,7 @@ changes are reviewed in versioned release follow-ups rather than rewriting the h
 - [v0.6 Ledger and multisig release audit](releases/v0.6/)
 - [v0.7 NFT and approval-surface release assurance](releases/v0.7/)
 - [v0.8 on-chain animation sandbox (independent security review complete)](releases/v0.8/)
+- [v0.9 store, privacy, Send, gateway, and Ledger software assurance](releases/v0.9/)
 - [Directory review log](reviews/)
 
 ## Review sequence

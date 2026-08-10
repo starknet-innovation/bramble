@@ -62,11 +62,13 @@ export const serveLedgerBroker = (
     busy = true;
     try {
       const value =
-        command.method === "getAppVersion"
-          ? await client.getAppVersion()
-          : command.method === "getPubKey"
-            ? await client.getPubKey(command.path, false)
-            : await client.signHash(command.path, command.hash);
+        command.method === "getOsVersion"
+          ? await client.getOsVersion()
+          : command.method === "getAppVersion"
+            ? await client.getAppVersion()
+            : command.method === "getPubKey"
+              ? await client.getPubKey(command.path, false)
+              : await client.signHash(command.path, command.hash);
       respond({ id: command.id, kind: "response", ok: true, value });
     } catch (error) {
       respond({
