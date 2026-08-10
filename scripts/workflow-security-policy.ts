@@ -9,13 +9,13 @@ import { readFile } from "node:fs/promises";
 import { escapeRegExp } from "./regexp";
 
 const RUST_TOOLCHAIN_ACTION = "dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30";
-const NODE_SETUP_ACTION = "actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f";
+const NODE_SETUP_ACTION = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
 const GITHUB_EXPRESSION = "$" + "{{";
 const SHELL_EXPANSION = "$" + "{";
 const RUST_TOOLCHAIN_BLOCK = `uses: ${RUST_TOOLCHAIN_ACTION} # stable
         with:
           toolchain: 1.96.1`;
-const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v6.3.0
+const NODE_SETUP_BLOCK = `uses: ${NODE_SETUP_ACTION} # v7.0.0
         with:
           node-version: 24`;
 
