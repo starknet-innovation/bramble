@@ -46,14 +46,33 @@ export type Strk20WalletStateResponse = {
       readonly tokenId: string;
     }[];
     readonly networkId: StarknetNetworkId;
-    readonly registration: "registered" | "unregistered";
+    /** Pool action fee in FRI. A failed read rejects the state request. */
+    readonly poolFeeFri: string;
+    /** Whether this network has the unlinkable paymaster route private spends require. */
+    readonly relayConfigured: boolean;
+    /**
+     * `pending` is derived locally, not read from the privacy service: a
+     * registration this wallet broadcast that the indexer has not reflected yet.
+     * Callers must treat it as "not shieldable, do not register again".
+     */
+    readonly registration: "pending" | "registered" | "unregistered";
   };
 };
 
 /**
- * Frozen registration or deposit review returned to the extension side panel.
+ * Frozen registration, deposit, or private-send review returned to the
+ * extension side panel.
  */
 export type Strk20WalletPreparationResponse = {
   readonly ok: true;
   readonly strk20Preparation: Strk20WalletPreparationReview;
+};
+
+/**
+ * Pool-registration status of a prospective private-send recipient, returned
+ * only to an extension-controlled page.
+ */
+export type Strk20RecipientStatusResponse = {
+  readonly ok: true;
+  readonly strk20RecipientRegistration: "registered" | "unregistered";
 };

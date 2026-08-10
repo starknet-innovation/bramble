@@ -8,6 +8,7 @@ import {
   isVaultV1,
   isVaultV2,
   isVaultV3,
+  isVaultV4,
   type Vault,
 } from "./vault-schema";
 
@@ -71,6 +72,18 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 3,
   },
+  {
+    fromVersion: 3,
+    // Optional account secrets are new in v4. Existing accounts have none, so
+    // the only valid deterministic migration is an empty encrypted collection.
+    migrate(value) {
+      if (!isVaultV3(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return { ...value, accountSecrets: [], schemaVersion: 4 };
+    },
+    toVersion: 4,
+  },
 ];
 
 const schemaVersionOf = (value: unknown): number | null => {
@@ -100,7 +113,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV3(value)) {
+  if (isVaultV4(value)) {
     return value;
   }
 
@@ -118,7 +131,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV3(migrated)) {
+  if (!isVaultV4(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

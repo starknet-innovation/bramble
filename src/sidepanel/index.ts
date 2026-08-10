@@ -4,20 +4,18 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
-import { applySkin } from "../ui/skin";
-import { colorSchemeForChoice, skinForChoice } from "../ui/theme";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { createDeploymentCache } from "./deployment-cache";
 import { bindDisclosures } from "./disclosures";
 import { bindCopyButtons, showToast } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
+import { applyEntryTheme, bindEntryNavigation } from "./entry-ui";
 import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
 import { bindHomeUi } from "./home-ui";
 import { hydrateView } from "./hydrate";
-import { bindImportKey } from "./import-key-ui";
 import { bindLedgerFirstRun } from "./ledger/first-run";
 import { createLedgerOnboardEntry } from "./ledger/onboard-entry";
 import { ledgerConnector } from "./ledger/sign-connector";
@@ -46,20 +44,14 @@ import { bindReveal } from "./reveal-ui";
 import { createSidepanelRuntime, type RuntimeApi } from "./runtime";
 import { createMutationRuntime } from "./runtime-refresh";
 import { createSceneRenderer } from "./scene-renderer";
-import {
-  bindAccountLabel,
-  bindAddAccount,
-  bindAppearance,
-  bindBackup,
-  bindContacts,
-  bindGroups,
-} from "./settings-ui";
-import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
+import type { SendIntent } from "./send-model";
+import { bindSettingsSurface } from "./settings-surface";
+import { bindDashboard, bindDeploy, bindPickers, deploymentPollScope } from "./shell-bindings";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
 import * as transfer from "./transfer-bindings";
 import { withTransactionAlerts } from "./tx-alerts-ui";
-import { dashboard, isWalletView, type WalletView } from "./views";
+import { dashboard, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: OnboardingCompletionBrowser & { readonly runtime?: RuntimeApi };
@@ -90,24 +82,8 @@ let drawerGroupFilter: string | null = null;
 let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 let snoozedApprovalIds: readonly string[] = [];
-
-const bindNavigation = (): void => {
-  app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const view = button.dataset["view"];
-      if (!isWalletView(view)) {
-        return;
-      }
-      navigate(view);
-    });
-  });
-};
-
-const bindBack = (): void => {
-  app?.querySelectorAll<HTMLButtonElement>("[data-nav-back]").forEach((button) => {
-    button.addEventListener("click", goBack);
-  });
-};
+// A shield/unshield shortcut is held only until Send is left.
+let sendIntent: SendIntent | null = null;
 
 const renderScene = createSceneRenderer(app, () => bindAll());
 
@@ -147,8 +123,7 @@ const ledgerOnboard = createLedgerOnboardEntry({
 });
 
 const bindAll = (): void => {
-  bindNavigation();
-  bindBack();
+  bindEntryNavigation(app, navigate, goBack);
   bindCopyButtons(app);
   bindOnboardingCompletion(app, extensionApi, () => globalThis.close());
   bindOnboarding({ app, render, wallet });
@@ -160,6 +135,7 @@ const bindAll = (): void => {
   });
   const shellDeps = {
     app,
+    deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
     render,
     setActiveView: (view: WalletView) => {
       activeView = view;
@@ -170,7 +146,13 @@ const bindAll = (): void => {
   bindDashboard(shellDeps);
   bindDeploy(shellDeps);
   bindPickers(shellDeps);
-  bindEndpointSettings({ app, networkId: () => lastNetworkId, render, wallet });
+  bindEndpointSettings({
+    app,
+    networkId: () => lastNetworkId,
+    onStrk20ConfigChanged: () => privacy.reset(),
+    render,
+    wallet,
+  });
   bindHomeUi({
     app,
     drawerGroupFilter: () => drawerGroupFilter,
@@ -199,8 +181,23 @@ const bindAll = (): void => {
   });
   bindReveal({ app, wallet });
   transfer.bindActivity({ app, render, wallet });
-  transfer.bindTransfer({ app, back: goBack, navigate: (view) => navigate(view), render, wallet });
-  const settingsDeps = {
+  transfer.bindTransfer({
+    app,
+    back: goBack,
+    navigate: (view) => navigate(view),
+    onPrivateSendSettled: () => privacy.invalidate(),
+    privacy: () => privacy.disclosure(),
+    publicBalances: () => ("balances" in cache.balances ? cache.balances.balances : []),
+    render,
+    reloadPrivacy: () => {
+      void privacy.reload();
+    },
+    senderAddress: () =>
+      cache.status.accounts.find((account) => account.id === cache.status.activeAccountId)
+        ?.address ?? "",
+    wallet,
+  });
+  bindSettingsSurface({
     activeAccountId: () => lastAccountId,
     app,
     expandedGroup: () => expandedGroupId,
@@ -217,14 +214,7 @@ const bindAll = (): void => {
     },
     startAddAccount: ledgerOnboard.startAddAccount,
     wallet,
-  };
-  bindAccountLabel(settingsDeps);
-  bindAddAccount(settingsDeps);
-  bindImportKey(settingsDeps);
-  bindAppearance(settingsDeps);
-  bindBackup(settingsDeps);
-  bindContacts(settingsDeps);
-  bindGroups(settingsDeps);
+  });
   bindAddressBook({ app, render, wallet });
   bindApprovals({
     app,
@@ -285,19 +275,25 @@ const bindAll = (): void => {
 };
 
 const applyTheme = (): void => {
-  const choice = cache.preferences?.theme ?? "dark";
-  const skin = skinForChoice(choice);
-  if (skin.name !== lastSkinName) {
-    lastSkinName = skin.name;
-    document.documentElement.style.setProperty("color-scheme", colorSchemeForChoice(choice));
-    applySkin(skin, document.documentElement);
-  }
+  lastSkinName = applyEntryTheme(
+    cache.preferences?.theme ?? "dark",
+    lastSkinName,
+    document.documentElement,
+  );
 };
 
 const paint = (): void => {
   const { status } = cache;
   lastNetworkId = status.networkId;
   lastAccountId = status.activeAccountId;
+  // A shortcut's configuration seeds Send's first render and nothing else. Any
+  // paint of another view means it was abandoned, so it cannot resurface on a
+  // later visit to Send. Enforced here because this is the one place every view
+  // transition passes through — five of the six assign activeView directly, and
+  // guarding only `navigate` let a closed shield leak into the next send.
+  if (activeView !== "send") {
+    sendIntent = null;
+  }
   applyTheme();
   const scene =
     fullPageOnboarding && status.hasVault
@@ -383,6 +379,7 @@ const paint = (): void => {
               cache.multisigNftId,
               privacy.disclosure(),
               privacy.journey(),
+              sendIntent,
             );
   lastActiveView = activeView;
   if (!animate && content === lastContent) {
@@ -395,6 +392,11 @@ privacy = createPrivacyController({
   app,
   balances: () => cache.balances,
   navigate: (view) => navigate(view),
+  openSend: (intent) => {
+    sendIntent = intent;
+    selectedTokenId = intent.tokenId;
+    navigate("send");
+  },
   paint,
   preferences: () => cache.preferences,
   status: () => cache.status,
@@ -407,6 +409,7 @@ const render = async (status: WalletStatus): Promise<void> => {
   const scopeChanged = updateRenderScope(cache, status);
   if (scopeChanged) {
     privacy.reset();
+    sendIntent = null;
   }
   if (scopeChanged === "network" && selectedMultisigId !== null) {
     selectedMultisigId = null;

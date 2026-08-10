@@ -2,7 +2,7 @@
  * Side-panel shell replacement and View Transitions choreography.
  */
 
-import { captureRepaintFocus, restoreRepaintFocus } from "./dom";
+import { captureRepaintFocus, restoreRepaintFocus } from "./focus-memo";
 import { animateLiveValueChanges, captureLiveValues } from "./live-updates";
 import type { NavDirection } from "./nav-direction";
 import { transitionScene } from "./scene-transition";

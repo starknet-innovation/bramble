@@ -8,11 +8,13 @@ import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
+  sameFelt,
 } from "../starknet/networks";
 import type { PaymasterAuthorizationReview } from "../starknet/strk20/paymaster-typed-data";
 import { STRK20_LIMITS } from "../starknet/strk20/schemas";
+import { canonicalStrk20PoolFee } from "../starknet/strk20/service";
 import { isTokenId } from "../storage/preferences-entries";
-import { isAccountId } from "../storage/vault-schema";
+import { isAccountIdForNetwork } from "../storage/vault-schema";
 
 /**
  * Display-safe private balance derived from validated SDK note totals.
@@ -32,19 +34,32 @@ export type PrivacyAccountState = {
   readonly accountId: string;
   readonly balances: readonly PrivateBalanceView[];
   readonly networkId: string;
-  readonly registration: "registered" | "unregistered";
+  /** Pool action fee in FRI. A failed read rejects the whole disclosure request. */
+  readonly poolFeeFri: string;
+  /** Whether the active network has an unlinkable private submission route. */
+  readonly relayConfigured: boolean;
+  /**
+   * `pending` means the wallet broadcast a registration that the privacy
+   * indexer has not reflected yet. It is not a shieldable state, but it must
+   * never be treated as `unregistered` either: offering to register again in
+   * that window is how a duplicate registration gets broadcast.
+   */
+  readonly registration: "pending" | "registered" | "unregistered";
 };
 
 /**
- * Immutable review metadata for one register or deposit operation.
+ * Immutable review metadata for one register, deposit, or private-send
+ * operation.
  */
 export type PrivacyPreparation = {
   readonly amount?: string;
   readonly authorization?: PaymasterAuthorizationReview;
   readonly id: string;
-  readonly kind: "deposit" | "register";
+  readonly kind: "deposit" | "register" | "transfer" | "withdraw";
   readonly payloadDigest: string;
   readonly poolAddress: string;
+  readonly poolFeeFri?: string;
+  readonly recipient?: string;
   readonly route: "private-relay" | "public-account";
   readonly relayFee?: {
     readonly amount: string;
@@ -117,9 +132,27 @@ const readRelayFee = (value: unknown): NonNullable<PrivacyPreparation["relayFee"
   return { amount: value["amount"], recipient: value["recipient"], token: value["token"] };
 };
 
+const isPoolFee = (value: unknown): value is string => {
+  if (typeof value !== "string") {
+    return false;
+  }
+  try {
+    return canonicalStrk20PoolFee(value) === value;
+  } catch {
+    return false;
+  }
+};
+
+type ExpectedPreparation = {
+  readonly amount?: string;
+  readonly kind: PrivacyPreparation["kind"];
+  readonly recipient?: string;
+  readonly tokenId?: string;
+};
+
 const readPreparation = (
   response: unknown,
-  expectedKind: PrivacyPreparation["kind"],
+  expected: ExpectedPreparation,
 ): PrivacyPreparation | null => {
   if (
     !isRecord(response) ||
@@ -141,13 +174,15 @@ const readPreparation = (
       "kind",
       "payloadDigest",
       "poolAddress",
+      "poolFeeFri",
+      "recipient",
       "relayFee",
       "route",
       "summaries",
       "symbol",
       "tokenId",
     ]) ||
-    value["kind"] !== expectedKind ||
+    value["kind"] !== expected.kind ||
     (value["route"] !== "private-relay" && value["route"] !== "public-account") ||
     typeof value["id"] !== "string" ||
     !PREPARATION_ID_PATTERN.test(value["id"]) ||
@@ -158,6 +193,7 @@ const readPreparation = (
     !isStringArray(value["summaries"]) ||
     !isDisplayString(value["symbol"]) ||
     !isTokenId(value["tokenId"]) ||
+    (expected.tokenId !== undefined && value["tokenId"] !== expected.tokenId) ||
     (value["amount"] !== undefined &&
       (typeof value["amount"] !== "string" ||
         value["amount"].length > MAX_DISPLAY_CHARACTERS ||
@@ -165,11 +201,31 @@ const readPreparation = (
     (value["authorization"] !== undefined && !authorization) ||
     (value["relayFee"] !== undefined && !relayFee) ||
     (value["route"] === "private-relay" && !relayFee) ||
+    (value["route"] === "private-relay" && value["poolFeeFri"] !== undefined) ||
     (value["route"] === "public-account" &&
-      (value["authorization"] !== undefined || value["relayFee"] !== undefined)) ||
-    (value["kind"] === "deposit" && typeof value["amount"] !== "string") ||
+      (value["authorization"] !== undefined ||
+        value["relayFee"] !== undefined ||
+        !isPoolFee(value["poolFeeFri"]))) ||
+    (value["recipient"] !== undefined &&
+      (typeof value["recipient"] !== "string" ||
+        !isNonZeroStarkFieldElement(value["recipient"]))) ||
+    (expected.amount !== undefined && value["amount"] !== expected.amount) ||
+    (expected.recipient !== undefined &&
+      (typeof value["recipient"] !== "string" ||
+        !sameFelt(value["recipient"], expected.recipient))) ||
+    // A deposit names whose private balance it credits — the depositor for a
+    // shield, a registered third party otherwise — so the recipient is required
+    // here exactly as it is for a transfer or a withdrawal.
+    (value["kind"] === "deposit" &&
+      (typeof value["amount"] !== "string" || typeof value["recipient"] !== "string")) ||
+    ((value["kind"] === "transfer" || value["kind"] === "withdraw") &&
+      (typeof value["amount"] !== "string" ||
+        typeof value["recipient"] !== "string" ||
+        value["route"] !== "private-relay")) ||
     (value["kind"] === "register" &&
-      (value["amount"] !== undefined || value["route"] !== "public-account"))
+      (value["amount"] !== undefined ||
+        value["recipient"] !== undefined ||
+        value["route"] !== "public-account"))
   ) {
     return null;
   }
@@ -177,9 +233,11 @@ const readPreparation = (
     ...(typeof value["amount"] === "string" ? { amount: value["amount"] } : {}),
     ...(authorization ? { authorization } : {}),
     id: value["id"],
-    kind: expectedKind,
+    kind: expected.kind,
     payloadDigest: value["payloadDigest"],
     poolAddress: value["poolAddress"],
+    ...(typeof value["poolFeeFri"] === "string" ? { poolFeeFri: value["poolFeeFri"] } : {}),
+    ...(typeof value["recipient"] === "string" ? { recipient: value["recipient"] } : {}),
     ...(relayFee ? { relayFee } : {}),
     route: value["route"],
     summaries: [...value["summaries"]],
@@ -199,10 +257,21 @@ const readState = (response: unknown): PrivacyAccountState | null => {
   }
   const state = response["strk20State"];
   if (
-    !hasOnlyKnownKeys(state, ["accountId", "balances", "networkId", "registration"]) ||
-    !isAccountId(state["accountId"]) ||
+    !hasOnlyKnownKeys(state, [
+      "accountId",
+      "balances",
+      "networkId",
+      "poolFeeFri",
+      "relayConfigured",
+      "registration",
+    ]) ||
     !isStarknetNetworkId(state["networkId"]) ||
-    (state["registration"] !== "registered" && state["registration"] !== "unregistered") ||
+    !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
+    !isPoolFee(state["poolFeeFri"]) ||
+    typeof state["relayConfigured"] !== "boolean" ||
+    (state["registration"] !== "pending" &&
+      state["registration"] !== "registered" &&
+      state["registration"] !== "unregistered") ||
     !Array.isArray(state["balances"]) ||
     state["balances"].length > STRK20_LIMITS.balances
   ) {
@@ -219,7 +288,8 @@ const readState = (response: unknown): PrivacyAccountState | null => {
       !isDisplayString(value["symbol"]) ||
       typeof value["token"] !== "string" ||
       !isNonZeroStarkFieldElement(value["token"]) ||
-      !isTokenId(value["tokenId"])
+      !isTokenId(value["tokenId"]) ||
+      value["tokenId"] !== `${state["networkId"]}:${value["symbol"]}:${value["token"]}`
     ) {
       return null;
     }
@@ -238,6 +308,8 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     accountId: state["accountId"],
     balances,
     networkId: state["networkId"],
+    poolFeeFri: state["poolFeeFri"],
+    relayConfigured: state["relayConfigured"],
     registration: state["registration"],
   };
 };
@@ -273,13 +345,18 @@ export const createPrivacyRuntimeClient = (
     }
     throw errorFrom(response, "Private balances unavailable");
   },
-  async preparePrivacyDeposit(tokenId: string, amount: string): Promise<PrivacyPreparation> {
+  async preparePrivacyDeposit(
+    tokenId: string,
+    amount: string,
+    recipient: string,
+  ): Promise<PrivacyPreparation> {
     const response = await sendMessage({
       amount,
+      recipient,
       tokenId,
       type: "wallet.strk20PrepareDeposit",
     });
-    const preparation = readPreparation(response, "deposit");
+    const preparation = readPreparation(response, { amount, kind: "deposit", recipient, tokenId });
     if (preparation) {
       return preparation;
     }
@@ -287,10 +364,74 @@ export const createPrivacyRuntimeClient = (
   },
   async preparePrivacyRegistration(): Promise<PrivacyPreparation> {
     const response = await sendMessage({ type: "wallet.strk20PrepareRegistration" });
-    const preparation = readPreparation(response, "register");
+    const preparation = readPreparation(response, { kind: "register" });
     if (preparation) {
       return preparation;
     }
     throw errorFrom(response, "Privacy activation preparation failed");
+  },
+  async preparePrivacyTransfer(
+    tokenId: string,
+    recipient: string,
+    amount: string,
+  ): Promise<PrivacyPreparation> {
+    const response = await sendMessage({
+      amount,
+      recipient,
+      tokenId,
+      type: "wallet.strk20PrepareTransfer",
+    });
+    const preparation = readPreparation(response, {
+      amount,
+      kind: "transfer",
+      recipient,
+      tokenId,
+    });
+    if (preparation) {
+      return preparation;
+    }
+    throw errorFrom(response, "Private send preparation failed");
+  },
+  async preparePrivacyWithdraw(
+    tokenId: string,
+    recipient: string,
+    amount: string,
+  ): Promise<PrivacyPreparation> {
+    const response = await sendMessage({
+      amount,
+      recipient,
+      tokenId,
+      type: "wallet.strk20PrepareWithdraw",
+    });
+    const preparation = readPreparation(response, {
+      amount,
+      kind: "withdraw",
+      recipient,
+      tokenId,
+    });
+    if (preparation) {
+      return preparation;
+    }
+    throw errorFrom(response, "Unshielding preparation failed");
+  },
+  async loadPrivacyRecipientStatus(
+    tokenId: string,
+    address: string,
+  ): Promise<"registered" | "unregistered"> {
+    const response = await sendMessage({
+      address,
+      tokenId,
+      type: "wallet.strk20RecipientStatus",
+    });
+    if (
+      isRecord(response) &&
+      hasOnlyKnownKeys(response, ["ok", "strk20RecipientRegistration"]) &&
+      response["ok"] === true &&
+      (response["strk20RecipientRegistration"] === "registered" ||
+        response["strk20RecipientRegistration"] === "unregistered")
+    ) {
+      return response["strk20RecipientRegistration"];
+    }
+    throw errorFrom(response, "Recipient check unavailable");
   },
 });

@@ -461,7 +461,10 @@ describe("popup response validators", () => {
 
   test("validates preferences, balance, and transfer responses", () => {
     const preferences = defaultWalletPreferences();
-    const token = preferences.tokens[0];
+    const token = preferences.tokens.find((candidate) => candidate.networkId === "SN_SEPOLIA");
+    if (!token) {
+      throw new Error("Sepolia token fixture unavailable");
+    }
 
     expect(isPreferencesResponse({ ok: true, preferences })).toBe(true);
     expect(isPreferencesResponse({ ok: true, preferences: { schemaVersion: 1 } })).toBe(false);
@@ -478,6 +481,14 @@ describe("popup response validators", () => {
         accountId: account.id,
         balances: [{ ...token, balance: "-1", formatted: "0" }],
         networkId: "SN_SEPOLIA",
+        ok: true,
+      }),
+    ).toBe(false);
+    expect(
+      isBalancesResponse({
+        accountId: account.id,
+        balances: [{ ...token, balance: "100", formatted: "0.0000000000000001" }],
+        networkId: "SN_MAIN",
         ok: true,
       }),
     ).toBe(false);

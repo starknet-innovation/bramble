@@ -7,6 +7,7 @@ import { WalletError } from "../shared/errors";
 import type { AccountRef } from "../storage/vault-schema";
 import { isNonZeroStarkFieldElement, STARKNET_NETWORKS } from "./networks";
 import {
+  IndeterminateRpcWriteError,
   isContractNotFoundError,
   isTransportRpcError,
   krustyAccount,
@@ -93,6 +94,14 @@ export const ensureAccountDeployed = async (
     const submitted = await deployAccountContract(starknetAccount, account);
     await provider.waitForTransaction(submitted.transactionHash);
   } catch (error) {
+    if (error instanceof IndeterminateRpcWriteError) {
+      // The account deployment may have landed, but the caller's subsequent
+      // invoke/declare definitely has not. Remove the inner write marker so a
+      // higher-level maturity guard can safely restore its own operation.
+      throw new WalletError(
+        "Account deployment status is unknown. Check the account on-chain before retrying.",
+      );
+    }
     if (error instanceof WalletError) {
       throw error;
     }

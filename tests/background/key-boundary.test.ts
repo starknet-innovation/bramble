@@ -19,14 +19,28 @@ import {
   SECRET_MNEMONIC,
   SECRET_PASSPHRASE,
   SECRET_PRIVATE_KEY,
+  SECRET_VIEWING_KEY,
 } from "../support/key-boundary-messages";
 
 const vault = {
   accounts: [account],
+  accountSecrets: [
+    {
+      accountId: account.id,
+      ledgerStrk20ViewingKeys: [
+        {
+          chainId: "0x534e5f4d41494e",
+          poolAddress: "0x123",
+          scheme: "ledger-strk20-typed-data-v1",
+          viewingKey: SECRET_VIEWING_KEY,
+        },
+      ],
+    },
+  ],
   activeAccountId: account.id,
   mnemonic: SECRET_MNEMONIC,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 3,
+  schemaVersion: 4,
   signingKeys: [{ accountId: account.id, privateKey: SECRET_PRIVATE_KEY }],
 } as unknown as Vault;
 
@@ -195,6 +209,8 @@ describe("key boundary", () => {
         message["type"] === "wallet.generateMnemonic" || message["type"] === "wallet.revealSecrets";
       expect(serialized).not.toContain(SECRET_PASSPHRASE);
       expect(serialized).not.toContain("signingKeys");
+      expect(serialized).not.toContain("accountSecrets");
+      expect(serialized).not.toContain(SECRET_VIEWING_KEY);
       if (message["type"] !== "wallet.revealSecrets") {
         expect(serialized).not.toContain(SECRET_PRIVATE_KEY);
       }

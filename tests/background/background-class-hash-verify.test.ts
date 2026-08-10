@@ -119,7 +119,10 @@ describe("background class-hash verification message", () => {
       {
         accountAddress: account.address,
         expectedClassHash: account.classHash,
-        rpcUrls: ["https://mainnet.nodes.starknet.org/rpc/v0_10"],
+        rpcUrls: [
+          "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
+          "https://mainnet.nodes.starknet.org/rpc/v0_10",
+        ],
       },
     ]);
   });
@@ -242,7 +245,10 @@ describe("background class-hash verification message", () => {
       {
         accountAddress: importedAccount.address,
         expectedClassHash: importedAccount.classHash,
-        rpcUrls: ["https://mainnet.nodes.starknet.org/rpc/v0_10"],
+        rpcUrls: [
+          "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
+          "https://mainnet.nodes.starknet.org/rpc/v0_10",
+        ],
       },
     ]);
   });

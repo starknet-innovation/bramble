@@ -4,6 +4,7 @@
 import { expect, test } from "bun:test";
 
 import {
+  explorerTransactionUrl,
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
@@ -38,4 +39,17 @@ test("resolves each configured chain id deterministically to its network", () =>
   expect(networkIdForChainId(STARKNET_NETWORKS.SN_SEPOLIA.chainId)).toBe("SN_SEPOLIA");
   expect(networkIdForChainId(STARKNET_NETWORKS.SN_DEVNET.chainId)).toBe("SN_DEVNET");
   expect(networkIdForChainId("0xdeadbeef")).toBeNull();
+});
+
+test("links transactions to each network's explorer, and never to a missing one", () => {
+  expect(explorerTransactionUrl("SN_MAIN", "0x123")).toBe("https://starkscan.co/tx/0x123");
+  expect(explorerTransactionUrl("SN_SEPOLIA", "0x123")).toBe(
+    "https://sepolia.starkscan.co/tx/0x123",
+  );
+  // Devnet has no public explorer, so callers must render no link at all.
+  expect(explorerTransactionUrl("SN_DEVNET", "0x123")).toBeNull();
+  // A malformed or zero hash never becomes a URL.
+  expect(explorerTransactionUrl("SN_MAIN", "0x0")).toBeNull();
+  expect(explorerTransactionUrl("SN_MAIN", "not-a-hash")).toBeNull();
+  expect(explorerTransactionUrl("SN_MAIN", "0xABC")).toBeNull();
 });

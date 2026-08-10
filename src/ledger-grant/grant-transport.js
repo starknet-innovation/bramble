@@ -5,7 +5,10 @@
  */
 import { getBluetoothServiceUuids, ledgerUSBVendorId } from "@ledgerhq/devices";
 import TransportWebBLE from "@ledgerhq/hw-transport-web-ble";
-import { requestTransportRaw as requestCableTransport } from "../sidepanel/ledger/webhid-impl";
+import {
+  bindLedgerTransportRaw,
+  requestTransportRaw as requestCableTransport,
+} from "../sidepanel/ledger/webhid-impl";
 
 const usbSupported = () => typeof navigator.usb?.requestDevice === "function";
 const hidSupported = () => typeof navigator.hid?.requestDevice === "function";
@@ -40,7 +43,14 @@ export const requestGrantTransport = (kind) => {
   const requestedDevice = navigator.bluetooth.requestDevice({
     filters: getBluetoothServiceUuids().map((uuid) => ({ services: [uuid] })),
   });
-  return requestedDevice.then((device) => TransportWebBLE.open(device));
+  return requestedDevice.then(async (device) =>
+    bindLedgerTransportRaw(await TransportWebBLE.open(device), {
+      disconnect: () => TransportWebBLE.disconnect(device.id),
+      listDevices: async () => [device],
+      openDevice: () => TransportWebBLE.open(device),
+      selectedDevice: device,
+    }),
+  );
 };
 
 const grantedDeviceCount = async (kind) => {
@@ -68,10 +78,7 @@ export const readGrantTransportDiagnostics = async (kind) => {
   };
 };
 
-export const closeGrantTransport = async (kind, transport) => {
-  if (kind === "ble") {
-    await TransportWebBLE.disconnect(transport.id).catch(() => undefined);
-  }
+export const closeGrantTransport = async (transport) => {
   let closeError;
   try {
     await transport.close();

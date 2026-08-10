@@ -31,19 +31,43 @@ export const STRK20_SDK_CONTEXT: Strk20AccountContext = {
   viewingKey: async () => "0x55",
 };
 
-export const providerFor = (): RpcProvider =>
-  ({
-    // Balance reads return a uint256; the pool-fee read returns a single u128
-    // felt (zero here so fee-independent tests see no extra approve call).
-    callContract: async (call: { entrypoint?: string }) =>
-      call?.entrypoint === "get_fee_amount" ? ["0x0"] : ["0x0", "0x10"],
-    getClassHashAt: async () => "0xdef",
-    getBlockNumber: async () => 20,
-    waitForTransaction: async () => ({
-      block_number: 10,
-      isSuccess: () => true,
-    }),
-  }) as unknown as RpcProvider;
+// Balance reads return a uint256; the pool-fee read returns a single u128 felt
+// (zero by default so fee-independent tests see no extra approve call), and
+// `get_public_key` a single felt that is zero only for unregistered addresses.
+const poolCallResult = (
+  entrypoint: string | undefined,
+  poolFee: string,
+  publicKey: string,
+): readonly string[] => {
+  if (entrypoint === "get_fee_amount") {
+    return [poolFee];
+  }
+  if (entrypoint === "get_public_key") {
+    return [publicKey];
+  }
+  return ["0x0", "0x10"];
+};
+
+/**
+ * Builds the RPC double used by the official-SDK suites. A non-zero `poolFee`
+ * exercises approval behavior; `publicKey` is what the pool reports for any
+ * queried address, with `"0x0"` modelling an unregistered recipient.
+ */
+export const strk20ProviderFor =
+  (options: { readonly poolFee?: string; readonly publicKey?: string } = {}) =>
+  (): RpcProvider =>
+    ({
+      callContract: async (call: { entrypoint?: string }) =>
+        poolCallResult(call?.entrypoint, options.poolFee ?? "0x0", options.publicKey ?? "0x77"),
+      getClassHashAt: async () => "0xdef",
+      getBlockNumber: async () => 20,
+      waitForTransaction: async () => ({
+        block_number: 10,
+        isSuccess: () => true,
+      }),
+    }) as unknown as RpcProvider;
+
+export const providerFor = strk20ProviderFor();
 
 type SdkInput = {
   readonly viewingKeyProvider: { readonly getViewingKey: () => Promise<string> };
@@ -53,7 +77,7 @@ export const sdkRuntime = (
   create: (input: SdkInput) => ReturnType<PrivacySdkRuntime["createPrivateTransfers"]>,
 ): PrivacySdkRuntime => ({
   Open: Symbol("OPEN"),
-  SetupRequirement: { Register: 0 },
+  SetupRequirement: { Ready: 3, Register: 0 },
   createPrivateTransfers: (input) => create(input as SdkInput),
 });
 

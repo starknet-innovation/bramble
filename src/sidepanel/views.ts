@@ -51,6 +51,7 @@ import type { PrivacyDisclosureState, PrivacyJourneyState } from "./privacy-mode
 import { privacyFlow } from "./privacy-views";
 import { revealFlow } from "./reveal-ui";
 import type { BalanceState } from "./runtime";
+import type { SendIntent } from "./send-model";
 import { settingsScreen } from "./settings-views";
 import {
   DEFAULT_CURRENCY,
@@ -81,6 +82,8 @@ type JourneyContext = {
   readonly prices: Readonly<Record<string, number>>;
   readonly privacy: PrivacyDisclosureState;
   readonly privacyJourney: PrivacyJourneyState;
+  /** A pre-configured send from a shield or unshield shortcut. */
+  readonly sendIntent?: SendIntent | null;
   readonly selectedMultisigId: string | null;
   readonly selectedNftId: string | null;
   readonly selectedTokenId: string | null;
@@ -280,12 +283,12 @@ export const dashboard = (
   multisigNfts: readonly DiscoveredNft[] = [],
   multisigNftId: string | null = null,
   privacy: PrivacyDisclosureState = {
-    enabled: false,
     error: null,
     loading: false,
     value: null,
   },
   privacyJourney: PrivacyJourneyState = { stage: "idle" },
+  sendIntent: SendIntent | null = null,
 ): string => {
   const account = activeAccount(status);
   const currency = preferences?.displayCurrency ?? DEFAULT_CURRENCY;
@@ -319,6 +322,7 @@ export const dashboard = (
     selectedMultisigId,
     selectedNftId,
     selectedTokenId,
+    ...(sendIntent ? { sendIntent } : {}),
     status,
     trackedBalances,
   };
@@ -340,11 +344,14 @@ export const dashboard = (
     classHashVerification,
     connectedSites,
     currency,
+    deployment,
     expandedGroupId,
     multisigs,
     preferences,
     prices,
     selectedMultisigId,
+    privacy,
+    ...(sendIntent ? { sendIntent } : {}),
     status,
   });
   if (simpleFlow !== null) {
@@ -369,7 +376,7 @@ export const dashboard = (
     return revealFlow(status);
   }
   if (activeView === "privacy") {
-    return privacyFlow(status, preferences, trackedBalances, privacyJourney);
+    return privacyFlow(status, preferences, privacyJourney);
   }
   const sharedIdentity =
     activeView === "multisig-home" || activeView === "activity" || activeView === "settings"

@@ -6,11 +6,29 @@
 import type { TokenBalance } from "../popup/responses";
 import { sameFelt } from "../starknet/networks";
 import { formatTokenAmount } from "../starknet/rpc";
+import type { ValueBucket } from "../starknet/send-routes";
 import { isLikelySpam } from "../starknet/token-registry";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { CURRENCY_SYMBOLS } from "./fiat";
+import { compareStrkFirst } from "./token-flows";
 import { compactAmount } from "./token-row";
+
+/**
+ * A pre-configured send, handed to the Send screen by a shortcut that already
+ * knows what the user is doing — the asset screen's Shield and Unshield buttons.
+ * Seeds the recipient, the asset, and both buckets, so the screen opens on the
+ * amount rather than asking again for what was already chosen.
+ */
+export type SendIntent = {
+  readonly accountId: string;
+  readonly destination: ValueBucket;
+  readonly networkId: string;
+  readonly recipient: string;
+  readonly recipientLabel: string;
+  readonly source: ValueBucket;
+  readonly tokenId: string;
+};
 
 /**
  * One ERC20 option in the Send asset picker.
@@ -44,24 +62,30 @@ export const sendAssets = (
       const change = byAddress(changes, token.address);
       return {
         ...token,
-        balance: balance?.balance ?? "0",
-        formatted: balance?.formatted ?? "0",
+        // A missing cache entry is unread, not proof that the account owns
+        // zero. Keep that distinction through the form so balance labels and
+        // Max never claim a value the RPC has not returned.
+        balance: balance?.balance ?? "",
+        formatted: balance?.formatted ?? "",
         spam: isLikelySpam(token),
         ...(price === undefined ? {} : { price }),
         ...(change === undefined ? {} : { change }),
       };
     })
-    .sort((left, right) => Number(left.spam) - Number(right.spam));
+    .sort((left, right) => Number(left.spam) - Number(right.spam) || compareStrkFirst(left, right));
 
 /**
- * Returns accounts on the active network except the account sending funds.
+ * Returns every account on the active network, the sending account included.
+ *
+ * The origin is a legitimate recipient rather than a mistake: shielding moves
+ * value from an account's public balance into its own private one, so the
+ * account has to be selectable. Callers mark it so it never reads as a
+ * different account.
  */
 export const sendRecipientAccounts = (
   accounts: readonly AccountRef[],
   networkId: string,
-  activeAccountId: string | null,
-): readonly AccountRef[] =>
-  accounts.filter((account) => account.networkId === networkId && account.id !== activeAccountId);
+): readonly AccountRef[] => accounts.filter((account) => account.networkId === networkId);
 
 const finitePositive = (value: string): number | null => {
   const parsed = Number(value);
@@ -126,7 +150,8 @@ export const balanceShortcut = (
 /**
  * Short balance copy shared by recipient/account and token rows.
  */
-export const sendBalanceLabel = (formatted: string): string => compactAmount(formatted);
+export const sendBalanceLabel = (formatted: string): string =>
+  formatted.length === 0 ? "—" : compactAmount(formatted);
 
 /**
  * Currency-aware input prefix for fiat-entry mode.

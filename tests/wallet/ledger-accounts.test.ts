@@ -8,7 +8,7 @@ import {
   isAccountRef,
   isKeylessAccount,
   isVaultV2,
-  isVaultV3,
+  isVaultV4,
   type Vault,
 } from "../../src/storage/vault-schema";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "../../src/wallet/accounts";
@@ -109,6 +109,7 @@ describe("keyless account in the vault schema", () => {
   };
   const base = {
     accounts: [ledgerAccount],
+    accountSecrets: [],
     activeAccountId: ledgerAccount.id,
     mnemonic: null,
     originGrants: [],
@@ -116,8 +117,8 @@ describe("keyless account in the vault schema", () => {
   };
 
   test("a current vault admits a keyless Ledger account with no signing key", () => {
-    const vault: Vault = { ...base, schemaVersion: 3 };
-    expect(isVaultV3(vault)).toBe(true);
+    const vault: Vault = { ...base, schemaVersion: 4 };
+    expect(isVaultV4(vault)).toBe(true);
   });
 
   test("a Ledger account is rejected at the legacy v2 schema", () => {
@@ -126,9 +127,9 @@ describe("keyless account in the vault schema", () => {
 
   test("a Ledger account carrying a signing key is rejected", () => {
     expect(
-      isVaultV3({
+      isVaultV4({
         ...base,
-        schemaVersion: 3,
+        schemaVersion: 4,
         signingKeys: [{ accountId: ledgerAccount.id, privateKey: "0x1" }],
       }),
     ).toBe(false);
@@ -145,12 +146,13 @@ describe("keyless account in the vault schema", () => {
       publicKeyY: "0x4",
     };
     expect(
-      isVaultV3({
+      isVaultV4({
         accounts: [hdAccount],
+        accountSecrets: [],
         activeAccountId: hdAccount.id,
         mnemonic: null,
         originGrants: [],
-        schemaVersion: 3,
+        schemaVersion: 4,
         signingKeys: [],
       }),
     ).toBe(false);

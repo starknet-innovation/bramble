@@ -103,6 +103,7 @@ describe("approvalCard renders each approval kind", () => {
   test("strk20-invoke request shows the private-transaction copy and call summaries", () => {
     const approval: PendingApproval = {
       actionReviews: [
+        { amount: "0x5", token: "0x49d", type: "deposit" },
         {
           calls: [
             {
@@ -139,7 +140,9 @@ describe("approvalCard renders each approval kind", () => {
     expect(html).toContain("0x1, 0x2");
     expect(html).toContain("Relay fee action · Withdrawal");
     expect(html).toContain("0x99");
-    expect(html).toContain("2 actions · including relay fee");
+    expect(html).toContain("3 actions · including relay fee");
+    expect(html).toContain("public deposit approval");
+    expect(html).toContain("Split the deposit and private actions");
     expect(html).toContain(`data-approval-action="deny" data-approval-id="${ID}"`);
   });
 

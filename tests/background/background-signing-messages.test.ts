@@ -58,10 +58,11 @@ const createSigningWallet = (captureSign?: (input: SignHashInput) => void) => ({
     }
     return {
       accounts: [account],
+      accountSecrets: [],
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin: "https://example.com" }],
-      schemaVersion: 3 as const,
+      schemaVersion: 4 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

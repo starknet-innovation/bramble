@@ -14,6 +14,7 @@ import { createWalletVaultService } from "../../src/wallet/vault-service";
 import { fakeKms } from "../support/fake-kms";
 
 const vaultKey = "mc-wallet:vault";
+const migrationKey = "mc-wallet:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 // Clearly-fake test vector; not a real key.
 const importedKey = "0xfeedface";
@@ -22,6 +23,7 @@ const newService = () =>
   createWalletVaultService({
     encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
     kms: fakeKms(),
+    migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
   });
 
 describe("deriveImportedAccount", () => {
@@ -111,6 +113,7 @@ describe("vault-service importRawKeyAccount", () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(store, vaultKey),
       kms: fakeKms(),
+      migrationStore: createEncryptedStore(store, migrationKey),
     });
 
     const account = await service.importRawKeyAccount({

@@ -10,7 +10,7 @@ type StorageArea = {
   readonly set: (items: Record<string, Json>) => Promise<void>;
 };
 
-type SessionStorageArea = StorageArea & {
+type RestrictedStorageArea = StorageArea & {
   readonly setAccessLevel?: (options: {
     readonly accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" | "TRUSTED_CONTEXTS";
   }) => Promise<void>;
@@ -19,8 +19,8 @@ type SessionStorageArea = StorageArea & {
 type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: {
     readonly storage?: {
-      readonly local?: StorageArea;
-      readonly session?: SessionStorageArea;
+      readonly local?: RestrictedStorageArea;
+      readonly session?: RestrictedStorageArea;
     };
   };
 };
@@ -69,6 +69,24 @@ export const createBrowserSessionStore = (): KeyValueStore => {
   return createAreaStore(storage);
 };
 
+const restrictToTrustedContexts = async (
+  storage: RestrictedStorageArea | undefined,
+): Promise<boolean> => {
+  if (!storage?.setAccessLevel) {
+    return false;
+  }
+  await storage.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+  return true;
+};
+
+/**
+ * Restricts persistent wallet storage to extension-owned contexts. Chrome
+ * exposes `storage.local` to content scripts by default; the background owns
+ * every persistence adapter, so content scripts need no direct access.
+ */
+export const hardenLocalAccess = async (): Promise<boolean> =>
+  restrictToTrustedContexts((globalThis as ExtensionGlobal).chrome?.storage?.local);
+
 /**
  * Restricts the in-memory session area to trusted extension contexts
  * (background, popup, side panel) so untrusted content scripts and web pages
@@ -79,9 +97,21 @@ export const createBrowserSessionStore = (): KeyValueStore => {
  */
 export const hardenSessionAccess = async (): Promise<boolean> => {
   const storage = (globalThis as ExtensionGlobal).chrome?.storage?.session;
-  if (!storage?.setAccessLevel) {
-    return false;
+  return restrictToTrustedContexts(storage);
+};
+
+/**
+ * Requires both wallet storage areas to be unavailable to untrusted extension
+ * contexts before privileged startup may continue. Chrome exposes local
+ * storage to content scripts by default, while session storage may contain the
+ * live unlock capability; missing support or either failed lockdown is fatal.
+ */
+export const requireTrustedStorageAccess = async (): Promise<void> => {
+  const [localRestricted, sessionRestricted] = await Promise.all([
+    hardenLocalAccess(),
+    hardenSessionAccess(),
+  ]);
+  if (!localRestricted || !sessionRestricted) {
+    throw new Error("trusted browser storage access is unavailable");
   }
-  await storage.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
-  return true;
 };

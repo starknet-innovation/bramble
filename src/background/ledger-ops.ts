@@ -10,6 +10,7 @@
  */
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks";
 import { knownTokensForNetwork } from "../starknet/token-registry";
+import { runUnlockedNetworkMutation, runVaultCreationWithNetwork } from "./active-network-mutation";
 import {
   readAddLedgerAccountInput,
   readCompleteLedgerSignInput,
@@ -18,7 +19,7 @@ import {
   readLedgerAccountStatusInput,
 } from "./ledger-inputs";
 import { readTypeOnlyInput } from "./message-inputs";
-import { networkRpcUrls } from "./runtime-state";
+import { networkRpcUrls, runActiveStateMutation } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import type { WalletOpsDeps } from "./wallet-ops";
 
@@ -50,18 +51,20 @@ const handleCreateLedgerVault: LedgerOpsHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid create ledger vault request" };
   }
-  if (!deps.wallet.createLedgerVault) {
+  const createLedgerVault = deps.wallet.createLedgerVault;
+  if (!createLedgerVault) {
     return { error: "wallet unavailable" };
   }
-  const account = await deps.wallet.createLedgerVault({
-    accountIndex: input.accountIndex,
-    networkId: input.networkId,
-    publicKeyX: input.publicKeyX,
-    vaultPassphrase: input.vaultPassphrase,
+  return runActiveStateMutation(deps.activeStateCoordinator, async () => {
+    const account = await runVaultCreationWithNetwork(
+      deps.session,
+      deps.preferencesStore,
+      input.networkId,
+      () => createLedgerVault(input),
+    );
+    deps.session.unlock(input.vaultPassphrase);
+    return { account, ok: true };
   });
-  await deps.preferencesStore.setActiveNetwork(input.networkId);
-  deps.session.unlock(input.vaultPassphrase);
-  return { account, ok: true };
 };
 
 const handleLedgerAccountStatus: LedgerOpsHandler = async (deps, message) => {
@@ -85,15 +88,19 @@ const handleAddLedgerAccount: LedgerOpsHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid add ledger account request" };
   }
-  const vaultPassphrase = deps.session.getPassphrase();
-  if (!vaultPassphrase) {
-    return { error: "wallet locked" };
-  }
-  if (!deps.wallet.addLedgerAccount) {
+  const addLedgerAccount = deps.wallet.addLedgerAccount;
+  if (!addLedgerAccount) {
     return { error: "wallet unavailable" };
   }
-  const account = await deps.wallet.addLedgerAccount({ ...input, vaultPassphrase });
-  return { account, ok: true };
+  return runActiveStateMutation(deps.activeStateCoordinator, async () => {
+    const account = await runUnlockedNetworkMutation(
+      deps.session,
+      deps.preferencesStore,
+      input.networkId,
+      (vaultPassphrase) => addLedgerAccount({ ...input, vaultPassphrase }),
+    );
+    return account ? { account, ok: true } : { error: "wallet locked" };
+  });
 };
 
 const handleDeriveLedgerAccounts: LedgerOpsHandler = async (deps, message) => {

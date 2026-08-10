@@ -70,6 +70,27 @@ describe("activity journey boundaries", () => {
     expect(html).not.toContain('class="tx-list"');
   });
 
+  test("offers an outbound explorer link beside the copy control", () => {
+    const html = activityScreen(pending, status, [transaction], false);
+
+    expect(html).toContain('href="https://starkscan.co/tx/0x123"');
+    expect(html).toContain('data-tx-explorer="0x123"');
+    expect(html).toContain("View transaction on Starkscan");
+    // A new browsing context, never one that can reach back into the panel.
+    expect(html).toContain('target="_blank" rel="noopener noreferrer"');
+    // The copy control stays: the link is additive.
+    expect(html).toContain('data-copy="0x123"');
+  });
+
+  test("omits the explorer link on a network that has none", () => {
+    const devnet: WalletStatus = { ...status, networkId: "SN_DEVNET" };
+    const html = activityScreen([], devnet, [{ ...transaction, networkId: "SN_DEVNET" }], false);
+
+    expect(html).not.toContain("data-tx-explorer");
+    expect(html).not.toContain("starkscan.co");
+    expect(html).toContain('data-copy="0x123"');
+  });
+
   test("labels and exposes the selected shared-account activity scope", () => {
     const html = activityScreen(
       [],

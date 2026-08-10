@@ -31,12 +31,17 @@ export const LAB_META: LabMeta = {
 };
 
 export const assertCheckpointReady = async (canvasElement: HTMLElement): Promise<void> => {
-  await waitFor(() => {
-    const lab = canvasElement.firstElementChild;
-    expect(lab).toHaveAttribute("data-lab-ready", "true");
-  });
+  await waitFor(
+    () => {
+      const lab = canvasElement.firstElementChild;
+      expect(lab).toHaveAttribute("data-lab-ready", "true");
+    },
+    { timeout: 5_000 },
+  );
   const error = canvasElement.querySelector("[data-lab-error]");
-  expect(error).not.toBeVisible();
+  if (error instanceof HTMLElement && !error.hidden) {
+    throw new Error(error.textContent?.trim() || "UI Lab checkpoint failed to render");
+  }
   const frame = canvasElement.querySelector<HTMLIFrameElement>("[data-lab-frame]");
   expect(frame?.contentDocument?.querySelector(".shell")).toBeInTheDocument();
   const lab = canvasElement.firstElementChild;

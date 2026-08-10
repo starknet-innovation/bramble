@@ -8,6 +8,78 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [0.9.0] - 2026-08-10
+
+Account-safe upgrades, one coherent public/private Send journey, managed service
+routing, and stricter Ledger and STRK20 trust boundaries ahead of the wallet's
+first formal external audit.
+
+### Added
+- A unified Send route model for public-to-public transfers, shielding into a
+  private balance, private transfers, and unshielding. Each route identifies its
+  submission path, fee source, and on-chain disclosure before review.
+- Account- and network-scoped encrypted custody for optional Ledger STRK20
+  viewing material. Software-account viewing keys remain derivable through
+  Krusty and are not retained.
+- Staged, authenticated, crash-recoverable vault schema v4 migration with
+  verified writes and deterministic recovery from interrupted extension updates.
+- Ledger OS and Starknet-app compatibility probes with model-specific firmware
+  floors, bounded response parsing, upgrade guidance, and exact-device reconnect.
+
+### Changed
+- Default Starknet RPC and bundled STRK20 traffic now route through the managed
+  MC Wallet gateway, with reviewed direct RPC fallbacks retained for transport
+  availability and custom user routing preserved.
+- Public and private balances share one portfolio and asset vocabulary. Shield
+  and Unshield open Send preconfigured instead of maintaining parallel transfer
+  interfaces.
+- Active-account and active-network mutations are serialized behind one
+  generation-aware authority so concurrent unlock, import, Ledger, dApp, and
+  preference operations cannot create split-brain state.
+- Browser storage is restricted to trusted extension contexts before startup,
+  session restoration, alarms, or runtime request handling continue.
+
+### Fixed
+- Private relay quotes no longer introduce a public sender fee approval or leave
+  unrelated allowance behind; mixed batches retain only exact public deposit
+  approval.
+- Account-mode transaction preparation failures remain retry-safe, while an
+  indeterminate response after an add-transaction request retains the durable
+  one-broadcast guard instead of risking duplicate submission.
+- Structured sequencer errors keep their numeric semantics even when hostile
+  revert text contains transport-like phrases.
+- Send review now fails closed on unknown account-scoped balances, insufficient
+  source value, missing relays, unread pool fees, changed fees, stale recipient
+  registration, and account/network changes.
+- Closing or editing Send invalidates the frozen review instead of reopening or
+  submitting a stale composition.
+- UI Lab Send checkpoints use valid account-scoped balances and report the
+  actual fixture preparation error instead of timing out generically.
+
+### Security
+- The pool fee, recipient, token, amount, account, network, and route are bound
+  into each private preparation and checked again immediately before proof,
+  signing, and broadcast.
+- Paymaster execution errors are generic at the post-proof boundary, preventing
+  a relay from echoing short proof or proof-fact values into wallet UI or logs.
+- RPC write ambiguity is created only at the three actual
+  `starknet_add*Transaction` fetches; endpoint selection, deployment checks, fee
+  estimation, transaction construction, and class decompression cannot claim a
+  possible broadcast.
+- Vault migrations fail closed on malformed staging data, silently failed writes
+  or deletes, stale sessions, and preference-write failures. Public account
+  projections cannot expose encrypted account-secret records.
+- Ledger compatibility checks may reuse a verified transport session, but key
+  matching and signature verification remain mandatory for every signing path.
+- The final software release head passes the repository's full test, 95%
+  coverage, dependency-audit, terminal, UI Lab, build, extension E2E,
+  reproducible-package, and checksum gates.
+
+Physical Ledger confirmation across the full supported device and transport
+matrix is deliberately not claimed by v0.9.0. It is tracked in
+[#224](https://github.com/starknet-innovation/mc-wallet/issues/224) for v0.9.1,
+after this release can be loaded on the target hardware.
+
 ## [0.8.0] - 2026-08-05
 
 Safer dApp account boundaries, explicit STRK20 privacy, faster and more truthful

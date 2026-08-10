@@ -61,8 +61,12 @@ const preferences = {
     },
   ],
 };
-const token = preferences.tokens[0];
-if (!token) throw new Error("Default token fixture missing");
+// The proposal composer opens on the first listed asset, and every token list
+// puts STRK first, so the fixture funds the asset the flow actually defaults to.
+const token = preferences.tokens.find(
+  (entry) => entry.networkId === "SN_MAIN" && entry.symbol === "STRK",
+);
+if (!token) throw new Error("Default STRK fixture missing");
 const portfolio = {
   balances: {
     balances: [

@@ -150,7 +150,11 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
       activeView === "token-detail"
     ) {
       fill(wallet.loadBalances(), (value) => {
-        cache.balances = value;
+        cache.balances =
+          "balances" in value &&
+          (value.accountId !== status.activeAccountId || value.networkId !== status.networkId)
+            ? { error: "balances unavailable" }
+            : value;
       });
     }
     fill(wallet.loadPrices(), (value) => {
@@ -250,7 +254,11 @@ export const hydrateView = async (deps: HydrateDeps): Promise<void> => {
   ) {
     fill(multisig.loadBalances(selectedMultisigId), (value) => {
       cache.multisigBalanceId = selectedMultisigId;
-      cache.multisigBalances = value;
+      cache.multisigBalances =
+        "balances" in value &&
+        (value.accountId !== selectedMultisigId || value.networkId !== status.networkId)
+          ? { error: "multisig balances unavailable" }
+          : value;
     });
   }
   if (activeView === "multisig-home" && selectedMultisigId) {

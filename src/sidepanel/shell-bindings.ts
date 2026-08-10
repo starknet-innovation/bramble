@@ -16,6 +16,8 @@ import type { WalletView } from "./views";
  */
 export type ShellBindingDeps = {
   readonly app: Element | null;
+  /** Captures the account/network whose deployment an async watcher may apply. */
+  readonly deploymentScope?: () => DeploymentPollScope | null;
   readonly wallet: SidepanelWallet;
   readonly render: (status: WalletStatus) => Promise<void>;
   readonly setActiveView: (view: WalletView) => void;
@@ -70,6 +72,34 @@ export type DeploymentWatchDeps = {
 };
 
 /**
+ * Account/network identity captured before a deployment is submitted.
+ */
+export type DeploymentPollScope = {
+  readonly accountId: string;
+  readonly stillCurrent: () => boolean;
+};
+
+/**
+ * Captures an active deployment scope and a live predicate for later polling.
+ */
+export const deploymentPollScope = (
+  status: Pick<WalletStatus, "activeAccountId" | "networkId">,
+  current: () => Pick<WalletStatus, "activeAccountId" | "networkId">,
+): DeploymentPollScope | null => {
+  const accountId = status.activeAccountId;
+  const networkId = status.networkId;
+  return accountId === null
+    ? null
+    : {
+        accountId,
+        stillCurrent: () => {
+          const latest = current();
+          return latest.activeAccountId === accountId && latest.networkId === networkId;
+        },
+      };
+};
+
+/**
  * Polls deployment status a bounded number of times after a deploy is
  * submitted, re-rendering once the account reports deployed so the home
  * "deploy now" banner clears on its own — the design has no background tx
@@ -80,20 +110,49 @@ export type DeploymentWatchDeps = {
  */
 export const watchDeployment = async (
   deps: DeploymentWatchDeps,
+  scope: DeploymentPollScope,
   options: { readonly attempts?: number; readonly intervalMs?: number } = {},
 ): Promise<void> => {
+  if (await awaitDeployment(deps.wallet, scope, options)) {
+    const status = await deps.wallet.loadStatus();
+    if (scope.stillCurrent() && status.activeAccountId === scope.accountId) {
+      await deps.render(status);
+    }
+  }
+};
+
+/**
+ * Waits for a submitted deployment to report deployed, answering whether it
+ * did within the attempt budget. THE deployment poll — `watchDeployment` adds a
+ * re-render on top, and a caller that must sequence work after deployment (the
+ * deploy-then-register journey) needs the answer rather than a repaint. A failed
+ * status load counts as "not yet".
+ */
+export const awaitDeployment = async (
+  wallet: Pick<SidepanelWallet, "loadDeploymentStatus">,
+  scope: DeploymentPollScope,
+  options: { readonly attempts?: number; readonly intervalMs?: number } = {},
+): Promise<boolean> => {
   const attempts = options.attempts ?? DEPLOY_WATCH_ATTEMPTS;
   const intervalMs = options.intervalMs ?? DEPLOY_WATCH_INTERVAL_MS;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (!scope.stillCurrent()) return false;
     await new Promise<void>((resolve) => {
       setTimeout(resolve, intervalMs);
     });
-    const deployment = await deps.wallet.loadDeploymentStatus().catch(() => null);
-    if (deployment?.deployed) {
-      await deps.render(await deps.wallet.loadStatus());
-      return;
+    if (!scope.stillCurrent()) return false;
+    const deployment = await wallet.loadDeploymentStatus().catch(() => null);
+    if (deployment && deployment.accountId !== scope.accountId) {
+      // The background always resolves the active account. A different id
+      // proves the user switched while this poll was in flight, so stop rather
+      // than observing or applying the new account's deployment.
+      return false;
+    }
+    if (deployment?.deployed && scope.stillCurrent()) {
+      return true;
     }
   }
+  return false;
 };
 
 /**
@@ -102,6 +161,7 @@ export const watchDeployment = async (
 export const bindDeploy = (deps: ShellBindingDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#deploy-button");
   button?.addEventListener("click", () => {
+    const scope = deps.deploymentScope?.() ?? null;
     buttonBusy(button, true);
     scopedStatus(button, "Submitting deployment...");
     void deps.wallet.deployAccount().then(
@@ -111,7 +171,7 @@ export const bindDeploy = (deps: ShellBindingDeps): void => {
         buttonBusy(button, false);
         // Nothing else re-renders after a deploy submit, so watch for the
         // account going live and clear the "deploy now" banner when it does.
-        void watchDeployment(deps);
+        if (scope) void watchDeployment(deps, scope);
       },
       (error: unknown) => {
         showToast(errorMessage(error, "Deployment failed"), "error");

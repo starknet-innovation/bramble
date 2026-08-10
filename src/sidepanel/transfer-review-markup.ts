@@ -1,10 +1,27 @@
 /**
  * Shared decoded-transfer review markup used by Send and NFT transfer flows.
  */
+import { escapeHtml } from "../shared/html";
+import { accountLabel } from "./parts";
 import { reviewCallsList, reviewFeeSection, reviewPanel, riskFlagMessages } from "./review-render";
 import type { SidepanelWallet } from "./runtime";
+import { tokenGlyph } from "./token-row";
+import type { TransferFields } from "./transfer-model";
 
 type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
+
+/**
+ * Renders the confirm-face summary: the amount with its fiat estimate, and who
+ * receives it.
+ */
+export const reviewSummaryHtml = (fields: TransferFields): string => `
+  <div class="send-review-hero">
+    <span class="send-review-token">${tokenGlyph(fields.tokenAddress, fields.tokenSymbol)}</span>
+    <span><strong>${escapeHtml(fields.amount)} ${escapeHtml(fields.tokenSymbol)}</strong><small>${escapeHtml(fields.fiatEstimate || "Fiat estimate unavailable")}</small></span>
+  </div>
+  <dl class="send-review-facts">
+    <div><dt>Recipient</dt><dd><strong>${escapeHtml(fields.recipientLabel || accountLabel(fields.recipient))}</strong><code>${escapeHtml(accountLabel(fields.recipient))}</code></dd></div>
+  </dl>`;
 
 /**
  * Renders the transfer fee state — the estimated amount, the pending-deployment

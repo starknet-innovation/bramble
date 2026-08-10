@@ -42,6 +42,17 @@ describe("PendingApproval fee review validation (#189)", () => {
     expect(isPendingApprovalsResponse(response(invokeApproval()))).toBe(true);
   });
 
+  test("rejects an account id whose network contradicts the approval context", () => {
+    const wrongScope = {
+      ...context,
+      chainId: STARKNET_NETWORKS.SN_SEPOLIA.chainId,
+      networkId: "SN_SEPOLIA",
+    };
+    expect(isPendingApprovalsResponse(response(invokeApproval({ context: wrongScope })))).toBe(
+      false,
+    );
+  });
+
   test("accepts the undeployed and estimate-failed states", () => {
     expect(
       isPendingApprovalsResponse(response(invokeApproval({ fee: null, requiresDeployment: true }))),

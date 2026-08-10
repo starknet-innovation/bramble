@@ -86,6 +86,15 @@ describe("STRK20 stage error mapping", () => {
     );
   });
 
+  test("does not let revert text impersonate a transport failure", () => {
+    expect(() =>
+      mapStrk20StageError(
+        "submission",
+        rpcError(41, { execution_error: "pool: network timeout policy rejected" }),
+      ),
+    ).toThrow("(submission/execution-reverted)");
+  });
+
   test("never emits the request body starknet.js embeds in the error message", () => {
     // RpcError.message contains the full JSON request params, which on a privacy
     // submission carry the proof blob and note-derived calldata.

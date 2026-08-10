@@ -146,6 +146,7 @@ const bindSendForm = (deps: NftUiDeps): void => {
     event.preventDefault();
     const data = new FormData(form);
     const fields = {
+      accountId: String(data.get("accountId") ?? ""),
       contract: normalizeFeltInput(String(data.get("contract") ?? "")),
       networkId: String(data.get("networkId") ?? ""),
       recipient: normalizeFeltInput(String(data.get("recipient") ?? "")),
@@ -229,7 +230,14 @@ const bindSendForm = (deps: NftUiDeps): void => {
             result.textContent = "Transfer submitted. Confirmation is tracked in Activity.";
           }
           if (requiresDeployment) {
-            void watchDeployment({ render: deps.render, wallet: deps.wallet });
+            void watchDeployment(
+              { render: deps.render, wallet: deps.wallet },
+              {
+                accountId: fields.accountId,
+                stillCurrent: () =>
+                  form.isConnected && new FormData(form).get("accountId") === fields.accountId,
+              },
+            );
           }
           if (submitButton) {
             submitButton.disabled = true;

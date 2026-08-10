@@ -18,7 +18,9 @@ export type LedgerRejectionCode =
   | "picker-cancelled"
   | "device-locked"
   | "no-app-open"
+  | "firmware-below-minimum"
   | "app-below-minimum"
+  | "unsupported-ledger-device"
   | "blind-signing-disabled"
   | "device-busy"
   | "replug"
@@ -38,7 +40,7 @@ export type LedgerRejectionCode =
 
 const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
   "app-below-minimum":
-    "Your Ledger's Starknet app is below the minimum version mc-wallet supports. Update it in Ledger Live, then reconnect. If the update is blocked, update your device firmware first.",
+    "Your Ledger's Starknet app needs an update. Update it in Ledger Live, then reconnect and open Starknet.",
   "blind-signing-disabled":
     "Turn on Blind signing in the Starknet app settings on your Ledger, then retry.",
   "chain-failed": "Your transaction was submitted but failed on-chain.",
@@ -55,6 +57,8 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
     "This Ledger account was set up for another network. Switch networks or pick a matching account.",
   "no-app-open":
     "Open the Starknet app on your Ledger. If Ledger Live can't find or install it, update your device firmware first (Ledger Live > My Ledger), then open the app.",
+  "firmware-below-minimum":
+    "Your Ledger firmware needs an update. Update it in Ledger Live (My Ledger), then reconnect and open the Starknet app.",
   "panel-context-lost": "The Ledger tab closed before you confirmed. Nothing was submitted.",
   "picker-cancelled":
     "No Ledger was chosen. Connect it by USB, unlock it, open the Starknet app, then try again.",
@@ -65,6 +69,8 @@ const LEDGER_MESSAGES: Readonly<Record<LedgerRejectionCode, string>> = {
     "We couldn't verify the signature from your Ledger, so nothing was submitted. Try again.",
   "unexpected-device-error":
     "Something went wrong talking to your Ledger. Make sure the Starknet app is open and no other app is using it, then try again.",
+  "unsupported-ledger-device":
+    "This Ledger device or firmware isn't supported yet. Update it in Ledger Live, then reconnect and open the Starknet app.",
   "webhid-unavailable": "Ledger support needs a Chromium-based browser (Chrome, Brave, or Edge).",
   "worker-evicted": "The wallet restarted mid-sign. Reconnect your Ledger and try again.",
   "wrong-device":

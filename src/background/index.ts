@@ -20,7 +20,7 @@ import { createAllowanceStore } from "../storage/allowance-store";
 import {
   createBrowserLocalStore,
   createBrowserSessionStore,
-  hardenSessionAccess,
+  requireTrustedStorageAccess,
 } from "../storage/browser-storage";
 import { createEncryptedStore, type EncryptedStore } from "../storage/encrypted-store";
 import { createMultisigStore } from "../storage/multisig-store";
@@ -31,6 +31,7 @@ import {
   type WalletPreferences,
 } from "../storage/preferences-store";
 import { createStrk20MaturityStore } from "../storage/strk20-maturity-store";
+import { VAULT_MIGRATION_STORE_KEY } from "../storage/vault-store-migration";
 import { createWalletVaultService, VAULT_STORE_KEY } from "../wallet/vault-service";
 import { setApprovalNotifier } from "./approval-notifier";
 import {
@@ -43,6 +44,7 @@ import { walletEventBroadcasts } from "./events";
 import { createMessageHandler } from "./messages";
 import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboarding-surface";
 import { defaultRuntimeRpc } from "./runtime-rpc";
+import { createActiveStateCoordinator, reconcileUnlockedActiveAccount } from "./runtime-state";
 import type { RuntimeSender } from "./senders";
 import { createUnlockSession, type UnlockSessionStore } from "./session";
 import { type AlarmsApi, startTransactionMonitor } from "./tx-monitor";
@@ -116,32 +118,39 @@ const sessionStore: UnlockSessionStore | undefined = (() => {
 // The vault store is created up front so the unlock session can drop its
 // cached AES key on lock/expiry, and so its PBKDF2-derived key is reused across
 // operations for the life of an unlock rather than re-derived every time.
-const vaultStore: EncryptedStore | null = (() => {
-  try {
-    return createEncryptedStore(createBrowserLocalStore(), VAULT_STORE_KEY);
-  } catch {
-    return null;
+const vaultStores: { readonly primary: EncryptedStore; readonly staging: EncryptedStore } | null =
+  (() => {
+    try {
+      const store = createBrowserLocalStore();
+      return {
+        primary: createEncryptedStore(store, VAULT_STORE_KEY),
+        staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY),
+      };
+    } catch {
+      return null;
+    }
+  })();
+const session = createUnlockSession(undefined, undefined, sessionStore, () => {
+  for (const store of [vaultStores?.primary, vaultStores?.staging]) {
+    store?.clearKeys();
   }
-})();
-const session = createUnlockSession(undefined, undefined, sessionStore, () =>
-  vaultStore?.clearKeys(),
-);
-const sessionReady = session.restore().catch(() => undefined);
-// Restrict the in-memory session area (which mirrors the unlock passphrase
-// across worker restarts) to trusted extension contexts, so content scripts
-// and web pages can never read it.
-void hardenSessionAccess().catch(() => undefined);
-const wallet = vaultStore
-  ? Promise.resolve()
+});
+// Storage lockdown is a startup prerequisite, not a best-effort side effect.
+// Requests remain fail-closed if Chrome cannot remove content-script access.
+const storageReady = requireTrustedStorageAccess();
+const sessionReady = storageReady.then(() => session.restore());
+const wallet = vaultStores
+  ? storageReady
       .then(() =>
         createWalletVaultService({
-          encryptedStore: vaultStore,
+          encryptedStore: vaultStores.primary,
           kms: createKrustyKms(krustyModule),
+          migrationStore: vaultStores.staging,
         }),
       )
       .catch(() => null)
   : Promise.resolve(null);
-const preferences = Promise.resolve()
+const preferences = storageReady
   .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
   .catch(() => null);
 void preferences
@@ -214,7 +223,7 @@ const phishingFeed = (() => {
   }
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
-void phishingFeed?.refresh().catch(() => undefined);
+void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
 // Loads the bundled multisig Sierra class for the explicit declare flow. The
 // artifact ships inside the extension package, so this fetch never leaves the
 // extension origin; the ops handler re-verifies its class hash before use.
@@ -246,7 +255,16 @@ const runtimeRpc = {
       })
     : unavailableStrk20Service,
 };
-const handleMessage = createMessageHandler(createWalletReader(wallet), runtime?.id ?? "", {
+const walletReader = createWalletReader(wallet);
+const activeStateCoordinator = createActiveStateCoordinator();
+const runtimeReady = sessionReady.then(async () => {
+  const store = await preferences;
+  if (store) {
+    await reconcileUnlockedActiveAccount(walletReader, session, store, activeStateCoordinator);
+  }
+});
+const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
+  activeStateCoordinator,
   approvals,
   session,
   preferencesStore: {
@@ -422,6 +440,7 @@ if (activityLog) {
       runtimeRpc: defaultRuntimeRpc,
     },
     now: systemClock,
+    ready: storageReady,
   });
 }
 
@@ -454,7 +473,7 @@ runtime?.onInstalled.addListener((details) => {
 });
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
   requestApprovalSurface(extensionApi, approvalSurfacePreference, runtime.id, message, sender);
-  void sessionReady
+  void runtimeReady
     .then(() => handleMessage(message, sender))
     .then(
       (response) => {

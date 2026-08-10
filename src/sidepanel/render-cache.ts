@@ -99,6 +99,7 @@ export const updateRenderScope = (
       ? {
           ...emptyActivityCache(),
           ...emptyNftCache(),
+          balances: { error: "balances unavailable" },
           multisigBalanceId: null,
           multisigBalances: { error: "multisig balances unavailable" },
           multisigClassDeclared: null,
