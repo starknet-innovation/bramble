@@ -58,11 +58,7 @@ export const strk20ProviderFor =
   (): RpcProvider =>
     ({
       callContract: async (call: { entrypoint?: string }) =>
-        poolCallResult(
-          call?.entrypoint,
-          options.poolFee ?? "0x0",
-          options.publicKey ?? "0x77",
-        ),
+        poolCallResult(call?.entrypoint, options.poolFee ?? "0x0", options.publicKey ?? "0x77"),
       getClassHashAt: async () => "0xdef",
       getBlockNumber: async () => 20,
       waitForTransaction: async () => ({

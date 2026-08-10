@@ -4,14 +4,13 @@
  */
 import type { WalletStatus } from "../popup/responses";
 import { isWalletEventMessage } from "../provider/events";
-import { applySkin } from "../ui/skin";
-import { colorSchemeForChoice, skinForChoice } from "../ui/theme";
 import { bindClusterScreens } from "./cluster-ui";
 import { bindAddressBook, bindApprovals } from "./dashboard-bindings";
 import { createDeploymentCache } from "./deployment-cache";
 import { bindDisclosures } from "./disclosures";
 import { bindCopyButtons, showToast } from "./dom";
 import { bindEndpointSettings } from "./endpoint-ui";
+import { applyEntryTheme, bindEntryNavigation } from "./entry-ui";
 import { locked, onboarding } from "./gate-views";
 import { healTransientGroupState } from "./group-state";
 import type { HomeTab } from "./home-tabs";
@@ -52,7 +51,7 @@ import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
 import * as transfer from "./transfer-bindings";
 import { withTransactionAlerts } from "./tx-alerts-ui";
-import { dashboard, isWalletView, type WalletView } from "./views";
+import { dashboard, type WalletView } from "./views";
 
 type ExtensionGlobal = typeof globalThis & {
   readonly chrome?: OnboardingCompletionBrowser & { readonly runtime?: RuntimeApi };
@@ -83,23 +82,8 @@ let drawerGroupFilter: string | null = null;
 let openAssignId: string | null = null;
 let expandedGroupId: string | null = null;
 let snoozedApprovalIds: readonly string[] = [];
-// A shield/unshield shortcut's pre-configured send. Held only until Send is
-// left, so returning to Send by any other route starts from a clean form.
+// A shield/unshield shortcut is held only until Send is left.
 let sendIntent: SendIntent | null = null;
-
-const bindNavigation = (): void => {
-  app?.querySelectorAll<HTMLButtonElement>("[data-view]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const view = button.dataset["view"];
-      if (isWalletView(view)) {
-        navigate(view);
-      }
-    });
-  });
-  app?.querySelectorAll<HTMLButtonElement>("[data-nav-back]").forEach((button) => {
-    button.addEventListener("click", goBack);
-  });
-};
 
 const renderScene = createSceneRenderer(app, () => bindAll());
 
@@ -139,7 +123,7 @@ const ledgerOnboard = createLedgerOnboardEntry({
 });
 
 const bindAll = (): void => {
-  bindNavigation();
+  bindEntryNavigation(app, navigate, goBack);
   bindCopyButtons(app);
   bindOnboardingCompletion(app, extensionApi, () => globalThis.close());
   bindOnboarding({ app, render, wallet });
@@ -291,13 +275,11 @@ const bindAll = (): void => {
 };
 
 const applyTheme = (): void => {
-  const choice = cache.preferences?.theme ?? "dark";
-  const skin = skinForChoice(choice);
-  if (skin.name !== lastSkinName) {
-    lastSkinName = skin.name;
-    document.documentElement.style.setProperty("color-scheme", colorSchemeForChoice(choice));
-    applySkin(skin, document.documentElement);
-  }
+  lastSkinName = applyEntryTheme(
+    cache.preferences?.theme ?? "dark",
+    lastSkinName,
+    document.documentElement,
+  );
 };
 
 const paint = (): void => {

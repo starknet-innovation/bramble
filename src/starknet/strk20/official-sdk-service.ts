@@ -10,19 +10,12 @@ import { isJson } from "../../shared/json";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "../networks";
 import { createRpcProvider } from "../provider";
 import { submitInvokeTransaction } from "../rpc-submit";
-import type { Strk20NetworkConfig } from "./config";
 import type { Strk20MaturityScope, Strk20MaturityStore } from "./maturity";
-import { strk20BuilderFor, strk20RegistrationBuilderFor } from "./official-sdk-builder";
-import {
-  isRetryableStrk20ServiceError,
-  mapStrk20ProtocolError,
-  mapStrk20StageError,
-  type Strk20FailureStage,
-} from "./official-sdk-errors";
-import { createStrk20MaturityRuntime, type Strk20MaturityRuntime } from "./official-sdk-maturity";
-import { areHistoricalDepositsReady, isHistoricalAccountReady } from "./official-sdk-readiness";
-import { assertNoSdkWarnings, readCallAndProof } from "./official-sdk-results";
-import type { PrivacySdkRuntime, SdkBuilder, SdkTransfers } from "./official-sdk-runtime";
+import { strk20RegistrationBuilderFor } from "./official-sdk-builder";
+import { mapStrk20ProtocolError, mapStrk20StageError } from "./official-sdk-errors";
+import { createStrk20MaturityRuntime } from "./official-sdk-maturity";
+import { defaultServiceRetryPause, maturityScope, prepareWith } from "./official-sdk-preparation";
+import type { PrivacySdkRuntime } from "./official-sdk-runtime";
 import { transfersFor } from "./official-sdk-transfers";
 import {
   approveCalls,
@@ -34,13 +27,11 @@ import {
   requireStrk20Config,
 } from "./official-sdk-values";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "./paymaster";
-import type { Strk20CallAndProof } from "./schemas";
 import {
   STRK20_PRIVACY_LEAK,
   STRK20_SERVICE_UNAVAILABLE,
   STRK20_SUBMISSION_UNAVAILABLE,
   type Strk20AccountContext,
-  type Strk20PrepareInput,
   type Strk20Service,
 } from "./service";
 
@@ -59,136 +50,6 @@ type OfficialServiceOptions = {
   readonly sdk: PrivacySdkRuntime;
   readonly submitInvoke?: typeof submitInvokeTransaction;
   readonly waitForAccepted?: (provider: RpcProvider, transactionHash: string) => Promise<number>;
-};
-
-const MAX_SERVICE_ATTEMPTS = 3;
-
-const defaultServiceRetryPause = (attempt: number): Promise<void> =>
-  new Promise((resolve) => {
-    setTimeout(resolve, attempt * 1_000);
-  });
-
-const retryableServiceAttempt = (attempt: number, error: unknown): boolean =>
-  attempt < MAX_SERVICE_ATTEMPTS && isRetryableStrk20ServiceError(error);
-
-const maturityScope = (input: Strk20AccountContext, poolAddress: string) => ({
-  accountId: input.account.id,
-  networkId: input.account.networkId,
-  poolAddress,
-});
-
-// Discovery-provider construction and builder assembly ran outside any mapping,
-// so an SDK throw here reached the message boundary unmapped and lost its cause.
-const discoverWith = (
-  sdk: PrivacySdkRuntime,
-  input: Strk20PrepareInput,
-  builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
-): { readonly builder: SdkBuilder; readonly transfers: SdkTransfers } => {
-  const transfers = transfersFor(sdk, input);
-  return {
-    builder:
-      builderForTransfers?.(transfers) ??
-      strk20BuilderFor(sdk, transfers, input.actions, input.account.address),
-    transfers,
-  };
-};
-
-type HistoricalState = "deposits" | "registration";
-
-const historicalReadiness = (
-  kind: HistoricalState | undefined,
-  provider: RpcProvider,
-  input: Strk20PrepareInput,
-): ((block: number) => Promise<boolean>) | undefined => {
-  if (kind === "registration") {
-    return (block) => isHistoricalAccountReady(provider, input.account.address, block);
-  }
-  if (kind === "deposits") {
-    return (block) =>
-      areHistoricalDepositsReady(provider, input.account.address, input.actions, block);
-  }
-  return undefined;
-};
-
-const prepareOnce = async (input: {
-  readonly builder: SdkBuilder;
-  readonly config: Strk20NetworkConfig;
-  readonly historicalState: HistoricalState | undefined;
-  readonly maturity: Strk20MaturityRuntime;
-  readonly preparation: Strk20PrepareInput;
-  readonly provider: RpcProvider;
-  readonly transfers: SdkTransfers;
-}): Promise<Strk20CallAndProof> => {
-  const readinessKind =
-    input.historicalState ??
-    (input.preparation.actions.some((action) => action.type === "deposit")
-      ? "deposits"
-      : undefined);
-  const block = await input.maturity.provingBlock(
-    input.provider,
-    maturityScope(input.preparation, input.config.poolAddress),
-    historicalReadiness(readinessKind, input.provider, input.preparation),
-  );
-  let result: unknown;
-  if (input.preparation.simulate) {
-    result = await input.builder.simulate({
-      provider: input.provider,
-      provingBlockId: block,
-      validateSignature: false,
-    });
-  } else {
-    const invocation = await input.builder.createProofInvocation({ provingBlockId: block });
-    assertNoSdkWarnings(invocation);
-    result = await input.transfers.executeWithInvocation(invocation, block);
-  }
-  assertNoSdkWarnings(result);
-  return readCallAndProof(result, input.config, input.preparation.simulate);
-};
-
-const prepareWith = async (
-  sdk: PrivacySdkRuntime,
-  input: Strk20PrepareInput,
-  maturity: Strk20MaturityRuntime,
-  providerFor: (nodeUrl: string) => RpcProvider,
-  pauseForServiceRetry: (attempt: number) => Promise<void>,
-  builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
-  historicalState?: HistoricalState,
-): Promise<Strk20CallAndProof> => {
-  const config = requireStrk20Config(input);
-  if (
-    input.actions.some((action) => action.type === "subaccount_invoke") &&
-    !config.subaccountAnonymizerAddress
-  ) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  const nodeUrl = input.rpcUrls[0];
-  if (!nodeUrl) {
-    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
-  }
-  for (let attempt = 1; attempt <= MAX_SERVICE_ATTEMPTS; attempt += 1) {
-    let stage: Strk20FailureStage =
-      historicalState === "registration" ? "registration-preparation" : "discovery";
-    try {
-      const { builder, transfers } = discoverWith(sdk, input, builderForTransfers);
-      const provider = providerFor(nodeUrl);
-      stage = "proving";
-      return await prepareOnce({
-        builder,
-        config,
-        historicalState,
-        maturity,
-        preparation: input,
-        provider,
-        transfers,
-      });
-    } catch (error) {
-      if (!retryableServiceAttempt(attempt, error)) {
-        return mapStrk20StageError(stage, error);
-      }
-      await pauseForServiceRetry(attempt);
-    }
-  }
-  throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
 };
 
 /**
