@@ -14,6 +14,18 @@ type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
 
 /**
+ * Safe marker for a write whose transport failed after submission began. The
+ * message is curated for display; no RPC error, request body, or proof material
+ * is retained on the instance.
+ */
+export class IndeterminateRpcWriteError extends WalletError {
+  public constructor(message: string) {
+    super(message);
+    this.name = "IndeterminateRpcWriteError";
+  }
+}
+
+/**
  * Builds an RPC provider pinned to {@link STARKNET_RPC_SPEC_VERSION}.
  *
  * Every provider in the wallet is created here so the spec version is decided
@@ -183,7 +195,7 @@ export const withRpcWrite = async <T>(
     return await run(selected);
   } catch (error) {
     if (isTransportRpcError(error)) {
-      throw new WalletError(
+      throw new IndeterminateRpcWriteError(
         "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
       );
     }

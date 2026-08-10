@@ -5,6 +5,7 @@
 
 import { describe, expect, test } from "bun:test";
 import type { RpcProvider } from "starknet";
+import { IndeterminateRpcWriteError } from "../../../src/starknet/provider";
 import { memoryStrk20MaturityStore } from "../../../src/starknet/strk20/maturity";
 import { createStrk20MaturityRuntime } from "../../../src/starknet/strk20/official-sdk-maturity";
 
@@ -214,6 +215,24 @@ describe("STRK20 proof maturity", () => {
     await expect(runtime.provingBlock(providerWith([30]), scope)).rejects.toThrow(
       "strk20 services unavailable",
     );
+  });
+
+  test("preserves the guard after an ambiguous write has been safely sanitized", async () => {
+    const store = memoryStrk20MaturityStore();
+    const runtime = createStrk20MaturityRuntime({ store });
+
+    await expect(
+      runtime.submitAccepted(
+        providerWith([]),
+        scope,
+        async () => "prepared",
+        async () => {
+          throw new IndeterminateRpcWriteError("safe status-unknown message");
+        },
+      ),
+    ).rejects.toThrow("safe status-unknown message");
+
+    expect(await store.read(scope)).toEqual({ state: "submitting" });
   });
 
   test("uses the built-in receipt wait when no override is injected", async () => {

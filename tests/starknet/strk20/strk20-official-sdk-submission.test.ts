@@ -456,4 +456,41 @@ describe("official STRK20 SDK submission boundary", () => {
     // And the determinate rejection frees the scope instead of wedging it.
     expect(await maturityStore.read(scope)).toBeNull();
   });
+
+  test("blocks a retry when an account-mode broadcast has an indeterminate outcome", async () => {
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const maturityStore = memoryStrk20MaturityStore();
+    let broadcasts = 0;
+    const service = createOfficialStrk20Service({
+      maturityStore,
+      providerFor,
+      sdk,
+      async submitInvoke() {
+        broadcasts += 1;
+        throw new Error(
+          "Failed to fetch https://rpc.example with proof UHJvb2ZCbG9iQmFzZTY0ZGF0YQ",
+        );
+      },
+    });
+    const request = {
+      ...context,
+      actions: [{ amount: "0x1", token, type: "deposit" }] as const,
+      plan: { mode: "account" } as const,
+    };
+
+    const firstError = await service.submitActions(request).catch((error: unknown) => error);
+    expect(firstError).toBeInstanceOf(WalletError);
+    expect((firstError as Error).message).toBe(
+      "strk20 services unavailable (submission/transport)",
+    );
+    expect(await maturityStore.read(scope)).toEqual({ state: "submitting" });
+    await expect(service.submitActions(request)).rejects.toThrow("strk20 services unavailable");
+    expect(broadcasts).toBe(1);
+  });
 });

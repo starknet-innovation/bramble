@@ -5,6 +5,7 @@
 import { WalletError } from "../../shared/errors";
 import { isRecord } from "../../shared/json";
 import { friendlyNetworkError } from "../../shared/network-error";
+import { IndeterminateRpcWriteError, isTransportRpcError } from "../provider";
 import {
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_NOT_REGISTERED,
@@ -161,10 +162,17 @@ export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): 
   }
   const text = failureText(error);
   const detail = sanitizeStrk20Detail(text);
+  const indeterminateWrite = stage === "submission" && isTransportRpcError(error);
+  const networkFailure = friendlyNetworkError(text);
   const category: Strk20ErrorCategory =
-    markerFor(text, CATEGORY_MARKERS) ??
-    (friendlyNetworkError(text) ? "transport" : "service-unavailable");
+    (networkFailure ? "transport" : markerFor(text, CATEGORY_MARKERS)) ?? "service-unavailable";
   const base = markerFor(text, BASE_MARKERS) ?? STRK20_SERVICE_UNAVAILABLE;
   const label = `${base} (${stage}/${category})`;
+  if (indeterminateWrite) {
+    // Maturity must retain its submitting guard because the node may have
+    // accepted the write before the response was lost. Preserve only that safe
+    // fact: unstructured transport errors can contain the full request body.
+    throw new IndeterminateRpcWriteError(label);
+  }
   throw new WalletError(detail === "" ? label : `${label}: ${detail}`);
 };

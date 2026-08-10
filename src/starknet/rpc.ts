@@ -44,6 +44,7 @@ export {
  * Re-exported provider helpers so existing callers keep one import path.
  */
 export {
+  IndeterminateRpcWriteError,
   isContractNotFoundError,
   isTransactionNotFoundError,
   isTransportRpcError,
