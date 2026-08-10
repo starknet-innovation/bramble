@@ -152,6 +152,77 @@ describe("switchActiveNetwork", () => {
     expect(vaultReads).toBe(0);
   });
 
+  test("locks the authorizing session when a vault-side network switch fails", async () => {
+    for (const failingStep of ["read", "select", "derive"] as const) {
+      const session = createUnlockSession();
+      session.unlock(vaultPassphrase);
+      const wallet = makeWallet({
+        async ensureNetworkAccount() {
+          if (failingStep === "derive") throw new Error("injected derive failure");
+          return mainnetAccount;
+        },
+        async readVault() {
+          if (failingStep === "read") throw new Error("injected read failure");
+          return {
+            accounts:
+              failingStep === "derive" ? [sepoliaAccount] : [sepoliaAccount, mainnetAccount],
+            activeAccountId: sepoliaAccount.id,
+          } as unknown as Vault;
+        },
+        async setActiveAccount() {
+          if (failingStep === "select") throw new Error("injected select failure");
+          return mainnetAccount;
+        },
+      });
+
+      await expect(
+        switchActiveNetwork(
+          wallet,
+          session,
+          makePreferencesStore(defaultWalletPreferences()),
+          "SN_MAIN",
+        ),
+      ).rejects.toThrow(`injected ${failingStep} failure`);
+      expect(session.isUnlocked()).toBe(false);
+    }
+  });
+
+  test("never revokes a replacement unlock or mutates after the old session changes", async () => {
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const readStarted = Promise.withResolvers<void>();
+    const releaseRead = Promise.withResolvers<void>();
+    let selections = 0;
+    const wallet = makeWallet({
+      async readVault() {
+        readStarted.resolve();
+        await releaseRead.promise;
+        return {
+          accounts: [sepoliaAccount, mainnetAccount],
+          activeAccountId: sepoliaAccount.id,
+        } as unknown as Vault;
+      },
+      async setActiveAccount() {
+        selections += 1;
+        return mainnetAccount;
+      },
+    });
+    const switching = switchActiveNetwork(
+      wallet,
+      session,
+      makePreferencesStore(defaultWalletPreferences()),
+      "SN_MAIN",
+    );
+    await readStarted.promise;
+    session.lock();
+    session.unlock(vaultPassphrase);
+    releaseRead.resolve();
+
+    await expect(switching).rejects.toThrow("Unlock session changed during network switch");
+    expect(selections).toBe(0);
+    expect(session.isUnlocked()).toBe(true);
+  });
+
   test("serializes concurrent selections so the last network intent wins", async () => {
     const session = createUnlockSession();
     session.unlock(vaultPassphrase);

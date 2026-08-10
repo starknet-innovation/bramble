@@ -221,6 +221,43 @@ export const reconcileUnlockedActiveAccount = async (
   }
 };
 
+const requireCurrentNetworkSwitch = (authorized: () => boolean): void => {
+  if (!authorized()) {
+    throw new WalletError("Unlock session changed during network switch");
+  }
+};
+
+const selectNetworkAccount = async (
+  wallet: WalletStatusReader,
+  networkId: StarknetNetworkId,
+  passphrase: string,
+  authorized: () => boolean,
+): Promise<AccountRef | null> => {
+  const vault = await wallet.readVault(passphrase);
+  requireCurrentNetworkSwitch(authorized);
+  const account = accountForNetwork(vault, networkId, vault.activeAccountId);
+  if (account?.id === vault.activeAccountId) {
+    return account;
+  }
+  if (account) {
+    const selected = await wallet.setActiveAccount({
+      accountId: account.id,
+      vaultPassphrase: passphrase,
+    });
+    requireCurrentNetworkSwitch(authorized);
+    return selected;
+  }
+  if (vault.accounts.length === 0) {
+    return null;
+  }
+  const selected = await wallet.ensureNetworkAccount({
+    networkId,
+    vaultPassphrase: passphrase,
+  });
+  requireCurrentNetworkSwitch(authorized);
+  return selected;
+};
+
 /**
  * Switches the active network and selects or derives the matching wallet account.
  */
@@ -240,17 +277,23 @@ export const switchActiveNetwork = async (
     if (!passphrase) {
       return null;
     }
-    const vault = await wallet.readVault(passphrase);
-    const account = accountForNetwork(vault, networkId, vault.activeAccountId);
-    if (account && account.id !== vault.activeAccountId) {
-      return wallet.setActiveAccount({ accountId: account.id, vaultPassphrase: passphrase });
+    const generation = session.generation();
+    const authorized = (): boolean =>
+      session.generation() === generation && session.peekPassphrase() === passphrase;
+    try {
+      return await selectNetworkAccount(wallet, networkId, passphrase, authorized);
+    } catch (error) {
+      // The durable network intent was already written. If its matching vault
+      // mutation fails or the session changes mid-flight, leaving the old
+      // active account available would expose a chain/account mismatch to the
+      // provider. Lock only the generation that authorized this switch; a
+      // replacement unlock must never be revoked by stale work. The next
+      // unlock reconciles the vault pointer to the durable network intent.
+      if (session.generation() === generation) {
+        session.lock();
+      }
+      throw error;
     }
-    if (account) {
-      return account;
-    }
-    return vault.accounts.length > 0
-      ? wallet.ensureNetworkAccount({ networkId, vaultPassphrase: passphrase })
-      : null;
   });
 
 /**
