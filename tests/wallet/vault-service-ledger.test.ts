@@ -160,7 +160,7 @@ describe("createLedgerVault", () => {
           {
             chainId: "0x534e5f4d41494e",
             poolAddress: "0x123",
-            scheme: "ledger-strk20-typed-data-v1",
+            scheme: "ledger-strk20-scope-keccak-v1",
             viewingKey: "0x654321",
           },
         ],

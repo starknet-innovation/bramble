@@ -139,7 +139,7 @@ type AccountSecretRef = {
   ledgerStrk20ViewingKeys: readonly {
     chainId: string;
     poolAddress: string;
-    scheme: "ledger-strk20-typed-data-v1";
+    scheme: "ledger-strk20-scope-keccak-v1";
     viewingKey: string;
   }[];
 };
@@ -155,9 +155,23 @@ An entry is valid only when:
   scope is atomic; a ninth distinct scope fails explicitly instead of silently evicting a key.
 
 Software accounts continue deriving through Krusty on demand and never write this collection.
-Ledger lookup fails closed unless the exact account/chain/pool record exists. Storing and forgetting
-are background-only vault-service methods and are intentionally absent from `WalletStatusReader`,
-runtime messages, provider methods, and UI clients.
+Ledger lookup fails closed unless the exact account/chain/pool record exists.
+
+`scheme` names the derivation the record was produced by, because a key derived one way cannot be
+recovered the other way and a registered viewing key cannot be replaced. Under
+`ledger-strk20-scope-keccak-v1` the device signs `starknet_keccak("<chainId>:<poolAddress>")` and the
+returned `(r, s)` is Poseidon-folded into the pool's valid range — the same two stages the software
+derivation composes, so the device supplies only the signature in the middle. Changing the message,
+the signer, or the fold is a new scheme and a new value; the validator accepts only the current
+string, so a record from a retired scheme stops validating rather than being misread as current.
+
+The write path is one atomic vault-service method that takes the device round-trip as a callback:
+the message hash, the fold, and the write all happen inside the vault boundary, so the key is never
+returned across a seam and the steps cannot run out of order. It is reachable through
+`WalletStatusReader` because the background must trigger it, but it resolves to nothing — no method
+anywhere hands a retained viewing key back. Forgetting is background-only. Neither the key nor any
+field named for it appears in runtime messages, provider methods, or UI clients; the panel sees only
+`privateBalances: "ready" | "setup-required"`.
 
 ### Hardware derivation ceremony: required proof obligations
 
