@@ -43,7 +43,7 @@ export const tokenBalance = {
   balance: "100",
   decimals: 6,
   formatted: "0.0001",
-  id: "SN_SEPOLIA:0x53c9",
+  id: "SN_SEPOLIA:USDC:0x53c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8",
   name: "USD Coin",
   networkId: "SN_SEPOLIA",
   symbol: "USDC",

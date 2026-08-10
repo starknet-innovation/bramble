@@ -74,7 +74,7 @@ export const tokenFiatValue = (
   formattedBalance: string,
   price: number | undefined,
 ): number | null => {
-  if (price === undefined || !Number.isFinite(price)) {
+  if (formattedBalance.trim().length === 0 || price === undefined || !Number.isFinite(price)) {
     return null;
   }
   const amount = Number(formattedBalance);

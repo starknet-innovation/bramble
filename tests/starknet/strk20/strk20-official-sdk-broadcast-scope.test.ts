@@ -31,7 +31,7 @@ const scope = {
 const depositRequest = {
   ...context,
   actions: [{ amount: "0x1", token, type: "deposit" }],
-  plan: { mode: "account" },
+  plan: { mode: "account", poolFeeFri: "0x0" },
 } as const;
 
 const depositSdk = () =>

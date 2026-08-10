@@ -179,7 +179,11 @@ describe("createMultisigClient", () => {
       declarationPending: false,
       declared: true,
     });
-    expect(await client.loadBalances(multisig.id)).toEqual({ balances: [] });
+    expect(await client.loadBalances(multisig.id)).toEqual({
+      accountId: multisig.id,
+      balances: [],
+      networkId: "SN_MAIN",
+    });
     expect(await client.loadMultisigs()).toEqual({
       multisigs: [multisig],
       proposals: [proposal],

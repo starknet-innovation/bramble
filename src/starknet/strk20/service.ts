@@ -38,6 +38,27 @@ export const STRK20_SERVICE_UNAVAILABLE = "strk20 services unavailable";
  * No unlinkable broadcast service is configured.
  */
 export const STRK20_SUBMISSION_UNAVAILABLE = "strk20 private submission unavailable";
+/**
+ * Maximum pool fee accepted by the wallet and the pool's u128 fee field.
+ */
+export const STRK20_MAX_POOL_FEE = (1n << 128n) - 1n;
+
+/**
+ * Parses a reviewed pool fee into its canonical felt representation. Values
+ * outside the pool's u128 fee field fail closed before they can enter a digest.
+ */
+export const canonicalStrk20PoolFee = (value: string): string => {
+  let fee: bigint;
+  try {
+    fee = BigInt(value);
+  } catch {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  if (fee < 0n || fee > STRK20_MAX_POOL_FEE) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  return `0x${fee.toString(16)}`;
+};
 
 /**
  * Privileged account context supplied only by the background worker. Viewing
@@ -99,6 +120,8 @@ export type Strk20PrivateRelayPlan = {
  */
 export type Strk20AccountPlan = {
   readonly mode: "account";
+  /** Exact STRK pool fee committed by the review digest. */
+  readonly poolFeeFri: string;
 };
 
 /**
@@ -114,11 +137,16 @@ export type Strk20Service = {
   readonly privateBalances: (input: Strk20BalancesInput) => Promise<readonly Strk20BalanceEntry[]>;
   readonly prepare: (input: Strk20PrepareInput) => Promise<Strk20CallAndProof>;
   readonly registrationStatus?: (
-    input: Strk20AccountContext & { readonly token: string },
+    input: Strk20AccountContext & { readonly subject?: string; readonly token: string },
   ) => Promise<"registered" | "unregistered">;
   readonly register?: (
-    input: Strk20AccountContext,
+    input: Strk20AccountContext & { readonly poolFeeFri: string },
   ) => Promise<{ readonly transactionHash: string }>;
+  /**
+   * Reads the pool's per-`apply_actions` STRK fee so the UI can show it before
+   * any quote exists. Absent implementations leave the fee unknown.
+   */
+  readonly poolFee?: (input: Strk20AccountContext) => Promise<string>;
   readonly quoteActions: (
     input: Strk20AccountContext & { readonly actions: readonly Strk20Action[] },
   ) => Promise<Strk20SubmissionPlan>;
@@ -148,6 +176,9 @@ export const unavailableStrk20Service: Strk20Service = {
     return unavailable();
   },
   async privateBalances() {
+    return unavailable();
+  },
+  async poolFee() {
     return unavailable();
   },
   async quoteActions() {
@@ -217,6 +248,20 @@ const assertFeeBalance = async (
       BigInt(action.token) === BigInt(feeAction.token),
   );
   assertSufficientPrivateBalance([...sameTokenSpend, feeAction], balances);
+};
+
+const assertReviewedPoolFee = async (
+  service: Strk20Service,
+  input: Strk20AccountContext,
+  expectedPoolFeeFri: string,
+): Promise<void> => {
+  if (!service.poolFee) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  const current = canonicalStrk20PoolFee(await service.poolFee(input));
+  if (current !== canonicalStrk20PoolFee(expectedPoolFeeFri)) {
+    throw new WalletError("Private pool fee changed. Review the transaction again.");
+  }
 };
 
 const isDepositOnly = (actions: readonly Strk20Action[]): boolean =>
@@ -289,7 +334,10 @@ export const quoteStrk20Plan = async (
   // private state before the dapp request is approved. Keep the entry route
   // deterministic and pay its fee from the public account instead.
   if (isDepositOnly(input.actions)) {
-    return { mode: "account" };
+    if (!service.poolFee) {
+      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    }
+    return { mode: "account", poolFeeFri: canonicalStrk20PoolFee(await service.poolFee(input)) };
   }
   return service.quoteActions(input);
 };
@@ -322,18 +370,23 @@ export const submitStrk20Actions = async (
   if (input.plan.mode === "account" && !isDepositOnly(input.actions)) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
   }
+  if (input.plan.mode === "account") {
+    await assertReviewedPoolFee(service, input, input.plan.poolFeeFri);
+  }
   await assertFeeBalance(service, input);
   return service.submitActions(input);
 };
 
 /**
- * Discovers whether the active account has registered its viewing key with the
- * configured pool. The token scopes the SDK preflight request only; setup of a
- * token channel is not treated as account registration.
+ * Discovers whether an address has registered its viewing key with the
+ * configured pool — the active account by default, or `subject` (e.g. a send
+ * recipient) when provided. The token scopes the SDK preflight request for the
+ * account's own status only; setup of a channel or token channel is never
+ * treated as registration, because the transfer builder opens those itself.
  */
 export const readStrk20RegistrationStatus = (
   service: Strk20Service,
-  input: Strk20AccountContext & { readonly token: string },
+  input: Strk20AccountContext & { readonly subject?: string; readonly token: string },
 ): Promise<"registered" | "unregistered"> => {
   if (!service.registrationStatus) {
     return Promise.reject(new WalletError(STRK20_SERVICE_UNAVAILABLE));
@@ -346,13 +399,14 @@ export const readStrk20RegistrationStatus = (
  * public Starknet transaction path. Callers must present and approve this
  * operation before invoking this boundary.
  */
-export const registerStrk20Account = (
+export const registerStrk20Account = async (
   service: Strk20Service,
-  input: Strk20AccountContext,
+  input: Strk20AccountContext & { readonly poolFeeFri: string },
 ): Promise<{ readonly transactionHash: string }> => {
   if (!service.register) {
-    return Promise.reject(new WalletError(STRK20_SERVICE_UNAVAILABLE));
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
+  await assertReviewedPoolFee(service, input, input.poolFeeFri);
   return service.register(input);
 };
 
@@ -384,7 +438,7 @@ export const summarizeStrk20Action = (action: Strk20Action): string => {
  */
 export const summarizeStrk20Plan = (plan: Strk20SubmissionPlan): string =>
   plan.mode === "account"
-    ? "Public account fee — first deposits are linked to this wallet"
+    ? `Public account pool fee ${plan.poolFeeFri} STRK fri — first deposits are linked to this wallet`
     : [
         `Private relay fee ${plan.feeAction.amount} (${plan.feeAction.token})`,
         ...(plan.authorization

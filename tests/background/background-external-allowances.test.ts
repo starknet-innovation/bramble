@@ -114,7 +114,7 @@ describe("external allowance manager messages", () => {
 
     const revokeCall = invokeCalls.at(-1)?.[0] as { calldata: string[]; entrypoint: string };
     expect(revokeCall.entrypoint).toBe("approve");
-    expect(revokeCall.calldata).toEqual([BigInt(SPENDER).toString(), "0", "0"]);
+    expect(revokeCall.calldata).toEqual([`0x${BigInt(SPENDER).toString(16)}`, "0x0", "0x0"]);
   });
 
   test("still rejects revoking an id that does not belong to the active account", async () => {

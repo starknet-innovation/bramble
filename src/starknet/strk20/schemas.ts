@@ -124,10 +124,16 @@ export const readStrk20InvokeCall = (value: unknown): Strk20InvokeCall | null =>
 
 /**
  * STRK20_DEPOSIT_ACTION: move a token amount from the public to the private
- * balance (always to self).
+ * balance. `recipient` names whose private balance is credited; omitted, the
+ * depositor is credited by the batch's implicit surplus.
+ *
+ * A deposit is public either way — the pool publishes the payer and the amount —
+ * so naming a recipient conceals only who receives the value, never the sender
+ * or the amount.
  */
 export type Strk20DepositAction = {
   readonly amount: string;
+  readonly recipient?: string;
   readonly token: string;
   readonly type: "deposit";
 };
@@ -197,12 +203,22 @@ export type Strk20Action =
   | Strk20TransferAction
   | Strk20WithdrawAction;
 
-const readDepositAction = (value: Record<string, unknown>): Strk20DepositAction | null =>
-  hasOnlyKnownKeys(value, ["amount", "token", "type"]) &&
-  isStrk20Address(value["token"]) &&
-  isStrk20Amount(value["amount"])
-    ? { amount: value["amount"], token: value["token"], type: "deposit" }
-    : null;
+const readDepositAction = (value: Record<string, unknown>): Strk20DepositAction | null => {
+  if (
+    !hasOnlyKnownKeys(value, ["amount", "recipient", "token", "type"]) ||
+    !isStrk20Address(value["token"]) ||
+    !isStrk20Amount(value["amount"])
+  ) {
+    return null;
+  }
+  const deposit = { amount: value["amount"], token: value["token"], type: "deposit" as const };
+  if (value["recipient"] === undefined) {
+    return deposit;
+  }
+  // A present-but-malformed recipient is rejected rather than dropped: silently
+  // discarding it would credit the depositor while the caller expected a payment.
+  return isStrk20Address(value["recipient"]) ? { ...deposit, recipient: value["recipient"] } : null;
+};
 
 const readWithdrawAction = (value: Record<string, unknown>): Strk20WithdrawAction | null =>
   hasOnlyKnownKeys(value, ["amount", "recipient", "token", "type"]) &&

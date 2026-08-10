@@ -28,6 +28,7 @@ const BROWSER_GLOBAL_FILES = new Set([
   "src/provider/inpage.ts",
   "src/sandbox/render.ts",
   "src/sidepanel/dom.ts",
+  "src/sidepanel/focus-memo.ts",
   "src/sidepanel/activity-ui.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/ledger/grant-window.ts",
@@ -72,6 +73,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/origins-ops.ts",
   "src/background/strk20-account-context.ts",
   "src/background/strk20-ops.ts",
+  // Active-account context split from strk20-wallet-ops; the vault passphrase
+  // only transits into the protected signer wiring, never logged or stored.
+  "src/background/strk20-op-context.ts",
   "src/background/strk20-wallet-ops.ts",
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
@@ -87,6 +91,7 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/provider/bridge-results.ts",
   "src/provider/bridge.ts",
   "src/sidepanel/dom.ts",
+  "src/sidepanel/focus-memo.ts",
   "src/sidepanel/gate-views.ts",
   "src/sidepanel/ledger/client.ts",
   "src/sidepanel/ledger/errors.ts",
@@ -152,9 +157,13 @@ const DYNAMIC_CODE_PATTERN =
 const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 const HTML_SINK_FILES = new Set([
   "src/sidepanel/dom.ts",
+  "src/sidepanel/focus-memo.ts",
   "src/sidepanel/index.ts",
   "src/sidepanel/tokens-ui.ts",
   "src/sidepanel/transfer-ui.ts",
+  // Send-screen rendering split out of transfer-ui.ts; the review panels it
+  // writes come from the same escaped markup helpers that file used.
+  "src/sidepanel/transfer-render.ts",
   // Swap screen dynamic regions (chips, picker rows, receipts): every
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
   "src/sidepanel/swap-ui.ts",

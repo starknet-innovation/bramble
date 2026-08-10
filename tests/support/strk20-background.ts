@@ -10,6 +10,7 @@ import { createUnlockSession } from "../../src/background/session";
 import { WalletError } from "../../src/shared/errors";
 import type { InvokeInput } from "../../src/starknet/rpc";
 import { STRK20_NOT_REGISTERED, type Strk20Service } from "../../src/starknet/strk20/service";
+import type { ActivityLog } from "../../src/storage/activity-store";
 import {
   defaultWalletPreferences,
   type WalletPreferences,
@@ -41,9 +42,13 @@ export const STRK20_CALL_AND_PROOF = {
 };
 
 export type Strk20HarnessOptions = {
+  /** Seeded activity log, for pending-registration derivation. */
+  readonly activity?: ActivityLog;
   readonly balance?: string;
   readonly balanceCalls?: { value: number };
   readonly invoked?: InvokeInput[];
+  /** Wall clock used to age the pending-registration window. */
+  readonly now?: () => number;
   readonly preferences?: WalletPreferences;
   readonly proveCalls?: { value: number };
   readonly publicBalance?: string;
@@ -89,6 +94,9 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       }
       return tokens.map((token) => ({ balance: options.balance ?? "0x64", token }));
     },
+    async poolFee() {
+      return "0x1";
+    },
     async quoteActions() {
       return {
         feeAction: {
@@ -125,6 +133,8 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
     },
   };
   return createMessageHandler(createWallet(), "extension-id", {
+    ...(options.activity ? { activity: options.activity } : {}),
+    ...(options.now ? { now: options.now } : {}),
     preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {
@@ -132,17 +142,14 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       },
     },
     runtimeRpc: makeRuntimeRpc({
-      ...(options.publicBalance === undefined
-        ? {}
-        : {
-            async getTokenBalances({ tokens }) {
-              return tokens.map((token) => ({
-                ...token,
-                balance: options.publicBalance ?? "0",
-                formatted: options.publicBalance ?? "0",
-              }));
-            },
-          }),
+      async getTokenBalances({ tokens }) {
+        const balance = options.publicBalance ?? "100000000000000000000";
+        return tokens.map((token) => ({
+          ...token,
+          balance,
+          formatted: balance,
+        }));
+      },
       async submitInvokeTransaction(input) {
         options.invoked?.push(input);
         return { calls: input.calls, transactionHash: "0x123" };

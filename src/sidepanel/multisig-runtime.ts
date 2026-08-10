@@ -20,7 +20,7 @@ import { isBalancesResponse, isErrorResponse, isTransferResponse } from "../popu
 import type { MultisigConfirmationMode } from "../shared/multisig-confirmation";
 import type { MultisigProposalCall } from "../storage/multisig-store";
 import type { MultisigSyncState } from "./multisig-sync";
-import type { BalanceState, RuntimeApi } from "./runtime";
+import type { RuntimeApi, ScopedBalanceState } from "./runtime";
 
 const responseError = (response: unknown, fallback: string): Error =>
   new Error(isErrorResponse(response) ? response.error : fallback);
@@ -136,10 +136,14 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         return "error";
       }
     },
-    async loadBalances(multisigId: string): Promise<BalanceState> {
+    async loadBalances(multisigId: string): Promise<ScopedBalanceState> {
       const response = await sendMessage({ id: multisigId, type: "wallet.multisigBalances" });
       if (isBalancesResponse(response) && response.accountId === multisigId) {
-        return { balances: response.balances };
+        return {
+          accountId: response.accountId,
+          balances: response.balances,
+          networkId: response.networkId,
+        };
       }
       return {
         error: isErrorResponse(response) ? response.error : "multisig balances unavailable",

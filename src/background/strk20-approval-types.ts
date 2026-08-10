@@ -23,6 +23,7 @@ export type Strk20DisclosureApprovalKind =
 export type Strk20DisclosureRequest =
   | {
       readonly poolAddress: string;
+      readonly poolFeeFri: string;
       readonly token: string;
       readonly type: "register";
     }

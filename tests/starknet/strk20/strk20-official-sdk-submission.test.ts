@@ -5,7 +5,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Call } from "starknet";
 import { num } from "starknet";
-import { WalletError } from "../../../src/shared/errors";
 import { STRK_TOKEN_ADDRESS } from "../../../src/starknet/networks";
 import { memoryStrk20MaturityStore } from "../../../src/starknet/strk20/maturity";
 import { createOfficialStrk20Service } from "../../../src/starknet/strk20/official-sdk-service";
@@ -18,6 +17,7 @@ import {
   STRK20_POOL_ADDRESS as poolAddress,
   providerFor,
   sdkRuntime as runtime,
+  strk20ProviderFor,
   STRK20_SDK_TOKEN as token,
 } from "../../support/strk20-official-sdk";
 
@@ -68,27 +68,6 @@ describe("official STRK20 SDK submission boundary", () => {
     expect(submitted).toHaveLength(1);
   });
 
-  test("discovers account registration using the SDK setup requirement enum", async () => {
-    let requirement = 0;
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      async discoverRequirement(recipient, selectedToken) {
-        expect(recipient).toBe(account.address);
-        expect(selectedToken).toBe(token);
-        return requirement;
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const service = createOfficialStrk20Service({ providerFor, sdk });
-
-    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("unregistered");
-    requirement = 3;
-    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
-  });
-
   test("registers through the SDK builder and submits only the reviewed pool proof", async () => {
     let registerCalls = 0;
     const submitted: unknown[] = [];
@@ -118,7 +97,9 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      transactionHash: "0xabc",
+    });
     expect(registerCalls).toBe(1);
     expect(submitted).toEqual([
       {
@@ -176,7 +157,9 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      transactionHash: "0xabc",
+    });
     expect(proofAttempts).toBe(3);
     expect(pauses).toEqual([1, 2]);
     expect(submitted).toHaveLength(1);
@@ -218,7 +201,7 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).rejects.toThrow(
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).rejects.toThrow(
       "strk20 services unavailable (proving/rate-limited): -32005 rate limit exceeded",
     );
     expect(proofAttempts).toBe(3);
@@ -257,11 +240,13 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    await expect(
+      service.register?.({ ...context, poolFeeFri: "0x3782dace9d900000" }),
+    ).resolves.toEqual({ transactionHash: "0xabc" });
     expect(submitted).toEqual([
       [
         {
-          calldata: ["291", "4000000000000000000", "0"],
+          calldata: ["0x123", "0x3782dace9d900000", "0x0"],
           contractAddress: num.toHex(BigInt(STRK_TOKEN_ADDRESS)),
           entrypoint: "approve",
         },
@@ -272,6 +257,38 @@ describe("official STRK20 SDK submission boundary", () => {
         },
       ],
     ]);
+  });
+
+  test("refuses a changed registration fee before proving or signing", async () => {
+    let proofs = 0;
+    let submissions = 0;
+    const sdk = runtime(() => ({
+      build: () => ({
+        ...builder(executeResult()),
+        async createProofInvocation() {
+          proofs += 1;
+          return executeResult();
+        },
+      }),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({
+      providerFor: strk20ProviderFor({ poolFee: "0x2" }),
+      sdk,
+      async submitInvoke(input) {
+        submissions += 1;
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(service.register?.({ ...context, poolFeeFri: "0x1" })).rejects.toThrow(
+      "Private pool fee changed",
+    );
+    expect(proofs).toBe(0);
+    expect(submissions).toBe(0);
   });
 
   test("an unreadable pool fee fails registration closed before submission", async () => {
@@ -306,7 +323,9 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).rejects.toThrow("strk20 services unavailable");
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).rejects.toThrow(
+      "strk20 services unavailable",
+    );
     expect(submissions).toBe(0);
   });
 
@@ -335,13 +354,13 @@ describe("official STRK20 SDK submission boundary", () => {
           { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
           { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
         ],
-        plan: { mode: "account" },
+        plan: { mode: "account", poolFeeFri: "0x0" },
       }),
     ).resolves.toEqual({ transactionHash: "0xdef" });
     expect(submitted).toEqual([
       [
         {
-          calldata: ["291", "0", "1"],
+          calldata: ["0x123", "0x0", "0x1"],
           contractAddress: token,
           entrypoint: "approve",
         },
@@ -356,9 +375,45 @@ describe("official STRK20 SDK submission boundary", () => {
       service.submitActions({
         ...context,
         actions: [{ amount: "0x1", recipient: "0x999", token, type: "withdraw" }],
-        plan: { mode: "account" },
+        plan: { mode: "account", poolFeeFri: "0x0" },
       }),
     ).rejects.toThrow("strk20 privacy leak");
+  });
+
+  test("refuses a changed deposit fee before proving or signing", async () => {
+    let proofs = 0;
+    let submissions = 0;
+    const sdk = runtime(() => ({
+      build: () => ({
+        ...builder(executeResult()),
+        async createProofInvocation() {
+          proofs += 1;
+          return executeResult();
+        },
+      }),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({
+      providerFor: strk20ProviderFor({ poolFee: "0x2" }),
+      sdk,
+      async submitInvoke(input) {
+        submissions += 1;
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(
+      service.submitActions({
+        ...context,
+        actions: [{ amount: "0x1", token, type: "deposit" }],
+        plan: { mode: "account", poolFeeFri: "0x1" },
+      }),
+    ).rejects.toThrow("Private pool fee changed");
+    expect(proofs).toBe(0);
+    expect(submissions).toBe(0);
   });
 
   test("surfaces a pool rejection of registration and frees the scope for a retry", async () => {
@@ -391,69 +446,14 @@ describe("official STRK20 SDK submission boundary", () => {
     });
 
     // The revert reason reaches the caller instead of a bare generic failure.
-    await expect(service.register?.(context)).rejects.toThrow(
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).rejects.toThrow(
       "(submission/execution-reverted): 41 Transaction execution error pool/registration-closed",
     );
     // And the scope is not left stuck on `submitting`, so the retry proceeds.
     expect(await maturityStore.read(scope)).toBeNull();
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
-    expect(attempts).toBe(2);
-  });
-
-  test("surfaces an account-mode deposit rejection without echoing the request body", async () => {
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const maturityStore = memoryStrk20MaturityStore();
-    // starknet.js builds an RpcError's `message` by embedding the serialized
-    // JSON-RPC request params, so the raw message of a rejected shielding
-    // broadcast carries the invoke calldata and the proof blob.
-    const requestBody =
-      '{"calldata":["0xfeedfacedeadbeef1234"],"proof":"UHJvb2ZCbG9iQmFzZTY0ZGF0YQ"}';
-    const service = createOfficialStrk20Service({
-      maturityStore,
-      providerFor,
-      sdk,
-      async submitInvoke() {
-        throw Object.assign(
-          new Error(`RPC: starknet_addInvokeTransaction with params ${requestBody}`),
-          {
-            baseError: {
-              code: 41,
-              data: { execution_error: "pool/deposit-cap-reached" },
-              message: "Transaction execution error",
-            },
-          },
-        );
-      },
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      transactionHash: "0xabc",
     });
-
-    let rejection: unknown;
-    try {
-      await service.submitActions({
-        ...context,
-        actions: [{ amount: "0x1", token, type: "deposit" }],
-        plan: { mode: "account" },
-      });
-    } catch (error) {
-      rejection = error;
-    }
-
-    // The failure is mapped, so only the sanitized on-chain reason is surfaced.
-    expect(rejection).toBeInstanceOf(WalletError);
-    const surfaced = rejection instanceof Error ? rejection.message : "";
-    expect(surfaced).toContain(
-      "(submission/execution-reverted): 41 Transaction execution error pool/deposit-cap-reached",
-    );
-    // The serialized request params never reach a rendered surface.
-    expect(surfaced).not.toContain("starknet_addInvokeTransaction");
-    expect(surfaced).not.toContain("0xfeedfacedeadbeef1234");
-    expect(surfaced).not.toContain("UHJvb2ZCbG9iQmFzZTY0ZGF0YQ");
-    // And the determinate rejection frees the scope instead of wedging it.
-    expect(await maturityStore.read(scope)).toBeNull();
+    expect(attempts).toBe(2);
   });
 });

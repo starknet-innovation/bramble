@@ -6,6 +6,7 @@
  */
 import type { TokenBalance, WalletStatus } from "../popup/responses";
 import { escapeHtml } from "../shared/html";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
 import { isLikelySpam } from "../starknet/token-registry";
 import type { DisplayCurrency, TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { emptyState, receipt } from "../ui/content";
@@ -17,6 +18,20 @@ import { accountLabel, flowHeader, flowScreen, walletMenuRow } from "./parts";
 import type { PrivacyDisclosureState } from "./privacy-model";
 import { sparklinePath, sparklineTrend } from "./sparkline";
 import { compactAmount, tokenGlyph } from "./token-row";
+
+/**
+ * THE token display order: STRK first, then everything else in its existing
+ * order. STRK pays every fee on Starknet, so it is the asset a user reaches for
+ * most and the sensible default in any picker. Callers that also sort by another
+ * key (spam last, for example) must apply that key first and fall back to this
+ * one — a second STRK-first implementation would drift between screens.
+ */
+export const compareStrkFirst = (
+  left: { readonly address: string },
+  right: { readonly address: string },
+): number =>
+  Number(sameFelt(right.address, STRK_TOKEN_ADDRESS)) -
+  Number(sameFelt(left.address, STRK_TOKEN_ADDRESS));
 
 /**
  * Currency used by the token screens when preferences carry none.
@@ -180,7 +195,6 @@ export const tokenDetailFlow = (
   price: number | null,
   currency: DisplayCurrency,
   privacy: PrivacyDisclosureState = {
-    enabled: false,
     error: null,
     loading: false,
     value: null,
@@ -192,6 +206,7 @@ export const tokenDetailFlow = (
     ? tokenFiatValue(privateBalance.formatted, price ?? undefined)
     : null;
   const registered = privacy.value?.registration === "registered";
+  const registrationPending = privacy.value?.registration === "pending";
   return (
     flowHeader(token.symbol, status, token.name) +
     flowScreen(
@@ -209,7 +224,7 @@ export const tokenDetailFlow = (
           ${fiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(fiat, currency))}</span>`}
         </div>
         ${
-          privacy.enabled && registered
+          registered
             ? `<div class="private-balance-summary">
                 <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
                 <span class="token-side">
@@ -217,13 +232,30 @@ export const tokenDetailFlow = (
                   ${privateFiat === null ? "" : `<span class="token-fiat">${escapeHtml(formatFiat(privateFiat, currency))}</span>`}
                 </span>
               </div>`
-            : ""
+            : privacy.value
+              ? `<div class="private-balance-summary muted" title="${registrationPending ? "Waiting for the privacy indexer to see your registration" : "Register to start shielding"}">
+                <span class="private-balance-label">${icon("lock")}<span>Private balance</span></span>
+                <span class="token-fiat">${registrationPending ? "Registration pending…" : "Register to start shielding"}</span>
+              </div>`
+              : ""
         }
-        ${button({
-          attributes: { "data-privacy-open": token.id },
-          icon: "shield",
-          label: registered ? `Shield ${token.symbol}` : "Go private",
-        })}
+        ${
+          registered
+            ? `<div class="token-privacy-actions">${button({
+                attributes: { "data-send-shield": token.id },
+                icon: "shield",
+                label: "Shield",
+              })}${button({
+                attributes: { "data-send-unshield": token.id },
+                label: "Unshield",
+                variant: "secondary",
+              })}</div>`
+            : button({
+                attributes: { "data-privacy-open": token.id },
+                icon: "shield",
+                label: registrationPending ? "Registration pending" : "Go private",
+              })
+        }
         ${privacy.error ? `<p class="hint">${escapeHtml(privacy.error)}</p>` : ""}
       </section>
       <section class="section">
