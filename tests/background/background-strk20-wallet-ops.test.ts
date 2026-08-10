@@ -42,9 +42,6 @@ const preferences = (): WalletPreferences => ({
 
 const SUBMITTED_AT = 1_700_000_000_000;
 
-// One broadcast registration in the log, exactly as `wallet.strk20Execute`
-// records it. The status is advanced through the store rather than fabricated so
-// the fixture cannot drift from what reconciliation actually writes.
 const activityWithRegistration = async (
   status: ActivityStatus = "pending",
 ): Promise<ActivityLog> => {
@@ -65,8 +62,7 @@ const activityWithRegistration = async (
   return log;
 };
 
-// The background canonicalizes the recipient before it reaches the action, so
-// the fixture asserts against that form rather than the padded input.
+// Assert against the canonical recipient the background hands to the action.
 const CANONICAL_RECIPIENT = canonicalFelt(STRK20_RECIPIENT);
 if (CANONICAL_RECIPIENT === null) {
   throw new Error("recipient fixture is not a field element");
@@ -97,6 +93,9 @@ const service = (capture: {
     },
     async privateBalances({ tokens }) {
       return tokens.map((entry) => ({ balance: "0xde0b6b3a7640000", token: entry }));
+    },
+    async poolFee() {
+      return "0x1";
     },
     async quoteActions() {
       return { mode: "account" };
@@ -150,10 +149,14 @@ describe("background wallet STRK20 operations", () => {
           readonly tokenId: string;
         }[];
         readonly networkId: string;
+        readonly poolFeeFri: string;
+        readonly relayConfigured: boolean;
         readonly registration: string;
       };
     };
     expect(response.strk20State.networkId).toBe("SN_SEPOLIA");
+    expect(response.strk20State.poolFeeFri).toBe("0x1");
+    expect(response.strk20State.relayConfigured).toBe(false);
     expect(response.strk20State.registration).toBe("registered");
     expect(response.strk20State.balances.find((entry) => entry.tokenId === token.id)).toEqual({
       balance: "0xde0b6b3a7640000",
@@ -162,6 +165,27 @@ describe("background wallet STRK20 operations", () => {
       token: STRK20_TOKEN,
       tokenId: token.id,
     });
+  });
+
+  test("returns a recoverable error when the pool fee cannot be read", async () => {
+    const capture = {
+      registered: { value: true },
+      registrations: { value: 0 },
+      submissions: [],
+    };
+    const handler = buildStrk20Handler({
+      preferences: preferences(),
+      strk20: {
+        ...service(capture),
+        async poolFee() {
+          throw new Error("could not read the pool fee (node unavailable)");
+        },
+      },
+    });
+
+    await expect(handler({ type: "wallet.strk20State" }, STRK20_EXTENSION_SENDER)).resolves.toEqual(
+      { error: "could not read the pool fee (node unavailable)" },
+    );
   });
 
   test("prepares public registration and atomically consumes it before submission", async () => {

@@ -12,7 +12,14 @@ import { account } from "../support/sidepanel-fixtures";
 const settled = (registration: "registered" | "unregistered"): PrivacyDisclosureState => ({
   error: null,
   loading: false,
-  value: { accountId: account.id, balances: [], networkId: "SN_MAIN", registration },
+  value: {
+    accountId: account.id,
+    balances: [],
+    networkId: "SN_MAIN",
+    poolFeeFri: "0x1",
+    relayConfigured: true,
+    registration,
+  },
 });
 
 const NOTICE = "You are not registered to the Starknet privacy pool yet.";

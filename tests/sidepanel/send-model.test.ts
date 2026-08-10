@@ -3,6 +3,7 @@
  * fiat conversion, and account-scoped recipient choices.
  */
 import { describe, expect, test } from "bun:test";
+import { tokenFiatValue } from "../../src/sidepanel/fiat";
 import {
   balanceShortcut,
   fiatInputToken,
@@ -51,6 +52,14 @@ describe("Send view model", () => {
     expect(assets[0]?.formatted).toBe("1.25");
     expect(assets[0]?.price).toBe(4_000);
     expect(assets[0]?.change).toBe(2.5);
+  });
+
+  test("keeps a missing balance unread instead of fabricating zero", () => {
+    const [asset] = sendAssets("SN_MAIN", preferences, [], {}, {});
+
+    expect(asset?.balance).toBe("");
+    expect(asset?.formatted).toBe("");
+    expect(tokenFiatValue(asset?.formatted ?? "", 4_000)).toBeNull();
   });
 
   test("keeps raw-balance shortcuts exact at token precision", () => {

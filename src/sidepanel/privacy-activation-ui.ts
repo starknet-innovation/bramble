@@ -12,7 +12,7 @@
 
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import type { SidepanelWallet } from "./runtime";
-import { awaitDeployment } from "./shell-bindings";
+import { awaitDeployment, type DeploymentPollScope } from "./shell-bindings";
 
 /**
  * Collaborators for the deploy-then-register control. `startRegistration` runs
@@ -21,6 +21,7 @@ import { awaitDeployment } from "./shell-bindings";
  */
 export type DeployAndRegisterDeps = {
   readonly app: Element | null;
+  readonly deploymentScope: () => DeploymentPollScope | null;
   readonly startRegistration: () => void;
   readonly wallet: Pick<SidepanelWallet, "deployAccount" | "loadDeploymentStatus">;
 };
@@ -35,14 +36,22 @@ export const bindDeployAndRegister = (deps: DeployAndRegisterDeps): void => {
     return;
   }
   button.addEventListener("click", () => {
+    const scope = deps.deploymentScope();
+    if (!scope) {
+      showToast("No active account is available to deploy", "error");
+      return;
+    }
     buttonBusy(button, true);
     showToast("Deploying this account first…", "success");
     void deps.wallet.deployAccount().then(
       async (transactionHash) => {
         // The deployment is irreversible from here, so the only question left is
         // whether it lands in time to continue automatically.
-        const deployed = await awaitDeployment(deps.wallet);
+        const deployed = await awaitDeployment(deps.wallet, scope);
         buttonBusy(button, false);
+        if (!scope.stillCurrent()) {
+          return;
+        }
         if (!deployed) {
           showToast(
             `Deployment ${transactionHash.slice(0, 10)}… is still settling. Register once it lands.`,

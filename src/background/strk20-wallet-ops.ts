@@ -105,12 +105,13 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
           })
         : [];
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
-    // Best effort: the fee is a display aid, so an unreadable fee leaves the
-    // field absent rather than failing the whole balance read.
-    const poolFeeFri = await service
-      .poolFee?.(context.accountContext)
-      .catch(() => undefined)
-      .then((value) => (typeof value === "string" ? value : undefined));
+    // The fee is a hard input to every pool route. Returning a successful state
+    // without it leaves Send in an endless "Checking" state, so an unavailable
+    // reader or a failed read rejects this request and reaches the UI's retry.
+    if (!service.poolFee) {
+      throw new Error("Private pool fee is unavailable. Retry the balance check.");
+    }
+    const poolFeeFri = await service.poolFee(context.accountContext);
     return {
       ok: true,
       strk20State: {
@@ -130,7 +131,8 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
           };
         }),
         networkId: context.accountContext.account.networkId,
-        ...(poolFeeFri === undefined ? {} : { poolFeeFri }),
+        poolFeeFri,
+        relayConfigured: context.accountContext.config?.paymaster !== undefined,
         registration,
       },
     };

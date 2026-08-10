@@ -24,8 +24,14 @@ export type TransferBucketsDeps = {
   readonly form: HTMLFormElement;
   /** Re-reads fields and drops any cached review after a bucket flip. */
   readonly onRouteChange: () => void;
+  /** Re-runs privacy discovery after a recoverable account-state failure. */
+  readonly retry?: () => void;
+  readonly retryable?: () => boolean;
   /** The formatted balance and raw value held in one bucket, for display. */
-  readonly balanceIn: (bucket: ValueBucket) => { readonly formatted: string; readonly raw: string };
+  readonly balanceIn: (bucket: ValueBucket) => {
+    readonly formatted: string | null;
+    readonly raw: string | null;
+  };
   readonly route: () => SendRouteResolution;
 };
 
@@ -61,6 +67,7 @@ const readBucket = (form: HTMLFormElement, name: "destination" | "source"): Valu
 export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
   const { form } = deps;
   const reason = form.querySelector<HTMLElement>("#send-route-reason");
+  const retry = form.querySelector<HTMLButtonElement>("#send-route-retry");
   const container = form.querySelector<HTMLElement>("#send-route-controls");
 
   const showBalance = (): void => {
@@ -71,12 +78,15 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
     // label and the raw value Max reads must both follow the source.
     const balanceField = sendFormInput(form, "tokenBalance");
     const formattedField = sendFormInput(form, "tokenFormatted");
-    if (balanceField) balanceField.value = balance.raw;
-    if (formattedField) formattedField.value = balance.formatted;
+    if (balanceField) balanceField.value = balance.raw ?? "";
+    if (formattedField) formattedField.value = balance.formatted ?? "";
     const label = form.querySelector<HTMLElement>("#send-balance-label");
     if (label) {
       const scope = source === "private" ? "Private balance" : "Balance";
-      label.textContent = `${scope} ${compactAmount(balance.formatted)} ${symbol}`;
+      label.textContent =
+        balance.formatted === null
+          ? `${scope} unavailable`
+          : `${scope} ${compactAmount(balance.formatted)} ${symbol}`;
     }
   };
 
@@ -96,6 +106,9 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
       reason.textContent = view.blocked?.reason ?? "";
       reason.hidden = view.blocked === undefined;
     }
+    if (retry) {
+      retry.hidden = view.blocked === undefined || deps.retryable?.() !== true;
+    }
   };
 
   const flip = (name: "destination" | "source"): void => {
@@ -111,6 +124,7 @@ export const bindTransferBuckets = (deps: TransferBucketsDeps): void => {
       flip(legOf(button));
     });
   }
+  retry?.addEventListener("click", () => deps.retry?.());
 
   // Recipient edits, asset switches, and stage moves all surface as input or
   // click activity on the form; re-gating is cheap and idempotent.

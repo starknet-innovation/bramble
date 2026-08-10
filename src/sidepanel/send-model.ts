@@ -60,8 +60,11 @@ export const sendAssets = (
       const change = byAddress(changes, token.address);
       return {
         ...token,
-        balance: balance?.balance ?? "0",
-        formatted: balance?.formatted ?? "0",
+        // A missing cache entry is unread, not proof that the account owns
+        // zero. Keep that distinction through the form so balance labels and
+        // Max never claim a value the RPC has not returned.
+        balance: balance?.balance ?? "",
+        formatted: balance?.formatted ?? "",
         spam: isLikelySpam(token),
         ...(price === undefined ? {} : { price }),
         ...(change === undefined ? {} : { change }),
@@ -145,7 +148,8 @@ export const balanceShortcut = (
 /**
  * Short balance copy shared by recipient/account and token rows.
  */
-export const sendBalanceLabel = (formatted: string): string => compactAmount(formatted);
+export const sendBalanceLabel = (formatted: string): string =>
+  formatted.length === 0 ? "—" : compactAmount(formatted);
 
 /**
  * Currency-aware input prefix for fiat-entry mode.

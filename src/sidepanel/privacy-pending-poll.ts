@@ -31,6 +31,8 @@ export type PendingRegistrationPollPort = {
   readonly apply: (state: PrivacyAccountState) => void;
   readonly clearTimer?: (handle: ReturnType<typeof setTimeout>) => void;
   readonly load: () => Promise<PrivacyAccountState>;
+  /** Stable account/network identity for the scheduler's captured callbacks. */
+  readonly scopeKey: string;
   readonly setTimer?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
   readonly stillCurrent: (state: PrivacyAccountState) => boolean;
   readonly visible: () => boolean;
@@ -49,6 +51,7 @@ export type PendingRegistrationPoll = {
  */
 export const createPendingRegistrationPoll = (): PendingRegistrationPoll => {
   let scheduler: RefreshScheduler | null = null;
+  let schedulerScope: string | null = null;
   // Visibility as the scheduler last saw it, recorded where the scheduler reads
   // it rather than where `sync` is called: a hidden surface stops repainting, so
   // `sync` is exactly what does not run during the window this has to detect.
@@ -58,8 +61,15 @@ export const createPendingRegistrationPoll = (): PendingRegistrationPoll => {
       if (!pending) {
         scheduler?.stop();
         scheduler = null;
+        schedulerScope = null;
         seenVisible = true;
         return;
+      }
+      if (scheduler && schedulerScope !== port.scopeKey) {
+        scheduler.stop();
+        scheduler = null;
+        schedulerScope = null;
+        seenVisible = true;
       }
       if (scheduler) {
         // A tick that fired while hidden rescheduled nothing, leaving the poll
@@ -72,6 +82,7 @@ export const createPendingRegistrationPoll = (): PendingRegistrationPoll => {
         return;
       }
       seenVisible = true;
+      schedulerScope = port.scopeKey;
       scheduler = createRefreshScheduler({
         burstDelaysMs: PENDING_BURST_DELAYS_MS,
         ...(port.clearTimer ? { clearTimer: port.clearTimer } : {}),

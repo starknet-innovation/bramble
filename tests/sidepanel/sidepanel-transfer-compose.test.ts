@@ -10,6 +10,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { sendFlow } from "../../src/sidepanel/flows";
+import type { SendIntent } from "../../src/sidepanel/send-model";
 import { bindTransferCompose } from "../../src/sidepanel/transfer-compose-ui";
 import type { TransferFields, TransferStage } from "../../src/sidepanel/transfer-model";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
@@ -42,6 +43,7 @@ const preferences: WalletPreferences = {
 
 const mount = (
   spendable?: () => bigint | null,
+  intent: SendIntent | null = null,
 ): {
   readonly fields: readonly TransferFields[];
   readonly form: HTMLFormElement;
@@ -49,7 +51,7 @@ const mount = (
 } => {
   const app = document.createElement("div");
   app.id = "app";
-  paint(app, sendFlow(status, account, preferences));
+  paint(app, sendFlow(status, account, preferences, [], {}, {}, "usd", [], intent));
   document.body.append(app);
   const form = app.querySelector<HTMLFormElement>("#transfer-form");
   if (!form) {
@@ -147,6 +149,19 @@ describe("asset and recipient selection", () => {
 
     expect(fields.at(-1)?.tokenSymbol).toBe("ETH");
     expect(stages).toContain("details");
+  });
+
+  test("does not auto-select another asset for an unresolved token intent", () => {
+    const { form } = mount(undefined, {
+      destination: "private",
+      recipient: account.address,
+      recipientLabel: "Current account",
+      source: "public",
+      tokenId: "SN_MAIN:MISSING:0x123",
+    });
+
+    expect(form.querySelector<HTMLInputElement>('[name="tokenId"]')?.value).toBe("");
+    expect(form.querySelector<HTMLButtonElement>("#send-token-trigger")?.disabled).toBe(false);
   });
 
   test("choosing a recipient records the address it carries", () => {

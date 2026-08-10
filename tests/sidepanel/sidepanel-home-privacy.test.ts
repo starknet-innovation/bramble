@@ -59,6 +59,8 @@ const privateState = (loading = false): PrivacyDisclosureState => ({
           },
         ],
         networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
         registration: "registered",
       },
 });
@@ -175,6 +177,8 @@ describe("unified portfolio scope", () => {
         accountId: account.id,
         balances: [],
         networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
         registration: "unregistered",
       },
     });
@@ -195,6 +199,8 @@ describe("unified portfolio scope", () => {
         accountId: account.id,
         balances: [],
         networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
         registration: "pending",
       },
     });

@@ -53,6 +53,8 @@ export type TransferUiDeps = {
   readonly privacy?: () => PrivacyDisclosureState;
   /** The account's public token balances, for bucket display and fee gating. */
   readonly publicBalances?: () => readonly TokenBalance[];
+  /** Retries account-scoped privacy discovery after a route read failure. */
+  readonly reloadPrivacy?: () => void;
   readonly render: (status: WalletStatus) => Promise<void>;
   /** Active account address, so a send to yourself is recognised as such. */
   readonly senderAddress?: () => string;
@@ -127,6 +129,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     transferState = {
       ...transferState,
       error: "",
+      privatePreparation: null,
       review: null,
       reviewedKey: null,
       stage: "details",
@@ -200,6 +203,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     balanceIn: (bucket) => balanceInBucket(bucket, routeContext()),
     form,
     onRouteChange: dropReview,
+    ...(deps.reloadPrivacy ? { retry: deps.reloadPrivacy } : {}),
+    retryable: () => deps.privacy?.().error !== null,
     route,
   });
 
@@ -294,7 +299,17 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     // review and the final confirm, because both arrive through this handler.
     const gate = route().blocked;
     if (gate) {
-      transferState = { ...transferState, error: gate.reason, fields, stage: "details" };
+      // A final confirm can reach this branch after the state behind the review
+      // changed (balance refresh, registration loss, relay removal). Invalidate
+      // every reviewed artifact and its async epoch before returning to edit;
+      // if the gate later clears, the next click must build a fresh review.
+      transferEpoch += 1;
+      transferState = {
+        ...initialTransferState<Review>(),
+        error: gate.reason,
+        fields,
+        stage: "details",
+      };
       repaint();
       return;
     }
@@ -419,7 +434,12 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
           if (epoch !== transferEpoch) return;
           transferState = { ...transferState, stage: "confirming", transactionHash };
           repaintActiveTransfer?.();
-          if (requiresDeployment) void watchDeployment({ render, wallet });
+          if (requiresDeployment) {
+            void watchDeployment(
+              { render, wallet },
+              { accountId: fields.accountId, stillCurrent: () => epoch === transferEpoch },
+            );
+          }
           void confirmSubmitted(epoch);
         },
         (error: unknown) => {

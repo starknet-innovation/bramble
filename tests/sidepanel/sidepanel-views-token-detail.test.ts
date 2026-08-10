@@ -100,6 +100,8 @@ describe("dashboard token-detail arm", () => {
           },
         ],
         networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
         registration: "registered",
       },
     };
@@ -121,6 +123,8 @@ describe("dashboard token-detail arm", () => {
         accountId: account.id,
         balances: [],
         networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
         registration: "unregistered",
       },
     };
@@ -140,6 +144,8 @@ describe("dashboard token-detail arm", () => {
         accountId: account.id,
         balances: [],
         networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
         registration: "pending",
       },
     };

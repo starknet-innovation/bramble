@@ -47,7 +47,7 @@ import { createMutationRuntime } from "./runtime-refresh";
 import { createSceneRenderer } from "./scene-renderer";
 import type { SendIntent } from "./send-model";
 import { bindSettingsSurface } from "./settings-surface";
-import { bindDashboard, bindDeploy, bindPickers } from "./shell-bindings";
+import { bindDashboard, bindDeploy, bindPickers, deploymentPollScope } from "./shell-bindings";
 import { createSwapClient } from "./swap-client";
 import { bindSwap } from "./swap-ui";
 import * as transfer from "./transfer-bindings";
@@ -151,6 +151,7 @@ const bindAll = (): void => {
   });
   const shellDeps = {
     app,
+    deploymentScope: () => deploymentPollScope(cache.status, () => cache.status),
     render,
     setActiveView: (view: WalletView) => {
       activeView = view;
@@ -204,6 +205,9 @@ const bindAll = (): void => {
     privacy: () => privacy.disclosure(),
     publicBalances: () => ("balances" in cache.balances ? cache.balances.balances : []),
     render,
+    reloadPrivacy: () => {
+      void privacy.reload();
+    },
     senderAddress: () =>
       cache.status.accounts.find((account) => account.id === cache.status.activeAccountId)
         ?.address ?? "",

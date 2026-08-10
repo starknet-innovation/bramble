@@ -5,7 +5,12 @@
 import type { BigNumberish, Call, RpcProvider } from "starknet";
 import { num } from "starknet";
 import { WalletError } from "../../shared/errors";
-import { isNonZeroStarkFieldElement, STARK_FIELD_PRIME, STRK_TOKEN_ADDRESS } from "../networks";
+import {
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  STARK_FIELD_PRIME,
+  STRK_TOKEN_ADDRESS,
+} from "../networks";
 import { buildErc20ApproveCall } from "../rpc-assets";
 import type { Strk20NetworkConfig } from "./config";
 import type { Strk20Action, Strk20BalanceEntry } from "./schemas";
@@ -217,11 +222,10 @@ export const readStrk20Registered = async (
   if (felt === undefined) {
     throw registrationUnreadable("the pool returned an unexpected result shape");
   }
-  try {
-    return BigInt(felt) !== 0n;
-  } catch {
-    throw registrationUnreadable("the pool returned a malformed public key");
+  if (!isStarkFieldElement(felt)) {
+    throw registrationUnreadable("the pool returned an out-of-field public key");
   }
+  return BigInt(felt) !== 0n;
 };
 
 /**

@@ -204,6 +204,7 @@ const amountStage = (
   status: WalletStatus,
   account: AccountRef | null,
   asset: SendAsset | undefined,
+  canChooseAsset: boolean,
   currency: DisplayCurrency,
   preferences: WalletPreferences | null,
 ): string => `
@@ -232,10 +233,13 @@ const amountStage = (
       </div>
       <div><dt>Network</dt><dd class="network-inline-value"><span class="network-inline-mark">${starknetNetworkGlyph()}</span><strong>${escapeHtml(status.network)}</strong></dd></div>
     </dl>
-    <span class="send-route-reason" id="send-route-reason" hidden></span>
+    <div class="send-route-feedback">
+      <span class="send-route-reason" id="send-route-reason" hidden></span>
+      <button id="send-route-retry" type="button" hidden>Retry</button>
+    </div>
     <p class="send-section-title">Asset</p>
     <div class="send-amount-card">
-      <button class="send-token-trigger" id="send-token-trigger" type="button" ${asset ? "" : "disabled"}>
+      <button class="send-token-trigger" id="send-token-trigger" type="button" ${canChooseAsset ? "" : "disabled"}>
         <span id="send-selected-token-glyph">${asset ? tokenGlyph(asset.address, asset.symbol) : icon("coins")}</span>
         <strong id="send-selected-token-symbol">${escapeHtml(asset?.symbol ?? "Select")}</strong>
         ${icon("chevronDown")}
@@ -372,13 +376,14 @@ export const sendFlow = (
   intent: SendIntent | null = null,
 ): string => {
   const assets = sendAssets(status.networkId, preferences, balances, prices, changes);
-  // A shortcut names its asset; otherwise the first tracked token leads.
-  const asset =
-    (intent ? assets.find((candidate) => candidate.id === intent.tokenId) : undefined) ?? assets[0];
+  // A shortcut names its exact asset. If it disappeared while navigating, do
+  // not silently turn the shield/unshield into a send of the first token.
+  const asset = intent ? assets.find((candidate) => candidate.id === intent.tokenId) : assets[0];
+  const missingIntentAsset = intent !== null && asset === undefined;
   const canSend = account !== null && asset !== undefined;
   const signer = account?.derivation.kind === "ledger" ? "ledger" : "software";
   const initialFiat =
-    asset && tokenFiatValue(asset.formatted, asset.price) !== null
+    asset?.formatted && tokenFiatValue(asset.formatted, asset.price) !== null
       ? formatFiat(tokenFiatValue(asset.formatted, asset.price) ?? 0, currency)
       : "—";
   return (
@@ -388,7 +393,8 @@ export const sendFlow = (
       `<section class="section send-flow">
         ${account ? "" : noAccountEmpty(status)}
         ${account && assets.length === 0 ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.") : ""}
-        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-public-balance="${escapeHtml(asset?.balance ?? "0")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "0")}">
+        ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
+        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-send-intent="${intent ? "true" : "false"}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
@@ -398,16 +404,16 @@ export const sendFlow = (
           <input name="source" type="hidden" value="${intent?.source ?? "public"}" />
           <input name="destination" type="hidden" value="${intent?.destination ?? "public"}" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />
-          <input name="tokenBalance" type="hidden" value="${escapeHtml(asset?.balance ?? "0")}" />
+          <input name="tokenBalance" type="hidden" value="${escapeHtml(asset?.balance ?? "")}" />
           <input name="tokenDecimals" type="hidden" value="${asset?.decimals ?? 0}" />
-          <input name="tokenFormatted" type="hidden" value="${escapeHtml(asset?.formatted ?? "0")}" />
+          <input name="tokenFormatted" type="hidden" value="${escapeHtml(asset?.formatted ?? "")}" />
           <input name="tokenId" type="hidden" value="${escapeHtml(asset?.id ?? "")}" />
           <input name="tokenPrice" type="hidden" value="${asset?.price ?? ""}" />
           <input name="tokenSymbol" type="hidden" value="${escapeHtml(asset?.symbol ?? "token")}" />
           ${sendProgress()}
           <div class="send-stage-frame" data-initial-fiat="${escapeHtml(initialFiat)}">
             ${recipientStage(status, account, preferences, multisigs)}
-            ${amountStage(status, account, asset, currency, preferences)}
+            ${amountStage(status, account, asset, assets.length > 0, currency, preferences)}
             ${assetStage(assets, currency)}
             <section class="send-stage send-review-stage" id="send-review-stage" hidden>
               <div class="send-review-head">

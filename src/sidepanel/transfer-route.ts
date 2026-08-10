@@ -47,11 +47,13 @@ const rawAmount = (amount: string, decimals: string): bigint => {
   }
 };
 
-const rawBalance = (value: string | undefined): bigint => {
+const rawBalance = (value: string | undefined): bigint | null => {
   try {
-    return value === undefined || value === "" ? 0n : BigInt(value);
+    if (value === undefined || value === "") return null;
+    const balance = BigInt(value);
+    return balance >= 0n ? balance : null;
   } catch {
-    return 0n;
+    return null;
   }
 };
 
@@ -99,9 +101,9 @@ const senderRegistration = (privacy: PrivacyDisclosureState): PoolRegistration =
 /**
  * Assembles the resolver input for the currently composed send.
  *
- * `relayConfigured` is reported as available because the panel cannot see the
- * network's relay configuration; the background remains the enforcement point
- * and fails closed when no unlinkable route exists.
+ * Relay availability comes from the privileged account-scoped disclosure. An
+ * absent disclosure therefore fails private spending closed; it never guesses
+ * that a relay exists.
  */
 export const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput => {
   const { fields } = context;
@@ -113,7 +115,7 @@ export const sendRouteInputFor = (context: TransferRouteContext): SendRouteInput
       : null,
     recipient: fields.recipient || null,
     recipientRegistration: context.recipientRegistration,
-    relayConfigured: true,
+    relayConfigured: context.privacy.value?.relayConfigured ?? false,
     senderAddress: context.senderAddress,
     senderRegistration: senderRegistration(context.privacy),
     source: fields.source,
@@ -149,21 +151,23 @@ export const transferRoute = (fields: TransferFields): SendRoute =>
 
 /**
  * The selected asset's balance in one bucket, raw and formatted, for the amount
- * card's label and for Max. Absent balances read as zero rather than throwing:
- * a bucket the account holds nothing in is a real state, not an error.
+ * card's label and for Max. An absent or malformed entry remains unknown: only
+ * an RPC response containing zero may be rendered or used as a zero balance.
  */
 export const balanceInBucket = (
   bucket: ValueBucket,
   context: TransferRouteContext,
-): { readonly formatted: string; readonly raw: string } => {
+): { readonly formatted: string | null; readonly raw: string | null } => {
   if (bucket === "private") {
     const entry = context.privacy.value?.balances.find(
       (candidate) => candidate.tokenId === context.fields.tokenId,
     );
-    return { formatted: entry?.formatted ?? "0", raw: rawBalance(entry?.balance).toString(10) };
+    const raw = rawBalance(entry?.balance);
+    return { formatted: entry?.formatted ?? null, raw: raw?.toString(10) ?? null };
   }
   const entry = context.publicBalances.find((candidate) => candidate.id === context.fields.tokenId);
-  return { formatted: entry?.formatted ?? "0", raw: rawBalance(entry?.balance).toString(10) };
+  const raw = rawBalance(entry?.balance);
+  return { formatted: entry?.formatted ?? null, raw: raw?.toString(10) ?? null };
 };
 
 /**

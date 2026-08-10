@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import type { Call, RpcProvider } from "starknet";
 import { num } from "starknet";
 import { WalletError } from "../../../src/shared/errors";
-import { STRK_TOKEN_ADDRESS } from "../../../src/starknet/networks";
+import { STARK_FIELD_PRIME, STRK_TOKEN_ADDRESS } from "../../../src/starknet/networks";
 import { memoryStrk20MaturityStore } from "../../../src/starknet/strk20/maturity";
 import { createOfficialStrk20Service } from "../../../src/starknet/strk20/official-sdk-service";
 import {
@@ -145,6 +145,26 @@ describe("official STRK20 SDK submission boundary", () => {
         token,
       }),
     ).rejects.toThrow("could not read pool registration");
+  });
+
+  test("rejects negative and out-of-field pool registration keys", async () => {
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const statusFrom = (publicKey: string) =>
+      createOfficialStrk20Service({
+        providerFor: strk20ProviderFor({ publicKey }),
+        sdk,
+      }).registrationStatus?.({ ...context, subject: "0x123", token });
+
+    await expect(statusFrom("-1")).rejects.toThrow("out-of-field public key");
+    await expect(statusFrom(`0x${STARK_FIELD_PRIME.toString(16)}`)).rejects.toThrow(
+      "out-of-field public key",
+    );
   });
 
   test("registers through the SDK builder and submits only the reviewed pool proof", async () => {

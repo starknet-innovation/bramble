@@ -193,6 +193,14 @@ describe("sendFlow shield shortcuts", () => {
     expect(html).toContain('name="tokenId" type="hidden" value="SN_MAIN:ETH"');
   });
 
+  test("never falls back to another token when an intent asset disappeared", () => {
+    const html = sendFlow(status, account, preferences, [], {}, {}, "usd", [], intent);
+
+    expect(html).toContain("The requested token is no longer tracked");
+    expect(html).toContain('name="tokenId" type="hidden" value=""');
+    expect(html).toContain('data-send-intent="true"');
+  });
+
   test("defaults to a public transfer with no recipient when there is no intent", () => {
     const html = sendFlow(status, account, preferences);
 

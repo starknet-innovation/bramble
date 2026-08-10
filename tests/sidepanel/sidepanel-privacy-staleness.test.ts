@@ -49,6 +49,8 @@ const staleUnregistered = {
   accountId: account.id,
   balances: [],
   networkId: "SN_MAIN" as const,
+  poolFeeFri: "0x1",
+  relayConfigured: true,
   registration: "unregistered" as const,
 };
 

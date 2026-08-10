@@ -10,7 +10,7 @@ import {
   type PrivacyDisclosureState,
   type PrivacyJourneyState,
 } from "./privacy-model";
-import { bindPrivacy } from "./privacy-ui";
+import { bindPrivacy, loadPrivacyDisclosure, type PrivacyUiDeps } from "./privacy-ui";
 import type { BalanceState, SidepanelWallet } from "./runtime";
 import type { SendIntent } from "./send-model";
 
@@ -37,24 +37,25 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
   let disclosure: PrivacyDisclosureState = emptyPrivacyDisclosure();
   let generation = 0;
   let journey: PrivacyJourneyState = { stage: "idle" };
+  const deps = (): PrivacyUiDeps => ({
+    ...options,
+    balances: () => {
+      const state = options.balances();
+      return "balances" in state ? state.balances : [];
+    },
+    disclosure: () => disclosure,
+    generation: () => generation,
+    journey: () => journey,
+    setDisclosure: (state) => {
+      disclosure = state;
+    },
+    setJourney: (state) => {
+      journey = state;
+    },
+  });
   return {
     bind(): void {
-      bindPrivacy({
-        ...options,
-        balances: () => {
-          const state = options.balances();
-          return "balances" in state ? state.balances : [];
-        },
-        disclosure: () => disclosure,
-        generation: () => generation,
-        journey: () => journey,
-        setDisclosure: (state) => {
-          disclosure = state;
-        },
-        setJourney: (state) => {
-          journey = state;
-        },
-      });
+      bindPrivacy(deps());
     },
     disclosure: (): PrivacyDisclosureState => disclosure,
     /**
@@ -68,6 +69,8 @@ export const createPrivacyController = (options: PrivacyControllerOptions) => {
       disclosure = emptyPrivacyDisclosure();
     },
     journey: (): PrivacyJourneyState => journey,
+    /** Retries the same guarded discovery used by the ordinary privacy UI. */
+    reload: (): Promise<boolean> => loadPrivacyDisclosure(deps()),
     reset(): void {
       generation += 1;
       disclosure = emptyPrivacyDisclosure();

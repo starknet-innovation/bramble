@@ -61,7 +61,12 @@ const scopeMatches = (deps: PrivacyUiDeps, scope: PrivacyAsyncScope): boolean =>
   );
 };
 
-const loadDisclosure = async (deps: PrivacyUiDeps): Promise<boolean> => {
+/**
+ * Re-reads the active account's privacy state with account/network staleness
+ * guards. Exported so Send's recoverable route error uses the same loader and
+ * never grows a second disclosure path.
+ */
+export const loadPrivacyDisclosure = async (deps: PrivacyUiDeps): Promise<boolean> => {
   const scope = captureScope(deps);
   const pending: PrivacyDisclosureState = {
     error: null,
@@ -112,7 +117,7 @@ const startJourney = async (
     current.value?.accountId === deps.status().activeAccountId &&
     current.value.networkId === deps.status().networkId
       ? true
-      : await loadDisclosure(deps);
+      : await loadPrivacyDisclosure(deps);
   const state = deps.disclosure().value;
   if (!ready || !state || !scopeMatches(deps, scope)) {
     buttonBusy(button, false);
@@ -157,6 +162,7 @@ const syncPendingPoll = (deps: PrivacyUiDeps): void => {
       deps.paint();
     },
     load: () => deps.wallet.loadPrivacyState(),
+    scopeKey: `${scope.networkId}:${scope.accountId ?? ""}:${scope.generation}`,
     stillCurrent: (value) =>
       scopeMatches(deps, scope) &&
       value.accountId === scope.accountId &&
@@ -179,13 +185,22 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
     !disclosure.error &&
     disclosure.value === null
   ) {
-    void loadDisclosure(deps);
+    void loadPrivacyDisclosure(deps);
   }
   syncPendingPoll(deps);
   // Deploy-then-register lands on the same journey as the plain entry, so both
   // reach the identical review.
   bindDeployAndRegister({
     app: deps.app,
+    deploymentScope: () => {
+      const scope = captureScope(deps);
+      return scope.accountId === null
+        ? null
+        : {
+            accountId: scope.accountId,
+            stillCurrent: () => scopeMatches(deps, scope),
+          };
+    },
     startRegistration: () => {
       const tokenId = defaultTokenId(deps);
       if (tokenId) {
@@ -197,7 +212,7 @@ const bindDisclosure = (deps: PrivacyUiDeps): void => {
   deps.app
     ?.querySelector<HTMLButtonElement>("[data-privacy-retry]")
     ?.addEventListener("click", () => {
-      void loadDisclosure(deps);
+      void loadPrivacyDisclosure(deps);
     });
   deps.app?.querySelectorAll<HTMLButtonElement>("[data-privacy-register]").forEach((button) => {
     button.addEventListener("click", () => {

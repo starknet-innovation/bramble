@@ -32,8 +32,10 @@ export type PrivacyAccountState = {
   readonly accountId: string;
   readonly balances: readonly PrivateBalanceView[];
   readonly networkId: string;
-  /** Pool action fee in FRI when known, for pre-quote fee display. */
-  readonly poolFeeFri?: string;
+  /** Pool action fee in FRI. A failed read rejects the whole disclosure request. */
+  readonly poolFeeFri: string;
+  /** Whether the active network has an unlinkable private submission route. */
+  readonly relayConfigured: boolean;
   /**
    * `pending` means the wallet broadcast a registration that the privacy
    * indexer has not reflected yet. It is not a shieldable state, but it must
@@ -229,12 +231,14 @@ const readState = (response: unknown): PrivacyAccountState | null => {
       "balances",
       "networkId",
       "poolFeeFri",
+      "relayConfigured",
       "registration",
     ]) ||
     !isStarknetNetworkId(state["networkId"]) ||
     !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
-    (state["poolFeeFri"] !== undefined &&
-      (typeof state["poolFeeFri"] !== "string" || !isStarkFieldElement(state["poolFeeFri"]))) ||
+    typeof state["poolFeeFri"] !== "string" ||
+    !isStarkFieldElement(state["poolFeeFri"]) ||
+    typeof state["relayConfigured"] !== "boolean" ||
     (state["registration"] !== "pending" &&
       state["registration"] !== "registered" &&
       state["registration"] !== "unregistered") ||
@@ -273,7 +277,8 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     accountId: state["accountId"],
     balances,
     networkId: state["networkId"],
-    ...(typeof state["poolFeeFri"] === "string" ? { poolFeeFri: state["poolFeeFri"] } : {}),
+    poolFeeFri: state["poolFeeFri"],
+    relayConfigured: state["relayConfigured"],
     registration: state["registration"],
   };
 };

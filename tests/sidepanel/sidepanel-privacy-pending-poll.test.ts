@@ -19,6 +19,8 @@ const state = (registration: PrivacyAccountState["registration"]): PrivacyAccoun
   accountId: "SN_MAIN:0xabc",
   balances: [],
   networkId: "SN_MAIN",
+  poolFeeFri: "0x1",
+  relayConfigured: true,
   registration,
 });
 
@@ -39,6 +41,7 @@ const harness = (options: {
       timers.delete(handle as unknown as number);
     },
     load: options.load,
+    scopeKey: "SN_MAIN:account-1:0",
     setTimer: (callback: () => void, delayMs: number) => {
       const id = nextId++;
       timers.set(id, { callback, delayMs });
@@ -62,8 +65,8 @@ const harness = (options: {
     setVisible: (value: boolean) => {
       visible = value;
     },
-    sync: (pending: boolean) => {
-      poll.sync(pending, port);
+    sync: (pending: boolean, scopeKey = port.scopeKey) => {
+      poll.sync(pending, { ...port, scopeKey });
     },
     timers,
   };
@@ -118,6 +121,28 @@ describe("pending registration poll", () => {
     // this pair would loop forever over the network; if it built a second
     // scheduler, the burst timers would double.
     expect(reads).toBe(1);
+    expect(test.count(500)).toBe(1);
+  });
+
+  test("restarts with fresh callbacks when the account or network scope changes", async () => {
+    let reads = 0;
+    const test = harness({
+      load: async () => {
+        reads += 1;
+        return state("pending");
+      },
+    });
+
+    test.sync(true, "SN_MAIN:account-1:0");
+    await flush();
+    expect(reads).toBe(1);
+
+    test.sync(true, "SN_SEPOLIA:account-2:1");
+    await flush();
+
+    // The old scheduler and its timers are replaced. Keeping it would retain
+    // the first account's load/apply closures until the registration settled.
+    expect(reads).toBe(2);
     expect(test.count(500)).toBe(1);
   });
 

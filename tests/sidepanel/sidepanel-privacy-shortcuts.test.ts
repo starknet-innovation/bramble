@@ -48,6 +48,8 @@ const bindWith = (html: string): { intents: readonly SendIntent[]; app: HTMLElem
         accountId: account.id,
         balances: [],
         networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
         registration: "registered",
       },
     }),

@@ -65,6 +65,8 @@ describe("privacy UI async scope isolation", () => {
       accountId: account.id,
       balances: [],
       networkId: "SN_MAIN" as const,
+      poolFeeFri: "0x1",
+      relayConfigured: true,
       registration: "registered" as const,
     };
     let disclosure: PrivacyDisclosureState = { error: null, loading: false, value: null };
@@ -136,6 +138,8 @@ describe("privacy UI async scope isolation", () => {
       readonly accountId: string;
       readonly balances: readonly [];
       readonly networkId: "SN_MAIN";
+      readonly poolFeeFri: "0x1";
+      readonly relayConfigured: true;
       readonly registration: "registered";
     }>();
     let disclosure: PrivacyDisclosureState = { error: null, loading: false, value: null };
@@ -169,6 +173,8 @@ describe("privacy UI async scope isolation", () => {
       accountId: account.id,
       balances: [],
       networkId: "SN_MAIN",
+      poolFeeFri: "0x1",
+      relayConfigured: true,
       registration: "registered",
     });
     await tick();
@@ -191,6 +197,8 @@ describe("privacy UI async scope isolation", () => {
           accountId: account.id,
           balances: [],
           networkId: "SN_MAIN",
+          poolFeeFri: "0x1",
+          relayConfigured: true,
           registration,
         },
       }),
@@ -207,6 +215,8 @@ describe("privacy UI async scope isolation", () => {
           accountId: account.id,
           balances: [],
           networkId: "SN_MAIN",
+          poolFeeFri: "0x1",
+          relayConfigured: true,
           registration: "pending" as const,
         }),
         preparePrivacyRegistration: async () => {
@@ -246,6 +256,8 @@ describe("privacy UI async scope isolation", () => {
           accountId: account.id,
           balances: [],
           networkId: "SN_MAIN",
+          poolFeeFri: "0x1",
+          relayConfigured: true,
           registration: "unregistered",
         },
       }),

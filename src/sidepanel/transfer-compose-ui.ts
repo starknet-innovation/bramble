@@ -210,7 +210,7 @@ const bindAssetControls = (
   // Open on STRK rather than "Select": it pays every fee on Starknet, so it is
   // the asset a send most often means. Only applied when nothing is chosen yet,
   // so a repaint never overwrites the user's own pick.
-  if (!sendFormInput(form, "tokenId")?.value) {
+  if (!sendFormInput(form, "tokenId")?.value && form.dataset["sendIntent"] !== "true") {
     const strk = Array.from(form.querySelectorAll<HTMLElement>("[data-send-asset]")).find((row) =>
       sameFelt(row.dataset["sendAddress"] ?? "0x0", STRK_TOKEN_ADDRESS),
     );

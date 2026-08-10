@@ -17,6 +17,8 @@ const deploymentStatus = (deployed: boolean): DeploymentStatusResponse => ({
   ok: true,
 });
 
+const scope = { accountId: "account-1", stillCurrent: () => true };
+
 type Harness = {
   readonly deps: DeploymentWatchDeps;
   readonly renders: WalletStatus[];
@@ -45,7 +47,7 @@ const makeHarness = (statuses: readonly (boolean | null)[]): Harness => {
           return deploymentStatus(outcome);
         },
         async loadStatus(): Promise<WalletStatus> {
-          return emptyStatus();
+          return { ...emptyStatus(), activeAccountId: "account-1" };
         },
       },
     },
@@ -57,7 +59,7 @@ describe("watchDeployment", () => {
   test("renders exactly once when deployment status flips to deployed", async () => {
     const harness = makeHarness([false, false, true, true]);
 
-    await watchDeployment(harness.deps, { attempts: 12, intervalMs: 0 });
+    await watchDeployment(harness.deps, scope, { attempts: 12, intervalMs: 0 });
 
     expect(harness.renders).toHaveLength(1);
     // Stops the moment it observes deployment; later attempts are not spent.
@@ -67,7 +69,7 @@ describe("watchDeployment", () => {
   test("stops without rendering when the account never deploys in budget", async () => {
     const harness = makeHarness([false, false, false]);
 
-    await watchDeployment(harness.deps, { attempts: 3, intervalMs: 0 });
+    await watchDeployment(harness.deps, scope, { attempts: 3, intervalMs: 0 });
 
     expect(harness.renders).toHaveLength(0);
     expect(harness.loads).toBe(3);
@@ -77,9 +79,48 @@ describe("watchDeployment", () => {
     const harness = makeHarness([null, null]);
 
     await expect(
-      watchDeployment(harness.deps, { attempts: 2, intervalMs: 0 }),
+      watchDeployment(harness.deps, scope, { attempts: 2, intervalMs: 0 }),
     ).resolves.toBeUndefined();
     expect(harness.renders).toHaveLength(0);
     expect(harness.loads).toBe(2);
+  });
+
+  test("stops when the active account changes instead of applying its deployment", async () => {
+    let current = true;
+    const harness = makeHarness([true]);
+    current = false;
+
+    await watchDeployment(
+      harness.deps,
+      { accountId: "account-1", stillCurrent: () => current },
+      { attempts: 2, intervalMs: 0 },
+    );
+
+    expect(harness.loads).toBe(0);
+    expect(harness.renders).toEqual([]);
+  });
+
+  test("rejects a deployment answer for a different account", async () => {
+    let loads = 0;
+    const renders: WalletStatus[] = [];
+    await watchDeployment(
+      {
+        render: async (status) => {
+          renders.push(status);
+        },
+        wallet: {
+          loadDeploymentStatus: async () => {
+            loads += 1;
+            return { accountId: "account-2", deployed: true, ok: true };
+          },
+          loadStatus: async () => ({ ...emptyStatus(), activeAccountId: "account-2" }),
+        },
+      },
+      scope,
+      { attempts: 2, intervalMs: 0 },
+    );
+
+    expect(loads).toBe(1);
+    expect(renders).toEqual([]);
   });
 });

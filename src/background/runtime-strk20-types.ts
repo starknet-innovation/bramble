@@ -46,8 +46,10 @@ export type Strk20WalletStateResponse = {
       readonly tokenId: string;
     }[];
     readonly networkId: StarknetNetworkId;
-    /** Pool action fee in FRI, when the service could read it. */
-    readonly poolFeeFri?: string;
+    /** Pool action fee in FRI. A failed read rejects the state request. */
+    readonly poolFeeFri: string;
+    /** Whether this network has the unlinkable paymaster route private spends require. */
+    readonly relayConfigured: boolean;
     /**
      * `pending` is derived locally, not read from the privacy service: a
      * registration this wallet broadcast that the indexer has not reflected yet.

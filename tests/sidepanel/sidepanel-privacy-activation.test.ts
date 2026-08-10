@@ -40,10 +40,12 @@ const mount = (): HTMLElement => {
 const bind = (
   app: HTMLElement,
   wallet: Partial<SidepanelWallet>,
+  stillCurrent: () => boolean = () => true,
 ): { readonly started: number[] } => {
   const started: number[] = [];
   bindDeployAndRegister({
     app,
+    deploymentScope: () => ({ accountId: "SN_MAIN:0x1", stillCurrent }),
     startRegistration: () => started.push(1),
     wallet: wallet as SidepanelWallet,
   });
@@ -122,5 +124,28 @@ describe("deploy then register", () => {
     expect(app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]")?.disabled).toBe(
       false,
     );
+  });
+
+  test("does not continue registration after the active account changes", async () => {
+    let current = true;
+    const app = mount();
+    const { started } = bind(
+      app,
+      {
+        async deployAccount() {
+          current = false;
+          return "0xdeadbeef";
+        },
+        async loadDeploymentStatus() {
+          return { accountId: "SN_MAIN:0x2", deployed: true, ok: true } as const;
+        },
+      },
+      () => current,
+    );
+
+    app.querySelector<HTMLButtonElement>("[data-privacy-deploy-register]")?.click();
+    await flush();
+
+    expect(started).toEqual([]);
   });
 });

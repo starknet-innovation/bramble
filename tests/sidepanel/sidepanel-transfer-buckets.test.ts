@@ -59,6 +59,7 @@ const registered = (privateBalance = "20000000000000000000"): PrivacyDisclosureS
     ],
     networkId: "SN_MAIN",
     poolFeeFri: SIX_STRK,
+    relayConfigured: true,
     registration: "registered",
   },
 });
@@ -81,6 +82,7 @@ const mountForm = (recipient = RECIPIENT): HTMLFormElement => {
       <button class="send-route-toggle" data-send-bucket="destination" data-bucket="public" type="button">Public</button>
     </div>
     <span id="send-route-reason" hidden></span>
+    <button id="send-route-retry" type="button" hidden>Retry</button>
     <span id="send-balance-label"></span>`;
   document.body.append(form);
   return form;
@@ -90,10 +92,11 @@ const context = (
   form: HTMLFormElement,
   privacy = registered(),
   recipientRegistration = "registered" as const,
+  balances: readonly TokenBalance[] = publicBalances,
 ) => ({
   fields: transferFields(form),
   privacy,
-  publicBalances,
+  publicBalances: balances,
   recipientRegistration,
   senderAddress: SENDER,
 });
@@ -156,6 +159,22 @@ describe("bucket controls", () => {
     );
   });
 
+  test("keeps an unread public balance unknown instead of displaying zero", () => {
+    const form = mountForm();
+    const unread = context(form, registered(), "registered", []);
+
+    expect(balanceInBucket("public", unread)).toEqual({ formatted: null, raw: null });
+    bindTransferBuckets({
+      balanceIn: (bucket) => balanceInBucket(bucket, unread),
+      form,
+      onRouteChange: () => undefined,
+      route: () => resolveTransferRoute(unread),
+    });
+
+    expect(form.querySelector("#send-balance-label")?.textContent).toBe("Balance unavailable");
+    expect(form.querySelector<HTMLInputElement>('[name="tokenBalance"]')?.value).toBe("");
+  });
+
   test("names the balance in use on the toggle itself", () => {
     const form = mountForm();
     bind(form);
@@ -212,6 +231,47 @@ describe("bucket controls", () => {
 
     expect(form.querySelector<HTMLElement>("#send-route-reason")?.textContent).toBe(
       "Private balances are unavailable right now",
+    );
+  });
+
+  test("offers an explicit retry for a failed private-state read", () => {
+    const form = mountForm();
+    const privacy: PrivacyDisclosureState = {
+      error: "could not read the pool fee",
+      loading: false,
+      value: null,
+    };
+    let retries = 0;
+    const destination = form.querySelector<HTMLInputElement>('[name="destination"]');
+    if (destination) destination.value = "private";
+    bindTransferBuckets({
+      balanceIn: (bucket) => balanceInBucket(bucket, context(form, privacy)),
+      form,
+      onRouteChange: () => undefined,
+      retry: () => {
+        retries += 1;
+      },
+      retryable: () => true,
+      route: () => resolveTransferRoute(context(form, privacy)),
+    });
+
+    const retry = form.querySelector<HTMLButtonElement>("#send-route-retry");
+    expect(retry?.hidden).toBe(false);
+    retry?.click();
+    expect(retries).toBe(1);
+  });
+
+  test("fails private spending closed when no relay is configured", () => {
+    const form = mountForm();
+    const privacy = registered();
+    bind(form, {
+      ...privacy,
+      value: privacy.value ? { ...privacy.value, relayConfigured: false } : null,
+    });
+    pick(form, "source", "private");
+
+    expect(form.querySelector<HTMLElement>("#send-route-reason")?.textContent).toBe(
+      "No private relay is configured for this network",
     );
   });
 

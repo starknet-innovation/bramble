@@ -7,7 +7,7 @@
  * activity refresh/export suites live in `sidepanel-activity-ui.test.ts`.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { WalletStatus } from "../../src/popup/responses";
+import type { TokenBalance, WalletStatus } from "../../src/popup/responses";
 import { sendFlow } from "../../src/sidepanel/flows";
 import {
   bindTransfer,
@@ -205,6 +205,42 @@ describe("bindTransfer", () => {
     submit(app);
     await flush();
     expect(calls.submitTransfer).toHaveLength(1);
+  });
+
+  test("invalidates a review when the final route gate fails", async () => {
+    const token = preferences.tokens[0];
+    if (!token) throw new Error("transfer token fixture missing");
+    const balance = (raw: string): readonly TokenBalance[] => [
+      {
+        ...token,
+        balance: raw,
+        formatted: raw === "0" ? "0" : "2",
+      },
+    ];
+    let balances = balance("2000000000000000000");
+    const { app, calls, deps } = mount();
+    bindTransfer({ ...deps, publicBalances: () => balances });
+    setField(app, "recipient", RECIPIENT);
+    setField(app, "amount", "1");
+
+    submit(app);
+    await flush();
+    expect(calls.reviewTransfer).toHaveLength(1);
+
+    // The reviewed amount is no longer affordable at final confirmation.
+    balances = balance("0");
+    submit(app);
+    await flush();
+    expect(calls.submitTransfer).toHaveLength(0);
+    expect(resultText(app)).toBe("Not enough ETH");
+
+    // Even if a refresh clears the gate, the stale review cannot submit. The
+    // next click must produce a new review and only its confirm may send.
+    balances = balance("2000000000000000000");
+    submit(app);
+    await flush();
+    expect(calls.reviewTransfer).toHaveLength(2);
+    expect(calls.submitTransfer).toHaveLength(0);
   });
 
   test("watches for deployment after confirming a first send", async () => {

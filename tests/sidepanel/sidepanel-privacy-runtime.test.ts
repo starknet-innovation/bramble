@@ -54,6 +54,8 @@ describe("privacy runtime client", () => {
               },
             ],
             networkId: "SN_MAIN",
+            poolFeeFri: "0x1",
+            relayConfigured: true,
             registration: "registered",
           },
         };
@@ -141,6 +143,8 @@ describe("privacy runtime client", () => {
         accountId: "SN_MAIN:0xabc",
         balances: [{ balance: "0x1", formatted: "1", symbol: "ETH", token: "0x1" }],
         networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
         registration: "registered",
       },
     }));
@@ -167,6 +171,8 @@ describe("privacy runtime client", () => {
       accountId: "SN_MAIN:0xabc",
       balances: [],
       networkId: "SN_MAIN",
+      poolFeeFri: "0x1",
+      relayConfigured: true,
       registration: "pending" as const,
     };
     const pending = createPrivacyRuntimeClient(async () => ({ ok: true, strk20State: state }));
