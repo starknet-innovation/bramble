@@ -25,6 +25,7 @@ import {
 } from "./service";
 
 const MAX_SERVICE_ATTEMPTS = 3;
+const noFinalProofGate = (): Promise<void> => Promise.resolve();
 
 /**
  * Default backoff between bounded privacy-service retries.
@@ -81,6 +82,7 @@ const historicalReadiness = (
 };
 
 const prepareOnce = async (input: {
+  readonly beforeProof: () => Promise<void>;
   readonly builder: SdkBuilder;
   readonly config: Strk20NetworkConfig;
   readonly historicalState: HistoricalState | undefined;
@@ -107,6 +109,10 @@ const prepareOnce = async (input: {
       validateSignature: false,
     });
   } else {
+    // This is the last asynchronous wallet-policy boundary before the SDK
+    // starts creating a proof. It runs after discovery and maturity waits, so
+    // mutable chain state cannot become stale during those preflights.
+    await input.beforeProof();
     const invocation = await input.builder.createProofInvocation({ provingBlockId: block });
     assertNoSdkWarnings(invocation);
     result = await input.transfers.executeWithInvocation(invocation, block);
@@ -124,6 +130,7 @@ export const prepareWith = async (
   maturity: Strk20MaturityRuntime,
   providerFor: (nodeUrl: string) => RpcProvider,
   pauseForServiceRetry: (attempt: number) => Promise<void>,
+  beforeProof: () => Promise<void> = noFinalProofGate,
   builderForTransfers?: (transfers: SdkTransfers) => SdkBuilder,
   historicalState?: HistoricalState,
 ): Promise<Strk20CallAndProof> => {
@@ -146,6 +153,7 @@ export const prepareWith = async (
       const provider = providerFor(nodeUrl);
       stage = "proving";
       return await prepareOnce({
+        beforeProof,
         builder,
         config,
         historicalState,

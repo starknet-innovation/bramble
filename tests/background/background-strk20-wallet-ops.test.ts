@@ -111,7 +111,8 @@ const service = (capture: {
     async subaccountCommitment() {
       return STRK20_RECIPIENT;
     },
-    async submitActions({ actions, plan }) {
+    async submitActions({ actions, beforeProof, plan }) {
+      if (beforeProof) await beforeProof();
       submissions.push({ actions, plan });
       return { transactionHash: "0x222" };
     },
@@ -120,7 +121,6 @@ const service = (capture: {
     },
   };
 };
-
 describe("background wallet STRK20 operations", () => {
   test("keeps private discovery privileged and returns account-scoped registration state", async () => {
     const capture = {

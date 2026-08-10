@@ -49,6 +49,8 @@ const RELAY_PLAN: Strk20SubmissionPlan = {
 };
 
 const service = (capture: {
+  readonly beforeProof?: (() => void) | undefined;
+  readonly proofStarted?: () => void;
   readonly recipientRegistered: boolean;
   readonly submissions: { actions: readonly Strk20Action[]; plan: Strk20SubmissionPlan }[];
 }): Strk20Service => ({
@@ -76,7 +78,10 @@ const service = (capture: {
   async subaccountCommitment() {
     return STRK20_RECIPIENT;
   },
-  async submitActions({ actions, plan }) {
+  async submitActions({ actions, beforeProof, plan }) {
+    capture.beforeProof?.();
+    await beforeProof?.();
+    capture.proofStarted?.();
     capture.submissions.push({ actions, plan });
     return { transactionHash: "0x444" };
   },
@@ -320,7 +325,12 @@ describe("background private-send operations", () => {
   });
 
   test("refuses execution when the reviewed recipient registration becomes stale", async () => {
+    let proofCalls = 0;
     const capture = {
+      beforeProof: undefined as (() => void) | undefined,
+      proofStarted: () => {
+        proofCalls += 1;
+      },
       recipientRegistered: true,
       submissions: [] as { actions: readonly Strk20Action[]; plan: Strk20SubmissionPlan }[],
     };
@@ -336,18 +346,26 @@ describe("background private-send operations", () => {
     )) as { readonly strk20Preparation: { readonly id: string } };
 
     expect(prepared).toMatchObject({ ok: true });
-    capture.recipientRegistered = false;
+    capture.beforeProof = () => {
+      capture.recipientRegistered = false;
+    };
     await expect(
       handler(
         { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "The recipient has not activated private balances" });
+    expect(proofCalls).toBe(0);
     expect(capture.submissions).toEqual([]);
   });
 
   test("refuses a third-party deposit when recipient registration changes after review", async () => {
+    let proofCalls = 0;
     const capture = {
+      beforeProof: undefined as (() => void) | undefined,
+      proofStarted: () => {
+        proofCalls += 1;
+      },
       recipientRegistered: true,
       submissions: [] as { actions: readonly Strk20Action[]; plan: Strk20SubmissionPlan }[],
     };
@@ -367,13 +385,16 @@ describe("background private-send operations", () => {
     )) as { readonly strk20Preparation: { readonly id: string } };
 
     expect(prepared).toMatchObject({ ok: true });
-    capture.recipientRegistered = false;
+    capture.beforeProof = () => {
+      capture.recipientRegistered = false;
+    };
     await expect(
       handler(
         { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "The recipient has not activated private balances" });
+    expect(proofCalls).toBe(0);
     expect(capture.submissions).toEqual([]);
   });
 

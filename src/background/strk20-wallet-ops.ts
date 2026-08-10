@@ -6,6 +6,7 @@
  * is produced.
  */
 
+import { WalletError } from "../shared/errors";
 import { sameFelt } from "../starknet/networks";
 import { formatTokenAmount } from "../starknet/rpc";
 import {
@@ -321,7 +322,7 @@ const assertRecipientRegistration = async (
     token: context.token.address,
   });
   if (registration !== "registered") {
-    throw new Error("The recipient has not activated private balances");
+    throw new WalletError("The recipient has not activated private balances");
   }
 };
 
@@ -340,9 +341,6 @@ const submitPreparedPrivateBatch = async (
   if (registration !== "registered") {
     throw new Error("Private registration is no longer active");
   }
-  if (preparation.kind === "transfer") {
-    await assertRecipientRegistration(service, preparation.recipient, context);
-  }
   const [privateBalance] = await readStrk20Balances(service, {
     ...context.accountContext,
     tokens: [context.token.address],
@@ -353,6 +351,11 @@ const submitPreparedPrivateBatch = async (
   return submitStrk20Actions(service, {
     ...context.accountContext,
     actions: preparation.actions,
+    ...(preparation.kind === "transfer"
+      ? {
+          beforeProof: () => assertRecipientRegistration(service, preparation.recipient, context),
+        }
+      : {}),
     plan: preparation.plan,
   });
 };
@@ -379,10 +382,10 @@ const submitPreparedDeposit = async (
   if (registration !== "registered") {
     throw new Error("Private registration is no longer active");
   }
-  await assertRecipientRegistration(service, preparation.recipient, context);
   return submitStrk20Actions(service, {
     ...context.accountContext,
     actions: preparation.actions,
+    beforeProof: () => assertRecipientRegistration(service, preparation.recipient, context),
     plan: preparation.plan,
   });
 };
