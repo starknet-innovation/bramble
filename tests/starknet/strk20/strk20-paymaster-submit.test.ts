@@ -1,6 +1,7 @@
 /** Submission-side privacy-paymaster contract tests. */
 import { describe, expect, test } from "bun:test";
 import { submitStrk20PaymasterPlan } from "../../../src/starknet/strk20/paymaster";
+import { STRK20_SUBMISSION_UNAVAILABLE } from "../../../src/starknet/strk20/service";
 import {
   paymasterCall as call,
   paymasterConfig as config,
@@ -198,5 +199,38 @@ describe("STRK20 paymaster submission boundary", () => {
         }),
       ).rejects.toThrow("strk20 private submission unavailable");
     }
+  });
+
+  test("never exposes proof material echoed by the relay", async () => {
+    const rejected = await submitStrk20PaymasterPlan({
+      accountAddress: "0x1",
+      call,
+      config,
+      http: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: -32_000,
+              data: { execution_error: "proof proof_facts 0x2" },
+              message: "rejected proof",
+            },
+            id: "mc-wallet-strk20",
+            jsonrpc: "2.0",
+          }),
+          { status: 200 },
+        ),
+      nowSeconds: 2,
+      plan: {
+        feeAction: { amount: "0x5", recipient: "0x4", token: "0x3", type: "withdraw" },
+      },
+      proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
+      signTypedData: async () => [],
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejected).toBeInstanceOf(Error);
+    expect((rejected as Error).message).toBe(STRK20_SUBMISSION_UNAVAILABLE);
   });
 });

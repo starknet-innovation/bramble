@@ -84,6 +84,26 @@ const reportedDetails = (data: unknown): readonly string[] => {
   return Object.values(data).filter((value): value is string => typeof value === "string");
 };
 
+const relayReportedError = (method: string, reported: unknown): WalletError => {
+  // An execute error may echo the submitted proof. Proof values are allowed to
+  // be short, so no pattern sanitizer can distinguish them reliably from a
+  // useful reason. Keep that post-proof boundary generic; quote failures carry
+  // no proof and may retain a bounded, sanitized diagnostic.
+  if (method === "paymaster_executeTransaction") {
+    return new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+  }
+  const detail = sanitizeStrk20Detail(
+    isRecord(reported)
+      ? [reported["message"], ...reportedDetails(reported["data"])].join(": ")
+      : String(reported),
+  );
+  return new WalletError(
+    detail === ""
+      ? STRK20_SUBMISSION_UNAVAILABLE
+      : `${STRK20_SUBMISSION_UNAVAILABLE}: the private relay rejected the request (${detail})`,
+  );
+};
+
 const feeMode = (config: Strk20PaymasterConfig) => ({
   mode: "sponsored_private",
   pool_fee_token: requirePaymasterFelt(config.feeToken, false),
@@ -235,22 +255,9 @@ const rpc = async (
   ) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
-  // A relay-reported error is an operator-side condition (credentials, an
-  // unsupported fee mode, a rejected batch) that the generic message hides.
-  // Surface the sanitized reason so it is diagnosable without a debug build;
-  // endpoints, felts, and proof blobs never survive sanitizeStrk20Detail.
   const reported = body["error"];
   if (reported !== undefined) {
-    const detail = sanitizeStrk20Detail(
-      isRecord(reported)
-        ? [reported["message"], ...reportedDetails(reported["data"])].join(": ")
-        : String(reported),
-    );
-    throw new WalletError(
-      detail === ""
-        ? STRK20_SUBMISSION_UNAVAILABLE
-        : `${STRK20_SUBMISSION_UNAVAILABLE}: the private relay rejected the request (${detail})`,
-    );
+    throw relayReportedError(method, reported);
   }
   if (!Object.hasOwn(body, "result")) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
