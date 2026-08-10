@@ -1,16 +1,20 @@
 /**
- * The privacy entry point for a hardware account whose viewing key has not been
- * derived on the device yet.
+ * Activation for a hardware account whose viewing key has not been derived yet.
  *
- * Registering publishes the viewing key's commitment, so the ceremony has to run
- * first. These pin that the shared entry point runs the ceremony instead of
- * preparing a registration, that it re-reads state afterwards so the surface
- * stops asking, and that it never prepares a registration in that state.
+ * Registering publishes the viewing key's commitment, so the key has to exist
+ * first — but both steps run behind ONE confirmation. The review is where the
+ * wallet discloses that the key is retained on disk, so the ceremony has to happen
+ * after the user has read that, not as an earlier separate tap.
+ *
+ * These pin that order: opening the journey prepares the registration review and
+ * derives nothing, confirming derives and then registers in that sequence, and a
+ * refused derivation registers nothing.
  */
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { WalletStatus } from "../../src/popup/responses";
-import type { PrivacyAccountState } from "../../src/sidepanel/privacy-runtime";
+import type { PrivacyJourneyState } from "../../src/sidepanel/privacy-model";
+import type { PrivacyAccountState, PrivacyPreparation } from "../../src/sidepanel/privacy-runtime";
 import { bindPrivacy } from "../../src/sidepanel/privacy-ui";
 import type { SidepanelWallet } from "../../src/sidepanel/runtime";
 import { registerDom, unregisterDom } from "../support/groups-harness";
@@ -33,10 +37,21 @@ const status: WalletStatus = {
 };
 
 const TOKEN_ID = preferences.tokens[0]?.id ?? "SN_MAIN:ETH:0x1";
+const digest = `sha256:${"a".repeat(64)}`;
 
-const stateWith = (
-  privateBalances: PrivacyAccountState["privateBalances"],
-): PrivacyAccountState => ({
+const preparation: PrivacyPreparation = {
+  id: digest,
+  kind: "register",
+  payloadDigest: digest,
+  poolAddress: "0x123",
+  poolFeeFri: "0x1",
+  route: "public-account",
+  summaries: ["Register this account with the privacy pool"],
+  symbol: "ETH",
+  tokenId: TOKEN_ID,
+};
+
+const state = (privateBalances: PrivacyAccountState["privateBalances"]): PrivacyAccountState => ({
   accountId: account.id,
   balances: [],
   networkId: "SN_MAIN",
@@ -46,52 +61,49 @@ const stateWith = (
   relayConfigured: true,
 });
 
-const bindWith = (options: { readonly ceremony?: () => Promise<void> } = {}) => {
-  const derived: number[] = [];
-  const registrations: number[] = [];
-  const painted: number[] = [];
-  // Flips to `ready` once the ceremony has run, the way the background does.
-  let state = stateWith("setup-required");
+const bindWith = (options: {
+  readonly ceremony?: () => Promise<void>;
+  readonly html: string;
+  readonly journey?: PrivacyJourneyState;
+}) => {
+  const order: string[] = [];
   const app = document.createElement("main");
-  app.innerHTML = `<button data-privacy-register="${TOKEN_ID}">Go private</button>`;
+  app.innerHTML = options.html;
   document.body.append(app);
   bindPrivacy({
     app,
     balances: () => [],
-    disclosure: () => ({ error: null, loading: false, value: state }),
+    disclosure: () => ({ error: null, loading: false, value: state("setup-required") }),
     generation: () => 0,
-    journey: () => ({ stage: "idle" }),
+    journey: () => options.journey ?? { stage: "idle" },
     navigate: () => undefined,
     openSend: () => undefined,
-    paint: () => painted.push(1),
+    paint: () => undefined,
     preferences: () => preferences,
     setDisclosure: () => undefined,
     setJourney: () => undefined,
     status: () => status,
     wallet: {
       async derivePrivacyViewingKey() {
-        derived.push(1);
+        order.push("derive");
         if (options.ceremony) {
           await options.ceremony();
         }
-        state = stateWith("ready");
+      },
+      async executePrivacyPreparation() {
+        order.push("register");
+        return "0xhash";
       },
       async loadPrivacyState() {
-        return state;
+        return state("setup-required");
       },
       async preparePrivacyRegistration() {
-        registrations.push(1);
-        throw new Error("registration must not be prepared before the key exists");
+        order.push("prepare-review");
+        return preparation;
       },
     } as unknown as SidepanelWallet,
   });
-  return { app, derived, painted, registrations, state: () => state };
-};
-
-const click = (app: HTMLElement): void => {
-  app
-    .querySelector<HTMLButtonElement>("[data-privacy-register]")
-    ?.dispatchEvent(new Event("click"));
+  return { app, order };
 };
 
 const settle = async (): Promise<void> => {
@@ -100,41 +112,44 @@ const settle = async (): Promise<void> => {
   }
 };
 
-describe("privacy entry point with no retained viewing key", () => {
-  test("runs the device ceremony instead of preparing a registration", async () => {
-    const bound = bindWith();
-
-    click(bound.app);
-    await settle();
-
-    expect(bound.derived).toHaveLength(1);
-    // Registering publishes the key's commitment, so it cannot come first. The
-    // stub throws if reached, but assert the count too so a swallowed error in the
-    // handler could not make this pass silently.
-    expect(bound.registrations).toHaveLength(0);
-  });
-
-  test("re-reads state after the ceremony so the surface stops asking", async () => {
-    const bound = bindWith();
-
-    click(bound.app);
-    await settle();
-
-    expect(bound.state().privateBalances).toBe("ready");
-    expect(bound.painted.length).toBeGreaterThan(0);
-  });
-
-  test("a failed ceremony leaves the account in the setup state", async () => {
+describe("activating a hardware account with no retained viewing key", () => {
+  test("one tap opens the review and derives nothing yet", async () => {
     const bound = bindWith({
-      ceremony: () => Promise.reject(new Error("rejected-on-device")),
+      html: `<button data-privacy-register="${TOKEN_ID}">Register to start shielding</button>`,
     });
 
-    click(bound.app);
+    bound.app.querySelector<HTMLButtonElement>("[data-privacy-register]")?.click();
     await settle();
 
-    // The rejection must not be mistaken for success: nothing is registered and
-    // the surface still asks for the ceremony.
-    expect(bound.registrations).toHaveLength(0);
-    expect(bound.state().privateBalances).toBe("setup-required");
+    // The review is where the key-custody disclosure lives, so nothing may be
+    // derived before the user has seen it.
+    expect(bound.order).toEqual(["prepare-review"]);
+  });
+
+  test("confirming derives the key and then registers, in that order", async () => {
+    const bound = bindWith({
+      html: '<button id="privacy-confirm">Activate private balances</button>',
+      journey: { preparation, stage: "activate-review", tokenId: TOKEN_ID },
+    });
+
+    bound.app.querySelector<HTMLButtonElement>("#privacy-confirm")?.click();
+    await settle();
+
+    expect(bound.order).toEqual(["derive", "register"]);
+  });
+
+  test("a refused derivation registers nothing", async () => {
+    const bound = bindWith({
+      ceremony: () => Promise.reject(new Error("rejected-on-device")),
+      html: '<button id="privacy-confirm">Activate private balances</button>',
+      journey: { preparation, stage: "activate-review", tokenId: TOKEN_ID },
+    });
+
+    bound.app.querySelector<HTMLButtonElement>("#privacy-confirm")?.click();
+    await settle();
+
+    // Registering after a refused derivation would publish a commitment for a key
+    // the wallet does not hold, stranding every note sent to this account.
+    expect(bound.order).toEqual(["derive"]);
   });
 });

@@ -50,7 +50,7 @@ const intentCopy: Readonly<Record<LedgerSignIntent, string>> = {
   "strk20-authorize": "Sign to authorize this private transfer",
   "strk20-broadcast": "Sign to broadcast this deposit",
   "strk20-register": "Sign to join the privacy pool",
-  "strk20-viewing-key": "Sign to unlock your private balance",
+  "strk20-viewing-key": "Sign to derive your viewing key",
   "swap-tokens": "Sign to swap these tokens",
 };
 

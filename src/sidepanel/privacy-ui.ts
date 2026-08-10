@@ -124,22 +124,6 @@ const startJourney = async (
     return;
   }
   try {
-    if (state.privateBalances === "setup-required") {
-      // A hardware account has no viewing key for this pool yet, and registering
-      // publishes that key's commitment — so the ceremony has to come first. It
-      // is its own step with its own device confirmation rather than a silent
-      // prelude to registration: it writes a key to disk, which the user is told
-      // about here, at the moment they authorize it.
-      await deps.wallet.derivePrivacyViewingKey();
-      if (!scopeMatches(deps, scope)) {
-        return;
-      }
-      await loadPrivacyDisclosure(deps);
-      deps.paint();
-      showToast("Private balances unlocked. Activate the account to start shielding.", "success");
-      buttonBusy(button, false);
-      return;
-    }
     if (state.registration === "pending") {
       // Registered on Starknet, not yet visible to the indexer. The poll flips
       // this on its own, so the only wrong move here is preparing a second one.
@@ -280,6 +264,23 @@ const bindShieldShortcuts = (deps: PrivacyUiDeps): void => {
   }
 };
 
+// Activation for one account, chained behind the single confirmation the user
+// just gave.
+//
+// A hardware account has to derive its viewing key before it can register,
+// because registering publishes that key's commitment. Both steps run here rather
+// than as two taps: the review that was just approved is where the wallet
+// discloses that the key is retained on disk, so the ceremony must happen after
+// the user has read that, not before. On a Ledger this means two device
+// confirmations in sequence — derive, then register — each labelled for what it
+// authorizes. A refused derivation throws, so nothing is registered.
+const activateAccount = async (deps: PrivacyUiDeps, preparationId: string): Promise<string> => {
+  if (deps.disclosure().value?.privateBalances === "setup-required") {
+    await deps.wallet.derivePrivacyViewingKey();
+  }
+  return deps.wallet.executePrivacyPreparation(preparationId);
+};
+
 const bindConfirmation = (
   deps: PrivacyUiDeps,
   journey: Extract<PrivacyJourneyState, { readonly stage: "activate-review" }>,
@@ -300,7 +301,7 @@ const bindConfirmation = (
       tokenId: journey.tokenId,
     });
     deps.paint();
-    void deps.wallet.executePrivacyPreparation(journey.preparation.id).then(
+    void activateAccount(deps, journey.preparation.id).then(
       (hash) => {
         if (!scopeMatches(deps, scope)) {
           return;
