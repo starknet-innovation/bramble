@@ -166,12 +166,23 @@ export const readStrk20PoolFee = async (
 };
 
 /**
- * Aggregates deposit approvals by token so the public account route grants
- * only the exact amounts consumed by the reviewed batch. `poolFeeFri` is the
- * pool's per-`apply_actions` STRK charge (`get_fee_amount`), folded into the
- * STRK approval because the pool pulls it from the caller via `transfer_from`
- * in the same transaction — every action batch, registration included, fails
- * on-chain without it.
+ * The pool fee to approve on the relay route: none.
+ *
+ * The pool charges `get_caller_address()` of `apply_actions`. On this route
+ * that caller is the relay, which funds the fee and is reimbursed from the
+ * sender's private balance by the quoted fee action. A sender approval would
+ * instead select `invoke_and_apply_action`, publish the sender in calldata and
+ * an Approval event, and leave an unused public allowance behind.
+ */
+export const RELAY_PAYS_POOL_FEE = 0n;
+
+/**
+ * Aggregates deposit approvals by token so the submitting account grants only
+ * the exact amounts consumed by the reviewed batch. `poolFeeFri` is the pool's
+ * per-`apply_actions` STRK charge and must be non-zero only when that account is
+ * the caller. Relay callers must pass {@link RELAY_PAYS_POOL_FEE}; deposits
+ * retain their own approvals because the pool pulls those tokens from the
+ * sender.
  */
 export const approveCalls = (
   actions: readonly Strk20Action[],

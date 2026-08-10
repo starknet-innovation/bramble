@@ -27,6 +27,7 @@ import { transfersFor } from "./official-sdk-transfers";
 import {
   approveCalls,
   balancesFrom,
+  RELAY_PAYS_POOL_FEE,
   readStrk20PoolFee,
   requireStrk20Config,
 } from "./official-sdk-values";
@@ -298,10 +299,9 @@ export const createOfficialStrk20Service = ({
       if (!nowSeconds) {
         throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
       }
-      const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
       return buildStrk20PaymasterPlan({
         accountAddress: input.account.address,
-        approveCalls: approveCalls(input.actions, config.poolAddress, poolFee),
+        approveCalls: approveCalls(input.actions, config.poolAddress, RELAY_PAYS_POOL_FEE),
         chainId: STARKNET_NETWORKS[input.account.networkId].chainId,
         config: config.paymaster,
         ...(http ? { http } : {}),
