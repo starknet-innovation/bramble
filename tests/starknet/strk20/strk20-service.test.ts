@@ -56,6 +56,9 @@ const service = (over: Partial<Strk20Service> = {}): Strk20Service => ({
   async privateBalances({ tokens }) {
     return tokens.map((token) => ({ balance: "0x64", token }));
   },
+  async poolFee() {
+    return "0x1";
+  },
   async quoteActions() {
     return plan;
   },
@@ -211,23 +214,26 @@ describe("STRK20 wallet policy", () => {
 
     await expect(quoteStrk20Actions(noRelay, { ...context, actions: deposit })).resolves.toEqual({
       mode: "account",
+      poolFeeFri: "0x1",
     });
     await expect(
       submitStrk20Actions(noRelay, {
         ...context,
         actions: deposit,
-        plan: { mode: "account" },
+        plan: { mode: "account", poolFeeFri: "0x1" },
       }),
     ).resolves.toEqual({ transactionHash: "0x8" });
     await expect(
       submitStrk20Actions(noRelay, {
         ...context,
         actions: [{ amount: "0x1", recipient: "0x9", token: "0x8", type: "transfer" }],
-        plan: { mode: "account" },
+        plan: { mode: "account", poolFeeFri: "0x1" },
       }),
     ).rejects.toThrow(STRK20_PRIVACY_LEAK);
     expect(relayQuotes).toBe(0);
-    expect(summarizeStrk20Plan({ mode: "account" })).toContain("Public account fee");
+    expect(summarizeStrk20Plan({ mode: "account", poolFeeFri: "0x1" })).toContain(
+      "Public account pool fee 0x1",
+    );
   });
 
   test("delegates registration status and execution only when the adapter supports them", async () => {
@@ -243,15 +249,33 @@ describe("STRK20 wallet policy", () => {
     await expect(readStrk20RegistrationStatus(ready, { ...context, token: "0x8" })).resolves.toBe(
       "registered",
     );
-    await expect(registerStrk20Account(ready, context)).resolves.toEqual({
+    await expect(registerStrk20Account(ready, { ...context, poolFeeFri: "0x1" })).resolves.toEqual({
       transactionHash: "0xa",
     });
     await expect(
       readStrk20RegistrationStatus(service(), { ...context, token: "0x8" }),
     ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
-    await expect(registerStrk20Account(service(), context)).rejects.toThrow(
-      STRK20_SERVICE_UNAVAILABLE,
+    await expect(
+      registerStrk20Account(service(), { ...context, poolFeeFri: "0x1" }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
+  });
+
+  test("refuses registration when the pool fee changed after review", async () => {
+    let registrations = 0;
+    const changed = service({
+      async poolFee() {
+        return "0x2";
+      },
+      async register() {
+        registrations += 1;
+        return { transactionHash: "0xa" };
+      },
+    });
+
+    await expect(registerStrk20Account(changed, { ...context, poolFeeFri: "0x1" })).rejects.toThrow(
+      "Private pool fee changed",
     );
+    expect(registrations).toBe(0);
   });
 
   test("the unavailable implementation fails every operation closed", async () => {
@@ -267,9 +291,9 @@ describe("STRK20 wallet policy", () => {
     await expect(
       unavailableStrk20Service.registrationStatus?.({ ...context, token: "0x8" }),
     ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
-    await expect(unavailableStrk20Service.register?.(context)).rejects.toThrow(
-      STRK20_SERVICE_UNAVAILABLE,
-    );
+    await expect(
+      unavailableStrk20Service.register?.({ ...context, poolFeeFri: "0x1" }),
+    ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);
     await expect(
       unavailableStrk20Service.subaccountCommitment({ ...context, dappName: "test" }),
     ).rejects.toThrow(STRK20_SERVICE_UNAVAILABLE);

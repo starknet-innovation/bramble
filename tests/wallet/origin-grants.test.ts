@@ -28,10 +28,11 @@ const vaultWith = (
   accountIds: readonly string[] | null,
 ): Vault => ({
   accounts: [first, second, third],
+  accountSecrets: [],
   activeAccountId,
   mnemonic: null,
   originGrants: accountIds === null ? [] : [{ accountIds, origin: ORIGIN }],
-  schemaVersion: 3,
+  schemaVersion: 4,
   signingKeys: [],
 });
 

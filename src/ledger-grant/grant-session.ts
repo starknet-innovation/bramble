@@ -5,7 +5,7 @@
  * actionable app/device failure that happened first.
  */
 import {
-  assertLedgerAppReady,
+  assertLedgerDeviceReady,
   type LedgerAppVersion,
   type LedgerDeviceClient,
   ledgerPublicKeyX,
@@ -23,16 +23,17 @@ export type LedgerGrantSession = {
 };
 
 /**
- * Probes the Starknet app version and derives the index-zero public key at the
- * wallet's canonical EIP-2645 path without taking ownership of the transport.
- * The public key is discarded; this is a transport/app/path compatibility
- * proof, not account creation. The retained-window broker uses this before it
- * reports ready, then keeps the same transport open for the caller's operation.
+ * Probes the pinned device OS and Starknet app version, then derives the
+ * index-zero public key at the wallet's canonical EIP-2645 path without taking
+ * ownership of the transport. The public key is discarded; this is a
+ * transport/app/path compatibility proof, not account creation. The
+ * retained-window broker uses this before it reports ready, then keeps the same
+ * transport open for the caller's operation.
  */
 export const probeLedgerGrantClient = async (
   client: LedgerDeviceClient,
 ): Promise<LedgerAppVersion> => {
-  const version = await assertLedgerAppReady(client);
+  const version = await assertLedgerDeviceReady(client);
   await ledgerPublicKeyX(client, ledgerAccountPath(0));
   return version;
 };

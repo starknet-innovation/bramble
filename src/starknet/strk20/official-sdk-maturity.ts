@@ -7,7 +7,7 @@
 import type { RpcProvider } from "starknet";
 import { WalletError } from "../../shared/errors";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "../networks";
-import { isTransportRpcError } from "../provider";
+import { IndeterminateRpcWriteError, isTransportRpcError } from "../provider";
 import {
   memoryStrk20MaturityStore,
   type Strk20MaturityScope,
@@ -201,7 +201,7 @@ export const createStrk20MaturityRuntime = ({
       // have been accepted after the response was lost — so those keep the scope
       // closed rather than risk proving against state a landed write invalidates.
       const result = await broadcast(prepared).catch(async (error: unknown) => {
-        if (!isTransportRpcError(error)) {
+        if (!(error instanceof IndeterminateRpcWriteError) && !isTransportRpcError(error)) {
           await store.write(scope, previous);
         }
         throw error;

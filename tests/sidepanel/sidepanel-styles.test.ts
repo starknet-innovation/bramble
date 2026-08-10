@@ -301,11 +301,8 @@ describe("sidepanel styles", () => {
     expect(SIDEPANEL_STYLES).not.toContain(".action-tile.primary");
   });
 
-  test("Terminal icon is an unboxed workstation glyph", () => {
-    const iconBlock = SIDEPANEL_STYLES.match(/\.terminal-cta-icon \{([^}]*)\}/)?.[1] ?? "";
-    expect(iconBlock).not.toContain("background:");
-    expect(iconBlock).not.toContain("border-radius:");
-    expect(SIDEPANEL_STYLES).toMatch(/\.terminal-cta-icon \.icon \{ height: 34px/);
+  test("the retired Terminal card leaves no orphan styles behind", () => {
+    expect(SIDEPANEL_STYLES).not.toContain("terminal-cta");
   });
 
   test("the icon-only dock uses white and grey focus without icon containers", () => {

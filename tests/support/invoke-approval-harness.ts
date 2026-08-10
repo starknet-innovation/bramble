@@ -64,10 +64,11 @@ export const invokeWalletStub = (connected: readonly AccountRef[]) => ({
   async readVault() {
     return {
       accounts: [invokeAccount],
+      accountSecrets: [],
       activeAccountId: invokeAccount.id,
       mnemonic: null,
       originGrants: [{ accountIds: [invokeAccount.id], origin: invokeOrigin }],
-      schemaVersion: 3 as const,
+      schemaVersion: 4 as const,
       signingKeys: [{ accountId: invokeAccount.id, privateKey: "0x123456" }],
     };
   },

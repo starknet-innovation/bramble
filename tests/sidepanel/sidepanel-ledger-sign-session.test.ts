@@ -37,19 +37,19 @@ const REQUEST: LedgerSignRequestSummary = {
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 const okVersion = (): ReturnType<LedgerDeviceClient["getAppVersion"]> =>
-  Promise.resolve({ errorMessage: "No errors", major: 2, minor: 1, patch: 0, returnCode: 0x9000 });
+  Promise.resolve({ errorMessage: "No errors", major: 2, minor: 4, patch: 0, returnCode: 0x9000 });
+
+const okOsVersion = () => Promise.resolve({ targetId: 0x33000004, version: "2.7.1" });
 
 const okPubKey = (): ReturnType<LedgerDeviceClient["getPubKey"]> =>
   Promise.resolve({ errorMessage: "No errors", publicKey: DEVICE_PUBLIC_KEY, returnCode: 0x9000 });
 
-// A device client whose signHash is supplied per test; the sign path now runs a
-// shared pre-check (version + public-key match) first, so getAppVersion/getPubKey
-// default to a ready device holding the account's key. Overrides drive the
-// pre-check failure paths (locked device, wrong device).
+// The shared pre-check defaults to a ready device; overrides drive its failure paths.
 const fakeClient = (
   signHash: LedgerDeviceClient["signHash"],
   overrides: Partial<LedgerDeviceClient> = {},
 ): LedgerDeviceClient => ({
+  getOsVersion: okOsVersion,
   getAppVersion: okVersion,
   getPubKey: okPubKey,
   signHash,

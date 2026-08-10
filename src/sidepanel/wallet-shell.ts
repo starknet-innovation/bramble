@@ -132,31 +132,44 @@ export const actionTile = (
   </button>`;
 
 /**
- * Renders the trusted bridge from the compact wallet into MC Terminal.
+ * Renders the home action that opens the active account on the public block
+ * explorer. Disabled rather than hidden when there is nothing to open — no
+ * account yet, or a network without an explorer (devnet) — so the action row
+ * keeps its shape instead of reflowing between screens.
  */
-export const terminalCta = (): string =>
-  `<a class="terminal-cta" href="${escapeHtml(TERMINAL_URL)}" target="_blank" rel="noopener noreferrer" aria-label="Join MC Terminal, your homebase for all Starknet activity">
-    <span class="terminal-cta-icon">${icon("monitor")}</span>
-    <span class="terminal-cta-copy"><strong>Join MC Terminal</strong><span>Your homebase for all Starknet activity</span></span>
-    <span class="terminal-cta-arrow">${icon("chevronRight")}</span>
-  </a>`;
+export const explorerTile = (url: string | null): string => {
+  const body = `<span class="tile-icon">${icon("externalLink")}</span>
+    <span class="tile-label">Explorer</span>`;
+  return url === null
+    ? `<button class="action-tile" type="button" disabled aria-label="Explorer unavailable on this network">${body}</button>`
+    : `<a class="action-tile" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" aria-label="Open this account on the block explorer">${body}</a>`;
+};
 
 /**
  * Renders the counterfactual-account deployment action when chain state is
- * conclusively undeployed.
+ * conclusively undeployed. Deployment is a fee-paying transaction, so the action
+ * stays disabled — with the reason on hover — until the account holds STRK to
+ * pay with. Offering it to an empty account only produces a failed estimate.
  */
-export const deployNotice = (account: AccountRef | null, deployment: boolean | null): string =>
+export const deployNotice = (
+  account: AccountRef | null,
+  deployment: boolean | null,
+  fundedForFees = true,
+): string =>
   account === null || deployment !== false
     ? ""
     : `<div class="deploy-notice">
         ${button({
           attributes: {
             id: "deploy-button",
-            title: "This account contract is not on-chain yet. Deploying it enables transactions.",
+            title: fundedForFees
+              ? "This account contract is not on-chain yet. Deploying it enables transactions."
+              : "Deploying costs a network fee. Receive STRK into this account first.",
           },
           className: "deploy-chip",
+          disabled: !fundedForFees,
           icon: "alert",
-          label: "Not deployed — deploy now",
+          label: fundedForFees ? "Not deployed — deploy now" : "Not deployed — receive STRK first",
           size: "small",
           variant: "secondary",
         })}

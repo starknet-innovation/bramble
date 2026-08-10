@@ -90,23 +90,32 @@ export const startTransactionMonitor = ({
   browser,
   deps,
   now,
+  ready,
 }: {
   readonly browser: TxMonitorBrowser | undefined;
   readonly deps: ReconcileDeps;
   readonly now: () => number;
+  /** Startup security gate that must settle before storage-backed work runs. */
+  readonly ready: Promise<void>;
 }): boolean => {
   const alarms = browser?.alarms;
   if (!alarms) {
     return false;
   }
+  try {
+    alarms.onAlarm.addListener((alarm) => {
+      const tier = ALARM_TIERS[alarm.name];
+      if (tier) {
+        void ready.then(() => reconcileObserved(deps, tier, now())).catch(() => undefined);
+      }
+    });
+  } catch {
+    return false;
+  }
+  // Create alarms only after their wake listener exists. Otherwise an optional
+  // API whose listener registration throws would leave recurring dead alarms.
   for (const [name, tier] of Object.entries(ALARM_TIERS)) {
     void ensureAlarm(alarms, name, tier).catch(() => undefined);
   }
-  alarms.onAlarm.addListener((alarm) => {
-    const tier = ALARM_TIERS[alarm.name];
-    if (tier) {
-      void reconcileObserved(deps, tier, now()).catch(() => undefined);
-    }
-  });
   return true;
 };

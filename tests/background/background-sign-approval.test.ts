@@ -26,10 +26,11 @@ const account: AccountRef = {
 };
 const vault = {
   accounts: [account],
+  accountSecrets: [],
   activeAccountId: account.id,
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 3,
+  schemaVersion: 4,
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 

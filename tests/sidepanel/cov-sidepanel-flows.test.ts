@@ -84,9 +84,18 @@ describe("sendFlow list callbacks", () => {
     expect(html).toContain('data-send-recipient="0xaaa1"');
     expect(html).toContain('data-send-recipient-label="Ada"');
     expect(html).not.toContain("Grace");
-    expect(html).toMatch(/send-network-context[\s\S]*?send-network-mark[\s\S]*?class="token-logo"/);
+    // The recipient screen leads with where the value is coming from, rendered
+    // like a recipient row but static — the origin is the active account.
+    expect(html).toMatch(
+      /send-origin-context[\s\S]*?Sending from[\s\S]*?send-recipient-avatar[\s\S]*?Amber Walrus/,
+    );
+    expect(html).toContain("<span>Sending to</span>");
     expect(html).toMatch(
       /<dt>Network<\/dt><dd class="network-inline-value">[\s\S]*?class="token-logo"/,
+    );
+    // From, To, Network in that order, above the amount card.
+    expect(html).toMatch(
+      /<dt>From<\/dt>[\s\S]*?<dt>To<\/dt>[\s\S]*?<dt>Network<\/dt>[\s\S]*?send-amount-card/,
     );
     // With a token available the form is enabled (canSend).
     expect(html).not.toMatch(/id="send-token-trigger"[^>]*disabled/);
@@ -149,5 +158,66 @@ describe("backupFlow Ledger recovery warning", () => {
 
   test("does not show the hardware warning in a software-only wallet", () => {
     expect(backupFlow(status)).not.toContain("Ledger accounts are not restored");
+  });
+});
+
+describe("sendFlow shield shortcuts", () => {
+  const intent = {
+    accountId: account.id,
+    destination: "private",
+    networkId: "SN_MAIN",
+    recipient: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+    recipientLabel: "Amber Walrus",
+    source: "public",
+    tokenId: "SN_MAIN:ETH",
+  } as const;
+
+  test("seeds both buckets, the recipient, and the asset from the intent", () => {
+    const withEth: WalletPreferences = {
+      ...preferences,
+      tokens: [
+        {
+          address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",
+          decimals: 18,
+          id: "SN_MAIN:ETH",
+          name: "Ether",
+          networkId: "SN_MAIN",
+          symbol: "ETH",
+        },
+      ],
+    };
+    const html = sendFlow(status, account, withEth, [], {}, {}, "usd", [], intent);
+
+    expect(html).toContain('name="source" type="hidden" value="public"');
+    expect(html).toContain('name="destination" type="hidden" value="private"');
+    expect(html).toContain(`name="recipient" type="hidden" value="${intent.recipient}"`);
+    expect(html).toContain('name="recipientLabel" type="hidden" value="Amber Walrus"');
+    expect(html).toContain('name="tokenId" type="hidden" value="SN_MAIN:ETH"');
+  });
+
+  test("never falls back to another token when an intent asset disappeared", () => {
+    const html = sendFlow(status, account, preferences, [], {}, {}, "usd", [], intent);
+
+    expect(html).toContain("The requested token is no longer tracked");
+    expect(html).toContain('name="tokenId" type="hidden" value=""');
+    expect(html).toContain('data-send-intent="true"');
+  });
+
+  test("drops an intent captured for another account scope", () => {
+    const html = sendFlow(status, account, preferences, [], {}, {}, "usd", [], {
+      ...intent,
+      accountId: "SN_MAIN:0x999",
+    });
+
+    expect(html).toContain('data-send-intent="false"');
+    expect(html).toContain('name="recipient" type="hidden" value=""');
+  });
+
+  test("defaults to a public transfer with no recipient when there is no intent", () => {
+    const html = sendFlow(status, account, preferences);
+
+    expect(html).toContain('name="source" type="hidden" value="public"');
+    expect(html).toContain('name="destination" type="hidden" value="public"');
+    expect(html).toContain('name="recipient" type="hidden" value=""');
   });
 });

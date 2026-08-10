@@ -8,33 +8,145 @@ import { CONTROL, MOTION, RADIUS, SIZE, SPACE, TYPE, WEIGHT } from "../ui/tokens
  * Privacy styles inherit every color from the active skin.
  */
 export const PRIVACY_STYLES = `
-  .privacy-toggle-row {
-    align-items: center;
-    display: flex;
-    gap: ${SPACE.md};
-    justify-content: space-between;
-    min-height: ${CONTROL.hit};
-    padding: ${SPACE.sm} 0 ${SPACE.md};
-  }
-  .privacy-toggle-row > label {
-    color: var(--mc-text);
-    cursor: pointer;
-    flex: none;
-    font-size: ${TYPE.label.size};
-    font-weight: ${WEIGHT.medium};
-    margin: 0;
-    text-wrap: nowrap;
-  }
-  .privacy-toggle-row input[type="checkbox"] { cursor: pointer; }
-  .privacy-callout {
-    background: var(--mc-elevated);
-    border-radius: ${RADIUS.md};
+  /* Receive: an unregistered account can only be paid publicly, so the whole
+     notice is the activation control rather than a message beside a link. */
+  button.privacy-pool-notice {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    color: var(--mc-muted);
     display: grid;
-    gap: ${SPACE.sm};
-    margin: ${SPACE.sm} 0 ${SPACE.md};
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.xs};
+    justify-items: start;
+    line-height: ${TYPE.caption.line};
+    padding: ${SPACE.md};
+    text-align: left;
+    width: 100%;
+  }
+  button.privacy-pool-notice strong { color: var(--mc-text); font-weight: ${WEIGHT.semibold}; }
+  button.privacy-pool-notice:not(:disabled):hover { background: var(--mc-hover); }
+  /* The same notice with nothing to act on yet: same surface, no affordance. */
+  .privacy-pool-notice.is-static {
+    background: var(--mc-panel);
+    border-radius: ${RADIUS.lg};
+    color: var(--mc-muted);
+    display: grid;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.xs};
+    line-height: ${TYPE.caption.line};
+    margin: 0;
     padding: ${SPACE.md};
   }
-  .privacy-callout p { color: var(--mc-muted); margin: 0; }
+
+  /* Unified balance rows: the summary is the row, the dropdown carries the
+     public/private split and the asset-screen link. The private line doubles
+     as the registration entry while the account is unregistered. */
+  .token-row.token-unified { display: block; }
+  .token-disclosure { min-width: 0; }
+  .token-disclosure summary {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    gap: ${SPACE.md};
+    list-style: none;
+  }
+  .token-disclosure summary::-webkit-details-marker { display: none; }
+  .token-breakdown {
+    display: grid;
+    gap: ${SPACE.sm};
+    padding: ${SPACE.md} ${SPACE.sm} ${SPACE.sm} calc(40px + ${SPACE.md});
+  }
+  .token-breakdown-row {
+    align-items: center;
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.md};
+    justify-content: space-between;
+  }
+  .token-breakdown-row.muted .token-breakdown-value { color: var(--mc-muted); }
+  .token-breakdown-label {
+    align-items: center;
+    color: var(--mc-muted);
+    display: inline-flex;
+    gap: ${SPACE.xs};
+  }
+  .token-breakdown-label .icon { height: 12px; width: 12px; }
+  .token-breakdown-value { font-variant-numeric: tabular-nums; font-weight: ${WEIGHT.medium}; }
+  button.token-breakdown-register {
+    background: transparent;
+    color: var(--mc-muted);
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.medium};
+    justify-content: space-between;
+    min-height: ${CONTROL.hitSmall};
+    padding: 0;
+    text-align: left;
+    width: 100%;
+  }
+  button.token-breakdown-register:not(:disabled):hover { background: transparent; color: var(--mc-text); }
+  /* Shield and Unshield sit side by side: one asset, two directions, neither
+     more default than the other. */
+  .token-privacy-actions {
+    display: grid;
+    gap: ${SPACE.sm};
+    grid-template-columns: 1fr 1fr;
+  }
+  button.token-breakdown-more {
+    background: transparent;
+    color: var(--mc-text);
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.semibold};
+    justify-content: flex-start;
+    min-height: ${CONTROL.hitSmall};
+    padding: 0;
+  }
+  button.token-breakdown-more:not(:disabled):hover { background: transparent; }
+  button.token-breakdown-more .icon { height: 14px; width: 14px; }
+  /* Which balance each end of a send uses, chosen on the account it belongs to
+     in the Accounts receipt. A blocked route greys the receipt and spells the
+     reason out beneath it — a dead control whose only explanation was a title
+     tooltip read as broken rather than gated. */
+  .send-context-receipt.muted { color: var(--mc-muted); }
+  /* One self-labelling toggle per account: it names the balance in use rather
+     than offering both. The private state inverts to the skin's foreground as a
+     fill, which is the brightest surface a dark skin has and the darkest a light
+     one has — no single token is the same shade in both, so the inversion is what
+     travels. */
+  button.send-route-toggle {
+    background: var(--mc-sunken);
+    border-radius: ${RADIUS.full};
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+    font-weight: ${WEIGHT.medium};
+    min-height: ${CONTROL.hitSmall};
+    min-width: 72px;
+    padding: 0 ${SPACE.md};
+  }
+  button.send-route-toggle[data-bucket="private"] {
+    background: var(--mc-text);
+    color: var(--mc-bg);
+  }
+  button.send-route-toggle:not(:disabled):hover { background: var(--mc-hover); }
+  button.send-route-toggle[data-bucket="private"]:not(:disabled):hover {
+    background: var(--mc-text);
+    opacity: 0.9;
+  }
+  .send-route-reason {
+    color: var(--mc-muted);
+    font-size: ${TYPE.caption.size};
+  }
+  .send-route-reason[hidden] { display: none; }
+  .privacy-inline-error {
+    align-items: center;
+    color: var(--mc-muted);
+    display: flex;
+    font-size: ${TYPE.caption.size};
+    gap: ${SPACE.sm};
+    justify-content: space-between;
+    padding: ${SPACE.sm} ${SPACE.sm} 0;
+  }
+  .private-balance-summary.muted .token-fiat { color: var(--mc-muted); }
   .private-balance-mark,
   .private-balance-label {
     align-items: center;
@@ -59,7 +171,6 @@ export const PRIVACY_STYLES = `
   }
   .privacy-flow { display: grid; min-height: calc(100dvh - 88px); }
   .privacy-review,
-  .privacy-compose,
   .privacy-working,
   .privacy-outcome {
     align-content: start;
@@ -127,37 +238,19 @@ export const PRIVACY_STYLES = `
   .privacy-network > span:last-child { display: grid; gap: 2px; }
   .privacy-token-context small,
   .privacy-network small { color: var(--mc-muted); }
-  .privacy-amount { display: grid; gap: ${SPACE.sm}; }
-  .privacy-amount > span:first-child { color: var(--mc-muted); font-size: ${TYPE.label.size}; }
-  .privacy-amount-control {
-    align-items: center;
-    background: var(--mc-panel);
-    border-radius: ${RADIUS.md};
-    display: flex;
-    padding: 0 ${SPACE.md};
-  }
-  .privacy-amount-control input {
-    background: transparent;
-    border: 0;
-    font-size: ${TYPE.headline.size};
-    min-width: 0;
-    padding-left: 0;
-  }
-  .privacy-shortcuts {
-    align-items: center;
-    color: var(--mc-muted);
-    display: flex;
-    font-size: ${TYPE.caption.size};
-    gap: ${SPACE.sm};
-    margin-top: -${SPACE.sm};
-  }
-  .privacy-shortcuts span { margin-right: auto; }
-  .privacy-shortcuts button {
-    background: transparent;
+  .privacy-review-amount { margin-bottom: ${SPACE.sm}; }
+  /* The compose card reuses the swap panels; only the static token chip and the
+     withdrawal address row are privacy-specific. */
+  .swap-token.is-static {
+    background: var(--mc-elevated);
+    border-radius: ${RADIUS.full};
     color: var(--mc-text);
-    min-height: ${CONTROL.hitSmall};
-    padding: 0 ${SPACE.sm};
+    font-weight: ${WEIGHT.semibold};
+    padding: ${SPACE.sm} ${SPACE.md};
   }
+  /* Unshield destination: the account the withdrawal makes public. The current
+     choice reads as an identity (avatar + name), not an address field, so the
+     link being created is recognizable before signing. */
   .privacy-working { align-content: center; justify-items: center; }
   .privacy-working .liquid-dots { color: var(--mc-text); }
   .privacy-task-list { text-align: left; width: 100%; }

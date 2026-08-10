@@ -6,7 +6,13 @@
 import { describe, expect, test } from "bun:test";
 import { createApprovalQueue } from "../../src/background/approvals";
 import { createMessageHandler } from "../../src/background/messages";
+import { unavailablePreferencesStore } from "../../src/background/runtime-state";
 import { createUnlockSession } from "../../src/background/session";
+import { createMemoryStore } from "../../src/storage/kv";
+import {
+  createPreferencesStore,
+  defaultWalletPreferences,
+} from "../../src/storage/preferences-store";
 import type { CreateVaultAccountInput, OriginGrantInput } from "../../src/wallet/vault-service";
 import {
   account,
@@ -197,7 +203,22 @@ describe("createMessageHandler", () => {
 
   test("sets active accounts through the unlocked session", async () => {
     const session = createUnlockSession();
-    const handler = createMessageHandler(createWallet(), "extension-id", { session });
+    let activeNetworkId: "SN_DEVNET" | "SN_MAIN" | "SN_SEPOLIA" = "SN_MAIN";
+    const networkSelections: string[] = [];
+    const handler = createMessageHandler(createWallet(), "extension-id", {
+      preferencesStore: {
+        ...unavailablePreferencesStore,
+        async read() {
+          return { ...defaultWalletPreferences(), activeNetworkId };
+        },
+        async setActiveNetwork(networkId) {
+          activeNetworkId = networkId;
+          networkSelections.push(networkId);
+          return { ...defaultWalletPreferences(), activeNetworkId };
+        },
+      },
+      session,
+    });
 
     await expect(
       handler({ accountId: account.id, type: "wallet.setActiveAccount" }, sender),
@@ -206,9 +227,81 @@ describe("createMessageHandler", () => {
     await expect(
       handler({ accountId: account.id, type: "wallet.setActiveAccount" }, sender),
     ).resolves.toEqual({ account, ok: true });
+    expect(networkSelections.at(-1)).toBe("SN_SEPOLIA");
     await expect(
       handler({ accountId: "not-an-account", type: "wallet.setActiveAccount" }, sender),
     ).resolves.toEqual({ error: "invalid active account request" });
+  });
+
+  test("reconciles the encrypted account after importing a new active network", async () => {
+    const mainnetAccount = {
+      ...account,
+      address: "0xabc111111",
+      id: "SN_MAIN:0xabc111111",
+      networkId: "SN_MAIN" as const,
+    };
+    let activeAccountId = account.id;
+    const baseWallet = createWallet({
+      accounts: [account, mainnetAccount],
+      activeAccountId: () => activeAccountId,
+    });
+    const preferencesStore = createPreferencesStore({ store: createMemoryStore() });
+    await preferencesStore.setActiveNetwork("SN_SEPOLIA");
+    const session = createUnlockSession();
+    session.unlock(vaultPassphrase);
+    const handler = createMessageHandler(
+      {
+        ...baseWallet,
+        async setActiveAccount(input: { readonly accountId: string }) {
+          activeAccountId = input.accountId;
+          return input.accountId === mainnetAccount.id ? mainnetAccount : account;
+        },
+      },
+      "extension-id",
+      { preferencesStore, session },
+    );
+    const backup = {
+      ...(await preferencesStore.read()),
+      activeNetworkId: "SN_MAIN" as const,
+    };
+
+    await expect(
+      handler({ preferences: backup, type: "wallet.importPreferences" }, sender),
+    ).resolves.toMatchObject({ ok: true });
+    expect(activeAccountId).toBe(mainnetAccount.id);
+    expect((await preferencesStore.read()).activeNetworkId).toBe("SN_MAIN");
+  });
+
+  test("orders a concurrent lock after an in-flight unlock", async () => {
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const baseWallet = createWallet();
+    let reads = 0;
+    const session = createUnlockSession();
+    const handler = createMessageHandler(
+      {
+        ...baseWallet,
+        async readVault(passphrase: string) {
+          reads += 1;
+          if (reads === 1) {
+            started.resolve();
+            await release.promise;
+          }
+          return baseWallet.readVault(passphrase);
+        },
+      },
+      "extension-id",
+      { session },
+    );
+
+    const unlocking = handler({ type: "wallet.unlock", vaultPassphrase }, sender);
+    await started.promise;
+    const locking = handler({ type: "wallet.lock" }, sender);
+    release.resolve();
+
+    await expect(unlocking).resolves.toMatchObject({ locked: false });
+    await expect(locking).resolves.toMatchObject({ locked: true });
+    expect(session.isUnlocked()).toBe(false);
   });
 
   test("creates pending approvals for ungranted dapp account requests", async () => {

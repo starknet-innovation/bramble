@@ -6,35 +6,68 @@ export type StarknetNetworkId = "SN_MAIN" | "SN_SEPOLIA" | "SN_DEVNET";
 /**
  * Starknet network metadata used for account derivation and display.
  * `rpcUrls` is an ordered failover list; the first entry is the primary.
+ * `explorerBaseUrl` is the public block explorer for outbound transaction
+ * links; networks without one (devnet) simply omit it and are never linked.
  */
 export type StarknetNetwork = {
   readonly chainId: string;
+  readonly explorerBaseUrl?: string;
   readonly id: StarknetNetworkId;
   readonly name: string;
   readonly rpcUrls: readonly [string, ...string[]];
 };
 
 /**
+ * JSON-RPC spec version the wallet is built and reviewed against.
+ *
+ * This is the single source of truth for the pin, and it is enforced twice:
+ * the bundled gateway URLs below carry the matching `v0_10` path segment, and
+ * `createRpcProvider` in `./provider` passes this value to starknet.js so the
+ * request encoding cannot drift with the SDK's global default. Bumping it
+ * means changing both this constant and the deployed gateway route, and
+ * re-checking the spec-dependent paths (`PRE_CONFIRMED` finality in
+ * `./rpc.ts`, `proof`/`proofFacts` invoke fields in `./rpc-submit.ts`).
+ */
+export const STARKNET_RPC_SPEC_VERSION = "0.10.0";
+
+/**
  * Supported Starknet networks and chain ids.
  *
- * Mainnet and Sepolia prefer the Starknet Foundation's public nodes on RPC
- * spec v0.10, which need no API key and report `PRE_CONFIRMED` finality.
- * Mainnet stays on the proof-facts-capable Foundation endpoint; Sepolia keeps
- * Cartridge as a read/write availability fallback. Requests originate in the
- * MV3 service worker, where the manifest's explicit host permissions apply.
+ * Mainnet and Sepolia prefer the wallet-owned gateway, which applies per-client
+ * rate limits before forwarding to the Starknet Foundation RPC nodes, and fall
+ * back to those same Foundation nodes directly when the gateway is unreachable
+ * — a gateway outage must not take the wallet offline. Failover is transport-
+ * only (see `withRpcFallback`), so the fallback is never reached because of a
+ * rate limit or any other answer the gateway actually returns; and writes
+ * re-probe `starknet_chainId` before signing (see `withRpcWrite`). Sepolia
+ * keeps Cartridge as a last read/write resort.
+ *
+ * Both wallet-operated gateway endpoints and direct Foundation-node fallbacks
+ * carry the `v0_10` segment, so the wallet pins its wire spec on every bundled
+ * path. They must stay in step with {@link STARKNET_RPC_SPEC_VERSION}.
+ * Cartridge and local devnet are not wallet-operated, so their spec is whatever
+ * that operator runs.
+ * Requests originate in the MV3 service worker, where the manifest's explicit
+ * host permissions apply — every host listed here needs an entry there.
  */
 export const STARKNET_NETWORKS: Readonly<Record<StarknetNetworkId, StarknetNetwork>> = {
   SN_MAIN: {
     chainId: "0x534e5f4d41494e",
+    explorerBaseUrl: "https://starkscan.co",
     id: "SN_MAIN",
     name: "Starknet Mainnet",
-    rpcUrls: ["https://mainnet.nodes.starknet.org/rpc/v0_10"],
+    rpcUrls: [
+      "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
+      "https://mainnet.nodes.starknet.org/rpc/v0_10",
+    ],
   },
   SN_SEPOLIA: {
     chainId: "0x534e5f5345504f4c4941",
+    explorerBaseUrl: "https://sepolia.starkscan.co",
     id: "SN_SEPOLIA",
     name: "Starknet Sepolia",
     rpcUrls: [
+      "https://wallet.nodes.starknet.org/rpc/sepolia/v0_10",
       "https://sepolia.nodes.starknet.org/rpc/v0_10",
       "https://api.cartridge.gg/x/starknet/sepolia",
     ],
@@ -159,6 +192,32 @@ export const isStarkFieldElement = (value: string): boolean =>
  */
 export const isNonZeroStarkFieldElement = (value: string): boolean =>
   isStarkFieldElement(value) && BigInt(value) > 0n;
+
+// One gate for every explorer link: a network with no explorer (devnet) and a
+// felt that is not well formed both yield null, so no caller can build a URL
+// that cannot resolve.
+const explorerUrl = (networkId: string, path: string, felt: string): string | null => {
+  const base = isStarknetNetworkId(networkId)
+    ? STARKNET_NETWORKS[networkId].explorerBaseUrl
+    : undefined;
+  return base === undefined || !isNonZeroStarkFieldElement(felt) ? null : `${base}/${path}/${felt}`;
+};
+
+/**
+ * Builds the public explorer URL for a transaction, or `null` when the network
+ * has no explorer (devnet) or the hash is not a well-formed field element. A
+ * caller that receives `null` must render no link rather than a broken one.
+ */
+export const explorerTransactionUrl = (networkId: string, hash: string): string | null =>
+  explorerUrl(networkId, "tx", hash);
+
+/**
+ * Builds the public explorer URL for an account, or `null` under the same rules
+ * as {@link explorerTransactionUrl}. Starknet accounts are contracts, so the
+ * account view lives under the explorer's contract path.
+ */
+export const explorerAccountUrl = (networkId: string, address: string): string | null =>
+  explorerUrl(networkId, "contract", address);
 
 /**
  * Stark curve group order (n). Valid Stark signing scalars live in [1, n).

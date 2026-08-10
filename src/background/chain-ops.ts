@@ -23,7 +23,11 @@ import {
   readSignTypedDataInput,
   readSwitchChainInput,
 } from "./message-inputs";
-import { switchActiveNetwork } from "./runtime-state";
+import {
+  type ActiveStateCoordinator,
+  runActiveStateMutation,
+  switchActiveNetwork,
+} from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
 import type { UnlockSession } from "./session";
@@ -34,6 +38,7 @@ import type { WalletStatusReader } from "./wallet-reader";
  * Dependencies for the provider chain and signing operations.
  */
 export type ChainOpsDeps = {
+  readonly activeStateCoordinator?: ActiveStateCoordinator;
   readonly approvals: ApprovalQueue;
   readonly extensionId: string;
   readonly guard?: OriginGuard;
@@ -248,32 +253,34 @@ export const handleChainOps = async (
  * approval time, so an approved card can never reconnect a disconnected site.
  */
 export const executeSwitchChainApproval = async (
-  deps: Pick<ChainOpsDeps, "preferencesStore" | "session" | "wallet">,
+  deps: Pick<ChainOpsDeps, "activeStateCoordinator" | "preferencesStore" | "session" | "wallet">,
   input: { readonly networkId: StarknetNetworkId; readonly origin: string },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, session, wallet } = deps;
-  const passphrase = session.getPassphrase();
-  if (!passphrase) {
-    return { error: "wallet locked" };
-  }
-  // A switch-chain approval carries no account context, so the shared claim
-  // validator skips it and this is the only place the grant is re-checked.
-  // Read it BEFORE switching: the switch re-selects the active account, and the
-  // auto-grant below would otherwise hand the origin a fresh account — silently
-  // reconnecting a site the user disconnected by switching accounts, with no
-  // connect prompt. A revoked or disconnected origin is refused instead.
-  const connected = await wallet.getGrantedAccounts(input.origin, passphrase);
-  if (connected.length === 0) {
-    return { error: "origin not connected" };
-  }
-  const account = await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
-  const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
-  if (account && !granted.some((item) => item.id === account.id)) {
-    await wallet.grantOrigin({
-      accountId: account.id,
-      origin: input.origin,
-      vaultPassphrase: passphrase,
-    });
-  }
-  return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
+  return runActiveStateMutation(deps.activeStateCoordinator, async () => {
+    const passphrase = session.getPassphrase();
+    if (!passphrase) {
+      return { error: "wallet locked" };
+    }
+    // A switch-chain approval carries no account context, so the shared claim
+    // validator skips it and this is the only place the grant is re-checked.
+    // Read it BEFORE switching: the switch re-selects the active account, and the
+    // auto-grant below would otherwise hand the origin a fresh account — silently
+    // reconnecting a site the user disconnected by switching accounts, with no
+    // connect prompt. A revoked or disconnected origin is refused instead.
+    const connected = await wallet.getGrantedAccounts(input.origin, passphrase);
+    if (connected.length === 0) {
+      return { error: "origin not connected" };
+    }
+    const account = await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
+    const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
+    if (account && !granted.some((item) => item.id === account.id)) {
+      await wallet.grantOrigin({
+        accountId: account.id,
+        origin: input.origin,
+        vaultPassphrase: passphrase,
+      });
+    }
+    return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
+  });
 };

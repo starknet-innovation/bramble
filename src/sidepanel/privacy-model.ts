@@ -6,35 +6,39 @@
 import type { PrivacyAccountState, PrivacyPreparation } from "./privacy-runtime";
 
 /**
- * Current explicit-disclosure state for the selected account and network.
+ * Current shielded-balance discovery state for the selected account and
+ * network. Discovery starts automatically for the unlocked active account;
+ * `value === null` with no error means it has not completed yet.
  */
 export type PrivacyDisclosureState = {
-  readonly enabled: boolean;
   readonly error: string | null;
   readonly loading: boolean;
   readonly value: PrivacyAccountState | null;
 };
 
 /**
- * Deterministic checkpoint in the registration or shielding journey.
+ * Deterministic checkpoint in the pool-registration journey.
+ *
+ * Registration is all this surface does. Every movement of value — shielding,
+ * unshielding, private sends — is composed in the Send flow as a send between
+ * two balances, so the journey has no compose or amount step of its own.
  */
 export type PrivacyJourneyState =
   | { readonly stage: "idle" }
   | {
       readonly preparation: PrivacyPreparation;
-      readonly stage: "activate-review" | "deposit-review";
+      readonly stage: "activate-review";
       readonly tokenId: string;
     }
-  | { readonly stage: "compose"; readonly tokenId: string }
   | {
-      readonly kind: "deposit" | "register";
+      readonly kind: "register";
       readonly preparation: PrivacyPreparation;
       readonly stage: "working";
       readonly tokenId: string;
     }
   | {
       readonly hash: string;
-      readonly kind: "deposit" | "register";
+      readonly kind: "register";
       readonly stage: "success";
       readonly symbol: string;
       readonly tokenId: string;
@@ -49,7 +53,6 @@ export type PrivacyJourneyState =
  * Returns the disclosure state used at lock, account switch, and first boot.
  */
 export const emptyPrivacyDisclosure = (): PrivacyDisclosureState => ({
-  enabled: false,
   error: null,
   loading: false,
   value: null,

@@ -17,6 +17,7 @@ const ALL_CODES: readonly LedgerRejectionCode[] = [
   "device-locked",
   "no-app-open",
   "app-below-minimum",
+  "firmware-below-minimum",
   "blind-signing-disabled",
   "device-busy",
   "replug",
@@ -33,6 +34,7 @@ const ALL_CODES: readonly LedgerRejectionCode[] = [
   "worker-evicted",
   "chain-failed",
   "unexpected-device-error",
+  "unsupported-ledger-device",
 ];
 
 describe("ledger rejection catalog", () => {

@@ -58,7 +58,12 @@ export {
 
 import { type AllowanceView, isAllowanceView } from "../starknet/allowance-discovery";
 import { isWalletPreferences, type WalletPreferences } from "../storage/preferences-store";
-import { type AccountRef, isAccountId, isAccountRef } from "../storage/vault-schema";
+import {
+  type AccountRef,
+  isAccountId,
+  isAccountIdForNetwork,
+  isAccountRef,
+} from "../storage/vault-schema";
 import { isPendingApprovalsResponse, type PendingApprovalsResponse } from "./approvals-responses";
 
 /**
@@ -324,11 +329,16 @@ export const isBalancesResponse = (value: unknown): value is BalancesResponse =>
   isJson(value) &&
   hasOnlyKnownKeys(value, ["accountId", "balances", "networkId", "ok"]) &&
   value["ok"] === true &&
-  isAccountId(value["accountId"]) &&
+  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   Array.isArray(value["balances"]) &&
-  value["balances"].every(isTokenBalance) &&
+  value["balances"].every(
+    (balance) =>
+      isTokenBalance(balance) &&
+      balance.networkId === value["networkId"] &&
+      balance.id === `${balance.networkId}:${balance.symbol}:${balance.address}`,
+  ) &&
   hasUniqueStrings(value["balances"].map((balance) => balance.id)) &&
-  isStarknetNetworkId(value["networkId"]);
+  value["balances"].every((balance) => balance.networkId === value["networkId"]);
 
 /**
  * Auto-detected token suggestions accepted from the background boundary.

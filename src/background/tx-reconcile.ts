@@ -43,6 +43,29 @@ export type ReconcileDeps = {
   readonly runtimeRpc: RuntimeRpc;
 };
 
+// Both wallet.activity and chrome.alarms reach this module. Serialize their
+// full read-chain-write cycles through one worker-wide queue so neither can
+// apply an outcome computed from a snapshot the other has already superseded.
+let reconciliationTail: Promise<void> = Promise.resolve();
+let pendingReconciliations = 0;
+const runReconciliation = <T>(operation: () => Promise<T>): Promise<T> => {
+  pendingReconciliations += 1;
+  const result = reconciliationTail.then(operation, operation);
+  reconciliationTail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  void result.then(
+    () => {
+      pendingReconciliations -= 1;
+    },
+    () => {
+      pendingReconciliations -= 1;
+    },
+  );
+  return result;
+};
+
 const byNetwork = (
   entries: readonly ActivityEntry[],
 ): ReadonlyMap<StarknetNetworkId, readonly ActivityEntry[]> => {
@@ -122,12 +145,20 @@ export const reconcileScope = async (
   scope: ActivityScope,
   nowMs: number,
 ): Promise<readonly ActivityEntry[]> => {
-  const entries = activityForScope(await deps.activity.list(), scope);
-  const due = entries.filter((entry) => isObserved(entry, nowMs));
-  const outcomes = { ...expiredOutcomes(entries, nowMs), ...(await chainOutcomes(deps, due)) };
-  return Object.keys(outcomes).length === 0
-    ? entries
-    : deps.activity.updateStatuses(outcomes, scope);
+  // A background alarm may be waiting through multiple RPC fallbacks. The
+  // Activity view must remain responsive: return its current durable snapshot
+  // instead of queueing user-visible work behind an unrelated network poll.
+  if (pendingReconciliations > 0) {
+    return activityForScope(await deps.activity.list(), scope);
+  }
+  return runReconciliation(async () => {
+    const entries = activityForScope(await deps.activity.list(), scope);
+    const due = entries.filter((entry) => isObserved(entry, nowMs));
+    const outcomes = { ...expiredOutcomes(entries, nowMs), ...(await chainOutcomes(deps, due)) };
+    return Object.keys(outcomes).length === 0
+      ? entries
+      : deps.activity.updateStatuses(outcomes, scope);
+  });
 };
 
 /**
@@ -143,13 +174,14 @@ export const reconcileObserved = async (
   deps: ReconcileDeps,
   tier: ObservationTier,
   nowMs: number,
-): Promise<void> => {
-  const entries = await deps.activity.list();
-  const due = entries.filter((entry) => isObservedAt(entry, tier, nowMs));
-  const expired = tier === "fast" ? expiredOutcomes(entries, nowMs) : {};
-  const outcomes = { ...expired, ...(await chainOutcomes(deps, due)) };
-  const touched = entries.filter((entry) => outcomes[entry.hash] !== undefined);
-  for (const scope of byScope(touched)) {
-    await deps.activity.updateStatuses(outcomes, scope);
-  }
-};
+): Promise<void> =>
+  runReconciliation(async () => {
+    const entries = await deps.activity.list();
+    const due = entries.filter((entry) => isObservedAt(entry, tier, nowMs));
+    const expired = tier === "fast" ? expiredOutcomes(entries, nowMs) : {};
+    const outcomes = { ...expired, ...(await chainOutcomes(deps, due)) };
+    const touched = entries.filter((entry) => outcomes[entry.hash] !== undefined);
+    for (const scope of byScope(touched)) {
+      await deps.activity.updateStatuses(outcomes, scope);
+    }
+  });

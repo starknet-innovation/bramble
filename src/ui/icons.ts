@@ -58,6 +58,8 @@ const ICONS = {
     '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />',
   globe:
     '<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z" /><path d="M3 12h18" /><path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18z" />',
+  externalLink:
+    '<path d="M14 4h6v6" /><path d="M20 4 11 13" /><path d="M17 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4" />',
   link: '<path d="M9 15 15 9" /><path d="M11 6l1.5-1.5a4 4 0 0 1 5.7 5.7L16.7 11.7" /><path d="M13 18l-1.5 1.5a4 4 0 0 1-5.7-5.7L7.3 12.3" />',
   lock: '<path d="M7 11V8a5 5 0 0 1 10 0v3" /><path d="M6 11h12v9H6z" />',
   monitor:

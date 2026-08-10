@@ -63,6 +63,7 @@ export const nftSendFlow = (
       <section class="section">
         ${account ? "" : noAccountEmpty(status)}
         <form id="nft-send-form">
+          <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="contract" type="hidden" value="${escapeHtml(nft.contract)}" />
           <input name="tokenId" type="hidden" value="${escapeHtml(nft.tokenId)}" />
           <input name="networkId" type="hidden" value="${escapeHtml(nft.networkId)}" />

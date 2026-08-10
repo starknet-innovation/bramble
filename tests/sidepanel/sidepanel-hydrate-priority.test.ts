@@ -11,7 +11,7 @@ import type { SidepanelWallet } from "../../src/sidepanel/runtime";
 const status: WalletStatus = {
   accountCount: 1,
   accounts: [],
-  activeAccountId: null,
+  activeAccountId: "SN_MAIN:0x1",
   hasVault: true,
   locked: false,
   network: "Starknet Mainnet",
@@ -70,7 +70,7 @@ describe("home hydration priority", () => {
       },
     } as never);
 
-    balances.resolve({ balances: [] });
+    balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
     prices.resolve({ asOf: 1, changes: {}, prices: { "0x1": 1 }, stale: false });
     await flush();
     expect(paints).toBe(1);
@@ -110,7 +110,11 @@ describe("home hydration priority", () => {
           },
         ],
         loadActivity: async () => ({ entries: [], historyUnavailable: false }),
-        loadBalances: async () => ({ balances: [] }),
+        loadBalances: async () => ({
+          accountId: "SN_MAIN:0x1",
+          balances: [],
+          networkId: "SN_MAIN",
+        }),
         loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
       },
     } as never);
@@ -160,7 +164,7 @@ describe("home hydration priority", () => {
     expect(cache.discoveredNfts).toHaveLength(1);
     expect(paints).toBe(1);
 
-    balances.resolve({ balances: [] });
+    balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
     prices.resolve({ asOf: null, changes: {}, prices: {}, stale: false });
     indexed.resolve([]);
     await run;
@@ -190,15 +194,40 @@ describe("home hydration priority", () => {
     } as never);
 
     current = false;
-    balances.resolve({ balances: [] });
+    balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
     await run;
     expect(paints).toBe(0);
     expect(cache.balances).toEqual({ error: "wallet locked" });
   });
 
+  test("rejects a balance response scoped to another account", async () => {
+    const cache = emptyRenderCache();
+    await hydrateView({
+      activeView: "tokens",
+      cache,
+      deployment: {},
+      multisig: emptyMultisigClient,
+      paint: () => undefined,
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        loadBalances: async () => ({
+          accountId: "SN_MAIN:0x999",
+          balances: [],
+          networkId: "SN_MAIN",
+        }),
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    expect(cache.balances).toEqual({ error: "balances unavailable" });
+  });
+
   test("hydrates a multisig home from the shared account balance scope", async () => {
     const multisigId = "SN_MAIN:0x7123";
     const sharedBalances = {
+      accountId: multisigId,
       balances: [
         {
           address: "0x3306",
@@ -211,6 +240,7 @@ describe("home hydration priority", () => {
           symbol: "USDC",
         },
       ],
+      networkId: "SN_MAIN" as const,
     };
     const cache = emptyRenderCache();
     let signerBalanceReads = 0;
@@ -258,7 +288,7 @@ describe("home hydration priority", () => {
         },
         loadBalances: async () => {
           signerBalanceReads += 1;
-          return { balances: [] };
+          return { accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" };
         },
         loadActivity: async (accountId?: string) => {
           sharedActivityReads.push(accountId);

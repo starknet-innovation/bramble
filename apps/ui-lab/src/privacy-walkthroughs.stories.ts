@@ -41,36 +41,16 @@ export const ActivatePrivateBalances: LabStory = {
       await stepForward(canvasElement, "Proof and authorization");
       expect(walletBody(canvasElement)).toHaveTextContent("Generate proof and authorize");
     });
-    await step("Confirm acceptance and indexer catch-up", async () => {
+    await step("Confirm acceptance and point at the next step", async () => {
       await stepForward(canvasElement, "Activation submitted");
-      expect(walletBody(canvasElement)).toHaveTextContent("Activation accepted");
+      expect(walletBody(canvasElement)).toHaveTextContent("You can now shield");
     });
   },
 };
 
-export const ShieldAnAsset: LabStory = {
-  args: { checkpointId: "asset-entry", scenarioId: "privacy" },
-  name: "Walkthrough · shield an asset",
-  play: async ({ canvasElement, step }) => {
-    await expectCheckpoint(canvasElement, "Asset privacy action");
-    await step("Choose the exact public amount", async () => {
-      await stepForward(canvasElement, "Choose shield amount");
-      expect(walletBody(canvasElement)).toHaveTextContent("Available to shield");
-    });
-    await step("Review the public deposit", async () => {
-      await stepForward(canvasElement, "Review shielding");
-      expect(walletBody(canvasElement)).toHaveTextContent("Public account transaction");
-    });
-    await step("Observe proof and submission liveness", async () => {
-      await stepForward(canvasElement, "Shielding in progress");
-      expect(walletBody(canvasElement)).toHaveTextContent("Broadcast to Starknet");
-    });
-    await step("Confirm acceptance without inventing indexer finality", async () => {
-      await stepForward(canvasElement, "Shielding submitted");
-      expect(walletBody(canvasElement)).toHaveTextContent("indexer catches up");
-    });
-  },
-};
+// There is no shielding walkthrough here any more: shield and unshield are
+// composed in Send, so their steps belong with the other send routes rather than
+// on the registration surface this file walks.
 
 export const SendPrivately: LabStory = {
   args: { checkpointId: "transfer-review", scenarioId: "privacy" },

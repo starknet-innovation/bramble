@@ -36,10 +36,11 @@ const createFakeChannel = (): {
 };
 
 const okClient = (): LedgerDeviceClient => ({
+  getOsVersion: async () => ({ targetId: 0x33000004, version: "2.7.1" }),
   getAppVersion: async () => ({
     errorMessage: "",
     major: 2,
-    minor: 1,
+    minor: 4,
     patch: 0,
     returnCode: 0x9000,
   }),
@@ -68,7 +69,21 @@ describe("serveLedgerBroker", () => {
       id: 1,
       kind: "response",
       ok: true,
-      value: { errorMessage: "", major: 2, minor: 1, patch: 0, returnCode: 0x9000 },
+      value: { errorMessage: "", major: 2, minor: 4, patch: 0, returnCode: 0x9000 },
+    });
+  });
+
+  test("serves the read-only OS version command", async () => {
+    const fake = createFakeChannel();
+    serveLedgerBroker(fake.channel, okClient(), () => undefined);
+
+    fake.emit({ id: 1, kind: "command", method: "getOsVersion" });
+    await tick();
+    expect(fake.posts[1]).toEqual({
+      id: 1,
+      kind: "response",
+      ok: true,
+      value: { targetId: 0x33000004, version: "2.7.1" },
     });
   });
 

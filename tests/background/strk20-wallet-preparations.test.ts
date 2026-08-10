@@ -26,6 +26,7 @@ const registration = async (suffix = ""): Promise<Strk20RegistrationPreparation>
   const unsigned = {
     kind: "register" as const,
     poolAddress: `0x123${suffix}`,
+    poolFeeFri: "0x1",
     summaries: ["Register private balances"],
     token,
   };
@@ -55,6 +56,7 @@ const privateDeposit = async (): Promise<Strk20DepositPreparation> => {
       mode: "private-relay" as const,
     },
     poolAddress: "0x123",
+    recipient: account.address,
     summaries: ["Shield 1 ETH"],
     token,
   };
@@ -72,6 +74,7 @@ describe("STRK20 wallet preparation store", () => {
       kind: "register",
       payloadDigest: value.id,
       poolAddress: value.poolAddress,
+      poolFeeFri: "0x1",
       route: "public-account",
       summaries: value.summaries,
       symbol: "ETH",
