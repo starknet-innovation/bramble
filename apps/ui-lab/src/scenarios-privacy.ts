@@ -43,7 +43,11 @@ const disclosure = (
     accountId: softwareAccount.id,
     balances,
     networkId: "SN_MAIN",
+    // The pool's 6 STRK action fee and a configured relay: the scenarios review
+    // the private route, which is only offered when a relay exists.
+    poolFeeFri: "0x53444835ec580000",
     registration,
+    relayConfigured: true,
   },
 });
 
