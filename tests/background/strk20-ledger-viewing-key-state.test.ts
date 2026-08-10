@@ -8,6 +8,7 @@
  * or — worse — as an account holding nothing.
  */
 import { describe, expect, test } from "bun:test";
+import { STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE } from "../../src/background/strk20-wallet-ops";
 import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 import type { AccountRef } from "../../src/storage/vault-schema";
 import {
@@ -71,6 +72,38 @@ describe("Ledger private-balance state before the viewing-key ceremony", () => {
     await expect(handler({ type: "wallet.strk20State" }, STRK20_CONTENT_SENDER)).resolves.toEqual({
       error: "privileged sender required",
     });
+  });
+
+  test("the registration review discloses that the key is kept on disk", async () => {
+    // Registration is only offered to an unregistered account.
+    const handler = buildStrk20Handler({
+      accounts: [ledgerAccount],
+      activeAccountId: () => ledgerAccount.id,
+      registered: false,
+    });
+
+    const response = (await handler(
+      { type: "wallet.strk20PrepareRegistration" },
+      STRK20_EXTENSION_SENDER,
+    )) as unknown as { readonly strk20Preparation: { readonly summaries: readonly string[] } };
+
+    expect(response.strk20Preparation.summaries).toContain(STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE);
+  });
+
+  test("a software account is not told its key is stored, because it is not", async () => {
+    // A software account derives its viewing key on demand and never persists it,
+    // so this disclosure would be a false statement about where the key lives.
+    const handler = buildStrk20Handler({ registered: false });
+
+    const response = (await handler(
+      { type: "wallet.strk20PrepareRegistration" },
+      STRK20_EXTENSION_SENDER,
+    )) as unknown as { readonly strk20Preparation: { readonly summaries: readonly string[] } };
+
+    expect(response.strk20Preparation.summaries).not.toContain(
+      STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE,
+    );
+    expect(response.strk20Preparation.summaries.join(" ")).not.toContain("on disk");
   });
 
   test("a software account is never asked to run a ceremony", async () => {

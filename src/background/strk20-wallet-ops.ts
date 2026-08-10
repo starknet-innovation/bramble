@@ -104,6 +104,29 @@ const needsViewingKeyCeremony = async (context: ActivePrivacyContext): Promise<b
   }
 };
 
+/**
+ * Custody disclosure shown when registering will retain a viewing key on disk.
+ *
+ * Exported because it is user-facing security copy: a test pins that the
+ * registration review carries it, so it cannot be dropped by accident.
+ */
+export const STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE =
+  "Registering stores a viewing key on disk for ease of use. It is encrypted with your wallet password, like every other secret this wallet holds, and cannot be read without it.";
+
+// Disclosed only for a keyless account, because only a keyless account retains
+// the key. A software account's viewing key is derived on demand and never
+// persisted, so telling that user their key is stored on disk would be false.
+//
+// The comparison is to "every other secret this wallet holds" rather than to the
+// recovery phrase on purpose: a Ledger-created vault holds no phrase at all
+// (createLedgerVault writes `mnemonic: null`), and those are exactly the accounts
+// this line is shown for — so a phrase comparison would break precisely where the
+// statement applies.
+const viewingKeyCustodyDisclosure = (context: ActivePrivacyContext): readonly string[] =>
+  context.accountContext.account.derivation.kind === "ledger"
+    ? [STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE]
+    : [];
+
 // The fee is a hard input to every pool route, and it is readable without the
 // viewing key. Returning a state without it leaves Send in an endless "Checking",
 // so an unavailable reader or a failed read rejects the whole request.
@@ -231,6 +254,7 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
       summaries: [
         "Register this account with the privacy pool",
         "Registration is public and links this wallet address to its viewing key",
+        ...viewingKeyCustodyDisclosure(context),
         `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee from this account`,
       ],
       token: context.token,
