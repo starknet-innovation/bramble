@@ -12,7 +12,7 @@ import type { WalletPreferences } from "../storage/preferences-store";
 import { emptyState, receipt } from "../ui/content";
 import { button } from "../ui/controls";
 import { icon } from "./icons";
-import { flowHeader, flowScreen } from "./parts";
+import { flowHeader, flowScreen, formatFri } from "./parts";
 import type { PrivacyJourneyState } from "./privacy-model";
 import { liquidDots, liquidDotsFilter } from "./progress-motion";
 import { tokenGlyph } from "./token-row";
@@ -58,6 +58,9 @@ const preparationDetails = (
               valueStyle: "code" as const,
             },
           ]
+        : []),
+      ...(preparation.poolFeeFri
+        ? [{ label: "Pool fee", value: `${formatFri(preparation.poolFeeFri)} from public STRK` }]
         : []),
       { label: "Privacy pool", value: shortAddress(preparation.poolAddress), valueStyle: "code" },
     ])}

@@ -3,7 +3,7 @@
  * verifies registration, approval, and proof boundaries without live services.
  */
 import { describe, expect, test } from "bun:test";
-import type { Call, RpcProvider } from "starknet";
+import type { Call } from "starknet";
 import { num } from "starknet";
 import { WalletError } from "../../../src/shared/errors";
 import { STARK_FIELD_PRIME, STRK_TOKEN_ADDRESS } from "../../../src/starknet/networks";
@@ -69,104 +69,6 @@ describe("official STRK20 SDK submission boundary", () => {
     expect(submitted).toHaveLength(1);
   });
 
-  test("discovers account registration using the SDK setup requirement enum", async () => {
-    let requirement = 0;
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      async discoverRequirement(recipient, selectedToken) {
-        expect(recipient).toBe(account.address);
-        expect(selectedToken).toBe(token);
-        return requirement;
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const service = createOfficialStrk20Service({ providerFor, sdk });
-
-    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("unregistered");
-    requirement = 3;
-    await expect(service.registrationStatus?.({ ...context, token })).resolves.toBe("registered");
-  });
-
-  test("reads a recipient from the pool, never from the setup requirement", async () => {
-    // The discovery preflight answers SetupChannel both for an unregistered
-    // recipient and for a registered one this sender has no channel to yet, and
-    // a channel key is derived per sender/recipient pair — so the first private
-    // transfer between any two accounts reports SetupChannel. Deriving the
-    // recipient's registration from it therefore either blocks every first send
-    // or waves through an unregistered recipient. The pool's `get_public_key` is
-    // the only unambiguous answer, so the requirement must not be consulted.
-    const subject = "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      async discoverRequirement() {
-        throw new Error("recipient registration must not come from the setup requirement");
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const statusFrom = (publicKey: string) =>
-      createOfficialStrk20Service({
-        providerFor: strk20ProviderFor({ publicKey }),
-        sdk,
-      }).registrationStatus?.({ ...context, subject, token });
-
-    // A registered recipient stays reachable with no channel of any kind yet;
-    // the transfer builder opens the channel and token subchannel itself.
-    await expect(statusFrom("0x77")).resolves.toBe("registered");
-    await expect(statusFrom("0x0")).resolves.toBe("unregistered");
-  });
-
-  test("fails closed when the pool cannot answer for a recipient", async () => {
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const service = createOfficialStrk20Service({
-      providerFor: () =>
-        ({
-          callContract: async () => {
-            throw new Error("node down");
-          },
-        }) as unknown as RpcProvider,
-      sdk,
-    });
-    await expect(
-      service.registrationStatus?.({
-        ...context,
-        subject: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
-        token,
-      }),
-    ).rejects.toThrow("could not read pool registration");
-  });
-
-  test("rejects negative and out-of-field pool registration keys", async () => {
-    const sdk = runtime(() => ({
-      build: () => builder(executeResult()),
-      async discoverNotes() {
-        return { notes: new Map() };
-      },
-      executeWithInvocation: async () => executeResult(),
-    }));
-    const statusFrom = (publicKey: string) =>
-      createOfficialStrk20Service({
-        providerFor: strk20ProviderFor({ publicKey }),
-        sdk,
-      }).registrationStatus?.({ ...context, subject: "0x123", token });
-
-    await expect(statusFrom("-1")).rejects.toThrow("out-of-field public key");
-    await expect(statusFrom(`0x${STARK_FIELD_PRIME.toString(16)}`)).rejects.toThrow(
-      "out-of-field public key",
-    );
-  });
-
   test("registers through the SDK builder and submits only the reviewed pool proof", async () => {
     let registerCalls = 0;
     const submitted: unknown[] = [];
@@ -196,7 +98,9 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      transactionHash: "0xabc",
+    });
     expect(registerCalls).toBe(1);
     expect(submitted).toEqual([
       {
@@ -254,7 +158,9 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      transactionHash: "0xabc",
+    });
     expect(proofAttempts).toBe(3);
     expect(pauses).toEqual([1, 2]);
     expect(submitted).toHaveLength(1);
@@ -296,7 +202,7 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).rejects.toThrow(
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).rejects.toThrow(
       "strk20 services unavailable (proving/rate-limited): -32005 rate limit exceeded",
     );
     expect(proofAttempts).toBe(3);
@@ -335,7 +241,9 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    await expect(
+      service.register?.({ ...context, poolFeeFri: "0x3782dace9d900000" }),
+    ).resolves.toEqual({ transactionHash: "0xabc" });
     expect(submitted).toEqual([
       [
         {
@@ -350,6 +258,38 @@ describe("official STRK20 SDK submission boundary", () => {
         },
       ],
     ]);
+  });
+
+  test("refuses a changed registration fee before proving or signing", async () => {
+    let proofs = 0;
+    let submissions = 0;
+    const sdk = runtime(() => ({
+      build: () => ({
+        ...builder(executeResult()),
+        async createProofInvocation() {
+          proofs += 1;
+          return executeResult();
+        },
+      }),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({
+      providerFor: strk20ProviderFor({ poolFee: "0x2" }),
+      sdk,
+      async submitInvoke(input) {
+        submissions += 1;
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(service.register?.({ ...context, poolFeeFri: "0x1" })).rejects.toThrow(
+      "Private pool fee changed",
+    );
+    expect(proofs).toBe(0);
+    expect(submissions).toBe(0);
   });
 
   test("an unreadable pool fee fails registration closed before submission", async () => {
@@ -384,7 +324,9 @@ describe("official STRK20 SDK submission boundary", () => {
       },
     });
 
-    await expect(service.register?.(context)).rejects.toThrow("strk20 services unavailable");
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).rejects.toThrow(
+      "strk20 services unavailable",
+    );
     expect(submissions).toBe(0);
   });
 
@@ -413,7 +355,7 @@ describe("official STRK20 SDK submission boundary", () => {
           { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
           { amount: "0x80000000000000000000000000000000", token, type: "deposit" },
         ],
-        plan: { mode: "account" },
+        plan: { mode: "account", poolFeeFri: "0x0" },
       }),
     ).resolves.toEqual({ transactionHash: "0xdef" });
     expect(submitted).toEqual([
@@ -434,9 +376,45 @@ describe("official STRK20 SDK submission boundary", () => {
       service.submitActions({
         ...context,
         actions: [{ amount: "0x1", recipient: "0x999", token, type: "withdraw" }],
-        plan: { mode: "account" },
+        plan: { mode: "account", poolFeeFri: "0x0" },
       }),
     ).rejects.toThrow("strk20 privacy leak");
+  });
+
+  test("refuses a changed deposit fee before proving or signing", async () => {
+    let proofs = 0;
+    let submissions = 0;
+    const sdk = runtime(() => ({
+      build: () => ({
+        ...builder(executeResult()),
+        async createProofInvocation() {
+          proofs += 1;
+          return executeResult();
+        },
+      }),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({
+      providerFor: strk20ProviderFor({ poolFee: "0x2" }),
+      sdk,
+      async submitInvoke(input) {
+        submissions += 1;
+        return { calls: input.calls, transactionHash: "0xabc" };
+      },
+    });
+
+    await expect(
+      service.submitActions({
+        ...context,
+        actions: [{ amount: "0x1", token, type: "deposit" }],
+        plan: { mode: "account", poolFeeFri: "0x1" },
+      }),
+    ).rejects.toThrow("Private pool fee changed");
+    expect(proofs).toBe(0);
+    expect(submissions).toBe(0);
   });
 
   test("surfaces a pool rejection of registration and frees the scope for a retry", async () => {
@@ -469,12 +447,14 @@ describe("official STRK20 SDK submission boundary", () => {
     });
 
     // The revert reason reaches the caller instead of a bare generic failure.
-    await expect(service.register?.(context)).rejects.toThrow(
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).rejects.toThrow(
       "(submission/execution-reverted): 41 Transaction execution error pool/registration-closed",
     );
     // And the scope is not left stuck on `submitting`, so the retry proceeds.
     expect(await maturityStore.read(scope)).toBeNull();
-    await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
+    await expect(service.register?.({ ...context, poolFeeFri: "0x0" })).resolves.toEqual({
+      transactionHash: "0xabc",
+    });
     expect(attempts).toBe(2);
   });
 

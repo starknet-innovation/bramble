@@ -25,6 +25,7 @@ const TOKEN = {
   networkId: "SN_MAIN" as const,
   symbol: "TST",
 };
+const BALANCE = { ...TOKEN, balance: "10000000", formatted: "10" };
 
 const status: WalletStatus = {
   accountCount: 1,
@@ -54,21 +55,11 @@ const mountOutcome = (chainStatus: ActivityStatus) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(
-    document.createRange().createContextualFragment(
-      sendFlow(
-        status,
-        account,
-        preferences,
-        [
-          {
-            ...TOKEN,
-            balance: "10000000",
-            formatted: "10",
-          },
-        ],
-        { [TOKEN_ADDRESS]: 1 },
+    document
+      .createRange()
+      .createContextualFragment(
+        sendFlow(status, account, preferences, [BALANCE], { [TOKEN_ADDRESS]: 1 }),
       ),
-    ),
   );
   document.body.append(app);
   const wallet = {
@@ -104,6 +95,7 @@ const mountOutcome = (chainStatus: ActivityStatus) => {
   const deps: TransferUiDeps = {
     app,
     confirmationDelaysMs: [0],
+    publicBalances: () => [BALANCE],
     render: async () => undefined,
     waitForConfirmation: async () => undefined,
     wallet: wallet as unknown as TransferUiDeps["wallet"],

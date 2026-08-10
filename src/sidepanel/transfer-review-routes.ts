@@ -118,7 +118,10 @@ const poolFeeHtml = (route: SendRoute, poolFeeFri?: string): string =>
  * differently again.
  */
 export const routeFeeHtml = (route: SendRoute, state: RouteFeeState): string =>
-  `${networkFeeHtml(route, state)}${poolFeeHtml(route, state.poolFeeFri)}`;
+  `${networkFeeHtml(route, state)}${poolFeeHtml(
+    route,
+    route.submission === "account" ? state.preparation?.poolFeeFri : state.poolFeeFri,
+  )}`;
 
 /**
  * The fee lines followed by the disclosure, which is what the review screen

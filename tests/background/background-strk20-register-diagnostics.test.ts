@@ -21,6 +21,9 @@ const offPath = async (): Promise<never> => {
 const registerRejectedBy = (error: unknown): Strk20Service => ({
   prepare: offPath,
   privateBalances: offPath,
+  async poolFee() {
+    return "0x1";
+  },
   quoteActions: offPath,
   async register() {
     return mapStrk20StageError("submission", error);

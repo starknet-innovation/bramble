@@ -22,8 +22,8 @@ import type { RuntimeResponse } from "./runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
+  assertPublicPoolSpendAffordable,
   errorText,
-  publicBalance,
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
@@ -286,9 +286,6 @@ const depositPreparation = async (
     if (!isStrk20Felt(`0x${amountRaw.toString(16)}`)) {
       return { error: "Amount is outside the Starknet field range" };
     }
-    if (amountRaw > (await publicBalance(deps, context))) {
-      return { error: `Not enough ${context.token.symbol}` };
-    }
     const actions = [
       {
         amount: `0x${amountRaw.toString(16)}`,
@@ -300,6 +297,15 @@ const depositPreparation = async (
       },
     ];
     const plan = await quoteStrk20Actions(service, { ...context.accountContext, actions });
+    if (plan.mode !== "account") {
+      return { error: "Shielding route unavailable" };
+    }
+    await assertPublicPoolSpendAffordable(
+      deps,
+      context,
+      plan.poolFeeFri,
+      `0x${amountRaw.toString(16)}`,
+    );
     const config = context.accountContext.config;
     if (!config) {
       return { error: "Private balances are not configured for this network" };

@@ -329,10 +329,14 @@ export const isBalancesResponse = (value: unknown): value is BalancesResponse =>
   isJson(value) &&
   hasOnlyKnownKeys(value, ["accountId", "balances", "networkId", "ok"]) &&
   value["ok"] === true &&
-  isStarknetNetworkId(value["networkId"]) &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   Array.isArray(value["balances"]) &&
-  value["balances"].every(isTokenBalance) &&
+  value["balances"].every(
+    (balance) =>
+      isTokenBalance(balance) &&
+      balance.networkId === value["networkId"] &&
+      balance.id === `${balance.networkId}:${balance.symbol}:${balance.address}`,
+  ) &&
   hasUniqueStrings(value["balances"].map((balance) => balance.id)) &&
   value["balances"].every((balance) => balance.networkId === value["networkId"]);
 

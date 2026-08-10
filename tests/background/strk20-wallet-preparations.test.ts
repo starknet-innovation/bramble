@@ -26,6 +26,7 @@ const registration = async (suffix = ""): Promise<Strk20RegistrationPreparation>
   const unsigned = {
     kind: "register" as const,
     poolAddress: `0x123${suffix}`,
+    poolFeeFri: "0x1",
     summaries: ["Register private balances"],
     token,
   };
@@ -73,6 +74,7 @@ describe("STRK20 wallet preparation store", () => {
       kind: "register",
       payloadDigest: value.id,
       poolAddress: value.poolAddress,
+      poolFeeFri: "0x1",
       route: "public-account",
       summaries: value.summaries,
       symbol: "ETH",

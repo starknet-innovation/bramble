@@ -240,14 +240,10 @@ export const isAccountId = (value: unknown): value is string => {
 };
 
 /**
- * Validates an account id and proves its embedded network agrees with the
- * explicit store or request scope. Keeping this comparison next to the account
- * id grammar prevents public caches from accepting contradictory identities.
+ * Checks that an account id is structurally valid for the claimed network.
  */
-export const isAccountIdForNetwork = (
-  value: unknown,
-  networkId: StarknetNetworkId,
-): value is string => isAccountId(value) && value.startsWith(`${networkId}:`);
+export const isAccountIdForNetwork = (value: unknown, networkId: unknown): value is string =>
+  isStarknetNetworkId(networkId) && isAccountId(value) && value.startsWith(`${networkId}:`);
 
 const hasValidAccountCore = (value: Record<string, unknown>): boolean =>
   isNonZeroFelt(value["address"]) &&

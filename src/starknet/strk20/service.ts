@@ -38,6 +38,27 @@ export const STRK20_SERVICE_UNAVAILABLE = "strk20 services unavailable";
  * No unlinkable broadcast service is configured.
  */
 export const STRK20_SUBMISSION_UNAVAILABLE = "strk20 private submission unavailable";
+/**
+ * Maximum pool fee accepted by the wallet and the pool's u128 fee field.
+ */
+export const STRK20_MAX_POOL_FEE = (1n << 128n) - 1n;
+
+/**
+ * Parses a reviewed pool fee into its canonical felt representation. Values
+ * outside the pool's u128 fee field fail closed before they can enter a digest.
+ */
+export const canonicalStrk20PoolFee = (value: string): string => {
+  let fee: bigint;
+  try {
+    fee = BigInt(value);
+  } catch {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  if (fee < 0n || fee > STRK20_MAX_POOL_FEE) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  return `0x${fee.toString(16)}`;
+};
 
 /**
  * Privileged account context supplied only by the background worker. Viewing
@@ -99,6 +120,8 @@ export type Strk20PrivateRelayPlan = {
  */
 export type Strk20AccountPlan = {
   readonly mode: "account";
+  /** Exact STRK pool fee committed by the review digest. */
+  readonly poolFeeFri: string;
 };
 
 /**
@@ -117,7 +140,7 @@ export type Strk20Service = {
     input: Strk20AccountContext & { readonly subject?: string; readonly token: string },
   ) => Promise<"registered" | "unregistered">;
   readonly register?: (
-    input: Strk20AccountContext,
+    input: Strk20AccountContext & { readonly poolFeeFri: string },
   ) => Promise<{ readonly transactionHash: string }>;
   /**
    * Reads the pool's per-`apply_actions` STRK fee so the UI can show it before
@@ -227,6 +250,20 @@ const assertFeeBalance = async (
   assertSufficientPrivateBalance([...sameTokenSpend, feeAction], balances);
 };
 
+const assertReviewedPoolFee = async (
+  service: Strk20Service,
+  input: Strk20AccountContext,
+  expectedPoolFeeFri: string,
+): Promise<void> => {
+  if (!service.poolFee) {
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+  }
+  const current = canonicalStrk20PoolFee(await service.poolFee(input));
+  if (current !== canonicalStrk20PoolFee(expectedPoolFeeFri)) {
+    throw new WalletError("Private pool fee changed. Review the transaction again.");
+  }
+};
+
 const isDepositOnly = (actions: readonly Strk20Action[]): boolean =>
   actions.length > 0 && actions.every((action) => action.type === "deposit");
 
@@ -297,7 +334,10 @@ export const quoteStrk20Plan = async (
   // private state before the dapp request is approved. Keep the entry route
   // deterministic and pay its fee from the public account instead.
   if (isDepositOnly(input.actions)) {
-    return { mode: "account" };
+    if (!service.poolFee) {
+      throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
+    }
+    return { mode: "account", poolFeeFri: canonicalStrk20PoolFee(await service.poolFee(input)) };
   }
   return service.quoteActions(input);
 };
@@ -330,6 +370,9 @@ export const submitStrk20Actions = async (
   if (input.plan.mode === "account" && !isDepositOnly(input.actions)) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
   }
+  if (input.plan.mode === "account") {
+    await assertReviewedPoolFee(service, input, input.plan.poolFeeFri);
+  }
   await assertFeeBalance(service, input);
   return service.submitActions(input);
 };
@@ -356,13 +399,14 @@ export const readStrk20RegistrationStatus = (
  * public Starknet transaction path. Callers must present and approve this
  * operation before invoking this boundary.
  */
-export const registerStrk20Account = (
+export const registerStrk20Account = async (
   service: Strk20Service,
-  input: Strk20AccountContext,
+  input: Strk20AccountContext & { readonly poolFeeFri: string },
 ): Promise<{ readonly transactionHash: string }> => {
   if (!service.register) {
-    return Promise.reject(new WalletError(STRK20_SERVICE_UNAVAILABLE));
+    throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }
+  await assertReviewedPoolFee(service, input, input.poolFeeFri);
   return service.register(input);
 };
 
@@ -394,7 +438,7 @@ export const summarizeStrk20Action = (action: Strk20Action): string => {
  */
 export const summarizeStrk20Plan = (plan: Strk20SubmissionPlan): string =>
   plan.mode === "account"
-    ? "Public account fee — first deposits are linked to this wallet"
+    ? `Public account pool fee ${plan.poolFeeFri} STRK fri — first deposits are linked to this wallet`
     : [
         `Private relay fee ${plan.feeAction.amount} (${plan.feeAction.token})`,
         ...(plan.authorization

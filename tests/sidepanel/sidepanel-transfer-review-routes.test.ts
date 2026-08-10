@@ -44,6 +44,21 @@ const relayed = (): PrivacyPreparation =>
     tokenId: "SN_MAIN:STRK:0x1",
   }) as PrivacyPreparation;
 
+const accountPreparation = (): PrivacyPreparation =>
+  ({
+    amount: "1",
+    id: `sha256:${"1".repeat(64)}`,
+    kind: "deposit",
+    payloadDigest: `sha256:${"1".repeat(64)}`,
+    poolAddress: "0x1",
+    poolFeeFri: POOL_FEE,
+    recipient: RECIPIENT,
+    route: "public-account",
+    summaries: [],
+    symbol: "STRK",
+    tokenId: "SN_MAIN:STRK:0x1",
+  }) as PrivacyPreparation;
+
 describe("route disclosure", () => {
   test("names the movement and what stays confidential on an unshield", () => {
     expect(routeDisclosureHtml(routeFor("private", "public"))).toContain(
@@ -104,7 +119,7 @@ describe("route fee lines", () => {
     // Both leave the public balance in the same transaction, so both are shown.
     const html = routeFeeHtml(routeFor("public", "private"), {
       poolFeeFri: POOL_FEE,
-      preparation: null,
+      preparation: accountPreparation(),
       review: review(),
     });
     expect(html).toContain("Estimated fee:");
@@ -117,7 +132,7 @@ describe("route fee lines", () => {
   test("a deposit still shows a network fee line with no estimate to give", () => {
     const html = routeFeeHtml(routeFor("public", "private"), {
       poolFeeFri: POOL_FEE,
-      preparation: null,
+      preparation: accountPreparation(),
       review: review({ fee: null }),
     });
     expect(html).toContain("Estimated fee: charged at submission");

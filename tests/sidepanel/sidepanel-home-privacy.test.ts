@@ -214,12 +214,13 @@ describe("unified portfolio scope", () => {
     expect(html).not.toContain("Shield / Unshield");
   });
 
-  test("pending discovery keeps public totals instead of hiding the hero", () => {
+  test("pending discovery marks the portfolio total incomplete", () => {
     const html = privateDashboard(privateState(true));
     const hero = html.slice(html.indexOf('class="hero"'), html.indexOf("home-actions"));
 
+    expect(hero).toContain("Public balances shown; private balances are still refreshing");
     expect(hero).toContain("$2,500.00");
-    expect(hero).not.toContain("Includes shielded balances");
+    expect(hero).toContain('data-total-complete="false"');
     expect(html).toContain("Discovering…");
   });
 

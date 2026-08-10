@@ -21,7 +21,9 @@ import { compactAmount } from "./token-row";
  * amount rather than asking again for what was already chosen.
  */
 export type SendIntent = {
+  readonly accountId: string;
   readonly destination: ValueBucket;
+  readonly networkId: string;
   readonly recipient: string;
   readonly recipientLabel: string;
   readonly source: ValueBucket;

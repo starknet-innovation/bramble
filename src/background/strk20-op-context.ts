@@ -5,7 +5,8 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
-import { STARKNET_NETWORKS } from "../starknet/networks";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
+import { canonicalStrk20PoolFee } from "../starknet/strk20/service";
 import type { TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import { activeAccountContext, networkRpcUrls } from "./runtime-state";
 import { strk20AccountContext } from "./strk20-account-context";
@@ -54,6 +55,62 @@ export const publicBalance = async (
     tokens: [context.token],
   });
   return balance ? BigInt(balance.balance) : 0n;
+};
+
+const strkTokenFor = (context: ActivePrivacyContext): TokenConfig =>
+  context.preferences.tokens.find(
+    (token) =>
+      token.networkId === context.accountContext.account.networkId &&
+      sameFelt(token.address, STRK_TOKEN_ADDRESS),
+  ) ?? {
+    address: STRK_TOKEN_ADDRESS,
+    decimals: 18,
+    id: `${context.accountContext.account.networkId}:STRK:${STRK_TOKEN_ADDRESS}`,
+    name: "Starknet Token",
+    networkId: context.accountContext.account.networkId,
+    symbol: "STRK",
+  };
+
+/**
+ * Re-checks every public token the pool can pull immediately before a review
+ * is created and again before submission. Missing or malformed RPC balances
+ * fail closed; a STRK deposit accounts for its amount and pool fee together.
+ */
+export const assertPublicPoolSpendAffordable = async (
+  deps: Pick<Strk20WalletOpsDeps, "runtimeRpc">,
+  context: ActivePrivacyContext,
+  poolFeeFri: string,
+  depositAmountRaw?: string,
+): Promise<void> => {
+  const fee = BigInt(canonicalStrk20PoolFee(poolFeeFri));
+  const strk = strkTokenFor(context);
+  const depositIsStrk = sameFelt(context.token.address, STRK_TOKEN_ADDRESS);
+  const tokens = depositAmountRaw === undefined || depositIsStrk ? [strk] : [context.token, strk];
+  const balances = await deps.runtimeRpc.getTokenBalances({
+    accountAddress: context.accountContext.account.address,
+    rpcUrls: context.accountContext.rpcUrls,
+    tokens,
+  });
+  const balanceOf = (address: string): bigint => {
+    const entry = balances.find((balance) => sameFelt(balance.address, address));
+    if (!entry || !/^\d+$/.test(entry.balance)) {
+      throw new Error("Could not confirm the public balance required by this transaction");
+    }
+    return BigInt(entry.balance);
+  };
+  const amount = depositAmountRaw === undefined ? 0n : BigInt(depositAmountRaw);
+  if (depositIsStrk) {
+    if (balanceOf(STRK_TOKEN_ADDRESS) < amount + fee) {
+      throw new Error("Not enough STRK for the amount and pool fee");
+    }
+    return;
+  }
+  if (depositAmountRaw !== undefined && balanceOf(context.token.address) < amount) {
+    throw new Error(`Not enough ${context.token.symbol}`);
+  }
+  if (balanceOf(STRK_TOKEN_ADDRESS) < fee) {
+    throw new Error("Not enough STRK for the pool fee");
+  }
 };
 
 /**

@@ -153,7 +153,9 @@ describe("asset and recipient selection", () => {
 
   test("does not auto-select another asset for an unresolved token intent", () => {
     const { form } = mount(undefined, {
+      accountId: account.id,
       destination: "private",
+      networkId: "SN_MAIN",
       recipient: account.address,
       recipientLabel: "Current account",
       source: "public",

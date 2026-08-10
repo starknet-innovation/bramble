@@ -153,6 +153,7 @@ describe("updateRenderScope", () => {
       summary: "Send",
     };
     Object.assign(cache, {
+      balances: { accountId: ACCOUNT_ID, balances: [], networkId: "SN_MAIN" },
       discoveredNfts: [nft],
       historyUnavailable: true,
       indexedNfts: [nft],
@@ -185,6 +186,7 @@ describe("updateRenderScope", () => {
     expect(cache.transactions).toEqual([]);
     expect(cache.historyUnavailable).toBe(false);
     expect(cache.multisigClassDeclared).toBeNull();
+    expect(cache.balances).toEqual({ error: "balances unavailable" });
 
     expect(updateRenderScope(cache, { ...cache.status, networkId: "SN_SEPOLIA" })).toBe("network");
   });

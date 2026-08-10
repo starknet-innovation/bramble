@@ -27,6 +27,7 @@ type BasePreparation = {
  */
 export type Strk20RegistrationPreparation = BasePreparation & {
   readonly kind: "register";
+  readonly poolFeeFri: string;
 };
 
 /**
@@ -95,6 +96,7 @@ export type Strk20WalletPreparationReview = {
   readonly kind: "deposit" | "register" | "transfer" | "withdraw";
   readonly payloadDigest: string;
   readonly poolAddress: string;
+  readonly poolFeeFri?: string;
   readonly recipient?: string;
   readonly route: "private-relay" | "public-account";
   readonly relayFee?: {
@@ -117,6 +119,7 @@ export const strk20WalletPreparationPayload = (
     ? {
         kind: preparation.kind,
         poolAddress: preparation.poolAddress,
+        poolFeeFri: preparation.poolFeeFri,
         summaries: preparation.summaries,
         token: preparation.token,
       }
@@ -143,6 +146,11 @@ const reviewOf = (preparation: Strk20WalletPreparation): Strk20WalletPreparation
   kind: preparation.kind,
   payloadDigest: preparation.context.payloadDigest,
   poolAddress: preparation.poolAddress,
+  ...(preparation.kind === "register"
+    ? { poolFeeFri: preparation.poolFeeFri }
+    : preparation.plan.mode === "account"
+      ? { poolFeeFri: preparation.plan.poolFeeFri }
+      : {}),
   ...(preparation.kind === "register" ? {} : { recipient: preparation.recipient }),
   route:
     preparation.kind !== "register" && preparation.plan.mode !== "account"

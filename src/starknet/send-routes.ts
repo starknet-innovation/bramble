@@ -45,10 +45,9 @@ export type PoolRegistration = "pending" | "registered" | "unknown" | "unregiste
  * token being sent is STRK.
  *
  * Either balance may be `null`, meaning not known yet — the account's balances
- * have not loaded, or the selected asset is absent from the list. Affordability
- * is then not asserted at all: an unknown balance is not a zero balance, and
- * refusing on one would block real sends while state hydrates. The background
- * validates the amount again, and the chain is the final word.
+ * have not loaded, or the selected asset is absent from the list. A required
+ * unknown balance blocks as pending: review cannot claim affordability until
+ * the account- and network-scoped balance has hydrated.
  */
 export type SendRouteInput = {
   readonly amountRaw: bigint;
@@ -200,8 +199,6 @@ const recipientBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlo
   return wait("Checking the recipient's privacy registration…");
 };
 
-// A shortfall is only assertable against a balance that has been read; `null`
-// means unknown, so no refusal is made.
 const shortOf = (balance: bigint | null, needed: bigint): boolean =>
   balance !== null && needed > balance;
 
@@ -213,7 +210,13 @@ const feeBlocker = (
   poolFeeFri: bigint,
   tokenIsStrk: boolean,
 ): SendRouteBlocker | null => {
-  if (tokenIsStrk || !shortOf(input.sourceStrkBalanceRaw, poolFeeFri)) {
+  if (tokenIsStrk) {
+    return null;
+  }
+  if (input.sourceStrkBalanceRaw === null) {
+    return wait(`Checking your ${input.source === "private" ? "private " : ""}STRK balance…`);
+  }
+  if (!shortOf(input.sourceStrkBalanceRaw, poolFeeFri)) {
     return null;
   }
   return refuse(
@@ -227,6 +230,11 @@ const amountBlocker = (input: SendRouteInput, route: SendRoute): SendRouteBlocke
   if (input.amountRaw <= 0n) {
     return refuse(
       "Enter an amount to send. Toggle the public/private button to shield or unshield.",
+    );
+  }
+  if (input.sourceTokenBalanceRaw === null) {
+    return wait(
+      `Checking your ${input.source === "private" ? "private " : ""}${input.tokenSymbol} balance…`,
     );
   }
   if (!route.poolFeeRequired) {

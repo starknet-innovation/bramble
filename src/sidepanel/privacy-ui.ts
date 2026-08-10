@@ -251,7 +251,9 @@ const bindShieldShortcuts = (deps: PrivacyUiDeps): void => {
           return;
         }
         deps.openSend?.({
+          accountId: account.id,
           destination,
+          networkId: account.networkId,
           recipient: account.address,
           recipientLabel: accountDisplayName(account, deps.preferences()),
           source,

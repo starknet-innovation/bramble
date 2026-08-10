@@ -228,7 +228,8 @@ export const BASE_STYLES = `
   .hero-change .hero-change-win { color: var(--mc-muted); font-weight: 500; }
   /* Degraded-price notice: a muted, low-key line so saved/unavailable prices
      read as an honest caveat under the total, never as an error state. */
-  .hero-stale {
+  .hero-stale,
+  .hero-partial {
     align-items: center;
     color: var(--mc-muted);
     display: inline-flex;

@@ -376,10 +376,16 @@ export const sendFlow = (
   intent: SendIntent | null = null,
 ): string => {
   const assets = sendAssets(status.networkId, preferences, balances, prices, changes);
+  const scopedIntent =
+    intent && account && intent.accountId === account.id && intent.networkId === status.networkId
+      ? intent
+      : null;
   // A shortcut names its exact asset. If it disappeared while navigating, do
   // not silently turn the shield/unshield into a send of the first token.
-  const asset = intent ? assets.find((candidate) => candidate.id === intent.tokenId) : assets[0];
-  const missingIntentAsset = intent !== null && asset === undefined;
+  const asset = scopedIntent
+    ? assets.find((candidate) => candidate.id === scopedIntent.tokenId)
+    : assets[0];
+  const missingIntentAsset = scopedIntent !== null && asset === undefined;
   const canSend = account !== null && asset !== undefined;
   const signer = account?.derivation.kind === "ledger" ? "ledger" : "software";
   const initialFiat =
@@ -394,15 +400,15 @@ export const sendFlow = (
         ${account ? "" : noAccountEmpty(status)}
         ${account && assets.length === 0 ? emptyState("No tokens are tracked on this network yet, so nothing can be sent.") : ""}
         ${missingIntentAsset ? '<p class="review-flag" role="alert">The requested token is no longer tracked on this network. Choose an asset before continuing.</p>' : ""}
-        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-send-intent="${intent ? "true" : "false"}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
+        <form id="transfer-form" data-signer="${signer}" data-amount-mode="token" data-send-intent="${scopedIntent ? "true" : "false"}" data-public-balance="${escapeHtml(asset?.balance ?? "")}" data-public-formatted="${escapeHtml(asset?.formatted ?? "")}">
           ${liquidDotsFilter("send")}
           <input name="accountId" type="hidden" value="${escapeHtml(account?.id ?? "")}" />
           <input name="amount" type="hidden" value="" />
           <input name="fiatEstimate" type="hidden" value="" />
-          <input name="recipient" type="hidden" value="${escapeHtml(intent?.recipient ?? "")}" />
-          <input name="recipientLabel" type="hidden" value="${escapeHtml(intent?.recipientLabel ?? "")}" />
-          <input name="source" type="hidden" value="${intent?.source ?? "public"}" />
-          <input name="destination" type="hidden" value="${intent?.destination ?? "public"}" />
+          <input name="recipient" type="hidden" value="${escapeHtml(scopedIntent?.recipient ?? "")}" />
+          <input name="recipientLabel" type="hidden" value="${escapeHtml(scopedIntent?.recipientLabel ?? "")}" />
+          <input name="source" type="hidden" value="${scopedIntent?.source ?? "public"}" />
+          <input name="destination" type="hidden" value="${scopedIntent?.destination ?? "public"}" />
           <input name="tokenAddress" type="hidden" value="${escapeHtml(asset?.address ?? "")}" />
           <input name="tokenBalance" type="hidden" value="${escapeHtml(asset?.balance ?? "")}" />
           <input name="tokenDecimals" type="hidden" value="${asset?.decimals ?? 0}" />

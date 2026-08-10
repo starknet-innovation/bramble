@@ -16,6 +16,7 @@ const preparation = {
   kind: "deposit" as const,
   payloadDigest: digest,
   poolAddress: "0x123",
+  poolFeeFri: "0x1",
   recipient: RECIPIENT,
   route: "public-account" as const,
   summaries: ["Shield 1.25 ETH"],
@@ -27,6 +28,7 @@ const registration = {
   kind: "register" as const,
   payloadDigest: digest,
   poolAddress: "0x123",
+  poolFeeFri: "0x1",
   route: "public-account" as const,
   summaries: ["Register private balances"],
   symbol: "ETH",
@@ -185,6 +187,58 @@ describe("privacy runtime client", () => {
     await expect(unknown.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
   });
 
+  test("rejects cross-network account and token identities", async () => {
+    const crossAccount = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20State: {
+        accountId: "SN_SEPOLIA:0xabc",
+        balances: [],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
+        registration: "registered",
+      },
+    }));
+    await expect(crossAccount.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
+
+    const crossToken = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20State: {
+        accountId: "SN_MAIN:0xabc",
+        balances: [
+          {
+            balance: "0x1",
+            formatted: "1",
+            symbol: "ETH",
+            token: "0x456",
+            tokenId: "SN_SEPOLIA:ETH:0x456",
+          },
+        ],
+        networkId: "SN_MAIN",
+        poolFeeFri: "0x1",
+        relayConfigured: true,
+        registration: "registered",
+      },
+    }));
+    await expect(crossToken.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
+  });
+
+  test("binds a preparation to the requested token, amount, and recipient", async () => {
+    for (const changed of [
+      { ...preparation, amount: "2" },
+      { ...preparation, recipient: "0xdef" },
+      { ...preparation, tokenId: "SN_MAIN:STRK:0x456" },
+    ]) {
+      const client = createPrivacyRuntimeClient(async () => ({
+        ok: true,
+        strk20Preparation: changed,
+      }));
+      await expect(
+        client.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
+      ).rejects.toThrow("Shielding preparation failed");
+    }
+  });
+
   // The two relayed preparations and the recipient lookup are the rest of the
   // privileged surface. Each is pinned on the message it sends and on refusing a
   // response it cannot validate, so a malformed review never becomes render state.
@@ -311,20 +365,21 @@ describe("privacy runtime client", () => {
       relayFee: { amount: "0x2", recipient: "0x3", token: "0x4" },
       route: "private-relay" as const,
     };
+    delete (relayPreparation as { poolFeeFri?: string }).poolFeeFri;
     const valid = createPrivacyRuntimeClient(async () => ({
       ok: true,
       strk20Preparation: relayPreparation,
     }));
-    await expect(valid.preparePrivacyDeposit(preparation.tokenId, "1", RECIPIENT)).resolves.toEqual(
-      relayPreparation,
-    );
+    await expect(
+      valid.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
+    ).resolves.toEqual(relayPreparation);
 
     const extra = createPrivacyRuntimeClient(async () => ({
       ok: true,
       strk20Preparation: { ...relayPreparation, executableProof: "hidden" },
     }));
-    await expect(extra.preparePrivacyDeposit(preparation.tokenId, "1", RECIPIENT)).rejects.toThrow(
-      "Shielding preparation failed",
-    );
+    await expect(
+      extra.preparePrivacyDeposit(preparation.tokenId, "1.25", RECIPIENT),
+    ).rejects.toThrow("Shielding preparation failed");
   });
 });

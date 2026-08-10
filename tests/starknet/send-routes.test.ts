@@ -353,22 +353,22 @@ describe("depositing into someone else's private balance", () => {
 describe("unknown balances", () => {
   // An absent balance is not a zero balance. Refusing on one blocked every send
   // while the account's balances were still loading.
-  test("does not assert affordability against a balance it has not read", () => {
+  test("waits until the source token balance has been read", () => {
     expect(
-      resolveSendRoute(ready({ amountRaw: 10_000n * SIX_STRK, sourceTokenBalanceRaw: null })).route
-        ?.id,
-    ).toBe("private-private");
+      resolveSendRoute(ready({ amountRaw: 10_000n * SIX_STRK, sourceTokenBalanceRaw: null }))
+        .blocked,
+    ).toEqual({ pending: true, reason: "Checking your private STRK balance…" });
   });
 
   test("still refuses when the balance is known and short", () => {
     expect(blockerFor({ amountRaw: 10_000n * SIX_STRK }).reason).toContain("Not enough private");
   });
 
-  test("skips the STRK fee check when the STRK balance is unknown", () => {
+  test("waits until the separate STRK fee balance has been read", () => {
     expect(
       resolveSendRoute(ready({ sourceStrkBalanceRaw: null, tokenAddress: ETH, tokenSymbol: "ETH" }))
-        .route?.id,
-    ).toBe("private-private");
+        .blocked,
+    ).toEqual({ pending: true, reason: "Checking your private STRK balance…" });
   });
 
   test("withholds a maximum rather than offering one from an unread balance", () => {

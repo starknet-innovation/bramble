@@ -15,7 +15,12 @@ import { buildErc20ApproveCall } from "../rpc-assets";
 import type { Strk20NetworkConfig } from "./config";
 import type { Strk20Action, Strk20BalanceEntry } from "./schemas";
 import { STRK20_LIMITS } from "./schemas";
-import { STRK20_SERVICE_UNAVAILABLE, type Strk20AccountContext } from "./service";
+import {
+  canonicalStrk20PoolFee,
+  STRK20_MAX_POOL_FEE,
+  STRK20_SERVICE_UNAVAILABLE,
+  type Strk20AccountContext,
+} from "./service";
 
 type SdkNote = { readonly amount: BigNumberish };
 
@@ -126,8 +131,6 @@ export const balancesFrom = (
   }));
 };
 
-const MAX_POOL_FEE = (1n << 128n) - 1n;
-
 // Every pool-fee failure is fatal to the submission, but they have different
 // causes (no RPC configured, node unreachable or rate limiting, a pool that
 // answers with something unusable). The suffix names which one without ever
@@ -171,10 +174,29 @@ export const readStrk20PoolFee = async (
   } catch {
     throw poolFeeUnavailable("the pool returned a malformed amount");
   }
-  if (fee < 0n || fee > MAX_POOL_FEE) {
+  if (fee < 0n || fee > STRK20_MAX_POOL_FEE) {
     throw poolFeeUnavailable("the pool returned an out-of-range amount");
   }
   return fee;
+};
+
+/**
+ * Re-reads the pool fee immediately before proving/submission and requires it
+ * to equal the fee committed by the user's review. A change requires a fresh
+ * review and no wallet authorization is produced on the stale preparation.
+ */
+export const requireReviewedStrk20PoolFee = async (
+  providerFor: (nodeUrl: string) => RpcProvider,
+  rpcUrls: readonly string[],
+  poolAddress: string,
+  reviewedPoolFeeFri: string,
+): Promise<bigint> => {
+  const reviewed = canonicalStrk20PoolFee(reviewedPoolFeeFri);
+  const current = await readStrk20PoolFee(providerFor, rpcUrls, poolAddress);
+  if (current !== BigInt(reviewed)) {
+    throw new WalletError("Private pool fee changed. Review the transaction again.");
+  }
+  return current;
 };
 
 // Same shape as the pool-fee failures: fatal, and worth naming the cause

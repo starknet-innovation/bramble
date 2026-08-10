@@ -53,18 +53,30 @@ const preferences: WalletPreferences = {
   ],
 };
 
+const publicBalance: TokenBalance = {
+  address: TOKEN_ADDRESS,
+  balance: "100000000000000000000",
+  decimals: 18,
+  formatted: "100",
+  id: `SN_MAIN:ETH:${TOKEN_ADDRESS}`,
+  name: "Ether",
+  networkId: "SN_MAIN",
+  symbol: "ETH",
+};
+
 const mount = (
   walletOverrides: Record<string, unknown> = {},
 ): { app: HTMLElement; calls: WalletCalls; renderCalls: WalletStatus[]; deps: TransferUiDeps } => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.id = "app";
-  paint(app, sendFlow(status, account, preferences));
+  paint(app, sendFlow(status, account, preferences, [publicBalance]));
   document.body.append(app);
   const { calls, wallet } = makeWallet(walletOverrides);
   const renderCalls: WalletStatus[] = [];
   const deps: TransferUiDeps = {
     app,
+    publicBalances: () => [publicBalance],
     render: async (next: WalletStatus) => {
       renderCalls.push(next);
     },

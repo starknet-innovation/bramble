@@ -30,6 +30,7 @@ import {
   RELAY_PAYS_POOL_FEE,
   readStrk20PoolFee,
   readStrk20Registered,
+  requireReviewedStrk20PoolFee,
   requireStrk20Config,
 } from "./official-sdk-values";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "./paymaster";
@@ -277,6 +278,12 @@ export const createOfficialStrk20Service = ({
     },
     async register(input) {
       const config = requireStrk20Config(input);
+      const reviewedPoolFee = await requireReviewedStrk20PoolFee(
+        providerFor,
+        input.rpcUrls,
+        config.poolAddress,
+        input.poolFeeFri,
+      );
       return submission(
         input,
         async () =>
@@ -295,11 +302,10 @@ export const createOfficialStrk20Service = ({
         // stage so the on-chain reason survives, sanitized, to the user.
         async (callAndProof) => {
           try {
-            const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
             const result = await submitInvoke({
               account: input.account,
               calls: [
-                ...approveCalls([], config.poolAddress, poolFee),
+                ...approveCalls([], config.poolAddress, reviewedPoolFee),
                 {
                   calldata: [...callAndProof.call.calldata],
                   contractAddress: config.poolAddress,
@@ -378,12 +384,19 @@ export const createOfficialStrk20Service = ({
     async submitActions(input) {
       const config = requireStrk20Config(input);
       if (input.plan.mode === "account") {
+        const accountPlan = input.plan;
         if (
           input.actions.length === 0 ||
           input.actions.some((action) => action.type !== "deposit")
         ) {
           throw new WalletError(STRK20_PRIVACY_LEAK);
         }
+        const reviewedPoolFee = await requireReviewedStrk20PoolFee(
+          providerFor,
+          input.rpcUrls,
+          config.poolAddress,
+          accountPlan.poolFeeFri,
+        );
         return submission(
           input,
           async () =>
@@ -401,15 +414,10 @@ export const createOfficialStrk20Service = ({
           // stage so only the sanitized on-chain reason survives to the user.
           async (callAndProof) => {
             try {
-              const poolFee = await readStrk20PoolFee(
-                providerFor,
-                input.rpcUrls,
-                config.poolAddress,
-              );
               const result = await submitInvoke({
                 account: input.account,
                 calls: [
-                  ...approveCalls(input.actions, config.poolAddress, poolFee),
+                  ...approveCalls(input.actions, config.poolAddress, reviewedPoolFee),
                   {
                     calldata: [...callAndProof.call.calldata],
                     contractAddress: callAndProof.call.contract_address,

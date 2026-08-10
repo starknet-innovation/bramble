@@ -21,8 +21,8 @@ import type { RuntimeResponse } from "./runtime-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
+  assertPublicPoolSpendAffordable,
   errorText,
-  publicBalance,
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
@@ -82,7 +82,8 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
     return { error: context.error };
   }
   try {
-    const status = await readStrk20RegistrationStatus(strk20ServiceForRuntime(deps.runtimeRpc), {
+    const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    const status = await readStrk20RegistrationStatus(service, {
       ...context.accountContext,
       token: context.token.address,
     });
@@ -104,7 +105,6 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
               .map((token) => token.address),
           })
         : [];
-    const service = strk20ServiceForRuntime(deps.runtimeRpc);
     // The fee is a hard input to every pool route. Returning a successful state
     // without it leaves Send in an endless "Checking" state, so an unavailable
     // reader or a failed read rejects this request and reaches the UI's retry.
@@ -147,7 +147,8 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
     return { error: context.error };
   }
   try {
-    const status = await readStrk20RegistrationStatus(strk20ServiceForRuntime(deps.runtimeRpc), {
+    const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    const status = await readStrk20RegistrationStatus(service, {
       ...context.accountContext,
       token: context.token.address,
     });
@@ -164,13 +165,19 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
     if (!config) {
       return { error: "Private balances are not configured for this network" };
     }
+    if (!service.poolFee) {
+      return { error: "Private pool fee is unavailable. Retry the registration." };
+    }
+    const poolFeeFri = await service.poolFee(context.accountContext);
+    await assertPublicPoolSpendAffordable(deps, context, poolFeeFri);
     const unsigned = {
       kind: "register" as const,
       poolAddress: config.poolAddress,
+      poolFeeFri,
       summaries: [
         "Register this account with the privacy pool",
         "Registration is public and links this wallet address to its viewing key",
-        "Approves and pays the pool's STRK action fee from this account",
+        `Approve and pay the reviewed ${poolFeeFri} STRK fri pool fee from this account`,
       ],
       token: context.token,
     };
@@ -289,7 +296,11 @@ const submitPreparation = async (
   if (registration === "registered") {
     throw new Error("Private balances are already active");
   }
-  return registerStrk20Account(service, context.accountContext);
+  await assertPublicPoolSpendAffordable(deps, context, preparation.poolFeeFri);
+  return registerStrk20Account(service, {
+    ...context.accountContext,
+    poolFeeFri: preparation.poolFeeFri,
+  });
 };
 
 // Transfers and withdrawals share their submission guard: both spend shielded
@@ -327,9 +338,15 @@ const submitPreparedDeposit = async (
   preparation: Extract<Strk20WalletPreparation, { readonly kind: "deposit" }>,
   context: ActivePrivacyContext,
 ): Promise<{ readonly transactionHash: string }> => {
-  if ((await publicBalance(deps, context)) < BigInt(preparation.amountRaw)) {
-    throw new Error(`Not enough ${preparation.token.symbol}`);
+  if (preparation.plan.mode !== "account") {
+    throw new Error("Shielding route changed");
   }
+  await assertPublicPoolSpendAffordable(
+    deps,
+    context,
+    preparation.plan.poolFeeFri,
+    preparation.amountRaw,
+  );
   const registration = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
     token: context.token.address,

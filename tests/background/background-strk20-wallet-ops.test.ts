@@ -62,7 +62,6 @@ const activityWithRegistration = async (
   return log;
 };
 
-// Assert against the canonical recipient the background hands to the action.
 const CANONICAL_RECIPIENT = canonicalFelt(STRK20_RECIPIENT);
 if (CANONICAL_RECIPIENT === null) {
   throw new Error("recipient fixture is not a field element");
@@ -76,8 +75,6 @@ if (!token) {
 }
 
 const service = (capture: {
-  // Separate from `registered` so a deposit crediting someone else can be tested
-  // against a registered sender and an unregistered recipient independently.
   readonly recipientRegistered?: { value: boolean };
   readonly registered: { value: boolean };
   readonly registrations: { value: number };
@@ -98,7 +95,7 @@ const service = (capture: {
       return "0x1";
     },
     async quoteActions() {
-      return { mode: "account" };
+      return { mode: "account", poolFeeFri: "0x1" };
     },
     async register() {
       registrations.value += 1;
@@ -202,10 +199,15 @@ describe("background wallet STRK20 operations", () => {
       { type: "wallet.strk20PrepareRegistration" },
       STRK20_EXTENSION_SENDER,
     )) as {
-      readonly strk20Preparation: { readonly id: string; readonly summaries: readonly string[] };
+      readonly strk20Preparation: {
+        readonly id: string;
+        readonly poolFeeFri: string;
+        readonly summaries: readonly string[];
+      };
     };
 
     expect(prepared.strk20Preparation.id).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(prepared.strk20Preparation.poolFeeFri).toBe("0x1");
     expect(
       prepared.strk20Preparation.summaries.some((summary) =>
         summary.includes("Registration is public"),
@@ -356,7 +358,7 @@ describe("background wallet STRK20 operations", () => {
             type: "deposit",
           },
         ],
-        plan: { mode: "account" },
+        plan: { mode: "account", poolFeeFri: "0x1" },
       },
     ]);
   });
@@ -391,7 +393,6 @@ describe("background wallet STRK20 operations", () => {
       };
     };
 
-    // The credited party is reviewable and committed, not inferred at submission.
     expect(prepared.strk20Preparation.recipient).toBe(CANONICAL_RECIPIENT);
     expect(prepared.strk20Preparation.summaries[0]).toBe(
       `Shield 1.5 ETH into ${CANONICAL_RECIPIENT}'s private balance`,
@@ -412,7 +413,7 @@ describe("background wallet STRK20 operations", () => {
             type: "deposit",
           },
         ],
-        plan: { mode: "account" },
+        plan: { mode: "account", poolFeeFri: "0x1" },
       },
     ]);
   });
@@ -480,7 +481,6 @@ describe("background wallet STRK20 operations", () => {
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "Invalid shield request" });
-    // A recipient that is not a field element is refused rather than coerced.
     await expect(
       handler(
         {

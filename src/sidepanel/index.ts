@@ -427,6 +427,7 @@ const render = async (status: WalletStatus): Promise<void> => {
   const scopeChanged = updateRenderScope(cache, status);
   if (scopeChanged) {
     privacy.reset();
+    sendIntent = null;
   }
   if (scopeChanged === "network" && selectedMultisigId !== null) {
     selectedMultisigId = null;

@@ -94,6 +94,9 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       }
       return tokens.map((token) => ({ balance: options.balance ?? "0x64", token }));
     },
+    async poolFee() {
+      return "0x1";
+    },
     async quoteActions() {
       return {
         feeAction: {
@@ -139,17 +142,14 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       },
     },
     runtimeRpc: makeRuntimeRpc({
-      ...(options.publicBalance === undefined
-        ? {}
-        : {
-            async getTokenBalances({ tokens }) {
-              return tokens.map((token) => ({
-                ...token,
-                balance: options.publicBalance ?? "0",
-                formatted: options.publicBalance ?? "0",
-              }));
-            },
-          }),
+      async getTokenBalances({ tokens }) {
+        const balance = options.publicBalance ?? "100000000000000000000";
+        return tokens.map((token) => ({
+          ...token,
+          balance,
+          formatted: balance,
+        }));
+      },
       async submitInvokeTransaction(input) {
         options.invoked?.push(input);
         return { calls: input.calls, transactionHash: "0x123" };

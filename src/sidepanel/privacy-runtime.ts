@@ -8,9 +8,11 @@ import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
   isStarknetNetworkId,
+  sameFelt,
 } from "../starknet/networks";
 import type { PaymasterAuthorizationReview } from "../starknet/strk20/paymaster-typed-data";
 import { STRK20_LIMITS } from "../starknet/strk20/schemas";
+import { canonicalStrk20PoolFee } from "../starknet/strk20/service";
 import { isTokenId } from "../storage/preferences-entries";
 import { isAccountIdForNetwork } from "../storage/vault-schema";
 
@@ -56,6 +58,7 @@ export type PrivacyPreparation = {
   readonly kind: "deposit" | "register" | "transfer" | "withdraw";
   readonly payloadDigest: string;
   readonly poolAddress: string;
+  readonly poolFeeFri?: string;
   readonly recipient?: string;
   readonly route: "private-relay" | "public-account";
   readonly relayFee?: {
@@ -129,9 +132,27 @@ const readRelayFee = (value: unknown): NonNullable<PrivacyPreparation["relayFee"
   return { amount: value["amount"], recipient: value["recipient"], token: value["token"] };
 };
 
+const isPoolFee = (value: unknown): value is string => {
+  if (typeof value !== "string") {
+    return false;
+  }
+  try {
+    return canonicalStrk20PoolFee(value) === value;
+  } catch {
+    return false;
+  }
+};
+
+type ExpectedPreparation = {
+  readonly amount?: string;
+  readonly kind: PrivacyPreparation["kind"];
+  readonly recipient?: string;
+  readonly tokenId?: string;
+};
+
 const readPreparation = (
   response: unknown,
-  expectedKind: PrivacyPreparation["kind"],
+  expected: ExpectedPreparation,
 ): PrivacyPreparation | null => {
   if (
     !isRecord(response) ||
@@ -153,6 +174,7 @@ const readPreparation = (
       "kind",
       "payloadDigest",
       "poolAddress",
+      "poolFeeFri",
       "recipient",
       "relayFee",
       "route",
@@ -160,7 +182,7 @@ const readPreparation = (
       "symbol",
       "tokenId",
     ]) ||
-    value["kind"] !== expectedKind ||
+    value["kind"] !== expected.kind ||
     (value["route"] !== "private-relay" && value["route"] !== "public-account") ||
     typeof value["id"] !== "string" ||
     !PREPARATION_ID_PATTERN.test(value["id"]) ||
@@ -171,6 +193,7 @@ const readPreparation = (
     !isStringArray(value["summaries"]) ||
     !isDisplayString(value["symbol"]) ||
     !isTokenId(value["tokenId"]) ||
+    (expected.tokenId !== undefined && value["tokenId"] !== expected.tokenId) ||
     (value["amount"] !== undefined &&
       (typeof value["amount"] !== "string" ||
         value["amount"].length > MAX_DISPLAY_CHARACTERS ||
@@ -178,11 +201,18 @@ const readPreparation = (
     (value["authorization"] !== undefined && !authorization) ||
     (value["relayFee"] !== undefined && !relayFee) ||
     (value["route"] === "private-relay" && !relayFee) ||
+    (value["route"] === "private-relay" && value["poolFeeFri"] !== undefined) ||
     (value["route"] === "public-account" &&
-      (value["authorization"] !== undefined || value["relayFee"] !== undefined)) ||
+      (value["authorization"] !== undefined ||
+        value["relayFee"] !== undefined ||
+        !isPoolFee(value["poolFeeFri"]))) ||
     (value["recipient"] !== undefined &&
       (typeof value["recipient"] !== "string" ||
         !isNonZeroStarkFieldElement(value["recipient"]))) ||
+    (expected.amount !== undefined && value["amount"] !== expected.amount) ||
+    (expected.recipient !== undefined &&
+      (typeof value["recipient"] !== "string" ||
+        !sameFelt(value["recipient"], expected.recipient))) ||
     // A deposit names whose private balance it credits — the depositor for a
     // shield, a registered third party otherwise — so the recipient is required
     // here exactly as it is for a transfer or a withdrawal.
@@ -203,9 +233,10 @@ const readPreparation = (
     ...(typeof value["amount"] === "string" ? { amount: value["amount"] } : {}),
     ...(authorization ? { authorization } : {}),
     id: value["id"],
-    kind: expectedKind,
+    kind: expected.kind,
     payloadDigest: value["payloadDigest"],
     poolAddress: value["poolAddress"],
+    ...(typeof value["poolFeeFri"] === "string" ? { poolFeeFri: value["poolFeeFri"] } : {}),
     ...(typeof value["recipient"] === "string" ? { recipient: value["recipient"] } : {}),
     ...(relayFee ? { relayFee } : {}),
     route: value["route"],
@@ -236,8 +267,7 @@ const readState = (response: unknown): PrivacyAccountState | null => {
     ]) ||
     !isStarknetNetworkId(state["networkId"]) ||
     !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
-    typeof state["poolFeeFri"] !== "string" ||
-    !isStarkFieldElement(state["poolFeeFri"]) ||
+    !isPoolFee(state["poolFeeFri"]) ||
     typeof state["relayConfigured"] !== "boolean" ||
     (state["registration"] !== "pending" &&
       state["registration"] !== "registered" &&
@@ -258,7 +288,8 @@ const readState = (response: unknown): PrivacyAccountState | null => {
       !isDisplayString(value["symbol"]) ||
       typeof value["token"] !== "string" ||
       !isNonZeroStarkFieldElement(value["token"]) ||
-      !isTokenId(value["tokenId"])
+      !isTokenId(value["tokenId"]) ||
+      value["tokenId"] !== `${state["networkId"]}:${value["symbol"]}:${value["token"]}`
     ) {
       return null;
     }
@@ -325,7 +356,7 @@ export const createPrivacyRuntimeClient = (
       tokenId,
       type: "wallet.strk20PrepareDeposit",
     });
-    const preparation = readPreparation(response, "deposit");
+    const preparation = readPreparation(response, { amount, kind: "deposit", recipient, tokenId });
     if (preparation) {
       return preparation;
     }
@@ -333,7 +364,7 @@ export const createPrivacyRuntimeClient = (
   },
   async preparePrivacyRegistration(): Promise<PrivacyPreparation> {
     const response = await sendMessage({ type: "wallet.strk20PrepareRegistration" });
-    const preparation = readPreparation(response, "register");
+    const preparation = readPreparation(response, { kind: "register" });
     if (preparation) {
       return preparation;
     }
@@ -350,7 +381,12 @@ export const createPrivacyRuntimeClient = (
       tokenId,
       type: "wallet.strk20PrepareTransfer",
     });
-    const preparation = readPreparation(response, "transfer");
+    const preparation = readPreparation(response, {
+      amount,
+      kind: "transfer",
+      recipient,
+      tokenId,
+    });
     if (preparation) {
       return preparation;
     }
@@ -367,7 +403,12 @@ export const createPrivacyRuntimeClient = (
       tokenId,
       type: "wallet.strk20PrepareWithdraw",
     });
-    const preparation = readPreparation(response, "withdraw");
+    const preparation = readPreparation(response, {
+      amount,
+      kind: "withdraw",
+      recipient,
+      tokenId,
+    });
     if (preparation) {
       return preparation;
     }

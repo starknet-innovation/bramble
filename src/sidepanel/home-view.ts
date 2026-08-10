@@ -64,14 +64,22 @@ export const homeScreen = (
   const fundedForFees = ("balances" in balances ? balances.balances : []).some(
     (token) => sameFelt(token.address, STRK_TOKEN_ADDRESS) && BigInt(token.balance) > 0n,
   );
-  const showTotal = account !== null && Object.keys(prices).length > 0;
+  const balancesComplete =
+    "balances" in balances &&
+    privacy.value !== null &&
+    !privacy.loading &&
+    privacy.error === null &&
+    privacy.value.accountId === account?.id &&
+    privacy.value.networkId === status.networkId;
+  const showTotal = account !== null && "balances" in balances && Object.keys(prices).length > 0;
   const total = showTotal ? portfolioTotal(unified, prices) : 0;
   return dockScreen(
     "home",
     `${pendingCallout(pendingCount)}
     <section class="hero">
-      <p class="hero-total" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
+      <p class="hero-total" data-total-complete="${balancesComplete}" data-live-key="portfolio-total" data-live-value="${showTotal ? total : "unknown"}">${showTotal ? escapeHtml(formatFiat(total, currency)) : "—"}</p>
       ${showTotal ? heroDelta(unified, prices, changes, currency) : ""}
+      ${account && !balancesComplete ? '<p class="hero-partial" role="status"><span>Public balances shown; private balances are still refreshing</span></p>' : ""}
       ${shieldedIncluded ? `<p class="hero-stale">${icon("lock")}<span>Includes shielded balances</span></p>` : ""}
       ${account !== null ? heroPriceNotice(priceStale, showTotal) : ""}
       ${account ? "" : noAccountEmpty(status)}

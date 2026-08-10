@@ -163,7 +163,9 @@ describe("backupFlow Ledger recovery warning", () => {
 
 describe("sendFlow shield shortcuts", () => {
   const intent = {
+    accountId: account.id,
     destination: "private",
+    networkId: "SN_MAIN",
     recipient: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
     recipientLabel: "Amber Walrus",
     source: "public",
@@ -199,6 +201,16 @@ describe("sendFlow shield shortcuts", () => {
     expect(html).toContain("The requested token is no longer tracked");
     expect(html).toContain('name="tokenId" type="hidden" value=""');
     expect(html).toContain('data-send-intent="true"');
+  });
+
+  test("drops an intent captured for another account scope", () => {
+    const html = sendFlow(status, account, preferences, [], {}, {}, "usd", [], {
+      ...intent,
+      accountId: "SN_MAIN:0x999",
+    });
+
+    expect(html).toContain('data-send-intent="false"');
+    expect(html).toContain('name="recipient" type="hidden" value=""');
   });
 
   test("defaults to a public transfer with no recipient when there is no intent", () => {

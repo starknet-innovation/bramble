@@ -81,7 +81,9 @@ describe("shield and unshield shortcuts", () => {
 
     expect(intents).toEqual([
       {
+        accountId: account.id,
         destination: "private",
+        networkId: "SN_MAIN",
         recipient: account.address,
         recipientLabel: expect.any(String) as unknown as string,
         source: "public",
