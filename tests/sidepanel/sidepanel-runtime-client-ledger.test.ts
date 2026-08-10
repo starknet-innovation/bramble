@@ -6,6 +6,7 @@
  * a plain fake.
  */
 import { describe, expect, test } from "bun:test";
+import type { LedgerSignRequestSummary } from "../../src/popup/responses";
 import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 import {
   account,
@@ -104,10 +105,11 @@ describe("Ledger runtime wrappers", () => {
   });
 
   test("loadLedgerSignPending returns the parked list, empty on a bad reply", async () => {
-    const pending = [
+    const pending: readonly LedgerSignRequestSummary[] = [
       {
         accountId: "SN_SEPOLIA:0x123",
         id: "ledger-sign-1",
+        intent: "send-token",
         messageHash: "0x1",
         path: ledgerAccountPath(0),
         publicKeyX: "0xabc",

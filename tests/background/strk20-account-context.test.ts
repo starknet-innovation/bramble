@@ -38,6 +38,7 @@ describe("STRK20 account context", () => {
         },
       },
       resolved,
+      "strk20-authorize",
     );
 
     expect(seen).toEqual([]);
@@ -53,7 +54,7 @@ describe("STRK20 account context", () => {
   });
 
   test("fails closed when viewing-key derivation is unavailable", async () => {
-    const context = strk20AccountContext({ wallet: createWallet() }, resolved);
+    const context = strk20AccountContext({ wallet: createWallet() }, resolved, "strk20-authorize");
 
     await expect(context.viewingKey()).rejects.toThrow("strk20 services unavailable");
   });

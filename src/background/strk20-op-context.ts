@@ -154,6 +154,7 @@ export const resolvePrivacyContext = async (
         preferences,
         rpcUrls: networkRpcUrls(STARKNET_NETWORKS[active.networkId], preferences),
       },
+      "strk20-authorize",
     ),
     preferences,
     token,

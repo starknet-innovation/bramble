@@ -9,6 +9,7 @@
  * so it does not weaken "Krusty owns wallet crypto".
  */
 import { WalletError } from "../shared/errors";
+import type { LedgerSignIntent } from "../starknet/ledger-intent";
 import { type DeviceSignature, verifyStarkSignature } from "../starknet/ledger-verify";
 import type { StarkHashSigner } from "../starknet/provider";
 import type { LedgerAccountRef } from "../storage/vault-schema";
@@ -19,9 +20,15 @@ import type { LedgerAccountRef } from "../storage/vault-schema";
  * account's PUBLIC x-coordinate, threaded so the panel can reject a wrong device
  * (a mismatch against the key the device reports at `path`) up front, before the
  * on-device confirm — the background verify gate remains the fund-safety check.
+ *
+ * `intent` states what this signature authorizes. Because the device blind-signs
+ * a bare hash, it is the only description of the operation the user ever sees;
+ * it is chosen by the background from the work in hand and never taken from a
+ * dapp or message (see {@link LedgerSignIntent}).
  */
 export type LedgerSignRequest = {
   readonly accountId: string;
+  readonly intent: LedgerSignIntent;
   readonly messageHash: string;
   readonly path: string;
   readonly publicKeyX: string;
@@ -40,12 +47,17 @@ export type LedgerHashSigner = (request: LedgerSignRequest) => Promise<DeviceSig
  * account's stored `publicKeyX`, and throws `WalletError` on any mismatch before
  * returning — so every submitting path that uses this signer fails closed rather
  * than broadcasting an unverified signature.
+ *
+ * `intent` is fixed when the signer is built, so a signer handed to an RPC
+ * helper cannot be reused later under a different description than the one the
+ * user was shown.
  */
 export const ledgerStarkHashSigner =
-  (account: LedgerAccountRef, sign: LedgerHashSigner): StarkHashSigner =>
+  (account: LedgerAccountRef, intent: LedgerSignIntent, sign: LedgerHashSigner): StarkHashSigner =>
   async (messageHash) => {
     const signature = await sign({
       accountId: account.id,
+      intent,
       messageHash,
       path: account.derivation.path,
       publicKeyX: account.publicKeyX,

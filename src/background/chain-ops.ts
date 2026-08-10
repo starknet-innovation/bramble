@@ -119,7 +119,12 @@ export const executeSignApproval = async (
   // settles the held dapp request with the real reason instead of leaving it to
   // hang on an unhandled throw. Fails closed — no signature returned on error.
   try {
-    const signature = await accountHashSigner(deps, account, passphrase)(messageHash);
+    const signature = await accountHashSigner(
+      deps,
+      account,
+      passphrase,
+      "dapp-message",
+    )(messageHash);
     return { ok: true, signature };
   } catch (error) {
     return { error: walletErrorMessage(error, "sign typed data request failed") };

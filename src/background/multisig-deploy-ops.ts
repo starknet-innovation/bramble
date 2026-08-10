@@ -125,7 +125,7 @@ const declareMultisigClass: MultisigDeployHandler = async (deps, message) => {
       compiledClassHash: MULTISIG_COMPILED_CLASS_HASH,
       contractClass,
       rpcUrls,
-      signHash: signerForContext(deps, context),
+      signHash: signerForContext(deps, context, "declare-class"),
     });
   } catch (error) {
     await releaseMultisigOperation(deps, claim.operationId);
@@ -215,7 +215,7 @@ const deployMultisig: MultisigDeployHandler = async (deps, message) => {
       account: context.account,
       calls: [buildMultisigDeployCall(config)],
       rpcUrls,
-      signHash: signerForContext(deps, context),
+      signHash: signerForContext(deps, context, "multisig-deploy"),
     });
   } catch (error) {
     await releaseMultisigOperation(deps, claim.operationId);

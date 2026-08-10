@@ -325,6 +325,7 @@ describe("privileged Ledger messages", () => {
 
     const parked = queue.request({
       accountId: ledgerAccount.id,
+      intent: "deploy-account",
       messageHash: DEPLOY_HASH,
       path: ledgerAccount.derivation.path,
       publicKeyX: ledgerAccount.publicKeyX,

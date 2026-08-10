@@ -79,6 +79,7 @@ describe("verified Ledger session reuse", () => {
     const request: LedgerSignRequestSummary = {
       accountId: "SN_MAIN:0x123",
       id: "ledger-sign-verified-session",
+      intent: "send-token",
       messageHash: "0xabc",
       path: ledgerAccountPath(0),
       publicKeyX: "0x2",

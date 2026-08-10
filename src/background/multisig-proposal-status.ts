@@ -3,6 +3,7 @@
  * but never authorize a transaction: action handlers perform a fresh chain
  * read for the selected signer immediately before every broadcast.
  */
+import type { MultisigProposalStatus } from "../starknet/multisig";
 import { canonicalFelt, sameFelt } from "../starknet/networks";
 import type {
   MultisigProposalRecord,
@@ -12,6 +13,34 @@ import type {
 import type { WalletOpsDeps } from "./wallet-ops";
 
 type ProposalStatusDeps = WalletOpsDeps & { readonly multisigStore: MultisigStore };
+
+/**
+ * Rejects a confirmation the chain state cannot accept, returning the user-facing
+ * reason or null when confirming is allowed. Advisory-free: callers must pass a
+ * FRESH status read for the selected signer, since this is the last gate before
+ * a broadcast.
+ */
+export const confirmGuard = (status: MultisigProposalStatus): string | null => {
+  if (status.state === "executed" || status.state === "not-found") {
+    return `cannot confirm a proposal that is ${status.state}`;
+  }
+  if (status.state === "confirmed") {
+    return "proposal already has quorum — execute it instead of adding more confirmations";
+  }
+  return status.confirmedBySigner ? "this account has already confirmed this proposal" : null;
+};
+
+/**
+ * Rejects a revocation the chain state cannot accept, returning the user-facing
+ * reason or null when revoking is allowed. Same freshness requirement as
+ * {@link confirmGuard}.
+ */
+export const revokeGuard = (status: MultisigProposalStatus): string | null => {
+  if (status.state === "executed" || status.state === "not-found") {
+    return `cannot revoke a proposal that is ${status.state}`;
+  }
+  return status.confirmedBySigner ? null : "this account has not confirmed this proposal";
+};
 
 /**
  * Checks whether this wallet's submit transaction is still pending. Activity

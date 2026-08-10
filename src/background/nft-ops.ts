@@ -296,7 +296,7 @@ const handleReviewNftTransfer = async (
           account: context.account,
           calls: [call],
           rpcUrls,
-          signHash: signerForContext(deps, context),
+          signHash: signerForContext(deps, context, "send-collectible"),
         })
         .catch(() => null)
     : null;
@@ -347,7 +347,7 @@ const handleTransferNft = async (
     account: context.account,
     calls: [call],
     rpcUrls,
-    signHash: signerForContext(deps, context),
+    signHash: signerForContext(deps, context, "send-collectible"),
   });
   await deps.activity.record({
     accountId: context.account.id,

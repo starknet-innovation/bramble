@@ -3,6 +3,7 @@
  * balances, deployment, transfer review and submission, and the activity feed.
  */
 import { resolveFeeAffordability } from "../starknet/fee-funds";
+import type { LedgerSignIntent } from "../starknet/ledger-intent";
 import {
   STARKNET_NETWORKS,
   STRK_TOKEN_ADDRESS,
@@ -87,12 +88,15 @@ export const verificationContext = (account: AccountRef, preferences: WalletPref
 
 /**
  * Builds a hash signer for a resolved active-account context without exposing
- * the vault secret to caller modules.
+ * the vault secret to caller modules. `intent` names what the signature
+ * authorizes and is required — on a Ledger it is the only description of the
+ * operation the user sees before blind-signing (see {@link accountHashSigner}).
  */
 export const signerForContext = (
   deps: WalletOpsDeps,
   context: { readonly account: AccountRef; readonly vaultPassphrase: string },
-) => accountHashSigner(deps, context.account, context.vaultPassphrase);
+  intent: LedgerSignIntent,
+) => accountHashSigner(deps, context.account, context.vaultPassphrase, intent);
 
 const transferContext = async (
   deps: WalletOpsDeps,
@@ -203,7 +207,7 @@ const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
   const result = await deps.runtimeRpc.submitAccountDeployment({
     account,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], await deps.preferencesStore.read()),
-    signHash: accountHashSigner(deps, account, vaultPassphrase),
+    signHash: accountHashSigner(deps, account, vaultPassphrase, "deploy-account"),
   });
   await deps.activity.record({
     accountId: account.id,
@@ -238,7 +242,7 @@ const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {
           account,
           calls: [call],
           rpcUrls,
-          signHash: accountHashSigner(deps, account, vaultPassphrase),
+          signHash: accountHashSigner(deps, account, vaultPassphrase, "send-token"),
         })
         .catch(() => null)
     : null;
@@ -280,7 +284,7 @@ const handleTransfer: WalletOpsHandler = async (deps, message) => {
     amount: input.amount,
     recipient: input.recipient,
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
-    signHash: accountHashSigner(deps, account, vaultPassphrase),
+    signHash: accountHashSigner(deps, account, vaultPassphrase, "send-token"),
     speed: input.speed,
     token,
   });

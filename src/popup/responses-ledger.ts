@@ -8,21 +8,27 @@
  * paths, and a public `(r, s)` pair.
  */
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
+import { isLedgerSignIntent, type LedgerSignIntent } from "../starknet/ledger-intent";
 import { isLedgerAccountPath } from "../starknet/ledger-path";
 import { isStarkFieldElement } from "../starknet/networks";
 import { isAccountId, isAccountRef, type LedgerAccountRef } from "../storage/vault-schema";
 
 /**
  * A pending device-sign the side panel that owns the Ledger transport must
- * fulfil: the background queue id, the account it belongs to, the host-computed
- * hash to blind-sign, the exact stored derivation path to hand the device, and
- * the account's stored public x-coordinate so the panel can reject a wrong
- * device before the on-device confirm. Carries no secret material — the private
- * key never leaves the device and `publicKeyX` is public.
+ * fulfil: the background queue id, the account it belongs to, what the signature
+ * authorizes, the host-computed hash to blind-sign, the exact stored derivation
+ * path to hand the device, and the account's stored public x-coordinate so the
+ * panel can reject a wrong device before the on-device confirm. Carries no
+ * secret material — the private key never leaves the device and `publicKeyX` is
+ * public.
+ *
+ * `intent` is background-chosen, never dapp-supplied; the validator below
+ * rejects an unknown one so the prompt cannot render an unlabelled hash.
  */
 export type LedgerSignRequestSummary = {
   readonly accountId: string;
   readonly id: string;
+  readonly intent: LedgerSignIntent;
   readonly messageHash: string;
   readonly path: string;
   readonly publicKeyX: string;
@@ -67,10 +73,11 @@ export type LedgerAccountStatusResponse = {
 
 const isLedgerSignRequestSummary = (value: unknown): value is LedgerSignRequestSummary =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "id", "messageHash", "path", "publicKeyX"]) &&
+  hasOnlyKnownKeys(value, ["accountId", "id", "intent", "messageHash", "path", "publicKeyX"]) &&
   typeof value["id"] === "string" &&
   value["id"].length > 0 &&
   isAccountId(value["accountId"]) &&
+  isLedgerSignIntent(value["intent"]) &&
   typeof value["messageHash"] === "string" &&
   isStarkFieldElement(value["messageHash"]) &&
   typeof value["publicKeyX"] === "string" &&

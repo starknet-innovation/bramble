@@ -309,6 +309,15 @@ export const SEND_STYLES = `
   }
   @keyframes send-pulse-icon { 50% { opacity: 0.55; transform: scale(0.9); } }
   .ledger-progress-hero h2 { font-size: ${TYPE.title.size}; }
+  /* What the device approval authorizes. Blind signing shows the user only a
+     hash, so this is the one statement of purpose they get: it sits directly
+     under the phase title and carries accent weight so it reads before the
+     progress rail or the hash itself. */
+  .ledger-sign-intent {
+    color: var(--mc-accent);
+    font-size: ${TYPE.body.size};
+    font-weight: 600;
+  }
   .ledger-signer-line {
     align-items: center;
     color: var(--mc-muted);

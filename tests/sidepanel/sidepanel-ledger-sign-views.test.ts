@@ -11,6 +11,7 @@ import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 
 const request: LedgerSignRequestSummary = {
   accountId: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  intent: "send-token",
   id: "ledger-sign-1",
   messageHash: "0xabc",
   path: ledgerAccountPath(3),
@@ -101,6 +102,33 @@ describe("ledgerSignScreen", () => {
       expect(html).toContain(padded);
       expect(html).not.toContain(">0xabc<");
     }
+  });
+
+  test("states what the signature authorizes in every phase", () => {
+    // Under blind signing the device shows only a bare hash, so this line is the
+    // sole description of the operation the user gets. It must be present
+    // wherever the prompt is, including the error phase they may retry from.
+    const phases: readonly LedgerSignView["phase"][] = [
+      { kind: "connect" },
+      { kind: "confirming" },
+      { kind: "submitting" },
+      { code: "device-locked", kind: "error", message: "Unlock your Ledger." },
+    ];
+    for (const phase of phases) {
+      expect(render(phase)).toContain("Sign to send");
+    }
+  });
+
+  test("each intent renders its own copy rather than a shared generic label", () => {
+    const copyFor = (intent: LedgerSignRequestSummary["intent"]): string =>
+      ledgerSignScreen({ phase: { kind: "confirming" }, request: { ...request, intent } }, status);
+    expect(copyFor("dapp-message")).toContain("Sign a message from this site");
+    expect(copyFor("multisig-revoke")).toContain("Sign to revoke your confirmation");
+    expect(copyFor("revoke-spending")).toContain("Sign to revoke a spending approval");
+    expect(copyFor("strk20-register")).toContain("Sign to join the privacy pool");
+    // A private send and its broadcast are distinct signatures with distinct
+    // consequences, so they must not share one label.
+    expect(copyFor("strk20-authorize")).not.toBe(copyFor("strk20-broadcast"));
   });
 
   test("a path with no recoverable index omits the index suffix", () => {

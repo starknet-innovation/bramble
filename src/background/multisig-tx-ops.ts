@@ -7,6 +7,7 @@
  * and quorum on-chain, so these handlers can never bypass it.
  */
 import type { Call } from "starknet";
+import type { LedgerSignIntent } from "../starknet/ledger-intent";
 import {
   buildMultisigConfirmCall,
   buildMultisigExecuteCall,
@@ -33,7 +34,12 @@ import {
   multisigRpc,
   refreshSignerMembership,
 } from "./multisig-ops";
-import { confirmedSignersAfterStatus, isProposalSubmitPending } from "./multisig-proposal-status";
+import {
+  confirmedSignersAfterStatus,
+  confirmGuard,
+  isProposalSubmitPending,
+  revokeGuard,
+} from "./multisig-proposal-status";
 import {
   claimMultisigProposalOperation,
   type MultisigProposalOperationKind,
@@ -77,12 +83,13 @@ const submitAndRecord = async (
   resolved: MultisigContext,
   calls: readonly Call[],
   summary: string,
+  intent: LedgerSignIntent,
 ): Promise<string> => {
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: resolved.account.account,
     calls,
     rpcUrls: resolved.rpcUrls,
-    signHash: signerForContext(deps, resolved.account),
+    signHash: signerForContext(deps, resolved.account, intent),
   });
   await recordSubmittedActivity(deps.activity, {
     accountId: resolved.record.id,
@@ -100,6 +107,7 @@ const submitClaimedAndRecord = async (
   calls: readonly Call[],
   summary: string,
   operationId: string,
+  intent: LedgerSignIntent,
 ): Promise<string> => {
   let result: { readonly transactionHash: string };
   try {
@@ -107,7 +115,7 @@ const submitClaimedAndRecord = async (
       account: resolved.account.account,
       calls,
       rpcUrls: resolved.rpcUrls,
-      signHash: signerForContext(deps, resolved.account),
+      signHash: signerForContext(deps, resolved.account, intent),
     });
   } catch (error) {
     await releaseMultisigOperation(deps, operationId);
@@ -241,6 +249,7 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
     target,
     [buildMultisigSubmitCall(target.record.address, call, input.salt)],
     `Propose: ${summary}`,
+    "multisig-propose",
   );
   const proposal = buildMultisigProposalRecord({
     id,
@@ -276,23 +285,6 @@ const reserveProposalAction = async (
     pendingError: "this signer already has a proposal action in progress — wait for it to settle",
     txId: found.proposal.txId,
   });
-
-const confirmGuard = (status: MultisigProposalStatus): string | null => {
-  if (status.state === "executed" || status.state === "not-found") {
-    return `cannot confirm a proposal that is ${status.state}`;
-  }
-  if (status.state === "confirmed") {
-    return "proposal already has quorum — execute it instead of adding more confirmations";
-  }
-  return status.confirmedBySigner ? "this account has already confirmed this proposal" : null;
-};
-
-const revokeGuard = (status: MultisigProposalStatus): string | null => {
-  if (status.state === "executed" || status.state === "not-found") {
-    return `cannot revoke a proposal that is ${status.state}`;
-  }
-  return status.confirmedBySigner ? null : "this account has not confirmed this proposal";
-};
 
 // The atomic mode is allowed only when this confirmation reaches quorum. The
 // contract sees confirm's storage write before execute; a failed execution
@@ -376,7 +368,7 @@ const prepareMultisigConfirmation: MultisigTxHandler = async (deps, message) => 
       account: context.found.resolved.account.account,
       calls: context.plan.calls,
       rpcUrls: context.found.resolved.rpcUrls,
-      signHash: signerForContext(deps, context.found.resolved.account),
+      signHash: signerForContext(deps, context.found.resolved.account, "multisig-confirm"),
     })
     .catch(() => null);
   return {
@@ -402,6 +394,9 @@ const confirmMultisigProposal: MultisigTxHandler = async (deps, message) => {
     context.plan.calls,
     context.plan.summary,
     claim.operationId,
+    // Atomic confirm-and-execute is still labelled as a confirmation: it is the
+    // action the user chose, and both calls ride on the one device approval.
+    "multisig-confirm",
   );
   await refreshAfterAction(deps, context.found).catch(() => undefined);
   return { ok: true, transactionHash };
@@ -426,6 +421,7 @@ const revokeMultisigConfirmation: MultisigTxHandler = async (deps, message) => {
     [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
     `Revoke confirmation: ${found.proposal.summary}`,
     claim.operationId,
+    "multisig-revoke",
   );
   await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };
@@ -468,6 +464,7 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
     ],
     `Execute: ${found.proposal.summary}`,
     claim.operationId,
+    "multisig-execute",
   );
   await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };

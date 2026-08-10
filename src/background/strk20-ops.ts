@@ -194,7 +194,7 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
     return { error: "strk20 services unavailable" };
   }
   try {
-    const accountContext = strk20AccountContext(deps, resolved);
+    const accountContext = strk20AccountContext(deps, resolved, "strk20-register");
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
     if (!service.poolFee) {
       return { error: "strk20 services unavailable" };
@@ -295,7 +295,7 @@ const handleStrk20InvokeTransaction: Strk20OpsHandler = async (deps, message, se
   }
   try {
     const plan = await quoteStrk20Plan(strk20ServiceForRuntime(deps.runtimeRpc), {
-      ...strk20AccountContext(deps, resolved),
+      ...strk20AccountContext(deps, resolved, "strk20-authorize"),
       actions: input.actions,
     });
     const payload = { actions: input.actions, strk20Plan: plan };
@@ -382,7 +382,7 @@ export const executeStrk20DisclosureApproval = async (
   if ("error" in resolved) {
     return resolved;
   }
-  const context = strk20AccountContext(deps, resolved);
+  const context = strk20AccountContext(deps, resolved, "strk20-authorize");
   try {
     if (approval.request.type === "register") {
       const registration = approval.request;
@@ -414,8 +414,9 @@ export const executeStrk20DisclosureApproval = async (
         { accountContext: context, preferences: resolved.preferences, token },
         registration.poolFeeFri,
       );
+      // Registration signs for its own reason, not the authorize-labelled one.
       const result = await registerStrk20Account(service, {
-        ...context,
+        ...strk20AccountContext(deps, resolved, "strk20-register"),
         poolFeeFri: registration.poolFeeFri,
       });
       await deps.activity.record({
@@ -477,7 +478,7 @@ export const executeStrk20InvokeApproval = async (
   }
   try {
     const result = await submitStrk20Actions(strk20ServiceForRuntime(deps.runtimeRpc), {
-      ...strk20AccountContext(deps, resolved),
+      ...strk20AccountContext(deps, resolved, "strk20-authorize"),
       actions: approval.actions,
       plan: approval.plan,
     });

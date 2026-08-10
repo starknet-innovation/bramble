@@ -11,6 +11,7 @@
  * never drift between the wallet-initiated and dapp-initiated flows.
  */
 import { WalletError } from "../shared/errors";
+import type { LedgerSignIntent } from "../starknet/ledger-intent";
 import type { StarkHashSigner } from "../starknet/provider";
 import { type AccountRef, isKeylessAccount } from "../storage/vault-schema";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
@@ -35,18 +36,27 @@ export type AccountHashSignerDeps = {
  * (via the queue) and verified against its stored `publicKeyX`; any other
  * account signs through the vault. Throws `WalletError` up front for a keyless
  * Ledger account with no queue wired, so the submit aborts with nothing sent.
+ *
+ * `intent` names what the signature authorizes and is REQUIRED, with no default:
+ * on a Ledger it becomes the only description of the operation the user sees
+ * before blind-signing a bare hash, so every call site must state it. It is
+ * ignored for vault-backed accounts, which prompt no device. Pass the intent of
+ * the operation being performed even on fee-estimate paths — those pass
+ * `skipValidate`, so starknet.js never invokes the signer and no device is
+ * prompted, but the label stays correct if that ever changes.
  */
 export const accountHashSigner = (
   deps: AccountHashSignerDeps,
   account: AccountRef,
   vaultPassphrase: string,
+  intent: LedgerSignIntent,
 ): StarkHashSigner => {
   if (isKeylessAccount(account)) {
     const queue = deps.ledgerSignQueue;
     if (!queue) {
       throw new WalletError("Ledger signing unavailable");
     }
-    return ledgerStarkHashSigner(account, (request) => queue.request(request));
+    return ledgerStarkHashSigner(account, intent, (request) => queue.request(request));
   }
   return (messageHash) =>
     deps.wallet.signHash({ accountId: account.id, messageHash, vaultPassphrase });

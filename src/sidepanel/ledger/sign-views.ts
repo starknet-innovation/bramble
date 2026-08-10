@@ -6,6 +6,7 @@
  */
 import type { LedgerSignRequestSummary, WalletStatus } from "../../popup/responses";
 import { escapeHtml } from "../../shared/html";
+import type { LedgerSignIntent } from "../../starknet/ledger-intent";
 import { ledgerAccountIndexOfPath } from "../../starknet/ledger-path";
 import { paddedFelt } from "../../starknet/networks";
 import { pill } from "../../ui/content";
@@ -27,6 +28,33 @@ const signerLine = (request: LedgerSignRequestSummary): string => {
     ${suffix}
   </div>`;
 };
+
+// What the signature authorizes, in the user's terms. The device shows only a
+// bare hash under v1 blind signing, so this is the sole statement of purpose the
+// user gets before approving. Typed as a total record over the intent union, so
+// adding an intent without writing its copy fails to type-check rather than
+// rendering an unlabelled prompt.
+const intentCopy: Readonly<Record<LedgerSignIntent, string>> = {
+  "dapp-message": "Sign a message from this site",
+  "dapp-transaction": "Sign to approve this site's transaction",
+  "declare-class": "Sign to declare a contract class",
+  "deploy-account": "Sign to deploy this account",
+  "multisig-confirm": "Sign to confirm this multisig transaction",
+  "multisig-deploy": "Sign to deploy this multisig",
+  "multisig-execute": "Sign to execute this multisig transaction",
+  "multisig-propose": "Sign to propose this multisig transaction",
+  "multisig-revoke": "Sign to revoke your confirmation",
+  "revoke-spending": "Sign to revoke a spending approval",
+  "send-collectible": "Sign to send this collectible",
+  "send-token": "Sign to send",
+  "strk20-authorize": "Sign to authorize this private transfer",
+  "strk20-broadcast": "Sign to broadcast this deposit",
+  "strk20-register": "Sign to join the privacy pool",
+  "swap-tokens": "Sign to swap these tokens",
+};
+
+const intentLine = (request: LedgerSignRequestSummary): string => `
+  <p class="ledger-sign-intent">${escapeHtml(intentCopy[request.intent])}</p>`;
 
 // The exact value the device is asked to sign, shown so it can be compared with
 // the device screen — the only check that catches a host that computed a
@@ -200,6 +228,7 @@ export const ledgerSignScreen = (view: LedgerSignView, status: WalletStatus): st
         <span class="ledger-device-mark" aria-hidden="true">${icon("shield")}</span>
         <p class="context-label">Secure hardware signature</p>
         <h2>${escapeHtml(phaseTitle[view.phase.kind])}</h2>
+        ${intentLine(view.request)}
         ${signerLine(view.request)}
       </div>
       ${ledgerProgress(view)}

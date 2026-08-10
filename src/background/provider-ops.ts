@@ -246,7 +246,12 @@ const estimateInvokeApprovalFee = async (
         account: resolved.account,
         calls: [...calls],
         rpcUrls,
-        signHash: accountHashSigner(deps, resolved.account, resolved.passphrase),
+        signHash: accountHashSigner(
+          deps,
+          resolved.account,
+          resolved.passphrase,
+          "dapp-transaction",
+        ),
       });
     } catch {
       estimated = null;
@@ -434,7 +439,9 @@ export const executeInvokeApproval = async (
   // hang on an unhandled throw. Fails closed — nothing is submitted on error.
   try {
     const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
-    const signHash = accountHashSigner(deps, account, passphrase);
+    // The two branches sign for different reasons, so each builds its own signer:
+    // the proof branch broadcasts an already-authorized private action, while the
+    // plain branch authorizes the site's calls themselves.
     const result = approval.payload.proof
       ? await (runtimeRpc.strk20 ?? unavailableStrk20Service).submitPrepared({
           account,
@@ -442,7 +449,7 @@ export const executeInvokeApproval = async (
           config: preferences.strk20Networks?.[account.networkId] ?? null,
           proof: approval.payload.proof,
           rpcUrls,
-          signHash,
+          signHash: accountHashSigner(deps, account, passphrase, "strk20-broadcast"),
           viewingKey: async () => {
             const derive = deps.wallet.deriveStrk20ViewingKey;
             const config = preferences.strk20Networks?.[account.networkId] ?? null;
@@ -462,7 +469,7 @@ export const executeInvokeApproval = async (
           account,
           calls,
           rpcUrls,
-          signHash,
+          signHash: accountHashSigner(deps, account, passphrase, "dapp-transaction"),
         });
     await activity.record({
       accountId: account.id,

@@ -1,8 +1,9 @@
 /**
  * The background Ledger StarkHashSigner must hand the device the account's exact
- * stored path, verify the returned signature against the account's publicKeyX,
- * and fail closed (throw, nothing returned) when the device returns a signature
- * that does not verify — the last gate before a transaction is broadcast.
+ * stored path and the intent the prompt will show, verify the returned signature
+ * against the account's publicKeyX, and fail closed (throw, nothing returned)
+ * when the device returns a signature that does not verify — the last gate
+ * before a transaction is broadcast.
  */
 import { describe, expect, test } from "bun:test";
 import { ec } from "starknet";
@@ -36,7 +37,7 @@ const deviceSignOf = (privateKey: string) => async (request: LedgerSignRequest) 
 describe("ledgerStarkHashSigner", () => {
   test("hands the device the stored path and returns the verified signature", async () => {
     const seen: LedgerSignRequest[] = [];
-    const sign = ledgerStarkHashSigner(account, async (request) => {
+    const sign = ledgerStarkHashSigner(account, "send-token", async (request) => {
       seen.push(request);
       return deviceSignOf(PRIVATE_KEY)(request);
     });
@@ -46,6 +47,7 @@ describe("ledgerStarkHashSigner", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]).toEqual({
       accountId: account.id,
+      intent: "send-token",
       messageHash: "0x1e240",
       path: ledgerAccountPath(3),
       publicKeyX,
@@ -61,14 +63,15 @@ describe("ledgerStarkHashSigner", () => {
   });
 
   test("fails closed when the device signs with the wrong key", async () => {
-    const sign = ledgerStarkHashSigner(account, deviceSignOf("0xdeadbeef"));
+    const sign = ledgerStarkHashSigner(account, "send-token", deviceSignOf("0xdeadbeef"));
     await expect(sign("0x1e240")).rejects.toThrow("Ledger signature verification failed");
   });
 
   test("fails closed when the device returns a signature of a different hash", async () => {
-    const sign = ledgerStarkHashSigner(account, async () =>
+    const sign = ledgerStarkHashSigner(account, "send-token", async () =>
       deviceSignOf(PRIVATE_KEY)({
         accountId: account.id,
+        intent: "send-token",
         messageHash: "0xdead",
         path: account.derivation.path,
         publicKeyX,

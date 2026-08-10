@@ -28,6 +28,7 @@ const OTHER_PUBLIC_KEY = Uint8Array.from([...Array(31).fill(0), 0x03, ...Array(3
 
 const REQUEST: LedgerSignRequestSummary = {
   accountId: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  intent: "send-token",
   id: "ledger-sign-1",
   messageHash: "0xabc",
   path: ledgerAccountPath(0),
@@ -64,10 +65,9 @@ const okSign = (): ReturnType<LedgerDeviceClient["signHash"]> =>
     s: new Uint8Array([...Array(31).fill(0), 2]),
   });
 
-// A connector expressed in terms of the device CLIENT (no transport). The
-// harness wraps each resolved client in an OWNED session whose `close` bumps a
-// counter, so tests assert the transport is released on every outcome without a
-// real WebHID handle.
+// A connector expressed in terms of the device CLIENT (no transport). The harness
+// wraps each client in an OWNED session whose `close` bumps a counter, so tests
+// assert the transport is released on every outcome without a real WebHID handle.
 type ClientConnector = {
   readonly listConnected?: LedgerConnector["listConnected"];
   readonly openConnected: (deviceId?: string) => Promise<LedgerDeviceClient | null>;

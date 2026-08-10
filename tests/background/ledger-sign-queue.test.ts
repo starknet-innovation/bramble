@@ -8,6 +8,7 @@ import { createLedgerSignQueue } from "../../src/background/ledger-sign-queue";
 
 const request = {
   accountId: "SN_MAIN:0x1",
+  intent: "send-token" as const,
   messageHash: "0x2",
   path: "m/2645'/0'/0'/0'/0'/0",
   publicKeyX: "0x3",

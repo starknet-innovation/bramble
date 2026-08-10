@@ -112,7 +112,7 @@ const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
     account: context.account,
     calls: [call],
     rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
-    signHash: signerForContext(deps, context),
+    signHash: signerForContext(deps, context, "revoke-spending"),
   });
   await deps.activity.record({
     accountId: context.account.id,

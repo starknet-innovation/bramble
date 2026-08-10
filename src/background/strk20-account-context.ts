@@ -3,6 +3,7 @@
  */
 
 import { WalletError } from "../shared/errors";
+import type { LedgerSignIntent } from "../starknet/ledger-intent";
 import { canonicalFelt, STARKNET_NETWORKS } from "../starknet/networks";
 import { type Strk20Service, unavailableStrk20Service } from "../starknet/strk20/service";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
@@ -22,6 +23,12 @@ export const strk20ServiceForRuntime = (runtimeRpc: RuntimeRpc): Strk20Service =
 /**
  * Builds a lazy protected SDK context. Viewing-key derivation and signing do
  * not occur until an approved operation actually needs them.
+ *
+ * `intent` labels the device prompt for a keyless Ledger account, so it must
+ * match the operation this context is built for — build a separate context
+ * rather than reusing one across operations that sign for different reasons
+ * (registration versus authorizing a private action). Read-only operations
+ * never reach the signer, so their intent is never shown.
  */
 export const strk20AccountContext = (
   deps: {
@@ -34,6 +41,7 @@ export const strk20AccountContext = (
     readonly preferences: Awaited<ReturnType<WalletPreferencesStore["read"]>>;
     readonly rpcUrls: readonly string[];
   },
+  intent: LedgerSignIntent,
 ) => {
   const deriveViewingKey = deps.wallet.deriveStrk20ViewingKey;
   const config = resolved.preferences.strk20Networks?.[resolved.account.networkId] ?? null;
@@ -41,7 +49,7 @@ export const strk20AccountContext = (
     account: resolved.account,
     config,
     rpcUrls: resolved.rpcUrls,
-    signHash: accountHashSigner(deps, resolved.account, resolved.passphrase),
+    signHash: accountHashSigner(deps, resolved.account, resolved.passphrase, intent),
     viewingKey: async () => {
       if (!deriveViewingKey) {
         throw new WalletError("strk20 services unavailable");
