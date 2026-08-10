@@ -81,6 +81,10 @@ const SECRET_MATERIAL_FILES = new Set([
   // only transits into the protected signer wiring, never logged or stored.
   "src/background/strk20-op-context.ts",
   "src/background/strk20-wallet-ops.ts",
+  // Viewing-key custody split from strk20-wallet-ops. It resolves the retained
+  // key to test whether one exists — presence is a vault fact nothing else can
+  // answer — and discards the value immediately without returning or logging it.
+  "src/background/strk20-viewing-key-state.ts",
   "src/background/runtime-state.ts",
   "src/background/runtime-types.ts",
   "src/background/session.ts",

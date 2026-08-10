@@ -8,7 +8,7 @@
  * or — worse — as an account holding nothing.
  */
 import { describe, expect, test } from "bun:test";
-import { STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE } from "../../src/background/strk20-wallet-ops";
+import { STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE } from "../../src/background/strk20-viewing-key-state";
 import { ledgerAccountPath } from "../../src/starknet/ledger-path";
 import type { AccountRef } from "../../src/storage/vault-schema";
 import {
@@ -74,12 +74,35 @@ describe("Ledger private-balance state before the viewing-key ceremony", () => {
     });
   });
 
-  test("the registration review discloses that the key is kept on disk", async () => {
-    // Registration is only offered to an unregistered account.
+  test("prepares the registration review with no viewing key retained", async () => {
+    // Reading the account's own status through the SDK needs the viewing key, so
+    // this path has to ask the pool directly. Otherwise the very first tap fails
+    // with "Ledger STRK20 viewing key unavailable" and the user can never reach
+    // the review that authorizes deriving it.
     const handler = buildStrk20Handler({
       accounts: [ledgerAccount],
       activeAccountId: () => ledgerAccount.id,
       registered: false,
+      viewingKeyUnavailable: true,
+    });
+
+    const response = (await handler(
+      { type: "wallet.strk20PrepareRegistration" },
+      STRK20_EXTENSION_SENDER,
+    )) as unknown as { readonly strk20Preparation?: { readonly kind: string } };
+
+    expect(response.strk20Preparation?.kind).toBe("register");
+  });
+
+  test("the registration review discloses that the key is kept on disk", async () => {
+    // Registration is only offered to an unregistered account, and a hardware
+    // account reaching this review has not derived its key yet — that is what the
+    // review authorizes.
+    const handler = buildStrk20Handler({
+      accounts: [ledgerAccount],
+      activeAccountId: () => ledgerAccount.id,
+      registered: false,
+      viewingKeyUnavailable: true,
     });
 
     const response = (await handler(

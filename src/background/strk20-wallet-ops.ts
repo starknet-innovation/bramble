@@ -16,7 +16,6 @@ import {
   submitStrk20Actions,
 } from "../starknet/strk20/service";
 import { systemClock } from "../storage/activity-store";
-import { isLedgerStrk20ViewingKeyMissing } from "../wallet/strk20-viewing-key";
 import { approvalPayloadMatchesContext, createApprovalContext } from "./approval-context";
 import { readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeResponse } from "./runtime-types";
@@ -29,6 +28,7 @@ import {
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
 import { handleStrk20SendOps } from "./strk20-send-ops";
+import { needsViewingKeyCeremony, viewingKeyCustodyDisclosure } from "./strk20-viewing-key-state";
 import { readStrk20WalletExecuteInput } from "./strk20-wallet-inputs";
 import {
   type Strk20WalletPreparation,
@@ -77,55 +77,6 @@ const hasPendingRegistration = async (
       now - entry.submittedAt < REGISTRATION_PENDING_WINDOW_MS,
   );
 };
-
-// Whether this account still needs the device ceremony before any private read.
-//
-// Only a keyless Ledger account can: a software account's key is always derivable
-// from its signing key. That guard is load-bearing, not an optimization — probing
-// resolves the key, so probing unconditionally would make every state read depend
-// on the key even when no balance is read, turning a working read into a failure
-// whenever derivation is unavailable.
-//
-// Resolving it is the only honest test, since presence is a vault fact no pool or
-// indexer can answer. The value is discarded immediately: it stays inside the
-// background boundary and is never returned, stored, or logged.
-const needsViewingKeyCeremony = async (context: ActivePrivacyContext): Promise<boolean> => {
-  if (context.accountContext.account.derivation.kind !== "ledger") {
-    return false;
-  }
-  try {
-    await context.accountContext.viewingKey();
-    return false;
-  } catch (error) {
-    if (isLedgerStrk20ViewingKeyMissing(error)) {
-      return true;
-    }
-    throw error;
-  }
-};
-
-/**
- * Custody disclosure shown when registering will retain a viewing key on disk.
- *
- * Exported because it is user-facing security copy: a test pins that the
- * registration review carries it, so it cannot be dropped by accident.
- */
-export const STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE =
-  "Registering stores a viewing key on disk for ease of use. It is encrypted with your wallet password, like every other secret this wallet holds, and cannot be read without it.";
-
-// Disclosed only for a keyless account, because only a keyless account retains
-// the key. A software account's viewing key is derived on demand and never
-// persisted, so telling that user their key is stored on disk would be false.
-//
-// The comparison is to "every other secret this wallet holds" rather than to the
-// recovery phrase on purpose: a Ledger-created vault holds no phrase at all
-// (createLedgerVault writes `mnemonic: null`), and those are exactly the accounts
-// this line is shown for — so a phrase comparison would break precisely where the
-// statement applies.
-const viewingKeyCustodyDisclosure = (context: ActivePrivacyContext): readonly string[] =>
-  context.accountContext.account.derivation.kind === "ledger"
-    ? [STRK20_VIEWING_KEY_CUSTODY_DISCLOSURE]
-    : [];
 
 // The fee is a hard input to every pool route, and it is readable without the
 // viewing key. Returning a state without it leaves Send in an endless "Checking",
@@ -225,8 +176,15 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
   }
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    // The account's OWN status normally comes from the SDK's discovery preflight,
+    // which needs the viewing key a hardware account does not have yet here. Ask
+    // the pool directly instead — it answers "is this address registered" for any
+    // address with no key required, which is the question being asked.
     const status = await readStrk20RegistrationStatus(service, {
       ...context.accountContext,
+      ...((await needsViewingKeyCeremony(context))
+        ? { subject: context.accountContext.account.address }
+        : {}),
       token: context.token.address,
     });
     if (status === "registered") {
