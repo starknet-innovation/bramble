@@ -58,6 +58,9 @@ const service = (capture: {
   async privateBalances({ tokens }) {
     return tokens.map((entry) => ({ balance: "0xde0b6b3a7640000", token: entry }));
   },
+  async poolFee() {
+    return "0x1";
+  },
   async quoteActions() {
     return RELAY_PLAN;
   },
@@ -314,6 +317,64 @@ describe("background private-send operations", () => {
         STRK20_EXTENSION_SENDER,
       ),
     ).resolves.toEqual({ error: "Privacy preparation not found" });
+  });
+
+  test("refuses execution when the reviewed recipient registration becomes stale", async () => {
+    const capture = {
+      recipientRegistered: true,
+      submissions: [] as { actions: readonly Strk20Action[]; plan: Strk20SubmissionPlan }[],
+    };
+    const handler = buildStrk20Handler({ preferences: preferences(), strk20: service(capture) });
+    const prepared = (await handler(
+      {
+        amount: "0.5",
+        recipient: STRK20_RECIPIENT,
+        tokenId: token.id,
+        type: "wallet.strk20PrepareTransfer",
+      },
+      STRK20_EXTENSION_SENDER,
+    )) as { readonly strk20Preparation: { readonly id: string } };
+
+    expect(prepared).toMatchObject({ ok: true });
+    capture.recipientRegistered = false;
+    await expect(
+      handler(
+        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: "The recipient has not activated private balances" });
+    expect(capture.submissions).toEqual([]);
+  });
+
+  test("refuses a third-party deposit when recipient registration changes after review", async () => {
+    const capture = {
+      recipientRegistered: true,
+      submissions: [] as { actions: readonly Strk20Action[]; plan: Strk20SubmissionPlan }[],
+    };
+    const handler = buildStrk20Handler({
+      preferences: preferences(),
+      publicBalance: "2000000000000000000",
+      strk20: service(capture),
+    });
+    const prepared = (await handler(
+      {
+        amount: "0.5",
+        recipient: STRK20_RECIPIENT,
+        tokenId: token.id,
+        type: "wallet.strk20PrepareDeposit",
+      },
+      STRK20_EXTENSION_SENDER,
+    )) as { readonly strk20Preparation: { readonly id: string } };
+
+    expect(prepared).toMatchObject({ ok: true });
+    capture.recipientRegistered = false;
+    await expect(
+      handler(
+        { preparationId: prepared.strk20Preparation.id, type: "wallet.strk20Execute" },
+        STRK20_EXTENSION_SENDER,
+      ),
+    ).resolves.toEqual({ error: "The recipient has not activated private balances" });
+    expect(capture.submissions).toEqual([]);
   });
 
   test("blocks sends to unregistered recipients, self-sends, and overdrafts", async () => {

@@ -174,13 +174,3 @@ const server = Bun.serve({
 });
 
 console.log(`STRK20 dev gateway on http://127.0.0.1:${server.port} -> ${upstreamBase}`);
-console.log(
-  paymasterKey
-    ? `paymaster -> ${paymasterUpstream} with a local key (${paymasterKey.length} chars, not logged)`
-    : "paymaster -> chained upstream (set AVNU_PAYMASTER_API_KEY to use a local relay key)",
-);
-console.log(
-  paymasterKey
-    ? `paymaster -> ${paymasterUpstream} with a local key (${paymasterKey.length} chars, not logged)`
-    : "paymaster -> chained upstream (set AVNU_PAYMASTER_API_KEY to use a local relay key)",
-);
