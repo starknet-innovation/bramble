@@ -20,6 +20,7 @@ const state = (registration: PrivacyAccountState["registration"]): PrivacyAccoun
   balances: [],
   networkId: "SN_MAIN",
   poolFeeFri: "0x1",
+  privateBalances: "ready",
   relayConfigured: true,
   registration,
 });

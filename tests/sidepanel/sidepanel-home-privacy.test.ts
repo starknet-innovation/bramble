@@ -62,6 +62,7 @@ const privateState = (loading = false): PrivacyDisclosureState => ({
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "registered",
+        privateBalances: "ready",
       },
 });
 
@@ -180,6 +181,7 @@ describe("unified portfolio scope", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "unregistered",
+        privateBalances: "ready",
       },
     });
 
@@ -202,6 +204,7 @@ describe("unified portfolio scope", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "pending",
+        privateBalances: "ready",
       },
     });
 

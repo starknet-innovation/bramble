@@ -14,6 +14,23 @@ import { isKeylessAccount, type Vault } from "../storage/vault-schema";
 import { findVaultAccount } from "./vault-account";
 
 /**
+ * Raised when a Ledger account has no retained viewing key for the exact scope
+ * asked for. Exported so callers can tell this recoverable state — the user has
+ * simply not run the device ceremony for this pool yet — apart from a genuine
+ * failure, without matching a message literal. Compare against it; never rebuild
+ * the string (see {@link isLedgerStrk20ViewingKeyMissing}).
+ */
+export const LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE = "Ledger STRK20 viewing key unavailable";
+
+/**
+ * True when a thrown error is the recoverable "device ceremony not yet run for
+ * this scope" state rather than a real failure. Callers use this to offer the
+ * ceremony instead of surfacing an error.
+ */
+export const isLedgerStrk20ViewingKeyMissing = (error: unknown): boolean =>
+  error instanceof WalletError && error.message === LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE;
+
+/**
  * Resolves a domain-separated privacy viewing key without exposing it beyond
  * the privileged vault boundary. Software accounts derive through Krusty;
  * Ledger accounts use only an exact chain/pool-scoped retained key.
@@ -34,7 +51,7 @@ export const deriveVaultStrk20ViewingKey = async (
       poolAddress,
     );
     if (!viewingKey) {
-      throw new WalletError("Ledger STRK20 viewing key unavailable");
+      throw new WalletError(LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE);
     }
     return viewingKey;
   }

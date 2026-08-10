@@ -46,6 +46,8 @@ const disclosure = (
     // The pool's 6 STRK action fee and a configured relay: the scenarios review
     // the private route, which is only offered when a relay exists.
     poolFeeFri: "0x53444835ec580000",
+    // These scenarios review a software account, whose key is always derivable.
+    privateBalances: "ready",
     registration,
     relayConfigured: true,
   },

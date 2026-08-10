@@ -61,6 +61,7 @@ const registered = (privateBalance = "20000000000000000000"): PrivacyDisclosureS
     poolFeeFri: SIX_STRK,
     relayConfigured: true,
     registration: "registered",
+    privateBalances: "ready",
   },
 });
 

@@ -16,6 +16,7 @@ import {
   submitStrk20Actions,
 } from "../starknet/strk20/service";
 import { systemClock } from "../storage/activity-store";
+import { isLedgerStrk20ViewingKeyMissing } from "../wallet/strk20-viewing-key";
 import { approvalPayloadMatchesContext, createApprovalContext } from "./approval-context";
 import { readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeResponse } from "./runtime-types";
@@ -77,6 +78,45 @@ const hasPendingRegistration = async (
   );
 };
 
+// Whether this account still needs the device ceremony before any private read.
+//
+// Only a keyless Ledger account can: a software account's key is always derivable
+// from its signing key. That guard is load-bearing, not an optimization — probing
+// resolves the key, so probing unconditionally would make every state read depend
+// on the key even when no balance is read, turning a working read into a failure
+// whenever derivation is unavailable.
+//
+// Resolving it is the only honest test, since presence is a vault fact no pool or
+// indexer can answer. The value is discarded immediately: it stays inside the
+// background boundary and is never returned, stored, or logged.
+const needsViewingKeyCeremony = async (context: ActivePrivacyContext): Promise<boolean> => {
+  if (context.accountContext.account.derivation.kind !== "ledger") {
+    return false;
+  }
+  try {
+    await context.accountContext.viewingKey();
+    return false;
+  } catch (error) {
+    if (isLedgerStrk20ViewingKeyMissing(error)) {
+      return true;
+    }
+    throw error;
+  }
+};
+
+// The fee is a hard input to every pool route, and it is readable without the
+// viewing key. Returning a state without it leaves Send in an endless "Checking",
+// so an unavailable reader or a failed read rejects the whole request.
+const requirePoolFee = async (
+  service: ReturnType<typeof strk20ServiceForRuntime>,
+  context: ActivePrivacyContext,
+): Promise<string> => {
+  if (!service.poolFee) {
+    throw new Error("Private pool fee is unavailable. Retry the balance check.");
+  }
+  return service.poolFee(context.accountContext);
+};
+
 const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
   const context = await resolvePrivacyContext(deps);
   if ("error" in context) {
@@ -84,6 +124,24 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
   }
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
+    // Every private read below needs the viewing key. A Ledger account that has
+    // not run the device ceremony for this pool has none, which is a recoverable
+    // setup state, not a failure — answer with it instead of attempting reads
+    // that would all fail, and report no balances rather than implying zero.
+    if (await needsViewingKeyCeremony(context)) {
+      return {
+        ok: true,
+        strk20State: {
+          accountId: context.accountContext.account.id,
+          balances: [],
+          networkId: context.accountContext.account.networkId,
+          poolFeeFri: await requirePoolFee(service, context),
+          registration: "unregistered",
+          relayConfigured: context.accountContext.config?.paymaster !== undefined,
+          privateBalances: "setup-required",
+        },
+      };
+    }
     const status = await readStrk20RegistrationStatus(service, {
       ...context.accountContext,
       token: context.token.address,
@@ -106,13 +164,7 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
               .map((token) => token.address),
           })
         : [];
-    // The fee is a hard input to every pool route. Returning a successful state
-    // without it leaves Send in an endless "Checking" state, so an unavailable
-    // reader or a failed read rejects this request and reaches the UI's retry.
-    if (!service.poolFee) {
-      throw new Error("Private pool fee is unavailable. Retry the balance check.");
-    }
-    const poolFeeFri = await service.poolFee(context.accountContext);
+    const poolFeeFri = await requirePoolFee(service, context);
     return {
       ok: true,
       strk20State: {
@@ -135,6 +187,7 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
         poolFeeFri,
         relayConfigured: context.accountContext.config?.paymaster !== undefined,
         registration,
+        privateBalances: "ready",
       },
     };
   } catch (error) {

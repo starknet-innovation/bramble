@@ -131,9 +131,11 @@ export const resolvePrivacyContext = async (
   if (!config) {
     return { error: "Private balances are not configured for this network" };
   }
-  if (active.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
-  }
+  // A Ledger account is no longer refused outright: it reaches private balances
+  // through a retained, scope-bound viewing key produced by the device ceremony.
+  // Without one, every read below fails with
+  // LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE, which callers map to the recoverable
+  // "run the ceremony" state rather than an error.
   const token = tokenId
     ? preferences.tokens.find(
         (stored) => stored.id === tokenId && stored.networkId === active.networkId,

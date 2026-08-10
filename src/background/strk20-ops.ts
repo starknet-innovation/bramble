@@ -183,9 +183,9 @@ const handleStrk20Register: Strk20OpsHandler = async (deps, message, sender) => 
   if ("error" in resolved) {
     return resolved;
   }
-  if (resolved.account.derivation.kind === "ledger") {
-    return { error: "Private balances are not available for Ledger accounts" };
-  }
+  // A Ledger account registers through its retained, scope-bound key; without one
+  // the derivation below fails closed, which is honest here — a dapp cannot drive
+  // the device ceremony, so the user must run it from the wallet first.
   const config = resolved.preferences.strk20Networks?.[resolved.account.networkId];
   const token = resolved.preferences.tokens.find(
     (candidate) => candidate.networkId === resolved.account.networkId,

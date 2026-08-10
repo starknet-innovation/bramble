@@ -103,6 +103,7 @@ describe("dashboard token-detail arm", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "registered",
+        privateBalances: "ready",
       },
     };
 
@@ -126,6 +127,7 @@ describe("dashboard token-detail arm", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "unregistered",
+        privateBalances: "ready",
       },
     };
 
@@ -147,6 +149,7 @@ describe("dashboard token-detail arm", () => {
         poolFeeFri: "0x1",
         relayConfigured: true,
         registration: "pending",
+        privateBalances: "ready",
       },
     };
 

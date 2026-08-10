@@ -15,6 +15,8 @@ import {
   defaultWalletPreferences,
   type WalletPreferences,
 } from "../../src/storage/preferences-store";
+import type { AccountRef } from "../../src/storage/vault-schema";
+import { LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE } from "../../src/wallet/strk20-viewing-key";
 import {
   contentSender,
   createWallet,
@@ -42,6 +44,13 @@ export const STRK20_CALL_AND_PROOF = {
 };
 
 export type Strk20HarnessOptions = {
+  /**
+   * Overrides the stub vault's accounts, so a suite can make a keyless Ledger
+   * account active and exercise the viewing-key setup state.
+   */
+  readonly accounts?: readonly AccountRef[];
+  /** Chooses which of `accounts` is active. Defaults to the shared stub account. */
+  readonly activeAccountId?: () => string;
   /** Seeded activity log, for pending-registration derivation. */
   readonly activity?: ActivityLog;
   readonly balance?: string;
@@ -56,6 +65,12 @@ export type Strk20HarnessOptions = {
   readonly registered?: boolean;
   readonly strk20?: Strk20Service;
   readonly subaccountCalls?: { value: number };
+  /**
+   * Makes vault viewing-key derivation fail the way a Ledger account with no
+   * retained key does, so the recoverable setup state can be exercised without
+   * hardware.
+   */
+  readonly viewingKeyUnavailable?: boolean;
 };
 
 /**
@@ -133,32 +148,47 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       return { transactionHash: "0x123" };
     },
   };
-  return createMessageHandler(createWallet(), "extension-id", {
-    ...(options.activity ? { activity: options.activity } : {}),
-    ...(options.now ? { now: options.now } : {}),
-    preferencesStore: {
-      ...unavailablePreferencesStore,
-      async read() {
-        return preferences;
-      },
-    },
-    runtimeRpc: makeRuntimeRpc({
-      async getTokenBalances({ tokens }) {
-        const balance = options.publicBalance ?? "100000000000000000000";
-        return tokens.map((token) => ({
-          ...token,
-          balance,
-          formatted: balance,
-        }));
-      },
-      async submitInvokeTransaction(input) {
-        options.invoked?.push(input);
-        return { calls: input.calls, transactionHash: "0x123" };
-      },
-      strk20,
-    }),
-    session,
+  const wallet = createWallet({
+    ...(options.accounts ? { accounts: options.accounts } : {}),
+    ...(options.activeAccountId ? { activeAccountId: options.activeAccountId } : {}),
   });
+  return createMessageHandler(
+    options.viewingKeyUnavailable
+      ? {
+          ...wallet,
+          deriveStrk20ViewingKey(): Promise<string> {
+            return Promise.reject(new WalletError(LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE));
+          },
+        }
+      : wallet,
+    "extension-id",
+    {
+      ...(options.activity ? { activity: options.activity } : {}),
+      ...(options.now ? { now: options.now } : {}),
+      preferencesStore: {
+        ...unavailablePreferencesStore,
+        async read() {
+          return preferences;
+        },
+      },
+      runtimeRpc: makeRuntimeRpc({
+        async getTokenBalances({ tokens }) {
+          const balance = options.publicBalance ?? "100000000000000000000";
+          return tokens.map((token) => ({
+            ...token,
+            balance,
+            formatted: balance,
+          }));
+        },
+        async submitInvokeTransaction(input) {
+          options.invoked?.push(input);
+          return { calls: input.calls, transactionHash: "0x123" };
+        },
+        strk20,
+      }),
+      session,
+    },
+  );
 };
 
 export type Strk20Handler = ReturnType<typeof buildStrk20Handler>;
