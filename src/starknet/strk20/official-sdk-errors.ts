@@ -5,7 +5,6 @@
 import { WalletError } from "../../shared/errors";
 import { isRecord } from "../../shared/json";
 import { friendlyNetworkError } from "../../shared/network-error";
-import { IndeterminateRpcWriteError, isTransportRpcError } from "../provider";
 import {
   STRK20_INSUFFICIENT_BALANCE,
   STRK20_NOT_REGISTERED,
@@ -155,6 +154,13 @@ export const mapStrk20ProtocolError = (error: unknown): never => {
  * revert reason, which is otherwise discarded at this boundary. Note material,
  * proofs, authorizing secrets, vault data, and service endpoints never survive
  * `sanitizeStrk20Detail`.
+ *
+ * Indeterminacy is recognised here, never minted: only `withRpcWrite` knows
+ * whether a write was actually in flight, and the marker it throws for that case
+ * is an `IndeterminateRpcWriteError` — a `WalletError`, so it reaches maturity
+ * unchanged through the passthrough below. A raw transport error arriving at
+ * `stage === "submission"` means the opposite: endpoint selection failed the
+ * chain-id probe, so nothing was broadcast and the scope must be released.
  */
 export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): never => {
   if (error instanceof WalletError) {
@@ -162,17 +168,10 @@ export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): 
   }
   const text = failureText(error);
   const detail = sanitizeStrk20Detail(text);
-  const indeterminateWrite = stage === "submission" && isTransportRpcError(error);
   const networkFailure = friendlyNetworkError(text);
   const category: Strk20ErrorCategory =
     (networkFailure ? "transport" : markerFor(text, CATEGORY_MARKERS)) ?? "service-unavailable";
   const base = markerFor(text, BASE_MARKERS) ?? STRK20_SERVICE_UNAVAILABLE;
   const label = `${base} (${stage}/${category})`;
-  if (indeterminateWrite) {
-    // Maturity must retain its submitting guard because the node may have
-    // accepted the write before the response was lost. Preserve only that safe
-    // fact: unstructured transport errors can contain the full request body.
-    throw new IndeterminateRpcWriteError(label);
-  }
   throw new WalletError(detail === "" ? label : `${label}: ${detail}`);
 };
