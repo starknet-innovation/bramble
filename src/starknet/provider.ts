@@ -136,6 +136,63 @@ export const isTransportRpcError = (error: unknown): boolean => {
   return !(isRecord(baseError) && typeof baseError["code"] === "number");
 };
 
+const PROVIDER_BROADCAST_METHODS = new Set([
+  "declareContract",
+  "deployAccountContract",
+  "invokeFunction",
+]);
+const CHANNEL_BROADCAST_METHODS = new Set(["declare", "deployAccount", "invoke"]);
+const PREPARATION_UNAVAILABLE =
+  "Transaction could not be prepared. Check your connection or RPC endpoint.";
+
+const runRpcBroadcast = async <T>(broadcast: () => Promise<T>): Promise<T> => {
+  try {
+    return await broadcast();
+  } catch (error) {
+    if (isTransportRpcError(error)) {
+      throw new IndeterminateRpcWriteError(
+        "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+      );
+    }
+    throw error;
+  }
+};
+
+const guardedMember = (
+  target: object,
+  property: string | symbol,
+  broadcastMethods: ReadonlySet<string>,
+): unknown => {
+  const value: unknown = Reflect.get(target, property, target);
+  if (typeof value !== "function") {
+    return value;
+  }
+  const call = (...args: readonly unknown[]): unknown => Reflect.apply(value, target, args);
+  return typeof property === "string" && broadcastMethods.has(property)
+    ? (...args: readonly unknown[]) => runRpcBroadcast(() => Promise.resolve(call(...args)))
+    : call;
+};
+
+// Account.execute/declare/deployAccount perform fee reads and signing before
+// calling these provider/channel methods. Guarding the methods, rather than the
+// whole Account operation, marks only the point at which a node can have
+// accepted a transaction.
+const guardRpcBroadcasts = (provider: RpcProvider): RpcProvider => {
+  const rawChannel: unknown = Reflect.get(provider, "channel", provider);
+  const channel =
+    typeof rawChannel === "object" && rawChannel !== null
+      ? new Proxy(rawChannel, {
+          get: (target, property) => guardedMember(target, property, CHANNEL_BROADCAST_METHODS),
+        })
+      : null;
+  return new Proxy(provider, {
+    get: (target, property) =>
+      property === "channel" && channel !== null
+        ? channel
+        : guardedMember(target, property, PROVIDER_BROADCAST_METHODS),
+  });
+};
+
 /**
  * Runs an operation against each configured RPC endpoint until one succeeds.
  * Only transport-level failures fail over; semantic RPC errors propagate so
@@ -162,9 +219,10 @@ export const withRpcFallback = async <T>(
 
 /**
  * Selects a chain-matching endpoint with read-only probes, then runs a
- * state-changing operation exactly once. After execution begins no transport
- * failure is retried: the node may already have accepted the transaction, so
- * replaying through a fallback could submit a second write.
+ * state-changing operation exactly once. The provider's transaction-broadcast
+ * methods preserve response-loss ambiguity without retaining the raw error;
+ * earlier transport failures become a safe preparation error. Neither case is
+ * retried against a fallback endpoint.
  */
 export const withRpcWrite = async <T>(
   rpcUrls: readonly string[],
@@ -192,12 +250,13 @@ export const withRpcWrite = async <T>(
     throw lastError;
   }
   try {
-    return await run(selected);
+    return await run(guardRpcBroadcasts(selected));
   } catch (error) {
+    if (error instanceof IndeterminateRpcWriteError) {
+      throw error;
+    }
     if (isTransportRpcError(error)) {
-      throw new IndeterminateRpcWriteError(
-        "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
-      );
+      throw new WalletError(PREPARATION_UNAVAILABLE);
     }
     throw error;
   }

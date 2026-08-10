@@ -114,7 +114,7 @@ describe("starknet RPC helpers", () => {
     expect(calls).toEqual(["https://one.example"]);
   });
 
-  test("preflights write endpoints but never retries after execution begins", async () => {
+  test("does not classify a callback preflight failure as an ambiguous broadcast", async () => {
     const made: string[] = [];
     const writes: string[] = [];
     const provider = (nodeUrl: string) =>
@@ -142,11 +142,40 @@ describe("starknet RPC helpers", () => {
         return provider(nodeUrl);
       },
     ).catch((error: unknown) => error);
-    expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
-    expect((rejection as Error).message).toContain("submission status is unknown");
+    expect(rejection).toBeInstanceOf(WalletError);
+    expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect((rejection as Error).message).toContain("could not be prepared");
 
     expect(made).toEqual(["https://offline.example", "https://selected.example"]);
     expect(writes).toEqual(["https://selected.example"]);
+  });
+
+  test("marks only provider transaction-broadcast methods as status unknown", async () => {
+    for (const method of ["declareContract", "deployAccountContract", "invokeFunction"] as const) {
+      const provider = {
+        async getChainId() {
+          return "0x534e5f4d41494e";
+        },
+        async [method]() {
+          throw new Error("connection reset with private request body");
+        },
+      } as unknown as import("starknet").RpcProvider;
+
+      const rejection = await withRpcWrite(
+        ["https://selected.example"],
+        "0x534e5f4d41494e",
+        async (selected) => {
+          const broadcast = Reflect.get(selected, method) as () => Promise<never>;
+          return broadcast();
+        },
+        () => provider,
+      ).catch((error: unknown) => error);
+
+      expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
+      expect((rejection as Error).message).toBe(
+        "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+      );
+    }
   });
 
   test("classifies transport versus semantic RPC failures", () => {
