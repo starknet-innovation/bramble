@@ -163,6 +163,7 @@ describe("requestDeviceGrant", () => {
     expect(Object.keys({ ...createCalls[0] }).sort()).toEqual(["active", "url"]);
     fake.emit({ kind: "ready" });
     const session = await pending;
+    expect(session.readiness).toBe("verified");
     await session.close();
   });
 

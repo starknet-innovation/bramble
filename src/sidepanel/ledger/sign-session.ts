@@ -48,6 +48,12 @@ import type { LedgerSignOutcome } from "./runtime-client";
 export type LedgerDeviceSession = {
   readonly client: LedgerDeviceClient;
   readonly close: () => Promise<void>;
+  /**
+   * Whether this exact, still-owned transport has already passed the shared OS
+   * and app gate. A verified session may skip only that repeated compatibility
+   * probe; account-key matching and signature verification remain mandatory.
+   */
+  readonly readiness?: "verified";
 };
 
 /**
@@ -168,20 +174,23 @@ export const createLedgerSignController = (
     }
   };
 
-  const signWith = async (client: LedgerDeviceClient, epoch: number): Promise<void> => {
+  const signWith = async (session: LedgerDeviceSession, epoch: number): Promise<void> => {
     const request = current;
     if (!request) {
       return;
     }
+    const { client } = session;
     const isActive = (): boolean => current?.id === request.id && operationEpoch === epoch;
     show({ kind: "checking" });
-    // Shared pre-check before the on-device confirm: assert the device OS and
-    // Starknet app are at/above the pinned floors (a locked/disconnected device
-    // surfaces here as a thrown transport error), then confirm the device holds
+    // Shared pre-check before the on-device confirm: unless the grant broker
+    // already checked this exact live session, assert the device OS and Starknet
+    // app are at/above the pinned floors. Then confirm the device holds
     // the account's key at `path` — a mismatch is the wrong Ledger and gets that
     // actionable copy instead of a post-sign verify failure. Fund safety still
     // rests on the background verify gate; this only fails faster and clearer.
-    await assertLedgerDeviceReady(client);
+    if (session.readiness !== "verified") {
+      await assertLedgerDeviceReady(client);
+    }
     if (!isActive()) {
       return;
     }
@@ -222,7 +231,7 @@ export const createLedgerSignController = (
     try {
       session = await obtain();
       if (session) {
-        await signWith(session.client, epoch);
+        await signWith(session, epoch);
       } else {
         show({ kind: "connect" });
       }

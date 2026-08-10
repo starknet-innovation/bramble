@@ -45,21 +45,11 @@ const STARKNET_APP_NAME = "Starknet";
 const sendEmptyApdu = (transport, apdu) =>
   transport.send(apdu.cla, apdu.ins, apdu.p1, apdu.p2, Buffer.alloc(0), [APDU_OK]);
 
-const readOsVersion = async (transport) => {
-  // Ledger's quit command is a no-op on the dashboard. Starting here therefore
-  // handles both an already-open Starknet app and Bluetooth's dashboard pairing
-  // state without an incompatible OS/app read sequence.
-  await sendEmptyApdu(transport, QUIT_APP_APDU);
-  const response = await transport.send(
-    OS_VERSION_APDU.cla,
-    OS_VERSION_APDU.ins,
-    OS_VERSION_APDU.p1,
-    OS_VERSION_APDU.p2,
-    Buffer.alloc(0),
-    [APDU_OK],
-  );
+const malformedOsVersion = () => new Error("Malformed Ledger OS version response");
+
+const parseOsVersion = (response) => {
   if (!(response instanceof Uint8Array) || response.length < 8) {
-    throw new Error("Malformed Ledger OS version response");
+    throw malformedOsVersion();
   }
   const statusOffset = response.length - 2;
   const status = (response[statusOffset] << 8) | response[statusOffset + 1];
@@ -70,14 +60,25 @@ const readOsVersion = async (transport) => {
     response[0] * 0x1000000 + response[1] * 0x10000 + response[2] * 0x100 + response[3];
   const versionLength = response[4];
   const versionEnd = 5 + versionLength;
-  if (versionLength === 0 || versionEnd > statusOffset) {
-    throw new Error("Malformed Ledger OS version response");
+  // Ledger's response always includes a length-prefixed flags field after the
+  // secure-element version. Validate that envelope even though this wallet does
+  // not consume the flags; otherwise a truncated APDU could be accepted as a
+  // valid firmware response.
+  if (versionLength === 0 || versionEnd >= statusOffset) {
+    throw malformedOsVersion();
   }
-  const osVersion = {
+  const flagsLength = response[versionEnd];
+  if (versionEnd + 1 + flagsLength > statusOffset) {
+    throw malformedOsVersion();
+  }
+  return {
     targetId,
     version: new TextDecoder("utf-8", { fatal: true }).decode(response.slice(5, versionEnd)),
   };
-  await transport.send(
+};
+
+const openStarknet = (transport) =>
+  transport.send(
     OPEN_APP_APDU.cla,
     OPEN_APP_APDU.ins,
     OPEN_APP_APDU.p1,
@@ -85,6 +86,45 @@ const readOsVersion = async (transport) => {
     Buffer.from(STARKNET_APP_NAME, "ascii"),
     [APDU_OK],
   );
+
+const readOsVersion = async (transport) => {
+  // This flow may start in Starknet or on the dashboard. Keep the transition on
+  // one owned transport so a second browser connection cannot race the APDU
+  // pipe; model/transport reconnection behavior is covered by the mandatory
+  // physical compatibility matrix rather than assumed from this pure client.
+  await sendEmptyApdu(transport, QUIT_APP_APDU);
+  let osVersion;
+  let readError;
+  try {
+    const response = await transport.send(
+      OS_VERSION_APDU.cla,
+      OS_VERSION_APDU.ins,
+      OS_VERSION_APDU.p1,
+      OS_VERSION_APDU.p2,
+      Buffer.alloc(0),
+      [APDU_OK],
+    );
+    osVersion = parseOsVersion(response);
+  } catch (error) {
+    readError = error;
+  }
+
+  // Once the quit APDU succeeds, best-effort restoration keeps a malformed or
+  // failed OS read from stranding the user on the dashboard. Preserve the OS
+  // failure when both operations fail because it is the cause of this check.
+  try {
+    await openStarknet(transport);
+  } catch (error) {
+    if (readError === undefined) {
+      throw error;
+    }
+  }
+  if (readError !== undefined) {
+    throw readError;
+  }
+  if (!osVersion) {
+    throw malformedOsVersion();
+  }
   return osVersion;
 };
 

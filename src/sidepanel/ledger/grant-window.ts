@@ -389,5 +389,6 @@ export const requestDeviceGrant = async (
       failPending(new LedgerRejection("panel-context-lost"));
       await browser.tabs.remove(tabId as number).catch(() => undefined);
     },
+    readiness: "verified",
   };
 };

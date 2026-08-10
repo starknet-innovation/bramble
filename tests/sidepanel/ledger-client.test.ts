@@ -32,7 +32,7 @@ const publicKey = bytes([...Array(31).fill(0), 0x02, ...Array(32).fill(0xff)]);
 
 const fakeClient = (overrides: Partial<LedgerDeviceClient> = {}): LedgerDeviceClient => ({
   async getOsVersion() {
-    return { targetId: 0x33000004, version: "2.7.1" };
+    return { targetId: 0x33000004, version: "2.6.1" };
   },
   async getAppVersion() {
     return { ...OK, major: 2, minor: 4, patch: 0 };
@@ -105,11 +105,20 @@ describe("ledgerAppVersion / assertLedgerAppReady", () => {
     await expect(ledgerAppVersion(client)).rejects.toMatchObject({
       code: "unexpected-device-error",
     });
+
+    const impossibleByte = fakeClient({
+      async getAppVersion() {
+        return { ...OK, major: 256, minor: 1, patch: 0 };
+      },
+    });
+    await expect(ledgerAppVersion(impossibleByte)).rejects.toMatchObject({
+      code: "unexpected-device-error",
+    });
   });
 });
 
 describe("ledgerFirmwareVersion / assertLedgerFirmwareReady", () => {
-  test("reads a known device OS and passes at the model's pinned current release", async () => {
+  test("reads a known device OS and passes at the model's compatibility floor", async () => {
     expect(await ledgerFirmwareVersion(fakeClient())).toEqual({
       model: "nano-x",
       version: MC_LEDGER_OS_MIN["nano-x"],
@@ -120,15 +129,40 @@ describe("ledgerFirmwareVersion / assertLedgerFirmwareReady", () => {
     });
   });
 
-  test("rejects an OS below its model's pinned current release", async () => {
+  test("rejects an OS below its model's compatibility floor", async () => {
     const client = fakeClient({
       async getOsVersion() {
-        return { targetId: 0x33000004, version: "2.7.0" };
+        return { targetId: 0x33000004, version: "2.6.0" };
       },
     });
     await expect(assertLedgerFirmwareReady(client)).rejects.toMatchObject({
       code: "firmware-below-minimum",
     });
+  });
+
+  test("uses Ledger's target masks across every supported model and hardware revision", async () => {
+    const cases = [
+      { model: "nano-x", targetId: 0x33001234 },
+      { model: "nano-s-plus", targetId: 0x3310abcd },
+      { model: "stax", targetId: 0x33200042 },
+      { model: "flex", targetId: 0x3330ffff },
+      { model: "nano-gen5", targetId: 0x33400099 },
+    ] as const;
+    for (const { model, targetId } of cases) {
+      const minimum = MC_LEDGER_OS_MIN[model];
+      const client = fakeClient({
+        async getOsVersion() {
+          return {
+            targetId,
+            version: `${minimum.major}.${minimum.minor}.${minimum.patch}`,
+          };
+        },
+      });
+      await expect(ledgerFirmwareVersion(client)).resolves.toEqual({
+        model,
+        version: minimum,
+      });
+    }
   });
 
   test("fails closed for an unknown device target or malformed OS version", async () => {
@@ -162,7 +196,7 @@ describe("assertLedgerDeviceReady", () => {
       },
       async getOsVersion() {
         calls.push("os");
-        return { targetId: 0x33000004, version: "2.7.1" };
+        return { targetId: 0x33000004, version: "2.6.1" };
       },
     });
     await expect(assertLedgerDeviceReady(client)).resolves.toEqual({
@@ -181,7 +215,7 @@ describe("assertLedgerDeviceReady", () => {
         return { ...OK, major: 2, minor: 4, patch: 0 };
       },
       async getOsVersion() {
-        return { targetId: 0x33000004, version: "2.7.0" };
+        return { targetId: 0x33000004, version: "2.6.0" };
       },
     });
     await expect(assertLedgerDeviceReady(client)).rejects.toMatchObject({

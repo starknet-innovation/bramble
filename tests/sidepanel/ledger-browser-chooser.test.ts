@@ -95,7 +95,7 @@ describe("Ledger OS preflight transport transition", () => {
     const calls: { cla: number; data: readonly number[]; ins: number }[] = [];
     const responses = [
       Buffer.from([0x90, 0x00]),
-      Buffer.from([0x33, 0x00, 0x00, 0x04, 0x05, 0x32, 0x2e, 0x37, 0x2e, 0x31, 0x90, 0x00]),
+      Buffer.from([0x33, 0x00, 0x00, 0x04, 0x05, 0x32, 0x2e, 0x36, 0x2e, 0x31, 0x00, 0x90, 0x00]),
       Buffer.from([0x90, 0x00]),
       Buffer.from([0x02, 0x04, 0x00, 0x90, 0x00]),
     ];
@@ -113,7 +113,7 @@ describe("Ledger OS preflight transport transition", () => {
 
     await expect(client.getOsVersion()).resolves.toEqual({
       targetId: 0x33000004,
-      version: "2.7.1",
+      version: "2.6.1",
     });
     await expect(client.getAppVersion()).resolves.toMatchObject({
       major: 2,
@@ -126,6 +126,34 @@ describe("Ledger OS preflight transport transition", () => {
       { cla: 0xe0, data: [], ins: 0x01 },
       { cla: 0xe0, data: [...Buffer.from("Starknet", "ascii")], ins: 0xd8 },
       { cla: 0x5a, data: [], ins: 0x00 },
+    ]);
+  });
+
+  test("restores Starknet after rejecting a truncated OS response", async () => {
+    const calls: { cla: number; data: readonly number[]; ins: number }[] = [];
+    const responses = [
+      Buffer.from([0x90, 0x00]),
+      Buffer.from([0x33, 0x00, 0x00, 0x04, 0x05, 0x32, 0x2e, 0x36, 0x2e, 0x31, 0x90, 0x00]),
+      Buffer.from([0x90, 0x00]),
+    ];
+    const transport = {
+      send: async (cla: number, ins: number, _p1: number, _p2: number, data: Uint8Array) => {
+        calls.push({ cla, data: [...data], ins });
+        const response = responses.shift();
+        if (!response) {
+          throw new Error("unexpected APDU");
+        }
+        return response;
+      },
+    };
+
+    await expect(newStarknetClient(transport as never).getOsVersion()).rejects.toThrow(
+      "Malformed Ledger OS version response",
+    );
+    expect(calls).toEqual([
+      { cla: 0xb0, data: [], ins: 0xa7 },
+      { cla: 0xe0, data: [], ins: 0x01 },
+      { cla: 0xe0, data: [...Buffer.from("Starknet", "ascii")], ins: 0xd8 },
     ]);
   });
 });

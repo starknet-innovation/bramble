@@ -36,20 +36,24 @@ import {
 export const LEDGER_PAGE_SIZE = 5;
 
 /**
- * Checks the pinned device OS and Starknet app releases on every call, then
- * reads the public-key x-coordinate for one page of account
- * indices — `startIndex … startIndex + count - 1` — SILENTLY and one round-trip
- * at a time (the browser transport is a serial pipe). Returns the enumerated `(index,
- * publicKeyX)` pairs for {@link LedgerOnboardController} to derive into
- * candidates. Any device/transport failure propagates as a typed
+ * Checks the pinned device OS and Starknet app releases unless this exact live
+ * session was already verified by the grant broker, then reads the public-key
+ * x-coordinate for one page of account indices — `startIndex … startIndex +
+ * count - 1` — SILENTLY and one round-trip at a time (the browser transport is
+ * a serial pipe). Returns the enumerated `(index, publicKeyX)` pairs for
+ * {@link LedgerOnboardController} to derive into candidates. Any
+ * device/transport failure propagates as a typed
  * {@link LedgerRejection} so the caller aborts cleanly.
  */
 export const enumerateLedgerPubKeys = async (
   client: LedgerDeviceClient,
   startIndex = 0,
   count: number = LEDGER_PAGE_SIZE,
+  readiness?: LedgerDeviceSession["readiness"],
 ): Promise<readonly LedgerPubKeyEntry[]> => {
-  await assertLedgerDeviceReady(client);
+  if (readiness !== "verified") {
+    await assertLedgerDeviceReady(client);
+  }
   const entries: LedgerPubKeyEntry[] = [];
   for (let offset = 0; offset < count; offset += 1) {
     const accountIndex = startIndex + offset;
@@ -127,6 +131,7 @@ export type LedgerOnboardControllerDeps = {
   readonly enumerate: (
     client: LedgerDeviceClient,
     startIndex: number,
+    readiness: LedgerDeviceSession["readiness"],
   ) => Promise<readonly LedgerPubKeyEntry[]>;
   readonly existingIds: () => ReadonlySet<string>;
   readonly onCancel: () => void;
@@ -262,7 +267,7 @@ export const createLedgerOnboardController = (
     let session: LedgerDeviceSession | null = null;
     try {
       session = await obtain();
-      const entries = await deps.enumerate(session.client, startIndex);
+      const entries = await deps.enumerate(session.client, startIndex, session.readiness);
       await closeLedgerSessionQuietly(session);
       session = null;
       const accounts = await deps.derive(entries);
