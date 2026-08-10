@@ -303,6 +303,28 @@ const submitPreparation = async (
   });
 };
 
+// A third-party private credit can only be encoded for a recipient whose
+// viewing-key registration is still active. The review already checks this,
+// but registration is chain state and may change while the user reviews. Keep
+// this final check immediately before the proof/sign/broadcast boundary.
+const assertRecipientRegistration = async (
+  service: ReturnType<typeof strk20ServiceForRuntime>,
+  recipient: string,
+  context: ActivePrivacyContext,
+): Promise<void> => {
+  if (sameFelt(recipient, context.accountContext.account.address)) {
+    return;
+  }
+  const registration = await readStrk20RegistrationStatus(service, {
+    ...context.accountContext,
+    subject: recipient,
+    token: context.token.address,
+  });
+  if (registration !== "registered") {
+    throw new Error("The recipient has not activated private balances");
+  }
+};
+
 // Transfers and withdrawals share their submission guard: both spend shielded
 // balance through the relay, so both re-check registration and the balance at
 // submit time rather than trusting the reviewed preparation.
@@ -317,6 +339,9 @@ const submitPreparedPrivateBatch = async (
   });
   if (registration !== "registered") {
     throw new Error("Private registration is no longer active");
+  }
+  if (preparation.kind === "transfer") {
+    await assertRecipientRegistration(service, preparation.recipient, context);
   }
   const [privateBalance] = await readStrk20Balances(service, {
     ...context.accountContext,
@@ -354,6 +379,7 @@ const submitPreparedDeposit = async (
   if (registration !== "registered") {
     throw new Error("Private registration is no longer active");
   }
+  await assertRecipientRegistration(service, preparation.recipient, context);
   return submitStrk20Actions(service, {
     ...context.accountContext,
     actions: preparation.actions,
