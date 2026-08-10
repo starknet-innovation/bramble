@@ -124,6 +124,22 @@ const startJourney = async (
     return;
   }
   try {
+    if (state.privateBalances === "setup-required") {
+      // A hardware account has no viewing key for this pool yet, and registering
+      // publishes that key's commitment — so the ceremony has to come first. It
+      // is its own step with its own device confirmation rather than a silent
+      // prelude to registration: it writes a key to disk, which the user is told
+      // about here, at the moment they authorize it.
+      await deps.wallet.derivePrivacyViewingKey();
+      if (!scopeMatches(deps, scope)) {
+        return;
+      }
+      await loadPrivacyDisclosure(deps);
+      deps.paint();
+      showToast("Private balances unlocked. Activate the account to start shielding.", "success");
+      buttonBusy(button, false);
+      return;
+    }
     if (state.registration === "pending") {
       // Registered on Starknet, not yet visible to the indexer. The poll flips
       // this on its own, so the only wrong move here is preparing a second one.

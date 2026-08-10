@@ -202,6 +202,9 @@ const privateBreakdownFor = (
   if (privacy.loading || !privacy.value) {
     return { kind: "loading" };
   }
+  if (privacy.value.privateBalances === "setup-required") {
+    return { kind: "setup-required" };
+  }
   if (privacy.value.registration === "pending") {
     return { kind: "pending" };
   }

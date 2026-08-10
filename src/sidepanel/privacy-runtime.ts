@@ -347,6 +347,20 @@ export const createPrivacyRuntimeClient = (
     }
     throw errorFrom(response, "Private transaction failed");
   },
+  /**
+   * Runs the hardware viewing-key ceremony for the active account and pool.
+   *
+   * Resolves to nothing on purpose: the key is derived and retained inside the
+   * vault boundary, and no response carries it. Callers re-read the privacy state
+   * afterwards to observe `privateBalances` flipping to `ready`.
+   */
+  async derivePrivacyViewingKey(): Promise<void> {
+    const response = await sendMessage({ type: "wallet.strk20DeriveLedgerViewingKey" });
+    if (isRecord(response) && hasOnlyKnownKeys(response, ["ok"]) && response["ok"] === true) {
+      return;
+    }
+    throw errorFrom(response, "Could not unlock private balances on your Ledger");
+  },
   async loadPrivacyState(): Promise<PrivacyAccountState> {
     const response = await sendMessage({ type: "wallet.strk20State" });
     const state = readState(response);

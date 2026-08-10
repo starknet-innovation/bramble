@@ -36,6 +36,7 @@ const activation: PrivacyPreparation = {
 const disclosure = (
   registration: "registered" | "unregistered",
   balances: readonly PrivateBalanceView[] = [],
+  privateBalances: "ready" | "setup-required" = "ready",
 ): PrivacyDisclosureState => ({
   error: null,
   loading: false,
@@ -46,8 +47,7 @@ const disclosure = (
     // The pool's 6 STRK action fee and a configured relay: the scenarios review
     // the private route, which is only offered when a relay exists.
     poolFeeFri: "0x53444835ec580000",
-    // These scenarios review a software account, whose key is always derivable.
-    privateBalances: "ready",
+    privateBalances,
     registration,
     relayConfigured: true,
   },
@@ -111,17 +111,12 @@ export const privacyScenario: WalletScenario = {
       state: { configuration: "missing", failClosed: true },
     },
     {
-      content: () =>
-        privacyDashboard({
-          error: "Ledger accounts cannot derive the STRK20 viewing key in this wallet.",
-          loading: false,
-          value: null,
-        }),
-      id: "ledger-unsupported",
-      label: "Ledger unsupported",
+      content: () => privacyDashboard(disclosure("unregistered", [], "setup-required")),
+      id: "ledger-setup-required",
+      label: "Ledger unlock required",
       narrative:
-        "The hardware boundary is explicit: no fallback key derivation or ambiguous retry is offered.",
-      state: { accountKind: "ledger", failClosed: true },
+        "A hardware account is not refused; it needs its viewing key derived on the device first, because registering publishes that key's commitment. The line reads as unknown rather than as a zero private balance, and the action unlocks instead of promising registration.",
+      state: { accountKind: "ledger", privateBalances: "setup-required", privateRead: false },
     },
     {
       content: () =>

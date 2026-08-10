@@ -121,14 +121,24 @@ export type PrivateBreakdown =
   | { readonly kind: "unavailable"; readonly message: string }
   /** Registration broadcast, not yet visible to the privacy indexer. */
   | { readonly kind: "pending" }
+  /**
+   * A hardware account with no viewing key derived for this pool yet. Distinct
+   * from `unregistered`: nothing private has been read, so the amount is unknown
+   * rather than absent, and the next step is the device ceremony, not registering.
+   */
+  | { readonly kind: "setup-required" }
   | { readonly kind: "unregistered" };
 
 const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown): string => {
   const symbol = token.symbol;
-  if (breakdown.kind === "unregistered") {
-    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="Register to start shielding">
+  if (breakdown.kind === "setup-required" || breakdown.kind === "unregistered") {
+    const label =
+      breakdown.kind === "setup-required"
+        ? "Unlock with your Ledger"
+        : "Register to start shielding";
+    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="${escapeHtml(label)}">
         <span class="token-breakdown-label">${icon("lock")}Private balance</span>
-        <span>Register to start shielding</span>
+        <span>${escapeHtml(label)}</span>
       </button>`;
   }
   const value =
