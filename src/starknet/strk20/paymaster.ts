@@ -242,6 +242,7 @@ export const buildStrk20PaymasterPlan = async (input: {
   readonly approveCalls: readonly Call[];
   readonly chainId: string;
   readonly config: Strk20PaymasterConfig;
+  readonly expectedFeeAmount: bigint;
   readonly http?: PaymasterHttp;
   readonly nowSeconds: number;
   readonly poolAddress: string;
@@ -287,7 +288,20 @@ export const buildStrk20PaymasterPlan = async (input: {
         value: result["typed_data"],
       })
     : undefined;
-  if (!feeAction || !sameFelt(feeAction.token, input.config.feeToken)) {
+  // A relay fee withdrawn to the user's public account would link the private
+  // action to that account on-chain. Compare numerically so padding cannot
+  // bypass the boundary. For the wallet's STRK-only relay route, the quoted
+  // amount must also equal the pool's independently-read on-chain fee: AVNU's
+  // sponsored-private STRK path applies neither conversion nor overhead to it.
+  // A mixed route also identifies the forwarder as the typed-data caller, so
+  // bind the fee recipient to that independently reviewed field.
+  if (
+    !feeAction ||
+    !sameFelt(feeAction.token, input.config.feeToken) ||
+    sameFelt(feeAction.recipient, input.accountAddress) ||
+    !sameFelt(feeAction.amount, input.expectedFeeAmount.toString()) ||
+    (boundTypedData ? !sameFelt(feeAction.recipient, boundTypedData.review.caller) : false)
+  ) {
     throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
   }
   if (!hasApprovals) {

@@ -53,8 +53,8 @@ const quotedTransaction = async (
             suggested_max_fee_in_strk: "0x1",
           },
           fee_action: {
-            amount: "0x1",
-            recipient: "0x2",
+            amount: POOL_FEE_6_STRK,
+            recipient: type === "invoke_and_apply_action" ? "0x99" : "0x2",
             token: STRK_TOKEN_ADDRESS,
             type: "withdraw",
           },
@@ -99,6 +99,35 @@ const quotedTransaction = async (
 };
 
 describe("relay quote approvals", () => {
+  test("rejects an unpriceable non-STRK relay fee before contacting the paymaster", async () => {
+    let requested = false;
+    const service = createOfficialStrk20Service({
+      http: async () => {
+        requested = true;
+        throw new Error("must not request");
+      },
+      nowSeconds: () => 1_000,
+      providerFor: strk20ProviderFor({ poolFee: POOL_FEE_6_STRK }),
+      sdk: runtime(() => ({
+        build: () => builder(executeResult()),
+        discoverNotes: async () => ({ notes: new Map() }),
+        executeWithInvocation: async () => executeResult(),
+      })),
+    });
+
+    await expect(
+      service.quoteActions({
+        ...relayContext,
+        actions: [{ amount: "0x1", recipient: "0x999", token, type: "transfer" }],
+        config: {
+          ...relayContext.config,
+          paymaster: { feeToken: token, url: "https://relay.example" },
+        },
+      }),
+    ).rejects.toThrow("strk20 private submission unavailable");
+    expect(requested).toBe(false);
+  });
+
   test("does not add a sender-linked pool-fee approval to a private action", async () => {
     const transaction = await quotedTransaction([
       { amount: "0x1", recipient: "0x999", token, type: "transfer" },
