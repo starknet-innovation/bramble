@@ -359,26 +359,39 @@ export const createOfficialStrk20Service = ({
               providerFor,
               pauseForServiceRetry,
             ),
+          // The account-mode broadcast ran unmapped, so a pool rejection of the
+          // shielding deposit reached the message boundary as a raw starknet.js
+          // error whose message embeds the serialized request params — the
+          // invoke calldata and the proof blob. Map it with the submission
+          // stage so only the sanitized on-chain reason survives to the user.
           async (callAndProof) => {
-            const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
-            const result = await submitInvoke({
-              account: input.account,
-              calls: [
-                ...approveCalls(input.actions, config.poolAddress, poolFee),
-                {
-                  calldata: [...callAndProof.call.calldata],
-                  contractAddress: callAndProof.call.contract_address,
-                  entrypoint: callAndProof.call.entry_point,
+            try {
+              const poolFee = await readStrk20PoolFee(
+                providerFor,
+                input.rpcUrls,
+                config.poolAddress,
+              );
+              const result = await submitInvoke({
+                account: input.account,
+                calls: [
+                  ...approveCalls(input.actions, config.poolAddress, poolFee),
+                  {
+                    calldata: [...callAndProof.call.calldata],
+                    contractAddress: callAndProof.call.contract_address,
+                    entrypoint: callAndProof.call.entry_point,
+                  },
+                ],
+                proof: callAndProof.proof,
+                rpcUrls: input.rpcUrls,
+                signHash: async (messageHash) => {
+                  const signature = await input.signHash(messageHash);
+                  return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
                 },
-              ],
-              proof: callAndProof.proof,
-              rpcUrls: input.rpcUrls,
-              signHash: async (messageHash) => {
-                const signature = await input.signHash(messageHash);
-                return { publicKey: signature.publicKey, r: signature.r, s: signature.s };
-              },
-            });
-            return { transactionHash: result.transactionHash };
+              });
+              return { transactionHash: result.transactionHash };
+            } catch (error) {
+              return mapStrk20StageError("submission", error);
+            }
           },
         );
       }

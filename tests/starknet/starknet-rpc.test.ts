@@ -9,6 +9,7 @@ import {
   buildErc20TransferCall,
   decodeErc20String,
   formatTokenAmount,
+  IndeterminateRpcWriteError,
   isContractNotFoundError,
   isTransactionNotFoundError,
   isTransportRpcError,
@@ -113,7 +114,7 @@ describe("starknet RPC helpers", () => {
     expect(calls).toEqual(["https://one.example"]);
   });
 
-  test("preflights write endpoints but never retries after execution begins", async () => {
+  test("does not classify a callback preflight failure as an ambiguous broadcast", async () => {
     const made: string[] = [];
     const writes: string[] = [];
     const provider = (nodeUrl: string) =>
@@ -129,23 +130,60 @@ describe("starknet RPC helpers", () => {
         },
       }) as unknown as import("starknet").RpcProvider;
 
-    await expect(
-      withRpcWrite(
-        ["https://offline.example", "https://selected.example", "https://unused.example"],
-        "0x534e5f4d41494e",
-        async (selected) => {
-          writes.push(String(selected));
-          throw new Error("connection reset after submit");
-        },
-        (nodeUrl) => {
-          made.push(nodeUrl);
-          return provider(nodeUrl);
-        },
-      ),
-    ).rejects.toThrow("submission status is unknown");
+    const rejection = await withRpcWrite(
+      ["https://offline.example", "https://selected.example", "https://unused.example"],
+      "0x534e5f4d41494e",
+      async (selected) => {
+        writes.push(String(selected));
+        throw new Error("connection reset after submit");
+      },
+      (nodeUrl) => {
+        made.push(nodeUrl);
+        return provider(nodeUrl);
+      },
+    ).catch((error: unknown) => error);
+    expect(rejection).toBeInstanceOf(WalletError);
+    expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
+    expect((rejection as Error).message).toContain("could not be prepared");
 
     expect(made).toEqual(["https://offline.example", "https://selected.example"]);
     expect(writes).toEqual(["https://selected.example"]);
+  });
+
+  test("marks only add-transaction fetches as status unknown", async () => {
+    for (const method of [
+      "starknet_addDeclareTransaction",
+      "starknet_addDeployAccountTransaction",
+      "starknet_addInvokeTransaction",
+    ] as const) {
+      const provider = {
+        channel: {
+          async fetchEndpoint() {
+            throw new Error("connection reset with private request body");
+          },
+        },
+        async getChainId() {
+          return "0x534e5f4d41494e";
+        },
+      } as unknown as import("starknet").RpcProvider;
+
+      const rejection = await withRpcWrite(
+        ["https://selected.example"],
+        "0x534e5f4d41494e",
+        async (selected) => {
+          const fetchEndpoint = Reflect.get(selected.channel, "fetchEndpoint") as (
+            rpcMethod: string,
+          ) => Promise<never>;
+          return fetchEndpoint(method);
+        },
+        () => provider,
+      ).catch((error: unknown) => error);
+
+      expect(rejection).toBeInstanceOf(IndeterminateRpcWriteError);
+      expect((rejection as Error).message).toBe(
+        "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+      );
+    }
   });
 
   test("classifies transport versus semantic RPC failures", () => {

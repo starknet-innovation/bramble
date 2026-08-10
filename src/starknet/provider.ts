@@ -14,6 +14,18 @@ type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
 const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
 
 /**
+ * Safe marker for a write whose transport failed after submission began. The
+ * message is curated for display; no RPC error, request body, or proof material
+ * is retained on the instance.
+ */
+export class IndeterminateRpcWriteError extends WalletError {
+  public constructor(message: string) {
+    super(message);
+    this.name = "IndeterminateRpcWriteError";
+  }
+}
+
+/**
  * Builds an RPC provider pinned to {@link STARKNET_RPC_SPEC_VERSION}.
  *
  * Every provider in the wallet is created here so the spec version is decided
@@ -124,6 +136,77 @@ export const isTransportRpcError = (error: unknown): boolean => {
   return !(isRecord(baseError) && typeof baseError["code"] === "number");
 };
 
+const BROADCAST_RPC_METHODS = new Set([
+  "starknet_addDeclareTransaction",
+  "starknet_addDeployAccountTransaction",
+  "starknet_addInvokeTransaction",
+]);
+const PREPARATION_UNAVAILABLE =
+  "Transaction could not be prepared. Check your connection or RPC endpoint.";
+
+const runRpcBroadcast = async <T>(broadcast: () => Promise<T>): Promise<T> => {
+  try {
+    return await broadcast();
+  } catch (error) {
+    if (isTransportRpcError(error)) {
+      throw new IndeterminateRpcWriteError(
+        "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
+      );
+    }
+    throw error;
+  }
+};
+
+const memberFor = (target: object, receiver: object, property: string | symbol): unknown => {
+  const value: unknown = Reflect.get(target, property, target);
+  if (typeof value !== "function") {
+    return value;
+  }
+  return (...args: readonly unknown[]): unknown => Reflect.apply(value, receiver, args);
+};
+
+// RpcChannel's add-transaction methods build and normalize a signed transaction
+// before calling fetchEndpoint. Bind channel methods through the proxy so that
+// only those exact JSON-RPC fetches receive the ambiguity marker; a local build
+// or decompression failure remains safely pre-broadcast.
+const guardRpcChannel = (rawChannel: object): object => {
+  let guardedChannel: object;
+  guardedChannel = new Proxy(rawChannel, {
+    get(target, property) {
+      const value: unknown = Reflect.get(target, property, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      if (property === "fetchEndpoint") {
+        return (...args: readonly unknown[]) => {
+          const fetch = (): Promise<unknown> => Promise.resolve(Reflect.apply(value, target, args));
+          return typeof args[0] === "string" && BROADCAST_RPC_METHODS.has(args[0])
+            ? runRpcBroadcast(fetch)
+            : fetch();
+        };
+      }
+      return (...args: readonly unknown[]) => Reflect.apply(value, guardedChannel, args);
+    },
+  });
+  return guardedChannel;
+};
+
+const guardRpcBroadcasts = (provider: RpcProvider): RpcProvider => {
+  const rawChannel: unknown = Reflect.get(provider, "channel", provider);
+  const channel =
+    typeof rawChannel === "object" && rawChannel !== null ? guardRpcChannel(rawChannel) : null;
+  let guardedProvider: RpcProvider;
+  guardedProvider = new Proxy(provider, {
+    get: (target, property): unknown => {
+      if (property === "channel" && channel !== null) {
+        return channel;
+      }
+      return memberFor(target, guardedProvider, property);
+    },
+  });
+  return guardedProvider;
+};
+
 /**
  * Runs an operation against each configured RPC endpoint until one succeeds.
  * Only transport-level failures fail over; semantic RPC errors propagate so
@@ -150,9 +233,10 @@ export const withRpcFallback = async <T>(
 
 /**
  * Selects a chain-matching endpoint with read-only probes, then runs a
- * state-changing operation exactly once. After execution begins no transport
- * failure is retried: the node may already have accepted the transaction, so
- * replaying through a fallback could submit a second write.
+ * state-changing operation exactly once. Only the three add-transaction JSON-
+ * RPC fetches preserve response-loss ambiguity without retaining the raw error;
+ * earlier transport failures become a safe preparation error. Neither case is
+ * retried against a fallback endpoint.
  */
 export const withRpcWrite = async <T>(
   rpcUrls: readonly string[],
@@ -180,12 +264,13 @@ export const withRpcWrite = async <T>(
     throw lastError;
   }
   try {
-    return await run(selected);
+    return await run(guardRpcBroadcasts(selected));
   } catch (error) {
+    if (error instanceof IndeterminateRpcWriteError) {
+      throw error;
+    }
     if (isTransportRpcError(error)) {
-      throw new WalletError(
-        "Transaction submission status is unknown. Check activity and on-chain state before retrying.",
-      );
+      throw new WalletError(PREPARATION_UNAVAILABLE);
     }
     throw error;
   }

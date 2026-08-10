@@ -154,6 +154,13 @@ export const mapStrk20ProtocolError = (error: unknown): never => {
  * revert reason, which is otherwise discarded at this boundary. Note material,
  * proofs, authorizing secrets, vault data, and service endpoints never survive
  * `sanitizeStrk20Detail`.
+ *
+ * Indeterminacy is recognised here, never minted: only `withRpcWrite` knows
+ * whether a write was actually in flight, and the marker it throws for that case
+ * is an `IndeterminateRpcWriteError` — a `WalletError`, so it reaches maturity
+ * unchanged through the passthrough below. A raw transport error arriving at
+ * `stage === "submission"` means the opposite: endpoint selection failed the
+ * chain-id probe, so nothing was broadcast and the scope must be released.
  */
 export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): never => {
   if (error instanceof WalletError) {
@@ -161,9 +168,9 @@ export const mapStrk20StageError = (stage: Strk20FailureStage, error: unknown): 
   }
   const text = failureText(error);
   const detail = sanitizeStrk20Detail(text);
+  const networkFailure = friendlyNetworkError(text);
   const category: Strk20ErrorCategory =
-    markerFor(text, CATEGORY_MARKERS) ??
-    (friendlyNetworkError(text) ? "transport" : "service-unavailable");
+    (networkFailure ? "transport" : markerFor(text, CATEGORY_MARKERS)) ?? "service-unavailable";
   const base = markerFor(text, BASE_MARKERS) ?? STRK20_SERVICE_UNAVAILABLE;
   const label = `${base} (${stage}/${category})`;
   throw new WalletError(detail === "" ? label : `${label}: ${detail}`);

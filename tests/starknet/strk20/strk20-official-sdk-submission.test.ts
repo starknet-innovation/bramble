@@ -5,6 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Call } from "starknet";
 import { num } from "starknet";
+import { WalletError } from "../../../src/shared/errors";
 import { STRK_TOKEN_ADDRESS } from "../../../src/starknet/networks";
 import { memoryStrk20MaturityStore } from "../../../src/starknet/strk20/maturity";
 import { createOfficialStrk20Service } from "../../../src/starknet/strk20/official-sdk-service";
@@ -397,5 +398,62 @@ describe("official STRK20 SDK submission boundary", () => {
     expect(await maturityStore.read(scope)).toBeNull();
     await expect(service.register?.(context)).resolves.toEqual({ transactionHash: "0xabc" });
     expect(attempts).toBe(2);
+  });
+
+  test("surfaces an account-mode deposit rejection without echoing the request body", async () => {
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const maturityStore = memoryStrk20MaturityStore();
+    // starknet.js builds an RpcError's `message` by embedding the serialized
+    // JSON-RPC request params, so the raw message of a rejected shielding
+    // broadcast carries the invoke calldata and the proof blob.
+    const requestBody =
+      '{"calldata":["0xfeedfacedeadbeef1234"],"proof":"UHJvb2ZCbG9iQmFzZTY0ZGF0YQ"}';
+    const service = createOfficialStrk20Service({
+      maturityStore,
+      providerFor,
+      sdk,
+      async submitInvoke() {
+        throw Object.assign(
+          new Error(`RPC: starknet_addInvokeTransaction with params ${requestBody}`),
+          {
+            baseError: {
+              code: 41,
+              data: { execution_error: "pool/deposit-cap-reached" },
+              message: "Transaction execution error",
+            },
+          },
+        );
+      },
+    });
+
+    let rejection: unknown;
+    try {
+      await service.submitActions({
+        ...context,
+        actions: [{ amount: "0x1", token, type: "deposit" }],
+        plan: { mode: "account" },
+      });
+    } catch (error) {
+      rejection = error;
+    }
+
+    // The failure is mapped, so only the sanitized on-chain reason is surfaced.
+    expect(rejection).toBeInstanceOf(WalletError);
+    const surfaced = rejection instanceof Error ? rejection.message : "";
+    expect(surfaced).toContain(
+      "(submission/execution-reverted): 41 Transaction execution error pool/deposit-cap-reached",
+    );
+    // The serialized request params never reach a rendered surface.
+    expect(surfaced).not.toContain("starknet_addInvokeTransaction");
+    expect(surfaced).not.toContain("0xfeedfacedeadbeef1234");
+    expect(surfaced).not.toContain("UHJvb2ZCbG9iQmFzZTY0ZGF0YQ");
+    // And the determinate rejection frees the scope instead of wedging it.
+    expect(await maturityStore.read(scope)).toBeNull();
   });
 });
