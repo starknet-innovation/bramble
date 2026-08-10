@@ -7,7 +7,7 @@ import type { RpcProvider, TypedData } from "starknet";
 import { num, typedData } from "starknet";
 import { WalletError } from "../../shared/errors";
 import { isJson } from "../../shared/json";
-import { STARKNET_NETWORKS, sameFelt } from "../networks";
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "../networks";
 import { createRpcProvider } from "../provider";
 import { submitInvokeTransaction } from "../rpc-submit";
 import type { Strk20NetworkConfig } from "./config";
@@ -27,6 +27,7 @@ import { transfersFor } from "./official-sdk-transfers";
 import {
   approveCalls,
   balancesFrom,
+  RELAY_PAYS_POOL_FEE,
   readStrk20PoolFee,
   requireStrk20Config,
 } from "./official-sdk-values";
@@ -298,12 +299,24 @@ export const createOfficialStrk20Service = ({
       if (!nowSeconds) {
         throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
       }
-      const poolFee = await readStrk20PoolFee(providerFor, input.rpcUrls, config.poolAddress);
+      // The upstream supports converted fee tokens, but its response does not
+      // expose enough independently-verifiable pricing data to cap that
+      // conversion. Restrict the wallet route to STRK, then bind the quoted
+      // withdrawal exactly to the pool's on-chain fee before proving.
+      if (!sameFelt(config.paymaster.feeToken, STRK_TOKEN_ADDRESS)) {
+        throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
+      }
+      const expectedFeeAmount = await readStrk20PoolFee(
+        providerFor,
+        input.rpcUrls,
+        config.poolAddress,
+      );
       return buildStrk20PaymasterPlan({
         accountAddress: input.account.address,
-        approveCalls: approveCalls(input.actions, config.poolAddress, poolFee),
+        approveCalls: approveCalls(input.actions, config.poolAddress, RELAY_PAYS_POOL_FEE),
         chainId: STARKNET_NETWORKS[input.account.networkId].chainId,
         config: config.paymaster,
+        expectedFeeAmount,
         ...(http ? { http } : {}),
         nowSeconds: nowSeconds(),
         poolAddress: config.poolAddress,

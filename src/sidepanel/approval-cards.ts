@@ -99,6 +99,16 @@ const strk20ActionReview = (approval: PendingApproval): string => {
   </details>`;
 };
 
+const strk20LinkageWarnings = (approval: PendingApproval): readonly string[] => {
+  const actions = approval.actionReviews ?? [];
+  return actions.some((action) => action.type === "deposit") &&
+    actions.some((action) => action.type !== "deposit")
+    ? [
+        "This mixed batch includes a public deposit approval, linking this account to the private relay transaction. Split the deposit and private actions if that linkage is not intended.",
+      ]
+    : [];
+};
+
 const declarationDetails = (approval: PendingApproval): string => {
   const declaration = approval.declaration;
   if (!declaration) {
@@ -247,7 +257,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
       ${strk20ActionReview(approval)}
       ${contextDisclosure(approval)}
     </div>
-    ${reviewPanel(approval.insights ?? [])}
+    ${reviewPanel([...strk20LinkageWarnings(approval), ...(approval.insights ?? [])])}
     ${decisionRow(approval, "Approve", status.locked)}
   </li>`;
 

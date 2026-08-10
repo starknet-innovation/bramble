@@ -31,19 +31,27 @@ export const STRK20_SDK_CONTEXT: Strk20AccountContext = {
   viewingKey: async () => "0x55",
 };
 
-export const providerFor = (): RpcProvider =>
-  ({
-    // Balance reads return a uint256; the pool-fee read returns a single u128
-    // felt (zero here so fee-independent tests see no extra approve call).
-    callContract: async (call: { entrypoint?: string }) =>
-      call?.entrypoint === "get_fee_amount" ? ["0x0"] : ["0x0", "0x10"],
-    getClassHashAt: async () => "0xdef",
-    getBlockNumber: async () => 20,
-    waitForTransaction: async () => ({
-      block_number: 10,
-      isSuccess: () => true,
-    }),
-  }) as unknown as RpcProvider;
+/**
+ * Builds the official-SDK RPC double. A non-zero pool fee lets route tests
+ * exercise mainnet approval behavior instead of silently taking the zero-fee
+ * shortcut used by fee-independent tests.
+ */
+export const strk20ProviderFor =
+  (options: { readonly poolFee?: string } = {}) =>
+  (): RpcProvider =>
+    ({
+      // Balance reads return a uint256; pool fees are a single u128 felt.
+      callContract: async (call: { entrypoint?: string }) =>
+        call?.entrypoint === "get_fee_amount" ? [options.poolFee ?? "0x0"] : ["0x0", "0x10"],
+      getClassHashAt: async () => "0xdef",
+      getBlockNumber: async () => 20,
+      waitForTransaction: async () => ({
+        block_number: 10,
+        isSuccess: () => true,
+      }),
+    }) as unknown as RpcProvider;
+
+export const providerFor = strk20ProviderFor();
 
 type SdkInput = {
   readonly viewingKeyProvider: { readonly getViewingKey: () => Promise<string> };
