@@ -125,10 +125,36 @@ describe("ledgerSignScreen", () => {
     expect(copyFor("dapp-message")).toContain("Sign a message from this site");
     expect(copyFor("multisig-revoke")).toContain("Sign to revoke your confirmation");
     expect(copyFor("revoke-spending")).toContain("Sign to revoke a spending approval");
-    expect(copyFor("strk20-register")).toContain("Sign to join the privacy pool");
-    // A private send and its broadcast are distinct signatures with distinct
-    // consequences, so they must not share one label.
-    expect(copyFor("strk20-authorize")).not.toBe(copyFor("strk20-broadcast"));
+    expect(copyFor("strk20-register-authorize")).toContain(
+      "Sign to authorize joining the privacy pool",
+    );
+    // Each half of a two-signature operation authorizes something different, so
+    // no pair may share one label — that is indistinguishable from the wallet
+    // asking twice for the same approval.
+    for (const [first, second] of [
+      ["strk20-authorize", "strk20-broadcast"],
+      ["strk20-register-authorize", "strk20-register-broadcast"],
+      ["strk20-shield-authorize", "strk20-shield-broadcast"],
+      ["strk20-transfer-authorize", "strk20-transfer-relay"],
+    ] as const) {
+      expect(copyFor(first)).not.toBe(copyFor(second));
+      expect(copyFor(first)).toContain("Signature 1 of 2");
+      expect(copyFor(second)).toContain("Signature 2 of 2");
+    }
+    // A relayed transfer broadcasts nothing from this account, so its second
+    // prompt must not claim otherwise.
+    expect(copyFor("strk20-transfer-relay")).not.toContain("broadcast");
+  });
+
+  test("a single-signature operation states no step count", () => {
+    const html = ledgerSignScreen(
+      { phase: { kind: "confirming" }, request: { ...request, intent: "strk20-viewing-key" } },
+      status,
+    );
+
+    expect(html).toContain("Sign to derive your viewing key");
+    // "Signature 1 of 1" would invent a sequence the user is not in.
+    expect(html).not.toContain("Signature");
   });
 
   test("a path with no recoverable index omits the index suffix", () => {

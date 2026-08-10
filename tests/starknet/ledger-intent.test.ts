@@ -27,7 +27,12 @@ describe("isLedgerSignIntent", () => {
       "send-token",
       "strk20-authorize",
       "strk20-broadcast",
-      "strk20-register",
+      "strk20-register-authorize",
+      "strk20-register-broadcast",
+      "strk20-shield-authorize",
+      "strk20-shield-broadcast",
+      "strk20-transfer-authorize",
+      "strk20-transfer-relay",
       "swap-tokens",
     ];
     for (const intent of intents) {

@@ -8,6 +8,7 @@
  * bridge.
  */
 
+import { STRK20_SIGN_INTENTS } from "../starknet/ledger-intent";
 import { canonicalFelt, isNonZeroStarkFieldElement, sameFelt } from "../starknet/networks";
 import { parseTokenAmount } from "../starknet/rpc";
 import { isStrk20Felt } from "../starknet/strk20/schemas";
@@ -43,7 +44,7 @@ const recipientStatus = async (
   if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
     return { error: "Enter a valid Starknet address" };
   }
-  const context = await resolvePrivacyContext(deps, input.tokenId);
+  const context = await resolvePrivacyContext(deps, STRK20_SIGN_INTENTS.transfer, input.tokenId);
   if ("error" in context) {
     return { error: context.error };
   }
@@ -66,7 +67,7 @@ const transferPreparation = async (
   if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
     return { error: "Enter a valid Starknet address" };
   }
-  const context = await resolvePrivacyContext(deps, input.tokenId);
+  const context = await resolvePrivacyContext(deps, STRK20_SIGN_INTENTS.transfer, input.tokenId);
   if ("error" in context) {
     return { error: context.error };
   }
@@ -157,7 +158,7 @@ const withdrawPreparation = async (
   if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
     return { error: "Enter a valid Starknet address" };
   }
-  const context = await resolvePrivacyContext(deps, input.tokenId);
+  const context = await resolvePrivacyContext(deps, STRK20_SIGN_INTENTS.transfer, input.tokenId);
   if ("error" in context) {
     return { error: context.error };
   }
@@ -268,7 +269,7 @@ const depositPreparation = async (
   if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
     return { error: "Enter a valid Starknet address" };
   }
-  const context = await resolvePrivacyContext(deps, input.tokenId);
+  const context = await resolvePrivacyContext(deps, STRK20_SIGN_INTENTS.shield, input.tokenId);
   if ("error" in context) {
     return { error: context.error };
   }

@@ -43,7 +43,12 @@ export type LedgerSignIntent =
   | "send-token"
   | "strk20-authorize"
   | "strk20-broadcast"
-  | "strk20-register"
+  | "strk20-register-authorize"
+  | "strk20-register-broadcast"
+  | "strk20-shield-authorize"
+  | "strk20-shield-broadcast"
+  | "strk20-transfer-authorize"
+  | "strk20-transfer-relay"
   | "strk20-viewing-key"
   | "swap-tokens";
 
@@ -64,7 +69,12 @@ const LEDGER_SIGN_INTENTS: Readonly<Record<LedgerSignIntent, true>> = {
   "send-token": true,
   "strk20-authorize": true,
   "strk20-broadcast": true,
-  "strk20-register": true,
+  "strk20-register-authorize": true,
+  "strk20-register-broadcast": true,
+  "strk20-shield-authorize": true,
+  "strk20-shield-broadcast": true,
+  "strk20-transfer-authorize": true,
+  "strk20-transfer-relay": true,
   "strk20-viewing-key": true,
   "swap-tokens": true,
 };
@@ -76,3 +86,34 @@ const LEDGER_SIGN_INTENTS: Readonly<Record<LedgerSignIntent, true>> = {
  */
 export const isLedgerSignIntent = (value: unknown): value is LedgerSignIntent =>
   typeof value === "string" && Object.hasOwn(LEDGER_SIGN_INTENTS, value);
+
+/**
+ * The two intents one private operation signs under, in order.
+ *
+ * Every STRK20 operation takes exactly two device approvals, for two different
+ * things: `authorize` signs the CallSet the privacy pool verifies against the
+ * proof, and `submit` signs whatever puts it on chain. Both are required, so a
+ * caller cannot label one phase and leave the other reading as the first.
+ */
+export type LedgerStrk20Intents = {
+  readonly authorize: LedgerSignIntent;
+  readonly submit: LedgerSignIntent;
+};
+
+/**
+ * The intent pair for each private operation the wallet signs.
+ *
+ * `submit` differs by route, and the distinction is not cosmetic: registration
+ * and shielding broadcast their own transaction from this account, while a
+ * transfer or withdrawal hands a pre-authorized call to the private relay and
+ * broadcasts nothing. A prompt that said "broadcast" for a relayed transfer
+ * would name an action the user is not taking.
+ */
+export const STRK20_SIGN_INTENTS = {
+  /** A site's own private invoke, whose route the wallet does not choose. */
+  dapp: { authorize: "strk20-authorize", submit: "strk20-broadcast" },
+  register: { authorize: "strk20-register-authorize", submit: "strk20-register-broadcast" },
+  shield: { authorize: "strk20-shield-authorize", submit: "strk20-shield-broadcast" },
+  /** Shared by private transfers and withdrawals: both spend notes via the relay. */
+  transfer: { authorize: "strk20-transfer-authorize", submit: "strk20-transfer-relay" },
+} as const satisfies Readonly<Record<string, LedgerStrk20Intents>>;

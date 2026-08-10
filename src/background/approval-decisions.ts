@@ -23,10 +23,13 @@ import type { RuntimeResponse } from "./runtime-types";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
 import {
+  executeStrk20DisclosureApproval,
+  executeStrk20InvokeApproval,
+} from "./strk20-approval-execution";
+import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
 } from "./strk20-approval-types";
-import { executeStrk20DisclosureApproval, executeStrk20InvokeApproval } from "./strk20-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**

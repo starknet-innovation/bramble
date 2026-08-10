@@ -449,7 +449,11 @@ export const executeInvokeApproval = async (
           config: preferences.strk20Networks?.[account.networkId] ?? null,
           proof: approval.payload.proof,
           rpcUrls,
+          // This branch performs only the submit half: the site already collected
+          // the CallSet authorization when it prepared the proof. Both entries name
+          // the broadcast because that is the only signature this path takes.
           signHash: accountHashSigner(deps, account, passphrase, "strk20-broadcast"),
+          submitSignHash: accountHashSigner(deps, account, passphrase, "strk20-broadcast"),
           viewingKey: async () => {
             const derive = deps.wallet.deriveStrk20ViewingKey;
             const config = preferences.strk20Networks?.[account.networkId] ?? null;

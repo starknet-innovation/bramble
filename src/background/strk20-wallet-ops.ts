@@ -7,6 +7,7 @@
  */
 
 import { WalletError } from "../shared/errors";
+import { type LedgerStrk20Intents, STRK20_SIGN_INTENTS } from "../starknet/ledger-intent";
 import { sameFelt } from "../starknet/networks";
 import { formatTokenAmount } from "../starknet/rpc";
 import {
@@ -92,7 +93,9 @@ const requirePoolFee = async (
 };
 
 const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
-  const context = await resolvePrivacyContext(deps);
+  // Reads only. Registration is named because it is the one action this surface
+  // offers an account that has none, and no read reaches a signer.
+  const context = await resolvePrivacyContext(deps, STRK20_SIGN_INTENTS.register);
   if ("error" in context) {
     return { error: context.error };
   }
@@ -170,7 +173,7 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
 };
 
 const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
-  const context = await resolvePrivacyContext(deps);
+  const context = await resolvePrivacyContext(deps, STRK20_SIGN_INTENTS.register);
   if ("error" in context) {
     return { error: context.error };
   }
@@ -281,6 +284,16 @@ const activitySummary = (
     : `Shield ${value} to ${preparation.recipient}`;
 };
 
+// What each submitted preparation's two device prompts say. Withdrawals share
+// the transfer pair: both spend notes through the relay, so both authorize a
+// private movement and then hand it off rather than broadcasting it.
+const signIntentsFor = (kind: Strk20WalletPreparation["kind"]): LedgerStrk20Intents => {
+  if (kind === "register") {
+    return STRK20_SIGN_INTENTS.register;
+  }
+  return kind === "deposit" ? STRK20_SIGN_INTENTS.shield : STRK20_SIGN_INTENTS.transfer;
+};
+
 const executePreparation = async (
   deps: Strk20WalletOpsDeps,
   preparationId: string,
@@ -289,7 +302,11 @@ const executePreparation = async (
   if (!preparation) {
     return { error: "Privacy preparation not found" };
   }
-  const context = await resolvePrivacyContext(deps, preparation.token.id);
+  const context = await resolvePrivacyContext(
+    deps,
+    signIntentsFor(preparation.kind),
+    preparation.token.id,
+  );
   if ("error" in context) {
     return { error: context.error };
   }

@@ -14,7 +14,7 @@ import type { RuntimeRpc } from "../../src/background/runtime-rpc";
 import { unavailablePreferencesStore } from "../../src/background/runtime-state";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
-import { executeStrk20InvokeApproval } from "../../src/background/strk20-ops";
+import { executeStrk20InvokeApproval } from "../../src/background/strk20-approval-execution";
 import type { OriginGuard } from "../../src/security/blocklist";
 import type { InvokeInput } from "../../src/starknet/rpc";
 import type { Strk20Service } from "../../src/starknet/strk20/service";

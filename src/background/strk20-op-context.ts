@@ -5,6 +5,7 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
+import type { LedgerStrk20Intents } from "../starknet/ledger-intent";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
 import { canonicalStrk20PoolFee } from "../starknet/strk20/service";
 import type { TokenConfig, WalletPreferences } from "../storage/preferences-store";
@@ -117,9 +118,16 @@ export const assertPublicPoolSpendAffordable = async (
  * Builds the protected account context for one privacy operation, selecting
  * `tokenId` or the network's first tracked token. Returns a displayable error
  * instead of throwing so handlers stay single-shape.
+ *
+ * `intents` names what this operation's two device prompts authorize, and is
+ * required rather than defaulted: a shared default is what once described a
+ * registration as a private transfer on the one screen a hardware user has to
+ * read. A read-only caller passes the operation its surface leads to, since no
+ * read reaches either signer.
  */
 export const resolvePrivacyContext = async (
   deps: Strk20WalletOpsDeps,
+  intents: LedgerStrk20Intents,
   tokenId?: string,
 ): Promise<ActivePrivacyContext | { readonly error: string }> => {
   const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
@@ -156,7 +164,7 @@ export const resolvePrivacyContext = async (
         preferences,
         rpcUrls: networkRpcUrls(STARKNET_NETWORKS[active.networkId], preferences),
       },
-      "strk20-authorize",
+      intents,
     ),
     preferences,
     token,

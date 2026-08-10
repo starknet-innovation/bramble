@@ -64,12 +64,18 @@ export const canonicalStrk20PoolFee = (value: string): string => {
  * Privileged account context supplied only by the background worker. Viewing
  * keys and signatures are acquired lazily, never persisted, and never cross
  * the page/provider bridge.
+ *
+ * `signHash` covers the pool's CallSet authorization; `submitSignHash` covers
+ * the broadcast or relay handoff that follows it. They are separate entries
+ * because on a hardware account each is a distinct device prompt, and the two
+ * approve different things — the caller decides how each is described.
  */
 export type Strk20AccountContext = {
   readonly account: AccountRef;
   readonly config: Strk20NetworkConfig | null;
   readonly rpcUrls: readonly string[];
   readonly signHash: (messageHash: string) => Promise<StarkSignature>;
+  readonly submitSignHash: (messageHash: string) => Promise<StarkSignature>;
   readonly viewingKey: () => Promise<string>;
 };
 
