@@ -10,6 +10,20 @@ export const fakeKms = (validMnemonic = true): KrustyKms => ({
   async deriveStrk20ViewingKey() {
     return "0x654321";
   },
+  // The two ceremony stages model the real ones' load-bearing properties without
+  // any crypto: the message hash is scope-dependent (so a test can prove the
+  // device was asked to sign the right scope) and the fold is a pure function of
+  // (r, s) (so a test can prove the stored key came from the device signature).
+  // Both return canonical non-zero felts well inside the curve order, because the
+  // ceremony validates them exactly as it validates real Krusty output.
+  async foldStrk20ViewingKey(r, s) {
+    const folded = (BigInt(r) * 0x10001n + BigInt(s)) % 0xffff_ffff_ffff_ffffn;
+    return `0x${(folded === 0n ? 1n : folded).toString(16)}`;
+  },
+  async strk20ViewingKeyMessageHash(chainId, poolAddress) {
+    const hash = (BigInt(chainId) * 0x1_0000_0001n + BigInt(poolAddress)) % (1n << 200n);
+    return `0x${(hash === 0n ? 1n : hash).toString(16)}`;
+  },
   async deriveStarknetKeypair(): Promise<StarkKeypair> {
     return {
       privateKey: "0x123456",

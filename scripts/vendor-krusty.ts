@@ -5,7 +5,11 @@ import { mkdir } from "node:fs/promises";
 
 const repo = "https://github.com/starknet-innovation/krusty-kms.git";
 const target = "vendor/krusty-kms";
-const KRUSTY_KMS_REVISION = "fb0b274dd654f69a828dee653576416f5a650a01";
+// Tip of upstream PR #42 (feat/strk20-viewing-key-stages), which exposes the two
+// hashing stages either side of the signature so a Ledger can supply the middle
+// step. PROVISIONAL: re-point this at the merge commit once #42 lands — a PR
+// branch tip can be rebased or squashed away, and this pin must stay fetchable.
+const KRUSTY_KMS_REVISION = "174e23216d4243407f077106ec4f8ea1c8ee08d9";
 
 const run = async (cmd: string[], cwd = "."): Promise<void> => {
   const child = Bun.spawn(cmd, { cwd, stderr: "inherit", stdout: "inherit" });

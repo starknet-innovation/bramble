@@ -146,6 +146,20 @@ export type ForgetLedgerStrk20ViewingKeyInput = Omit<
 >;
 
 /**
+ * Background-only input for the Ledger viewing-key ceremony. Carries no secret:
+ * `sign` is the caller's device round-trip, which receives the message hash the
+ * software derivation would have signed and returns the device's `(r, s)` — the
+ * key is folded and written inside the vault boundary and never handed back.
+ */
+export type DeriveLedgerStrk20ViewingKeyInput = {
+  readonly accountId: string;
+  readonly chainId: string;
+  readonly poolAddress: string;
+  readonly sign: (messageHash: string) => Promise<StarkSignature>;
+  readonly vaultPassphrase: string;
+};
+
+/**
  * Input for deriving addresses for a batch of enumerated Ledger (index, public
  * key) pairs to build the account picker. A public-key derivation only — it
  * reads no secrets and writes nothing to the vault.
@@ -187,6 +201,15 @@ export type WalletVaultService = {
     readonly poolAddress: string;
     readonly vaultPassphrase: string;
   }) => Promise<string>;
+  /**
+   * Runs the Ledger viewing-key ceremony for one scope and retains the result.
+   * Returns nothing: the key is folded and written inside the vault boundary, so
+   * no caller can observe it. Idempotent per scope — re-running replaces that
+   * scope's key and leaves every other account and pool untouched.
+   */
+  readonly deriveLedgerStrk20ViewingKey: (
+    input: DeriveLedgerStrk20ViewingKeyInput,
+  ) => Promise<void>;
   readonly ensureNetworkAccount: (input: EnsureNetworkAccountInput) => Promise<AccountRef>;
   /** Removes one retained Ledger viewing-key scope without returning its value. */
   readonly forgetLedgerStrk20ViewingKey: (

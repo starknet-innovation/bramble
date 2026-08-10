@@ -2,7 +2,12 @@
  * Krusty KMS WASM adapter. Wallet cryptography must enter through this boundary.
  */
 import { WalletError } from "../shared/errors";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  isStarkPrivateKey,
+} from "../starknet/networks";
 
 /**
  * Stark key material returned only inside privileged wallet flows.
@@ -41,6 +46,23 @@ export type KrustyKms = {
     chainId: string,
     poolAddress: string,
   ) => Promise<string>;
+  /**
+   * Folds a signature over {@link strk20ViewingKeyMessageHash} into a viewing
+   * key. The second of the two stages {@link deriveStrk20ViewingKey} composes,
+   * exposed so a Ledger — which never reveals its private key — can supply the
+   * signature itself and still land on a key this derivation recognizes.
+   *
+   * The result is secret material: it goes only to the encrypted vault, never to
+   * messages, logs, preferences, or UI state.
+   */
+  readonly foldStrk20ViewingKey: (r: string, s: string) => Promise<string>;
+  /**
+   * Computes the message a viewing key is derived by signing, for one canonical
+   * chain and pool. Carries no secret material — it is a hash of public scope —
+   * but the scope must be canonical: Krusty rejects non-shortest-form hex,
+   * because two spellings of one pool would derive two different keys.
+   */
+  readonly strk20ViewingKeyMessageHash: (chainId: string, poolAddress: string) => Promise<string>;
   readonly deriveStarknetKeypair: (
     mnemonic: string,
     addressIndex: number,
@@ -145,6 +167,8 @@ export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
 
   const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
   const deriveStrk20ViewingKey = requireFunction(module, "deriveStrk20ViewingKey");
+  const foldStrk20ViewingKey = requireFunction(module, "foldStrk20ViewingKey");
+  const strk20ViewingKeyMessageHash = requireFunction(module, "strk20ViewingKeyMessageHash");
   const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
   const generateMnemonic = requireFunction(module, "generateMnemonic");
   const getAccountClassHashes = requireFunction(module, "getAccountClassHashes");
@@ -180,6 +204,38 @@ export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
       const result = await deriveStrk20ViewingKey(privateKey, chainId, poolAddress);
       if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
         throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
+      }
+      return result;
+    },
+    async foldStrk20ViewingKey(r, s) {
+      await ready;
+      // (r, s) arrive from a device the wallet does not control, so they are
+      // checked as field elements before crossing into WASM.
+      if (!isStarkFieldElement(r) || !isStarkFieldElement(s)) {
+        throw new WalletError("Invalid STRK20 viewing-key signature input");
+      }
+      const result = await foldStrk20ViewingKey(r, s);
+      // The fold promises a key in [1, n/2]; isStarkPrivateKey pins the range
+      // this wallet will accept, so a WASM build that broke that guarantee
+      // fails closed here instead of registering an unusable key with the pool.
+      if (typeof result !== "string" || !isStarkPrivateKey(result)) {
+        throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
+      }
+      return result;
+    },
+    async strk20ViewingKeyMessageHash(chainId, poolAddress) {
+      await ready;
+      if (
+        !isNonZeroStarkFieldElement(chainId) ||
+        !isNonZeroStarkFieldElement(poolAddress) ||
+        canonicalFelt(chainId) !== chainId ||
+        canonicalFelt(poolAddress) !== poolAddress
+      ) {
+        throw new WalletError("Invalid STRK20 viewing-key scope");
+      }
+      const result = await strk20ViewingKeyMessageHash(chainId, poolAddress);
+      if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
+        throw new WalletError("Krusty KMS returned an invalid STRK20 message hash");
       }
       return result;
     },

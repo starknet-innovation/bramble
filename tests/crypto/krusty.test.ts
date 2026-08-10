@@ -11,6 +11,12 @@ const createModule = (signatureR = "0x1") => ({
   deriveStrk20ViewingKey() {
     return "0x456";
   },
+  foldStrk20ViewingKey() {
+    return "0x789";
+  },
+  strk20ViewingKeyMessageHash() {
+    return "0xabc";
+  },
   deriveStarknetKeypair() {
     return {
       private_key: "0x123",
@@ -64,6 +70,53 @@ describe("createKrustyKms", () => {
       publicKeyY: "0xdef",
     });
     await expect(kms.deriveOzAccountAddress("0xabc", "0x123")).resolves.toBe("0xabc");
+  });
+
+  test("validates the two viewing-key ceremony stages at the boundary", async () => {
+    const kms = createKrustyKms(createModule());
+
+    await expect(kms.strk20ViewingKeyMessageHash("0x1", "0x2")).resolves.toBe("0xabc");
+    await expect(kms.foldStrk20ViewingKey("0x1", "0x2")).resolves.toBe("0x789");
+
+    // The scope must be canonical: two spellings of one pool would otherwise
+    // derive two different keys, and a registered key cannot be changed.
+    await expect(kms.strk20ViewingKeyMessageHash("0x01", "0x2")).rejects.toThrow(
+      "Invalid STRK20 viewing-key scope",
+    );
+    await expect(kms.strk20ViewingKeyMessageHash("0x1", "0x02")).rejects.toThrow(
+      "Invalid STRK20 viewing-key scope",
+    );
+    await expect(kms.strk20ViewingKeyMessageHash("0x0", "0x2")).rejects.toThrow(
+      "Invalid STRK20 viewing-key scope",
+    );
+    // (r, s) come from a device the wallet does not control.
+    await expect(kms.foldStrk20ViewingKey("nope", "0x2")).rejects.toThrow(
+      "Invalid STRK20 viewing-key signature input",
+    );
+  });
+
+  test("rejects ceremony output the wallet cannot use as a viewing key", async () => {
+    // A fold result outside [1, n/2] means the WASM build broke its own range
+    // guarantee; registering it would strand the account's notes.
+    const outOfRange = createKrustyKms({
+      ...createModule(),
+      foldStrk20ViewingKey() {
+        return "0x0";
+      },
+    });
+    await expect(outOfRange.foldStrk20ViewingKey("0x1", "0x2")).rejects.toThrow(
+      "Krusty KMS returned an invalid STRK20 viewing key",
+    );
+
+    const badHash = createKrustyKms({
+      ...createModule(),
+      strk20ViewingKeyMessageHash() {
+        return "not-a-felt";
+      },
+    });
+    await expect(badHash.strk20ViewingKeyMessageHash("0x1", "0x2")).rejects.toThrow(
+      "Krusty KMS returned an invalid STRK20 message hash",
+    );
   });
 
   test("rejects invalid derivation inputs before WASM calls", async () => {

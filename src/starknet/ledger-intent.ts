@@ -44,6 +44,7 @@ export type LedgerSignIntent =
   | "strk20-authorize"
   | "strk20-broadcast"
   | "strk20-register"
+  | "strk20-viewing-key"
   | "swap-tokens";
 
 // Enumerated as a value so the boundary validator cannot drift from the type: a
@@ -64,6 +65,7 @@ const LEDGER_SIGN_INTENTS: Readonly<Record<LedgerSignIntent, true>> = {
   "strk20-authorize": true,
   "strk20-broadcast": true,
   "strk20-register": true,
+  "strk20-viewing-key": true,
   "swap-tokens": true,
 };
 

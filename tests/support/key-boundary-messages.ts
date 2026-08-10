@@ -208,6 +208,9 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   { message: { type: "wallet.ledgerSignPending" }, sender: extensionSender },
+  // The viewing-key ceremony writes a retained secret; its response must carry
+  // nothing but an acknowledgement. Scanned like every other wallet.* type.
+  { message: { type: "wallet.strk20DeriveLedgerViewingKey" }, sender: extensionSender },
   {
     message: { id: "ledger-sign-1", r: "0x1", s: "0x2", type: "wallet.completeLedgerSign" },
     sender: extensionSender,
