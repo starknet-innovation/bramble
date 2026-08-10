@@ -63,8 +63,12 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
   skin/scale tokens (`src/ui/skin.ts`, `src/ui/tokens.ts`), no hard-coded colors.
 - Exported APIs need doc comments explaining trust boundaries and failure behavior (checked).
 - New dependencies: pinned exact, justified in the PR, used immediately. Prefer zero.
-- Never expose or persist an STRK20 viewing key. Privacy-service responses are untrusted, and only
-  the configured pool's `apply_actions` call may carry a prepared proof into submission.
+- Never expose an STRK20 viewing key. Software-account viewing keys remain derived on demand and
+  unpersisted. A Ledger viewing key may be retained only in encrypted v4 `accountSecrets` through
+  the background-only vault service, bound to its exact account, chain, pool, and derivation scheme;
+  it must never enter account metadata, preferences, activity, logs, session storage, messages, or
+  UI state. Privacy-service responses are untrusted, and only the configured pool's `apply_actions`
+  call may carry a prepared proof into submission.
 
 ## Schema migrations
 

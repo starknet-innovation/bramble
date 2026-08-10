@@ -9,7 +9,11 @@
  */
 import { describe, expect, test } from "bun:test";
 import { UNRESOLVED_WINDOW_MS } from "../../src/background/tx-observation";
-import { type ReconcileDeps, reconcileObserved } from "../../src/background/tx-reconcile";
+import {
+  type ReconcileDeps,
+  reconcileObserved,
+  reconcileScope,
+} from "../../src/background/tx-reconcile";
 import type { TransactionStatusReport } from "../../src/starknet/rpc";
 import { type ActivityEntry, memoryActivityLog } from "../../src/storage/activity-store";
 import type { WalletPreferences } from "../../src/storage/preferences-store";
@@ -164,5 +168,90 @@ describe("background reconciliation", () => {
     const stored = await statusOf(offline, "0xabc");
     expect(stored?.status).toBe("preconfirmed");
     expect(stored?.notFoundCount).toBeUndefined();
+  });
+
+  test("serializes panel and alarm reads so a stale third miss cannot overwrite acceptance", async () => {
+    const activity = memoryActivityLog();
+    await activity.record(entry());
+    await activity.updateStatuses(
+      { "0xabc": { notFoundCount: 2, status: "preconfirmed" } },
+      { accountId: ACCOUNT, networkId: "SN_MAIN" },
+    );
+    const firstRpcStarted = Promise.withResolvers<void>();
+    const releaseFirstRpc = Promise.withResolvers<void>();
+    let rpcCalls = 0;
+    const deps: ReconcileDeps = {
+      activity,
+      preferencesStore: {
+        async read() {
+          return preferences;
+        },
+      },
+      runtimeRpc: {
+        async getTransactionStatuses() {
+          rpcCalls += 1;
+          if (rpcCalls === 1) {
+            firstRpcStarted.resolve();
+            await releaseFirstRpc.promise;
+            return { "0xabc": found("accepted") };
+          }
+          return {
+            "0xabc": { finalizedOnL1: false, found: false, status: "pending" },
+          };
+        },
+      } as unknown as ReconcileDeps["runtimeRpc"],
+    };
+
+    const panel = reconcileScope(deps, { accountId: ACCOUNT, networkId: "SN_MAIN" }, 1_000);
+    await firstRpcStarted.promise;
+    const alarm = reconcileObserved(deps, "fast", 1_000);
+    releaseFirstRpc.resolve();
+    await Promise.all([panel, alarm]);
+
+    const stored = await statusOf(deps, "0xabc");
+    expect(rpcCalls).toBe(1);
+    expect(stored?.status).toBe("accepted");
+    expect(stored?.notFoundCount).toBe(0);
+    expect(stored?.failureNotice).toBeUndefined();
+  });
+
+  test("returns local activity while a background RPC is stalled", async () => {
+    const activity = memoryActivityLog();
+    await activity.record(entry());
+    const rpcStarted = Promise.withResolvers<void>();
+    const releaseRpc = Promise.withResolvers<void>();
+    const deps: ReconcileDeps = {
+      activity,
+      preferencesStore: {
+        async read() {
+          return preferences;
+        },
+      },
+      runtimeRpc: {
+        async getTransactionStatuses() {
+          rpcStarted.resolve();
+          await releaseRpc.promise;
+          return {};
+        },
+      } as unknown as ReconcileDeps["runtimeRpc"],
+    };
+
+    const alarm = reconcileObserved(deps, "fast", 1_000);
+    await rpcStarted.promise;
+    const panel = reconcileScope(deps, { accountId: ACCOUNT, networkId: "SN_MAIN" }, 1_000);
+    const outcome = await Promise.race([
+      panel.then((entries) => ({ entries, settled: true as const })),
+      (async () => {
+        for (let turn = 0; turn < 10; turn += 1) {
+          await Promise.resolve();
+        }
+        return { entries: [], settled: false as const };
+      })(),
+    ]);
+    expect(outcome.settled).toBe(true);
+    expect(outcome.entries.map((stored) => stored.hash)).toEqual(["0xabc"]);
+
+    releaseRpc.resolve();
+    await alarm;
   });
 });

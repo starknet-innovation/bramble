@@ -7,7 +7,7 @@ import {
   migrateVault,
   VAULT_MIGRATIONS,
 } from "../../src/storage/migrations";
-import { isVaultV1, isVaultV3 } from "../../src/storage/vault-schema";
+import { isVaultV1, isVaultV4 } from "../../src/storage/vault-schema";
 
 const legacyVault = {
   accounts: [
@@ -41,7 +41,8 @@ const legacyVault = {
   ],
 };
 
-const currentVault = { ...legacyVault, mnemonic: null, schemaVersion: 3 as const };
+const legacyV3 = { ...legacyVault, mnemonic: null, schemaVersion: 3 as const };
+const currentVault = { ...legacyV3, accountSecrets: [], schemaVersion: 4 as const };
 
 describe("migrateVault", () => {
   test("declares contiguous migration steps to the current schema", () => {
@@ -55,6 +56,7 @@ describe("migrateVault", () => {
   test("creates an empty current vault for missing data", () => {
     expect(migrateVault(undefined)).toEqual({
       accounts: [],
+      accountSecrets: [],
       activeAccountId: null,
       mnemonic: null,
       originGrants: [],
@@ -71,9 +73,10 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV3(migrated)).toBe(true);
+    expect(isVaultV4(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
+      accountSecrets: [],
       mnemonic: null,
       schemaVersion: CURRENT_SCHEMA_VERSION,
     });
@@ -81,9 +84,9 @@ describe("migrateVault", () => {
   });
 
   test("returns valid current vaults for every supported source shape", () => {
-    for (const source of [undefined, null, {}, legacyVault, currentVault]) {
+    for (const source of [undefined, null, {}, legacyVault, legacyV3, currentVault]) {
       const migrated = migrateVault(source);
-      expect(isVaultV3(migrated)).toBe(true);
+      expect(isVaultV4(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });
@@ -99,6 +102,7 @@ describe("migrateVault", () => {
     try {
       expect(migrateVault({})).toEqual({
         accounts: [],
+        accountSecrets: [],
         activeAccountId: null,
         mnemonic: null,
         originGrants: [],

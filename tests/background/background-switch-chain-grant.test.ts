@@ -57,10 +57,11 @@ const walletStub = (connected: () => readonly AccountRef[], grants: string[] = [
   async readVault() {
     return {
       accounts: [account],
+      accountSecrets: [],
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 3 as const,
+      schemaVersion: 4 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

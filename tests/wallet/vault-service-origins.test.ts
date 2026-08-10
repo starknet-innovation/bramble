@@ -13,6 +13,7 @@ import { fakeKms } from "../support/fake-kms";
 
 const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const vaultKey = "mc-wallet:vault";
+const migrationKey = "mc-wallet:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 
 // KMS whose keypair varies by account index so derived accounts stay distinct.
@@ -32,6 +33,7 @@ describe("createWalletVaultService origin grants", () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
       kms: fakeKms(),
+      migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
     const account = await service.createAccount({ mnemonic, vaultPassphrase });
@@ -60,6 +62,7 @@ describe("createWalletVaultService origin grants", () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
       kms: indexedKms(),
+      migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
     const first = await service.createAccount({ mnemonic, vaultPassphrase });
@@ -106,6 +109,7 @@ describe("createWalletVaultService origin grants", () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
       kms: fakeKms(),
+      migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
     await service.createAccount({ mnemonic, vaultPassphrase });
@@ -125,6 +129,7 @@ describe("createWalletVaultService origin grants", () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
       kms: fakeKms(),
+      migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
     await service.createAccount({ mnemonic, vaultPassphrase });
@@ -148,6 +153,7 @@ describe("createWalletVaultService origin grants", () => {
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
       kms: fakeKms(),
+      migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
     });
 
     await service.createAccount({ mnemonic, vaultPassphrase });

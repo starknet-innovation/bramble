@@ -12,7 +12,7 @@ import {
 import type { PaymasterAuthorizationReview } from "../starknet/strk20/paymaster-typed-data";
 import { STRK20_LIMITS } from "../starknet/strk20/schemas";
 import { isTokenId } from "../storage/preferences-entries";
-import { isAccountId } from "../storage/vault-schema";
+import { isAccountIdForNetwork } from "../storage/vault-schema";
 
 /**
  * Display-safe private balance derived from validated SDK note totals.
@@ -200,8 +200,8 @@ const readState = (response: unknown): PrivacyAccountState | null => {
   const state = response["strk20State"];
   if (
     !hasOnlyKnownKeys(state, ["accountId", "balances", "networkId", "registration"]) ||
-    !isAccountId(state["accountId"]) ||
     !isStarknetNetworkId(state["networkId"]) ||
+    !isAccountIdForNetwork(state["accountId"], state["networkId"]) ||
     (state["registration"] !== "registered" && state["registration"] !== "unregistered") ||
     !Array.isArray(state["balances"]) ||
     state["balances"].length > STRK20_LIMITS.balances

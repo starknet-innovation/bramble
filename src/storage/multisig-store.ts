@@ -18,6 +18,7 @@ import {
 } from "../starknet/networks";
 import type { KeyValueStore } from "./kv";
 import { serializeStoreMutations } from "./mutation-queue";
+import { isAccountId, isAccountIdForNetwork } from "./vault-schema";
 
 /**
  * Browser storage key for the multisig registry.
@@ -123,7 +124,7 @@ export const multisigId = (networkId: StarknetNetworkId, address: string): strin
  */
 export const multisigProposalId = (ownerId: string, txId: string): string | null => {
   const canonical = canonicalFelt(txId);
-  return canonical ? `${ownerId}:${canonical}` : null;
+  return canonical && isAccountId(ownerId) ? `${ownerId}:${canonical}` : null;
 };
 
 /**
@@ -137,7 +138,7 @@ export const multisigOperationId = (
   target: string,
 ): string | null => {
   const canonical = canonicalFelt(target);
-  return canonical && accountId.length > 0 && accountId.length <= 200
+  return canonical && isAccountIdForNetwork(accountId, networkId)
     ? `${kind}:${networkId}:${accountId}:${canonical}`
     : null;
 };
@@ -221,7 +222,7 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
         value["confirmedSignerAddresses"].length)) &&
   (value["confirmedBySigner"] === undefined) ===
     (value["confirmedBySignerAddress"] === undefined) &&
-  typeof value["multisigId"] === "string" &&
+  isAccountId(value["multisigId"]) &&
   (value["state"] === "confirmed" ||
     value["state"] === "executed" ||
     value["state"] === "not-found" ||
@@ -242,13 +243,13 @@ export const isMultisigProposalRecord = (value: unknown): value is MultisigPropo
 export const isMultisigOperationRecord = (value: unknown): value is MultisigOperationRecord =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountId", "id", "kind", "networkId", "target", "transactionHash"]) &&
-  typeof value["accountId"] === "string" &&
   (value["kind"] === "confirm" ||
     value["kind"] === "declare" ||
     value["kind"] === "deploy" ||
     value["kind"] === "execute" ||
     value["kind"] === "revoke") &&
   isStarknetNetworkId(value["networkId"]) &&
+  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   typeof value["target"] === "string" &&
   isStarkFieldElement(value["target"]) &&
   (value["transactionHash"] === undefined ||

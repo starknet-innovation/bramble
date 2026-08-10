@@ -114,12 +114,15 @@ device.
    remain expandable in the approval. A private-relay review also lists the relayer-fee withdrawal
    as a separately labelled action with its exact token, amount, and recipient. Denial returns
    `USER_REFUSED_OP`; account, network, grant, or payload changes invalidate the request.
-3. Only after approval does the background lazily derive a domain-separated viewing key through
-   Krusty from the selected account's encrypted signing key. The derivation matches the pinned SDK
-   reference: deterministic Stark ECDSA over the canonical `chainId:poolAddress`, Poseidon of
-   `(r,s)`, and the privacy pool's lower-half curve-order fold. This produces a distinct identity
-   for every chain and pool. The key is never persisted, logged, or returned through a browser
-   message. Keyless Ledger accounts cannot currently use STRK20 and fail closed.
+3. Only after approval does the background resolve a domain-separated viewing key. Software
+   accounts derive it lazily through Krusty from the selected account's encrypted signing key. The
+   derivation matches the pinned SDK reference: deterministic Stark ECDSA over the canonical
+   `chainId:poolAddress`, Poseidon of `(r,s)`, and the privacy pool's lower-half curve-order fold.
+   Software-derived keys are never persisted. A Ledger account may resolve only an exact
+   account/chain/pool-scoped key retained in encrypted vault `accountSecrets`; if none exists it
+   fails closed. The typed-data hardware ceremony that provisions such a key is deliberately not
+   implemented until its domain, message, reduction, confirmation UI, and test vectors are
+   formally reviewed. No viewing key is logged or returned through a browser message.
 4. The SDK performs note discovery, transaction assembly, and proving. `USER_LINKAGE` warnings map
    to the Wallet API privacy-leak error; every other non-empty or malformed warning fails closed.
 5. Before a dapp invoke approval appears, the wallet runs only public/pure action checks, rejects a

@@ -49,6 +49,9 @@ const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/conten
 const SECRET_MATERIAL_FILES = new Set([
   "src/background/account-hash-signer.ts",
   "src/background/account-creation-inputs.ts",
+  // Keeps the unlocked vault credential inside the privileged worker while
+  // coordinating fail-closed network/vault commits; never persists or emits it.
+  "src/background/active-network-mutation.ts",
   "src/background/add-chain-ops.ts",
   "src/background/approval-decisions.ts",
   "src/background/chain-ops.ts",
@@ -112,13 +115,17 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/storage/encrypted-store.ts",
   "src/storage/migrations.ts",
   "src/storage/vault-schema.ts",
+  "src/storage/vault-account-secrets.ts",
+  "src/storage/vault-store-migration.ts",
   "src/wallet/accounts.ts",
   "src/wallet/strk20-viewing-key.ts",
+  "src/wallet/vault-network-account.ts",
+  "src/wallet/vault-reveal.ts",
   "src/wallet/vault-service.ts",
   "src/wallet/vault-service-types.ts",
 ]);
 const SECRET_MATERIAL_PATTERN =
-  /\b(?:mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase)\b/i;
+  /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
 const SUPPRESSION_MARKERS = [
   "@ts-" + "expect-error",
   "@ts-" + "ignore",

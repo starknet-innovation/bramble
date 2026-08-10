@@ -4,36 +4,43 @@
 import type { KrustyKms } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import { isWalletOrigin } from "../shared/origin";
-import {
-  isNonZeroStarkFieldElement,
-  isStarkFieldElement,
-  type StarknetNetworkId,
-} from "../starknet/networks";
+import { canonicalFelt, isStarkFieldElement, isStarkPrivateKey } from "../starknet/networks";
 import { type EncryptedStore, isVaultPassphrase } from "../storage/encrypted-store";
-import { migrateVault } from "../storage/migrations";
 import { assertStoreAccess, type StoreActor } from "../storage/permissioned-store";
 import {
-  type AccountRef,
+  LEDGER_STRK20_VIEWING_KEY_SCHEME,
+  ledgerStrk20ScopeFor,
+  ledgerStrk20ViewingKeyFor,
+  withLedgerStrk20ViewingKey,
+  withoutLedgerStrk20ViewingKey,
+} from "../storage/vault-account-secrets";
+import {
   CURRENT_SCHEMA_VERSION,
   isAccountId,
   isKeylessAccount,
-  type SigningKeyRef,
+  isVaultV4,
   type Vault,
 } from "../storage/vault-schema";
+import { readMigratedVault } from "../storage/vault-store-migration";
 import {
   deriveAccount,
   deriveAccountRef,
   deriveImportedAccount,
   deriveLedgerAccount,
   deriveLedgerAccountRefs,
-  getOzAccountClassHash,
   nextAccountIndex,
-  sameWalletKey,
 } from "./accounts";
 import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
 import { deriveVaultStrk20ViewingKey } from "./strk20-viewing-key";
 import { findVaultAccount } from "./vault-account";
-import type { RevealedSecrets, WalletVaultService } from "./vault-service-types";
+import {
+  deriveNetworkAccount,
+  findNetworkAccount,
+  selectSourceAccount,
+} from "./vault-network-account";
+import type { WalletVaultService } from "./vault-service-types";
+
+export { activeAccountSecrets } from "./vault-reveal";
 
 /**
  * Re-exports the documented type surface from its size-budget split.
@@ -46,12 +53,14 @@ export type {
   CreateVaultAccountInput,
   DeriveLedgerAccountsInput,
   EnsureNetworkAccountInput,
+  ForgetLedgerStrk20ViewingKeyInput,
   ImportRawKeyAccountInput,
   OriginGrantInput,
   RevealedSecrets,
   RevokeOriginInput,
   SetActiveAccountInput,
   SignHashInput,
+  StoreLedgerStrk20ViewingKeyInput,
   WalletStatus,
   WalletVaultService,
 } from "./vault-service-types";
@@ -65,6 +74,7 @@ type WalletVaultServiceOptions = {
   readonly actor?: StoreActor;
   readonly encryptedStore: EncryptedStore;
   readonly kms: KrustyKms;
+  readonly migrationStore: EncryptedStore;
 };
 
 const writeVault = async (
@@ -72,79 +82,10 @@ const writeVault = async (
   vault: Vault,
   vaultPassphrase: string,
 ): Promise<void> => {
+  if (!isVaultV4(vault)) {
+    throw new WalletError("Invalid vault");
+  }
   await encryptedStore.write(vault, vaultPassphrase);
-};
-
-// The wallet key to derive from when adding a network account: active, else first.
-const selectSourceAccount = (vault: Vault): AccountRef | undefined =>
-  (vault.activeAccountId
-    ? vault.accounts.find((stored) => stored.id === vault.activeAccountId)
-    : null) ?? vault.accounts[0];
-// The existing account deriving `source`'s key onto `networkId`, if any.
-const findNetworkAccount = (
-  vault: Vault,
-  networkId: StarknetNetworkId,
-  source: AccountRef,
-): AccountRef | undefined =>
-  vault.accounts.find((stored) => stored.networkId === networkId && sameWalletKey(stored, source));
-
-// Derives `source`'s account onto `networkId`, returning the new `AccountRef`
-// together with the signing-key entries the vault must gain for it. A keyless
-// Ledger source stays keyless: it re-derives a Ledger account on the target
-// network from its stored `publicKeyX` + device derivation metadata (reusing
-// `deriveLedgerAccount`, which resolves the TARGET network's class hash and the
-// counterfactual address the same way), and needs no signing key. Any keyed
-// account clones its retained signing key onto the derived address, and fails
-// closed ("Signing key unavailable") if that key is somehow absent.
-const deriveNetworkAccount = async (
-  kms: KrustyKms,
-  vault: Vault,
-  source: AccountRef,
-  networkId: StarknetNetworkId,
-): Promise<{ readonly account: AccountRef; readonly signingKeys: readonly SigningKeyRef[] }> => {
-  if (isKeylessAccount(source)) {
-    const account = await deriveLedgerAccount(kms, {
-      accountIndex: source.derivation.accountIndex,
-      eip2645application: source.derivation.eip2645application,
-      networkId,
-      publicKeyX: source.publicKeyX,
-    });
-    return { account, signingKeys: [] };
-  }
-  const signingKey = vault.signingKeys.find((stored) => stored.accountId === source.id);
-  if (!signingKey) {
-    throw new WalletError("Signing key unavailable");
-  }
-  const classHash = await getOzAccountClassHash(kms, networkId);
-  const address = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(address)) {
-    throw new WalletError("Krusty KMS returned invalid account address");
-  }
-  const account: AccountRef = {
-    ...source,
-    address,
-    classHash,
-    id: `${networkId}:${address}`,
-    networkId,
-  };
-  return { account, signingKeys: [{ accountId: account.id, privateKey: signingKey.privateKey }] };
-};
-
-/**
- * Extracts the active account's private key and the vault recovery phrase for
- * the re-authenticated reveal flow. Throws when no account is selected or its
- * signing key is missing; never persists or logs the returned material.
- */
-export const activeAccountSecrets = (vault: Vault): RevealedSecrets => {
-  const accountId = vault.activeAccountId;
-  if (!accountId) {
-    throw new WalletError("No account selected");
-  }
-  const signingKey = vault.signingKeys.find((key) => key.accountId === accountId);
-  if (!signingKey) {
-    throw new WalletError("Signing key unavailable");
-  }
-  return { mnemonic: vault.mnemonic, privateKey: signingKey.privateKey };
 };
 
 /**
@@ -154,6 +95,7 @@ export const createWalletVaultService = ({
   actor = "background",
   encryptedStore,
   kms,
+  migrationStore,
 }: WalletVaultServiceOptions): WalletVaultService => {
   assertStoreAccess("vault", actor);
 
@@ -161,7 +103,7 @@ export const createWalletVaultService = ({
     if (!isVaultPassphrase(vaultPassphrase)) {
       throw new WalletError("Passphrase must be at least 12 characters");
     }
-    return migrateVault(await encryptedStore.read(vaultPassphrase));
+    return readMigratedVault({ primary: encryptedStore, staging: migrationStore }, vaultPassphrase);
   };
 
   // Serializes vault mutations. Every mutation is a read-modify-write of the
@@ -177,13 +119,12 @@ export const createWalletVaultService = ({
     return next;
   };
 
-  const readVault = async (vaultPassphrase: string): Promise<Vault> => {
-    const vault = await readVaultSnapshot(vaultPassphrase);
-    await serialized(() => encryptedStore.upgradeLegacyEnvelope(vaultPassphrase)).catch(
-      () => undefined,
-    );
-    return vault;
-  };
+  const readVault = (vaultPassphrase: string): Promise<Vault> =>
+    serialized(async () => {
+      const vault = await readVaultSnapshot(vaultPassphrase);
+      await encryptedStore.upgradeLegacyEnvelope(vaultPassphrase).catch(() => undefined);
+      return vault;
+    });
 
   const service: WalletVaultService = {
     async addDerivedAccount(input) {
@@ -225,10 +166,10 @@ export const createWalletVaultService = ({
       await writeVault(
         encryptedStore,
         {
+          ...vault,
           accounts: [...vault.accounts, account],
           activeAccountId: vault.activeAccountId ?? account.id,
           mnemonic: vault.mnemonic ?? input.mnemonic,
-          originGrants: vault.originGrants,
           schemaVersion: CURRENT_SCHEMA_VERSION,
           signingKeys: [...vault.signingKeys, { accountId: account.id, privateKey }],
         },
@@ -304,6 +245,7 @@ export const createWalletVaultService = ({
         encryptedStore,
         {
           accounts: [account],
+          accountSecrets: [],
           activeAccountId: account.id,
           mnemonic: null,
           originGrants: [],
@@ -369,6 +311,40 @@ export const createWalletVaultService = ({
         input.vaultPassphrase,
       );
       return account;
+    },
+    async forgetLedgerStrk20ViewingKey(input) {
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      const account = findVaultAccount(vault, input.accountId);
+      if (!isKeylessAccount(account)) {
+        throw new WalletError("Account is not a Ledger account");
+      }
+      const scope = ledgerStrk20ScopeFor(account, input.chainId, input.poolAddress);
+      if (!scope) {
+        throw new WalletError("Invalid Ledger STRK20 viewing-key scope");
+      }
+      const existing = ledgerStrk20ViewingKeyFor(
+        vault.accountSecrets,
+        account.id,
+        scope.chainId,
+        scope.poolAddress,
+      );
+      if (!existing) {
+        return false;
+      }
+      await writeVault(
+        encryptedStore,
+        {
+          ...vault,
+          accountSecrets: withoutLedgerStrk20ViewingKey(
+            vault.accountSecrets,
+            account.id,
+            scope.chainId,
+            scope.poolAddress,
+          ),
+        },
+        input.vaultPassphrase,
+      );
+      return true;
     },
     generateMnemonic() {
       return kms.generateMnemonic();
@@ -470,6 +446,28 @@ export const createWalletVaultService = ({
         ready: true,
       };
     },
+    async storeLedgerStrk20ViewingKey(input) {
+      const vault = await readVaultSnapshot(input.vaultPassphrase);
+      const account = findVaultAccount(vault, input.accountId);
+      if (!isKeylessAccount(account)) {
+        throw new WalletError("Account is not a Ledger account");
+      }
+      const scope = ledgerStrk20ScopeFor(account, input.chainId, input.poolAddress);
+      const viewingKey = canonicalFelt(input.viewingKey);
+      if (!scope || !viewingKey || !isStarkPrivateKey(viewingKey)) {
+        throw new WalletError("Invalid Ledger STRK20 viewing key");
+      }
+      const accountSecrets = withLedgerStrk20ViewingKey(vault.accountSecrets, {
+        accountId: account.id,
+        ledgerStrk20ViewingKeys: [
+          { ...scope, scheme: LEDGER_STRK20_VIEWING_KEY_SCHEME, viewingKey },
+        ],
+      });
+      if (!accountSecrets) {
+        throw new WalletError("Ledger STRK20 viewing-key limit reached");
+      }
+      await writeVault(encryptedStore, { ...vault, accountSecrets }, input.vaultPassphrase);
+    },
   };
 
   return {
@@ -479,9 +477,13 @@ export const createWalletVaultService = ({
     createAccount: (input) => serialized(() => service.createAccount(input)),
     createLedgerVault: (input) => serialized(() => service.createLedgerVault(input)),
     ensureNetworkAccount: (input) => serialized(() => service.ensureNetworkAccount(input)),
+    forgetLedgerStrk20ViewingKey: (input) =>
+      serialized(() => service.forgetLedgerStrk20ViewingKey(input)),
     importRawKeyAccount: (input) => serialized(() => service.importRawKeyAccount(input)),
     grantOrigin: (input) => serialized(() => service.grantOrigin(input)),
     revokeOrigin: (input) => serialized(() => service.revokeOrigin(input)),
     setActiveAccount: (input) => serialized(() => service.setActiveAccount(input)),
+    storeLedgerStrk20ViewingKey: (input) =>
+      serialized(() => service.storeLedgerStrk20ViewingKey(input)),
   };
 };

@@ -12,6 +12,7 @@ import {
 } from "../starknet/networks";
 import type { KeyValueStore } from "./kv";
 import { serializeStoreMutations } from "./mutation-queue";
+import { isAccountIdForNetwork } from "./vault-schema";
 
 /**
  * Browser storage key for the activity log.
@@ -190,12 +191,11 @@ export const isActivityEntry = (value: unknown): value is ActivityEntry =>
     "summary",
     "token",
   ]) &&
-  typeof value["accountId"] === "string" &&
-  value["accountId"].length > 0 &&
+  isStarknetNetworkId(value["networkId"]) &&
+  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   typeof value["hash"] === "string" &&
   isStarkFieldElement(value["hash"]) &&
   isActivityKind(value["kind"]) &&
-  isStarknetNetworkId(value["networkId"]) &&
   isActivityStatus(value["status"]) &&
   typeof value["submittedAt"] === "number" &&
   Number.isSafeInteger(value["submittedAt"]) &&

@@ -90,10 +90,11 @@ describe("background network messages", () => {
           }
           return {
             accounts,
+            accountSecrets: [],
             activeAccountId,
             mnemonic: null,
             originGrants: [],
-            schemaVersion: 3 as const,
+            schemaVersion: 4 as const,
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",
@@ -186,10 +187,11 @@ describe("background network messages", () => {
         async readVault() {
           return {
             accounts,
+            accountSecrets: [],
             activeAccountId,
             mnemonic: null,
             originGrants: [{ accountIds: grantedAccountIds, origin: "https://example.com" }],
-            schemaVersion: 3 as const,
+            schemaVersion: 4 as const,
             signingKeys: accounts.map((stored) => ({
               accountId: stored.id,
               privateKey: "0x123456",

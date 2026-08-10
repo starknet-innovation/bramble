@@ -115,6 +115,20 @@ describe("privacy runtime client", () => {
     await expect(client.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
   });
 
+  test("rejects private state whose account and network scopes disagree", async () => {
+    const client = createPrivacyRuntimeClient(async () => ({
+      ok: true,
+      strk20State: {
+        accountId: "SN_MAIN:0xabc",
+        balances: [],
+        networkId: "SN_SEPOLIA",
+        registration: "registered",
+      },
+    }));
+
+    await expect(client.loadPrivacyState()).rejects.toThrow("Private balances unavailable");
+  });
+
   test("accepts a strict relay review and rejects hidden extra fields", async () => {
     const relayPreparation = {
       ...preparation,

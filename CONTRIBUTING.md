@@ -129,8 +129,11 @@ history.
 ## Security Rules
 
 - Never log secrets, ciphertext keys, mnemonics, signatures, passphrases, or decrypted vault data.
-- STRK20 viewing keys stay inside the privileged vault/SDK boundary and are never persisted or
-  returned through extension messages.
+- STRK20 viewing keys stay inside the privileged vault/SDK boundary and are never returned through
+  extension messages. Software-account viewing keys remain derived on demand and unpersisted. A
+  Ledger viewing key may be retained only in the encrypted v4 `accountSecrets` collection through
+  the background-only vault service, with an exact account/chain/pool/scheme binding; it must never
+  enter `AccountRef`, preferences, activity, logs, session storage, or UI state.
 - Use Web Crypto for local store encryption. Use Krusty KMS for wallet/account cryptography.
 - Treat extension messages as untrusted input. Validate type, origin, and requested capability.
 - Request the smallest browser permissions possible.
