@@ -16,7 +16,7 @@ import {
 /**
  * Public same-origin gateway exposed to released wallet builds.
  */
-export const STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
+export const STRK20_GATEWAY_BASE = "https://wallet.nodes.starknet.org/api/strk20";
 /**
  * Canonical Starknet Mainnet privacy-pool address.
  */
@@ -93,14 +93,14 @@ export const isStrk20NetworkConfig = (value: unknown): value is Strk20NetworkCon
       isNonZeroStarkFieldElement(value["subaccountAnonymizerAddress"])));
 
 /**
- * Bundled mainnet routing uses the Terminal gateway so private upstream
+ * Bundled mainnet routing uses the wallet-owned AWS gateway so private upstream
  * service URLs and paymaster credentials never enter the extension bundle.
- * OHTTP additionally hides discovery/proving request contents from the relay.
+ * OHTTP remains disabled until both privacy upstreams support it.
  */
 export const DEFAULT_STRK20_NETWORKS: Strk20NetworkConfigs = {
   SN_MAIN: {
     discoveryUrl: `${STRK20_GATEWAY_BASE}/discovery`,
-    ohttpEnabled: true,
+    ohttpEnabled: false,
     paymaster: {
       feeToken: STRK_TOKEN_ADDRESS,
       url: `${STRK20_GATEWAY_BASE}/paymaster`,

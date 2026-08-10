@@ -29,6 +29,7 @@
     "default_path": "sidepanel.html"
   },
   "host_permissions": [
+    "https://wallet.nodes.starknet.org/*",
     "https://mainnet.nodes.starknet.org/*",
     "https://sepolia.nodes.starknet.org/*",
     "https://api.cartridge.gg/*",
@@ -36,7 +37,6 @@
     "https://starkscan.co/*",
     "https://starknet.api.avnu.fi/*",
     "https://sepolia.api.avnu.fi/*",
-    "https://mc-wallet-terminal.vercel.app/*",
     "https://metamask.github.io/*",
     "http://127.0.0.1:5050/*",
     "http://localhost:5050/*"

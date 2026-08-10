@@ -2,12 +2,35 @@
  * Starknet provider plumbing shared by wallet RPC operations: the Krusty
  * signer adapter, endpoint failover, and RPC error classification.
  */
-import { Account, RpcProvider, type Signature, Signer } from "starknet";
+import { Account, RpcProvider, type RpcProviderOptions, type Signature, Signer } from "starknet";
 import type { StarkSignature } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
 import type { AccountRef } from "../storage/vault-schema";
-import { isStarkFieldElement, sameFelt } from "./networks";
+import { isStarkFieldElement, STARKNET_RPC_SPEC_VERSION, sameFelt } from "./networks";
+
+type RpcProviderFactory = (options: RpcProviderOptions) => RpcProvider;
+
+const createStarknetProvider: RpcProviderFactory = (options) => new RpcProvider(options);
+
+/**
+ * Builds an RPC provider pinned to {@link STARKNET_RPC_SPEC_VERSION}.
+ *
+ * Every provider in the wallet is created here so the spec version is decided
+ * in one place rather than inherited from starknet.js's mutable global default
+ * — a dependency bump must not silently move the wire format the wallet signs
+ * and broadcasts against. Note what this does and does not buy: pinning fixes
+ * how the wallet *encodes* requests, and it makes starknet.js skip its lazy
+ * `starknet_specVersion` probe, so a node serving a different spec is not
+ * detected here. The pin's counterpart is the `v0_10` segment in the bundled
+ * gateway URLs; both must move together. The optional factory is a test seam;
+ * it always receives the same pinned configuration as the production constructor.
+ */
+export const createRpcProvider = (
+  nodeUrl: string,
+  options: Omit<RpcProviderOptions, "nodeUrl" | "specVersion"> = {},
+  makeProvider: RpcProviderFactory = createStarknetProvider,
+): RpcProvider => makeProvider({ ...options, nodeUrl, specVersion: STARKNET_RPC_SPEC_VERSION });
 
 /**
  * Function that signs a Stark transaction hash through the vault service.
@@ -109,7 +132,7 @@ export const isTransportRpcError = (error: unknown): boolean => {
 export const withRpcFallback = async <T>(
   rpcUrls: readonly string[],
   run: (provider: RpcProvider) => Promise<T>,
-  makeProvider: (nodeUrl: string) => RpcProvider = (nodeUrl) => new RpcProvider({ nodeUrl }),
+  makeProvider: (nodeUrl: string) => RpcProvider = createRpcProvider,
 ): Promise<T> => {
   let lastError: unknown = new WalletError("No RPC endpoints configured");
   for (const nodeUrl of rpcUrls) {
@@ -135,7 +158,7 @@ export const withRpcWrite = async <T>(
   rpcUrls: readonly string[],
   expectedChainId: string,
   run: (provider: RpcProvider) => Promise<T>,
-  makeProvider: (nodeUrl: string) => RpcProvider = (nodeUrl) => new RpcProvider({ nodeUrl }),
+  makeProvider: (nodeUrl: string) => RpcProvider = createRpcProvider,
 ): Promise<T> => {
   let selected: RpcProvider | null = null;
   let lastError: unknown = new WalletError("No RPC endpoints configured");

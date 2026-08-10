@@ -3,11 +3,12 @@
  * Wallet's narrow STRK20 middleware contract.
  */
 
-import type { TypedData } from "starknet";
-import { num, RpcProvider, typedData } from "starknet";
+import type { RpcProvider, TypedData } from "starknet";
+import { num, typedData } from "starknet";
 import { WalletError } from "../../shared/errors";
 import { isJson } from "../../shared/json";
 import { STARKNET_NETWORKS, sameFelt } from "../networks";
+import { createRpcProvider } from "../provider";
 import { submitInvokeTransaction } from "../rpc-submit";
 import type { Strk20NetworkConfig } from "./config";
 import type { Strk20MaturityScope, Strk20MaturityStore } from "./maturity";
@@ -196,7 +197,7 @@ export const createOfficialStrk20Service = ({
   nowSeconds,
   pauseForMaturity,
   pauseForServiceRetry = defaultServiceRetryPause,
-  providerFor = (nodeUrl) => new RpcProvider({ nodeUrl }),
+  providerFor = createRpcProvider,
   sdk,
   submitInvoke = submitInvokeTransaction,
   waitForAccepted,

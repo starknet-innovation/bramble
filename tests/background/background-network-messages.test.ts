@@ -309,7 +309,10 @@ describe("background network messages", () => {
 
     expect(invoked[0]).toMatchObject({
       account: mainnetAccount,
-      rpcUrls: ["https://mainnet.nodes.starknet.org/rpc/v0_10"],
+      rpcUrls: [
+        "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
+        "https://mainnet.nodes.starknet.org/rpc/v0_10",
+      ],
     });
     expect(grantedAccountIds).toEqual([account.id, mainnetAccount.id]);
   });
@@ -317,6 +320,7 @@ describe("background network messages", () => {
   test("prefers the user's custom RPC endpoint and keeps built-ins as fallback", () => {
     const preferences = defaultWalletPreferences();
     expect(networkRpcUrls(STARKNET_NETWORKS.SN_MAIN, preferences)).toEqual([
+      "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
       "https://mainnet.nodes.starknet.org/rpc/v0_10",
     ]);
     expect(
@@ -324,6 +328,10 @@ describe("background network messages", () => {
         ...preferences,
         rpcOverrides: { SN_MAIN: "https://my-node.example/rpc" },
       }),
-    ).toEqual(["https://my-node.example/rpc", "https://mainnet.nodes.starknet.org/rpc/v0_10"]);
+    ).toEqual([
+      "https://my-node.example/rpc",
+      "https://wallet.nodes.starknet.org/rpc/mainnet/v0_10",
+      "https://mainnet.nodes.starknet.org/rpc/v0_10",
+    ]);
   });
 });

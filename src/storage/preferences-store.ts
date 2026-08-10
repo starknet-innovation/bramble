@@ -3,11 +3,18 @@
  */
 import { WalletError } from "../shared/errors";
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "../shared/json";
-import { DEFAULT_NETWORK, DEFAULT_TOKENS, isStarknetNetworkId } from "../starknet/networks";
+import {
+  DEFAULT_NETWORK,
+  DEFAULT_TOKENS,
+  isStarknetNetworkId,
+  STRK_TOKEN_ADDRESS,
+} from "../starknet/networks";
 import {
   DEFAULT_STRK20_NETWORKS,
   isStrk20NetworkConfig,
   isStrk20NetworkConfigs,
+  STRK20_MAINNET_POOL,
+  type Strk20NetworkConfig,
 } from "../starknet/strk20/config";
 import {
   createGroup as createGroupPure,
@@ -153,6 +160,34 @@ export const defaultWalletPreferences = (): WalletPreferences => ({
   tokens: DEFAULT_TOKENS.map(withTokenId),
 });
 
+const RETIRED_STRK20_GATEWAY_BASE = "https://mc-wallet-terminal.vercel.app/api/strk20";
+
+// The old bundled Mainnet snapshot is the only configuration rebased on read.
+// Requiring every default field preserves custom routing and an empty-map opt-out.
+const isRetiredBundledMainnetRouting = (config: Strk20NetworkConfig | undefined): boolean =>
+  config !== undefined &&
+  config.discoveryUrl === `${RETIRED_STRK20_GATEWAY_BASE}/discovery` &&
+  config.ohttpEnabled === true &&
+  config.ohttpRelayUrl === undefined &&
+  config.paymaster?.feeToken === STRK_TOKEN_ADDRESS &&
+  config.paymaster.url === `${RETIRED_STRK20_GATEWAY_BASE}/paymaster` &&
+  config.poolAddress === STRK20_MAINNET_POOL &&
+  config.proverUrl === `${RETIRED_STRK20_GATEWAY_BASE}/prover` &&
+  config.subaccountAnonymizerAddress === undefined;
+
+const withCurrentStrk20Defaults = (preferences: WalletPreferences): WalletPreferences => {
+  if (preferences.strk20Networks === undefined) {
+    return { ...preferences, strk20Networks: DEFAULT_STRK20_NETWORKS };
+  }
+  if (!isRetiredBundledMainnetRouting(preferences.strk20Networks.SN_MAIN)) {
+    return preferences;
+  }
+  return {
+    ...preferences,
+    strk20Networks: { ...preferences.strk20Networks, ...DEFAULT_STRK20_NETWORKS },
+  };
+};
+
 const writePreferences = async (
   store: KeyValueStore,
   preferences: WalletPreferences,
@@ -180,13 +215,7 @@ export const createPreferencesStore = ({
     if (!isWalletPreferences(stored)) {
       throw new WalletError("Invalid stored preferences");
     }
-    // Stored preferences created before the bundled gateway existed inherit it
-    // once. Clearing Mainnet later persists an explicit empty map, so the
-    // user's decision to disable privacy routing remains durable.
-    const withPrivacyDefaults =
-      stored.strk20Networks === undefined
-        ? { ...stored, strk20Networks: DEFAULT_STRK20_NETWORKS }
-        : stored;
+    const withPrivacyDefaults = withCurrentStrk20Defaults(stored);
     // Self-heal legacy multi-group membership on read (the validator stays
     // permissive so old data loads rather than erroring): collapse each account
     // to a single folder so every consumer sees the single-group invariant.
