@@ -4,7 +4,12 @@
  * issued before the transport function yielded to an asynchronous preflight.
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import { newStarknetClient, requestTransportRaw } from "../../src/sidepanel/ledger/webhid-impl";
+import {
+  bindLedgerTransportRaw,
+  type LedgerRawTransport,
+  newStarknetClient,
+  requestTransportRaw,
+} from "../../src/sidepanel/ledger/webhid-impl";
 
 type UsbPickerOptions = {
   readonly filters: readonly { readonly classCode?: number; readonly vendorId?: number }[];
@@ -91,15 +96,19 @@ describe("Ledger browser chooser activation", () => {
 });
 
 describe("Ledger OS preflight transport transition", () => {
-  test("reads firmware from the dashboard, then reopens Starknet before app checks", async () => {
+  test("the client continues on the exact transport reopened by its binding", async () => {
     const calls: { cla: number; data: readonly number[]; ins: number }[] = [];
-    const responses = [
-      Buffer.from([0x90, 0x00]),
+    const initialResponses = [
+      Buffer.from([1, 5, ...Buffer.from("BOLOS"), 5, ...Buffer.from("1.0.0"), 0, 0x90, 0x00]),
       Buffer.from([0x33, 0x00, 0x00, 0x04, 0x05, 0x32, 0x2e, 0x36, 0x2e, 0x31, 0x00, 0x90, 0x00]),
       Buffer.from([0x90, 0x00]),
+    ];
+    const reopenedResponses = [
+      Buffer.from([1, 8, ...Buffer.from("Starknet"), 5, ...Buffer.from("2.4.0"), 0, 0x90, 0x00]),
       Buffer.from([0x02, 0x04, 0x00, 0x90, 0x00]),
     ];
-    const transport = {
+    const rawTransport = (responses: Uint8Array[]): LedgerRawTransport => ({
+      close: async () => undefined,
       send: async (cla: number, ins: number, _p1: number, _p2: number, data: Uint8Array) => {
         calls.push({ cla, data: [...data], ins });
         const response = responses.shift();
@@ -108,8 +117,14 @@ describe("Ledger OS preflight transport transition", () => {
         }
         return response;
       },
-    };
-    const client = newStarknetClient(transport as never);
+    });
+    const selectedDevice = { id: "selected-ledger" };
+    const transport = bindLedgerTransportRaw(rawTransport(initialResponses), {
+      listDevices: async () => [selectedDevice],
+      openDevice: async () => rawTransport(reopenedResponses),
+      selectedDevice,
+    });
+    const client = newStarknetClient(transport);
 
     await expect(client.getOsVersion()).resolves.toEqual({
       targetId: 0x33000004,
@@ -122,38 +137,11 @@ describe("Ledger OS preflight transport transition", () => {
       returnCode: 0x9000,
     });
     expect(calls).toEqual([
-      { cla: 0xb0, data: [], ins: 0xa7 },
+      { cla: 0xb0, data: [], ins: 0x01 },
       { cla: 0xe0, data: [], ins: 0x01 },
       { cla: 0xe0, data: [...Buffer.from("Starknet", "ascii")], ins: 0xd8 },
+      { cla: 0xb0, data: [], ins: 0x01 },
       { cla: 0x5a, data: [], ins: 0x00 },
-    ]);
-  });
-
-  test("restores Starknet after rejecting a truncated OS response", async () => {
-    const calls: { cla: number; data: readonly number[]; ins: number }[] = [];
-    const responses = [
-      Buffer.from([0x90, 0x00]),
-      Buffer.from([0x33, 0x00, 0x00, 0x04, 0x05, 0x32, 0x2e, 0x36, 0x2e, 0x31, 0x90, 0x00]),
-      Buffer.from([0x90, 0x00]),
-    ];
-    const transport = {
-      send: async (cla: number, ins: number, _p1: number, _p2: number, data: Uint8Array) => {
-        calls.push({ cla, data: [...data], ins });
-        const response = responses.shift();
-        if (!response) {
-          throw new Error("unexpected APDU");
-        }
-        return response;
-      },
-    };
-
-    await expect(newStarknetClient(transport as never).getOsVersion()).rejects.toThrow(
-      "Malformed Ledger OS version response",
-    );
-    expect(calls).toEqual([
-      { cla: 0xb0, data: [], ins: 0xa7 },
-      { cla: 0xe0, data: [], ins: 0x01 },
-      { cla: 0xe0, data: [...Buffer.from("Starknet", "ascii")], ins: 0xd8 },
     ]);
   });
 });

@@ -16,6 +16,7 @@ import { StarknetClient } from "@ledgerhq/hw-app-starknet";
 import TransportWebHID from "@ledgerhq/hw-transport-webhid";
 import TransportWebUSB from "@ledgerhq/hw-transport-webusb";
 import { Buffer } from "buffer";
+import { exactLedgerDevice, readLedgerOsAndRestoreStarknet } from "./device-transition";
 
 const deviceIds = new WeakMap();
 const knownDevices = new Map();
@@ -30,103 +31,121 @@ const transports = {
   usb: TransportWebUSB,
 };
 
-// Ledger's built-in Get OS Version command is accepted only on the dashboard,
-// while the Starknet APDUs require the Starknet app. Use the existing transport
-// to make that transition atomically: quit the active app, read the OS, then
-// open Starknet again. Opening a second transport would race the device pipe.
-// The version response ends in the APDU status word and starts with a u32 target
-// id followed by the length-prefixed secure-element version string.
-const OS_VERSION_APDU = { cla: 0xe0, ins: 0x01, p1: 0, p2: 0 };
-const QUIT_APP_APDU = { cla: 0xb0, ins: 0xa7, p1: 0, p2: 0 };
-const OPEN_APP_APDU = { cla: 0xe0, ins: 0xd8, p1: 0, p2: 0 };
-const APDU_OK = 0x9000;
-const STARKNET_APP_NAME = "Starknet";
+const reconnectAttempts = 40;
+const reconnectDelayMs = 250;
+const boundTransports = new WeakMap();
 
-const sendEmptyApdu = (transport, apdu) =>
-  transport.send(apdu.cla, apdu.ins, apdu.p1, apdu.p2, Buffer.alloc(0), [APDU_OK]);
+const pause = () => new Promise((resolve) => setTimeout(resolve, reconnectDelayMs));
 
-const malformedOsVersion = () => new Error("Malformed Ledger OS version response");
-
-const parseOsVersion = (response) => {
-  if (!(response instanceof Uint8Array) || response.length < 8) {
-    throw malformedOsVersion();
+const closeQuietly = async (transport) => {
+  try {
+    await transport.close();
+  } catch {
+    // A transition deliberately invalidates this transport. The exact-device
+    // reopen and post-transition state check are the authoritative result.
   }
-  const statusOffset = response.length - 2;
-  const status = (response[statusOffset] << 8) | response[statusOffset + 1];
-  if (status !== APDU_OK) {
-    throw new Error("Ledger OS version command failed");
-  }
-  const targetId =
-    response[0] * 0x1000000 + response[1] * 0x10000 + response[2] * 0x100 + response[3];
-  const versionLength = response[4];
-  const versionEnd = 5 + versionLength;
-  // Ledger's response always includes a length-prefixed flags field after the
-  // secure-element version. Validate that envelope even though this wallet does
-  // not consume the flags; otherwise a truncated APDU could be accepted as a
-  // valid firmware response.
-  if (versionLength === 0 || versionEnd >= statusOffset) {
-    throw malformedOsVersion();
-  }
-  const flagsLength = response[versionEnd];
-  if (versionEnd + 1 + flagsLength > statusOffset) {
-    throw malformedOsVersion();
-  }
-  return {
-    targetId,
-    version: new TextDecoder("utf-8", { fatal: true }).decode(response.slice(5, versionEnd)),
-  };
 };
 
-const openStarknet = (transport) =>
-  transport.send(
-    OPEN_APP_APDU.cla,
-    OPEN_APP_APDU.ins,
-    OPEN_APP_APDU.p1,
-    OPEN_APP_APDU.p2,
-    Buffer.from(STARKNET_APP_NAME, "ascii"),
-    [APDU_OK],
-  );
-
-const readOsVersion = async (transport) => {
-  // This flow may start in Starknet or on the dashboard. Keep the transition on
-  // one owned transport so a second browser connection cannot race the APDU
-  // pipe; model/transport reconnection behavior is covered by the mandatory
-  // physical compatibility matrix rather than assumed from this pure client.
-  await sendEmptyApdu(transport, QUIT_APP_APDU);
-  let osVersion;
-  let readError;
-  try {
-    const response = await transport.send(
-      OS_VERSION_APDU.cla,
-      OS_VERSION_APDU.ins,
-      OS_VERSION_APDU.p1,
-      OS_VERSION_APDU.p2,
-      Buffer.alloc(0),
-      [APDU_OK],
-    );
-    osVersion = parseOsVersion(response);
-  } catch (error) {
-    readError = error;
+const reconnectBoundTransport = async (transport) => {
+  const state = boundTransports.get(transport);
+  if (!state || state.closed || state.reconnecting) {
+    throw new Error("Ledger exact-device session is unavailable");
   }
+  state.reconnecting = true;
+  const generation = state.generation;
+  const previous = state.current;
+  state.current = null;
+  await closeQuietly(previous);
 
-  // Once the quit APDU succeeds, best-effort restoration keeps a malformed or
-  // failed OS read from stranding the user on the dashboard. Preserve the OS
-  // failure when both operations fail because it is the cause of this check.
+  let lastError;
   try {
-    await openStarknet(transport);
-  } catch (error) {
-    if (readError === undefined) {
-      throw error;
+    for (let attempt = 0; attempt < reconnectAttempts; attempt += 1) {
+      if (state.closed || state.generation !== generation) {
+        break;
+      }
+      try {
+        const candidates = await state.binding.listDevices();
+        const selected = exactLedgerDevice(state.binding.selectedDevice, candidates);
+        if (selected) {
+          const reopened = await state.binding.openDevice(selected);
+          if (state.closed || state.generation !== generation) {
+            await closeQuietly(reopened);
+            break;
+          }
+          state.current = reopened;
+          return;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt + 1 < reconnectAttempts) {
+        await pause();
+      }
     }
+  } finally {
+    state.reconnecting = false;
   }
-  if (readError !== undefined) {
-    throw readError;
+  const error = new Error("Ledger disconnected before the exact device could reconnect");
+  error.name = "DisconnectedDevice";
+  if (lastError !== undefined) {
+    error.cause = lastError;
   }
-  if (!osVersion) {
-    throw malformedOsVersion();
-  }
-  return osVersion;
+  throw error;
 };
+
+/**
+ * Wraps a selected browser transport with an exact-device reconnection binding.
+ * Only the original browser object, its unique origin-scoped id, or its unique
+ * vendor-bound serial may be reopened; list order and product labels are never
+ * accepted as identity.
+ */
+export const bindLedgerTransportRaw = (initial, binding) => {
+  const state = { binding, closed: false, current: initial, generation: 0, reconnecting: false };
+  const transport = {
+    close: async () => {
+      if (state.closed) {
+        return;
+      }
+      state.closed = true;
+      state.generation += 1;
+      const current = state.current;
+      state.current = null;
+      let disconnectError;
+      try {
+        await binding.disconnect?.();
+      } catch (error) {
+        disconnectError = error;
+      }
+      if (current) {
+        try {
+          await current.close();
+        } catch (error) {
+          if (disconnectError === undefined) {
+            disconnectError = error;
+          }
+        }
+      }
+      if (disconnectError !== undefined) {
+        throw disconnectError;
+      }
+    },
+    send: (...args) => {
+      if (!state.current || state.closed) {
+        throw new Error("Ledger exact-device session is unavailable");
+      }
+      return state.current.send(...args);
+    },
+  };
+  boundTransports.set(transport, state);
+  return transport;
+};
+
+const bindCableTransport = async (kind, device) =>
+  bindLedgerTransportRaw(await transports[kind].open(device), {
+    listDevices: () => transports[kind].list(),
+    openDevice: (selected) => transports[kind].open(selected),
+    selectedDevice: device,
+  });
 
 const idOf = (device) => {
   const known = deviceIds.get(device);
@@ -203,10 +222,10 @@ export const listConnectedDevicesRaw = async () =>
 export const openConnectedTransportRaw = async (deviceId) => {
   if (deviceId !== undefined) {
     const selected = knownDevices.get(deviceId);
-    return selected ? transports[selected.kind].open(selected.device) : null;
+    return selected ? bindCableTransport(selected.kind, selected.device) : null;
   }
   const [connected] = await connectedDevices();
-  return connected ? transports[connected.kind].open(connected.device) : null;
+  return connected ? bindCableTransport(connected.kind, connected.device) : null;
 };
 
 export const supportedTransportKindsRaw = async () => {
@@ -244,7 +263,7 @@ export const requestTransportRaw = async (kind) => {
     if (!device) {
       throw new DOMException("No Ledger selected", "NotFoundError");
     }
-    return TransportWebHID.open(device);
+    return bindCableTransport("hid", device);
   }
   // Target the vendor transport interface rather than the composite device as
   // a whole. Modern Ledgers can expose Ledger APDU, vendor USB, and protected
@@ -254,11 +273,19 @@ export const requestTransportRaw = async (kind) => {
     filters: [{ classCode: 0xff, vendorId: ledgerUSBVendorId }],
   });
   const device = await requestedDevice;
-  return TransportWebUSB.open(device);
+  return bindCableTransport("usb", device);
 };
 
-export const newStarknetClient = (transport) => {
+export const newStarknetClient = (transport, onTransition) => {
   const client = new StarknetClient(transport);
-  client.getOsVersion = () => readOsVersion(transport);
+  client.getOsVersion = () =>
+    readLedgerOsAndRestoreStarknet(
+      {
+        reconnect: () => reconnectBoundTransport(transport),
+        send: (cla, ins, p1, p2, data, statuses) =>
+          transport.send(cla, ins, p1, p2, Buffer.from(data), statuses),
+      },
+      onTransition,
+    );
   return client;
 };
