@@ -12,39 +12,15 @@ import {
   type LedgerTransitionPort,
   readLedgerOsAndRestoreStarknet,
 } from "../../src/sidepanel/ledger/device-transition";
+import {
+  ledgerAppStateResponse,
+  ledgerNanoXOsResponse,
+} from "../support/ledger-management-fixtures";
 
 type ApduCall = { readonly cla: number; readonly data: readonly number[]; readonly ins: number };
 type Response = Uint8Array | Error;
 
 const ok = (): Uint8Array => Uint8Array.from([0x90, 0x00]);
-
-const appState = (name: string, version = "2.4.0"): Uint8Array => {
-  const nameBytes = new TextEncoder().encode(name);
-  const versionBytes = new TextEncoder().encode(version);
-  return Uint8Array.from([
-    1,
-    nameBytes.length,
-    ...nameBytes,
-    versionBytes.length,
-    ...versionBytes,
-    0,
-    0x90,
-    0x00,
-  ]);
-};
-
-const osVersion = (): Uint8Array =>
-  Uint8Array.from([
-    0x33,
-    0x00,
-    0x00,
-    0x04,
-    0x05,
-    ...new TextEncoder().encode("2.6.1"),
-    0,
-    0x90,
-    0x00,
-  ]);
 
 const transitionHarness = (
   connections: readonly (readonly Response[])[],
@@ -91,13 +67,13 @@ const transitionHarness = (
 describe("Ledger dashboard and app transition", () => {
   test("dashboard starts skip CloseApp and confirm Starknet after reopening", async () => {
     const harness = transitionHarness([
-      [appState("BOLOS"), osVersion(), ok()],
-      [appState("Starknet")],
+      [ledgerAppStateResponse("BOLOS"), ledgerNanoXOsResponse(), ok()],
+      [ledgerAppStateResponse("Starknet")],
     ]);
 
     await expect(
       readLedgerOsAndRestoreStarknet(harness.port, (phase) => harness.phases.push(phase)),
-    ).resolves.toEqual({ targetId: 0x33000004, version: "2.6.1" });
+    ).resolves.toEqual({ targetId: 0x33000004, version: "2.2.3" });
 
     expect(harness.reconnects()).toBe(1);
     expect(harness.calls.map(({ cla, ins }) => [cla, ins])).toEqual([
@@ -118,14 +94,14 @@ describe("Ledger dashboard and app transition", () => {
   test("app starts reconnect after both disconnecting transitions", async () => {
     const disconnected = new DOMException("device disconnected during operation", "NetworkError");
     const harness = transitionHarness([
-      [appState("Starknet"), disconnected],
-      [appState("BOLOS"), osVersion(), disconnected],
-      [appState("Starknet")],
+      [ledgerAppStateResponse("Starknet"), disconnected],
+      [ledgerAppStateResponse("BOLOS"), ledgerNanoXOsResponse(), disconnected],
+      [ledgerAppStateResponse("Starknet")],
     ]);
 
     await expect(readLedgerOsAndRestoreStarknet(harness.port)).resolves.toEqual({
       targetId: 0x33000004,
-      version: "2.6.1",
+      version: "2.2.3",
     });
 
     expect(harness.reconnects()).toBe(2);
@@ -141,14 +117,14 @@ describe("Ledger dashboard and app transition", () => {
 
   test("an acknowledged CloseApp still requires a dashboard reconnect", async () => {
     const harness = transitionHarness([
-      [appState("Starknet"), ok()],
-      [appState("BOLOS"), osVersion(), ok()],
-      [appState("Starknet")],
+      [ledgerAppStateResponse("Starknet"), ok()],
+      [ledgerAppStateResponse("BOLOS"), ledgerNanoXOsResponse(), ok()],
+      [ledgerAppStateResponse("Starknet")],
     ]);
 
     await expect(readLedgerOsAndRestoreStarknet(harness.port)).resolves.toEqual({
       targetId: 0x33000004,
-      version: "2.6.1",
+      version: "2.2.3",
     });
     expect(harness.reconnects()).toBe(2);
   });
@@ -156,8 +132,8 @@ describe("Ledger dashboard and app transition", () => {
   test("OpenApp disconnect is accepted only after Starknet is confirmed", async () => {
     const disconnected = new Error("DisconnectedDeviceDuringOperation");
     const harness = transitionHarness([
-      [appState("BOLOS"), osVersion(), disconnected],
-      [appState("Ethereum")],
+      [ledgerAppStateResponse("BOLOS"), ledgerNanoXOsResponse(), disconnected],
+      [ledgerAppStateResponse("Ethereum")],
     ]);
 
     await expect(readLedgerOsAndRestoreStarknet(harness.port)).rejects.toThrow(
@@ -166,36 +142,88 @@ describe("Ledger dashboard and app transition", () => {
     expect(harness.reconnects()).toBe(1);
   });
 
-  test("restores Starknet before surfacing a malformed firmware response", async () => {
-    const malformedOs = Uint8Array.from([
+  test("restores Starknet before rejecting malformed, truncated, and oversized MCU fields", async () => {
+    const truncatedMcu = Uint8Array.from([
       0x33,
       0x00,
       0x00,
       0x04,
       0x05,
       ...new TextEncoder().encode("2.6.1"),
+      0x04,
+      0xe6,
+      0x00,
+      0x00,
+      0x00,
+      0x04,
+      0x32,
+      0x2e,
       0x90,
       0x00,
     ]);
-    const harness = transitionHarness([
-      [appState("BOLOS"), malformedOs, ok()],
-      [appState("Starknet")],
+    const oversizedMcu = Uint8Array.from([
+      0x33,
+      0x00,
+      0x00,
+      0x04,
+      0x05,
+      ...new TextEncoder().encode("2.6.1"),
+      0x04,
+      0xe6,
+      0x00,
+      0x00,
+      0x00,
+      33,
+      ...new Uint8Array(33).fill(0x31),
+      0x90,
+      0x00,
+    ]);
+    const invalidMcu = Uint8Array.from([
+      0x33,
+      0x00,
+      0x00,
+      0x04,
+      0x05,
+      ...new TextEncoder().encode("2.6.1"),
+      0x04,
+      0xe6,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0xff,
+      0x90,
+      0x00,
     ]);
 
-    await expect(readLedgerOsAndRestoreStarknet(harness.port)).rejects.toThrow(
-      "Malformed Ledger management response",
-    );
-    expect(harness.calls.at(-1)).toMatchObject({ cla: 0xb0, ins: 0x01 });
+    for (const malformedOs of [truncatedMcu, oversizedMcu, invalidMcu]) {
+      const harness = transitionHarness([
+        [ledgerAppStateResponse("BOLOS"), malformedOs, ok()],
+        [ledgerAppStateResponse("Starknet")],
+      ]);
+      const error = await readLedgerOsAndRestoreStarknet(harness.port).then(
+        () => null,
+        (reason: unknown) => reason,
+      );
+
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("Malformed Ledger management response");
+      expect((error as Error).message).not.toContain("2.6.1");
+      expect(harness.calls.at(-1)).toMatchObject({ cla: 0xb0, ins: 0x01 });
+    }
   });
 
   test("a reconnect that cannot bind the selected device fails closed", async () => {
     const selected = { id: "selected", productName: "Ledger" };
     const wrong = { id: "other", productName: "Ledger" };
-    const harness = transitionHarness([[appState("BOLOS"), osVersion(), ok()]], async () => {
-      if (!exactLedgerDevice(selected, [wrong])) {
-        throw new Error("Ledger exact device unavailable");
-      }
-    });
+    const harness = transitionHarness(
+      [[ledgerAppStateResponse("BOLOS"), ledgerNanoXOsResponse(), ok()]],
+      async () => {
+        if (!exactLedgerDevice(selected, [wrong])) {
+          throw new Error("Ledger exact device unavailable");
+        }
+      },
+    );
 
     await expect(readLedgerOsAndRestoreStarknet(harness.port)).rejects.toThrow(
       "Ledger exact device unavailable",
@@ -205,7 +233,9 @@ describe("Ledger dashboard and app transition", () => {
 
   test("a non-disconnect OpenApp failure is not reclassified as success", async () => {
     const rejected = new Error("User rejected opening the app");
-    const harness = transitionHarness([[appState("BOLOS"), osVersion(), rejected]]);
+    const harness = transitionHarness([
+      [ledgerAppStateResponse("BOLOS"), ledgerNanoXOsResponse(), rejected],
+    ]);
 
     await expect(readLedgerOsAndRestoreStarknet(harness.port)).rejects.toBe(rejected);
     expect(harness.reconnects()).toBe(0);

@@ -95,6 +95,12 @@ const QUIT_APP_APDU = { cla: 0xb0, ins: 0xa7, p1: 0, p2: 0 };
 const OPEN_APP_APDU = { cla: 0xe0, ins: 0xd8, p1: 0, p2: 0 };
 const DASHBOARD_NAMES: ReadonlySet<string> = new Set(["BOLOS", "OLOS", "OLOS\u0000"]);
 const STARKNET_APP_NAME = "Starknet";
+const MAX_MANAGEMENT_RESPONSE_BYTES = 260;
+const MAX_APP_NAME_BYTES = 64;
+const MAX_VERSION_BYTES = 32;
+const MAX_FLAGS_BYTES = 64;
+const MAX_TRAILING_FIELD_BYTES = 64;
+const MAX_OS_TRAILING_FIELDS = 5;
 
 const malformedResponse = (): Error => new Error("Malformed Ledger management response");
 
@@ -107,7 +113,11 @@ const byteAt = (response: Uint8Array, offset: number): number => {
 };
 
 const statusOffsetOf = (response: Uint8Array): number => {
-  if (!(response instanceof Uint8Array) || response.length < 2) {
+  if (
+    !(response instanceof Uint8Array) ||
+    response.length < 2 ||
+    response.length > MAX_MANAGEMENT_RESPONSE_BYTES
+  ) {
     throw malformedResponse();
   }
   const offset = response.length - 2;
@@ -121,6 +131,7 @@ const readLv = (
   response: Uint8Array,
   offset: number,
   statusOffset: number,
+  maximumLength: number,
 ): { readonly nextOffset: number; readonly value: Uint8Array } => {
   if (offset >= statusOffset) {
     throw malformedResponse();
@@ -128,14 +139,21 @@ const readLv = (
   const length = byteAt(response, offset);
   const valueOffset = offset + 1;
   const nextOffset = valueOffset + length;
-  if (nextOffset > statusOffset) {
+  if (length > maximumLength || nextOffset > statusOffset) {
     throw malformedResponse();
   }
   return { nextOffset, value: response.slice(valueOffset, nextOffset) };
 };
 
-const decode = (bytes: Uint8Array): string =>
-  new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+const decode = (bytes: Uint8Array): string => {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw malformedResponse();
+  }
+};
+
+const isPrintableVersion = (value: string): boolean => /^[\x20-\x7e]+$/.test(value);
 
 const parseAppState = (
   response: Uint8Array,
@@ -144,11 +162,11 @@ const parseAppState = (
   if (statusOffset < 1 || response[0] !== 1) {
     throw malformedResponse();
   }
-  const name = readLv(response, 1, statusOffset);
-  const version = readLv(response, name.nextOffset, statusOffset);
+  const name = readLv(response, 1, statusOffset, MAX_APP_NAME_BYTES);
+  const version = readLv(response, name.nextOffset, statusOffset, MAX_VERSION_BYTES);
   let offset = version.nextOffset;
   if (offset < statusOffset) {
-    offset = readLv(response, offset, statusOffset).nextOffset;
+    offset = readLv(response, offset, statusOffset, MAX_FLAGS_BYTES).nextOffset;
   }
   if (offset !== statusOffset) {
     throw malformedResponse();
@@ -166,13 +184,23 @@ const parseOsVersion = (response: Uint8Array): LedgerOsVersionResponse => {
     byteAt(response, 1) * 0x10000 +
     byteAt(response, 2) * 0x100 +
     byteAt(response, 3);
-  const version = readLv(response, 4, statusOffset);
+  const version = readLv(response, 4, statusOffset, MAX_VERSION_BYTES);
   if (version.value.length === 0) {
     throw malformedResponse();
   }
-  const flags = readLv(response, version.nextOffset, statusOffset);
-  if (flags.nextOffset !== statusOffset) {
+  const flags = readLv(response, version.nextOffset, statusOffset, MAX_FLAGS_BYTES);
+  const mcuVersion = readLv(response, flags.nextOffset, statusOffset, MAX_VERSION_BYTES);
+  if (!isPrintableVersion(decode(mcuVersion.value))) {
     throw malformedResponse();
+  }
+  let offset = mcuVersion.nextOffset;
+  let trailingFields = 0;
+  while (offset < statusOffset) {
+    trailingFields += 1;
+    if (trailingFields > MAX_OS_TRAILING_FIELDS) {
+      throw malformedResponse();
+    }
+    offset = readLv(response, offset, statusOffset, MAX_TRAILING_FIELD_BYTES).nextOffset;
   }
   return { targetId, version: decode(version.value) };
 };

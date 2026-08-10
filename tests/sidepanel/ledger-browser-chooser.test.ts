@@ -10,6 +10,10 @@ import {
   newStarknetClient,
   requestTransportRaw,
 } from "../../src/sidepanel/ledger/webhid-impl";
+import {
+  ledgerAppStateResponse,
+  ledgerNanoXOsResponse,
+} from "../support/ledger-management-fixtures";
 
 type UsbPickerOptions = {
   readonly filters: readonly { readonly classCode?: number; readonly vendorId?: number }[];
@@ -99,12 +103,12 @@ describe("Ledger OS preflight transport transition", () => {
   test("the client continues on the exact transport reopened by its binding", async () => {
     const calls: { cla: number; data: readonly number[]; ins: number }[] = [];
     const initialResponses = [
-      Buffer.from([1, 5, ...Buffer.from("BOLOS"), 5, ...Buffer.from("1.0.0"), 0, 0x90, 0x00]),
-      Buffer.from([0x33, 0x00, 0x00, 0x04, 0x05, 0x32, 0x2e, 0x36, 0x2e, 0x31, 0x00, 0x90, 0x00]),
+      ledgerAppStateResponse("BOLOS", "1.0.0"),
+      ledgerNanoXOsResponse(),
       Buffer.from([0x90, 0x00]),
     ];
     const reopenedResponses = [
-      Buffer.from([1, 8, ...Buffer.from("Starknet"), 5, ...Buffer.from("2.4.0"), 0, 0x90, 0x00]),
+      ledgerAppStateResponse("Starknet"),
       Buffer.from([0x02, 0x04, 0x00, 0x90, 0x00]),
     ];
     const rawTransport = (responses: Uint8Array[]): LedgerRawTransport => ({
@@ -128,7 +132,7 @@ describe("Ledger OS preflight transport transition", () => {
 
     await expect(client.getOsVersion()).resolves.toEqual({
       targetId: 0x33000004,
-      version: "2.6.1",
+      version: "2.2.3",
     });
     await expect(client.getAppVersion()).resolves.toMatchObject({
       major: 2,
