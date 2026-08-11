@@ -34,6 +34,10 @@ type RecoveryImportBind = {
   readonly wordAssist: WordAssist;
 };
 
+/**
+ * Handles returned by the recovery-import binder so onboarding can invalidate
+ * in-flight Krusty validation when the step or phrase length changes.
+ */
 export type RecoveryImportControls = {
   readonly invalidateValidation: () => void;
 };
