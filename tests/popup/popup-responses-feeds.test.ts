@@ -63,6 +63,22 @@ describe("isAllowancesResponse", () => {
     expect(isAllowancesResponse({ allowances: [], ok: true })).toBe(true);
   });
 
+  test("accepts a lower-bound allowance and rejects any other marking", () => {
+    // MCW-V09-108: a record the wallet can only bound from below must survive
+    // the message boundary, or the manager silently shows nothing for exactly
+    // the allowances it is least sure about. Only `true` is representable, so
+    // "exact" has one spelling.
+    expect(
+      isAllowancesResponse({ allowances: [{ ...allowanceView, lowerBound: true }], ok: true }),
+    ).toBe(true);
+    expect(
+      isAllowancesResponse({ allowances: [{ ...allowanceView, lowerBound: false }], ok: true }),
+    ).toBe(false);
+    expect(
+      isAllowancesResponse({ allowances: [{ ...allowanceView, lowerBound: "yes" }], ok: true }),
+    ).toBe(false);
+  });
+
   test("rejects a bad ok flag, a non-array payload, and invalid views", () => {
     expect(isAllowancesResponse({ allowances: [allowanceView], ok: false })).toBe(false);
     expect(isAllowancesResponse({ allowances: {}, ok: true })).toBe(false);

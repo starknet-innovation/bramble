@@ -18,7 +18,7 @@ import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
-import type { UnlockSession } from "./session";
+import type { PassiveUnlockSession } from "./session";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**
@@ -35,7 +35,11 @@ export type DiscoveryOpsDeps = {
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
+  /**
+   * Non-renewing session view: discovery is read-only traffic a page can poll,
+   * so it observes the unlock window and never extends it.
+   */
+  readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
 };
 
@@ -103,7 +107,7 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
   if (!apiVersionSupported(input.apiVersion)) {
     return { error: "unsupported api version" };
   }
-  const passphrase = session.getPassphrase();
+  const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }

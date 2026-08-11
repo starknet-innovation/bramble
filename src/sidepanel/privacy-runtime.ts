@@ -3,7 +3,8 @@
  */
 
 import { isErrorResponse } from "../popup/responses";
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { isSha256Digest } from "../shared/ids";
+import { hasOnlyKnownKeys, isDecimalAmountText, isRecord, isStringArray } from "../shared/json";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
@@ -74,8 +75,6 @@ export type PrivacyPreparation = {
 const errorFrom = (response: unknown, fallback: string): Error =>
   new Error(isErrorResponse(response) ? response.error : fallback);
 
-const PREPARATION_ID_PATTERN = /^sha256:[0-9a-f]{64}$/;
-const DISPLAY_AMOUNT_PATTERN = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
 const MAX_SUMMARIES = 32;
 const MAX_SUMMARY_CHARACTERS = 256;
 const MAX_DISPLAY_CHARACTERS = 128;
@@ -83,13 +82,15 @@ const MAX_DISPLAY_CHARACTERS = 128;
 const isDisplayString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= MAX_DISPLAY_CHARACTERS;
 
-const isStringArray = (value: unknown): value is readonly string[] =>
-  Array.isArray(value) &&
+// The review card's summary list: the shared string-array guard (which also
+// rejects a sparse or property-carrying array) plus the two display bounds this
+// screen owns. It composes the shared guard rather than shadowing its name with
+// a private, stricter copy — the previous local `isStringArray` read at every
+// call site as if it were the shared one.
+const isSummaryList = (value: unknown): value is readonly string[] =>
+  isStringArray(value) &&
   value.length <= MAX_SUMMARIES &&
-  value.every(
-    (entry) =>
-      typeof entry === "string" && entry.length > 0 && entry.length <= MAX_SUMMARY_CHARACTERS,
-  );
+  value.every((entry) => entry.length > 0 && entry.length <= MAX_SUMMARY_CHARACTERS);
 
 const readAuthorization = (value: unknown): PaymasterAuthorizationReview | null => {
   if (
@@ -184,20 +185,17 @@ const readPreparation = (
     ]) ||
     value["kind"] !== expected.kind ||
     (value["route"] !== "private-relay" && value["route"] !== "public-account") ||
-    typeof value["id"] !== "string" ||
-    !PREPARATION_ID_PATTERN.test(value["id"]) ||
+    !isSha256Digest(value["id"]) ||
     typeof value["payloadDigest"] !== "string" ||
     value["id"] !== value["payloadDigest"] ||
     typeof value["poolAddress"] !== "string" ||
     !isNonZeroStarkFieldElement(value["poolAddress"]) ||
-    !isStringArray(value["summaries"]) ||
+    !isSummaryList(value["summaries"]) ||
     !isDisplayString(value["symbol"]) ||
     !isTokenId(value["tokenId"]) ||
     (expected.tokenId !== undefined && value["tokenId"] !== expected.tokenId) ||
     (value["amount"] !== undefined &&
-      (typeof value["amount"] !== "string" ||
-        value["amount"].length > MAX_DISPLAY_CHARACTERS ||
-        !DISPLAY_AMOUNT_PATTERN.test(value["amount"]))) ||
+      (!isDecimalAmountText(value["amount"]) || value["amount"].length > MAX_DISPLAY_CHARACTERS)) ||
     (value["authorization"] !== undefined && !authorization) ||
     (value["relayFee"] !== undefined && !relayFee) ||
     (value["route"] === "private-relay" && !relayFee) ||

@@ -3,8 +3,8 @@
  * kept out of preferences-store.ts so that file stays within the size budget.
  * Follows the built-in network model in starknet/networks.ts.
  */
-import { hasOnlyKnownKeys, hasUniqueStrings, isRecord } from "../shared/json";
-import { isServiceUrl } from "../shared/service-url";
+import { hasOnlyKnownKeys, isNetworkLabel, isRecord } from "../shared/json";
+import { isOptionalServiceUrlList, isServiceUrl } from "../shared/service-url";
 import { isCanonicalChainId } from "../starknet/networks";
 
 /**
@@ -31,16 +31,6 @@ export type CustomNetwork = {
  */
 export const normalizeChainId = (chainId: string): string => BigInt(chainId).toString();
 
-const isNetworkText = (value: unknown, max: number): value is string =>
-  typeof value === "string" && value.trim().length > 0 && value.trim().length <= max;
-
-const isOptionalCustomUrlList = (value: unknown): value is readonly string[] | undefined =>
-  value === undefined ||
-  (Array.isArray(value) &&
-    value.length > 0 &&
-    value.every(isCustomRpcUrl) &&
-    hasUniqueStrings(value));
-
 /**
  * Checks an untrusted value is a well-formed stored custom network.
  */
@@ -48,8 +38,8 @@ export const isCustomNetwork = (value: unknown): value is CustomNetwork =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["blockExplorerUrls", "chainId", "iconUrls", "id", "name", "rpcUrls"]) &&
   isCanonicalChainId(value["chainId"]) &&
-  isNetworkText(value["id"], 256) &&
-  isNetworkText(value["name"], 256) &&
-  isOptionalCustomUrlList(value["rpcUrls"]) &&
-  isOptionalCustomUrlList(value["blockExplorerUrls"]) &&
-  isOptionalCustomUrlList(value["iconUrls"]);
+  isNetworkLabel(value["id"]) &&
+  isNetworkLabel(value["name"]) &&
+  isOptionalServiceUrlList(value["rpcUrls"]) &&
+  isOptionalServiceUrlList(value["blockExplorerUrls"]) &&
+  isOptionalServiceUrlList(value["iconUrls"]);

@@ -15,10 +15,15 @@
 import { hash } from "starknet";
 import { type ActivityEntry, isUnresolvedActivityStatus } from "../storage/activity-store";
 import type { TokenConfig } from "../storage/preferences-store";
-import { canonicalFelt, isStarkFieldElement, type StarknetNetworkId, sameFelt } from "./networks";
+import {
+  canonicalFelt,
+  isStarkFieldElement,
+  type StarknetNetworkId,
+  sameFelt,
+  uint256Felts,
+} from "./networks";
 import { formatTokenAmount } from "./rpc";
 
-const UINT_128_SHIFT = 128n;
 const MAX_SUMMARY_LENGTH = 200;
 
 /**
@@ -66,16 +71,8 @@ export type HistoryEvent = {
 const isSafeBlockNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
-const uint256From = (low: string | undefined, high: string | undefined): string | null => {
-  if (typeof low !== "string" || typeof high !== "string") {
-    return null;
-  }
-  try {
-    return (BigInt(low) + (BigInt(high) << UINT_128_SHIFT)).toString();
-  } catch {
-    return null;
-  }
-};
+const uint256From = (low: string | undefined, high: string | undefined): string | null =>
+  uint256Felts(low, high)?.toString() ?? null;
 
 // The (from, to, amount) triple of a Transfer event, canonicalized to 0x-hex
 // felts. Present only when all three parse to in-field-range values.

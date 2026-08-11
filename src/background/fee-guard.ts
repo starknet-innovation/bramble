@@ -12,6 +12,7 @@ import {
   type StarknetNetworkId,
   sameFelt,
 } from "../starknet/networks";
+import { tokenConfigId } from "../storage/preferences-entries";
 import type { TokenConfig, WalletPreferences } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -26,7 +27,7 @@ const strkToken = (networkId: StarknetNetworkId, preferences: WalletPreferences)
   ) ?? {
     address: STRK_TOKEN_ADDRESS,
     decimals: 18,
-    id: `${networkId}:STRK:${STRK_TOKEN_ADDRESS}`,
+    id: tokenConfigId(networkId, "STRK", STRK_TOKEN_ADDRESS),
     name: "Starknet Token",
     networkId,
     symbol: "STRK",

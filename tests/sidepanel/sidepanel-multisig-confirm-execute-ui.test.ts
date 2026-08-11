@@ -63,6 +63,8 @@ const makeProposal = (overrides: Partial<MultisigProposalRecord> = {}): Multisig
 type ConfirmationInput = {
   readonly mode: MultisigConfirmationMode;
   readonly proposalId: string;
+  /** MCW-V09-119: the fee the panel rendered, echoed back on submit. */
+  readonly reviewedFee?: { readonly overallFee: string; readonly unit: string };
   readonly signerAccountId: string;
 };
 
@@ -132,10 +134,14 @@ describe("multisig confirm-and-execute review", () => {
     expect(submit?.disabled).toBe(false);
     submit?.click();
     await flush();
+    // MCW-V09-119: the confirmation carries back the exact fee this panel
+    // rendered, which is what lets the background refuse a co-signing invoke
+    // whose cost has moved since the signer read it.
     expect(submitted).toEqual([
       {
         mode: "confirm-and-execute",
         proposalId: proposal.id,
+        reviewedFee: { overallFee: "1000", unit: "FRI" },
         signerAccountId: signer.id,
       },
     ]);

@@ -194,6 +194,10 @@ describe("wallet_addDeclareTransaction held approval", () => {
     expect(declared).toHaveLength(1);
     expect(declared[0]?.compiledClassHash).toBe(declare.compiledClassHash);
     expect(declared[0]?.classHash).toBe(declare.classHash);
+    // MCW-V09-119: the declaration fee the card displayed travels into the
+    // submission as a ceiling, so a declare that got more expensive while the
+    // card was open is refused rather than signed at the new price.
+    expect(declared[0]?.reviewedFee).toEqual({ overallFee: "2500000000000000", unit: "FRI" });
   });
 
   test("shows both STRK fee estimates when account deployment is required", async () => {
@@ -218,6 +222,26 @@ describe("wallet_addDeclareTransaction held approval", () => {
     expect(deployEstimated).toHaveLength(1);
     await handler({ id: pending?.id, type: "wallet.denyOrigin" }, extensionSender);
     await expect(held).resolves.toEqual({ error: "request rejected" });
+  });
+
+  test("carries BOTH displayed fees into the submission as ceilings", async () => {
+    // The card adds the declaration fee and the deployment fee into an
+    // "Estimated total" (approval-cards.ts). Approving submits a deployment and
+    // then a declaration; binding only the declaration would leave the larger
+    // half of that total enforced by nothing, which is MCW-V09-119 restated one
+    // transaction over.
+    const { declared, handler } = makeHarness([account], false);
+    const held = handler(declareMessage(), contentSender);
+    await flushHeld();
+    const id = await latestApprovalId(handler, extensionSender);
+
+    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await expect(held).resolves.toMatchObject({ ok: true });
+    expect(declared[0]?.reviewedFee).toEqual({ overallFee: "2500000000000000", unit: "FRI" });
+    expect(declared[0]?.reviewedDeploymentFee).toEqual({
+      overallFee: "1500000000000000",
+      unit: "FRI",
+    });
   });
 
   test("drops the declare when the user denies", async () => {

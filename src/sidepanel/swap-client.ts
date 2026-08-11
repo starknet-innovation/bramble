@@ -5,7 +5,8 @@
  * throws instead of rendering.
  */
 import { isErrorResponse } from "../popup/responses";
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { isSha256Digest } from "../shared/ids";
+import { hasOnlyKnownKeys, isDecimalAmountText, isRecord, isRiskFlagCode } from "../shared/json";
 import type { RuntimeApi } from "./runtime";
 
 /**
@@ -32,9 +33,6 @@ export type SwapPreparationView = {
   readonly summaries: readonly string[];
 };
 
-const isAmountText = (value: unknown): value is string =>
-  typeof value === "string" && /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value);
-
 const isUsd = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
 
@@ -48,12 +46,12 @@ const isSwapQuoteView = (value: unknown): value is SwapQuoteView =>
     "sellAmount",
     "sellAmountInUsd",
   ]) &&
-  isAmountText(value["buyAmount"]) &&
+  isDecimalAmountText(value["buyAmount"]) &&
   isUsd(value["buyAmountInUsd"]) &&
   isUsd(value["gasFeesInUsd"]) &&
   typeof value["quoteId"] === "string" &&
   value["quoteId"].length > 0 &&
-  isAmountText(value["sellAmount"]) &&
+  isDecimalAmountText(value["sellAmount"]) &&
   isUsd(value["sellAmountInUsd"]);
 
 const responseError = (response: unknown, fallback: string): Error =>
@@ -62,8 +60,7 @@ const responseError = (response: unknown, fallback: string): Error =>
 const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["flags", "id", "payloadDigest", "summaries"]) &&
-  typeof value["id"] === "string" &&
-  /^sha256:[0-9a-f]{64}$/.test(value["id"]) &&
+  isSha256Digest(value["id"]) &&
   value["payloadDigest"] === value["id"] &&
   Array.isArray(value["summaries"]) &&
   value["summaries"].length > 0 &&
@@ -77,8 +74,7 @@ const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
     (flag) =>
       isRecord(flag) &&
       hasOnlyKnownKeys(flag, ["code", "message"]) &&
-      typeof flag["code"] === "string" &&
-      /^[a-z][a-z-]{1,40}$/.test(flag["code"]) &&
+      isRiskFlagCode(flag["code"]) &&
       typeof flag["message"] === "string" &&
       flag["message"].length > 0 &&
       flag["message"].length <= 300,

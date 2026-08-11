@@ -1,13 +1,30 @@
 /**
- * Decodes a SNIP-12 typed-data request for the sign approval card so the user
+ * Renders a SNIP-12 typed-data request for the sign approval card so the user
  * can read exactly what a site is asking them to sign: the domain, the primary
  * type, every message field, and the raw payload.
+ *
+ * Which of those values the signed hash actually covers is decided by
+ * `./sign-request-decode`, which resolves each value against the payload's own
+ * type declarations; this module only lays the two resulting groups out, with
+ * anything the hash does not cover in a separate, unmistakably labelled block
+ * so it can never read as part of what is signed. When the decoder cannot place
+ * a value at all, the view says so through `classified: false` and the card
+ * withholds the approve affordance rather than showing a partial view the user
+ * might trust.
+ *
+ * This is a pure view over untrusted input: it renders whatever it is handed,
+ * including payloads the hashing boundary in `src/starknet/typed-data.ts`
+ * refuses, and never decides whether a request may be signed.
  */
 import { escapeHtml } from "../shared/html";
+import { isRecord } from "../shared/json";
 import { RADIUS, SPACE, TYPE } from "../ui/tokens";
+import { decodeSignRequest } from "./sign-request-decode";
+import type { SignRequestRow, SignRequestSplit } from "./sign-request-rows";
+import { SIGN_ROW_LIMIT, signRawText, signValueText } from "./sign-request-text";
 
 /**
- * Sign-request card styles, kept beside the decoder so the side panel
+ * Sign-request card styles, kept beside the renderer so the side panel
  * stylesheet composes them in and stays within its size budget.
  */
 export const SIGN_REQUEST_STYLES = `
@@ -17,8 +34,15 @@ export const SIGN_REQUEST_STYLES = `
     display: grid;
     gap: 6px;
     margin-bottom: ${SPACE.sm};
+    /* Bounded like the raw block below: an unbounded list of site-supplied rows
+       would scroll its own "NOT signed" banner out of view and push the decision
+       controls arbitrarily far down the card. */
+    max-height: 240px;
+    overflow: auto;
     padding: ${SPACE.sm} ${SPACE.md};
   }
+  .sign-unsigned { border-left: 3px solid var(--mc-danger); }
+  .sign-more { color: var(--mc-muted); font-size: ${TYPE.caption.size}; font-style: italic; }
   .sign-row { align-items: baseline; display: flex; gap: ${SPACE.md}; justify-content: space-between; }
   .sign-key { color: var(--mc-muted); flex: none; font-size: ${TYPE.caption.size}; }
   .sign-val {
@@ -39,73 +63,77 @@ export const SIGN_REQUEST_STYLES = `
     padding: ${SPACE.sm};
   }`;
 
-type Field = { readonly name: string; readonly type: string };
+/**
+ * The one warning shown when the decoder could not establish what a payload's
+ * signed hash would cover. The card renders it in place of the approve control,
+ * so the two can never disagree about whether signing is on offer.
+ */
+export const SIGN_REQUEST_UNCLASSIFIED_WARNING =
+  "This wallet could not work out which parts of this message would actually be signed, so it will not offer to sign it. Deny this request and ask the site to send a standard SNIP-12 message.";
 
-const asRecord = (value: unknown): Record<string, unknown> | null =>
-  typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-
-const isFieldList = (value: unknown): value is readonly Field[] =>
-  Array.isArray(value) &&
-  value.every(
-    (entry) =>
-      asRecord(entry) !== null &&
-      typeof (entry as Field).name === "string" &&
-      typeof (entry as Field).type === "string",
-  );
-
-// Renders a leaf value: primitives as text, structs/arrays as compact JSON.
-const valueText = (value: unknown): string => {
-  if (value === null || value === undefined) {
-    return "—";
-  }
-  if (typeof value === "object") {
-    return JSON.stringify(value);
-  }
-  return String(value);
+/**
+ * A rendered sign request: the card body, and whether every value in the
+ * payload could be placed as covered or not covered by the signed hash. A caller
+ * must not present an approve affordance when `classified` is false.
+ */
+export type SignRequestView = {
+  readonly classified: boolean;
+  readonly html: string;
 };
 
-const rows = (entries: readonly (readonly [string, unknown])[]): string =>
-  entries
-    .map(
-      ([key, value]) =>
-        `<div class="sign-row"><span class="sign-key">${escapeHtml(key)}</span><span class="sign-val">${escapeHtml(valueText(value))}</span></div>`,
-    )
-    .join("");
+const row = ([key, value]: SignRequestRow): string =>
+  `<div class="sign-row"><span class="sign-key">${escapeHtml(key)}</span><span class="sign-val">${escapeHtml(signValueText(value))}</span></div>`;
 
-const section = (label: string, body: string): string =>
+// The row count is capped as well as the block height: the count is what decides
+// how far the decision controls sit from the top of the card, and a site
+// controls it directly through undeclared keys.
+const rows = (entries: readonly SignRequestRow[]): string => {
+  const shown = entries.slice(0, SIGN_ROW_LIMIT);
+  const hidden = entries.length - shown.length;
+  const overflow =
+    hidden > 0
+      ? `<div class="sign-row sign-more">${hidden} more values not shown — see Raw typed data</div>`
+      : "";
+  return `${shown.map(row).join("")}${overflow}`;
+};
+
+// Section labels are fixed strings, never interpolated from the payload: a
+// site-chosen `primaryType` such as "shown by the site but NOT signed" would
+// otherwise reproduce the not-signed banner verbatim over the signed block, and
+// the banner is the whole mitigation. The primary type is reported as a row
+// inside the block instead (`PRIMARY_TYPE_KEY`).
+const section = (label: string, body: string, modifier = ""): string =>
   body.length === 0
     ? ""
-    : `<p class="eyebrow">${escapeHtml(label)}</p><div class="sign-block">${body}</div>`;
+    : `<p class="eyebrow">${escapeHtml(label)}</p><div class="sign-block${modifier}">${body}</div>`;
+
+const unsignedSection = (label: string, split: SignRequestSplit): string =>
+  section(`${label} — shown by the site but NOT signed`, rows(split.unsigned), " sign-unsigned");
 
 /**
  * Renders the decoded domain, primary-type message fields, and a raw view of a
- * SNIP-12 typed-data payload. Falls back gracefully for non-standard shapes.
+ * SNIP-12 typed-data payload, resolving every value against the payload's own
+ * type declarations so undeclared — and therefore unsigned — keys are never
+ * shown as signed content. A payload that is not an envelope at all falls back
+ * to a single raw row and is reported unclassified, because nothing about it
+ * can be described as signed.
  */
-export const signRequestDetails = (typedData: unknown): string => {
-  const record = asRecord(typedData);
-  if (!record) {
-    return `<div class="sign-block">${rows([["data", typedData]])}</div>`;
+export const signRequestView = (typedData: unknown): SignRequestView => {
+  if (!isRecord(typedData)) {
+    return {
+      classified: false,
+      html: `<div class="sign-block">${rows([["data", typedData]])}</div>`,
+    };
   }
-  const domain = asRecord(record["domain"]);
-  const message = asRecord(record["message"]);
-  const types = asRecord(record["types"]);
-  const primaryType = typeof record["primaryType"] === "string" ? record["primaryType"] : "";
-  const fieldList = types && isFieldList(types[primaryType]) ? types[primaryType] : null;
-
-  const domainRows = domain ? rows(Object.entries(domain)) : "";
-  const messageRows = message
-    ? rows(
-        (fieldList ? fieldList.map((field) => field.name) : Object.keys(message)).map(
-          (name) => [name, message[name]] as const,
-        ),
-      )
-    : "";
-
-  const raw = escapeHtml(JSON.stringify(typedData, null, 2));
-  return `
-    ${section("Domain", domainRows)}
-    ${section(primaryType ? `Message · ${primaryType}` : "Message", messageRows)}
-    <details class="sign-raw"><summary>Raw typed data</summary><pre>${raw}</pre></details>`;
+  const decoded = decodeSignRequest(typedData);
+  const raw = escapeHtml(signRawText(JSON.stringify(typedData, null, 2) ?? ""));
+  return {
+    classified: !decoded.domain.unclassified && !decoded.message.unclassified,
+    html: `
+    ${section("Domain", rows(decoded.domain.signed))}
+    ${unsignedSection("Domain", decoded.domain)}
+    ${section("Message", rows(decoded.message.signed))}
+    ${unsignedSection("Message", decoded.message)}
+    <details class="sign-raw"><summary>Raw typed data</summary><pre>${raw}</pre></details>`,
+  };
 };

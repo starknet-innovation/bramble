@@ -1,34 +1,75 @@
 /**
  * Verifies the official privacy SDK pin and exact browser runtime artifact.
+ *
+ * Provenance runs through the same `vendor-pin-policy` helpers the Krusty gate
+ * uses, and the pinned commit is read back out of `scripts/vendor-privacy-sdk.ts`
+ * rather than copied here: a second literal would let the verifier and the
+ * vendoring step disagree about which revision was fetched. Both shipped files
+ * are digest-pinned — the browser bundle that executes, and the source map the
+ * build-only-dependency assertions below are read from, since `dist/` is
+ * git-ignored upstream and no worktree check can see either of them.
  */
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { vendorProvenanceFailures, vendorRevisionPin } from "./vendor-pin-policy";
 
-const revision = "722d1cfbddfc0e7d65f45084cfced08f092d2f3c";
-const bundle = "vendor/starknet-privacy/sdk/dist/browser/starknet-sdk.min.js";
+const checkout = "vendor/starknet-privacy";
+const bundle = `${checkout}/sdk/dist/browser/starknet-sdk.min.js`;
 const sourceMap = `${bundle}.map`;
+const vendorScript = "scripts/vendor-privacy-sdk.ts";
 const expectedDigest = "c3ae103928707d7712ba4fe47abecfb946019da622c795b14779e7c3bc8965cc";
+// SHA-256 of the source map emitted alongside the reviewed bundle. Its
+// `sources` are repository-relative, so it is byte-reproducible wherever the
+// pinned revision is built; update it only together with PRIVACY_SDK_REVISION.
+const expectedSourceMapDigest = "36a2a9a176a4287cc6db6a82f71d2e71b781a0de77ea2b77aceb008e66bba38e";
 
-if (!(await Bun.file(bundle).exists())) {
-  throw new Error(`Privacy SDK runtime missing: ${bundle}; run bun run vendor:privacy`);
+for (const path of [bundle, sourceMap]) {
+  if (!(await Bun.file(path).exists())) {
+    throw new Error(`Privacy SDK runtime missing: ${path}; run bun run vendor:privacy`);
+  }
 }
-const child = Bun.spawn(["git", "rev-parse", "HEAD"], {
-  cwd: "vendor/starknet-privacy",
-  stderr: "inherit",
-  stdout: "pipe",
+
+const git = async (args: string[]): Promise<string> => {
+  const child = Bun.spawn(["git", ...args], { cwd: checkout, stderr: "inherit", stdout: "pipe" });
+  const output = await new Response(child.stdout).text();
+  if ((await child.exited) !== 0) {
+    throw new Error(
+      `Privacy SDK provenance unavailable: git ${args.join(" ")} failed in ${checkout}`,
+    );
+  }
+  return output.trim();
+};
+
+const artifactDigest = async (path: string): Promise<string> =>
+  createHash("sha256")
+    .update(await readFile(path))
+    .digest("hex");
+
+const provenanceFailures = vendorProvenanceFailures({
+  artifacts: [
+    { digest: await artifactDigest(bundle), expectedDigest, path: bundle },
+    {
+      digest: await artifactDigest(sourceMap),
+      expectedDigest: expectedSourceMapDigest,
+      path: sourceMap,
+    },
+  ],
+  head: await git(["rev-parse", "HEAD"]),
+  name: "Privacy SDK",
+  pinnedRevision: vendorRevisionPin(
+    await readFile(vendorScript, "utf8"),
+    vendorScript,
+    "PRIVACY_SDK_REVISION",
+  ),
+  worktreeStatus: await git(["status", "--porcelain"]),
 });
-const head = (await new Response(child.stdout).text()).trim();
-if ((await child.exited) !== 0 || head !== revision) {
-  throw new Error("Privacy SDK checkout does not match the pinned revision");
+if (provenanceFailures.length > 0) {
+  throw new Error(provenanceFailures.join("; "));
 }
-const source = await readFile(bundle);
-const digest = createHash("sha256").update(source).digest("hex");
-if (digest !== expectedDigest) {
-  throw new Error("Privacy SDK browser bundle does not match the reviewed artifact");
-}
-const text = source.toString("utf8");
+
+const text = (await readFile(bundle)).toString("utf8");
 for (const forbidden of ["child_process", "form-data", "node:fs", "starknet-devnet"]) {
   if (text.includes(forbidden)) {
     throw new Error(`Privacy SDK browser bundle contains forbidden runtime: ${forbidden}`);

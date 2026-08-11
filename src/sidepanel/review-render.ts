@@ -9,7 +9,9 @@
  * never trusts its inputs, so callers may pass decoded summaries and flag
  * messages directly.
  */
+
 import { escapeHtml } from "../shared/html";
+import type { FeeEstimate } from "../starknet/fee-bounds";
 import { button } from "../ui/controls";
 import type { UiAttributes } from "../ui/html-attributes";
 import { icon } from "./icons";
@@ -22,7 +24,7 @@ import { formatFri } from "./parts";
  * cannot drift between them (issue 189).
  */
 export type ReviewFeeState = {
-  readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly fee: FeeEstimate | null;
   /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
    * "insufficient" renders a warning; "ok"/"unknown"/absent render nothing

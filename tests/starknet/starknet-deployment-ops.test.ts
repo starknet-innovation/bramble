@@ -253,3 +253,72 @@ describe("submitAccountDeployment", () => {
     ).rejects.toThrow("Account is already deployed");
   });
 });
+
+/**
+ * MCW-V09-119, second half. The declare approval card shows an "Account
+ * deployment fee" and folds it into an "Estimated total", and approving submits
+ * that deployment first. Binding only the declaration would leave the larger
+ * half of the total the user read enforced by nothing at all.
+ */
+describe("a reviewed deployment fee is a ceiling on the deployment", () => {
+  type Seen = { bounds: unknown; deploys: number; estimates: number };
+  // 10 gas at 3 FRI plus 100 gas at 2 FRI: bounds that authorise 230.
+  const deployBounds = {
+    l1_gas: { max_amount: 10n, max_price_per_unit: 3n },
+    l2_gas: { max_amount: 100n, max_price_per_unit: 2n },
+  };
+  const runDeployment = async (reviewedFee?: { overallFee: string; unit: string }) => {
+    const seen: Seen = { bounds: undefined, deploys: 0, estimates: 0 };
+    const deploying = {
+      async deployAccount(_payload: unknown, details?: { readonly resourceBounds?: unknown }) {
+        seen.deploys += 1;
+        seen.bounds = details?.resourceBounds;
+        return { transaction_hash: "0xdeploy" };
+      },
+      async estimateAccountDeployFee() {
+        seen.estimates += 1;
+        return { overall_fee: 230n, resourceBounds: deployBounds, unit: "FRI" };
+      },
+    } as unknown as Account;
+    const error = await ensureAccountDeployed(
+      provider({
+        async getClassHashAt() {
+          throw notFoundError();
+        },
+      }),
+      deploying,
+      account,
+      reviewedFee,
+    ).then(
+      () => null,
+      (thrown: unknown) => thrown,
+    );
+    return { error, seen };
+  };
+
+  test("refuses before deploying when the deployment has grown past the review", async () => {
+    const { error, seen } = await runDeployment({ overallFee: "100", unit: "FRI" });
+    expect((error as Error).message).toContain("account deployment fee rose above");
+    // Nothing submitted. A guard that fires after the deployment has already
+    // paid for it at a price the card never showed.
+    expect(seen.deploys).toBe(0);
+  });
+
+  test("signs the bounds it checked, once", async () => {
+    const { error, seen } = await runDeployment({ overallFee: "230", unit: "FRI" });
+    expect(error).toBeNull();
+    expect(seen.deploys).toBe(1);
+    expect(seen.estimates).toBe(1);
+    expect(seen.bounds).toEqual(deployBounds);
+  });
+
+  test("stays unbound, and estimates nothing, when no deployment fee was shown", async () => {
+    const { error, seen } = await runDeployment();
+    expect(error).toBeNull();
+    expect(seen.deploys).toBe(1);
+    expect(seen.estimates).toBe(0);
+    // Absent means no user reviewed a deployment fee. Inventing a ceiling here
+    // would be worse than the honest absence of one.
+    expect(seen.bounds).toBeUndefined();
+  });
+});

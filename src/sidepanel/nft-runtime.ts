@@ -6,15 +6,12 @@
 import {
   type DiscoveredNft,
   isDiscoverNftsResponse,
-  isErrorResponse,
   isPreferencesResponse,
   isTransferResponse,
   isTransferReviewResponse,
   type TransferReviewResponse,
 } from "../popup/responses";
-
-const failure = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
+import { responseError as failure } from "./runtime-errors";
 
 /**
  * Builds the NFT wrappers over a runtime send function. Every reply is checked
@@ -114,16 +111,24 @@ export const createNftRuntimeClient = (sendMessage: (message: unknown) => Promis
       }
       inFlightLoads.clear();
     },
+    /**
+     * Sends the reviewed NFT transfer. `reviewedFee` must be the estimate the
+     * review step displayed: the background makes it the ceiling this send may
+     * sign under, so any other value would make that guarantee a fiction. Null
+     * (no estimate was produced) leaves the send bounded only by the node.
+     */
     async transferNft(
       contract: string,
       tokenId: string,
       networkId: string,
       recipient: string,
+      reviewedFee: TransferReviewResponse["review"]["fee"] = null,
     ): Promise<string> {
       const response = await sendMessage({
         contract,
         networkId,
         recipient,
+        ...(reviewedFee === null ? {} : { reviewedFee }),
         tokenId,
         type: "wallet.transferNft",
       });

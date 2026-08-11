@@ -21,9 +21,16 @@ import type { MultisigConfirmationMode } from "../shared/multisig-confirmation";
 import type { MultisigProposalCall } from "../storage/multisig-store";
 import type { MultisigSyncState } from "./multisig-sync";
 import type { RuntimeApi, ScopedBalanceState } from "./runtime";
+import { responseError } from "./runtime-errors";
 
-const responseError = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
+/**
+ * The fee estimate a confirmation review produced. Named here because the panel
+ * has to hold on to it between the review and the submit: it is echoed back so
+ * the background can hold the co-signing invoke to the figure the signer read.
+ */
+export type MultisigReviewFee = NonNullable<
+  MultisigConfirmationReviewResponse["confirmationReview"]["fee"]
+>;
 
 /**
  * Multisig client surface returned by createMultisigClient.
@@ -47,15 +54,23 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
         throw responseError(response, "add multisig failed");
       }
     },
+    /**
+     * Submits the reviewed confirmation. `reviewedFee` must be the estimate
+     * `prepareConfirmation` returned and this panel displayed; the background
+     * makes it the ceiling the co-signing invoke may sign under. Omitted when
+     * no estimate was shown, which leaves the send bounded only by the node.
+     */
     async confirmProposal(input: {
       readonly mode: MultisigConfirmationMode;
       readonly proposalId: string;
+      readonly reviewedFee?: MultisigReviewFee;
       readonly signerAccountId: string;
       readonly untrackedVerified?: boolean;
     }): Promise<string> {
       const response = await sendMessage({
         mode: input.mode,
         proposalId: input.proposalId,
+        ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
         signerAccountId: input.signerAccountId,
         type: "wallet.confirmMultisigProposal",
         ...(input.untrackedVerified ? { untrackedVerified: true } : {}),

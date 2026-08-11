@@ -10,7 +10,7 @@ import { buildErc721TransferCall, buildErc1155TransferCall } from "../starknet/n
 import { unavailableNftIndexer } from "../starknet/nft-indexer";
 import type { DiscoveredNft } from "../starknet/nft-metadata";
 import type { NftStandard } from "../starknet/rpc";
-import { verifyCalls } from "../starknet/verify";
+import { refuseOnPoisonedRecipient, verifyCalls } from "../starknet/verify";
 import { readStrkBalance } from "./fee-guard";
 import { readTypeOnlyInput } from "./message-inputs";
 import {
@@ -20,7 +20,7 @@ import {
   readReviewNftTransferInput,
   readTransferNftInput,
 } from "./nft-inputs";
-import { activeAccountContext, networkRpcUrls } from "./runtime-state";
+import { activeAccountContext, networkRpcUrls, observedAccountContext } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import {
   resolveReviewFee,
@@ -59,7 +59,7 @@ const ownedNftStandard = async (
     rpcUrls,
     tokenId: target.tokenId,
   });
-  return BigInt(owner) === BigInt(accountAddress) ? "ERC721" : null;
+  return sameFelt(owner, accountAddress) ? "ERC721" : null;
 };
 
 // Re-proves ownership of one discovery candidate on-chain, returning the NFT
@@ -337,15 +337,19 @@ const handleTransferNft = async (
     return { error: prepared.error };
   }
   const { call, context, report, rpcUrls } = prepared;
-  // NFT sends now run through pre-sign verification: block a recipient that
-  // mimics one of the wallet's saved addresses before anything is signed.
-  const poisoning = report.flags.find((flag) => flag.code === "address-poisoning");
-  if (poisoning) {
-    return { error: poisoning.message };
+  // Pre-sign verification through the one shared recipient policy: a recipient
+  // that mimics a saved address is refused before anything is signed, in the
+  // same words every other send line uses.
+  const refusal = refuseOnPoisonedRecipient(report);
+  if (refusal) {
+    return refusal;
   }
+  // Same bind as the ERC20 send: the fee the review step rendered is the
+  // ceiling this send may sign under (MCW-V09-119).
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: context.account,
     calls: [call],
+    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
     rpcUrls,
     signHash: signerForContext(deps, context),
   });
@@ -367,7 +371,8 @@ const handleDiscoverNfts = async (
   if (!input) {
     return { error: "invalid discover nfts request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  // Panel-poll traffic: observe the session, never extend it.
+  const context = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { error: context.error };
   }
@@ -414,7 +419,8 @@ const handleLoadWatchedNfts = async (
   if (!readTypeOnlyInput(message, "wallet.loadWatchedNfts")) {
     return { error: "invalid watched nft request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  // Panel-poll traffic: observe the session, never extend it.
+  const context = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { error: context.error };
   }

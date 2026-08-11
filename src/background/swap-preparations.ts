@@ -5,11 +5,11 @@
  */
 import type { Call } from "starknet";
 import { WalletError } from "../shared/errors";
+import { isSha256Digest } from "../shared/ids";
 import type { ApprovalContext } from "./approval-context";
 import type { ApprovalRiskFlag } from "./approvals";
 
 const MAX_SWAP_PREPARATIONS = 20;
-const PREPARATION_ID_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 /**
  * Frozen swap execution and review metadata held only by the background.
@@ -70,7 +70,7 @@ export const createSwapPreparationStore = (): SwapPreparationStore => {
   const pending = new Map<string, SwapPreparation>();
   return {
     claim(id) {
-      if (!PREPARATION_ID_PATTERN.test(id)) {
+      if (!isSha256Digest(id)) {
         return null;
       }
       const preparation = pending.get(id);
@@ -82,7 +82,7 @@ export const createSwapPreparationStore = (): SwapPreparationStore => {
     },
     put(preparation) {
       const copy = clonePreparation(preparation);
-      if (!PREPARATION_ID_PATTERN.test(copy.id) || copy.id !== copy.context.payloadDigest) {
+      if (!isSha256Digest(copy.id) || copy.id !== copy.context.payloadDigest) {
         throw new WalletError("Invalid swap preparation commitment");
       }
       pending.set(copy.id, copy);

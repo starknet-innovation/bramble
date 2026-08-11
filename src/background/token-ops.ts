@@ -5,10 +5,12 @@
  * extension-page messages.
  */
 
+import { isTokenSymbol } from "../shared/json";
 import { STARKNET_NETWORKS, type StarknetNetworkId, sameFelt } from "../starknet/networks";
 import type { PriceService } from "../starknet/prices";
 import { isTransportRpcError, type TokenMetadata } from "../starknet/rpc";
 import { isLikelySpam, knownTokensForNetwork } from "../starknet/token-registry";
+import { withTokenId } from "../storage/preferences-entries";
 import type { TokenConfig, WalletPreferencesStore } from "../storage/preferences-store";
 import { readTypeOnlyInput } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
@@ -65,7 +67,7 @@ const buildTokenRecord = (
   metadata: TokenMetadata,
 ): TokenRecord | null => {
   const symbol = metadata.symbol.trim().toUpperCase();
-  if (!/^[A-Z0-9]{2,12}$/.test(symbol)) {
+  if (!isTokenSymbol(symbol)) {
     return null;
   }
   const trimmedName = metadata.name.trim().slice(0, 64);
@@ -115,7 +117,10 @@ const handleAddToken: TokenHandler = async (deps, message) => {
     ok: true,
     preferences: await preferencesStore.setTokenHidden({
       hidden: true,
-      tokenId: `${network.id}:${record.symbol}:${record.address}`,
+      // The id the store derived, never a second interpolation of the same
+      // three fields: a locally re-derived id that drifted from `withTokenId`
+      // hides nothing while reporting success.
+      tokenId: withTokenId(record).id,
     }),
   };
 };

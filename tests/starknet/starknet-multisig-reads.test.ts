@@ -10,6 +10,7 @@ import {
   computeMultisigTransactionId,
   getMultisigConfig,
   getMultisigProposalStatus,
+  multisigTransactionId,
 } from "../../src/starknet/multisig";
 
 const MULTISIG = "0x111111111111111111111111111111111111111111111111111111111111111";
@@ -142,12 +143,13 @@ describe("getMultisigProposalStatus", () => {
 });
 
 describe("computeMultisigTransactionId", () => {
-  test("returns the contract-derived id as a canonical hex string", async () => {
-    stubContract({ hash_transaction: ["0xdead"] });
+  test("returns the locally derived id when the contract view agrees", async () => {
+    const derived = multisigTransactionId(call, "0x7");
+    stubContract({ hash_transaction: [derived] });
 
     await expect(
       computeMultisigTransactionId({ address: MULTISIG, call, rpcUrls: RPC, salt: "0x7" }),
-    ).resolves.toBe("0xdead");
+    ).resolves.toBe(derived);
   });
 
   test("throws when the hash view returns no felt", async () => {

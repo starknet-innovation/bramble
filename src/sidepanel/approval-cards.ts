@@ -9,7 +9,16 @@ import { button } from "../ui/controls";
 import { icon } from "./icons";
 import { accountLabel, formatFri } from "./parts";
 import { reviewCallsList, reviewFeeSection, reviewPanel, riskFlagMessages } from "./review-render";
-import { signRequestDetails } from "./sign-request";
+import { SIGN_REQUEST_UNCLASSIFIED_WARNING, signRequestView } from "./sign-request";
+
+const denyButton = (approval: PendingApproval): string =>
+  button({
+    attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
+    icon: "x",
+    label: "Deny",
+    tone: "danger",
+    variant: "secondary",
+  });
 
 // Shared approve/deny controls (one long template line so it is not re-wrapped);
 // `approve` is disabled when the wallet is locked or the origin is blocked.
@@ -19,13 +28,13 @@ const decisionRow = (approval: PendingApproval, label: string, locked: boolean):
     disabled: locked || approval.blocked === true,
     icon: "check",
     label,
-  })}${button({
-    attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
-    icon: "x",
-    label: "Deny",
-    tone: "danger",
-    variant: "secondary",
-  })}</div>`;
+  })}${denyButton(approval)}</div>`;
+
+// Used when the card cannot describe what approving would commit to: the
+// approve control is absent rather than merely disabled, so a partial view can
+// never be approved by mistake.
+const denyOnlyRow = (approval: PendingApproval): string =>
+  `<div class="button-row">${denyButton(approval)}</div>`;
 
 const contextDetails = (approval: PendingApproval): string => {
   const context = approval.context;
@@ -236,17 +245,27 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     ${decisionRow(approval, "Approve", status.locked || approval.feeEstimatePending === true)}
   </li>`;
 
-const signCard = (approval: PendingApproval, status: WalletStatus): string => `
+// A sign card only offers to sign what the decoder could place on one side of
+// the signed hash or the other; an unclassified payload gets the warning and a
+// Deny-only row instead, because a partial view of a message is exactly what a
+// hostile payload wants the user to trust.
+const signCard = (approval: PendingApproval, status: WalletStatus): string => {
+  const view = signRequestView(approval.typedData);
+  return `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Sign request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Review exactly what this site asks you to sign. Signing does not move funds — only sign messages you understand."}</p>
       ${contextDisclosure(approval)}
     </div>
-    ${signRequestDetails(approval.typedData)}
-    ${reviewPanel(approval.insights ?? [])}
-    ${decisionRow(approval, "Sign", status.locked)}
+    ${view.html}
+    ${reviewPanel([
+      ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
+      ...(approval.insights ?? []),
+    ])}
+    ${view.classified ? decisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
   </li>`;
+};
 
 const strk20Card = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">

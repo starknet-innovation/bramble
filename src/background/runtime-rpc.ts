@@ -3,7 +3,13 @@
  * tests can stub network access.
  */
 
-import { type ExternalAllowanceScan, scanExternalAllowances } from "../starknet/allowance-scan";
+import { untrustedFetch } from "../shared/http-json";
+import {
+  type ExternalAllowanceScan,
+  readTrackedAllowances,
+  scanExternalAllowances,
+  type TrackedAllowanceScan,
+} from "../starknet/allowance-scan";
 import { type VerifyClassHashInput, verifyAccountClassHash } from "../starknet/class-hash-verify";
 import {
   computeMultisigTransactionId,
@@ -59,10 +65,7 @@ import {
   type TransferInput,
 } from "../starknet/rpc";
 import { createStarkscanClient, type StarkscanHttp } from "../starknet/starkscan";
-import {
-  createStarkscanPreferredBalances,
-  createStarkscanPreferredHistory,
-} from "../starknet/starkscan-wallet";
+import { createRpcFirstBalances, createRpcFirstHistory } from "../starknet/starkscan-wallet";
 import type { Strk20Service } from "../starknet/strk20/service";
 import type { scanTransactionHistory, TransactionHistoryScan } from "../starknet/tx-history-scan";
 
@@ -113,6 +116,17 @@ export type RuntimeRpc = {
   readonly getExternalAllowances?: (
     input: ExternalAllowanceScan,
   ) => ReturnType<typeof scanExternalAllowances>;
+  /**
+   * Reads the live on-chain amount of allowances the wallet already tracks, one
+   * direct `allowance(owner, spender)` call per record — no event scan, so it
+   * reaches tokens the user does not track and multisig scopes the account only
+   * signs for. Optional so existing RPC stubs stay valid; when absent the
+   * manager reports what the local log holds, including any record it can only
+   * state as a lower bound.
+   */
+  readonly getTrackedAllowances?: (
+    input: TrackedAllowanceScan,
+  ) => ReturnType<typeof readTrackedAllowances>;
   readonly getDeploymentStatus: (
     input: DeploymentStatusInput,
   ) => ReturnType<typeof getDeploymentStatus>;
@@ -178,13 +192,16 @@ export type RuntimeRpc = {
   readonly strk20?: Strk20Service;
 };
 
-// Real network transport for the NFT indexer: a thin `fetch` wrapper matching
-// the {@link NftIndexerHttp} shape the discovery client expects.
-const nftIndexerHttp: NftIndexerHttp = (url) => fetch(url);
+// Real network transports for the untrusted read boundaries. All of them are
+// the SHARED `untrustedFetch` rather than a local lambda: a wrapper written here
+// would type-check while dropping the deadline and the redirect refusal the
+// bounded reader composed (MCW-V09-122), which is how three of these boundaries
+// once shipped unhardened.
+const nftIndexerHttp: NftIndexerHttp = untrustedFetch;
 const NFT_METADATA_TIMEOUT_MS = 10_000;
 const nftMetadataHttp: NftMetadataHttp = (url, init) =>
   fetch(url, { ...init, signal: AbortSignal.timeout(NFT_METADATA_TIMEOUT_MS) });
-const starkscanHttp: StarkscanHttp = (url, init) => fetch(url, init);
+const starkscanHttp: StarkscanHttp = untrustedFetch;
 // The public explorer read lane is used because an extension cannot safely
 // embed an external API key. The client keeps its base injectable so a
 // deployment-owned authenticated relay can replace this without changing
@@ -193,8 +210,8 @@ const starkscanClient = createStarkscanClient({
   baseUrl: "https://starkscan.co/v1",
   http: starkscanHttp,
 });
-const getPreferredBalances = createStarkscanPreferredBalances(starkscanClient);
-const getPreferredHistory = createStarkscanPreferredHistory(starkscanClient);
+const getRpcFirstBalances = createRpcFirstBalances(starkscanClient);
+const getRpcFirstHistory = createRpcFirstHistory(starkscanClient);
 
 const getNftMetadata = async (input: NftTokenUriInput): Promise<NftTokenMetadata | null> =>
   resolveNftMetadataUri(await getNftTokenUri(input), nftMetadataHttp);
@@ -207,13 +224,14 @@ export const defaultRuntimeRpc: RuntimeRpc = {
   estimateDeclareFee,
   estimateInvokeFee,
   getExternalAllowances: scanExternalAllowances,
+  getTrackedAllowances: readTrackedAllowances,
   getDeploymentStatus,
   getNftMetadata,
   getNftOwner,
   getNftOwnership,
-  getTokenBalances: getPreferredBalances,
+  getTokenBalances: getRpcFirstBalances,
   getTokenMetadata,
-  getTransactionHistory: getPreferredHistory,
+  getTransactionHistory: getRpcFirstHistory,
   getTransactionStatuses,
   multisig: {
     computeTransactionId: computeMultisigTransactionId,

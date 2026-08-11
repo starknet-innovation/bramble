@@ -347,20 +347,33 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         return;
       }
       void wallet
-        .reviewTransfer(fields.accountId, fields.tokenId, fields.recipient, fields.amount)
+        .reviewTransfer(
+          fields.accountId,
+          fields.tokenId,
+          fields.recipient,
+          fields.amount,
+          fields.speed,
+        )
         .then(
           (review) => {
             if (epoch !== transferEpoch) return;
             const feeFailed = review.feeEstimateFailed;
+            // Address poisoning is a refusal here, not a notice, matching the
+            // NFT send screen (nft-ui.ts) and the background's own refusal on
+            // submit: leaving the key unreviewed means the next click re-reviews
+            // instead of confirming, so the flag cannot be clicked past.
+            const blocked = review.flags.some((flag) => flag.code === "address-poisoning");
             transferState = {
-              error: feeFailed
-                ? "Fee estimate unavailable. Retry before authorizing this transaction."
-                : "",
+              error: blocked
+                ? "This recipient closely mimics a saved address. Change it and review again."
+                : feeFailed
+                  ? "Fee estimate unavailable. Retry before authorizing this transaction."
+                  : "",
               fields,
               privatePreparation: null,
               requiresDeployment: review.requiresDeployment,
               review,
-              reviewedKey: feeFailed ? null : key,
+              reviewedKey: blocked || feeFailed ? null : key,
               stage: "review",
               transactionHash: null,
             };
@@ -378,6 +391,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     }
     const epoch = ++transferEpoch;
     const requiresDeployment = transferState.requiresDeployment;
+    const reviewedFee = transferState.review?.fee ?? null;
     const privatePreparation = transferState.privatePreparation;
     transferState = { ...transferState, error: "", fields, stage: "authorizing" };
     repaint();
@@ -428,6 +442,10 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         fields.recipient,
         fields.amount,
         fields.speed,
+        // Exactly what the review step rendered. Sending it back is what lets
+        // the background refuse a send whose fee has moved since the user read
+        // it, instead of signing at a price they never saw.
+        reviewedFee,
       )
       .then(
         (transactionHash) => {

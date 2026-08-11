@@ -3,8 +3,15 @@
  * signatures. Kept out of rpc.ts so that file stays within the size budget.
  */
 import type { Account, CompiledContract, RpcProvider } from "starknet";
+import { WalletError } from "../shared/errors";
 import type { AccountRef } from "../storage/vault-schema";
 import { ensureAccountDeployed } from "./deployment";
+import {
+  authorizedSpendFor,
+  exceedsReviewedFee,
+  type FeeEstimate,
+  nodeFeeEstimate,
+} from "./fee-bounds";
 import { STARKNET_NETWORKS } from "./networks";
 import { krustyAccount, type StarkHashSigner, withRpcFallback, withRpcWrite } from "./provider";
 
@@ -17,6 +24,20 @@ export type DeclareInput = {
   readonly classHash?: string;
   readonly compiledClassHash: string;
   readonly contractClass: unknown;
+  /**
+   * The declaration fee the approval card displayed. Supplying it makes that
+   * figure a signing ceiling — see {@link submitDeclareTransaction}. Absent on
+   * the estimate path and wherever no fee was reviewed.
+   */
+  readonly reviewedFee?: FeeEstimate;
+  /**
+   * The account-deployment fee the same approval card displayed, for a
+   * declaration from an account that is not deployed yet. The card presents it
+   * as part of an "Estimated total", so it is bound the same way the
+   * declaration fee is — see {@link ensureAccountDeployed}. Absent when the
+   * account is already deployed or no deployment fee could be estimated.
+   */
+  readonly reviewedDeploymentFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: StarkHashSigner;
 };
@@ -32,11 +53,11 @@ export type DeclareSubmission = {
 
 /**
  * Network fee estimate for a declaration, denominated by the RPC-provided unit.
+ * The same shape as every other fee the wallet shows, so it is the same type:
+ * one definition in `./fee-bounds`, kept re-exported under this name because
+ * that is what the declare surface and its callers already say.
  */
-export type DeclareFeeEstimate = {
-  readonly overallFee: string;
-  readonly unit: string;
-};
+export type DeclareFeeEstimate = FeeEstimate;
 
 const declarePayload = ({
   classHash,
@@ -66,13 +87,34 @@ export const estimateDeclareFee = async (
         input.account,
         input.signHash,
       ).estimateDeclareFee(declarePayload(input), { skipValidate: true });
-      return {
-        overallFee: BigInt(estimate.overall_fee).toString(),
-        unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
-      };
+      return nodeFeeEstimate(estimate);
     },
     makeProvider,
   );
+
+// Settles the resource bounds a declaration will sign under. With no reviewed
+// fee this is `{}` — starknet.js estimates internally, the pre-existing
+// behaviour. With one, the estimate is taken here, the spend its bounds would
+// authorise is compared against the figure the approval card showed, and those
+// same bounds are then PASSED to `declare`, so what is signed is what was
+// checked rather than a second quote the library takes moments later.
+const checkedDeclareBounds = async (
+  starknetAccount: Account,
+  payload: ReturnType<typeof declarePayload>,
+  reviewedFee: FeeEstimate | undefined,
+): Promise<Record<string, unknown>> => {
+  if (!reviewedFee) {
+    return {};
+  }
+  const estimate = await starknetAccount.estimateDeclareFee(payload);
+  const authorized = authorizedSpendFor(estimate, "standard");
+  if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
+    throw new WalletError(
+      "The network fee for this declaration rose above the amount you reviewed. Nothing was submitted — review it again.",
+    );
+  }
+  return { resourceBounds: estimate.resourceBounds };
+};
 
 /**
  * Signs and submits a declare transaction through an account contract,
@@ -80,9 +122,26 @@ export const estimateDeclareFee = async (
  * transaction. Returns the node's transaction and class hashes. Optional
  * factories are dependency seams for deterministic tests; production uses the
  * standard RPC provider and Krusty account.
+ *
+ * With `reviewedFee`, the figure the user approved is a ceiling: a declaration
+ * whose bounds would authorise more than that figure plus its headroom is
+ * refused before anything is signed or broadcast, and the bounds signed are the
+ * bounds that were checked. `reviewedDeploymentFee` binds the counterfactual
+ * account deployment this may submit first in exactly the same way, so both
+ * halves of the total the card showed are enforced rather than only the one the
+ * user asked for.
  */
 export const submitDeclareTransaction = async (
-  { account, classHash, compiledClassHash, contractClass, rpcUrls, signHash }: DeclareInput,
+  {
+    account,
+    classHash,
+    compiledClassHash,
+    contractClass,
+    reviewedDeploymentFee,
+    reviewedFee,
+    rpcUrls,
+    signHash,
+  }: DeclareInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
   makeAccount: typeof krustyAccount = krustyAccount,
 ): Promise<DeclareSubmission> =>
@@ -91,13 +150,16 @@ export const submitDeclareTransaction = async (
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
       const starknetAccount = makeAccount(provider, account, signHash);
-      await ensureAccountDeployed(provider, starknetAccount, account);
+      await ensureAccountDeployed(provider, starknetAccount, account, reviewedDeploymentFee);
+      const payload = declarePayload({
+        compiledClassHash,
+        contractClass,
+        ...(classHash === undefined ? {} : { classHash }),
+      });
+      const bounds = await checkedDeclareBounds(starknetAccount as Account, payload, reviewedFee);
       const result = await (starknetAccount as Account).declare(
-        declarePayload({
-          compiledClassHash,
-          contractClass,
-          ...(classHash === undefined ? {} : { classHash }),
-        }),
+        payload,
+        bounds as Parameters<Account["declare"]>[1],
       );
       return {
         classHash: result.class_hash,

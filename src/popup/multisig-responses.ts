@@ -2,12 +2,14 @@
  * Pure multisig response validators for background runtime data, kept out of
  * responses.ts so that file stays within the size budget.
  */
+
 import { hasOnlyKnownKeys, isJson, isRecord } from "../shared/json";
 import {
   isMultisigConfirmationMode,
   type MultisigConfirmationMode,
 } from "../shared/multisig-confirmation";
 import { isMultisigSyncWarning, type MultisigSyncWarning } from "../shared/multisig-sync";
+import type { FeeEstimate } from "../starknet/fee-bounds";
 import { isStarkFieldElement } from "../starknet/networks";
 import {
   isMultisigProposalRecord,
@@ -23,7 +25,7 @@ import { isFeeShape } from "./responses-transfer";
  */
 export type MultisigConfirmationReviewResponse = {
   readonly confirmationReview: {
-    readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+    readonly fee: FeeEstimate | null;
     readonly feeEstimateFailed: boolean;
     readonly mode: MultisigConfirmationMode;
     readonly proposalId: string;

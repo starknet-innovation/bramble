@@ -14,11 +14,12 @@ import type { RuntimeRpc } from "../../src/background/runtime-rpc";
 import { unavailablePreferencesStore } from "../../src/background/runtime-state";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
-import { executeStrk20InvokeApproval } from "../../src/background/strk20-ops";
+import { executeStrk20InvokeApproval } from "../../src/background/strk20-approval-execution";
 import type { OriginGuard } from "../../src/security/blocklist";
 import type { InvokeInput } from "../../src/starknet/rpc";
 import type { Strk20Service } from "../../src/starknet/strk20/service";
 import { memoryActivityLog } from "../../src/storage/activity-store";
+import { memoryAllowanceStore } from "../../src/storage/allowance-store";
 import { defaultWalletPreferences } from "../../src/storage/preferences-store";
 import type { AccountRef } from "../../src/storage/vault-schema";
 import type { SignHashInput, WalletStatus } from "../../src/wallet/vault-service";
@@ -314,6 +315,7 @@ describe("executeStrk20InvokeApproval", () => {
     const session = createUnlockSession(); // never unlocked
     const deps = {
       activity: memoryActivityLog(),
+      allowanceStore: memoryAllowanceStore(),
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {
@@ -343,6 +345,7 @@ describe("executeStrk20InvokeApproval", () => {
     session.unlock(vaultPassphrase);
     return {
       activity: memoryActivityLog(),
+      allowanceStore: memoryAllowanceStore(),
       ...(queue ? { ledgerSignQueue: queue } : {}),
       preferencesStore: {
         ...unavailablePreferencesStore,
@@ -431,6 +434,7 @@ describe("executeStrk20InvokeApproval", () => {
     const activity = memoryActivityLog(() => 42);
     const deps = {
       activity,
+      allowanceStore: memoryAllowanceStore(),
       preferencesStore: {
         ...unavailablePreferencesStore,
         async read() {

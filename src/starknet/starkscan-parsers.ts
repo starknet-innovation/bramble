@@ -1,7 +1,7 @@
 /**
  * Strict parsers for the Starkscan fields consumed by wallet read surfaces.
  */
-import { isRecord } from "../shared/json";
+import { isBaseUnitsAmount, isRecord } from "../shared/json";
 import { canonicalFelt, isStarkFieldElement } from "./networks";
 import type {
   StarkscanAddressActivity,
@@ -18,7 +18,6 @@ import type {
 } from "./starkscan-types";
 
 const MAX_PAGE_LIMIT = 200;
-const DECIMAL_PATTERN = /^(?:0|[1-9][0-9]*)$/;
 const invalidResponse = (): never => {
   throw new Error("Invalid Starkscan response");
 };
@@ -36,7 +35,7 @@ const nullableInteger = (value: unknown): number | null =>
   value === null ? null : integerValue(value);
 const decimalValue = (value: unknown): string => {
   const parsed = stringValue(value, 256);
-  return DECIMAL_PATTERN.test(parsed) ? parsed : invalidResponse();
+  return isBaseUnitsAmount(parsed) ? parsed : invalidResponse();
 };
 const nullableDecimal = (value: unknown): string | null =>
   value === null ? null : decimalValue(value);

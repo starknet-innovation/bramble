@@ -115,11 +115,25 @@ review flow. Execution is available only after the on-chain threshold is met.
 
 ### Allowance manager
 
-The allowance manager lists approvals submitted through MC Wallet plus live
-approvals it can discover on-chain for tokens you track, and lets you **revoke**
-one by setting that spender's allowance to zero. Approvals for untracked tokens
-may not appear, so this view is not a complete chain index. Reviewing detected
-allowances periodically limits how much a compromised dApp contract can move.
+The allowance manager lists **ERC-20 token approvals** submitted through MC
+Wallet — from a dApp, a swap, a privacy-pool deposit, or a multisig you sign for
+— plus live approvals it can discover on-chain, and lets you **revoke** one by
+setting that spender's allowance to zero. For every approval it tracks, the
+wallet re-reads the live on-chain amount, so a listed figure reflects the chain
+rather than only what this wallet saw. An allowance a multisig granted is shown
+but not revokable here: that takes a proposal the multisig executes.
+
+An amount shown as **"at least N"** is one the wallet can only bound from below:
+part of the allowance was granted somewhere else (or has aged out of the log) and
+no on-chain reading was available, so the spender's true reach is N or more.
+
+Two limits are worth knowing. Approvals for tokens you do not track and never
+approved here may not appear, so this view is not a complete chain index. And
+**NFT collection approvals are not token allowances**: `set_approval_for_all`,
+which lets a marketplace move every item you own in a collection, is flagged
+loudly on the review screen before you sign but is not listed or revokable here —
+revoke it from the marketplace that asked for it. Reviewing detected allowances
+periodically limits how much a compromised dApp contract can move.
 
 ---
 

@@ -20,7 +20,6 @@ import {
   isDetectTokensResponse,
   isErrorResponse,
   isGenerateMnemonicResponse,
-  isPendingApprovalsResponse,
   isPreferencesResponse,
   isPricesResponse,
   isRevealSecretsResponse,
@@ -31,16 +30,17 @@ import {
   isWalletStatus,
   type PendingApproval,
   type RevealSecretsResponse,
+  readPendingApprovals,
   type TokenBalance,
   type TransferReviewResponse,
   type WalletStatus,
 } from "../popup/responses";
 import type { Strk20NetworkConfig } from "../starknet/strk20/config";
-import type { AccountGroupIcon } from "../storage/account-groups";
 import type { AccountRef } from "../storage/vault-schema";
 import { createLedgerRuntimeClient } from "./ledger/runtime-client";
 import { createNftRuntimeClient } from "./nft-runtime";
 import { createPrivacyRuntimeClient } from "./privacy-runtime";
+import { unavailableStatus } from "./runtime-status";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -76,23 +76,13 @@ export type ScopedBalanceState =
     };
 
 /**
- * A locked, account-less status used before the first load resolves and as the
- * fallback when the background is unavailable.
+ * The pre-load placeholder status, re-exported here so the panel keeps one
+ * import surface for the runtime client and the statuses it paints.
  */
-export const emptyStatus = (): WalletStatus => ({
-  accountCount: 0,
-  accounts: [],
-  activeAccountId: null,
-  hasVault: false,
-  locked: true,
-  network: "Unavailable",
-  networkId: "SN_MAIN",
-  networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
-  ready: false,
-});
+export { emptyStatus } from "./runtime-status";
 
-const responseError = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
+import { responseError } from "./runtime-errors";
+import { createAccountGroupClient } from "./runtime-groups";
 
 /**
  * Wallet client surface returned by createSidepanelRuntime.
@@ -266,11 +256,17 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       tokenId: string,
       recipient: string,
       amount: string,
+      // The speed the send would use. Carried into the review because a `fast`
+      // send signs scaled-up bounds, so the fee it authorises is not the fee a
+      // standard review would have shown — and that reviewed figure is the
+      // ceiling the send is then held to.
+      speed: "fast" | "standard" = "standard",
     ): Promise<TransferReviewResponse["review"]> {
       const response = await sendMessage({
         accountId,
         amount,
         recipient,
+        speed,
         tokenId,
         type: "wallet.reviewTransfer",
       });
@@ -326,8 +322,8 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       throw responseError(response, "token visibility update failed");
     },
     async loadPendingApprovals(): Promise<readonly PendingApproval[]> {
-      const response = await sendMessage({ type: "wallet.pendingApprovals" });
-      return isPendingApprovalsResponse(response) ? response.pending : [];
+      // Per-entry: one malformed prompt must not blank the queue (MCW-V09-106).
+      return readPendingApprovals(await sendMessage({ type: "wallet.pendingApprovals" })) ?? [];
     },
     async loadPreferences() {
       const response = await sendMessage({ type: "wallet.preferences" });
@@ -336,9 +332,15 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "preferences unavailable");
     },
+    /**
+     * Reads wallet status, or the fail-closed {@link unavailableStatus} when the
+     * background does not answer with one. A failure is never reported as "this
+     * browser has no wallet": that rendered the first-run screen to a user whose
+     * vault was merely unreadable, inviting them to set a new wallet up over it.
+     */
     async loadStatus(): Promise<WalletStatus> {
-      const response = await sendMessage({ type: "wallet.status" });
-      return isWalletStatus(response) ? response : emptyStatus();
+      const response = await sendMessage({ type: "wallet.status" }).catch(() => null);
+      return isWalletStatus(response) ? response : unavailableStatus();
     },
     async lockVault(): Promise<WalletStatus> {
       const response = await sendMessage({ type: "wallet.lock" });
@@ -382,53 +384,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "label update failed");
     },
-    async createGroup(name: string, icon: AccountGroupIcon): Promise<string> {
-      const response = await sendMessage({ icon, name, type: "wallet.createGroup" });
-      if (isPreferencesResponse(response)) {
-        // The pure model appends the new group last with a deterministic id, so
-        // the final entry is the one just created — return its id so the caller
-        // can open its members editor.
-        const groups = response.preferences.groups ?? [];
-        const created = groups[groups.length - 1];
-        if (created) {
-          return created.id;
-        }
-      }
-      throw responseError(response, "group create failed");
-    },
-    async renameGroup(id: string, name: string): Promise<void> {
-      const response = await sendMessage({ id, name, type: "wallet.renameGroup" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "group rename failed");
-    },
-    async setGroupIcon(id: string, icon: AccountGroupIcon): Promise<void> {
-      const response = await sendMessage({ icon, id, type: "wallet.setGroupIcon" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "group icon update failed");
-    },
-    async removeGroup(id: string): Promise<void> {
-      const response = await sendMessage({ id, type: "wallet.removeGroup" });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "group remove failed");
-    },
-    async setAccountInGroup(accountId: string, groupId: string, member: boolean): Promise<void> {
-      const response = await sendMessage({
-        accountId,
-        groupId,
-        member,
-        type: "wallet.setAccountInGroup",
-      });
-      if (isPreferencesResponse(response)) {
-        return;
-      }
-      throw responseError(response, "group membership update failed");
-    },
+    ...createAccountGroupClient(sendMessage),
     async setDisplay(input: {
       readonly approvalSurface?: "popup" | "side-panel";
       readonly displayCurrency?: "eur" | "gbp" | "usd";
@@ -468,17 +424,26 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "network switch failed");
     },
+    /**
+     * Sends the reviewed transfer. `reviewedFee` is the fee estimate the review
+     * step displayed: the background treats it as the ceiling this send may
+     * sign under, so passing anything other than the figure actually on screen
+     * would make the guarantee a lie. Null (the review produced no estimate)
+     * sends nothing and leaves the transfer bounded only by the node's quote.
+     */
     async submitTransfer(
       accountId: string,
       tokenId: string,
       recipient: string,
       amount: string,
       speed: "fast" | "standard" = "standard",
+      reviewedFee: TransferReviewResponse["review"]["fee"] = null,
     ): Promise<string> {
       const response = await sendMessage({
         accountId,
         amount,
         recipient,
+        ...(reviewedFee === null ? {} : { reviewedFee }),
         speed,
         tokenId,
         type: "wallet.transfer",

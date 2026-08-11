@@ -9,8 +9,8 @@ import type { AccountRef } from "../../src/storage/vault-schema";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,
+  HARNESS_PROPOSED_TX_ID,
   HARNESS_TARGET,
-  HARNESS_TX_ID,
   harnessAccount,
   harnessContentSender,
   harnessExtensionSender,
@@ -114,7 +114,7 @@ describe("multisig messages", () => {
     const response = await propose(handler, watched.multisig.id);
     expect(response).toMatchObject({
       ok: true,
-      proposal: { state: "pending", summary: "Pay vendor", txId: HARNESS_TX_ID },
+      proposal: { state: "pending", summary: "Pay vendor", txId: HARNESS_PROPOSED_TX_ID },
       transactionHash: "0x7cd",
     });
     const submit = invokeCalls.at(-1)?.[0] as { calldata: string[]; entrypoint: string };

@@ -179,11 +179,30 @@ export const STARK_FIELD_PRIME = BigInt(
 
 const MAX_STARK_FIELD_HEX_DIGITS = 64;
 
+// The one lexical rule for canonical `0x`-hex the wallet emits and re-reads:
+// lowercase digits only, at least one, no separators or sign. Every stricter
+// grammar in this module (field element, chain id) is this pattern plus a
+// numeric bound, and callers outside it re-read felts through those. Three
+// copies of this regex once existed — here, in `isHexChainId`, and inline in the
+// provider bridge's `(r, s)` reader — which is three chances for one of them to
+// admit a spelling the others reject.
+const LOWERCASE_HEX_PATTERN = /^0x[0-9a-f]+$/;
+
+/**
+ * The exclusive upper bound of a Cairo `u128`: the range each limb of the
+ * `(low, high)` pair a `u256` is split across must stay inside, and therefore
+ * the cut-off an allowance at or above `2^128` is treated as unlimited by. The
+ * one shared spelling of `2 ** 128` — three modules had written `1n << 128n`
+ * privately, which is three chances for one of them to drift by an exponent.
+ * Do not re-derive it.
+ */
+export const UINT128_LIMIT = 1n << 128n;
+
 /**
  * Checks whether a hex string is a Stark field element.
  */
 export const isStarkFieldElement = (value: string): boolean =>
-  /^0x[0-9a-f]+$/.test(value) &&
+  LOWERCASE_HEX_PATTERN.test(value) &&
   value.length <= 2 + MAX_STARK_FIELD_HEX_DIGITS &&
   BigInt(value) < STARK_FIELD_PRIME;
 
@@ -226,8 +245,12 @@ export const explorerAccountUrl = (networkId: string, address: string): string |
  * [n, P) holds field elements that are NOT valid private keys: a key there is
  * reduced mod n when signing, so it would derive an account for a different
  * effective scalar than the one the user pasted.
+ *
+ * Exported so a conformance test can construct a value inside that gap without
+ * writing the constant out a second time; {@link isStarkPrivateKey} is the only
+ * thing that should ever compare against it.
  */
-const STARK_CURVE_ORDER = BigInt(
+export const STARK_CURVE_ORDER = BigInt(
   "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f",
 );
 
@@ -274,6 +297,32 @@ export const asFelt = (value: unknown): bigint | null => {
 };
 
 /**
+ * Joins the `(low, high)` felt pair Cairo splits a uint256 across into one
+ * bigint, or null when the pair is not a canonical uint256. Calldata, event
+ * data, and RPC results all carry uint256 this way; this is the one shared
+ * join, so a caller never re-derives the `<< 128n` shift (four private copies
+ * once existed) and never differs on how a missing or malformed half is handled
+ * — it fails closed as null rather than reading as zero.
+ *
+ * Canonical means each half is a felt inside {@link UINT128_LIMIT}, which is the
+ * only pair Cairo itself can hold. An out-of-range limb is a malformed answer,
+ * not a large number: admitting it would let a hostile calldata spelling such as
+ * `(0, 2^128)` decode to a value above `2^256` that the reviewer would display
+ * and the chain would never execute. The bound lives here rather than at each
+ * decoder so the RPC reader, the calldata decoders, and the event decoder cannot
+ * disagree about which pairs are real.
+ */
+export const uint256Felts = (low: unknown, high: unknown): bigint | null => {
+  const lowValue = asFelt(low);
+  const highValue = asFelt(high);
+  if (lowValue === null || highValue === null) {
+    return null;
+  }
+  const outOfRange = [lowValue, highValue].some((limb) => limb < 0n || limb >= UINT128_LIMIT);
+  return outOfRange ? null : lowValue + (highValue << 128n);
+};
+
+/**
  * Normalizes a numeric string into the canonical `0x`-hex felt form, or null
  * when the value is not numeric. Callers needing throw-on-invalid semantics
  * wrap this rather than re-deriving the conversion.
@@ -287,13 +336,35 @@ export const canonicalFelt = (value: string): string | null => {
 };
 
 /**
+ * Canonicalizes a contract or recipient address to the single spelling every
+ * stored record uses: lowercase, zero-padded to 64 hex digits. Returns null
+ * when the input is not a non-zero field element, so a caller that receives a
+ * string has an address that is both valid and comparable by identity.
+ *
+ * This is the one shared address canonicalizer — the seeded token defaults, the
+ * curated registry, the watch-asset boundary, the Add-token parser, and the
+ * preferences id builders all route through it, so two spellings of one address
+ * can never become two stored records. Do not re-derive the padding locally.
+ */
+export const canonicalAddress = (address: string): string | null => {
+  // Coerced rather than assumed: this sits on the storage-entry path, where an
+  // untyped record from an old store or a hand-built test can reach it with a
+  // non-string field. Anything that is not a felt reports null and fails the
+  // entry validators, instead of throwing out of an id builder.
+  const lower = `${address}`.trim().toLowerCase();
+  return isNonZeroStarkFieldElement(lower)
+    ? `0x${BigInt(lower).toString(16).padStart(MAX_STARK_FIELD_HEX_DIGITS, "0")}`
+    : null;
+};
+
+/**
  * Checks whether a value is a chain id in lowercase `0x`-hex form. The loose
  * form used when reading an already-canonical chain id off an internal message
  * or a provider event: it accepts any length and `0x0`, matching how the
  * extension emits chain ids. Do not re-derive this regex locally.
  */
 export const isHexChainId = (value: unknown): value is string =>
-  typeof value === "string" && /^0x[0-9a-f]+$/.test(value);
+  typeof value === "string" && LOWERCASE_HEX_PATTERN.test(value);
 
 /**
  * Checks whether a value is a canonical chain id: a positive `0x`-hex felt of

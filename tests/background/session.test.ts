@@ -3,12 +3,12 @@
  * survive worker restarts through the session store, and never outlive lock.
  */
 import { describe, expect, test } from "bun:test";
-import { createUnlockSession, type UnlockSessionState } from "../../src/background/session";
+import { createUnlockSession, type UnlockSessionMirrorEntry } from "../../src/background/session";
 
 const PASSPHRASE = "correct horse battery staple";
 
 const memoryStore = () => {
-  let state: UnlockSessionState | null = null;
+  let state: UnlockSessionMirrorEntry | null = null;
   return {
     async clear() {
       state = null;
@@ -16,7 +16,7 @@ const memoryStore = () => {
     async load() {
       return state;
     },
-    async save(next: UnlockSessionState) {
+    async save(next: UnlockSessionMirrorEntry) {
       state = next;
     },
     snapshot: () => state,
@@ -28,7 +28,7 @@ const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 describe("createUnlockSession", () => {
   test("expires passphrases after inactivity", () => {
     let now = 1_000;
-    const session = createUnlockSession(100, () => now);
+    const session = createUnlockSession({ now: () => now, ttlMs: 100 });
 
     session.unlock(PASSPHRASE);
     expect(session.getPassphrase()).toBe(PASSPHRASE);
@@ -40,7 +40,7 @@ describe("createUnlockSession", () => {
 
   test("bumps the generation on unlock, lock, and expiry but not on activity", () => {
     let now = 1_000;
-    const session = createUnlockSession(100, () => now);
+    const session = createUnlockSession({ now: () => now, ttlMs: 100 });
 
     const atStart = session.generation();
     session.unlock(PASSPHRASE);
@@ -72,7 +72,7 @@ describe("createUnlockSession", () => {
 
   test("renews the expiry on activity instead of locking mid-use", () => {
     let now = 1_000;
-    const session = createUnlockSession(100, () => now);
+    const session = createUnlockSession({ now: () => now, ttlMs: 100 });
 
     session.unlock(PASSPHRASE);
     now = 1_090;
@@ -85,7 +85,7 @@ describe("createUnlockSession", () => {
 
   test("peeking never renews the expiry, so passive polling cannot hold the unlock", () => {
     let now = 1_000;
-    const session = createUnlockSession(100, () => now);
+    const session = createUnlockSession({ now: () => now, ttlMs: 100 });
 
     session.unlock(PASSPHRASE);
     // Poll right up to the edge of the window: peeks must not push it out.
@@ -101,7 +101,7 @@ describe("createUnlockSession", () => {
 
   test("isUnlocked reports without renewing the expiry", () => {
     let now = 1_000;
-    const session = createUnlockSession(100, () => now);
+    const session = createUnlockSession({ now: () => now, ttlMs: 100 });
 
     session.unlock(PASSPHRASE);
     now = 1_099;
@@ -113,14 +113,13 @@ describe("createUnlockSession", () => {
   test("peeking an expired session clears derived key material", () => {
     let now = 1_000;
     let cleared = 0;
-    const session = createUnlockSession(
-      100,
-      () => now,
-      undefined,
-      () => {
+    const session = createUnlockSession({
+      now: () => now,
+      onClear: () => {
         cleared += 1;
       },
-    );
+      ttlMs: 100,
+    });
 
     session.unlock(PASSPHRASE);
     now = 1_201;
@@ -137,17 +136,19 @@ describe("createUnlockSession", () => {
   });
 
   test("rejects unsafe ttl values", () => {
-    expect(() => createUnlockSession(0)).toThrow("Invalid unlock session ttl");
-    expect(() => createUnlockSession(Number.MAX_SAFE_INTEGER + 1)).toThrow(
+    expect(() => createUnlockSession({ ttlMs: 0 })).toThrow("Invalid unlock session ttl");
+    expect(() => createUnlockSession({ ttlMs: Number.MAX_SAFE_INTEGER + 1 })).toThrow(
       "Invalid unlock session ttl",
     );
-    expect(() => createUnlockSession(8 * 60 * 60 * 1000 + 1)).toThrow("Invalid unlock session ttl");
+    expect(() => createUnlockSession({ ttlMs: 8 * 60 * 60 * 1000 + 1 })).toThrow(
+      "Invalid unlock session ttl",
+    );
   });
 
   test("mirrors unlocks to the session store and clears it on lock", async () => {
     const now = 1_000;
     const store = memoryStore();
-    const session = createUnlockSession(100, () => now, store);
+    const session = createUnlockSession({ now: () => now, store, ttlMs: 100 });
 
     session.unlock(PASSPHRASE);
     await flushMicrotasks();
@@ -162,16 +163,16 @@ describe("createUnlockSession", () => {
   test("restores an unexpired persisted session after a worker restart", async () => {
     let now = 1_000;
     const store = memoryStore();
-    const first = createUnlockSession(100, () => now, store);
+    const first = createUnlockSession({ now: () => now, store, ttlMs: 100 });
     first.unlock(PASSPHRASE);
     await flushMicrotasks();
 
-    const restarted = createUnlockSession(100, () => now, store);
+    const restarted = createUnlockSession({ now: () => now, store, ttlMs: 100 });
     await restarted.restore();
     expect(restarted.getPassphrase()).toBe(PASSPHRASE);
 
     now = 5_000;
-    const tooLate = createUnlockSession(100, () => now, store);
+    const tooLate = createUnlockSession({ now: () => now, store, ttlMs: 100 });
     await tooLate.restore();
     expect(tooLate.getPassphrase()).toBeNull();
   });
@@ -179,14 +180,13 @@ describe("createUnlockSession", () => {
   test("clears derived key material on both lock and inactivity expiry", () => {
     let now = 1_000;
     let cleared = 0;
-    const session = createUnlockSession(
-      100,
-      () => now,
-      undefined,
-      () => {
+    const session = createUnlockSession({
+      now: () => now,
+      onClear: () => {
         cleared += 1;
       },
-    );
+      ttlMs: 100,
+    });
 
     session.unlock(PASSPHRASE);
     session.lock();
@@ -206,7 +206,7 @@ describe("createUnlockSession", () => {
       },
       async save() {},
     };
-    const session = createUnlockSession(100, () => 1_000, store);
+    const session = createUnlockSession({ now: () => 1_000, store, ttlMs: 100 });
     await session.restore();
     expect(session.getPassphrase()).toBeNull();
   });

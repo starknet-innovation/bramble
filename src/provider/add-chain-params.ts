@@ -3,7 +3,8 @@
  * shared by the provider bridge and the background handler so a malformed chain
  * descriptor is rejected identically on both sides of the wire.
  */
-import { hasOnlyKnownKeys, isRecord, type Json } from "../shared/json";
+import { hasOnlyKnownKeys, isNetworkLabel, isRecord, type Json } from "../shared/json";
+import { isOptionalServiceUrlList, isServiceUrlList } from "../shared/service-url";
 import { isCanonicalChainId } from "../starknet/networks";
 
 /**
@@ -19,31 +20,14 @@ export type ProviderChain = {
   readonly rpcUrls?: readonly string[];
 };
 
-const isNonEmptyString = (value: unknown): value is string =>
-  typeof value === "string" && value.trim().length > 0 && value.length <= 256;
-
-const isHttpUrl = (value: unknown): value is string => {
-  if (typeof value !== "string" || value.length === 0 || value.length > 2048) {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-};
-
-// Validates an optional URI array: every entry an http(s) URL, at least one
-// entry, all unique. Returns null when the value is malformed.
+// Validates an optional URI array against the shared endpoint-list rule
+// (`isServiceUrlList`, the same predicate `isCustomNetwork` applies to the
+// stored network), returning null when the value is malformed.
 const readUrlList = (value: unknown): readonly string[] | null | undefined => {
   if (value === undefined) {
     return undefined;
   }
-  if (!Array.isArray(value) || value.length === 0 || !value.every(isHttpUrl)) {
-    return null;
-  }
-  return new Set(value).size === value.length ? [...value] : null;
+  return isServiceUrlList(value) ? [...value] : null;
 };
 
 /**
@@ -63,9 +47,9 @@ export const readProviderChain = (params: Json | undefined): ProviderChain | nul
       "native_currency",
       "rpc_urls",
     ]) ||
-    !isNonEmptyString(params["id"]) ||
+    !isNetworkLabel(params["id"]) ||
     !isCanonicalChainId(params["chain_id"]) ||
-    !isNonEmptyString(params["chain_name"]) ||
+    !isNetworkLabel(params["chain_name"]) ||
     (params["native_currency"] !== undefined && !isRecord(params["native_currency"]))
   ) {
     return null;
@@ -86,13 +70,6 @@ export const readProviderChain = (params: Json | undefined): ProviderChain | nul
   };
 };
 
-const isOptionalUrlArray = (value: unknown): value is readonly string[] | undefined =>
-  value === undefined ||
-  (Array.isArray(value) &&
-    value.length > 0 &&
-    value.every(isHttpUrl) &&
-    new Set(value).size === value.length);
-
 /**
  * Narrows an untrusted value to the internal camelCase `ProviderChain` shape,
  * used by the background handler to re-validate a chain crossed from the bridge.
@@ -108,8 +85,8 @@ export const isProviderChain = (value: unknown): value is ProviderChain =>
     "rpcUrls",
   ]) &&
   isCanonicalChainId(value["chainId"]) &&
-  isNonEmptyString(value["chainName"]) &&
-  isNonEmptyString(value["id"]) &&
-  isOptionalUrlArray(value["rpcUrls"]) &&
-  isOptionalUrlArray(value["blockExplorerUrls"]) &&
-  isOptionalUrlArray(value["iconUrls"]);
+  isNetworkLabel(value["chainName"]) &&
+  isNetworkLabel(value["id"]) &&
+  isOptionalServiceUrlList(value["rpcUrls"]) &&
+  isOptionalServiceUrlList(value["blockExplorerUrls"]) &&
+  isOptionalServiceUrlList(value["iconUrls"]);

@@ -6,7 +6,6 @@
 import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../../src/background/messages";
 import { createUnlockSession } from "../../src/background/session";
-import type { SignHashInput } from "../../src/wallet/vault-service";
 import {
   contentSender,
   createWallet,
@@ -38,23 +37,16 @@ describe("background sender gates", () => {
   });
 
   test("rejects privileged commands from content senders", async () => {
-    const captured: SignHashInput[] = [];
-    const handler = createMessageHandler(
-      createWallet({ captureSign: (input) => captured.push(input) }),
-      "extension-id",
-    );
+    const handler = createMessageHandler(createWallet(), "extension-id");
 
-    await expect(
-      handler(
-        {
-          messageHash: "0x1234",
-          type: "wallet.signHash",
-          vaultPassphrase,
-        },
-        contentSender,
-      ),
-    ).resolves.toEqual({ error: "privileged sender required" });
-    expect(captured).toEqual([]);
+    // A vault read is the sharpest privileged command: it decrypts the vault
+    // and returns key material, so it must never dispatch for a page sender.
+    const response = await handler(
+      { type: "wallet.revealSecrets", vaultPassphrase },
+      contentSender,
+    );
+    expect(response).toEqual({ error: "privileged sender required" });
+    expect(JSON.stringify(response)).not.toContain("privateKey");
   });
 
   test("rejects status reads from content senders", async () => {
@@ -66,26 +58,17 @@ describe("background sender gates", () => {
   });
 
   test("rejects extension-page URL prefix matches from other senders", async () => {
-    const captured: SignHashInput[] = [];
-    const handler = createMessageHandler(
-      createWallet({ captureSign: (input) => captured.push(input) }),
-      "extension-id",
-    );
+    const handler = createMessageHandler(createWallet(), "extension-id");
 
     await expect(
       handler(
-        {
-          messageHash: "0x1234",
-          type: "wallet.signHash",
-          vaultPassphrase,
-        },
+        { type: "wallet.revealSecrets", vaultPassphrase },
         {
           id: "other-extension",
           url: "chrome-extension://extension-id-other/popup.html",
         },
       ),
     ).resolves.toEqual({ error: "untrusted sender" });
-    expect(captured).toEqual([]);
   });
 
   test("allows content senders to use the provider account request path", async () => {

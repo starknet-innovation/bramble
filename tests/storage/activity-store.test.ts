@@ -177,12 +177,12 @@ describe("activityToCsv", () => {
 
     const [, row] = activityToCsv(await log.list()).split("\n");
     const cells = row?.split(",");
-    expect(cells?.[0]).toBe("2023-11-14T22:13:20.000Z");
-    expect(cells?.[4]).toBe("pending");
-    expect(cells?.[5]).toBe("1.5");
-    expect(cells?.[6]).toBe("ETH");
-    expect(cells?.[7]).toBe("0x777abbcc");
-    expect(cells?.[8]).toBe("0xdef");
+    expect(cells?.[0]).toBe('"2023-11-14T22:13:20.000Z"');
+    expect(cells?.[4]).toBe('"pending"');
+    expect(cells?.[5]).toBe('"1.5"');
+    expect(cells?.[6]).toBe('"ETH"');
+    expect(cells?.[7]).toBe('"0x777abbcc"');
+    expect(cells?.[8]).toBe('"0xdef"');
   });
 
   test("exports blank detail cells for entries lacking the optional fields", async () => {
@@ -204,11 +204,11 @@ describe("activityToCsv", () => {
     expect(entries).toHaveLength(1);
     const [, row] = activityToCsv(entries).split("\n");
     const cells = row?.split(",");
-    expect(cells?.[0]).toBe("2023-11-14T22:13:20.000Z");
-    expect(cells?.[5]).toBe("");
-    expect(cells?.[6]).toBe("");
-    expect(cells?.[7]).toBe("");
-    expect(cells?.[9]).toBe("Deploy account contract");
+    expect(cells?.[0]).toBe('"2023-11-14T22:13:20.000Z"');
+    expect(cells?.[5]).toBe('""');
+    expect(cells?.[6]).toBe('""');
+    expect(cells?.[7]).toBe('""');
+    expect(cells?.[9]).toBe('"Deploy account contract"');
   });
 });
 

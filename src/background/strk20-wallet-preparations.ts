@@ -5,6 +5,7 @@
  */
 
 import { WalletError } from "../shared/errors";
+import { isSha256Digest } from "../shared/ids";
 import type { PaymasterAuthorizationReview } from "../starknet/strk20/paymaster-typed-data";
 import type { Strk20Action } from "../starknet/strk20/schemas";
 import type { Strk20SubmissionPlan } from "../starknet/strk20/service";
@@ -12,7 +13,6 @@ import type { TokenConfig } from "../storage/preferences-store";
 import type { ApprovalContext } from "./approval-context";
 
 const MAX_PREPARATIONS = 20;
-const PREPARATION_ID_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 type BasePreparation = {
   readonly context: ApprovalContext;
@@ -186,7 +186,7 @@ export const createStrk20WalletPreparationStore = (): Strk20WalletPreparationSto
   const pending = new Map<string, Strk20WalletPreparation>();
   return {
     claim(id) {
-      if (!PREPARATION_ID_PATTERN.test(id)) {
+      if (!isSha256Digest(id)) {
         return null;
       }
       const preparation = pending.get(id);
@@ -198,7 +198,7 @@ export const createStrk20WalletPreparationStore = (): Strk20WalletPreparationSto
     },
     put(preparation) {
       const copy = structuredClone(preparation);
-      if (!PREPARATION_ID_PATTERN.test(copy.id) || copy.id !== copy.context.payloadDigest) {
+      if (!isSha256Digest(copy.id) || copy.id !== copy.context.payloadDigest) {
         throw new WalletError("Invalid privacy preparation commitment");
       }
       pending.set(copy.id, copy);

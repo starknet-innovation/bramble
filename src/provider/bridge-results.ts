@@ -5,9 +5,14 @@
  * `{ code, message, data? }` error objects.
  */
 
-import { hasOnlyKnownKeys, isJson, isRecord, type Json } from "../shared/json";
+import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord, type Json } from "../shared/json";
 import { errorForMessage, unknownError, type WalletRpcError } from "../shared/rpc-errors";
-import { isStarknetNetworkId, type StarknetNetworkId } from "../starknet/networks";
+import {
+  isHexChainId,
+  isStarkFieldElement,
+  isStarknetNetworkId,
+  type StarknetNetworkId,
+} from "../starknet/networks";
 import { isAccountRef } from "../storage/vault-schema";
 
 export {
@@ -136,7 +141,7 @@ const parseAccountsResult = <T>(
     return null;
   }
   const accounts = result["accounts"];
-  return new Set(accounts.map(keyOf)).size === accounts.length ? accounts : null;
+  return hasUniqueStrings(accounts.map(keyOf)) ? accounts : null;
 };
 
 /**
@@ -160,8 +165,7 @@ const providerChainIdResult = (result: unknown): { chainId: string } | null =>
   isJson(result) &&
   hasOnlyKnownKeys(result, ["chainId", "ok"]) &&
   result["ok"] === true &&
-  typeof result["chainId"] === "string" &&
-  /^0x[0-9a-f]+$/.test(result["chainId"])
+  isHexChainId(result["chainId"])
     ? { chainId: result["chainId"] }
     : null;
 
@@ -247,8 +251,7 @@ export const providerSwitchChainId = (params: Json | undefined): string | null =
   isRecord(params) &&
   hasOnlyKnownKeys(params, ["chainId", "silent_mode"]) &&
   (params["silent_mode"] === undefined || typeof params["silent_mode"] === "boolean") &&
-  typeof params["chainId"] === "string" &&
-  /^0x[0-9a-f]+$/.test(params["chainId"])
+  isHexChainId(params["chainId"])
     ? params["chainId"]
     : null;
 
@@ -326,14 +329,19 @@ const okFieldPayload = <T>(
 // `{ ok: true, [flag]: true }` → `{ result: true }` (watchAsset, addStarknetChain).
 const okFlagPayload = (result: unknown, flag: string): ProviderPayload =>
   isRecord(result) && result["ok"] === true && result[flag] === true ? { result: true } : failed();
-// `{ ok: true, signature: { r, s } }` → the spec `[r, s]` felt pair.
+// `{ ok: true, signature: { r, s } }` → the spec `[r, s]` felt pair. The halves
+// are checked with the shared field-element grammar, not a local hex regex: a
+// signature component is a felt, so the rule that admits it must be the same one
+// the signer, the verifier, and the storage boundary apply — a private
+// `/^0x[0-9a-f]+$/` copy here would also admit an over-wide or out-of-field
+// string that no other layer considers a felt.
 const signaturePayload: ResultMapper = (result) => {
   const signature = isRecord(result) && result["ok"] === true ? result["signature"] : null;
   return isRecord(signature) &&
     typeof signature["r"] === "string" &&
     typeof signature["s"] === "string" &&
-    /^0x[0-9a-f]+$/.test(signature["r"]) &&
-    /^0x[0-9a-f]+$/.test(signature["s"])
+    isStarkFieldElement(signature["r"]) &&
+    isStarkFieldElement(signature["s"])
     ? { result: [signature["r"], signature["s"]] }
     : failed();
 };

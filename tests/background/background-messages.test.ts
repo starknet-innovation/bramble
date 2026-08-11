@@ -1,6 +1,8 @@
 /**
  * Background message checks prove typed wallet command dispatch: account
- * creation, mnemonic generation, grants, approvals, and session locking.
+ * creation, mnemonic generation, approvals, and session locking. Origin grants
+ * are minted only by the approval path (see MCW-V09-124), so they are covered
+ * through wallet.approveOrigin rather than a direct grant message.
  * Sender trust gates live in background-sender-gates.test.ts.
  */
 import { describe, expect, test } from "bun:test";
@@ -115,46 +117,6 @@ describe("createMessageHandler", () => {
         { id: "extension-id", url: "https://other.example/app" },
       ),
     ).resolves.toEqual({ error: "origin not connected" });
-  });
-
-  test("validates origin grant messages", async () => {
-    const captured: OriginGrantInput[] = [];
-    const handler = createMessageHandler(
-      createWallet({ captureGrant: (input) => captured.push(input) }),
-      "extension-id",
-    );
-
-    await expect(
-      handler(
-        {
-          origin: "not-a-url",
-          type: "wallet.grantOrigin",
-          vaultPassphrase,
-        },
-        sender,
-      ),
-    ).resolves.toEqual({ error: "invalid grant origin request" });
-    expect(captured).toEqual([]);
-  });
-
-  test("grants normalized origins through the wallet service only", async () => {
-    const captured: OriginGrantInput[] = [];
-    const handler = createMessageHandler(
-      createWallet({ captureGrant: (input) => captured.push(input) }),
-      "extension-id",
-    );
-
-    await expect(
-      handler(
-        {
-          origin: "https://example.com/path",
-          type: "wallet.grantOrigin",
-          vaultPassphrase,
-        },
-        sender,
-      ),
-    ).resolves.toEqual({ accounts: [account], ok: true });
-    expect(captured[0]?.origin).toBe("https://example.com");
   });
 
   test("reads only origin-granted accounts", async () => {

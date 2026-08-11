@@ -14,7 +14,7 @@ import { CallData, constants, hash } from "starknet";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
 import { MULTISIG_LIMITS } from "./multisig";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
+import { isNonZeroStarkFieldElement, isStarkFieldElement, sameFelt } from "./networks";
 import { withRpcFallback } from "./provider";
 
 /**
@@ -133,7 +133,7 @@ const requirePinnedCompiledClass = (casm: unknown): void => {
   } catch {
     throw new WalletError("Declared multisig class is malformed");
   }
-  if (BigInt(computed) !== BigInt(MULTISIG_COMPILED_CLASS_HASH)) {
+  if (!sameFelt(computed, MULTISIG_COMPILED_CLASS_HASH)) {
     throw new WalletError("Declared multisig class does not match the pinned compiled class hash");
   }
 };
@@ -177,7 +177,7 @@ export const requireMultisigContractClass = (artifact: unknown): unknown => {
   const computed = hash.computeContractClassHash(
     artifact as Parameters<typeof hash.computeContractClassHash>[0],
   );
-  if (BigInt(computed) !== BigInt(MULTISIG_CLASS_HASH)) {
+  if (!sameFelt(computed, MULTISIG_CLASS_HASH)) {
     throw new WalletError("Bundled multisig class does not match the pinned class hash");
   }
   return artifact;

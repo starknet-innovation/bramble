@@ -10,6 +10,7 @@ import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import type { RuntimeRpc } from "./runtime-rpc";
+import type { PassiveUnlockSession } from "./session";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**
@@ -21,11 +22,15 @@ export const strk20ServiceForRuntime = (runtimeRpc: RuntimeRpc): Strk20Service =
 
 /**
  * Builds a lazy protected SDK context. Viewing-key derivation and signing do
- * not occur until an approved operation actually needs them.
+ * not occur until an approved operation actually needs them. `session` is the
+ * unlock that authorized the operation and is required: it binds the returned
+ * `signHash` to that unlock, so a private transfer signed here fails closed
+ * once the user locks, exactly as the public transaction paths do.
  */
 export const strk20AccountContext = (
   deps: {
     readonly ledgerSignQueue?: LedgerSignQueue;
+    readonly session: PassiveUnlockSession;
     readonly wallet: WalletStatusReader;
   },
   resolved: {

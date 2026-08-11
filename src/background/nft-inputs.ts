@@ -1,7 +1,8 @@
 /**
  * Pure parsers for NFT gallery runtime messages from extension pages.
  */
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "../shared/json";
+import { type FeeEstimate, isFeeEstimate } from "../starknet/fee-bounds";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
@@ -9,7 +10,7 @@ import {
 } from "../starknet/networks";
 
 const isTokenId = (value: unknown): value is string =>
-  typeof value === "string" && value.length <= 78 && /^(?:0|[1-9][0-9]*)$/.test(value);
+  isBaseUnitsAmount(value) && value.length <= 78;
 
 /**
  * Fields shared by the add-NFT and transfer-NFT requests.
@@ -64,38 +65,58 @@ export const readAddNftInput = (
 
 type NftTransferMessageType = "wallet.reviewNftTransfer" | "wallet.transferNft";
 
+/**
+ * A parsed NFT send or send-review request: the target NFT, the recipient, and
+ * — on a send the panel has already reviewed — the fee estimate that review
+ * displayed, which the background turns into a signing ceiling (MCW-V09-119).
+ */
+export type NftTransferRequest = NftTarget & {
+  readonly recipient: string;
+  readonly reviewedFee?: FeeEstimate;
+};
+
 const readNftTransferInput = (
   message: unknown,
   messageType: NftTransferMessageType,
-): (NftTarget & { readonly recipient: string }) | null => {
+): NftTransferRequest | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["contract", "networkId", "recipient", "tokenId", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "contract",
+      "networkId",
+      "recipient",
+      "reviewedFee",
+      "tokenId",
+      "type",
+    ]) ||
     message["type"] !== messageType ||
     typeof message["recipient"] !== "string" ||
-    !isNonZeroStarkFieldElement(message["recipient"])
+    !isNonZeroStarkFieldElement(message["recipient"]) ||
+    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"]))
   ) {
     return null;
   }
   const target = readNftTarget(message);
-  return target ? { ...target, recipient: message["recipient"] } : null;
+  return target
+    ? {
+        ...target,
+        recipient: message["recipient"],
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
+      }
+    : null;
 };
 
 /**
  * Parses an NFT transfer-review request. Review is read-only; the background
  * still re-parses and re-proves the same fields on the later submit request.
  */
-export const readReviewNftTransferInput = (
-  message: unknown,
-): (NftTarget & { readonly recipient: string }) | null =>
+export const readReviewNftTransferInput = (message: unknown): NftTransferRequest | null =>
   readNftTransferInput(message, "wallet.reviewNftTransfer");
 
 /**
  * Parses a send-NFT request through the verified invoke path.
  */
-export const readTransferNftInput = (
-  message: unknown,
-): (NftTarget & { readonly recipient: string }) | null =>
+export const readTransferNftInput = (message: unknown): NftTransferRequest | null =>
   readNftTransferInput(message, "wallet.transferNft");
 
 /**

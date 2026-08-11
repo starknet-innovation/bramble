@@ -3,9 +3,22 @@
  * the background boundary.
  */
 
-import { isUuid } from "../shared/ids";
-import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord, type Json } from "../shared/json";
+import { isSha256Digest, isUuid } from "../shared/ids";
+import {
+  hasOnlyArrayEntries,
+  hasOnlyKnownKeys,
+  hasUniqueStrings,
+  isJson,
+  isOwnDataProperty,
+  isRecord,
+  isRiskFlagCode,
+  isSafeDecimals,
+  isTokenSymbol,
+  JSON_BUDGETS,
+  type Json,
+} from "../shared/json";
 import { isWalletOrigin } from "../shared/origin";
+import { type FeeEstimate, isFeeEstimate as isFee } from "../starknet/fee-bounds";
 import { isStarkFieldElement, isStarknetNetworkId, STARKNET_NETWORKS } from "../starknet/networks";
 import {
   readStrk20Action,
@@ -42,10 +55,10 @@ export type DeclarationReview = {
   readonly accountDeployment: "deployed" | "undeployed" | "unknown";
   readonly classHash?: string;
   readonly compiledClassHash: string;
-  readonly deploymentFee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly deploymentFee: FeeEstimate | null;
   readonly deploymentFeeEstimateFailed: boolean;
   readonly entryPointCount: number;
-  readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+  readonly fee: FeeEstimate | null;
   readonly feeEstimateFailed: boolean;
   readonly sierraProgramLength: number;
 };
@@ -73,7 +86,7 @@ export type PendingApproval = {
   readonly blocked?: boolean;
   readonly context?: ApprovalContext;
   readonly declaration?: DeclarationReview;
-  readonly fee?: { readonly overallFee: string; readonly unit: string } | null;
+  readonly fee?: FeeEstimate | null;
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
   readonly feeEstimatePending?: boolean;
@@ -131,16 +144,12 @@ const isWatchAssetToken = (value: unknown): value is WatchAssetToken =>
   hasOnlyKnownKeys(value, ["address", "decimals", "name", "networkId", "symbol"]) &&
   typeof value["address"] === "string" &&
   isStarkFieldElement(value["address"]) &&
-  typeof value["decimals"] === "number" &&
-  Number.isSafeInteger(value["decimals"]) &&
-  value["decimals"] >= 0 &&
-  value["decimals"] <= 36 &&
+  isSafeDecimals(value["decimals"]) &&
   typeof value["name"] === "string" &&
   value["name"].length > 0 &&
   value["name"].length <= 64 &&
   isStarknetNetworkId(value["networkId"]) &&
-  typeof value["symbol"] === "string" &&
-  /^[A-Z0-9]{2,12}$/.test(value["symbol"]);
+  isTokenSymbol(value["symbol"]);
 
 const isInsightText = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= 200;
@@ -151,8 +160,7 @@ const isSummaryText = (value: unknown): value is string =>
 const isApprovalRiskFlag = (value: unknown): value is ApprovalRiskFlag =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["code", "message"]) &&
-  typeof value["code"] === "string" &&
-  /^[a-z][a-z-]{1,40}$/.test(value["code"]) &&
+  isRiskFlagCode(value["code"]) &&
   typeof value["message"] === "string" &&
   value["message"].length > 0 &&
   value["message"].length <= 300;
@@ -163,18 +171,10 @@ const isApprovalContext = (value: unknown): value is ApprovalContext =>
   isStarknetNetworkId(value["networkId"]) &&
   isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
   value["chainId"] === STARKNET_NETWORKS[value["networkId"]].chainId &&
-  typeof value["payloadDigest"] === "string" &&
-  /^sha256:[0-9a-f]{64}$/.test(value["payloadDigest"]);
+  isSha256Digest(value["payloadDigest"]);
 
 const isCount = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-
-const isFee = (value: unknown): value is { readonly overallFee: string; readonly unit: string } =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["overallFee", "unit"]) &&
-  typeof value["overallFee"] === "string" &&
-  /^(?:0|[1-9][0-9]*)$/.test(value["overallFee"]) &&
-  (value["unit"] === "FRI" || value["unit"] === "WEI");
 
 const isDeclarationReview = (value: unknown): value is DeclarationReview =>
   isRecord(value) &&
@@ -328,6 +328,70 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
   );
 };
 
+type ParsedPendingApprovals = {
+  readonly approvals: readonly PendingApproval[];
+  readonly dropped: boolean;
+};
+
+// Each queued approval is budgeted on its own. A shared budget over the whole
+// response is a denial-of-service lever: a handful of individually legal
+// typed-data prompts sum past it and blank every prompt in the queue, including
+// the ones the user still has to reject.
+const readApprovalSlot = (pending: readonly unknown[], index: number): PendingApproval | null => {
+  const descriptor = Object.getOwnPropertyDescriptor(pending, index);
+  if (!isOwnDataProperty(descriptor)) {
+    return null;
+  }
+  const entry: unknown = descriptor.value;
+  return isJson(entry) && isPendingApproval(entry) ? entry : null;
+};
+
+// Only connection prompts dedupe per origin; watch-asset and invoke prompts
+// legitimately queue multiple entries for the same site.
+const dedupesByOrigin = (approval: PendingApproval): boolean =>
+  approval.kind === undefined || approval.kind === "connect";
+
+const parsePendingApprovals = (value: unknown): ParsedPendingApprovals | null => {
+  // Budgeting each entry on its own replaced the whole-envelope `isJson` gate,
+  // so the queue itself still needs the two bounds that gate used to supply:
+  // the shared provider array cap (an unbounded list is handed straight to the
+  // renderer) and the "indices and length only" shape check (an own non-index
+  // property survives a validator that walks indices).
+  if (
+    !isRecord(value) ||
+    !hasOnlyKnownKeys(value, ["ok", "pending"]) ||
+    value["ok"] !== true ||
+    !Array.isArray(value["pending"]) ||
+    value["pending"].length > JSON_BUDGETS.provider.maxArrayLength ||
+    !hasOnlyArrayEntries(value["pending"])
+  ) {
+    return null;
+  }
+  const pending: readonly unknown[] = value["pending"];
+  const approvals: PendingApproval[] = [];
+  const seenIds = new Set<string>();
+  const seenConnectOrigins = new Set<string>();
+  let dropped = false;
+  for (let index = 0; index < pending.length; index += 1) {
+    const approval = readApprovalSlot(pending, index);
+    const byOrigin = approval !== null && dedupesByOrigin(approval);
+    if (
+      approval === null ||
+      seenIds.has(approval.id) ||
+      (byOrigin && seenConnectOrigins.has(approval.origin))
+    ) {
+      dropped = true;
+      continue;
+    }
+    seenIds.add(approval.id);
+    if (byOrigin) {
+      seenConnectOrigins.add(approval.origin);
+    }
+    approvals.push(approval);
+  }
+  return { approvals, dropped };
+};
+
 const isConnectedSite = (value: unknown): value is ConnectedSite =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["accountCount", "origin"]) &&
@@ -338,23 +402,34 @@ const isConnectedSite = (value: unknown): value is ConnectedSite =>
   isWalletOrigin(value["origin"]);
 
 /**
- * Checks pending approval responses before rendering.
+ * Reads the reviewable approvals out of a pending-approval response.
+ *
+ * Returns `null` when the envelope itself is not a pending-approval response —
+ * wrong shape, a queue past the shared provider array bound, or an array
+ * carrying own non-index properties — so a forged, unbounded, or smuggling
+ * reply never reaches the consent queue. Otherwise every returned approval was
+ * validated on its own, and an entry that fails —
+ * unknown `kind`, inconsistent fee review, duplicate id, duplicate connection
+ * origin, missing array slot, or a payload past the per-message JSON budget —
+ * is dropped while the remaining prompts stay reviewable. One malformed entry
+ * must never blank a queue the user still has to approve or reject.
  */
-export const isPendingApprovalsResponse = (value: unknown): value is PendingApprovalsResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["ok", "pending"]) &&
-  value["ok"] === true &&
-  Array.isArray(value["pending"]) &&
-  value["pending"].every(isPendingApproval) &&
-  hasUniqueStrings(value["pending"].map((approval) => approval.id)) &&
-  hasUniqueStrings(
-    value["pending"]
-      // Only connection prompts dedupe per origin; watch-asset and invoke
-      // prompts legitimately queue multiple entries for the same site.
-      .filter((approval) => approval.kind === undefined || approval.kind === "connect")
-      .map((approval) => approval.origin),
-  );
+export const readPendingApprovals = (value: unknown): readonly PendingApproval[] | null => {
+  const parsed = parsePendingApprovals(value);
+  return parsed === null ? null : parsed.approvals;
+};
+
+/**
+ * Checks pending approval responses before rendering. This is the all-or-nothing
+ * form: it holds only when every queued entry validates, so it answers "did the
+ * background return an intact queue", not "what is safe to render" — a caller
+ * that renders the queue should use `readPendingApprovals`, which keeps the
+ * sound entries when one is malformed rather than blanking the queue.
+ */
+export const isPendingApprovalsResponse = (value: unknown): value is PendingApprovalsResponse => {
+  const parsed = parsePendingApprovals(value);
+  return parsed !== null && !parsed.dropped;
+};
 
 /**
  * Checks connected-sites responses before rendering the permissions manager.

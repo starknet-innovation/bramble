@@ -3,8 +3,10 @@
  */
 import { type Call, CallData, cairo, type RpcProvider, shortString } from "starknet";
 import { WalletError } from "../shared/errors";
+import { isDecimalAmountText, isSafeDecimals } from "../shared/json";
 import type { TokenConfig } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
+import { type FeeEstimate, reviewedSpendFor } from "./fee-bounds";
 import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
 import {
   isTransactionNotFoundError,
@@ -108,6 +110,8 @@ export type TransferInput = {
   readonly account: AccountRef;
   readonly amount: string;
   readonly recipient: string;
+  /** Reviewed fee ceiling; see {@link InvokeInput.reviewedFee}. */
+  readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: StarkHashSigner;
   readonly speed?: FeeSpeed;
@@ -115,12 +119,12 @@ export type TransferInput = {
 };
 
 /**
- * Fee estimate returned before signing.
+ * Fee estimate returned before signing. Defined in `./fee-bounds` alongside the
+ * predicate that turns a reviewed one into a signing ceiling, re-exported here
+ * because callers already import the RPC surface from here — one definition,
+ * two doors.
  */
-export type FeeEstimate = {
-  readonly overallFee: string;
-  readonly unit: string;
-};
+export type { FeeEstimate };
 
 /**
  * Inputs for reading transaction statuses.
@@ -163,16 +167,15 @@ export type TransactionStatusReport = {
 const pow10 = (decimals: number): bigint => 10n ** BigInt(decimals);
 
 /**
- * Parses a decimal token amount into raw integer ERC20 units.
+ * Parses a decimal token amount into raw integer ERC20 units. The terminal
+ * consumer of every amount the reader boundaries admit, so it applies their
+ * grammars (`isDecimalAmountText`, `isSafeDecimals`) rather than its own copies.
+ * Throws {@link WalletError} on a value either rule rejects, on more fraction
+ * digits than the token has, and on a non-positive result.
  */
 export const parseTokenAmount = (amount: string, decimals: number): bigint => {
   const trimmed = amount.trim();
-  if (
-    !Number.isSafeInteger(decimals) ||
-    decimals < 0 ||
-    decimals > 36 ||
-    !/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(trimmed)
-  ) {
+  if (!isSafeDecimals(decimals) || !isDecimalAmountText(trimmed)) {
     throw new WalletError("Invalid transfer amount");
   }
 
@@ -351,7 +354,7 @@ export const getTokenMetadata = async (
         throw new WalletError("Invalid token decimals");
       }
       const decimals = Number(BigInt(rawDecimals));
-      if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 36) {
+      if (!isSafeDecimals(decimals)) {
         throw new WalletError("Invalid token decimals");
       }
       return {
@@ -368,7 +371,7 @@ export const getTokenMetadata = async (
  * Signs and submits an ERC20 transfer through an account contract.
  */
 export const submitErc20Transfer = async (
-  { account, amount, recipient, rpcUrls, signHash, speed, token }: TransferInput,
+  { account, amount, recipient, reviewedFee, rpcUrls, signHash, speed, token }: TransferInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<TransferSubmission> => {
   const amountRaw = parseTokenAmount(amount, token.decimals);
@@ -377,6 +380,7 @@ export const submitErc20Transfer = async (
     {
       account,
       calls: [call],
+      ...(reviewedFee === undefined ? {} : { reviewedFee }),
       rpcUrls,
       signHash,
       ...(speed === undefined ? {} : { speed }),
@@ -392,9 +396,14 @@ export const submitErc20Transfer = async (
 /**
  * Estimates invoke fees without broadcasting or signing. Validation is skipped
  * so review-time estimation cannot open a Ledger prompt before user approval.
+ *
+ * The figure returned is what a submission at `speed` would AUTHORISE (see
+ * {@link reviewedSpendFor}), not the node's headline quote: a `fast` send signs
+ * scaled-up bounds, so quoting the unscaled number would both misprice the
+ * review and bind, as a ceiling, a send guaranteed to exceed it.
  */
 export const estimateInvokeFee = async (
-  { account, calls, rpcUrls, signHash }: InvokeInput,
+  { account, calls, rpcUrls, signHash, speed = "standard" }: InvokeInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
 ): Promise<FeeEstimate> => {
   if (calls.length === 0) {
@@ -405,10 +414,7 @@ export const estimateInvokeFee = async (
     async (provider) => {
       const starknetAccount = krustyAccount(provider, account, signHash);
       const estimate = await starknetAccount.estimateInvokeFee([...calls], { skipValidate: true });
-      return {
-        overallFee: BigInt(estimate.overall_fee).toString(),
-        unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
-      };
+      return reviewedSpendFor(estimate, speed);
     },
     makeProvider,
   );

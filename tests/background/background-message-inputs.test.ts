@@ -9,14 +9,12 @@ import {
   readApprovalIdInput,
   readCreateAccountInput,
   readGetGrantedAccountsInput,
-  readGrantOriginInput,
   readRequestAccountsInput,
   readRevealSecretsInput,
   readRevokeOriginInput,
   readSaveAddressInput,
   readSetActiveAccountInput,
   readSetActiveNetworkInput,
-  readSignHashInput,
   readSwitchChainInput,
   readTransferInput,
   readTypeOnlyInput,
@@ -44,14 +42,6 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(
-      readGrantOriginInput({
-        debug: true,
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
       readGetGrantedAccountsInput({
         debug: true,
         origin: "https://example.com",
@@ -75,14 +65,6 @@ describe("background message parsers", () => {
         type: "wallet.requestAccounts",
       }),
     ).toEqual({ origin: "https://example.com", silent: true });
-    expect(
-      readSignHashInput({
-        debug: true,
-        messageHash: "0x1234",
-        type: "wallet.signHash",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
     expect(
       readSetActiveAccountInput({
         accountId,
@@ -132,22 +114,6 @@ describe("background message parsers", () => {
         mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
         networkId: "toString",
         type: "wallet.createAccount",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readGrantOriginInput({
-        accountId: "not-an-account",
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
-        vaultPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readSignHashInput({
-        accountId: "not-an-account",
-        messageHash: "0x1234",
-        type: "wallet.signHash",
         vaultPassphrase,
       }),
     ).toBeNull();
@@ -234,14 +200,6 @@ describe("background message parsers", () => {
         type: "wallet.transfer",
       }),
     ).toBeNull();
-    expect(
-      readSignHashInput({
-        accountId,
-        messageHash: "0x1234",
-        type: "wallet.signHash",
-        vaultPassphrase,
-      }),
-    ).toEqual({ accountId, messageHash: "0x1234", vaultPassphrase });
   });
 
   test("reject short vault passphrases before service calls", () => {
@@ -255,23 +213,9 @@ describe("background message parsers", () => {
       }),
     ).toBeNull();
     expect(
-      readGrantOriginInput({
-        origin: "https://example.com",
-        type: "wallet.grantOrigin",
-        vaultPassphrase: shortPassphrase,
-      }),
-    ).toBeNull();
-    expect(
       readGetGrantedAccountsInput({
         origin: "https://example.com",
         type: "wallet.getGrantedAccounts",
-        vaultPassphrase: shortPassphrase,
-      }),
-    ).toBeNull();
-    expect(
-      readSignHashInput({
-        messageHash: "0x1234",
-        type: "wallet.signHash",
         vaultPassphrase: shortPassphrase,
       }),
     ).toBeNull();

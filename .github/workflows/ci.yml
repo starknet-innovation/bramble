@@ -219,6 +219,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
         with:
           toolchain: 1.96.1
+          # scripts/vendor-krusty.ts pins this exact rustc release and builds the
+          # crypto core for this target; the wasm digest it enforces holds for
+          # no other toolchain.
+          targets: wasm32-unknown-unknown
       # Cache the wasm-pack binary and the cargo download/registry so each run
       # skips recompiling wasm-pack from source and re-fetching crates. Keyed on
       # the pinned krusty revision (vendor-krusty.ts) plus the wasm-pack version;

@@ -50,12 +50,15 @@ const readAddStarknetChainInput = (
 };
 
 /**
- * Reduces a validated dapp chain to the stored custom-network shape.
+ * Reduces a validated dapp chain to the stored custom-network shape. The labels
+ * are trimmed here as well as in the bridge reader: this lane also accepts a
+ * chain crossed straight from a runtime message, and the store should hold the
+ * same canonical text either way.
  */
 const toCustomNetwork = (chain: ProviderChain): CustomNetwork => ({
   chainId: chain.chainId,
-  id: chain.id,
-  name: chain.chainName,
+  id: chain.id.trim(),
+  name: chain.chainName.trim(),
   ...(chain.rpcUrls === undefined ? {} : { rpcUrls: chain.rpcUrls }),
   ...(chain.blockExplorerUrls === undefined ? {} : { blockExplorerUrls: chain.blockExplorerUrls }),
   ...(chain.iconUrls === undefined ? {} : { iconUrls: chain.iconUrls }),

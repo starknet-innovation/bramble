@@ -23,10 +23,13 @@ import type { RuntimeResponse } from "./runtime-types";
 import type { UnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
 import {
+  executeStrk20DisclosureApproval,
+  executeStrk20InvokeApproval,
+} from "./strk20-approval-execution";
+import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
 } from "./strk20-approval-types";
-import { executeStrk20DisclosureApproval, executeStrk20InvokeApproval } from "./strk20-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**
@@ -104,6 +107,12 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }) => {
       ...(approval.context === undefined ? {} : { context: approval.context }),
       origin: approval.origin,
       payload,
+      // The figure on the card at the moment of the click, not the one queued:
+      // `updateInvokeFee` replaces it when the first estimate lands and on the
+      // panel's retry, so this is what the user actually consented to pay.
+      // Null (still estimating, or the estimate failed) leaves the submission
+      // unbound, which is honest — no fee was reviewed.
+      ...(approval.fee ? { reviewedFee: approval.fee } : {}),
     },
   );
   return settleExecutor(result);
@@ -116,6 +125,7 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
   const result = await executeStrk20InvokeApproval(
     {
       activity: deps.activity,
+      allowanceStore: deps.allowanceStore,
       preferencesStore: deps.preferencesStore,
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
@@ -149,6 +159,7 @@ const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }
   const result = await executeStrk20DisclosureApproval(
     {
       activity: deps.activity,
+      allowanceStore: deps.allowanceStore,
       preferencesStore: deps.preferencesStore,
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
@@ -218,6 +229,7 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }) => {
   }
   const result = await executeDeclareApproval(
     {
+      activity: deps.activity,
       preferencesStore: deps.preferencesStore,
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
@@ -228,6 +240,15 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }) => {
       ...(approval.context === undefined ? {} : { context: approval.context }),
       declare: payload.declare,
       origin: approval.origin,
+      // The declaration fee shown on the card. Null (estimate failed) leaves
+      // the submission unbound, which is honest — no fee was reviewed.
+      ...(approval.declaration?.fee ? { reviewedFee: approval.declaration.fee } : {}),
+      // The deployment fee shown on the same card, for an undeployed account.
+      // The card adds the two into an "Estimated total", so both halves of that
+      // total are bound or the total is a number the wallet does not stand by.
+      ...(approval.declaration?.deploymentFee
+        ? { reviewedDeploymentFee: approval.declaration.deploymentFee }
+        : {}),
     },
   );
   return settleExecutor(result);

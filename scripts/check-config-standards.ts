@@ -24,6 +24,7 @@ import {
 } from "./config-standards-policy";
 import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";
 import { vendorPinFailures } from "./vendor-pin-policy";
+import { pinnedActionLine } from "./workflow-inventory";
 import { workflowSecurityFailures } from "./workflow-security-policy";
 
 const failures: string[] = [];
@@ -403,9 +404,8 @@ for (const command of ciCommands) {
 }
 
 const packageCommandIndex = ciLines.indexOf("- run: bun run package:extension");
-const uploadActionIndex = ciLines.findIndex((line) =>
-  /^- uses: actions\/upload-artifact@[0-9a-f]{40}/.test(line),
-);
+// Pin grammar comes from ./workflow-inventory; 0 (absent) sorts before all.
+const uploadActionIndex = pinnedActionLine(ciWorkflow, "actions/upload-artifact@") - 1;
 const uploadNameIndex = ciLines.indexOf("name: mc-wallet-extension");
 const uploadZipIndex = ciLines.indexOf("artifacts/*.zip");
 const uploadChecksumIndex = ciLines.indexOf("artifacts/*.zip.sha256");

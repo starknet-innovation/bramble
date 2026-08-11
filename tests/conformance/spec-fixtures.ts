@@ -67,17 +67,23 @@ export const ACCOUNT: AccountRef = {
   publicKeyY: "0xdef",
 };
 
-/** A minimal, valid SNIP-12 typed-data payload for wallet_signTypedData. */
+/**
+ * A minimal, valid SNIP-12 typed-data payload for wallet_signTypedData. This is
+ * the dapp-facing signing contract, so it is revision 1 with every domain key
+ * declared. Revision 0 is signable too (MCW-V09-101 is closed by the name
+ * grammar, not by a revision ban); this fixture pins the modern shape, and
+ * `tests/starknet/typed-data-revisions.test.ts` pins the other revision.
+ */
 export const TYPED_DATA: Json = {
-  domain: { chainId: "SN_SEPOLIA", name: "MC Test", version: "1" },
+  domain: { chainId: "SN_SEPOLIA", name: "MC Test", revision: "1", version: "1" },
   message: { content: "hello" },
   primaryType: "Message",
   types: {
     Message: [{ name: "content", type: "felt" }],
-    StarkNetDomain: [
-      { name: "name", type: "felt" },
-      { name: "chainId", type: "felt" },
-      { name: "version", type: "felt" },
+    StarknetDomain: [
+      { name: "name", type: "shortstring" },
+      { name: "chainId", type: "shortstring" },
+      { name: "version", type: "shortstring" },
     ],
   },
 };

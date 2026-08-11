@@ -251,7 +251,16 @@ const paintSwapStages = (root: Element, figures: SwapFigures): void => {
                 : ("default" as const),
           },
         ]),
-    { label: "Network fee", value: `≈ ${formatFiat(quote.gasFeesInUsd, "usd")}` },
+    // Deliberately NOT labelled "Network fee". Every other reviewed send in the
+    // wallet shows a fee the wallet estimated itself and then binds the
+    // submission to (MCW-V09-119); this figure is the aggregator's own USD
+    // guess, carried through unchanged, and no resource bound is signed against
+    // it. Labelling it like the others would claim an assurance that is not
+    // there.
+    {
+      label: "Aggregator fee estimate",
+      value: `≈ ${formatFiat(quote.gasFeesInUsd, "usd")} (not wallet-enforced)`,
+    },
     { label: "Slippage cap", value: "0.5%" },
     { label: "Route", value: "AVNU aggregator" },
   ]);
@@ -396,7 +405,11 @@ export const bindSwap = (deps: SwapUiDeps): void => {
     deps.swap
       .prepare({
         amount: quoted.sellAmount,
-        buyAmount: compactAmount(quoted.buyAmount),
+        // The RAW quoted amount, never the display form: compactAmount groups
+        // thousands ("1000" reads "1,000"), and the background's amount reader
+        // rejects a grouped string — formatting one into the message made every
+        // quote of 1000 units or more unpreparable. Grouping is for the screen.
+        buyAmount: quoted.buyAmount,
         buyTokenId,
         quoteId: quoted.quoteId,
         sellTokenId,

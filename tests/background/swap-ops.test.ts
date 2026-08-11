@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { createMessageHandler } from "../../src/background/messages";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
-import type { SwapCall, SwapService } from "../../src/starknet/avnu";
+import { avnuRouterAddress, type SwapCall, type SwapService } from "../../src/starknet/avnu";
 import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "../../src/starknet/networks";
 import { createActivityLog } from "../../src/storage/activity-store";
 
@@ -83,15 +83,21 @@ const walletStub = {
 // 12.5 STRK in base units (12.5e18) as the aggregator would return it.
 const BUY_AMOUNT_HEX = `0x${(125n * 10n ** 17n).toString(16)}`;
 
+// The wallet's PINNED AVNU router for this network: the only contract the
+// approval may name as spender and the only contract a swap call may run on
+// (see the build-policy gate in ../../src/background/swap-ops.ts). Read from
+// the pin, never restated, so this fixture keeps describing a real build.
+const ROUTER_ADDRESS = avnuRouterAddress("SN_MAIN");
+
 const defaultBuild: readonly SwapCall[] = [
   {
-    calldata: ["0x1", "0x2386f26fc10000", "0x0"],
+    calldata: [ROUTER_ADDRESS, "0x2386f26fc10000", "0x0"],
     contractAddress: ETH_TOKEN_ADDRESS,
     entrypoint: "approve",
   },
   {
     calldata: ["0x3"],
-    contractAddress: "0x2c56e8b00dbe2a71e57472685378fc8988bba947e9a99b26a00fade2b4fe7c2",
+    contractAddress: ROUTER_ADDRESS,
     entrypoint: "multi_route_swap",
   },
 ];
@@ -99,6 +105,7 @@ const defaultBuild: readonly SwapCall[] = [
 const makeHarness = (options?: {
   readonly build?: readonly SwapCall[];
   readonly buildError?: string;
+  readonly activityWriteFails?: boolean;
   readonly locked?: boolean;
   readonly quoteError?: string;
 }) => {
@@ -152,7 +159,9 @@ const makeHarness = (options?: {
     },
   };
   const handler = createMessageHandler(walletStub, "extension-id", {
-    activity,
+    activity: options?.activityWriteFails
+      ? { ...activity, record: () => Promise.reject(new Error("storage quota exceeded")) }
+      : activity,
     runtimeRpc: {
       async submitInvokeTransaction({ calls }: { readonly calls: readonly unknown[] }) {
         submitted.push(calls);
@@ -252,6 +261,50 @@ describe("swap operations", () => {
     ).toEqual({ error: "no swap route available for this pair" });
   });
 
+  // MCW-V09-108: the build's approval is a standing grant to the router until
+  // the route spends it, and only the account that swapped can revoke it. Left
+  // unrecorded, a residual router allowance would be invisible to the manager.
+  test("files the router approval it submitted in the allowance log", async () => {
+    const { handler } = makeHarness();
+    const prepared = await prepareSwap(handler);
+    const preparationId = "swapPreparation" in prepared ? prepared.swapPreparation.id : "";
+    expect(await handler({ type: "wallet.allowances" }, extensionSender)).toEqual({
+      allowances: [],
+      ok: true,
+    });
+
+    await handler({ preparationId, type: "wallet.swapExecute" }, extensionSender);
+
+    const listed = await handler({ type: "wallet.allowances" }, extensionSender);
+    expect("allowances" in listed ? listed.allowances : []).toMatchObject([
+      {
+        accountId: account.id,
+        // 0.01 ETH, exactly the quoted sell amount the policy admitted.
+        amount: "10000000000000000",
+        source: "wallet",
+        spender: `0x${BigInt(ROUTER_ADDRESS).toString(16)}`,
+        token: `0x${BigInt(ETH_TOKEN_ADDRESS).toString(16)}`,
+      },
+    ]);
+  });
+
+  // MCW-V09-108: bookkeeping must not sit behind another store's write. An
+  // activity log that rejects (quota, IO) once left the router approval
+  // unrecorded — an on-chain grant the manager could never list or revoke.
+  test("files the approval even when the activity write fails after broadcast", async () => {
+    const { handler, submitted } = makeHarness({ activityWriteFails: true });
+    const prepared = await prepareSwap(handler);
+    const preparationId = "swapPreparation" in prepared ? prepared.swapPreparation.id : "";
+
+    await handler({ preparationId, type: "wallet.swapExecute" }, extensionSender);
+    expect(submitted).toHaveLength(1);
+
+    const listed = await handler({ type: "wallet.allowances" }, extensionSender);
+    expect("allowances" in listed ? listed.allowances : []).toMatchObject([
+      { amount: "10000000000000000", source: "wallet" },
+    ]);
+  });
+
   test("prepares exact calls, then submits the one-time frozen route and records activity", async () => {
     const { activity, buildRequests, handler, submitted } = makeHarness();
     const prepared = await prepareSwap(handler);
@@ -297,6 +350,28 @@ describe("swap operations", () => {
     const response = await prepareSwap(handler);
     expect(response).toEqual({ error: "swap build touched an unexpected token approval" });
     expect(submitted).toHaveLength(0);
+  });
+
+  test("the approve-only-sell-token policy covers both increase_allowance spellings", async () => {
+    // Which selectors grant spend is defined once, by isApproveEntrypoint in
+    // ../../src/starknet/verify-selectors.ts. If this gate kept its own list, a build
+    // could route an approval onto another token under a spelling only the
+    // reviewer knows about, and the policy would wave it through.
+    for (const entrypoint of ["increase_allowance", "increaseAllowance"]) {
+      const rogue: readonly SwapCall[] = [
+        {
+          calldata: ["0x1", "0xffffffffffffffffffffffff", "0x0"],
+          contractAddress: STRK_TOKEN_ADDRESS,
+          entrypoint,
+        },
+      ];
+      const { handler, submitted } = makeHarness({ build: rogue });
+
+      await expect(prepareSwap(handler)).resolves.toEqual({
+        error: "swap build touched an unexpected token approval",
+      });
+      expect(submitted).toHaveLength(0);
+    }
   });
 
   test("an approval larger than the quoted sell amount is rejected unsigned", async () => {

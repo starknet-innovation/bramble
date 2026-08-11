@@ -157,6 +157,15 @@ export const createWalletVaultService = ({
     },
     async createAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
+      // First-run or same-phrase only, mirroring `createLedgerVault`: a second,
+      // different phrase would displace the one the user backed up, and any
+      // phrase written over a keyless (Ledger) vault leaves its accounts
+      // unrecoverable from the phrase the vault would then claim to hold.
+      const displacesStoredSeed =
+        vault.mnemonic === null ? vault.accounts.length > 0 : vault.mnemonic !== input.mnemonic;
+      if (displacesStoredSeed) {
+        throw new WalletError("Wallet already exists");
+      }
       const { account, privateKey } = await deriveAccount(kms, input);
 
       if (vault.accounts.some((stored) => stored.id === account.id)) {

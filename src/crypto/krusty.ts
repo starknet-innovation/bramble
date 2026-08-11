@@ -2,7 +2,12 @@
  * Krusty KMS WASM adapter. Wallet cryptography must enter through this boundary.
  */
 import { WalletError } from "../shared/errors";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "../starknet/networks";
+import { isOwnDataProperty } from "../shared/json";
+import {
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  isStarkPrivateKey,
+} from "../starknet/networks";
 
 /**
  * Stark key material returned only inside privileged wallet flows.
@@ -64,9 +69,12 @@ const asRecord = (value: unknown): Record<string, unknown> => {
   return value as Record<string, unknown>;
 };
 
+// Reads a field only when it is an own enumerable data property, through the
+// shared boundary predicate: a getter on the WASM module object must never run
+// during validation, and must never answer differently on a second read.
 const ownValue = (record: Record<string, unknown>, field: string): unknown => {
   const descriptor = Object.getOwnPropertyDescriptor(record, field);
-  return descriptor?.enumerable === true && "value" in descriptor ? descriptor.value : undefined;
+  return isOwnDataProperty(descriptor) ? descriptor.value : undefined;
 };
 
 const krustyResultValue = (record: Record<string, unknown>, field: string): unknown => {
@@ -112,9 +120,15 @@ const requireFieldElementField = (value: unknown, field: string): string => {
   return fieldValue;
 };
 
+// Signing scalars are judged by `isStarkPrivateKey`, never by the wider
+// non-zero-felt rule: a value in the [curve order, field prime) gap is a felt
+// but not a key, and the signer would silently reduce it mod n and sign for a
+// different key than the one the vault records. The one shared rule; the same
+// predicate guards the raw-key import, the stored signing key, and the stored
+// viewing key, so no layer accepts a scalar another layer would refuse.
 const requirePrivateKeyField = (value: unknown, field: string): string => {
   const fieldValue = requireFieldElementField(value, field);
-  if (!isNonZeroStarkFieldElement(fieldValue)) {
+  if (!isStarkPrivateKey(fieldValue)) {
     throw new WalletError(`Krusty KMS result missing non-zero private key: ${field}`);
   }
   return fieldValue;
@@ -171,14 +185,17 @@ export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
     async deriveStrk20ViewingKey(privateKey, chainId, poolAddress) {
       await ready;
       if (
-        !isNonZeroStarkFieldElement(privateKey) ||
+        !isStarkPrivateKey(privateKey) ||
         !isNonZeroStarkFieldElement(chainId) ||
         !isNonZeroStarkFieldElement(poolAddress)
       ) {
         throw new WalletError("Invalid STRK20 viewing-key input");
       }
       const result = await deriveStrk20ViewingKey(privateKey, chainId, poolAddress);
-      if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
+      // A viewing key is a signing scalar too, and the encrypted vault already
+      // refuses to store one outside the curve order; checking the same rule
+      // here means the boundary refuses it rather than the storage layer.
+      if (typeof result !== "string" || !isStarkPrivateKey(result)) {
         throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
       }
       return result;
@@ -222,7 +239,7 @@ export const createKrustyKms = (moduleValue: unknown): KrustyKms => {
     },
     async signStarkHash(privateKey, messageHash) {
       await ready;
-      if (!isNonZeroStarkFieldElement(privateKey) || !isStarkFieldElement(messageHash)) {
+      if (!isStarkPrivateKey(privateKey) || !isStarkFieldElement(messageHash)) {
         throw new WalletError("Invalid Stark signing input");
       }
 

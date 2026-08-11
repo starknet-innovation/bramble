@@ -1,6 +1,8 @@
 /**
  * Shared network-service URL policy: HTTPS anywhere, HTTP only on loopback.
  */
+import { hasUniqueStrings } from "./json";
+
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
 /**
@@ -21,3 +23,21 @@ export const isServiceUrl = (value: unknown): value is string => {
     return false;
   }
 };
+
+/**
+ * Checks a chain descriptor's endpoint list: non-empty, every entry a
+ * {@link isServiceUrl} endpoint, no entry repeated. The one rule behind every
+ * URI array a dapp may attach to a chain — do not re-derive it locally, because
+ * a looser copy on the dapp side would prompt the user to approve a chain the
+ * store then refused to persist.
+ */
+export const isServiceUrlList = (value: unknown): value is readonly string[] =>
+  Array.isArray(value) && value.length > 0 && value.every(isServiceUrl) && hasUniqueStrings(value);
+
+/**
+ * Checks an optional endpoint list: absent, or a well-formed
+ * {@link isServiceUrlList}. Anything else — an empty list, a malformed entry, a
+ * repeat — is rejected.
+ */
+export const isOptionalServiceUrlList = (value: unknown): value is readonly string[] | undefined =>
+  value === undefined || isServiceUrlList(value);

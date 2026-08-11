@@ -4,6 +4,7 @@
  * bridge.
  */
 import { invalidRequestPayload } from "../shared/rpc-errors";
+import { isHexChainId } from "../starknet/networks";
 import {
   CONTENT_TARGET,
   canQueueProviderRequest,
@@ -127,7 +128,7 @@ const request = (args: unknown): Promise<unknown> => {
 const refreshChainId = async (): Promise<void> => {
   try {
     const chainId = await request({ type: "wallet_requestChainId" });
-    if (typeof chainId === "string" && /^0x[0-9a-f]+$/.test(chainId)) {
+    if (isHexChainId(chainId)) {
       currentChainId = chainId;
     }
   } catch {

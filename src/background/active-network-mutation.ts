@@ -2,7 +2,7 @@
 import { WalletError } from "../shared/errors";
 import type { StarknetNetworkId } from "../starknet/networks";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
-import type { UnlockSession } from "./session";
+import { heldSessionAuthorization, type UnlockSession } from "./session";
 
 /**
  * Commits a network preference and its matching vault mutation under one
@@ -18,10 +18,11 @@ export const runGuardedNetworkMutation = async <T>(
   changedError: string,
   operation: (vaultPassphrase: string) => Promise<T>,
 ): Promise<T> => {
-  const authorized = (): boolean =>
-    session.generation() === generation && session.peekPassphrase() === passphrase;
+  // The caller's (generation, passphrase) pair IS the authorization token: a
+  // helper that was handed a stale one must not begin the first durable write.
+  const authorized = heldSessionAuthorization(session, generation, passphrase);
   const requireAuthorized = (): void => {
-    if (!authorized()) {
+    if (!authorized.isCurrent()) {
       throw new WalletError(changedError);
     }
   };

@@ -4,9 +4,10 @@
 
 import type { Call } from "starknet";
 import { isUuid } from "../shared/ids";
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, isDecimalAmountText, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
 import { INVOKE_LIMITS } from "../starknet/call-limits";
+import { type FeeEstimate, isFeeEstimate } from "../starknet/fee-bounds";
 import type { StarknetNetworkId } from "../starknet/networks";
 import {
   isHexChainId,
@@ -17,7 +18,6 @@ import {
 import { isStrk20Proof, type Strk20Proof } from "../starknet/strk20/schemas";
 import { isVaultPassphrase } from "../storage/encrypted-store";
 import { isAccountId } from "../storage/vault-schema";
-import type { OriginGrantInput, SignHashInput } from "../wallet/vault-service";
 
 export { readCreateAccountInput } from "./account-creation-inputs";
 
@@ -26,7 +26,7 @@ export { readCreateAccountInput } from "./account-creation-inputs";
  * and swap input readers; parsing/scaling happens later via parseTokenAmount).
  */
 export const isTransferAmount = (value: unknown): value is string =>
-  typeof value === "string" && /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value.trim());
+  typeof value === "string" && isDecimalAmountText(value.trim());
 
 const isFeltLikeString = (value: unknown): value is string => {
   if (
@@ -86,31 +86,6 @@ export const readActivityInput = (message: unknown): { readonly accountId?: stri
     return null;
   }
   return message["accountId"] === undefined ? {} : { accountId: message["accountId"] };
-};
-
-/**
- * Parses privileged origin-grant messages and normalizes origins.
- */
-export const readGrantOriginInput = (message: unknown): OriginGrantInput | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "origin", "type", "vaultPassphrase"]) ||
-    message["type"] !== "wallet.grantOrigin" ||
-    !isVaultPassphrase(message["vaultPassphrase"])
-  ) {
-    return null;
-  }
-
-  const origin = normalizeWalletOrigin(message["origin"]);
-  if (!origin || (message["accountId"] !== undefined && !isAccountId(message["accountId"]))) {
-    return null;
-  }
-
-  return {
-    ...(message["accountId"] === undefined ? {} : { accountId: message["accountId"] }),
-    origin,
-    vaultPassphrase: message["vaultPassphrase"],
-  };
 };
 
 /**
@@ -316,12 +291,26 @@ const readTransferFields = (
   readonly accountId: string;
   readonly amount: string;
   readonly recipient: string;
+  /**
+   * The fee the review step displayed, echoed back by the panel on send. The
+   * background turns it into a signing ceiling (MCW-V09-119); absent means the
+   * caller reviewed no fee and the send is bounded only by the node's quote.
+   */
+  readonly reviewedFee?: FeeEstimate;
   readonly speed: "fast" | "standard";
   readonly tokenId: string;
 } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "amount", "recipient", "speed", "tokenId", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "accountId",
+      "amount",
+      "recipient",
+      "reviewedFee",
+      "speed",
+      "tokenId",
+      "type",
+    ]) ||
     message["type"] !== type ||
     !isAccountId(message["accountId"]) ||
     !isTransferAmount(message["amount"]) ||
@@ -329,6 +318,7 @@ const readTransferFields = (
     !isStarkFieldElement(message["recipient"]) ||
     typeof message["tokenId"] !== "string" ||
     message["tokenId"].length === 0 ||
+    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"])) ||
     (message["speed"] !== undefined &&
       message["speed"] !== "fast" &&
       message["speed"] !== "standard")
@@ -340,6 +330,7 @@ const readTransferFields = (
     accountId: message["accountId"],
     amount: message["amount"].trim(),
     recipient: message["recipient"],
+    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
     speed: message["speed"] === "fast" ? "fast" : "standard",
     tokenId: message["tokenId"],
   };
@@ -375,32 +366,6 @@ export const readTransferInput = (message: unknown): ReturnType<typeof readTrans
  */
 export const readReviewTransferInput = (message: unknown): ReturnType<typeof readTransferFields> =>
   readTransferFields(message, "wallet.reviewTransfer");
-
-/**
- * Parses privileged hash-signing requests without accepting non-hex hashes.
- */
-export const readSignHashInput = (message: unknown): SignHashInput | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "messageHash", "type", "vaultPassphrase"]) ||
-    message["type"] !== "wallet.signHash" ||
-    typeof message["messageHash"] !== "string" ||
-    !isStarkFieldElement(message["messageHash"]) ||
-    !isVaultPassphrase(message["vaultPassphrase"])
-  ) {
-    return null;
-  }
-
-  if (message["accountId"] !== undefined && !isAccountId(message["accountId"])) {
-    return null;
-  }
-
-  return {
-    ...(message["accountId"] === undefined ? {} : { accountId: message["accountId"] }),
-    messageHash: message["messageHash"],
-    vaultPassphrase: message["vaultPassphrase"],
-  };
-};
 
 /**
  * Parses popup unlock messages carrying the vault passphrase.

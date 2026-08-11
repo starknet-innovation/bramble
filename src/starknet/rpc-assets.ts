@@ -12,7 +12,12 @@ import {
   type RpcProvider,
 } from "starknet";
 import { WalletError } from "../shared/errors";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "./networks";
+import {
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  sameFelt,
+  uint256Felts,
+} from "./networks";
 import { isTransportRpcError, withRpcFallback } from "./provider";
 
 /**
@@ -137,27 +142,17 @@ export const getNftOwner = async ({
   });
 };
 
-const UINT128_LIMIT = 1n << 128n;
-
 /**
- * Decodes a canonical two-limb Cairo uint256 response, returning null for
- * malformed or out-of-range limbs.
+ * Decodes a canonical two-limb Cairo uint256 response, returning null for a
+ * wrong arity or for a limb that is not a felt inside the uint128 range. Arity
+ * is the only rule this reader owns: the limb grammar and the join are the
+ * shared `uint256Felts`, never a local `<< 128n` or limb bound, so this reader
+ * and the calldata/event decoders cannot disagree about limb order, about the
+ * range a limb may spend, or about how a missing limb is handled — it is null
+ * here, never zero.
  */
-export const decodeUint256Response = (response: readonly string[]): bigint | null => {
-  try {
-    const low = BigInt(response[0] ?? "");
-    const high = BigInt(response[1] ?? "");
-    return response.length === 2 &&
-      low >= 0n &&
-      low < UINT128_LIMIT &&
-      high >= 0n &&
-      high < UINT128_LIMIT
-      ? low + (high << 128n)
-      : null;
-  } catch {
-    return null;
-  }
-};
+export const decodeUint256Response = (response: readonly string[]): bigint | null =>
+  response.length === 2 ? uint256Felts(response[0], response[1]) : null;
 
 const tryBalanceEntrypoint = async (
   provider: RpcProvider,
@@ -188,7 +183,7 @@ const readNftOwnership = async (
     const owner = await tryOwnerEntrypoint(provider, entrypoint, contractAddress, tokenCalldata);
     if (owner !== null) {
       return {
-        balance: BigInt(owner) === BigInt(accountAddress) ? "1" : "0",
+        balance: sameFelt(owner, accountAddress) ? "1" : "0",
         standard: "ERC721",
       };
     }

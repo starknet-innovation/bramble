@@ -111,11 +111,18 @@ history.
   popup boundary modules enforced by `bun run check`.
 - Krusty KMS owns wallet cryptography. Do not add fallback signing, key derivation, or mnemonic
   validation code.
-- Krusty KMS source must stay pinned in `scripts/vendor-krusty.ts`; update the pin only with the
-  full required gates.
-- The official Privacy SDK source and browser bundle digest stay pinned in
-  `scripts/vendor-privacy-sdk.ts` and `scripts/check-privacy-sdk.ts`. Do not replace its proving,
+- Krusty KMS source must stay pinned in `scripts/vendor-krusty.ts` — the revision, the rustc
+  release, and the build-path remapping that makes the wasm reproducible. Both shipped artifacts
+  (`krusty_kms_wasm_bg.wasm` and the wasm-bindgen glue) are digest-pinned in
+  `scripts/check-krusty-adapter.ts`, whose header states exactly what those digests do and do not
+  prove. Update any of these pins only together, and only with the full required gates.
+- The official Privacy SDK source is pinned in `scripts/vendor-privacy-sdk.ts`; the browser bundle
+  and its source map are digest-pinned in `scripts/check-privacy-sdk.ts`, which reads the revision
+  back out of the vendor script rather than keeping a second copy. Do not replace its proving,
   note-discovery, or sub-account cryptography with local implementations.
+- Every vendored checkout is verified through `scripts/vendor-pin-policy.ts`: pinned revision,
+  clean worktree, and a reviewed digest for every artifact that ships. Add a new vendored source
+  through those helpers, never with a private copy of the checks.
 - No fallback signing implementation. If Krusty KMS is unavailable, fail closed.
 - Encrypted stores must validate decrypted data before use.
 - Stored data access must go through permission checks. Do not read browser storage directly from UI

@@ -187,15 +187,23 @@ describe("route fee lines", () => {
 });
 
 describe("deposit dispatch", () => {
+  const ACCOUNT_ID = `SN_MAIN:${SENDER}`;
+
   const fields = (recipient: string): TransferFields =>
     ({
+      accountId: ACCOUNT_ID,
       amount: "1",
       destination: "private",
       recipient,
       source: "public",
+      tokenAddress: "0x1",
       tokenId: "SN_MAIN:STRK:0x1",
     }) as TransferFields;
 
+  // The deposit is now reached through the shared recipient check, so the stub
+  // answers the two reads it makes. Neither recipient here resembles a trusted
+  // address (shielding to self is an exact match, not a lookalike), so the
+  // check passes and the dispatch is what these assert.
   const recordingWallet = (): {
     readonly deposits: readonly (readonly string[])[];
     readonly wallet: SidepanelWallet;
@@ -204,6 +212,11 @@ describe("deposit dispatch", () => {
     return {
       deposits,
       wallet: {
+        loadPreferences: async () => ({ addressBook: [], tokens: [] }),
+        loadStatus: async () => ({
+          accounts: [{ address: SENDER, id: ACCOUNT_ID, networkId: "SN_MAIN" }],
+          networkId: "SN_MAIN",
+        }),
         preparePrivacyDeposit: async (tokenId: string, amount: string, recipient: string) => {
           deposits.push([tokenId, amount, recipient]);
           return {} as never;

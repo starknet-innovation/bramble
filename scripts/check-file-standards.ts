@@ -3,6 +3,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { actionReferences, isPinnedActionReference, WORKFLOW_DIR } from "./workflow-inventory";
 
 const MAX_LINES = 500;
 const EXCLUDED = new Set([
@@ -72,6 +73,13 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/provider-ops.ts",
   "src/background/origins-ops.ts",
   "src/background/strk20-account-context.ts",
+  // Approved-request execution split out of strk20-ops.ts: it re-resolves the
+  // granted account behind a non-renewing session peek and hands the unlocked
+  // vault credential straight to the protected signer wiring. Same boundary,
+  // same rule — never logged, persisted, or returned across a message.
+  "src/background/strk20-approval-execution.ts",
+  // Queues approvals only. Since the execution half moved out, its sole match
+  // is the `./signature-waiters` import path; no secret material transits here.
   "src/background/strk20-ops.ts",
   // Active-account context split from strk20-wallet-ops; the vault passphrase
   // only transits into the protected signer wiring, never logged or stored.
@@ -154,7 +162,6 @@ const hasControlByte = (text: string): boolean => {
 };
 const DYNAMIC_CODE_PATTERN =
   /\b(?:eval|importScripts)\s*\(|\bnew Function\b|\b(?:setTimeout|setInterval)\s*\(\s*["']|import\s*\(\s*["']https?:\/\//;
-const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 const HTML_SINK_FILES = new Set([
   "src/sidepanel/dom.ts",
   "src/sidepanel/focus-memo.ts",
@@ -257,13 +264,14 @@ for (const file of await walk(".")) {
     failures.push(`${file} must live under its primary module directory`);
   }
 
-  if (file.startsWith(".github/workflows/")) {
-    lines.forEach((line, index) => {
-      const actionRef = line.match(/^\s*-\s+uses:\s*(\S+)/)?.[1];
-      if (actionRef && !GITHUB_ACTION_REF_PATTERN.test(actionRef)) {
-        failures.push(`${file}:${index + 1} GitHub Actions must be pinned to commit SHAs`);
+  if (file.startsWith(`${WORKFLOW_DIR}/`)) {
+    // Extraction and the pin rule are shared with the workflow security policy
+    // (./workflow-inventory), so neither gate can be the looser of the two.
+    for (const { line, reference } of actionReferences(text)) {
+      if (!isPinnedActionReference(reference)) {
+        failures.push(`${file}:${line} GitHub Actions must be pinned to commit SHAs`);
       }
-    });
+    }
   }
 
   if (file.endsWith(".ts") && /\.postMessage\([\s\S]{0,400},\s*["']\*["']/.test(text)) {

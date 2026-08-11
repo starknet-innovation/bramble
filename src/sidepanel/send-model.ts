@@ -4,6 +4,7 @@
  * signed by the wallet.
  */
 import type { TokenBalance } from "../popup/responses";
+import { isSafeDecimals } from "../shared/json";
 import { sameFelt } from "../starknet/networks";
 import { formatTokenAmount } from "../starknet/rpc";
 import type { ValueBucket } from "../starknet/send-routes";
@@ -119,8 +120,9 @@ export const fiatInputToken = (
     price === undefined ||
     !Number.isFinite(price) ||
     price <= 0 ||
-    !Number.isSafeInteger(decimals) ||
-    decimals < 0
+    // The shared token-decimals bound, not a local half of it: a count this
+    // screen would convert against must be one the token boundaries admit.
+    !isSafeDecimals(decimals)
   ) {
     return null;
   }

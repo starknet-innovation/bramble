@@ -8,6 +8,8 @@ import type { Call } from "starknet";
 import type { StarkSignature } from "../../crypto/krusty";
 import { WalletError } from "../../shared/errors";
 import type { AccountRef } from "../../storage/vault-schema";
+import type { FeeEstimate } from "../fee-bounds";
+import { sameFelt, UINT128_LIMIT } from "../networks";
 import type { Strk20NetworkConfig } from "./config";
 import type { PaymasterAuthorizationReview } from "./paymaster-typed-data";
 import type {
@@ -39,9 +41,11 @@ export const STRK20_SERVICE_UNAVAILABLE = "strk20 services unavailable";
  */
 export const STRK20_SUBMISSION_UNAVAILABLE = "strk20 private submission unavailable";
 /**
- * Maximum pool fee accepted by the wallet and the pool's u128 fee field.
+ * Maximum pool fee accepted by the wallet and the pool's u128 fee field. The
+ * bound is `UINT128_LIMIT` from ../networks, never a local `1n << 128n`, so the
+ * fee field and the uint256 limb grammar cannot drift apart by an exponent.
  */
-export const STRK20_MAX_POOL_FEE = (1n << 128n) - 1n;
+export const STRK20_MAX_POOL_FEE = UINT128_LIMIT - 1n;
 
 /**
  * Parses a reviewed pool fee into its canonical felt representation. Values
@@ -94,6 +98,13 @@ export type Strk20PrepareInput = Strk20AccountContext & {
 export type Strk20PreparedSubmissionInput = Strk20AccountContext & {
   readonly call: Call;
   readonly proof: Strk20Proof;
+  /**
+   * The network fee the approval card displayed for this prepared call. Carried
+   * through to the invoke boundary as a signing ceiling (MCW-V09-119), so the
+   * privacy send is held to the figure the user reviewed exactly like every
+   * other approved invoke. Absent when no estimate was shown.
+   */
+  readonly reviewedFee?: FeeEstimate;
 };
 
 /**
@@ -130,6 +141,23 @@ export type Strk20AccountPlan = {
 export type Strk20SubmissionPlan = Strk20PrivateRelayPlan | Strk20AccountPlan;
 
 /**
+ * Outcome of a pool submission: the broadcast transaction, plus the ERC20
+ * approvals that submission granted so the caller can track them.
+ *
+ * A deposit (and the pool fee) is pulled by the pool, so entering the pool
+ * necessarily approves it to spend the account's PUBLIC balance. Those grants
+ * are ordinary standing allowances owned by the submitting account, and the
+ * allowance manager can only show or revoke a residual one if the submitter
+ * reports it — reconstructing it from the actions at the call site would be a
+ * second definition of the pool's own approval rule. `allowanceGrants` is
+ * absent (never a lie) for a submission that approves nothing.
+ */
+export type Strk20SubmissionResult = {
+  readonly allowanceGrants?: readonly Call[];
+  readonly transactionHash: string;
+};
+
+/**
  * Injectable official-SDK adapter. Implementations must validate every SDK and
  * service response, target the configured pool, and fail closed.
  */
@@ -141,7 +169,7 @@ export type Strk20Service = {
   ) => Promise<"registered" | "unregistered">;
   readonly register?: (
     input: Strk20AccountContext & { readonly poolFeeFri: string },
-  ) => Promise<{ readonly transactionHash: string }>;
+  ) => Promise<Strk20SubmissionResult>;
   /**
    * Reads the pool's per-`apply_actions` STRK fee so the UI can show it before
    * any quote exists. Absent implementations leave the fee unknown.
@@ -160,7 +188,7 @@ export type Strk20Service = {
       readonly beforeProof?: () => Promise<void>;
       readonly plan: Strk20SubmissionPlan;
     },
-  ) => Promise<{ readonly transactionHash: string }>;
+  ) => Promise<Strk20SubmissionResult>;
   readonly submitPrepared: (
     input: Strk20PreparedSubmissionInput,
   ) => Promise<{ readonly transactionHash: string }>;
@@ -247,7 +275,7 @@ const assertFeeBalance = async (
   const sameTokenSpend = input.actions.filter(
     (action) =>
       (action.type === "withdraw" || action.type === "transfer") &&
-      BigInt(action.token) === BigInt(feeAction.token),
+      sameFelt(action.token, feeAction.token),
   );
   assertSufficientPrivateBalance([...sameTokenSpend, feeAction], balances);
 };
@@ -368,7 +396,7 @@ export const submitStrk20Actions = async (
     readonly beforeProof?: () => Promise<void>;
     readonly plan: Strk20SubmissionPlan;
   },
-): Promise<{ readonly transactionHash: string }> => {
+): Promise<Strk20SubmissionResult> => {
   await assertActionBatch(service, input);
   if (input.plan.mode === "account" && !isDepositOnly(input.actions)) {
     throw new WalletError(STRK20_PRIVACY_LEAK);
@@ -405,7 +433,7 @@ export const readStrk20RegistrationStatus = (
 export const registerStrk20Account = async (
   service: Strk20Service,
   input: Strk20AccountContext & { readonly poolFeeFri: string },
-): Promise<{ readonly transactionHash: string }> => {
+): Promise<Strk20SubmissionResult> => {
   if (!service.register) {
     throw new WalletError(STRK20_SERVICE_UNAVAILABLE);
   }

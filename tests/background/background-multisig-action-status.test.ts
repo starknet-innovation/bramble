@@ -13,11 +13,22 @@ import {
 import {
   HARNESS_MULTISIG,
   HARNESS_TARGET,
-  HARNESS_TX_ID,
   harnessAccount,
   harnessExtensionSender,
+  harnessTxId,
   makeMultisigHarness,
 } from "../support/multisig-harness";
+
+const proposalCall = {
+  calldata: ["0x5"],
+  contractAddress: HARNESS_TARGET,
+  entrypoint: "transfer",
+  salt: "0x0",
+} as const;
+
+// Executable fixtures are filed under the id their own call hashes to; the
+// execute path re-derives it offline before building any invoke.
+const PROPOSAL_TX_ID = harnessTxId(proposalCall);
 
 const makeHarness = async (status: MultisigProposalStatus | "throw") => {
   const { handler, invokeCalls, multisigStore } = makeMultisigHarness({
@@ -37,18 +48,13 @@ const makeHarness = async (status: MultisigProposalStatus | "throw") => {
     signers: [harnessAccount.address],
   };
   const proposal: MultisigProposalRecord = {
-    call: {
-      calldata: ["0x5"],
-      contractAddress: HARNESS_TARGET,
-      entrypoint: "transfer",
-      salt: "0x0",
-    },
+    call: proposalCall,
     confirmations: 0,
-    id: multisigProposalId(record.id, HARNESS_TX_ID) ?? "",
+    id: multisigProposalId(record.id, PROPOSAL_TX_ID) ?? "",
     multisigId: record.id,
     state: "pending",
     summary: "Pay vendor",
-    txId: HARNESS_TX_ID,
+    txId: PROPOSAL_TX_ID,
   };
   await multisigStore.upsertMultisig(record);
   await multisigStore.upsertProposal(proposal);

@@ -1,6 +1,8 @@
 /**
  * Authenticated or relay-backed Starkscan HTTP client and endpoint surface.
  */
+import { WalletError } from "../shared/errors";
+import { HTTP_BODY_LIMITS, readBoundedText, UNTRUSTED_REQUEST_INIT } from "../shared/http-json";
 import { isRecord } from "../shared/json";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "./networks";
 import {
@@ -30,7 +32,6 @@ import type {
   StarkscanTransfer,
 } from "./starkscan-types";
 
-const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 8_000;
 const MAX_PAGE_LIMIT = 200;
 /**
@@ -140,11 +141,13 @@ const pageQuery = (options: StarkscanPageOptions = {}): URLSearchParams => {
   return query;
 };
 
-const readError = async (response: Response): Promise<StarkscanError> => {
+const readError = async (response: Response, deadline: AbortSignal): Promise<StarkscanError> => {
   const retryAfter = response.headers.get("retry-after");
   const requestIdHeader = response.headers.get("x-request-id");
   try {
-    const value = JSON.parse((await response.text()).slice(0, 8_192)) as unknown;
+    const value = JSON.parse(
+      await readBoundedText(response, HTTP_BODY_LIMITS.errorDetail, deadline),
+    ) as unknown;
     if (isRecord(value)) {
       const message =
         typeof value["message"] === "string" ? value["message"] : "Starkscan request failed";
@@ -168,33 +171,56 @@ const readError = async (response: Response): Promise<StarkscanError> => {
   );
 };
 
+// One deadline per exchange, created before the request and carried into the
+// body read, so connect, headers, and every body chunk share a single budget.
+// Returning it alongside the response is what lets the reader cancel a stalled
+// stream instead of only aborting the socket.
 const fetchResponse = async (
   http: StarkscanHttp,
   url: string,
   apiKey: string | undefined,
   timeoutMs: number,
-): Promise<Response> => {
+): Promise<{ readonly deadline: AbortSignal; readonly response: Response }> => {
+  const deadline = AbortSignal.timeout(timeoutMs);
   try {
-    return await http(url, {
-      headers: {
-        accept: "application/json",
-        ...(apiKey === undefined ? {} : { "X-Starkscan-Api-Key": apiKey }),
-      },
-      method: "GET",
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    return {
+      deadline,
+      response: await http(url, {
+        ...UNTRUSTED_REQUEST_INIT,
+        headers: {
+          accept: "application/json",
+          ...(apiKey === undefined ? {} : { "X-Starkscan-Api-Key": apiKey }),
+        },
+        method: "GET",
+        signal: deadline,
+      }),
+    };
   } catch {
     throw new StarkscanError("Starkscan unavailable", null);
   }
 };
 
-const parseResponse = async <T>(response: Response, parse: (value: unknown) => T): Promise<T> => {
+// The cap is spent as the bytes arrive, never after them: a hostile explorer
+// that answers `200` and streams forever is cut off at the budget rather than
+// buffered whole and then measured, which is what a `text()`-then-check does.
+const parseResponse = async <T>(
+  { deadline, response }: { readonly deadline: AbortSignal; readonly response: Response },
+  parse: (value: unknown) => T,
+): Promise<T> => {
   if (!response.ok) {
-    throw await readError(response);
+    throw await readError(response, deadline);
   }
-  const text = await response.text();
-  if (text.length > MAX_RESPONSE_BYTES) {
-    throw new StarkscanError("Starkscan response exceeded size limit", response.status);
+  let text: string;
+  try {
+    text = await readBoundedText(response, HTTP_BODY_LIMITS.starkscan, deadline);
+  } catch (error) {
+    // The reader's own reason — over budget, or out of time — is a curated,
+    // non-reflective string, so it is safe to keep and more useful than one
+    // message covering both.
+    throw new StarkscanError(
+      error instanceof WalletError ? error.message : "Starkscan response unavailable",
+      response.status,
+    );
   }
   try {
     return parse(JSON.parse(text) as unknown);
@@ -206,8 +232,15 @@ const parseResponse = async <T>(response: Response, parse: (value: unknown) => T
 
 /**
  * Creates a read-only Starkscan client. It validates every consumed field,
- * bounds hostile response sizes, never logs the API key, and surfaces
- * rate-limit metadata so callers can fall back without blind retries.
+ * never logs the API key, and surfaces rate-limit metadata so callers can fall
+ * back without blind retries.
+ *
+ * Responses are read through the shared bounded reader (`../shared/http-json`):
+ * one deadline covers the whole exchange and the body is cut off at
+ * `HTTP_BODY_LIMITS.starkscan` as it streams, so neither an endless body nor a
+ * stalled one can be buffered into the worker. Requests carry the same
+ * hardening as the wallet's other untrusted boundaries — no cookies, no
+ * referrer, redirects refused. Every failure is a {@link StarkscanError}.
  */
 export const createStarkscanClient = ({
   apiKey,

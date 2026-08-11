@@ -5,8 +5,8 @@ import { describe, expect, test } from "bun:test";
 import type { RpcProvider } from "starknet";
 import { createStarkscanClient } from "../../src/starknet/starkscan";
 import {
-  createStarkscanPreferredBalances,
-  createStarkscanPreferredHistory,
+  createRpcFirstBalances,
+  createRpcFirstHistory,
   getStarkscanTokenBalances,
   getStarkscanTransactionHistory,
 } from "../../src/starknet/starkscan-wallet";
@@ -145,7 +145,11 @@ describe("Starkscan wallet adapters", () => {
     ).rejects.toThrow("incomplete");
   });
 
-  test("preferred wallet reads use Starkscan first and preserve RPC fallback", async () => {
+  // Ordering is pinned in starkscan-rpc-first.test.ts (MCW-V09-129): the
+  // configured RPC answers first and the gateway is the outage fallback. This
+  // case keeps the fallback wiring itself covered — an unreachable gateway must
+  // not turn an RPC outage into a thrown read.
+  test("preferred wallet reads keep the indexed fallback wired", async () => {
     const input = {
       accountAddress: ACCOUNT,
       rpcUrls: ["https://rpc.example"],
@@ -168,16 +172,22 @@ describe("Starkscan wallet adapters", () => {
         cap: null,
       },
     });
-    expect((await createStarkscanPreferredBalances(complete)(input))[0]?.balance).toBe("0");
+    const offlineRpc = () =>
+      ({
+        async callContract() {
+          throw new Error("node unreachable");
+        },
+      }) as unknown as RpcProvider;
+    expect((await createRpcFirstBalances(complete)(input, offlineRpc))[0]?.balance).toBe("0");
 
+    let rpcBalanceReads = 0;
     const unavailable = createStarkscanClient({
       baseUrl: "https://starkscan.test/v1",
       http: async () => {
         throw new Error("offline");
       },
     });
-    let rpcBalanceReads = 0;
-    const balances = await createStarkscanPreferredBalances(unavailable)(input, () => {
+    const balances = await createRpcFirstBalances(unavailable)(input, () => {
       return {
         async callContract() {
           rpcBalanceReads += 1;
@@ -195,6 +205,6 @@ describe("Starkscan wallet adapters", () => {
       rpcUrls: ["https://rpc.example"],
       tokens: [],
     } as const;
-    expect(await createStarkscanPreferredHistory(unavailable)(historyInput)).toEqual([]);
+    expect(await createRpcFirstHistory(unavailable)(historyInput)).toEqual([]);
   });
 });

@@ -26,7 +26,11 @@ import {
   unavailablePreferencesStore,
 } from "./runtime-state";
 import type { UnlockSession } from "./session";
-import { createSignatureWaiters, type SignatureWaiters } from "./signature-waiters";
+import {
+  createSignatureWaiters,
+  releaseWaitersOnApprovalExpiry,
+  type SignatureWaiters,
+} from "./signature-waiters";
 import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
@@ -117,31 +121,43 @@ const activeStateCoordinatorFor = (
  * Resolves every optional collaborator into the fully wired router context.
  * Absent collaborators fall back to in-memory or explicitly-unavailable
  * defaults, never to a silently permissive one.
+ *
+ * The approval queue and the waiter registry are bound together here: an
+ * approval swept by the queue's TTL frees an admission slot, so the dapp
+ * response parked behind it must be released in the same step, or the
+ * unbounded growth the caps exist to prevent simply moves into the registry.
+ * The binding is applied to a caller-supplied queue too, so the entrypoint's
+ * own queue is never left unbound.
  */
 export const routerContext = (
   wallet: WalletStatusReader,
   extensionId: string,
   options: MessageHandlerOptions,
   session: UnlockSession,
-): RouterContext => ({
-  activeStateCoordinator: activeStateCoordinatorFor(options.activeStateCoordinator),
-  activity: options.activity ?? memoryActivityLog(),
-  allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
-  approvals: options.approvals ?? createApprovalQueue(),
-  extensionId,
-  guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
-  ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
-  loadMultisigClass: options.loadMultisigClass,
-  multisigStore: options.multisigStore ?? memoryMultisigStore(),
-  now: options.now ?? systemClock,
-  originHistory: options.originHistory ?? memoryOriginHistory(),
-  preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
-  prices: options.prices ?? unavailablePriceService,
-  runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
-  session,
-  swap: options.swap ?? unavailableSwapService,
-  swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
-  strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
-  waiters: createSignatureWaiters(),
-  wallet,
-});
+): RouterContext => {
+  const approvals = options.approvals ?? createApprovalQueue();
+  const waiters = createSignatureWaiters();
+  releaseWaitersOnApprovalExpiry(approvals, waiters, notifyApprovalsChanged);
+  return {
+    activeStateCoordinator: activeStateCoordinatorFor(options.activeStateCoordinator),
+    activity: options.activity ?? memoryActivityLog(),
+    allowanceStore: options.allowanceStore ?? memoryAllowanceStore(),
+    approvals,
+    extensionId,
+    guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
+    ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
+    loadMultisigClass: options.loadMultisigClass,
+    multisigStore: options.multisigStore ?? memoryMultisigStore(),
+    now: options.now ?? systemClock,
+    originHistory: options.originHistory ?? memoryOriginHistory(),
+    preferencesStore: options.preferencesStore ?? unavailablePreferencesStore,
+    prices: options.prices ?? unavailablePriceService,
+    runtimeRpc: options.runtimeRpc ?? defaultRuntimeRpc,
+    session,
+    swap: options.swap ?? unavailableSwapService,
+    swapPreparations: options.swapPreparations ?? createSwapPreparationStore(),
+    strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
+    waiters,
+    wallet,
+  };
+};

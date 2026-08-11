@@ -6,7 +6,7 @@
 import type { Call } from "starknet";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { sameFelt } from "../starknet/networks";
-import { verifyCalls } from "../starknet/verify";
+import { verificationContext, verifyCalls } from "../starknet/verify";
 import {
   isMultisigProposalRecord,
   isMultisigRecord,
@@ -73,11 +73,17 @@ export const multisigProposalEffect = (
       targetLabel,
     };
   }
-  const report = verifyCalls([asCall(call)], {
-    account,
-    addressBook: preferences?.addressBook ?? [],
-    tokens: preferences?.tokens ?? [],
-  });
+  // Built through the shared trusted-set builder rather than a local literal,
+  // so this review scopes contacts, tokens, and watched collections to the
+  // account's network exactly as every background review path does.
+  const report = verifyCalls(
+    [asCall(call)],
+    verificationContext(account, {
+      addressBook: preferences?.addressBook ?? [],
+      nfts: preferences?.nfts ?? [],
+      tokens: preferences?.tokens ?? [],
+    }),
+  );
   return {
     flags: report.flags.map((flag) => flag.message),
     summary: report.calls[0]?.summary ?? `Call ${call.entrypoint} on ${targetLabel}`,

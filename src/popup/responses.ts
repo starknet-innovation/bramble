@@ -16,8 +16,19 @@ export {
   isPendingApprovalsResponse,
   type PendingApproval,
   type PendingApprovalsResponse,
+  readPendingApprovals,
   type WatchAssetToken,
 } from "./approvals-responses";
+/**
+ * Re-exported token-balance validators for one import path.
+ */
+export {
+  type BalancesResponse,
+  type DetectTokensResponse,
+  isBalancesResponse,
+  isDetectTokensResponse,
+  type TokenBalance,
+} from "./responses-balances";
 /**
  * Re-exported Ledger response validators for one import path.
  */
@@ -58,13 +69,8 @@ export {
 
 import { type AllowanceView, isAllowanceView } from "../starknet/allowance-discovery";
 import { isWalletPreferences, type WalletPreferences } from "../storage/preferences-store";
-import {
-  type AccountRef,
-  isAccountId,
-  isAccountIdForNetwork,
-  isAccountRef,
-} from "../storage/vault-schema";
-import { isPendingApprovalsResponse, type PendingApprovalsResponse } from "./approvals-responses";
+import { type AccountRef, isAccountId, isAccountRef } from "../storage/vault-schema";
+import { type PendingApprovalsResponse, readPendingApprovals } from "./approvals-responses";
 
 /**
  * Popup wallet status response accepted from the background boundary.
@@ -138,30 +144,6 @@ export type PreferencesResponse = {
 };
 
 /**
- * Popup token balance item accepted from the background boundary.
- */
-export type TokenBalance = {
-  readonly address: string;
-  readonly balance: string;
-  readonly decimals: number;
-  readonly formatted: string;
-  readonly id: string;
-  readonly name: string;
-  readonly networkId: string;
-  readonly symbol: string;
-};
-
-/**
- * Popup token balances response accepted from the background boundary.
- */
-export type BalancesResponse = {
-  readonly accountId: string;
-  readonly balances: readonly TokenBalance[];
-  readonly networkId: string;
-  readonly ok: true;
-};
-
-/**
  * Popup transfer response accepted from the background boundary.
  */
 export type TransferResponse = {
@@ -189,37 +171,6 @@ const isNetworkOption = (value: unknown): value is NetworkOption =>
   isStarknetNetworkId(value["id"]) &&
   typeof value["name"] === "string" &&
   value["name"].length > 0;
-
-const isTokenBalance = (value: unknown): value is TokenBalance =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, [
-    "address",
-    "balance",
-    "decimals",
-    "formatted",
-    "id",
-    "name",
-    "networkId",
-    "symbol",
-  ]) &&
-  typeof value["address"] === "string" &&
-  isStarkFieldElement(value["address"]) &&
-  typeof value["balance"] === "string" &&
-  /^(?:0|[1-9][0-9]*)$/.test(value["balance"]) &&
-  typeof value["decimals"] === "number" &&
-  Number.isSafeInteger(value["decimals"]) &&
-  value["decimals"] >= 0 &&
-  value["decimals"] <= 36 &&
-  typeof value["formatted"] === "string" &&
-  value["formatted"].length > 0 &&
-  typeof value["id"] === "string" &&
-  value["id"].length > 0 &&
-  typeof value["name"] === "string" &&
-  value["name"].length > 0 &&
-  isStarknetNetworkId(value["networkId"]) &&
-  typeof value["symbol"] === "string" &&
-  /^[A-Z0-9]{2,12}$/.test(value["symbol"]);
 
 /**
  * Checks popup status responses before rendering.
@@ -322,33 +273,6 @@ export const isPreferencesResponse = (value: unknown): value is PreferencesRespo
   isWalletPreferences(value["preferences"]);
 
 /**
- * Checks balance responses before rendering.
- */
-export const isBalancesResponse = (value: unknown): value is BalancesResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["accountId", "balances", "networkId", "ok"]) &&
-  value["ok"] === true &&
-  isAccountIdForNetwork(value["accountId"], value["networkId"]) &&
-  Array.isArray(value["balances"]) &&
-  value["balances"].every(
-    (balance) =>
-      isTokenBalance(balance) &&
-      balance.networkId === value["networkId"] &&
-      balance.id === `${balance.networkId}:${balance.symbol}:${balance.address}`,
-  ) &&
-  hasUniqueStrings(value["balances"].map((balance) => balance.id)) &&
-  value["balances"].every((balance) => balance.networkId === value["networkId"]);
-
-/**
- * Auto-detected token suggestions accepted from the background boundary.
- */
-export type DetectTokensResponse = {
-  readonly ok: true;
-  readonly suggestions: readonly TokenBalance[];
-};
-
-/**
  * Fiat prices keyed by contract address accepted from the background boundary.
  */
 export type PricesResponse = {
@@ -380,18 +304,6 @@ const isPriceMap = (value: unknown): value is Readonly<Record<string, number>> =
 
 const isNumberArray = (value: unknown): value is readonly number[] =>
   Array.isArray(value) && value.every(isFiniteNumberValue);
-
-/**
- * Checks auto-detected token responses before rendering suggestions.
- */
-export const isDetectTokensResponse = (value: unknown): value is DetectTokensResponse =>
-  isRecord(value) &&
-  isJson(value) &&
-  hasOnlyKnownKeys(value, ["ok", "suggestions"]) &&
-  value["ok"] === true &&
-  Array.isArray(value["suggestions"]) &&
-  value["suggestions"].every(isTokenBalance) &&
-  hasUniqueStrings(value["suggestions"].map((token) => token.id));
 
 /**
  * Checks fiat price responses before applying values to balances.
@@ -430,10 +342,16 @@ export const isTransferResponse = (value: unknown): value is TransferResponse =>
   isStarkFieldElement(value["transactionHash"]);
 
 /**
- * Checks approval decision responses before updating popup state.
+ * Checks an approve/deny reply — the granted-account list or a pending-approval
+ * envelope — before the caller treats the decision as applied. The pending
+ * branch accepts the envelope, not every entry in it: the decision already
+ * succeeded, so a malformed prompt still queued behind it must not surface as
+ * "approval failed" (MCW-V09-106). A salvaged queue is not exactly a
+ * `PendingApprovalsResponse`, so this returns a plain boolean instead of
+ * narrowing; use `readPendingApprovals` when the entries are needed.
  */
-export const isApprovalDecisionResponse = (value: unknown): value is ApprovalDecisionResponse =>
-  isAccountsResponse(value) || isPendingApprovalsResponse(value);
+export const isApprovalDecisionResponse = (value: unknown): boolean =>
+  isAccountsResponse(value) || readPendingApprovals(value) !== null;
 
 /**
  * Activity feed response accepted from the background boundary. The feed merges

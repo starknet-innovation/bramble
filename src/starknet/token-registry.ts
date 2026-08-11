@@ -7,6 +7,7 @@
  * treat auto-detection as advisory: a wrong address simply fails its balance
  * probe and is never surfaced, and none of this data authorizes a transfer.
  */
+import { withTokenId } from "../storage/preferences-entries";
 import type { TokenConfig } from "../storage/preferences-store";
 import { STRK_TOKEN_ADDRESS, type StarknetNetworkId, sameFelt } from "./networks";
 
@@ -138,10 +139,10 @@ const foldSymbol = (symbol: string): string => {
  * tokens directly.
  */
 export const knownTokensForNetwork = (networkId: StarknetNetworkId): readonly TokenConfig[] =>
-  REGISTRY[networkId].map((token) => ({
-    ...token,
-    id: `${networkId}:${token.symbol}:${token.address}`,
-  }));
+  // Through the one shared id builder, never a local interpolation of the same
+  // three fields: a curated entry and a user-added entry for the same token must
+  // land on the same id, or "already tracked" comparisons silently miss.
+  REGISTRY[networkId].map(withTokenId);
 
 /**
  * Metadata shape scored by the spam heuristics; accepts both stored token

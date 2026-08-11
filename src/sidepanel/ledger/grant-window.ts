@@ -19,6 +19,7 @@ import {
   type LedgerBrokerResponse,
   ledgerBrokerChannelName,
 } from "../../ledger-grant/broker-protocol";
+import { isRecord } from "../../shared/json";
 import { LedgerRejection } from "./errors";
 import type { LedgerDeviceSession } from "./sign-session";
 
@@ -131,9 +132,6 @@ type LedgerBrokerCall =
       readonly method: "signHash";
       readonly path: string;
     };
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isReturnCode = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 0xffff;

@@ -19,6 +19,7 @@ import { unavailablePreferencesStore } from "../../src/background/runtime-state"
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession } from "../../src/background/session";
 import { createSignatureWaiters } from "../../src/background/signature-waiters";
+import { memoryActivityLog } from "../../src/storage/activity-store";
 import type { AccountRef } from "../../src/storage/vault-schema";
 
 const origin = "https://dapp.example";
@@ -170,6 +171,7 @@ describe("executeDeclareApproval", () => {
       session.unlock(passphrase);
     }
     return {
+      activity: memoryActivityLog(),
       preferencesStore: unavailablePreferencesStore,
       runtimeRpc: {
         async submitDeclareTransaction(input: {
@@ -210,6 +212,7 @@ describe("executeDeclareApproval", () => {
     const signed: string[] = [];
     return {
       ...(queue ? { ledgerSignQueue: queue } : {}),
+      activity: memoryActivityLog(),
       preferencesStore: unavailablePreferencesStore,
       runtimeRpc: {
         async submitDeclareTransaction(input: {

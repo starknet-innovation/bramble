@@ -7,8 +7,9 @@
 
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "../starknet/networks";
 import { canonicalStrk20PoolFee } from "../starknet/strk20/service";
+import { withTokenId } from "../storage/preferences-entries";
 import type { TokenConfig, WalletPreferences } from "../storage/preferences-store";
-import { activeAccountContext, networkRpcUrls } from "./runtime-state";
+import { type ActiveAccountContext, networkRpcUrls } from "./runtime-state";
 import { strk20AccountContext } from "./strk20-account-context";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
 import type { WalletOpsDeps } from "./wallet-ops";
@@ -62,14 +63,17 @@ const strkTokenFor = (context: ActivePrivacyContext): TokenConfig =>
     (token) =>
       token.networkId === context.accountContext.account.networkId &&
       sameFelt(token.address, STRK_TOKEN_ADDRESS),
-  ) ?? {
+  ) ??
+  // Through the shared id builder, never a local interpolation of the same
+  // three fields: a fallback whose id drifted from a stored token's would be
+  // compared against it and silently miss.
+  withTokenId({
     address: STRK_TOKEN_ADDRESS,
     decimals: 18,
-    id: `${context.accountContext.account.networkId}:STRK:${STRK_TOKEN_ADDRESS}`,
     name: "Starknet Token",
     networkId: context.accountContext.account.networkId,
     symbol: "STRK",
-  };
+  });
 
 /**
  * Re-checks every public token the pool can pull immediately before a review
@@ -117,12 +121,20 @@ export const assertPublicPoolSpendAffordable = async (
  * Builds the protected account context for one privacy operation, selecting
  * `tokenId` or the network's first tracked token. Returns a displayable error
  * instead of throwing so handlers stay single-shape.
+ *
+ * The account context is an argument rather than something resolved here
+ * because resolving it is what decides whether the unlock window is renewed.
+ * The disclosure read the privacy screen polls passes
+ * `observedAccountContext`; the preparation and execution routes the user just
+ * triggered pass `activeAccountContext`. Keeping that choice at the
+ * call site is what stops one shared builder from silently renewing the
+ * inactivity window for ambient traffic (MCW-V09-105).
  */
 export const resolvePrivacyContext = async (
   deps: Strk20WalletOpsDeps,
-  tokenId?: string,
+  input: { readonly active: ActiveAccountContext; readonly tokenId?: string },
 ): Promise<ActivePrivacyContext | { readonly error: string }> => {
-  const active = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  const { active, tokenId } = input;
   if (active.error !== undefined) {
     return { error: active.error };
   }
@@ -146,6 +158,10 @@ export const resolvePrivacyContext = async (
     accountContext: strk20AccountContext(
       {
         ...(deps.ledgerSignQueue ? { ledgerSignQueue: deps.ledgerSignQueue } : {}),
+        // The extension-owned privacy flows bind their vault signer to the same
+        // unlock every public path uses, so an explicit lock revokes a private
+        // transfer in flight instead of letting it complete.
+        session: deps.session,
         wallet: deps.wallet,
       },
       {

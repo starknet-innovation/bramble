@@ -43,7 +43,7 @@ const httpReturning = (payload: unknown, ok = true): SwapHttp => {
   };
 };
 httpReturning.lastUrl = "";
-httpReturning.lastInit = undefined as Parameters<SwapHttp>[1];
+httpReturning.lastInit = undefined as RequestInit | undefined;
 
 describe("avnu swap service", () => {
   test("fetches, validates, and returns the best quote for the requested pair", async () => {
@@ -114,7 +114,10 @@ describe("avnu swap service", () => {
     expect(built.chainId).toBe(STARKNET_NETWORKS.SN_MAIN.chainId);
     expect(httpReturning.lastUrl).toBe(`${AVNU_BASE_URLS.SN_MAIN}/swap/v3/build`);
     expect(httpReturning.lastInit?.method).toBe("POST");
-    const body = JSON.parse(httpReturning.lastInit?.body ?? "{}") as Record<string, unknown>;
+    const body = JSON.parse(String(httpReturning.lastInit?.body ?? "{}")) as Record<
+      string,
+      unknown
+    >;
     expect(body["includeApprove"]).toBe(true);
     expect(body["slippage"]).toBe(0.005);
     expect(body["takerAddress"]).toBe(TAKER);

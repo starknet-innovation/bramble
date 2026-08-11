@@ -3,7 +3,8 @@
  * is authoritative; dapp-provided options are used only as a fallback. The
  * result is shaped for the preferences token store and the approval queue.
  */
-import { isNonZeroStarkFieldElement, type StarknetNetworkId } from "../starknet/networks";
+import { isSafeDecimals, isTokenSymbol } from "../shared/json";
+import { canonicalAddress, type StarknetNetworkId } from "../starknet/networks";
 import type { WatchAssetToken } from "./approvals";
 
 /**
@@ -25,8 +26,6 @@ export type WatchAssetMetadata = {
   readonly symbol: string;
 };
 
-const isTokenSymbol = (value: string): boolean => /^[A-Z0-9]{2,12}$/.test(value);
-
 // Restrict token names to printable ASCII (excluding angle-bracket markup) so a
 // dapp cannot smuggle control characters, RTL overrides, or non-ASCII homoglyphs
 // into a name the wallet later renders next to a balance. Note: the preferences
@@ -35,32 +34,20 @@ const isTokenSymbol = (value: string): boolean => /^[A-Z0-9]{2,12}$/.test(value)
 const isTokenName = (value: string): boolean =>
   value.length > 0 && value.length <= 64 && /^[\x20-\x7E]+$/.test(value) && !/[<>]/.test(value);
 
-const isTokenDecimals = (value: number): boolean =>
-  Number.isSafeInteger(value) && value >= 0 && value <= 36;
-
-/**
- * Canonicalizes a token contract address to lowercase, zero-padded 0x hex so
- * case- and padding-variant spellings of the same address compare equal for
- * validation and dedup. Returns null when the address is not a field element.
- */
-export const canonicalTokenAddress = (address: string): string | null => {
-  const lower = address.trim().toLowerCase();
-  if (!isNonZeroStarkFieldElement(lower)) {
-    return null;
-  }
-  return `0x${BigInt(lower).toString(16).padStart(64, "0")}`;
-};
-
 /**
  * Builds a validated watch-asset token from on-chain metadata and dapp options,
  * or returns null when the token cannot satisfy the wallet token contract.
+ *
+ * The address is canonicalized through the shared {@link canonicalAddress} so a
+ * dapp cannot register a second record for a token the wallet already tracks by
+ * spelling it differently.
  */
 export const watchAssetToken = (
   request: WatchAssetRequest,
   metadata: WatchAssetMetadata | null,
   networkId: StarknetNetworkId,
 ): WatchAssetToken | null => {
-  const address = canonicalTokenAddress(request.address);
+  const address = canonicalAddress(request.address);
   if (address === null) {
     return null;
   }
@@ -71,7 +58,7 @@ export const watchAssetToken = (
   }
   const symbol = rawSymbol.trim().toUpperCase();
   const name = (metadata?.name ?? request.name ?? symbol).trim();
-  if (!isTokenSymbol(symbol) || !isTokenName(name) || !isTokenDecimals(decimals)) {
+  if (!isTokenSymbol(symbol) || !isTokenName(name) || !isSafeDecimals(decimals)) {
     return null;
   }
   return { address, decimals, name, networkId, symbol };

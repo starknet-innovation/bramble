@@ -4,7 +4,7 @@
  * store and its validators share one definition. Ownership is proven over RPC
  * before an NFT is watched; this module only shapes and validates the data.
  */
-import { hasOnlyKnownKeys, isRecord } from "../shared/json";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "../shared/json";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
@@ -29,9 +29,7 @@ export type WatchedNft = {
 };
 
 const isTokenId = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= MAX_TOKEN_ID_DIGITS &&
-  /^(?:0|[1-9][0-9]*)$/.test(value);
+  isBaseUnitsAmount(value) && value.length <= MAX_TOKEN_ID_DIGITS;
 
 const isNftLabel = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;

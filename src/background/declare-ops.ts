@@ -12,7 +12,9 @@ import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "../security/blocklist";
 import { walletErrorMessage } from "../shared/errors";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
+import type { FeeEstimate } from "../starknet/fee-bounds";
 import { STARKNET_NETWORKS } from "../starknet/networks";
+import type { ActivityLog } from "../storage/activity-store";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
 import type { AccountRef } from "../storage/vault-schema";
 import { accountHashSigner } from "./account-hash-signer";
@@ -24,7 +26,7 @@ import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
 import { isClaimedSenderOrigin, type RuntimeSender } from "./senders";
-import type { UnlockSession } from "./session";
+import type { PassiveUnlockSession } from "./session";
 import type { SignatureWaiters } from "./signature-waiters";
 import type { WalletStatusReader } from "./wallet-reader";
 
@@ -37,7 +39,12 @@ export type DeclareOpsDeps = {
   readonly guard?: OriginGuard;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
+  /**
+   * Non-renewing session view: a page can issue this request on its own
+   * cadence, so reading the passphrase here must never extend the unlock
+   * lifetime.
+   */
+  readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
 };
@@ -47,13 +54,25 @@ export type DeclareOpsDeps = {
  */
 export type DeclareExecuteDeps = {
   /**
+   * Activity log a submitted declare is journalled in, so an approved,
+   * fee-paying declare is auditable and followed to acceptance or revert like
+   * every other submitted transaction. Required, deliberately: making it
+   * optional is exactly how the journal was silently dropped by the one
+   * production caller while the executor's own test kept passing.
+   */
+  readonly activity: ActivityLog;
+  /**
    * Panel round-trip queue for keyless Ledger accounts. Optional so partial test
    * stubs stay valid; a Ledger declare with no queue wired fails closed.
    */
   readonly ledgerSignQueue?: LedgerSignQueue;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
-  readonly session: UnlockSession;
+  /**
+   * Non-renewing session view: the user's approval click already renewed the
+   * window, so submitting the held declare must not renew it for the dapp.
+   */
+  readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
 };
 
@@ -80,6 +99,15 @@ const declareSummaries = (declare: ProviderDeclare): readonly string[] => [
   `Compiled class hash ${declare.compiledClassHash}`,
   ...(declare.classHash === undefined ? [] : [`Class hash ${declare.classHash}`]),
 ];
+
+// The activity line for a submitted declare. Deterministic and built only from
+// the already-validated request felts, never from node output: activity
+// summaries are load-bearing (multisig dedup guards match on them exactly — see
+// multisig-deploy-ops.ts, which keys off "Declare multisig class" and a
+// " at 0x…" deploy marker), so this wording is deliberately distinct from both
+// and identifies the class the dapp asked to declare.
+const declareActivitySummary = (declare: ProviderDeclare): string =>
+  `Declare contract class ${declare.classHash ?? declare.compiledClassHash}`;
 
 const countArray = (value: unknown): number => (Array.isArray(value) ? value.length : 0);
 
@@ -196,7 +224,7 @@ export const handleDeclareOps = async (
   if (guard.isBlocked(input.origin)) {
     return { error: "origin blocked" };
   }
-  const passphrase = session.getPassphrase();
+  const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
@@ -223,6 +251,13 @@ export const handleDeclareOps = async (
  * declare, and returns the node's transaction and class hashes. Returns an
  * actionable error response instead of throwing so the claimed request and
  * held dapp promise settle together without leaving stale approval controls.
+ *
+ * `reviewedFee` is the declaration fee the approval card was showing when the
+ * user approved; it travels into the submit boundary as a signing ceiling, so a
+ * declaration that has grown more expensive since the review is refused rather
+ * than signed. `reviewedDeploymentFee` does the same for the account deployment
+ * an undeployed account submits first — the card totals the two, so binding
+ * only one of them would leave the larger half of that total unenforced.
  */
 export const executeDeclareApproval = async (
   deps: DeclareExecuteDeps,
@@ -230,10 +265,12 @@ export const executeDeclareApproval = async (
     readonly context?: ApprovalContext;
     readonly declare: ProviderDeclare;
     readonly origin: string;
+    readonly reviewedDeploymentFee?: FeeEstimate;
+    readonly reviewedFee?: FeeEstimate;
   },
 ): Promise<RuntimeResponse> => {
   const { preferencesStore, runtimeRpc, session, wallet } = deps;
-  const passphrase = session.getPassphrase();
+  const passphrase = session.peekPassphrase();
   if (!passphrase) {
     return { error: "wallet locked" };
   }
@@ -260,17 +297,39 @@ export const executeDeclareApproval = async (
   // `{ error }` (mirroring executeStrk20InvokeApproval) so the applier settles
   // the held dapp request with the real reason instead of leaving it to hang on
   // an unhandled throw. Fails closed — nothing is submitted on error.
+  let result: { readonly classHash: string; readonly transactionHash: string };
   try {
-    const result = await runtimeRpc.submitDeclareTransaction({
+    result = await runtimeRpc.submitDeclareTransaction({
       account,
       compiledClassHash: input.declare.compiledClassHash,
       contractClass: input.declare.contractClass,
+      // The declaration fee the approval card showed becomes the ceiling this
+      // submission may sign under (MCW-V09-119), and the deployment fee it
+      // showed alongside becomes the ceiling on the deployment submitted first.
+      ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+      ...(input.reviewedDeploymentFee
+        ? { reviewedDeploymentFee: input.reviewedDeploymentFee }
+        : {}),
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences),
       signHash: accountHashSigner(deps, account, passphrase),
       ...(input.declare.classHash === undefined ? {} : { classHash: input.declare.classHash }),
     });
-    return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
   } catch (error) {
     return { error: declarationErrorMessage(error) };
   }
+  // Journal the submitted declare like every other submitted transaction, so it
+  // appears in the activity feed and CSV export and background reconciliation
+  // follows it to acceptance or revert. The transaction is already on chain by
+  // this point, so a storage failure must not be reported to the dapp as a
+  // failed declare.
+  await deps.activity
+    .record({
+      accountId: account.id,
+      hash: result.transactionHash,
+      kind: "declare",
+      networkId: account.networkId,
+      summary: declareActivitySummary(input.declare),
+    })
+    .catch(() => undefined);
+  return { classHash: result.classHash, ok: true, transactionHash: result.transactionHash };
 };

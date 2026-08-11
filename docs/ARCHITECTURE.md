@@ -450,33 +450,33 @@ Pinned class (reproduce with scarb `2.18.0` via `bun run vendor:multisig`; verif
 - Class hash: `0xbb216b0643679b992e7953b6ea6f5057804237053e79fdd064cf2b5adea035`
 - Compiled class hash: `0x42d945a7f59ead19b20435fbea7d168449299b03d71f8da205517166a2c80c8`
 
-`bun run test:multisig-contract` proves same-call confirmation visibility and
-full rollback on target failure against the pinned Cairo component.
-Known limitations (v1): proposals are single-call; signer/quorum changes use custom self-calls;
-event discovery is bounded and RPC-dependent; below-quorum confirmations pay separate fees; and
-proposals plus review packages contain public transaction data.
+`bun run test:multisig-contract` proves same-call confirmation visibility and full rollback on
+target failure against the pinned Cairo component. Known limitations (v1): proposals are
+single-call; signer/quorum changes use custom self-calls; event discovery is bounded and
+RPC-dependent; below-quorum confirmations pay separate fees; and proposals plus review packages
+contain public transaction data.
 
 ## Allowance manager
 
-Settings → Allowances lists the ERC20 approvals granted through this wallet
-(spender, token, amount, account, network) and revokes any with one tap by
-submitting `approve(spender, 0)` through the same verified send path as
-transfers. Approvals are recorded from decoded `approve` calls when a dapp invoke
-is submitted; the plain store lives at `mc-wallet:allowances`, outside the
-encrypted vault. Enumerating allowances granted on other sites requires an
-on-chain indexer and is a follow-up — only approvals made through this wallet are
-tracked today.
+Settings → Allowances lists the ERC20 approvals this wallet granted — the active account's own
+plus any a watched multisig it signs for executed (read-only: those need a proposal) — and revokes
+one with `approve(spender, 0)` through the verified send path. Every submitting path files what it
+granted; the store applies the arithmetic (`applyDelta`, one serialized read-modify-write) where
+`approve` sets, an increase adds, a decrease subtracts, and a delta over an unseen base stores
+`lowerBound`, shown as "at least N". Each record's live `allowance(owner, spender)` is then read
+directly and adopted when it is at least the tracked figure. Collection approvals are excluded and
+reviewed as their own kinds: an ERC721 `approve` carries a token id, so a "revoke" would approve
+item 0. The store `mc-wallet:allowances` sits outside the vault.
 
 ## NFT gallery
 
 Home → NFTs merges auto-discovered collectibles with watched `nfts` preferences (contract, token
 id, network, optional label, spam flag).
-Indexer claims are re-proved on-chain against the active account before display;
-explicitly watched NFTs also resolve ERC-721/1155 metadata without auto-fetching
-attacker-controlled airdrop URLs. The detail screen shows the resolved artwork
-and attributes, then sends through a two-phase review → confirm flow. Review
-re-proves ownership, detects ERC-721 versus ERC-1155, decodes the exact call,
-screens the recipient, and estimates the fee without broadcasting. Confirmation
+Indexer claims are re-proved on-chain against the active account before display; explicitly
+watched NFTs also resolve ERC-721/1155 metadata without auto-fetching attacker-controlled airdrop
+URLs. The detail screen shows the resolved artwork and attributes, then sends through a two-phase
+review → confirm flow. Review re-proves ownership, detects ERC-721 versus ERC-1155, decodes the
+exact call, screens the recipient, and estimates the fee without broadcasting. Confirmation
 repeats those checks immediately before the verified invoke submission.
 On unlock and resync, watched NFTs hydrate through an ownership-proven metadata lane without
 waiting for the optional indexer.

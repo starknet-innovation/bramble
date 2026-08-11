@@ -7,6 +7,7 @@ import { createKrustyKms } from "../crypto/krusty";
 import type { WalletEventMessage } from "../provider/events";
 import { createOriginGuard } from "../security/blocklist";
 import { createPhishingFeed } from "../security/phishing-feed";
+import { untrustedFetch } from "../shared/http-json";
 import { createSwapService, unavailableSwapService } from "../starknet/avnu";
 import { MULTISIG_CLASS_ARTIFACT } from "../starknet/multisig-deploy";
 import { createPriceService, unavailablePriceService } from "../starknet/prices";
@@ -37,7 +38,7 @@ import { setApprovalNotifier } from "./approval-notifier";
 import {
   type ApprovalSurfaceBrowser,
   configureApprovalSurface,
-  requestApprovalSurface,
+  createApprovalSurfaceOpener,
 } from "./approval-surface";
 import { createApprovalQueue } from "./approvals";
 import { walletEventBroadcasts } from "./events";
@@ -46,8 +47,9 @@ import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboar
 import { defaultRuntimeRpc } from "./runtime-rpc";
 import { createActiveStateCoordinator, reconcileUnlockedActiveAccount } from "./runtime-state";
 import type { RuntimeSender } from "./senders";
-import { createUnlockSession, type UnlockSessionStore } from "./session";
+import type { SessionAlarmsApi } from "./session-expiry-alarm";
 import { type AlarmsApi, startTransactionMonitor } from "./tx-monitor";
+import { createBackgroundUnlockSession } from "./unlock-session-boot";
 import { createWalletReader } from "./wallet-reader";
 
 type RuntimeApi = {
@@ -68,7 +70,9 @@ type RuntimeApi = {
   readonly sendMessage?: (message: unknown) => Promise<unknown>;
 };
 
-type AlarmsGlobal = { readonly alarms?: AlarmsApi };
+// Two alarm consumers, one API: recurring reconciliation cadences
+// (./tx-monitor) and the one-shot unlock deadline (./session-expiry-alarm).
+type AlarmsGlobal = { readonly alarms?: AlarmsApi & SessionAlarmsApi };
 
 type TabsApi = {
   readonly query: (
@@ -86,8 +90,6 @@ type ExtensionGlobal = typeof globalThis & {
     };
 };
 
-const SESSION_STORE_KEY = "mc-wallet:session";
-
 const extensionApi = (globalThis as ExtensionGlobal).chrome;
 const runtime = extensionApi?.runtime;
 const tabs = extensionApi?.tabs;
@@ -97,20 +99,9 @@ const updateApprovalSurface = (preference: ApprovalSurfacePreference): void => {
   void configureApprovalSurface(extensionApi, preference).catch(() => undefined);
 };
 const approvals = createApprovalQueue();
-const sessionStore: UnlockSessionStore | undefined = (() => {
+const sessionStore = (() => {
   try {
-    const store = createBrowserSessionStore();
-    return {
-      async clear() {
-        await store.remove(SESSION_STORE_KEY);
-      },
-      async load() {
-        return store.get(SESSION_STORE_KEY);
-      },
-      async save(state) {
-        await store.set(SESSION_STORE_KEY, state);
-      },
-    };
+    return createBrowserSessionStore();
   } catch {
     return undefined;
   }
@@ -130,10 +121,14 @@ const vaultStores: { readonly primary: EncryptedStore; readonly staging: Encrypt
       return null;
     }
   })();
-const session = createUnlockSession(undefined, undefined, sessionStore, () => {
-  for (const store of [vaultStores?.primary, vaultStores?.staging]) {
-    store?.clearKeys();
-  }
+const session = createBackgroundUnlockSession({
+  alarms: extensionApi?.alarms,
+  sessionStore,
+  clearKeyCaches: () => {
+    for (const store of [vaultStores?.primary, vaultStores?.staging]) {
+      store?.clearKeys();
+    }
+  },
 });
 // Storage lockdown is a startup prerequisite, not a best-effort side effect.
 // Requests remain fail-closed if Chrome cannot remove content-script access.
@@ -188,7 +183,7 @@ const allowanceLog = (() => {
 })();
 const priceService = (() => {
   try {
-    return createPriceService({ http: (url) => fetch(url), store: createBrowserLocalStore() });
+    return createPriceService({ http: untrustedFetch, store: createBrowserLocalStore() });
   } catch {
     return unavailablePriceService;
   }
@@ -197,7 +192,7 @@ const priceService = (() => {
 // fetch is unavailable in this runtime.
 const swapService = (() => {
   try {
-    return createSwapService({ http: (url, init) => fetch(url, init) });
+    return createSwapService({ http: untrustedFetch });
   } catch {
     return unavailableSwapService;
   }
@@ -217,7 +212,7 @@ const multisigLog = (() => {
 // even before the first fetch or when the source is unreachable.
 const phishingFeed = (() => {
   try {
-    return createPhishingFeed({ fetch: (url) => fetch(url), store: createBrowserLocalStore() });
+    return createPhishingFeed({ fetch: untrustedFetch, store: createBrowserLocalStore() });
   } catch {
     return null;
   }
@@ -471,8 +466,18 @@ setApprovalNotifier(() => broadcastEvent({ event: "approvalsChanged", type: "wal
 runtime?.onInstalled.addListener((details) => {
   void openOnboardingOnInstall(extensionApi, details.reason);
 });
+// Runs synchronously ahead of the async gating below so Chrome still counts the
+// page's transient user activation; blocklisted origins and repeat opens from a
+// single tab are filtered inside the opener.
+const openApprovalSurface = createApprovalSurfaceOpener({
+  browser: extensionApi,
+  extensionId: runtime?.id ?? "",
+  guard: originGuard,
+  now: systemClock,
+  preference: () => approvalSurfacePreference,
+});
 runtime?.onMessage.addListener((message, sender, sendResponse) => {
-  requestApprovalSurface(extensionApi, approvalSurfacePreference, runtime.id, message, sender);
+  openApprovalSurface(message, sender);
   void runtimeReady
     .then(() => handleMessage(message, sender))
     .then(

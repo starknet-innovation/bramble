@@ -7,12 +7,24 @@
  * Trust boundary: every AVNU response is UNTRUSTED input. Quotes are validated
  * field by field (felt addresses, hex amounts, finite USD figures) and must
  * echo the exact token pair that was requested; built calls are validated as
- * felts/entrypoint identifiers and are additionally policy-checked by the
- * background swap handler (an `approve` may only target the sell token) and
- * decoded by the call verifier before anything is signed. Failure behaviour:
- * network errors, malformed payloads, and unsupported networks all throw —
- * the wallet fails closed and never signs calldata it could not validate.
+ * felts/entrypoint identifiers and the COMPLETE returned call set is then
+ * policy-checked against the reviewed intent by the background swap handler
+ * (../background/swap-ops.ts) and decoded by the call verifier before anything
+ * is signed — this module never decides what a build may do, but it does pin
+ * WHO a build may touch: the exchange router per network (AVNU_DEPLOYMENTS) and
+ * the swap selectors that router exposes (isAvnuSwapEntrypoint). Those two pins
+ * are what stop an aggregator choosing both sides of the policy's equalities.
+ * Failure behaviour: network errors, malformed payloads, and networks with no
+ * pinned deployment all throw — the wallet fails closed and never signs
+ * calldata it could not validate.
  */
+import {
+  type BoundedHttpFetch,
+  fetchBoundedJson,
+  HTTP_BODY_LIMITS,
+  HTTP_REQUEST_TIMEOUT_MS,
+} from "../shared/http-json";
+import { isRecord, isSafeDecimals } from "../shared/json";
 import {
   isStarkFieldElement,
   STARKNET_NETWORKS,
@@ -21,34 +33,79 @@ import {
 } from "./networks";
 
 /**
- * Minimal HTTP response subset consumed from the injected fetch.
+ * Injectable network fetch used only by the background worker, and the same
+ * shape every other untrusted HTTP boundary in the wallet takes: the aggregator
+ * is reached through {@link fetchBoundedJson}, so its bodies are capped as they
+ * stream and its exchanges carry a deadline and the shared request hardening
+ * rather than a private variant of either.
  */
-export type SwapHttpResponse = {
-  readonly json: () => Promise<unknown>;
-  readonly ok: boolean;
+export type SwapHttp = BoundedHttpFetch;
+
+/**
+ * One pinned AVNU deployment: the API base the wallet talks to and the exchange
+ * (router) contract that API may make this wallet approve and call. The two are
+ * one value because a build is only reviewable against a counterparty the
+ * wallet fixed in ADVANCE — an aggregator free to name its own spender picks
+ * both sides of every equality a build policy could check, and "the approval and
+ * the swap agree" then says nothing about who is being trusted.
+ */
+export type AvnuDeployment = {
+  readonly baseUrl: string;
+  readonly router: string;
 };
 
 /**
- * Injectable network fetch used only by the background worker. `init` carries
- * the POST body for the build endpoint.
+ * Pinned AVNU deployment per network, total over StarknetNetworkId so adding a
+ * network forces an explicit decision rather than inheriting an unpinned
+ * counterparty. `null` means AVNU is not available there (devnet runs no
+ * aggregator) and every swap entry point fails closed before a request is made.
+ * The router addresses are AVNU's published exchange contracts; they are a
+ * trust anchor, so changing one is a security review, not a config tweak. A
+ * stale pin can only fail closed — builds naming a different spender are
+ * rejected unsigned by ../background/swap-ops.ts — never fail open.
  */
-export type SwapHttp = (
-  url: string,
-  init?: {
-    readonly body?: string;
-    readonly headers?: Readonly<Record<string, string>>;
-    readonly method?: string;
+export const AVNU_DEPLOYMENTS: Readonly<Record<StarknetNetworkId, AvnuDeployment | null>> = {
+  SN_DEVNET: null,
+  SN_MAIN: {
+    baseUrl: "https://starknet.api.avnu.fi",
+    router: "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",
   },
-) => Promise<SwapHttpResponse>;
+  SN_SEPOLIA: {
+    baseUrl: "https://sepolia.api.avnu.fi",
+    router: "0x02c56e8b00dbe2a71e57472685378fc8988bba947e9a99b26a00fade2b4fe7c2",
+  },
+};
 
 /**
- * AVNU API base URL per supported network. Devnet has no aggregator, so swaps
- * are unavailable there and the service throws before any request is made.
+ * AVNU API base URL per supported network, derived from AVNU_DEPLOYMENTS so a
+ * base URL can never exist without the router pin that makes its builds
+ * reviewable. Devnet has no aggregator, so swaps are unavailable there and the
+ * service throws before any request is made.
  */
-export const AVNU_BASE_URLS: Readonly<Partial<Record<StarknetNetworkId, string>>> = {
-  SN_MAIN: "https://starknet.api.avnu.fi",
-  SN_SEPOLIA: "https://sepolia.api.avnu.fi",
-};
+export const AVNU_BASE_URLS: Readonly<Partial<Record<StarknetNetworkId, string>>> =
+  Object.fromEntries(
+    Object.entries(AVNU_DEPLOYMENTS).flatMap(([networkId, deployment]) =>
+      deployment ? [[networkId, deployment.baseUrl] as const] : [],
+    ),
+  );
+
+// AVNU's exchange exposes exactly two swap entry points: multi_route_swap
+// (exact-in, the shape /swap/v3/build returns for a quote) and
+// swap_exact_token_to (exact-out). Nothing else on that contract is part of a
+// swap, so the build policy admits these and only these — a positive allowlist,
+// because "not a transfer" is not a description of a swap and leaves every
+// other selector (set_approval_for_all, burn, upgrade, …) reachable.
+const AVNU_SWAP_ENTRYPOINTS: readonly string[] = ["multi_route_swap", "swap_exact_token_to"];
+
+/**
+ * Reports whether an entrypoint is one of the pinned router's swap entry
+ * points. Trust boundary: the entrypoint is untrusted text from an aggregator
+ * response, so matching is exact — no case folding, no normalization. Every
+ * other selector reports false and is rejected by the background build policy
+ * rather than reaching the account as an opaque "Call <selector> on 0x…" line.
+ */
+export const isAvnuSwapEntrypoint = (entrypoint: string): boolean =>
+  AVNU_SWAP_ENTRYPOINTS.includes(entrypoint);
 
 /**
  * One validated AVNU quote: the exact sell/buy amounts (hex base units), the
@@ -127,9 +184,6 @@ export type SwapService = {
   readonly listTokens: (networkId: StarknetNetworkId) => Promise<readonly SwapCatalogToken[]>;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 // isStarkFieldElement takes an already-string value; this lifts it into a
 // type guard usable on unknown JSON fields.
 const isFelt = (value: unknown): value is string =>
@@ -148,7 +202,16 @@ const isEntrypoint = (value: unknown): value is string =>
   typeof value === "string" && /^[a-zA-Z_][a-zA-Z0-9_]{0,63}$/.test(value);
 
 const MAX_CALLDATA_LENGTH = 2000;
-const MAX_SWAP_CALLS = 4;
+
+/**
+ * Hard cap on the calls one build may return. A swap is an approval plus a
+ * route call, so anything beyond this is a build the wallet will not review.
+ * Single source of truth: the background build-policy gate in
+ * ../background/swap-ops.ts re-checks the same bound over the calls it froze,
+ * so an injected SwapService cannot widen it.
+ */
+export const MAX_SWAP_CALLS = 4;
+
 const MAX_CATALOG_TOKENS = 200;
 
 const isTokenText = (value: unknown, maxLength: number): value is string =>
@@ -160,10 +223,7 @@ const isTokenText = (value: unknown, maxLength: number): value is string =>
 const readCatalogToken = (value: unknown): SwapCatalogToken | null =>
   isRecord(value) &&
   isFelt(value["address"]) &&
-  typeof value["decimals"] === "number" &&
-  Number.isInteger(value["decimals"]) &&
-  value["decimals"] >= 0 &&
-  value["decimals"] <= 36 &&
+  isSafeDecimals(value["decimals"]) &&
   isTokenText(value["name"], 64) &&
   isTokenText(value["symbol"], 20)
     ? {
@@ -174,13 +234,26 @@ const readCatalogToken = (value: unknown): SwapCatalogToken | null =>
       }
     : null;
 
-const baseUrlFor = (networkId: StarknetNetworkId): string => {
-  const base = AVNU_BASE_URLS[networkId];
-  if (!base) {
+const deploymentFor = (networkId: StarknetNetworkId): AvnuDeployment => {
+  const deployment = AVNU_DEPLOYMENTS[networkId];
+  if (!deployment) {
     throw new Error("swaps are not available on this network");
   }
-  return base;
+  return deployment;
 };
+
+const baseUrlFor = (networkId: StarknetNetworkId): string => deploymentFor(networkId).baseUrl;
+
+/**
+ * The pinned AVNU exchange router for a network: the ONLY contract a build may
+ * ask this wallet to approve as a spender or to call. Trust boundary: this is
+ * wallet-side configuration, never anything an aggregator response can
+ * influence. Throws "swaps are not available on this network" for a network
+ * with no pinned deployment, so a caller that cannot name a counterparty
+ * refuses the build instead of reviewing it against one the aggregator chose.
+ */
+export const avnuRouterAddress = (networkId: StarknetNetworkId): string =>
+  deploymentFor(networkId).router;
 
 // Validates one untrusted quote object and pins it to the requested pair, so a
 // response for a different token pair (or a tampered aggregator) can never
@@ -240,78 +313,82 @@ const readCall = (value: unknown): SwapCall => {
 /**
  * Creates the AVNU swap service over an injected fetch.
  */
-export const createSwapService = ({ http }: { readonly http: SwapHttp }): SwapService => ({
-  async buildCalls(input) {
-    if (!(input.slippage > 0 && input.slippage <= 0.05)) {
-      throw new Error("invalid slippage");
-    }
-    const response = await http(`${baseUrlFor(input.networkId)}/swap/v3/build`, {
-      body: JSON.stringify({
-        includeApprove: true,
-        quoteId: input.quoteId,
-        slippage: input.slippage,
+export const createSwapService = ({ http }: { readonly http: SwapHttp }): SwapService => {
+  // One bounded read for every aggregator endpoint. A transport failure, a
+  // non-ok status, an over-budget body, and a body that never ends all arrive
+  // here as a throw, which each caller turns into its own fail-closed message —
+  // no route is ever built from a partially read answer.
+  const read = async (url: string, request?: Omit<RequestInit, "signal">): Promise<unknown> =>
+    fetchBoundedJson(http, url, HTTP_BODY_LIMITS.swap, HTTP_REQUEST_TIMEOUT_MS, request);
+  return {
+    async buildCalls(input) {
+      if (!(input.slippage > 0 && input.slippage <= 0.05)) {
+        throw new Error("invalid slippage");
+      }
+      const payload = await read(`${baseUrlFor(input.networkId)}/swap/v3/build`, {
+        body: JSON.stringify({
+          includeApprove: true,
+          quoteId: input.quoteId,
+          slippage: input.slippage,
+          takerAddress: input.takerAddress,
+        }),
+        headers: { "content-type": "application/json" },
+        method: "POST",
+      }).catch(() => {
+        throw new Error("swap build failed");
+      });
+      if (
+        !isRecord(payload) ||
+        !isFelt(payload["chainId"]) ||
+        !sameFelt(payload["chainId"], STARKNET_NETWORKS[input.networkId].chainId) ||
+        !Array.isArray(payload["calls"]) ||
+        payload["calls"].length === 0 ||
+        payload["calls"].length > MAX_SWAP_CALLS
+      ) {
+        throw new Error("invalid swap build response");
+      }
+      return {
+        calls: payload["calls"].map(readCall),
+        chainId: payload["chainId"],
+      };
+    },
+    async listTokens(networkId) {
+      const payload = await read(
+        `${baseUrlFor(networkId)}/v1/starknet/tokens?tag=Verified&size=${MAX_CATALOG_TOKENS}&page=0`,
+      ).catch(() => {
+        throw new Error("token list failed");
+      });
+      if (
+        !isRecord(payload) ||
+        !Array.isArray(payload["content"]) ||
+        payload["content"].length > MAX_CATALOG_TOKENS
+      ) {
+        throw new Error("invalid token list response");
+      }
+      return payload["content"]
+        .map(readCatalogToken)
+        .filter((token): token is SwapCatalogToken => token !== null);
+    },
+    async getQuote(input) {
+      const query = new URLSearchParams({
+        buyTokenAddress: input.buyTokenAddress,
+        sellAmount: input.sellAmount,
+        sellTokenAddress: input.sellTokenAddress,
+        size: "1",
         takerAddress: input.takerAddress,
-      }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
-    if (!response.ok) {
-      throw new Error("swap build failed");
-    }
-    const payload = await response.json();
-    if (
-      !isRecord(payload) ||
-      !isFelt(payload["chainId"]) ||
-      !sameFelt(payload["chainId"], STARKNET_NETWORKS[input.networkId].chainId) ||
-      !Array.isArray(payload["calls"]) ||
-      payload["calls"].length === 0 ||
-      payload["calls"].length > MAX_SWAP_CALLS
-    ) {
-      throw new Error("invalid swap build response");
-    }
-    return {
-      calls: payload["calls"].map(readCall),
-      chainId: payload["chainId"],
-    };
-  },
-  async listTokens(networkId) {
-    const response = await http(
-      `${baseUrlFor(networkId)}/v1/starknet/tokens?tag=Verified&size=${MAX_CATALOG_TOKENS}&page=0`,
-    );
-    if (!response.ok) {
-      throw new Error("token list failed");
-    }
-    const payload = await response.json();
-    if (
-      !isRecord(payload) ||
-      !Array.isArray(payload["content"]) ||
-      payload["content"].length > MAX_CATALOG_TOKENS
-    ) {
-      throw new Error("invalid token list response");
-    }
-    return payload["content"]
-      .map(readCatalogToken)
-      .filter((token): token is SwapCatalogToken => token !== null);
-  },
-  async getQuote(input) {
-    const query = new URLSearchParams({
-      buyTokenAddress: input.buyTokenAddress,
-      sellAmount: input.sellAmount,
-      sellTokenAddress: input.sellTokenAddress,
-      size: "1",
-      takerAddress: input.takerAddress,
-    });
-    const response = await http(`${baseUrlFor(input.networkId)}/swap/v3/quotes?${query}`);
-    if (!response.ok) {
-      throw new Error("swap quote failed");
-    }
-    const payload = await response.json();
-    if (!Array.isArray(payload) || payload.length === 0) {
-      throw new Error("no swap route available for this pair");
-    }
-    return readQuote(payload[0], input);
-  },
-});
+      });
+      const payload = await read(`${baseUrlFor(input.networkId)}/swap/v3/quotes?${query}`).catch(
+        () => {
+          throw new Error("swap quote failed");
+        },
+      );
+      if (!Array.isArray(payload) || payload.length === 0) {
+        throw new Error("no swap route available for this pair");
+      }
+      return readQuote(payload[0], input);
+    },
+  };
+};
 
 /**
  * Fail-closed default used when the background could not construct the real

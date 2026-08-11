@@ -13,6 +13,7 @@ import {
 } from "../../src/background/chain-ops";
 import type { RuntimeSender } from "../../src/background/senders";
 import { createUnlockSession, type UnlockSession } from "../../src/background/session";
+import { typedDataHash } from "../../src/starknet/typed-data";
 import { createMemoryStore } from "../../src/storage/kv";
 import { createPreferencesStore } from "../../src/storage/preferences-store";
 import type { AccountRef } from "../../src/storage/vault-schema";
@@ -62,10 +63,13 @@ const unlocked = (): UnlockSession => {
   return session;
 };
 
-// A well-formed SNIP-12 envelope so typedDataHash succeeds where a test needs to
-// reach past the shape check.
+// A well-formed SNIP-12 revision 1 envelope so typedDataHash succeeds where a
+// test needs to reach past the shape check. `revision` is load-bearing: without
+// it the payload declares no domain struct for either revision, so every test
+// below would pass for the wrong reason — rejected at the envelope rather than
+// at the guard under test.
 const typedData = {
-  domain: { chainId: "0x534e5f4d41494e", name: "Test", version: "1" },
+  domain: { chainId: "0x534e5f4d41494e", name: "Test", revision: "1", version: "1" },
   message: { contents: "hi" },
   primaryType: "Mail",
   types: {
@@ -79,6 +83,12 @@ const typedData = {
 };
 
 describe("handleChainOps guard branches", () => {
+  test("the shared fixture really does hash, so every guard below is the reason", () => {
+    // Without this the tests still pass while the envelope is rejected before
+    // the guard under test is ever reached — a silently weakened control.
+    expect(typedDataHash(typedData, account.address)).toMatch(/^0x[0-9a-f]+$/);
+  });
+
   test("rejects a malformed signTypedData message", async () => {
     const response = await handleChainOps(
       deps(unlocked()),

@@ -12,6 +12,7 @@
  * raw transport error, or device identifier crosses the channel.
  */
 
+import { isRecord } from "../shared/json";
 import { isLedgerRejectionCode, type LedgerRejectionCode } from "../sidepanel/ledger/errors";
 import { isLedgerAccountPath } from "../starknet/ledger-path";
 import { isStarkFieldElement } from "../starknet/networks";
@@ -84,9 +85,6 @@ export type LedgerBrokerResponse =
       readonly ok: true;
       readonly value: unknown;
     };
-
-const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isRequestId = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value > 0;

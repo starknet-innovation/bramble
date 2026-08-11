@@ -19,7 +19,11 @@ import type { AccountRef, Vault } from "../storage/vault-schema";
 import { findVaultAccount } from "../wallet/vault-account";
 import { runGuardedNetworkMutation } from "./active-network-mutation";
 import type { NetworkOption, WalletStatus } from "./runtime-types";
-import type { UnlockSession } from "./session";
+import {
+  captureSessionAuthorization,
+  type PassiveUnlockSession,
+  type UnlockSession,
+} from "./session";
 import type { WalletStatusReader } from "./wallet-reader";
 
 const networkOptions = (): readonly NetworkOption[] =>
@@ -209,8 +213,7 @@ export const reconcileUnlockedActiveAccount = async (
   if (!vaultPassphrase) {
     return null;
   }
-  const authorized = (): boolean =>
-    session.generation() === generation && session.peekPassphrase() === vaultPassphrase;
+  const authorized = captureSessionAuthorization(session).isCurrent;
   try {
     return await runActiveStateMutation(coordinator, () =>
       reconcileActiveAccountWithGuard(wallet, preferencesStore, vaultPassphrase, authorized),
@@ -254,8 +257,7 @@ export const selectActiveAccount = async (
       return null;
     }
     const generation = session.generation();
-    const authorized = (): boolean =>
-      session.generation() === generation && session.peekPassphrase() === passphrase;
+    const authorized = captureSessionAuthorization(session).isCurrent;
     const target = findVaultAccount(await wallet.readVault(passphrase), accountId);
     requireCurrentAccountSelection(authorized);
     return runGuardedNetworkMutation(
@@ -320,8 +322,7 @@ export const switchActiveNetwork = async (
       return null;
     }
     const generation = session.generation();
-    const authorized = (): boolean =>
-      session.generation() === generation && session.peekPassphrase() === passphrase;
+    const authorized = captureSessionAuthorization(session).isCurrent;
     return runGuardedNetworkMutation(
       session,
       preferencesStore,
@@ -334,14 +335,10 @@ export const switchActiveNetwork = async (
   });
 
 /**
- * Resolves the active network account behind an unlocked session, or the
- * error response to return when it cannot be resolved.
+ * The active account resolved behind an unlocked session, or the error response
+ * to return when it cannot be resolved.
  */
-export const activeAccountContext = async (
-  wallet: WalletStatusReader,
-  session: UnlockSession,
-  preferencesStore: WalletPreferencesStore,
-): Promise<
+export type ActiveAccountContext =
   | { readonly error: string }
   | {
       readonly account: AccountRef;
@@ -350,9 +347,13 @@ export const activeAccountContext = async (
       readonly error?: never;
       readonly networkId: StarknetNetworkId;
       readonly vaultPassphrase: string;
-    }
-> => {
-  const vaultPassphrase = session.getPassphrase();
+    };
+
+const accountContextFor = async (
+  wallet: WalletStatusReader,
+  vaultPassphrase: string | null,
+  preferencesStore: WalletPreferencesStore,
+): Promise<ActiveAccountContext> => {
   if (!vaultPassphrase) {
     return { error: "wallet locked" };
   }
@@ -369,6 +370,32 @@ export const activeAccountContext = async (
     vaultPassphrase,
   };
 };
+
+/**
+ * Resolves the active network account for an operation the user just initiated
+ * from an extension page, renewing the inactivity window as it reads the
+ * passphrase. Never use it on traffic that arrives on a cadence the user does
+ * not control — that is what {@link observedAccountContext} is for.
+ */
+export const activeAccountContext = (
+  wallet: WalletStatusReader,
+  session: UnlockSession,
+  preferencesStore: WalletPreferencesStore,
+): Promise<ActiveAccountContext> =>
+  accountContextFor(wallet, session.getPassphrase(), preferencesStore);
+
+/**
+ * Resolves the active network account without extending the unlock lifetime.
+ * It takes the non-renewing half of the session, so a handler wired to ambient
+ * traffic — panel polling, dapp queries, background reconciliation — cannot
+ * hold the wallet unlocked no matter which session value it is handed.
+ */
+export const observedAccountContext = (
+  wallet: WalletStatusReader,
+  session: PassiveUnlockSession,
+  preferencesStore: WalletPreferencesStore,
+): Promise<ActiveAccountContext> =>
+  accountContextFor(wallet, session.peekPassphrase(), preferencesStore);
 
 /**
  * Builds extension-page wallet status from vault and preferences state.

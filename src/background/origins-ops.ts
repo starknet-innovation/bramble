@@ -30,7 +30,8 @@ export const handleOriginOps = async (
     if (!readTypeOnlyInput(message, "wallet.connectedSites")) {
       return { error: "invalid connected sites request" };
     }
-    const passphrase = deps.session.getPassphrase();
+    // Peek, never renew: the panel re-reads this list on its ambient cadence.
+    const passphrase = deps.session.peekPassphrase();
     if (!passphrase) {
       return { error: "wallet locked" };
     }

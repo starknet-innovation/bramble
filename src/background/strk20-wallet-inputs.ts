@@ -2,6 +2,7 @@
  * Strict parsers for extension-only STRK20 wallet journey messages.
  */
 
+import { isSha256Digest } from "../shared/ids";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { isTransferAmount } from "./message-inputs";
 
@@ -92,7 +93,6 @@ export const readStrk20WalletExecuteInput = (
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["preparationId", "type"]) &&
   message["type"] === "wallet.strk20Execute" &&
-  typeof message["preparationId"] === "string" &&
-  /^sha256:[0-9a-f]{64}$/.test(message["preparationId"])
+  isSha256Digest(message["preparationId"])
     ? { preparationId: message["preparationId"] }
     : null;
