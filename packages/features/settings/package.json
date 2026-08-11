@@ -1,0 +1,22 @@
+{
+  "name": "@mc-wallet/settings",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./groups": "./src/groups.ts",
+    "./preferences": "./src/preferences.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/portfolio": "workspace:*",
+    "@mc-wallet/privacy": "workspace:*",
+    "@mc-wallet/store": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*"
+  }
+}

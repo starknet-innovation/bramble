@@ -4,11 +4,16 @@
  * wallet-rpc-spec.ts (which holds the per-method table) to keep each file within
  * the repository size cap. Everything here is distilled from wallet_rpc.json.
  */
-import type { ProviderMethod, ProviderRequest, RuntimeMessage } from "../../src/provider/bridge";
-import type { ProviderResultMethod } from "../../src/provider/bridge-results";
-import type { Json } from "../../src/shared/json";
-import { SUPPORTED_WALLET_API } from "../../src/shared/versions";
-import type { AccountRef } from "../../src/storage/vault-schema";
+
+import type { Json } from "@mc-wallet/core/json";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type {
+  ProviderMethod,
+  ProviderRequest,
+  RuntimeMessage,
+} from "@mc-wallet/wallet-protocol/bridge";
+import type { ProviderResultMethod } from "@mc-wallet/wallet-protocol/results";
+import { SUPPORTED_WALLET_API } from "@mc-wallet/wallet-protocol/versions";
 
 /** Spec PADDED_TXN_HASH: `0x` + 64 hex with a top nibble in 0-8 (felt < 2^252). */
 export const PADDED_TXN_HASH = /^0x(0[0-8][a-f0-9]{62})$/;

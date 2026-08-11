@@ -1,0 +1,33 @@
+{
+  "name": "@mc-wallet/wallet-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./add-chain": "./src/transactions/add-chain.ts",
+    "./bridge": "./src/provider/bridge.ts",
+    "./declare": "./src/transactions/declare.ts",
+    "./deployment": "./src/transactions/deployment.ts",
+    "./events": "./src/provider/events.ts",
+    "./invoke-limits": "./src/transactions/invoke-limits.ts",
+    "./invoke": "./src/transactions/invoke.ts",
+    "./methods": "./src/provider/methods.ts",
+    "./request-params": "./src/provider/request-params.ts",
+    "./results": "./src/provider/results.ts",
+    "./rpc-errors": "./src/provider/rpc-errors.ts",
+    "./runtime-message": "./src/provider/runtime-message.ts",
+    "./strk20": "./src/privacy/strk20.ts",
+    "./strk20-bridge": "./src/privacy/strk20-bridge.ts",
+    "./watch-asset": "./src/transactions/watch-asset.ts",
+    "./versions": "./src/provider/versions.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*"
+  }
+}

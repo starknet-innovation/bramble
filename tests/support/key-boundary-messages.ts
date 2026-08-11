@@ -6,8 +6,8 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { RuntimeSender } from "../../src/background/senders";
-import type { AccountRef } from "../../src/storage/vault-schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { type KeyBoundaryMessage, strk20KeyBoundaryMessages } from "./key-boundary-strk20-messages";
 
 /**
@@ -69,11 +69,11 @@ const OUTBOUND_ONLY = new Set(["wallet.event"]);
 
 /**
  * Reads every wallet.* message type the background sources handle. Derived
- * from the literals in src/background so the scan's coverage is enforced by
+ * from the literals in apps/extension/src/background so the scan's coverage is enforced by
  * construction rather than by memory.
  */
 export const handledWalletMessages = async (): Promise<ReadonlySet<string>> => {
-  const dir = "src/background";
+  const dir = "apps/extension/src/background";
   const handled = new Set<string>();
   for (const entry of await readdir(dir)) {
     if (!entry.endsWith(".ts")) {

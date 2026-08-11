@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   createBrowserLocalStore,
   createBrowserSessionStore,
-} from "../../src/storage/browser-storage";
+} from "../../apps/extension/src/browser-storage";
 
 type MutableGlobal = { chrome?: unknown };
 const globalWithChrome = globalThis as unknown as MutableGlobal;

@@ -1,0 +1,27 @@
+{
+  "name": "@mc-wallet/starknet",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./class-hash-verify": "./src/transactions/class-hash-verify.ts",
+    "./declare": "./src/transactions/declare.ts",
+    "./deployment": "./src/transactions/deployment.ts",
+    "./provider": "./src/rpc/provider.ts",
+    "./rpc": "./src/rpc/rpc.ts",
+    "./rpc-assets": "./src/rpc/rpc-assets.ts",
+    "./rpc-submit": "./src/rpc/rpc-submit.ts",
+    "./typed-data": "./src/transactions/typed-data.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*",
+    "@mc-wallet/wallet-protocol": "workspace:*",
+    "starknet": "10.0.2"
+  }
+}

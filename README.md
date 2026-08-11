@@ -85,28 +85,30 @@ Bun · TypeScript · [starknet.js](https://github.com/starknet-io/starknet.js) �
 
 ## Architecture
 
-The extension is split by trust boundary, so page code can never reach signing or vault operations:
+The extension is a private-workspace modular monolith. Package direction is deny-by-default, so
+page code cannot reach signing or vault operations:
 
 ```
-src/background              privileged state, approvals, unlock sessions, vault service
-src/content + src/provider  page <-> background bridge (signing never exposed to pages)
-src/storage                encrypted persistence, permissions, schema migrations
-src/crypto                 Krusty KMS boundary (validates every WASM input/output)
-src/starknet               RPC, networks, token registry, prices, STRK20 privacy adapter
-src/security               phishing blocklist and lookalike heuristics
-src/sidepanel + src/ui      full-page onboarding, side-panel app, Ledger boundary, and design system
-contracts/multisig         the pinned OpenZeppelin multisig shell (Cairo)
+apps/extension              MV3 pages, entrypoints, browser adapters, privileged orchestration
+packages/foundation        pure values, validators, and wallet/provider protocol
+packages/platform          store, encrypted vault, Krusty, Starknet, and Ledger adapters
+packages/features          permissions, portfolio, transactions, multisig, privacy, settings
+packages/presentation      UI Kit and production wallet UI shared with UI Lab
+packages/testing/testkit   deterministic test doubles excluded from production bundles
+contracts/multisig         pinned OpenZeppelin multisig shell (Cairo)
 ```
 
-`src/background` owns privileged state, approvals, unlock sessions, Ledger signature verification,
-and vault wiring. Page-facing code cannot access signing or storage directly. The full trust-boundary
-tour, provider API, design system, schema-migration workflow, and reproducible-build details live in
+`apps/extension/src/background` remains the sole privileged authority and composition root for
+approvals, unlock sessions, Ledger signature verification, and vault wiring. Page-facing code can
+access only the validated provider protocol. The package graph and its enforced invariants are in
+[docs/MODULAR_ARCHITECTURE.md](docs/MODULAR_ARCHITECTURE.md); the runtime trust-boundary tour is in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Docs
 
 - **[Documentation portal](docs/index.md)** — host-ready project and security-audit documentation.
 - **[Architecture & internals](docs/ARCHITECTURE.md)** — the provider API, Ledger trust boundary, pinned class hashes, storage migrations, design system, and full tour.
+- **[Modular architecture](docs/MODULAR_ARCHITECTURE.md)** — package ownership, dependency direction, typed invariants, and local package workflows.
 - **[Wallet store architecture](docs/WALLET_STORE.md)** — persistence layout, account scoping, Chrome update migrations, and Ledger viewing-key custody.
 - **[Security audit](docs/security-audit/index.md)** — baseline, threat model, review sequence, and sanitized findings ledger.
 - **[Source package audit](docs/security-audit/src-package-audit.md)** — package-by-package controls, resolved findings, and validation evidence.

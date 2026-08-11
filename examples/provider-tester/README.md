@@ -8,7 +8,7 @@ wallet behaves correctly end to end.
 
 The extension's content script injects the provider only on `https://` and
 `http://localhost` / `http://127.0.0.1` pages (see `content_scripts.matches` in
-`public/manifest.json`). A `file://` page gets no provider. So serve this folder
+`apps/extension/public/manifest.json`). A `file://` page gets no provider. So serve this folder
 over a local HTTP server.
 
 ## Run it

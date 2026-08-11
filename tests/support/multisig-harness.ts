@@ -3,15 +3,17 @@
  * createMessageHandler with controllable multisig chain reads, so lifecycle
  * tests do not each re-declare ~140 lines of stubbing.
  */
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { MultisigProposalStatus } from "../../src/starknet/multisig";
-import { MULTISIG_CLASS_HASH } from "../../src/starknet/multisig-deploy";
-import type { MultisigProposalDiscovery } from "../../src/starknet/multisig-discovery";
-import type { ActivityLog, ActivityStatus } from "../../src/storage/activity-store";
-import { type MultisigStore, memoryMultisigStore } from "../../src/storage/multisig-store";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+
+import type { MultisigProposalStatus } from "@mc-wallet/multisig/chain";
+import { MULTISIG_CLASS_HASH } from "@mc-wallet/multisig/deploy";
+import type { MultisigProposalDiscovery } from "@mc-wallet/multisig/discovery";
+import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
+import type { ActivityLog, ActivityStatus } from "@mc-wallet/transactions/activity";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 
 /**
  * Address of the multisig contract the harness watches.

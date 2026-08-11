@@ -1,0 +1,38 @@
+{
+  "name": "@mc-wallet/privacy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./call-set-signer": "./src/policy/call-set-signer.ts",
+    "./config": "./src/config.ts",
+    "./maturity": "./src/policy/maturity.ts",
+    "./maturity-store": "./src/policy/maturity-store.ts",
+    "./official-sdk-builder": "./src/sdk/official-sdk-builder.ts",
+    "./official-sdk-errors": "./src/sdk/official-sdk-errors.ts",
+    "./official-sdk-maturity": "./src/sdk/official-sdk-maturity.ts",
+    "./official-sdk-preparation": "./src/sdk/official-sdk-preparation.ts",
+    "./official-sdk-readiness": "./src/sdk/official-sdk-readiness.ts",
+    "./official-sdk-results": "./src/sdk/official-sdk-results.ts",
+    "./official-sdk-runtime": "./src/sdk/official-sdk-runtime.ts",
+    "./official-sdk-service": "./src/sdk/official-sdk-service.ts",
+    "./official-sdk-transfers": "./src/sdk/official-sdk-transfers.ts",
+    "./official-sdk-values": "./src/sdk/official-sdk-values.ts",
+    "./paymaster": "./src/paymaster/paymaster.ts",
+    "./paymaster-typed-data": "./src/paymaster/paymaster-typed-data.ts",
+    "./service": "./src/service.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/starknet": "workspace:*",
+    "@mc-wallet/store": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*",
+    "@mc-wallet/wallet-protocol": "workspace:*",
+    "starknet": "10.0.2"
+  }
+}

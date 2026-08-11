@@ -10,7 +10,7 @@ import {
   ledgerGrantFailure,
   preferredLedgerTransport,
   transportForConnectionMethod,
-} from "../../src/ledger-grant/grant-flow";
+} from "../../apps/extension/src/ledger-grant/grant-flow";
 
 const namedError = (name: string, message = ""): Error => {
   const error = new Error(message);

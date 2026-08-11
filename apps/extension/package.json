@@ -1,0 +1,33 @@
+{
+  "name": "@mc-wallet/extension",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {},
+  "scripts": {
+    "build": "bun run build.ts",
+    "check": "bun run check:types",
+    "check:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/kms-krusty": "workspace:*",
+    "@mc-wallet/ledger-browser": "workspace:*",
+    "@mc-wallet/ledger-protocol": "workspace:*",
+    "@mc-wallet/multisig": "workspace:*",
+    "@mc-wallet/permissions": "workspace:*",
+    "@mc-wallet/portfolio": "workspace:*",
+    "@mc-wallet/privacy": "workspace:*",
+    "@mc-wallet/settings": "workspace:*",
+    "@mc-wallet/starknet": "workspace:*",
+    "@mc-wallet/store": "workspace:*",
+    "@mc-wallet/transactions": "workspace:*",
+    "@mc-wallet/ui-kit": "workspace:*",
+    "@mc-wallet/vault": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*",
+    "@mc-wallet/wallet-protocol": "workspace:*",
+    "@mc-wallet/wallet-ui": "workspace:*",
+    "buffer": "6.0.3",
+    "starknet": "10.0.2"
+  }
+}

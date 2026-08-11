@@ -22,112 +22,122 @@ const EXCLUDED = new Set([
   "vendor",
 ]);
 const BROWSER_GLOBAL_FILES = new Set([
-  "src/background/index.ts",
-  "src/content/index.ts",
-  "src/ledger-grant/index.ts",
-  "src/provider/inpage.ts",
-  "src/sandbox/render.ts",
-  "src/sidepanel/dom.ts",
-  "src/sidepanel/focus-memo.ts",
-  "src/sidepanel/activity-ui.ts",
-  "src/sidepanel/index.ts",
-  "src/sidepanel/ledger/grant-window.ts",
-  "src/sidepanel/scene-renderer.ts",
-  "src/sidepanel/settings-ui.ts",
-  "src/sidepanel/transfer-ui.ts",
-  "src/storage/browser-storage.ts",
+  "apps/extension/src/background/index.ts",
+  "apps/extension/src/content/index.ts",
+  "apps/extension/src/ledger-grant/index.ts",
+  "apps/extension/src/provider/inpage.ts",
+  "apps/extension/src/sandbox/render.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/sync/lifecycle.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/activity-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  "packages/platform/ledger-browser/src/grant-window.ts",
+  "packages/platform/ledger-browser/src/transport.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/scene-renderer.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/settings-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-ui.ts",
+  "apps/extension/src/browser-storage.ts",
 ]);
 const ENCRYPTED_STORE_WIRING_FILES = new Set([
-  "src/background/index.ts",
-  "src/storage/encrypted-store.ts",
+  "apps/extension/src/background/index.ts",
+  "packages/platform/vault/src/encrypted-store.ts",
 ]);
 const RANDOM_UUID_FILES = new Set([
-  "src/background/approvals.ts",
-  "src/provider/inpage.ts",
-  "src/sidepanel/ledger/grant-window.ts",
+  "apps/extension/src/background/approvals/approvals.ts",
+  "apps/extension/src/provider/inpage.ts",
+  "packages/platform/ledger-browser/src/grant-window.ts",
 ]);
-const RAW_ERROR_BOUNDARY_FILES = new Set(["src/background/index.ts", "src/content/index.ts"]);
+const RAW_ERROR_BOUNDARY_FILES = new Set([
+  "apps/extension/src/background/index.ts",
+  "apps/extension/src/content/index.ts",
+]);
 const SECRET_MATERIAL_FILES = new Set([
-  "src/background/account-hash-signer.ts",
-  "src/background/account-creation-inputs.ts",
+  "apps/extension/src/background/ledger/account-hash-signer.ts",
+  "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
-  "src/background/active-network-mutation.ts",
-  "src/background/add-chain-ops.ts",
-  "src/background/approval-decisions.ts",
-  "src/background/chain-ops.ts",
-  "src/background/discovery-ops.ts",
-  "src/background/declare-ops.ts",
-  "src/background/import-inputs.ts",
-  "src/background/ledger-ops.ts",
-  "src/background/ledger-sign-queue.ts",
-  "src/background/ledger-signer.ts",
-  "src/background/signature-waiters.ts",
-  "src/background/index.ts",
-  "src/background/message-inputs.ts",
+  "apps/extension/src/background/runtime/active-network-mutation.ts",
+  "apps/extension/src/background/provider/add-chain-ops.ts",
+  "apps/extension/src/background/approvals/approval-decisions.ts",
+  "apps/extension/src/background/transactions/chain-ops.ts",
+  "apps/extension/src/background/portfolio/discovery-ops.ts",
+  "apps/extension/src/background/transactions/declare-ops.ts",
+  "apps/extension/src/background/accounts/import-inputs.ts",
+  "apps/extension/src/background/ledger/ledger-ops.ts",
+  "apps/extension/src/background/ledger/ledger-sign-queue.ts",
+  "apps/extension/src/background/ledger/ledger-signer.ts",
+  "apps/extension/src/background/approvals/signature-waiters.ts",
+  "apps/extension/src/background/index.ts",
+  "apps/extension/src/background/routing/message-inputs.ts",
   // Wires collaborators by name only. Its sole match is the `./signature-waiters`
   // import path; it holds no secret material and touches no key operations.
-  "src/background/message-context.ts",
-  "src/background/messages.ts",
-  "src/background/provider-ops.ts",
-  "src/background/origins-ops.ts",
-  "src/background/strk20-account-context.ts",
-  "src/background/strk20-ops.ts",
+  "apps/extension/src/background/routing/message-context.ts",
+  "apps/extension/src/background/routing/messages.ts",
+  "apps/extension/src/background/provider/provider-ops.ts",
+  "apps/extension/src/background/settings/origins-ops.ts",
+  "apps/extension/src/background/privacy/strk20-account-context.ts",
+  "apps/extension/src/background/privacy/strk20-ops.ts",
   // Active-account context split from strk20-wallet-ops; the vault passphrase
   // only transits into the protected signer wiring, never logged or stored.
-  "src/background/strk20-op-context.ts",
-  "src/background/strk20-wallet-ops.ts",
-  "src/background/runtime-state.ts",
-  "src/background/runtime-types.ts",
-  "src/background/session.ts",
-  "src/ledger-grant/broker-protocol.ts",
-  "src/background/unlock-errors.ts",
-  "src/background/wallet-ops.ts",
-  "src/background/wallet-reader.ts",
-  "src/background/ledger-inputs.ts",
-  "src/crypto/krusty.ts",
-  "src/popup/responses.ts",
-  "src/popup/responses-ledger.ts",
-  "src/provider/bridge-results.ts",
-  "src/provider/bridge.ts",
-  "src/sidepanel/dom.ts",
-  "src/sidepanel/focus-memo.ts",
-  "src/sidepanel/gate-views.ts",
-  "src/sidepanel/ledger/client.ts",
-  "src/sidepanel/ledger/errors.ts",
-  "src/sidepanel/ledger/first-run.ts",
-  "src/sidepanel/ledger/onboard-entry.ts",
-  "src/sidepanel/ledger/runtime-client.ts",
-  "src/sidepanel/ledger/sign-runtime.ts",
-  "src/sidepanel/ledger/sign-session.ts",
-  "src/sidepanel/ledger/sign-views.ts",
-  "src/sidepanel/import-key-ui.ts",
-  "src/sidepanel/index.ts",
-  "src/sidepanel/onboarding-ui.ts",
-  "src/sidepanel/onboarding-views.ts",
-  "src/sidepanel/reveal-ui.ts",
-  "src/sidepanel/runtime.ts",
-  "src/starknet/ledger-verify.ts",
-  "src/starknet/provider.ts",
-  "src/starknet/rpc.ts",
-  "src/starknet/strk20/call-set-signer.ts",
-  "src/starknet/strk20/official-sdk-service.ts",
+  "apps/extension/src/background/privacy/strk20-op-context.ts",
+  "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
+  "apps/extension/src/background/runtime/runtime-state.ts",
+  "apps/extension/src/background/runtime/runtime-types.ts",
+  "apps/extension/src/background/runtime/session.ts",
+  "packages/platform/ledger-protocol/src/broker.ts",
+  "apps/extension/src/background/routing/unlock-errors.ts",
+  "apps/extension/src/background/accounts/wallet-ops.ts",
+  "apps/extension/src/background/accounts/wallet-reader.ts",
+  "apps/extension/src/background/ledger/ledger-inputs.ts",
+  "packages/platform/kms-krusty/src/adapter.ts",
+  "packages/foundation/wallet-model/src/accounts/signing.ts",
+  // Pure length policy only; carries no passphrase value across a boundary.
+  "packages/foundation/wallet-model/src/preferences/passphrase.ts",
+  "packages/testing/testkit/src/fake-kms.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses-ledger.ts",
+  "packages/foundation/wallet-protocol/src/provider/results.ts",
+  "packages/foundation/wallet-protocol/src/provider/bridge.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/gate-views.ts",
+  "packages/platform/ledger-protocol/src/client.ts",
+  "packages/platform/ledger-protocol/src/errors.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/first-run.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-entry.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/runtime-client.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-session.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-views.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
+  "packages/features/transactions/src/routing/ledger-verify.ts",
+  "packages/platform/starknet/src/rpc/provider.ts",
+  "packages/platform/starknet/src/rpc/rpc.ts",
+  "packages/features/privacy/src/policy/call-set-signer.ts",
+  "packages/features/privacy/src/sdk/official-sdk-service.ts",
   // CallSet signing and viewing-key wiring extracted from official-sdk-service;
   // same Krusty-delegated boundary, no secret ever stored or logged here.
-  "src/starknet/strk20/official-sdk-transfers.ts",
-  "src/starknet/strk20/paymaster.ts",
-  "src/starknet/strk20/service.ts",
-  "src/storage/encrypted-store.ts",
-  "src/storage/migrations.ts",
-  "src/storage/vault-schema.ts",
-  "src/storage/vault-account-secrets.ts",
-  "src/storage/vault-store-migration.ts",
-  "src/wallet/accounts.ts",
-  "src/wallet/strk20-viewing-key.ts",
-  "src/wallet/vault-network-account.ts",
-  "src/wallet/vault-reveal.ts",
-  "src/wallet/vault-service.ts",
-  "src/wallet/vault-service-types.ts",
+  "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
+  "packages/features/privacy/src/paymaster/paymaster.ts",
+  "packages/features/privacy/src/service.ts",
+  "packages/platform/vault/src/accounts/account-secrets.ts",
+  "packages/platform/vault/src/encrypted-store.ts",
+  "packages/platform/vault/src/kms-port.ts",
+  "packages/platform/vault/src/schema/migrations.ts",
+  "packages/platform/vault/src/schema/schema.ts",
+  "packages/platform/vault/src/schema/store-migration.ts",
+  "packages/platform/vault/src/accounts/accounts.ts",
+  "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
+  "packages/platform/vault/src/accounts/network-account.ts",
+  "packages/platform/vault/src/service/reveal.ts",
+  "packages/platform/vault/src/service/service.ts",
+  "packages/platform/vault/src/service/service-types.ts",
 ]);
 const SECRET_MATERIAL_PATTERN =
   /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
@@ -156,35 +166,39 @@ const DYNAMIC_CODE_PATTERN =
   /\b(?:eval|importScripts)\s*\(|\bnew Function\b|\b(?:setTimeout|setInterval)\s*\(\s*["']|import\s*\(\s*["']https?:\/\//;
 const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 const HTML_SINK_FILES = new Set([
-  "src/sidepanel/dom.ts",
-  "src/sidepanel/focus-memo.ts",
-  "src/sidepanel/index.ts",
-  "src/sidepanel/tokens-ui.ts",
-  "src/sidepanel/transfer-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/tokens-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-ui.ts",
   // Send-screen rendering split out of transfer-ui.ts; the review panels it
   // writes come from the same escaped markup helpers that file used.
-  "src/sidepanel/transfer-render.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-render.ts",
   // Swap screen dynamic regions (chips, picker rows, receipts): every
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
-  "src/sidepanel/swap-ui.ts",
-  "src/sidepanel/swap-picker.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/swap/swap-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/swap/swap-picker.ts",
   // Shell replacement extracted from the sidepanel entrypoint; it receives
   // fully escaped production templates and owns no dynamic template content.
-  "src/sidepanel/scene-renderer.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/scene-renderer.ts",
   // Collectible animation renderer: document.write of the untrusted on-chain
   // data:text/html, confined by the manifest sandbox page's isolated security
   // principal and egress-blocking CSP (never executed in a privileged page) —
   // audited 2026-07.
-  "src/sandbox/render.ts",
+  "apps/extension/src/sandbox/render.ts",
 ]);
 const HTML_SINK_PATTERN =
   /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML|srcdoc)\b/;
 const VAULT_SERVICE_WIRING_FILES = new Set([
-  "src/background/index.ts",
-  "src/wallet/vault-service.ts",
+  "apps/extension/src/background/index.ts",
+  "packages/platform/vault/src/schema/store-migration.ts",
+  "packages/platform/vault/src/service/service.ts",
 ]);
 
 const failures: string[] = [];
+
+const isProductionTypeScript = (file: string): boolean =>
+  file.startsWith("apps/extension/src/") || /^packages\/[^/]+\/[^/]+\/src\//.test(file);
 
 const hasExportDoc = (lines: readonly string[], index: number): boolean => {
   for (let previous = index - 1; previous >= 0; previous -= 1) {
@@ -234,7 +248,7 @@ for (const file of await walk(".")) {
     failures.push(`${file} must not contain raw control bytes (use a \\u escape)`);
   }
 
-  if (file.startsWith("src/") && file.endsWith(".ts")) {
+  if (isProductionTypeScript(file) && file.endsWith(".ts")) {
     lines.forEach((line, index) => {
       if (
         /^export (?:\{|class|const|function|interface|type)\b/.test(line) &&
@@ -274,12 +288,12 @@ for (const file of await walk(".")) {
     failures.push(`${file} must not use eval-style dynamic code execution`);
   }
 
-  if (file.startsWith("src/") && /\bconsole\./.test(text)) {
+  if (isProductionTypeScript(file) && /\bconsole\./.test(text)) {
     failures.push(`${file} must not log from production wallet code`);
   }
 
   if (
-    file.startsWith("src/") &&
+    isProductionTypeScript(file) &&
     file.endsWith(".ts") &&
     !HTML_SINK_FILES.has(file) &&
     HTML_SINK_PATTERN.test(text)
@@ -292,7 +306,7 @@ for (const file of await walk(".")) {
   }
 
   if (
-    file.startsWith("src/") &&
+    isProductionTypeScript(file) &&
     file.endsWith(".ts") &&
     !SECRET_MATERIAL_FILES.has(file) &&
     SECRET_MATERIAL_PATTERN.test(text)
@@ -301,36 +315,38 @@ for (const file of await walk(".")) {
   }
 
   if (
-    (file.startsWith("src/popup/") || file.startsWith("src/sidepanel/")) &&
+    (file.startsWith("packages/presentation/wallet-ui/src/popup/") ||
+      file.startsWith("packages/presentation/wallet-ui/src/sidepanel/")) &&
     /#[0-9a-fA-F]{3,8}\b|\b(?:black|white)\b/.test(text)
   ) {
     failures.push(`${file} must use skin tokens for colors`);
   }
 
   if (
-    file.startsWith("src/") &&
-    file !== "src/background/session.ts" &&
-    file !== "src/starknet/prices.ts" &&
-    file !== "src/storage/activity-store.ts" &&
+    isProductionTypeScript(file) &&
+    file !== "apps/extension/src/background/runtime/session.ts" &&
+    file !== "packages/features/portfolio/src/tokens/prices.ts" &&
+    file !== "packages/features/transactions/src/activity/activity.ts" &&
+    file !== "packages/features/permissions/src/phishing-feed.ts" &&
     /\bDate\.now\(/.test(text)
   ) {
     failures.push(`${file} must keep clock access behind an explicit boundary`);
   }
 
-  if (file.startsWith("src/") && /\b(?:new Date|Math\.random)\b/.test(text)) {
+  if (isProductionTypeScript(file) && /\b(?:new Date|Math\.random)\b/.test(text)) {
     failures.push(`${file} must not use implicit clock or random sources`);
   }
 
   if (
-    file.startsWith("src/") &&
-    file !== "src/storage/encrypted-store.ts" &&
+    isProductionTypeScript(file) &&
+    file !== "packages/platform/vault/src/encrypted-store.ts" &&
     /\bcrypto\.getRandomValues\b/.test(text)
   ) {
     failures.push(`${file} must keep raw random bytes behind crypto/storage boundaries`);
   }
 
   if (
-    file.startsWith("src/") &&
+    isProductionTypeScript(file) &&
     !RANDOM_UUID_FILES.has(file) &&
     /\bcrypto\.randomUUID\b/.test(text)
   ) {
@@ -339,14 +355,14 @@ for (const file of await walk(".")) {
 
   if (
     file.endsWith(".ts") &&
-    file !== "src/storage/browser-storage.ts" &&
+    file !== "apps/extension/src/browser-storage.ts" &&
     /\b(?:chrome|browser)\.storage\b/.test(text)
   ) {
     failures.push(`${file} must use the storage adapter instead of browser storage directly`);
   }
 
   if (
-    file.startsWith("src/") &&
+    isProductionTypeScript(file) &&
     file.endsWith(".ts") &&
     !BROWSER_GLOBAL_FILES.has(file) &&
     /\b(?:document|window|globalThis)\./.test(text)
@@ -355,17 +371,17 @@ for (const file of await walk(".")) {
   }
 
   if (
-    file.startsWith("src/") &&
+    isProductionTypeScript(file) &&
     file.endsWith(".ts") &&
-    file !== "src/background/index.ts" &&
-    file !== "src/storage/browser-storage.ts" &&
+    file !== "apps/extension/src/background/index.ts" &&
+    file !== "apps/extension/src/browser-storage.ts" &&
     /createBrowser(?:Local|Session)Store/.test(text)
   ) {
     failures.push(`${file} must not construct browser storage directly`);
   }
 
   if (
-    file.startsWith("src/") &&
+    isProductionTypeScript(file) &&
     file.endsWith(".ts") &&
     !ENCRYPTED_STORE_WIRING_FILES.has(file) &&
     /\bcreateEncryptedStore\b/.test(text)
@@ -374,7 +390,7 @@ for (const file of await walk(".")) {
   }
 
   if (
-    file.startsWith("src/") &&
+    isProductionTypeScript(file) &&
     file.endsWith(".ts") &&
     !VAULT_SERVICE_WIRING_FILES.has(file) &&
     /\b(?:createWalletVaultService|VAULT_STORE_KEY)\b/.test(text)

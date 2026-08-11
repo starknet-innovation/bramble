@@ -7,7 +7,7 @@ import {
   hardenLocalAccess,
   hardenSessionAccess,
   requireTrustedStorageAccess,
-} from "../../src/storage/browser-storage";
+} from "../../apps/extension/src/browser-storage";
 
 type MutableGlobal = { chrome?: unknown };
 const globalWithChrome = globalThis as unknown as MutableGlobal;

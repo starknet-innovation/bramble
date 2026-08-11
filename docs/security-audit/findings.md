@@ -46,7 +46,7 @@ impact, remediation, and retest condition.
 
 **Evidence.** `bun run check:lint` with pinned Biome `2.5.3` reports
 `internalError/panic` while processing `scripts/check-krusty-adapter.ts` and
-`tests/background/background-multisig-ops-guards.test.ts`. The command exits successfully, so the subsequent
+`tests/background/multisig/background-multisig-ops-guards.test.ts`. The command exits successfully, so the subsequent
 `&&` stages in `bun run check` execute.
 
 **Impact.** A security-sensitive file can receive incomplete lint analysis while the required gate

@@ -1,0 +1,19 @@
+{
+  "name": "@mc-wallet/kms-krusty",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./adapter": "./src/adapter.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/vault": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*"
+  }
+}

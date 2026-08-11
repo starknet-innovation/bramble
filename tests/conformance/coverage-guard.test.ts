@@ -7,9 +7,9 @@
  * updating the spec table fails to compile or fails an assertion here.
  */
 import { describe, expect, test } from "bun:test";
-import type { ProviderMethod, ProviderRequest } from "../../src/provider/bridge";
-import { readProviderRequestArguments, toRuntimeMessage } from "../../src/provider/bridge";
-import type { ProviderResultMethod } from "../../src/provider/bridge-results";
+import type { ProviderMethod, ProviderRequest } from "@mc-wallet/wallet-protocol/bridge";
+import { readProviderRequestArguments, toRuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
+import type { ProviderResultMethod } from "@mc-wallet/wallet-protocol/results";
 import { ORIGIN, SPEC_METHOD_NAMES, SPEC_METHODS } from "./wallet-rpc-spec";
 
 // The 16 spec method names, written out literally so the table itself cannot

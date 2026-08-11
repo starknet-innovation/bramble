@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from "node:http";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
-import { isMissingAvnuCandleHistory } from "./src/data/avnu-proxy";
+import { isMissingAvnuCandleHistory } from "./src/data/avnu/avnu-proxy";
 import { attachExtendedWebSocketBridge } from "./src/data/extended/dev-bridge";
 import { AVNU_API, EXTENDED_API_BASE } from "./src/protocols/constants";
 

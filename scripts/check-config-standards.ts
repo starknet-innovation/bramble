@@ -2,6 +2,7 @@
  * Enforces pinned repository configuration, CI, and artifact policy.
  */
 import { readFile } from "node:fs/promises";
+import { artifactPolicyFailures } from "./artifact-policy";
 import { biomeComplexityFailures } from "./biome-complexity-policy";
 import {
   BIOME_COMPLEXITY_RULE_KEYS,
@@ -15,6 +16,7 @@ import {
   EXPECTED_PACKAGE_MANAGER,
   EXPECTED_PACKAGE_SCRIPTS,
   EXPECTED_README_SECTIONS,
+  EXPECTED_WORKSPACES,
   PINNED_RUNTIME_FILES,
   REQUIRED_BIOME_COMPLEXITY_RULES,
   REQUIRED_BIOME_LINTER_DOMAINS,
@@ -45,12 +47,12 @@ const hasOnlyKeys = (value: Record<string, unknown>, keys: readonly string[]): b
 const packageJson = await readJson("package.json");
 const biomeJson = await readJson("biome.json");
 const gitignore = await readFile(".gitignore", "utf8");
-const manifestJson = await readJson("public/manifest.json");
+const manifestJson = await readJson("apps/extension/public/manifest.json");
 const readme = await readFile("README.md", "utf8");
 const architecture = await readFile("docs/ARCHITECTURE.md", "utf8");
 const contributing = await readFile("CONTRIBUTING.md", "utf8");
 const tsconfigJson = await readJson("tsconfig.json");
-const buildScript = await readFile("scripts/build-extension.ts", "utf8");
+const buildScript = await readFile("apps/extension/build.ts", "utf8");
 const ciWorkflow = await readFile(".github/workflows/ci.yml", "utf8");
 const packageScript = await readFile("scripts/package-extension.ts", "utf8");
 const vendorKrustyScript = await readFile("scripts/vendor-krusty.ts", "utf8");
@@ -68,6 +70,7 @@ if (
     "scripts",
     "type",
     "version",
+    "workspaces",
   ])
 ) {
   failures.push("package.json top-level keys must stay explicit");
@@ -96,7 +99,7 @@ if (
   typeof manifestJson["version"] !== "string" ||
   packageJson["version"] !== manifestJson["version"]
 ) {
-  failures.push("package.json and public/manifest.json versions must match");
+  failures.push("package.json and apps/extension/public/manifest.json versions must match");
 }
 
 if (
@@ -105,11 +108,15 @@ if (
   !SEMVER.test(packageJson["version"]) ||
   !SEMVER.test(manifestJson["version"])
 ) {
-  failures.push("package.json and public/manifest.json versions must use x.y.z");
+  failures.push("package.json and apps/extension/public/manifest.json versions must use x.y.z");
 }
 
 if (packageJson["packageManager"] !== EXPECTED_PACKAGE_MANAGER) {
   failures.push(`package.json packageManager must stay ${EXPECTED_PACKAGE_MANAGER}`);
+}
+
+if (!hasStringList(packageJson["workspaces"], EXPECTED_WORKSPACES)) {
+  failures.push("package.json workspaces must cover apps and private packages exactly");
 }
 
 if (
@@ -290,12 +297,19 @@ if (!compilerOptions) {
   if (!hasStringList(compilerOptions["lib"], ["ES2022", "DOM", "DOM.Iterable"])) {
     failures.push("tsconfig.json compilerOptions.lib must stay browser-ready");
   }
-  if (!hasStringList(compilerOptions["types"], ["bun-types"])) {
+  if (!hasStringList(compilerOptions["types"], ["bun"])) {
     failures.push("tsconfig.json compilerOptions.types must stay Bun-only");
   }
 }
-if (!hasStringList(tsconfigJson["include"], ["scripts/**/*.ts", "src/**/*.ts", "tests/**/*.ts"])) {
-  failures.push("tsconfig.json include must cover scripts, src, and tests");
+if (
+  !hasStringList(tsconfigJson["include"], [
+    "apps/extension/**/*.ts",
+    "packages/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+  ])
+) {
+  failures.push("tsconfig.json include must cover the extension, packages, scripts, and tests");
 }
 
 const gitignoreLines = gitignore.split("\n").map((line) => line.trim());
@@ -401,95 +415,7 @@ for (const command of ciCommands) {
   }
   previousCiCommand = index;
 }
-
-const packageCommandIndex = ciLines.indexOf("- run: bun run package:extension");
-const uploadActionIndex = ciLines.findIndex((line) =>
-  /^- uses: actions\/upload-artifact@[0-9a-f]{40}/.test(line),
-);
-const uploadNameIndex = ciLines.indexOf("name: mc-wallet-extension");
-const uploadZipIndex = ciLines.indexOf("artifacts/*.zip");
-const uploadChecksumIndex = ciLines.indexOf("artifacts/*.zip.sha256");
-const uploadRequiredIndex = ciLines.indexOf("if-no-files-found: error");
-if (
-  uploadActionIndex <= packageCommandIndex ||
-  uploadNameIndex <= uploadActionIndex ||
-  uploadZipIndex <= uploadNameIndex ||
-  uploadChecksumIndex <= uploadZipIndex ||
-  uploadRequiredIndex <= uploadChecksumIndex
-) {
-  failures.push(".github/workflows/ci.yml must upload the release zip and SHA-256 checksum");
-}
-const buildExtensionCheck = buildScript.indexOf('await run(["bun", "run", "check:extension"]);');
-const buildKrustyCheck = buildScript.indexOf('await run(["bun", "run", "check:krusty"]);');
-const buildPrivacyCheck = buildScript.indexOf('await run(["bun", "run", "check:privacy"]);');
-const buildDistClear = buildScript.indexOf("await rm(outdir");
-if (
-  buildExtensionCheck === -1 ||
-  buildKrustyCheck === -1 ||
-  buildPrivacyCheck === -1 ||
-  buildDistClear === -1 ||
-  buildExtensionCheck > buildDistClear ||
-  buildKrustyCheck > buildDistClear ||
-  buildPrivacyCheck > buildDistClear
-) {
-  failures.push(
-    "scripts/build-extension.ts must check manifest and vendored runtimes before building",
-  );
-}
-const packageTouch = packageScript.indexOf('await run(["touch", "-t", reproducibleZipTime');
-const packageZip = packageScript.indexOf('await run(["zip", "-X", "-q", zipPath');
-const packageRuntimeImport = packageScript.indexOf(
-  'import { EXPECTED_RUNTIME_FILES } from "./extension-runtime-files";',
-);
-const packageRuntimeCheck = packageScript.indexOf(
-  'files.join("\\n") !== EXPECTED_RUNTIME_FILES.join("\\n")',
-);
-const packageRuntimeFailure = packageScript.indexOf("unexpected packaged files");
-if (
-  packageRuntimeImport === -1 ||
-  packageRuntimeCheck === -1 ||
-  packageRuntimeFailure === -1 ||
-  packageRuntimeImport > packageRuntimeCheck ||
-  packageRuntimeCheck > packageZip ||
-  packageRuntimeFailure < packageRuntimeCheck
-) {
-  failures.push("scripts/package-extension.ts must package only the pinned runtime files");
-}
-const packageZipNamePrefix = packageScript.indexOf("const zipName = `mc-wallet-");
-const packageZipNameVersion = packageScript.indexOf('manifest["version"]', packageZipNamePrefix);
-const packageZipNameSuffix = packageScript.indexOf(".zip`;", packageZipNameVersion);
-const packageZipPath = packageScript.indexOf("const zipPath = resolve(artifactDir, zipName);");
-if (
-  packageZipNamePrefix === -1 ||
-  packageZipNameVersion === -1 ||
-  packageZipNameSuffix === -1 ||
-  packageZipPath === -1 ||
-  packageZipNamePrefix > packageZipNameVersion ||
-  packageZipNameVersion > packageZipNameSuffix ||
-  packageZipNameSuffix > packageZipPath ||
-  packageZipPath > packageZip
-) {
-  failures.push("scripts/package-extension.ts must name release zips from the manifest version");
-}
-
-if (packageTouch === -1 || packageZip === -1 || packageTouch > packageZip) {
-  failures.push("scripts/package-extension.ts must normalize mtimes before zipping");
-}
-
-const packageDigest = packageScript.indexOf('createHash("sha256")');
-const packageChecksumWrite = packageScript.indexOf("await writeFile(");
-const packageChecksumSuffix = packageScript.indexOf(".sha256");
-if (
-  packageZip === -1 ||
-  packageDigest === -1 ||
-  packageChecksumWrite === -1 ||
-  packageChecksumSuffix === -1 ||
-  packageZip > packageDigest ||
-  packageDigest > packageChecksumWrite ||
-  packageChecksumWrite > packageChecksumSuffix
-) {
-  failures.push("scripts/package-extension.ts must write a SHA-256 checksum after zipping");
-}
+failures.push(...artifactPolicyFailures(buildScript, ciWorkflow, packageScript));
 
 if (failures.length > 0) {
   for (const failure of failures) {

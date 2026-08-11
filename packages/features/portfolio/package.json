@@ -1,0 +1,27 @@
+{
+  "name": "@mc-wallet/portfolio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./nft": "./src/collectibles/nft.ts",
+    "./nft-indexer": "./src/collectibles/nft-indexer.ts",
+    "./nft-metadata": "./src/collectibles/nft-metadata.ts",
+    "./nft-token-metadata": "./src/collectibles/nft-token-metadata.ts",
+    "./prices": "./src/tokens/prices.ts",
+    "./token-logos": "./src/tokens/token-logos.ts",
+    "./token-registry": "./src/tokens/token-registry.ts",
+    "./watched-nft": "./src/collectibles/watched-nft.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/store": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*",
+    "starknet": "10.0.2"
+  }
+}

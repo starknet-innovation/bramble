@@ -1,0 +1,26 @@
+{
+  "name": "@mc-wallet/multisig",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./chain": "./src/chain.ts",
+    "./confirmation": "./src/confirmation.ts",
+    "./deploy": "./src/deploy.ts",
+    "./discovery": "./src/discovery.ts",
+    "./repository": "./src/repository.ts",
+    "./sync": "./src/sync.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/starknet": "workspace:*",
+    "@mc-wallet/store": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*",
+    "starknet": "10.0.2"
+  }
+}

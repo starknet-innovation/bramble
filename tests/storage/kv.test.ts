@@ -2,9 +2,8 @@
  * Key-value storage checks prove raw adapters reject lossy JSON writes.
  */
 import { afterEach, expect, test } from "bun:test";
-
-import { createBrowserLocalStore } from "../../src/storage/browser-storage";
-import { assertStorageKey, createMemoryStore } from "../../src/storage/kv";
+import { assertStorageKey, createMemoryStore } from "@mc-wallet/store/kv";
+import { createBrowserLocalStore } from "../../apps/extension/src/browser-storage";
 
 type FakeStorageArea = {
   readonly get: (key: string) => Promise<Record<string, unknown>>;

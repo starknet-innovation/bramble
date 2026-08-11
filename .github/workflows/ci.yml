@@ -190,6 +190,7 @@ jobs:
       - run: bun run check:cycles
       # The leading `./` prevents Bun from matching tests inside ignored vendor checkouts.
       - run: bun test ./tests
+      - run: bun run check:workspaces
       # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).
       - name: Coverage floor
         run: bun run check:coverage
@@ -245,11 +246,9 @@ jobs:
       # so a vulnerable dependency blocks the rest of the pipeline. Severity gate
       # (--audit-level=high) can be tuned in package.json's check:audit script.
       - run: bun run check:audit
-      # apps/terminal is a standalone Vite+React app with its own package.json,
-      # lockfile, and tsconfig. It is intentionally excluded from the extension's
-      # root standards gates (biome, check:files, tsc), so validate it with its
-      # own typecheck + production build here.
-      - run: cd apps/terminal && bun install --frozen-lockfile && bun run build
+      # Terminal shares the root lockfile but remains a standalone dapp; verify
+      # its production bundle before the extension release pipeline.
+      - run: bun run --filter @mc-wallet/terminal build
       - run: bun run test:e2e:install
       - run: bun run check:files
       - run: bun run vendor:krusty

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAINNET_TOKEN_ADDRESSES } from "../protocols";
+import { MAINNET_TOKEN_ADDRESSES } from "../protocols/index";
 import { avnuTokenArtwork } from "./avnu-token-assets";
 
 describe("avnuTokenArtwork", () => {

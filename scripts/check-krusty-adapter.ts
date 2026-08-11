@@ -1,9 +1,10 @@
 /**
  * Verifies the vendored Krusty KMS WASM package satisfies the wallet crypto boundary.
  */
-import { createKrustyKms } from "../src/crypto/krusty";
-import { DEFAULT_NETWORK, isStarkFieldElement } from "../src/starknet/networks";
-import { deriveAccount } from "../src/wallet/accounts";
+
+import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
+import { deriveAccount } from "@mc-wallet/vault/accounts";
+import { DEFAULT_NETWORK, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 
 const wasmPackage = "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js";
 const wasmBinary = "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm_bg.wasm";

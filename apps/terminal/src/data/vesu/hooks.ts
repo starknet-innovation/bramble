@@ -1,5 +1,5 @@
-import { useAsyncResource } from "../useAsyncResource";
-import type { Resource } from "../types";
+import { useAsyncResource } from "../core/useAsyncResource";
+import type { Resource } from "../core/types";
 import {
   fetchVesuMarkets,
   fetchVesuPositions,

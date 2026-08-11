@@ -1,5 +1,5 @@
+import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
 import type { Preview } from "@storybook/html-vite";
-import { darkSkin } from "../../../src/ui/dark-skin";
 
 const preview: Preview = {
   parameters: {

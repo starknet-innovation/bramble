@@ -1,7 +1,7 @@
 /**
  * STRK20 requests for the exhaustive background key-boundary scan.
  */
-import type { RuntimeSender } from "../../src/background/senders";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /** One request and the runtime sender that is allowed to issue it. */
 export type KeyBoundaryMessage = {

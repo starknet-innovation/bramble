@@ -4,7 +4,7 @@
  * base64, empty, and oversized payloads all fail closed to null.
  */
 import { describe, expect, test } from "bun:test";
-import { decodeHtmlDataUri } from "../../src/sandbox/render-payload";
+import { decodeHtmlDataUri } from "../../apps/extension/src/sandbox/render-payload";
 
 describe("decodeHtmlDataUri", () => {
   const html = "<!doctype html><html><body><canvas></canvas><script>1;</script></body></html>";

@@ -3,8 +3,8 @@
  */
 import { Check, ChevronDown, Copy, LogOut, WalletCards } from "lucide-react";
 import { type ReactNode, useState } from "react";
-import { useWallet } from "../wallet/WalletProvider";
-import { walletNetwork } from "../wallet/wallet-connection";
+import { useWallet } from "../wallet/connection/WalletProvider";
+import { walletNetwork } from "../wallet/connection/wallet-connection";
 import { type ScreenId, SCREEN_TABS, shortenAddress } from "./screens";
 
 export type TopNavProps = {

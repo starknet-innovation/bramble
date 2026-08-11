@@ -1,0 +1,306 @@
+import {
+  bindNfts,
+  createSidepanelRuntime,
+  nftDetailFlow,
+  nftGalleryFlow,
+  nftSendFlow,
+} from "@mc-wallet/wallet-ui/lab";
+import {
+  discoveredNft,
+  invokeApproval,
+  NFT_CONTRACT,
+  nftId,
+  preferences,
+  RECIPIENT_ADDRESS,
+  secondAccount,
+  secondActivity,
+  softwareAccount,
+  softwareActivity,
+  statusFor,
+  watchAssetApproval,
+} from "../fixtures/fixtures";
+import { walletDashboard } from "../runtime/scenario-dashboard";
+import { messageType, nextTurn, updateForm } from "../runtime/scenario-runtime";
+import type { FrameContext, WalletScenario } from "../runtime/types";
+import { approvalsScenario } from "./scenarios-approvals";
+import { multisigScenario } from "./scenarios-multisig";
+import {
+  ledgerOnboardingScenario,
+  onboardingScenario,
+  unlockScenario,
+} from "./scenarios-onboarding";
+import { privacyScenario } from "./scenarios-privacy";
+import { settingsScenario } from "./scenarios-settings";
+import { ledgerScenario, sendScenario } from "./scenarios-signing";
+import { swapScenario } from "./scenarios-swap";
+import { assetsScenario, portfolioScenario } from "./scenarios-wallet";
+
+const NFT_HASH = `0x02${"b".repeat(62)}`;
+
+const dappScenario: WalletScenario = {
+  checkpoints: [
+    {
+      content: () => walletDashboard(),
+      id: "wallet",
+      label: "Wallet in use",
+      narrative: "The user may be anywhere in the wallet when a request arrives.",
+      state: { foreground: "home", pending: 0 },
+    },
+    {
+      content: () => walletDashboard({ pending: [invokeApproval], view: "settings" }),
+      id: "takeover",
+      label: "Request takeover",
+      narrative: "A fresh transaction request supersedes the prior wallet screen.",
+      state: { foreground: "approval", origin: invokeApproval.origin, pending: 1 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          pending: [watchAssetApproval],
+          status: statusFor(secondAccount),
+          view: "send",
+        }),
+      id: "watch-asset",
+      label: "Receipt token",
+      narrative: "A wallet_watchAsset request takes focus and identifies the token precisely.",
+      state: { foreground: "approval", kind: "watch-asset", pending: 1 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          pending: [invokeApproval],
+          snoozed: [invokeApproval.id],
+          view: "activity",
+        }),
+      id: "snoozed",
+      label: "Review later",
+      narrative: "Snoozing returns control while keeping the request visible in Activity.",
+      state: { foreground: "activity", pending: 1, snoozed: 1 },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          pending: [invokeApproval],
+          snoozed: [invokeApproval.id],
+          view: "requests",
+        }),
+      id: "parked-list",
+      label: "Parked request list",
+      narrative: "Parked decisions live one level below account-scoped transaction activity.",
+      state: { foreground: "requests", pending: 1, snoozed: 1 },
+    },
+  ],
+  description:
+    "External requests preempt stale wallet navigation, remain reviewable, and can be explicitly parked.",
+  id: "dapp",
+  surface: "sidepanel",
+  title: "dApp request takeover",
+  views: ["requests"],
+};
+
+const activityScenario: WalletScenario = {
+  checkpoints: [
+    {
+      content: () =>
+        walletDashboard({
+          activity: softwareActivity,
+          status: statusFor(softwareAccount),
+          view: "activity",
+        }),
+      id: "account-a",
+      label: "Daily account",
+      narrative: "Only the active account's accepted transactions are rendered.",
+      state: { accountId: softwareAccount.id, entries: 2, scope: "SN_MAIN" },
+    },
+    {
+      content: () =>
+        walletDashboard({ activity: [], status: statusFor(secondAccount), view: "activity" }),
+      id: "scope-cleared",
+      label: "Switch boundary",
+      narrative: "The old lane clears immediately while the new account refreshes.",
+      state: { accountId: secondAccount.id, entries: 0, loading: true, scope: "SN_MAIN" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          activity: secondActivity,
+          status: statusFor(secondAccount),
+          view: "activity",
+        }),
+      id: "account-b",
+      label: "Trading account",
+      narrative: "The second account receives its own isolated activity snapshot.",
+      state: { accountId: secondAccount.id, entries: 1, scope: "SN_MAIN" },
+    },
+    {
+      content: () =>
+        walletDashboard({
+          activity: softwareActivity,
+          status: statusFor(softwareAccount),
+          view: "activity",
+        }),
+      id: "account-a-restored",
+      label: "Switch back",
+      narrative: "Returning restores account A without any rows from account B.",
+      state: { accountId: softwareAccount.id, entries: 2, foreignEntries: 0, scope: "SN_MAIN" },
+    },
+  ],
+  description:
+    "Account and network scope changes clear stale rows before restoring the correct activity lane.",
+  id: "activity",
+  surface: "sidepanel",
+  title: "Account-isolated Activity",
+  views: ["activity"],
+};
+
+type NftMode = "blocked" | "review" | "submitted";
+
+const prepareNft =
+  (mode: NftMode) =>
+  async (context: FrameContext): Promise<void> => {
+    const wallet = createSidepanelRuntime({
+      sendMessage: async (message) => {
+        const type = messageType(message);
+        context.emit({ detail: type ?? "invalid request", kind: "action" });
+        if (type === "wallet.reviewNftTransfer") {
+          const blocked = mode === "blocked";
+          return {
+            ok: true,
+            review: {
+              fee: { overallFee: "1800000000000000", unit: "FRI" },
+              feeAffordability: "ok",
+              feeEstimateFailed: false,
+              flags: blocked
+                ? [{ code: "address-poisoning", message: "Recipient resembles a recent address." }]
+                : [],
+              requiresDeployment: false,
+              summaries: ["Transfer MC Test Collection #342", `Recipient ${RECIPIENT_ADDRESS}`],
+            },
+          };
+        }
+        if (type === "wallet.transferNft" && mode === "submitted") {
+          return { ok: true, transactionHash: NFT_HASH };
+        }
+        return { error: "UI Lab blocks non-fixture runtime requests" };
+      },
+    });
+    bindNfts({
+      app: context.app,
+      openDetail: () => undefined,
+      render: async () => undefined,
+      wallet,
+    });
+    updateForm(context, '#nft-send-form input[name="recipient"]', RECIPIENT_ADDRESS);
+    const form = context.app.querySelector<HTMLFormElement>("#nft-send-form");
+    if (!form) {
+      throw new Error("Missing production NFT send form");
+    }
+    form.requestSubmit();
+    await nextTurn();
+    if (mode === "submitted") {
+      form.requestSubmit();
+      await nextTurn();
+    }
+  };
+
+const nftScenario: WalletScenario = {
+  checkpoints: [
+    {
+      content: () =>
+        nftGalleryFlow(statusFor(), softwareAccount, preferences, [
+          { ...discoveredNft, image: "" },
+        ]),
+      id: "metadata-loading",
+      label: "Metadata loading",
+      narrative: "The owned token remains identifiable while artwork is not yet resolved.",
+      state: { artwork: "pending", metadata: "cached", tokenId: "342" },
+    },
+    {
+      content: () => nftGalleryFlow(statusFor(), softwareAccount, preferences, [discoveredNft]),
+      id: "gallery",
+      label: "Gallery ready",
+      narrative: "The production gallery presents the full-size fixture artwork and collection.",
+      state: { artwork: "local fixture", metadata: "ready", tokenId: "342" },
+    },
+    {
+      content: () =>
+        nftDetailFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      id: "detail",
+      label: "NFT detail",
+      narrative: "Artwork, attributes, and identifiers lead to a dedicated guarded Send journey.",
+      state: { attributes: 3, owner: softwareAccount.id, tokenId: "342" },
+    },
+    {
+      content: () => walletDashboard({ preferences, view: "nft-watch" }),
+      id: "watch",
+      label: "Watch by contract",
+      narrative: "Manual collectible tracking is isolated around ownership verification.",
+      state: { ownershipCheck: true, view: "nft-watch" },
+    },
+    {
+      content: () => walletDashboard({ preferences, view: "nft-hidden" }),
+      id: "hidden",
+      label: "Hidden collectibles",
+      narrative: "Spam and hidden-token recovery no longer crowds the gallery.",
+      state: { task: "hidden management", view: "nft-hidden" },
+    },
+    {
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      id: "recipient",
+      label: "Choose recipient",
+      narrative: "Collection identity, address entry, and saved recipients define who receives it.",
+      state: { stage: "recipient", tokenId: "342" },
+    },
+    {
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      id: "review",
+      label: "Transfer review",
+      narrative: "The real NFT binding requires a decoded review before confirmation.",
+      prepare: prepareNft("review"),
+      state: { contract: NFT_CONTRACT, review: "ready", tokenId: "342" },
+    },
+    {
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      id: "blocked",
+      label: "Recipient blocked",
+      narrative: "An address-poisoning flag prevents the confirmation state.",
+      prepare: prepareNft("blocked"),
+      state: { blocked: true, reason: "address-poisoning", tokenId: "342" },
+    },
+    {
+      content: () => nftSendFlow(statusFor(), softwareAccount, preferences, nftId, [discoveredNft]),
+      id: "submitted",
+      label: "Transfer submitted",
+      narrative: "Confirmation returns a transaction hash and never bypasses review.",
+      prepare: prepareNft("submitted"),
+      state: { review: "passed", transactionHash: NFT_HASH },
+    },
+  ],
+  description:
+    "NFT metadata arrival, gallery and detail quality, guarded transfer review, blocking, and submission.",
+  id: "nft",
+  surface: "sidepanel",
+  title: "NFT loading and send",
+  views: ["nfts", "nft-watch", "nft-hidden", "nft-detail", "nft-send"],
+};
+
+export const walletScenarios: readonly WalletScenario[] = [
+  onboardingScenario,
+  unlockScenario,
+  portfolioScenario,
+  sendScenario,
+  swapScenario,
+  privacyScenario,
+  ledgerScenario,
+  ledgerOnboardingScenario,
+  approvalsScenario,
+  dappScenario,
+  activityScenario,
+  assetsScenario,
+  nftScenario,
+  multisigScenario,
+  settingsScenario,
+];
+
+export const walletScenario = (id: string): WalletScenario =>
+  walletScenarios.find((scenario) => scenario.id === id) ?? sendScenario;

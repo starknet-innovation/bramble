@@ -1,0 +1,34 @@
+{
+  "name": "@mc-wallet/wallet-ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./lab": "./src/lab.ts",
+    "./start": "./src/sidepanel/index.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/ledger-protocol": "workspace:*",
+    "@mc-wallet/multisig": "workspace:*",
+    "@mc-wallet/portfolio": "workspace:*",
+    "@mc-wallet/privacy": "workspace:*",
+    "@mc-wallet/settings": "workspace:*",
+    "@mc-wallet/starknet": "workspace:*",
+    "@mc-wallet/transactions": "workspace:*",
+    "@mc-wallet/ui-kit": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*",
+    "@mc-wallet/wallet-protocol": "workspace:*",
+    "starknet": "10.0.2"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "20.11.1",
+    "@mc-wallet/store": "workspace:*",
+    "@mc-wallet/testkit": "workspace:*"
+  }
+}

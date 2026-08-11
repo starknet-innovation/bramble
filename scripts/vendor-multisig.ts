@@ -3,7 +3,7 @@
  * and vendors the Sierra + CASM artifacts into vendor/multisig. The build is
  * reproducible: OpenZeppelin dependencies are pinned exactly in Scarb.toml,
  * and check-multisig-class.ts verifies the artifacts still match the class
- * hashes pinned in src/starknet/multisig-deploy.ts.
+ * hashes pinned in packages/features/multisig/src/deploy.ts.
  */
 import { cp, mkdir } from "node:fs/promises";
 

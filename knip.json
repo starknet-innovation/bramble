@@ -1,13 +1,28 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": [
-    "src/background/index.ts",
-    "src/content/index.ts",
-    "src/sidepanel/index.ts",
-    "src/provider/inpage.ts",
-    "src/ledger-grant/index.ts",
-    "scripts/*.ts",
-    "tests/**/*.test.ts"
-  ],
-  "project": ["src/**/*.ts", "scripts/**/*.ts"]
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.ts", "tests/**/*.test.ts"],
+      "ignoreBinaries": ["scarb"],
+      "project": ["scripts/**/*.ts", "tests/**/*.ts"]
+    },
+    "apps/extension": {
+      "entry": [
+        "src/background/index.ts",
+        "src/content/index.ts",
+        "src/ledger-grant/index.ts",
+        "src/provider/inpage.ts",
+        "src/sandbox/render.ts",
+        "src/sidepanel/index.ts"
+      ],
+      "ignoreDependencies": ["buffer"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/terminal": {
+      "entry": ["api/**/*.ts"]
+    },
+    "packages/platform/ledger-browser": {
+      "ignoreDependencies": ["buffer"]
+    }
+  }
 }

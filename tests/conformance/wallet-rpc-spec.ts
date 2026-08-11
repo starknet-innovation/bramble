@@ -10,8 +10,9 @@
  * against this table so no method is left to the imagination. Fixtures, patterns,
  * and the `SpecMethod` type live in spec-fixtures.ts.
  */
-import type { ProviderMethod } from "../../src/provider/bridge";
-import { SUPPORTED_SPECS } from "../../src/shared/versions";
+
+import type { ProviderMethod } from "@mc-wallet/wallet-protocol/bridge";
+import { SUPPORTED_SPECS } from "@mc-wallet/wallet-protocol/versions";
 import {
   ACCOUNT,
   ADDRESS,

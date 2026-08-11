@@ -300,7 +300,7 @@ A `release/vX.Y` branch may **not** be promoted to `main` until:
 - The **nightly / full suite is green** on the release branch (E2E, audit, build).
 - There are **no unresolved release-blocking regressions** (see the nightly tracking issue).
 - **Release notes and version metadata are complete** — `package.json` and
-  `public/manifest.json` bumped in lockstep to `X.Y.0`, and the `CHANGELOG.md`
+  `apps/extension/public/manifest.json` bumped in lockstep to `X.Y.0`, and the `CHANGELOG.md`
   `[X.Y.0]` section is filled in (`bun run changelog`). The single-source gate
   (`bun run check:release-version`) must pass: if the version does not match the
   `release/vX.Y` branch, the auto-release **fails** rather than shipping a
@@ -315,7 +315,7 @@ See `RELEASING.md` for the Chrome Web Store specifics.
 
 1. **Confirm scope.** All milestone issues closed or deferred; acceptance
    criteria met; no open release-blocking regressions.
-2. **Version metadata.** Bump `package.json` **and** `public/manifest.json` to
+2. **Version metadata.** Bump `package.json` **and** `apps/extension/public/manifest.json` to
    `X.Y.0` in lockstep; run `bun run check:files` and
    `bun test tests/conformance/release-version-single-source.test.ts`.
 3. **Gates green.** Required PR CI green on the branch tip; nightly/full suite green.

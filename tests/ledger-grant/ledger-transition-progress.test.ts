@@ -1,6 +1,6 @@
 /** Ledger grant progress copy must expose the device-confirmation phase. */
 import { describe, expect, test } from "bun:test";
-import { ledgerTransitionProgress } from "../../src/ledger-grant/transition-progress";
+import { ledgerTransitionProgress } from "../../apps/extension/src/ledger-grant/transition-progress";
 
 describe("Ledger transition progress", () => {
   test("asks for device confirmation only while opening Starknet", () => {

@@ -5,13 +5,14 @@
  * by the public account so this test has no relayer dependency; that links the
  * account to the actions and is not a privacy-preserving production route.
  */
+
+import { STRK20_MAINNET_POOL } from "@mc-wallet/privacy/config";
+import { sanitizeStrk20Detail } from "@mc-wallet/privacy/official-sdk-errors";
+import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc-assets";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { isStrk20CallAndProof, type Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import type { Page } from "@playwright/test";
 import { RpcProvider } from "starknet";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "../../src/starknet/networks";
-import { buildErc20ApproveCall } from "../../src/starknet/rpc-assets";
-import { STRK20_MAINNET_POOL } from "../../src/starknet/strk20/config";
-import { sanitizeStrk20Detail } from "../../src/starknet/strk20/official-sdk-errors";
-import { isStrk20CallAndProof, type Strk20Action } from "../../src/starknet/strk20/schemas";
 import { expect, test } from "../e2e/fixtures";
 import {
   IMPORT_MNEMONIC,

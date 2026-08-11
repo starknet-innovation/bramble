@@ -281,7 +281,7 @@ commitment before confirmation. Execute accepts only the preparation id, atomica
 rechecks account/network/chain/digest, and submits the frozen calls without contacting AVNU again.
 
 **Validation.** `tests/starknet/avnu.test.ts` rejects a chain-mismatched build.
-`tests/background/swap-ops.test.ts` proves the final calls are built before confirmation, execute only once,
+`tests/background/transactions/swap-ops.test.ts` proves the final calls are built before confirmation, execute only once,
 and reject an unexpected approval token or allowance before signing.
 
 <a id="mcw-src-002"></a>
@@ -354,7 +354,7 @@ account, network, and review digest. Decision handling rechecks the unlocked ses
 network, chain, origin grant, exact account, and private-payload digest. Each downstream executor
 also selects the recorded account rather than re-resolving an arbitrary active account.
 
-**Validation.** `tests/background/approval-security.test.ts` proves network drift and payload substitution are
+**Validation.** `tests/background/approvals/approval-security.test.ts` proves network drift and payload substitution are
 refused without submission. The invoke, declare, typed-data, and STRK20 approval suites exercise
 the bound context on successful execution.
 
@@ -376,7 +376,7 @@ entry and returns a cloned public snapshot plus its private payload. Approve and
 before any awaited validation or executor work. Every success or failure is terminal and settles
 the held request; a second decision receives `approval not found` and cannot reach an executor.
 
-**Validation.** `tests/background/approval-security.test.ts` drives two concurrent approve decisions while the
+**Validation.** `tests/background/approvals/approval-security.test.ts` drives two concurrent approve decisions while the
 first executor is paused and observes exactly one side effect.
 
 <a id="mcw-src-006"></a>
@@ -396,7 +396,7 @@ impact.
 after the atomic claim and before context checks or executor dispatch, a blocked origin is refused,
 the held dapp request is settled with the error, and the claimed item remains terminal.
 
-**Validation.** `tests/background/approval-security.test.ts` queues an allowed request, makes its origin
+**Validation.** `tests/background/approvals/approval-security.test.ts` queues an allowed request, makes its origin
 blocked before decision, and proves the side effect count remains zero.
 
 <a id="mcw-src-007"></a>
@@ -462,7 +462,7 @@ non-plain prototypes, and throwing proxies. Method-specific budgets distinguish 
 typed data, and contract classes. Shared invoke call/calldata limits, STRK20 action/proof limits,
 AVNU list/call limits, and HTTP response-size checks bound protocol fan-out before expensive use.
 
-**Validation.** `tests/shared/json.test.ts`, `tests/provider/provider-bridge-results-guards.test.ts`, and
+**Validation.** `tests/shared/json.test.ts`, `tests/provider/bridge/provider-bridge-results-guards.test.ts`, and
 `tests/starknet/typed-data.test.ts` cover structural, call/calldata, cycle/accessor, and oversized typed-data
 rejection. The full boundary suites verify valid maximum-shape behavior remains accepted.
 
