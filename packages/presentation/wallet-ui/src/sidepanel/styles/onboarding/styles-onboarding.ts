@@ -236,7 +236,7 @@ export const ONBOARDING_STYLES = `
     text-align: center;
   }
   .recovery-word.is-invalid {
-    box-shadow: inset 0 0 0 1px var(--mc-danger);
+    background: color-mix(in srgb, var(--mc-danger) 12%, transparent);
     color: var(--mc-danger);
   }
   .recovery-suggestions {

@@ -2,10 +2,7 @@
  * BIP39 English assist helpers used by recovery-phrase entry.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  isBip39EnglishWord,
-  suggestBip39EnglishWords,
-} from "../../../../src/sidepanel/journeys/onboarding/bip39-english";
+import { isBip39EnglishWord, suggestBip39EnglishWords } from "../../src/recovery/bip39-english";
 
 describe("bip39 english assist", () => {
   test("recognizes English BIP39 words case-insensitively", () => {

@@ -113,7 +113,8 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
   // English BIP39 word list embeds the token `seed`; assist-only, never crypto.
-  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/bip39-english.ts",
+  "packages/presentation/wallet-ui/src/recovery/bip39-english.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses-onboarding.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/recovery-import-bind.ts",

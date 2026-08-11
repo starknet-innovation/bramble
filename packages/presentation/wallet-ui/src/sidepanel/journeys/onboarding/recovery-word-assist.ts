@@ -4,7 +4,7 @@
  * Continue path through Krusty.
  */
 
-import { isBip39EnglishWord, suggestBip39EnglishWords } from "./bip39-english";
+import { isBip39EnglishWord, suggestBip39EnglishWords } from "../../../recovery/bip39-english";
 
 const SUGGESTION_LIMIT = 5;
 

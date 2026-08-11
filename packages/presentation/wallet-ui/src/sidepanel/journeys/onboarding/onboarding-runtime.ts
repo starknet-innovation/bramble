@@ -9,8 +9,8 @@ import {
   isCreateAccountResponse,
   isErrorResponse,
   isGenerateMnemonicResponse,
-  isValidateMnemonicResponse,
 } from "../../../popup/responses/responses";
+import { isValidateMnemonicResponse } from "../../../popup/responses/responses-onboarding";
 
 const responseError = (response: unknown, fallback: string): Error =>
   new Error(isErrorResponse(response) ? response.error : fallback);

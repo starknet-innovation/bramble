@@ -121,15 +121,6 @@ export type GenerateMnemonicResponse = {
 };
 
 /**
- * Popup mnemonic-validity response accepted from the background boundary.
- * Carries only the boolean verdict — never the phrase.
- */
-export type ValidateMnemonicResponse = {
-  readonly ok: true;
-  readonly valid: boolean;
-};
-
-/**
  * Re-authenticated secret reveal accepted only by the extension reveal flow.
  */
 export type RevealSecretsResponse = {
@@ -306,15 +297,6 @@ export const isGenerateMnemonicResponse = (value: unknown): value is GenerateMne
   value["ok"] === true &&
   typeof value["mnemonic"] === "string" &&
   value["mnemonic"].trim().split(/\s+/).length >= 12;
-
-/**
- * Checks mnemonic-validity responses before gating onboarding Continue.
- */
-export const isValidateMnemonicResponse = (value: unknown): value is ValidateMnemonicResponse =>
-  isRecord(value) &&
-  hasOnlyKnownKeys(value, ["ok", "valid"]) &&
-  value["ok"] === true &&
-  typeof value["valid"] === "boolean";
 
 /**
  * Checks re-authenticated reveal responses before showing secret material.
