@@ -131,3 +131,50 @@ export const isLedgerAccountsResponse = (value: unknown): value is LedgerAccount
     (account) => isAccountRef(account) && account.derivation.kind === "ledger",
   ) &&
   hasUniqueStrings(value["accounts"].map((account) => account.id));
+
+/**
+ * One HD position a recovery-phrase scan reported.
+ */
+export type SeedScanCandidate = {
+  readonly accountIndex: number;
+  readonly address: string;
+  readonly alreadyAdded: boolean;
+  readonly deployed: boolean;
+  readonly funded: boolean;
+};
+
+/**
+ * Scan results for a restored recovery phrase.
+ */
+export type SeedScanResponse = {
+  readonly candidates: readonly SeedScanCandidate[];
+  readonly ok: true;
+};
+
+const isSeedScanCandidate = (value: unknown): value is SeedScanCandidate =>
+  isRecord(value) &&
+  hasOnlyKnownKeys(value, ["accountIndex", "address", "alreadyAdded", "deployed", "funded"]) &&
+  typeof value["accountIndex"] === "number" &&
+  Number.isSafeInteger(value["accountIndex"]) &&
+  value["accountIndex"] >= 0 &&
+  typeof value["address"] === "string" &&
+  isStarkFieldElement(value["address"]) &&
+  typeof value["alreadyAdded"] === "boolean" &&
+  typeof value["deployed"] === "boolean" &&
+  typeof value["funded"] === "boolean";
+
+/**
+ * Checks recovery-phrase scan responses before the picker offers to restore
+ * anything. Every candidate must carry a field-element address and a real reason
+ * it qualified, so a malformed reply is refused rather than rendering an account
+ * the wallet cannot actually derive. Addresses must be distinct: two rows for one
+ * address would let a single tap look like two restored accounts.
+ */
+export const isSeedScanResponse = (value: unknown): value is SeedScanResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["candidates", "ok"]) &&
+  value["ok"] === true &&
+  Array.isArray(value["candidates"]) &&
+  value["candidates"].every(isSeedScanCandidate) &&
+  hasUniqueStrings(value["candidates"].map((candidate) => candidate.address));

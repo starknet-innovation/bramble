@@ -26,11 +26,14 @@ export {
   isLedgerAccountsResponse,
   isLedgerSignPendingResponse,
   isOkResponse,
+  isSeedScanResponse,
   type LedgerAccountStatusResponse,
   type LedgerAccountsResponse,
   type LedgerSignPendingResponse,
   type LedgerSignRequestSummary,
   type OkResponse,
+  type SeedScanCandidate,
+  type SeedScanResponse,
 } from "./responses-ledger";
 /**
  * Re-exported NFT auto-discovery validators for one import path.

@@ -38,9 +38,11 @@ import {
 import type { Strk20NetworkConfig } from "../starknet/strk20/config";
 import type { AccountGroupIcon } from "../storage/account-groups";
 import type { AccountRef } from "../storage/vault-schema";
+import { createAccountsRuntimeClient } from "./accounts-runtime-client";
 import { createLedgerRuntimeClient } from "./ledger/runtime-client";
 import { createNftRuntimeClient } from "./nft-runtime";
 import { createPrivacyRuntimeClient } from "./privacy-runtime";
+import { responseError } from "./response-error";
 
 /**
  * Minimal browser runtime API consumed by the side panel.
@@ -91,9 +93,6 @@ export const emptyStatus = (): WalletStatus => ({
   ready: false,
 });
 
-const responseError = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
-
 /**
  * Wallet client surface returned by createSidepanelRuntime.
  */
@@ -106,6 +105,7 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
   const sendMessage = async (message: unknown): Promise<unknown> => runtime?.sendMessage(message);
 
   return {
+    ...createAccountsRuntimeClient(sendMessage),
     ...createLedgerRuntimeClient(sendMessage),
     ...createNftRuntimeClient(sendMessage),
     ...createPrivacyRuntimeClient(sendMessage),
@@ -115,15 +115,6 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
         return;
       }
       throw responseError(response, "add token failed");
-    },
-    async addAccount(networkId: string): Promise<string> {
-      const response = await sendMessage({ networkId, type: "wallet.addAccount" });
-      if (isCreateAccountResponse(response)) {
-        // Surface the created account's id so the caller can file it into the
-        // focused group (the background already returns the account here).
-        return response.account.id;
-      }
-      throw responseError(response, "add account failed");
     },
     async importAccount(networkId: string, privateKey: string): Promise<string> {
       const response = await sendMessage({ networkId, privateKey, type: "wallet.importAccount" });

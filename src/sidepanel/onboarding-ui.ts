@@ -13,6 +13,7 @@ import { verifyBackupWords } from "./backup-verify";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
+import { restoreOutcomeMessage, restoreSeedAccounts } from "./restore-accounts";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -403,9 +404,23 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       return;
     }
     buttonBusy(submitButton, true);
+    // `requiresVerification` is set only when this wallet generated the phrase
+    // itself, so its absence here means the user typed an existing one — the case
+    // that may already have accounts on chain. A freshly generated phrase has
+    // none by definition, so it is not worth a single network read.
+    const restoreExisting = !requiresVerification;
     void wallet.createAccount(mnemonic, selectedNetworkId(), passphraseInput?.value ?? "").then(
       async () => {
         showToast("Wallet created", "success");
+        // Best effort, and deliberately after the wallet is usable: an
+        // unreachable node must not turn a successful import into a failure. The
+        // accounts surface offers the same scan to run again.
+        const restored = restoreExisting
+          ? await restoreSeedAccounts(wallet, selectedNetworkId()).catch(() => null)
+          : null;
+        if (restored && restored.added > 0) {
+          showToast(restoreOutcomeMessage(restored), "success");
+        }
         await deps.render(await wallet.loadStatus());
       },
       (error: unknown) => {

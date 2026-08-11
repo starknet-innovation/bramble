@@ -71,6 +71,48 @@ describe("account lifecycle wrappers", () => {
     );
   });
 
+  test("addAccount carries an explicit HD index when restoring", async () => {
+    const { sent, wallet } = captureRuntime(createAccountResponse);
+    expect(await wallet.addAccount("SN_MAIN", 7)).toBe(account.id);
+    // Without the index the background takes the lowest free position, which
+    // would land a restored account at the wrong address.
+    expect(sent[0]).toEqual({ accountIndex: 7, networkId: "SN_MAIN", type: "wallet.addAccount" });
+  });
+
+  test("scanSeedAccounts returns the candidates and carries no payload", async () => {
+    const candidates = [
+      {
+        accountIndex: 3,
+        address: "0xabc",
+        alreadyAdded: false,
+        deployed: true,
+        funded: false,
+      },
+    ];
+    const { sent, wallet } = captureRuntime({ candidates, ok: true });
+    expect(await wallet.scanSeedAccounts()).toEqual(candidates);
+    // The network and passphrase come from wallet state, so the request carries
+    // nothing a caller could redirect.
+    expect(sent[0]).toEqual({ type: "wallet.scanSeedAccounts" });
+  });
+
+  test("scanSeedAccounts rejects a malformed candidate rather than offering it", async () => {
+    // An address that is not a field element cannot be derived, so offering to
+    // restore it would produce an account the wallet cannot reach.
+    await expect(
+      runtimeReturning({
+        candidates: [
+          { accountIndex: 0, address: "nope", alreadyAdded: false, deployed: true, funded: false },
+        ],
+        ok: true,
+      }).scanSeedAccounts(),
+    ).rejects.toThrow("Could not scan for accounts");
+  });
+
+  test("scanSeedAccounts throws on an error envelope", async () => {
+    await expect(runtimeReturning(errorEnvelope).scanSeedAccounts()).rejects.toThrow("boom");
+  });
+
   test("importAccount returns the imported id and carries the raw key only in the request", async () => {
     const { sent, wallet } = captureRuntime(createAccountResponse);
     expect(await wallet.importAccount("SN_MAIN", "0xdeadbeef")).toBe(account.id);

@@ -5,6 +5,7 @@
 import type { WalletStatus } from "../popup/responses";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { bindGroupControls } from "./group-ui";
+import { restoreOutcomeMessage, restoreSeedAccounts } from "./restore-accounts";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -69,6 +70,44 @@ export const bindAccountLabel = (deps: SettingsUiDeps): void => {
 export const bindAddAccount = (deps: SettingsUiDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#new-account");
   button?.addEventListener("click", () => deps.startAddAccount());
+};
+
+/**
+ * Binds "Find my other accounts" on the account flow: scans this wallet's
+ * recovery phrase for accounts that already exist on chain and adds the ones it
+ * does not hold yet.
+ *
+ * Reachable from the accounts surface rather than only from import, because a
+ * wallet imported before this existed is exactly the wallet that needs it. The
+ * scan makes several network reads, so the button reports progress and stays busy
+ * until the run settles.
+ */
+export const bindRestoreAccounts = (deps: SettingsUiDeps): void => {
+  const button = deps.app?.querySelector<HTMLButtonElement>("#restore-accounts");
+  const result = deps.app?.querySelector<HTMLElement>("#new-account-result");
+  button?.addEventListener("click", () => {
+    buttonBusy(button, true);
+    if (result) {
+      result.textContent = "Checking the chain for accounts from your recovery phrase…";
+    }
+    void restoreSeedAccounts(deps.wallet, deps.networkId()).then(
+      async (outcome) => {
+        if (result) {
+          result.textContent = "";
+        }
+        showToast(restoreOutcomeMessage(outcome), "success");
+        // Re-render either way: an added account has to appear in the list, and a
+        // run that added nothing still leaves the button to un-busy.
+        await rerender(deps);
+      },
+      (error: unknown) => {
+        if (result) {
+          result.textContent = errorMessage(error, "Could not scan for accounts");
+        }
+        buttonBusy(button, false);
+      },
+    );
+  });
 };
 
 /**
