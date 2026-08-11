@@ -176,6 +176,9 @@ export const KEY_BOUNDARY_MESSAGES: readonly KeyBoundaryMessage[] = [
     sender: extensionSender,
   },
   { message: { networkId: "SN_MAIN", type: "wallet.addAccount" }, sender: extensionSender },
+  // Reads the vault's recovery phrase to walk HD positions; the response must
+  // carry only public account metadata back.
+  { message: { type: "wallet.scanSeedAccounts" }, sender: extensionSender },
   {
     message: {
       accountIndex: 0,

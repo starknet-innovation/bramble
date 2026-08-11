@@ -3,6 +3,7 @@
  */
 
 import type { Call } from "starknet";
+import { isDerivationIndex } from "../crypto/krusty";
 import { isUuid } from "../shared/ids";
 import { hasOnlyKnownKeys, isRecord } from "../shared/json";
 import { normalizeWalletOrigin } from "../shared/origin";
@@ -268,21 +269,30 @@ export const readSetActiveNetworkInput = (
 
 /**
  * Parses add-account messages; the passphrase comes from the unlocked session,
- * not the message, so only the target network is carried.
+ * not the message, so only the target network and HD position are carried.
+ *
+ * `accountIndex` is optional and targets one specific position, which restoring a
+ * recovery phrase needs: its accounts may sit at 0, 3 and 7, and taking the
+ * lowest free index repeatedly cannot rebuild that without also creating the
+ * unused positions between. Omitted, the wallet picks the lowest free one as
+ * before. Validated against the same predicate the KMS enforces, so an
+ * out-of-range index is refused here rather than deep in derivation.
  */
 export const readAddAccountInput = (
   message: unknown,
-): { readonly networkId: StarknetNetworkId } | null => {
+): { readonly accountIndex?: number; readonly networkId: StarknetNetworkId } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["networkId", "type"]) ||
+    !hasOnlyKnownKeys(message, ["accountIndex", "networkId", "type"]) ||
     message["type"] !== "wallet.addAccount" ||
-    !isStarknetNetworkId(message["networkId"])
+    !isStarknetNetworkId(message["networkId"]) ||
+    (message["accountIndex"] !== undefined && !isDerivationIndex(message["accountIndex"]))
   ) {
     return null;
   }
 
   return {
+    ...(message["accountIndex"] === undefined ? {} : { accountIndex: message["accountIndex"] }),
     networkId: message["networkId"],
   };
 };

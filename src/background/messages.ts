@@ -44,6 +44,7 @@ import {
   switchActiveNetwork,
 } from "./runtime-state";
 import type { RuntimeResponse } from "./runtime-types";
+import { handleSeedScanOps } from "./seed-scan-ops";
 import {
   isClaimedSenderOrigin,
   isExtensionPageSender,
@@ -120,7 +121,11 @@ const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
       ctx.preferencesStore,
       input.networkId,
       (vaultPassphrase) =>
-        ctx.wallet.addDerivedAccount({ networkId: input.networkId, vaultPassphrase }),
+        ctx.wallet.addDerivedAccount({
+          ...(input.accountIndex === undefined ? {} : { accountIndex: input.accountIndex }),
+          networkId: input.networkId,
+          vaultPassphrase,
+        }),
     );
     return account ? { account, ok: true } : { error: "wallet locked" };
   });
@@ -352,6 +357,7 @@ const handlePreferences: RouterHandler = async (ctx, messageType, message) => {
 const HANDLERS: readonly RouterHandler[] = [
   (ctx, messageType, message) => handleWalletOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) => handleLedgerOps(buildOpsDeps(ctx), messageType, message),
+  (ctx, messageType, message) => handleSeedScanOps(buildOpsDeps(ctx), messageType, message),
   (ctx, messageType, message) =>
     handleSwapOps(
       {

@@ -3,7 +3,6 @@
  */
 import type { KrustyKms } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
-import { isWalletOrigin } from "../shared/origin";
 import { canonicalFelt, isStarkFieldElement, isStarkPrivateKey } from "../starknet/networks";
 import { type EncryptedStore, isVaultPassphrase } from "../storage/encrypted-store";
 import { assertStoreAccess, type StoreActor } from "../storage/permissioned-store";
@@ -30,7 +29,7 @@ import {
   deriveLedgerAccountRefs,
   nextAccountIndex,
 } from "./accounts";
-import { connectedSitesFromVault, grantedAccountIdsFor } from "./origin-grants";
+import { scanSeedAccounts } from "./seed-account-scan";
 import {
   deriveVaultStrk20ViewingKey,
   runLedgerStrk20ViewingKeyCeremony,
@@ -41,6 +40,7 @@ import {
   findNetworkAccount,
   selectSourceAccount,
 } from "./vault-network-account";
+import { grantedAccountsFor, grantOriginAccess, revokeOriginAccess } from "./vault-origin-ops";
 import type { WalletVaultService } from "./vault-service-types";
 
 export { activeAccountSecrets } from "./vault-reveal";
@@ -130,6 +130,13 @@ export const createWalletVaultService = ({
       return vault;
     });
 
+  const originIo = {
+    readVault,
+    readVaultSnapshot,
+    writeVault: (vault: Vault, vaultPassphrase: string) =>
+      writeVault(encryptedStore, vault, vaultPassphrase),
+  };
+
   const service: WalletVaultService = {
     async addDerivedAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
@@ -138,7 +145,7 @@ export const createWalletVaultService = ({
       }
 
       const { account, privateKey } = await deriveAccount(kms, {
-        accountIndex: nextAccountIndex(vault.accounts, input.networkId),
+        accountIndex: input.accountIndex ?? nextAccountIndex(vault.accounts, input.networkId),
         mnemonic: vault.mnemonic,
         networkId: input.networkId,
       });
@@ -360,56 +367,19 @@ export const createWalletVaultService = ({
       return kms.generateMnemonic();
     },
     previewAccount: (input) => deriveAccountRef(kms, input),
-    async grantOrigin(input) {
-      if (!isWalletOrigin(input.origin)) {
-        throw new WalletError("Invalid origin");
-      }
-
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const accountId = input.accountId ?? vault.activeAccountId;
-      if (!accountId) {
-        throw new WalletError("No account selected");
-      }
-
-      const account = findVaultAccount(vault, accountId);
-      const grants = vault.originGrants.filter((grant) => grant.origin !== input.origin);
-      const existing = vault.originGrants.find((grant) => grant.origin === input.origin);
-      const accountIds = [...new Set([...(existing?.accountIds ?? []), account.id])];
-
-      await writeVault(
-        encryptedStore,
-        {
-          ...vault,
-          originGrants: [...grants, { accountIds, origin: input.origin }],
-        },
-        input.vaultPassphrase,
-      );
-
-      return [account];
-    },
-    async getGrantedAccounts(origin, vaultPassphrase) {
-      if (!isWalletOrigin(origin)) {
-        throw new WalletError("Invalid origin");
-      }
-
-      const vault = await readVault(vaultPassphrase);
-      return grantedAccountIdsFor(vault, origin).map((accountId) =>
-        findVaultAccount(vault, accountId),
-      );
-    },
+    // The vault read completes before any probe runs, so the mutation queue is
+    // never held across the network round trips this walk makes. Holding it
+    // would block every other vault operation for the length of a whole scan.
+    scanSeedAccounts: async (input) =>
+      scanSeedAccounts(kms, await readVault(input.vaultPassphrase), {
+        networkId: input.networkId,
+        probe: input.probe,
+      }),
+    grantOrigin: (input) => grantOriginAccess(originIo, input),
+    getGrantedAccounts: (origin, vaultPassphrase) =>
+      grantedAccountsFor(originIo, origin, vaultPassphrase),
     readVault,
-    async revokeOrigin(input) {
-      if (!isWalletOrigin(input.origin)) {
-        throw new WalletError("Invalid origin");
-      }
-
-      const vault = await readVaultSnapshot(input.vaultPassphrase);
-      const originGrants = vault.originGrants.filter((grant) => grant.origin !== input.origin);
-      if (originGrants.length !== vault.originGrants.length) {
-        await writeVault(encryptedStore, { ...vault, originGrants }, input.vaultPassphrase);
-      }
-      return connectedSitesFromVault({ ...vault, originGrants });
-    },
+    revokeOrigin: (input) => revokeOriginAccess(originIo, input),
     async setActiveAccount(input) {
       const vault = await readVaultSnapshot(input.vaultPassphrase);
       const account = findVaultAccount(vault, input.accountId);

@@ -77,6 +77,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/background/origins-ops.ts",
   "src/background/strk20-account-context.ts",
   "src/background/strk20-ops.ts",
+  // Recovery-phrase scan handler: holds the unlocked passphrase only to reach the
+  // vault service, and returns public account metadata alone.
+  "src/background/seed-scan-ops.ts",
   // Post-approval appliers split from strk20-ops by trust step. They take the
   // unlocked passphrase only to build the protected signer for an operation the
   // user already reviewed; nothing is persisted or logged.
@@ -139,8 +142,15 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/storage/vault-account-secrets.ts",
   "src/storage/vault-store-migration.ts",
   "src/wallet/accounts.ts",
+  // Walks HD positions using the vault's stored phrase. Derives public metadata
+  // only and discards every intermediate; the phrase is read from an
+  // already-decrypted vault and never returned, logged, or re-persisted.
+  "src/wallet/seed-account-scan.ts",
   "src/wallet/strk20-viewing-key.ts",
   "src/wallet/vault-network-account.ts",
+  // Origin-grant read-modify-writes split from vault-service; the passphrase
+  // transits into the injected vault io and is never stored or logged.
+  "src/wallet/vault-origin-ops.ts",
   "src/wallet/vault-reveal.ts",
   "src/wallet/vault-service.ts",
   "src/wallet/vault-service-types.ts",

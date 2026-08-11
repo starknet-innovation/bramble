@@ -150,7 +150,16 @@ const requireNonZeroFieldElementField = (value: unknown, field: string): string 
   return fieldValue;
 };
 
-const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
+/**
+ * Whether a value is usable as a BIP-32 derivation index.
+ *
+ * Exported and single-sourced here because this boundary is what consumes the
+ * index: every caller that accepts one from outside — a message validator, an
+ * account derivation — must agree with the KMS on what it will accept, and a
+ * second private copy elsewhere is how they drift apart.
+ */
+export const isDerivationIndex = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 const isMnemonicWordCount = (value: number): boolean =>
   Number.isSafeInteger(value) && MNEMONIC_WORD_COUNTS.some((count) => count === value);
 const isMnemonicText = (value: unknown): value is string =>

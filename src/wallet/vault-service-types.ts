@@ -15,6 +15,7 @@ import type {
   Vault,
 } from "../storage/vault-schema";
 import type { AccountDerivationInput, LedgerPubKeyEntry } from "./accounts";
+import type { SeedAccountCandidate, SeedAccountScanInput } from "./seed-account-scan";
 
 /**
  * Public wallet status shown to popup and provider callers.
@@ -87,8 +88,14 @@ export type EnsureNetworkAccountInput = {
 /**
  * Input for adding a freshly derived account on a network using the vault's
  * retained recovery phrase.
+ *
+ * `accountIndex` targets one specific HD position and defaults to the lowest
+ * unused one. Restoring a phrase needs the explicit form: a wallet whose
+ * accounts sit at 0, 3 and 7 cannot be rebuilt by repeatedly taking the lowest
+ * free index without also creating the unused positions between them.
  */
 export type AddDerivedAccountInput = {
+  readonly accountIndex?: number;
   readonly networkId: StarknetNetworkId;
   readonly vaultPassphrase: string;
 };
@@ -236,6 +243,14 @@ export type WalletVaultService = {
   ) => Promise<readonly AccountRef[]>;
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
   readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
+  /**
+   * Finds the HD accounts a restored recovery phrase already has on chain, using
+   * the injected `probe` for every chain answer. Returns public account metadata
+   * only and persists nothing — the caller decides which candidates to add.
+   */
+  readonly scanSeedAccounts: (
+    input: SeedAccountScanInput & { readonly vaultPassphrase: string },
+  ) => Promise<readonly SeedAccountCandidate[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;
   readonly status: () => Promise<WalletStatus>;

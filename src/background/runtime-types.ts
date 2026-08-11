@@ -411,6 +411,27 @@ export type LedgerSignPendingResponse = {
 };
 
 /**
+ * One HD position a phrase scan found, as the panel sees it. Public metadata
+ * only: the address, why it qualified, and whether this wallet already holds it.
+ */
+export type SeedScanCandidateView = {
+  readonly accountIndex: number;
+  readonly address: string;
+  readonly alreadyAdded: boolean;
+  readonly deployed: boolean;
+  readonly funded: boolean;
+};
+
+/**
+ * HD positions a restored recovery phrase already has on chain. Public metadata
+ * only; the phrase itself never leaves the vault service.
+ */
+export type SeedScanResponse = {
+  readonly candidates: readonly SeedScanCandidateView[];
+  readonly ok: true;
+};
+
+/**
  * One Ledger candidate's on-chain state; fields are null when degraded.
  */
 export type LedgerAccountStatusResponse = {
@@ -455,6 +476,7 @@ export type RuntimeResponse =
   | PricesResponse
   | RequestAccountsResponse
   | RevealSecretsResponse
+  | SeedScanResponse
   | SignHashResponse
   | Strk20BalancesResponse
   | Strk20PrepareResponse

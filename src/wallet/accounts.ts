@@ -1,7 +1,7 @@
 /**
  * Starknet account derivation through Krusty KMS with no local crypto fallback.
  */
-import type { KrustyKms } from "../crypto/krusty";
+import { isDerivationIndex, type KrustyKms } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import { isRecord } from "../shared/json";
 import {
@@ -76,8 +76,6 @@ const parseClassHashes = (json: string): unknown => {
     throw new WalletError("Krusty KMS returned invalid class hash JSON");
   }
 };
-
-const isDerivationIndex = (value: number): boolean => Number.isSafeInteger(value) && value >= 0;
 
 const ownValue = (record: Record<string, unknown>, field: string): unknown => {
   const descriptor = Object.getOwnPropertyDescriptor(record, field);

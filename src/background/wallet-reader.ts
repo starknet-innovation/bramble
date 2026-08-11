@@ -73,6 +73,12 @@ export type WalletStatusReader = {
   readonly importRawKeyAccount?: (input: ImportRawKeyAccountInput) => Promise<AccountRef>;
   /** Derives public metadata without writing; optional only for partial test stubs. */
   readonly previewAccount?: (input: AccountDerivationInput) => Promise<AccountRef>;
+  /**
+   * Finds the HD accounts this vault's phrase already has on chain, using the
+   * caller's `probe` for every chain answer. Returns public metadata only and
+   * writes nothing. Optional so partial test stubs stay valid.
+   */
+  readonly scanSeedAccounts?: WalletVaultService["scanSeedAccounts"];
   readonly getGrantedAccounts: (
     origin: string,
     vaultPassphrase: string,
@@ -138,6 +144,9 @@ export const createWalletReader = (
     },
     async previewAccount(input) {
       return (await required()).previewAccount(input);
+    },
+    async scanSeedAccounts(input) {
+      return (await required()).scanSeedAccounts(input);
     },
     async readVault(vaultPassphrase) {
       return (await required()).readVault(vaultPassphrase);
