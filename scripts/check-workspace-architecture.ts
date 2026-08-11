@@ -3,7 +3,7 @@
  * deny-by-default dependency graph without adding a build-orchestration tool.
  */
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { PINNED_RUNTIME_FILES } from "./config-standards-policy";
 import { isOutsideRoot, sourceImports } from "./workspace-architecture-imports";
 
@@ -11,6 +11,7 @@ type Manifest = {
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
   readonly exports?: Readonly<Record<string, string>>;
+  readonly imports?: unknown;
   readonly name?: string;
   readonly private?: boolean;
   readonly type?: string;
@@ -157,6 +158,16 @@ const EXCLUDED_DIRECTORIES = new Set([
   "vendor",
 ]);
 
+const SOURCE_EXTENSIONS = new Set([".cjs", ".cts", ".js", ".jsx", ".mjs", ".mts", ".ts", ".tsx"]);
+
+const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
+  ["packages/presentation/wallet-ui/tests/support/groups-harness.ts", 1],
+  ["scripts/check-krusty-adapter.ts", 1],
+  ["scripts/check-privacy-sdk.ts", 1],
+]);
+
+const DEVELOPMENT_SOURCE_FILES = new Set(["apps/terminal/src/data/extended/dev-bridge.ts"]);
+
 const EXTENSION_SURFACE_EDGES: Readonly<Record<string, readonly string[]>> = {
   content: ["@mc-wallet/wallet-protocol"],
   "ledger-grant": ["@mc-wallet/ledger-browser", "@mc-wallet/ledger-protocol", "@mc-wallet/ui-kit"],
@@ -209,6 +220,9 @@ const isExactVersion = (version: string): boolean =>
 for (const workspace of workspaces) {
   if (workspace.manifest.private !== true || workspace.manifest.type !== "module") {
     failures.push(`${workspace.root}/package.json must be private ESM package metadata`);
+  }
+  if (workspace.manifest.imports !== undefined) {
+    failures.push(`${workspace.root}/package.json may not hide dependencies behind import aliases`);
   }
   if (workspace.root !== "." && (await Bun.file(join(workspace.root, "bun.lock")).exists())) {
     failures.push(`${workspace.root}/bun.lock duplicates the root workspace lockfile`);
@@ -271,10 +285,9 @@ const walkTypeScript = async (root: string, isRepositoryRoot = false): Promise<s
     const path = join(root, entry.name);
     if (entry.isDirectory()) {
       files.push(...(await walkTypeScript(path)));
-    } else if (
-      entry.isFile() &&
-      (path.endsWith(".js") || path.endsWith(".ts") || path.endsWith(".tsx"))
-    ) {
+    } else if (entry.isSymbolicLink()) {
+      failures.push(`${path} may not be a symbolic link inside a workspace`);
+    } else if (entry.isFile() && SOURCE_EXTENSIONS.has(extname(path))) {
       files.push(path);
     }
   }
@@ -292,22 +305,51 @@ const graph = new Map(
   ]),
 );
 const extensionRoot = resolve("apps/extension/src");
+const seenNonLiteralAllowances = new Set<string>();
+const externalPackageName = (specifier: string): string | null => {
+  const [first, second] = specifier.split("/");
+  if (!first || (first.startsWith("@") && !second)) {
+    return null;
+  }
+  return first.startsWith("@") ? `${first}/${second}` : first;
+};
+
+const isRuntimeSource = (workspace: Workspace, file: string): boolean => {
+  if (workspace.name === "mc-wallet" || workspace.name === "@mc-wallet/ui-lab") {
+    return false;
+  }
+  const repositoryRelative = relative(resolve("."), resolve(file)).split(sep).join("/");
+  const segments = repositoryRelative.split("/");
+  if (
+    DEVELOPMENT_SOURCE_FILES.has(repositoryRelative) ||
+    segments.includes("test") ||
+    segments.includes("tests") ||
+    segments.includes("__tests__") ||
+    /\.(?:spec|test)\.[^.]+$/.test(file)
+  ) {
+    return false;
+  }
+  const roots = workspace.name === "@mc-wallet/terminal" ? ["api", "shared", "src"] : ["src"];
+  return roots.some((root) => !isOutsideRoot(resolve(workspace.root, root), file));
+};
+
 for (const workspace of workspaces) {
   const edges = graph.get(workspace.name) ?? new Set<string>();
   for (const file of await walkTypeScript(workspace.root, workspace.root === ".")) {
     const source = await readFile(file, "utf8");
     const imports = sourceImports(file, source);
-    const workspaceRelative = relative(resolve(workspace.root), resolve(file));
-    const workspaceSegments = workspaceRelative.split(sep);
-    const testOrToolSource =
-      workspaceSegments.includes("scripts") ||
-      workspaceSegments.includes("test") ||
-      workspaceSegments.includes("tests") ||
-      /\.test\.[^.]+$/.test(file);
-    const productionSource = !isOutsideRoot(resolve(workspace.root, "src"), file);
-    if (!testOrToolSource && imports.nonLiteralModuleLoads > 0) {
-      failures.push(`${file} contains a non-literal module load that cannot be boundary-checked`);
+    const repositoryRelative = relative(resolve("."), resolve(file)).split(sep).join("/");
+    const allowedNonLiteralLoads = NON_LITERAL_MODULE_LOADS.get(repositoryRelative) ?? 0;
+    if (NON_LITERAL_MODULE_LOADS.has(repositoryRelative)) {
+      seenNonLiteralAllowances.add(repositoryRelative);
     }
+    if (imports.nonLiteralModuleLoads !== allowedNonLiteralLoads) {
+      failures.push(
+        `${file} contains ${imports.nonLiteralModuleLoads} non-literal module loads; expected ${allowedNonLiteralLoads}`,
+      );
+    }
+    const productionSource = !isOutsideRoot(resolve(workspace.root, "src"), file);
+    const runtimeSource = isRuntimeSource(workspace, file);
     const extensionRelative = relative(extensionRoot, resolve(file));
     const extensionSurface = isOutsideRoot(extensionRoot, file)
       ? undefined
@@ -347,6 +389,25 @@ for (const workspace of workspaces) {
             `${file} may not import external module ${specifier} from the ${extensionSurface} surface`,
           );
         }
+        if (specifier.startsWith("node:") || specifier.startsWith("bun:")) {
+          continue;
+        }
+        const dependency = externalPackageName(specifier);
+        if (dependency === null) {
+          failures.push(`${file} imports invalid external module specifier ${specifier}`);
+          continue;
+        }
+        const productionVersion = workspace.manifest.dependencies?.[dependency];
+        const developmentVersion = workspace.manifest.devDependencies?.[dependency];
+        if (!productionVersion && !developmentVersion) {
+          failures.push(
+            `${workspace.name} must directly declare external dependency ${dependency}`,
+          );
+        } else if (runtimeSource && !productionVersion) {
+          failures.push(
+            `${file} may not import development-only dependency ${dependency} at runtime`,
+          );
+        }
         continue;
       }
       const [scope, packageSegment, ...subpath] = specifier.split("/");
@@ -381,6 +442,12 @@ for (const workspace of workspaces) {
         failures.push(`${workspace.name} must declare ${targetName} as workspace:*`);
       }
     }
+  }
+}
+
+for (const path of NON_LITERAL_MODULE_LOADS.keys()) {
+  if (!seenNonLiteralAllowances.has(path)) {
+    failures.push(`non-literal module-load allowance references missing source ${path}`);
   }
 }
 

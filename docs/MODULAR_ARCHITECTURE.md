@@ -360,14 +360,18 @@ The repository must enforce the architecture offline:
 2. Exact package `exports`; no wildcard or undeclared deep imports.
 3. Deny-by-default package adjacency matrix.
 4. Every cross-package import has a declared workspace dependency.
-5. Type-only imports count as edges.
-6. The workspace graph and the complete source-module graph are acyclic.
-7. The dependency matrix prevents page and presentation closures from acquiring privileged vault,
+5. Every external import is directly owned by its workspace; runtime source cannot rely on a
+   development-only dependency.
+6. Type-only imports count as edges.
+7. The workspace graph and the complete source-module graph are acyclic.
+8. The dependency matrix prevents page and presentation closures from acquiring privileged vault,
    KMS, browser-storage, or test dependencies before bundling.
-8. The extension manifest and packaged-file allowlist remain exact.
-9. Source standards apply inside every package, including file size, secret-field names, clock,
+9. Computed module loads are limited to exact audited build/test adapters; symlinked workspace
+   source fails closed.
+10. The extension manifest and packaged-file allowlist remain exact.
+11. Source standards apply inside every package, including file size, secret-field names, clock,
    entropy, DOM sinks, exported documentation, and dependency pins.
-10. Cross-workspace relative imports fail; there is no legacy-import allowance.
+12. Cross-workspace relative imports fail; there is no legacy-import allowance.
 
 ## Development workflow
 

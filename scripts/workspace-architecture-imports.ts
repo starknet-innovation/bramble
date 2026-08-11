@@ -5,10 +5,13 @@ import {
   forEachChild,
   isCallExpression,
   isExportDeclaration,
+  isExternalModuleReference,
   isIdentifier,
   isImportDeclaration,
+  isImportEqualsDeclaration,
   isImportTypeNode,
   isLiteralTypeNode,
+  isPropertyAccessExpression,
   isStringLiteralLike,
   type Node,
   ScriptKind,
@@ -32,7 +35,12 @@ const scriptKindFor = (file: string): ScriptKind => {
   if (file.endsWith(".tsx")) {
     return ScriptKind.TSX;
   }
-  return file.endsWith(".js") ? ScriptKind.JS : ScriptKind.TS;
+  if (file.endsWith(".jsx")) {
+    return ScriptKind.JSX;
+  }
+  return file.endsWith(".js") || file.endsWith(".mjs") || file.endsWith(".cjs")
+    ? ScriptKind.JS
+    : ScriptKind.TS;
 };
 
 /**
@@ -57,10 +65,24 @@ export const sourceImports = (file: string, source: string): SourceImports => {
       isStringLiteralLike(node.argument.literal)
     ) {
       specifiers.add(node.argument.literal.text);
+    } else if (isImportEqualsDeclaration(node) && isExternalModuleReference(node.moduleReference)) {
+      const expression = node.moduleReference.expression;
+      if (expression && isStringLiteralLike(expression)) {
+        specifiers.add(expression.text);
+      } else {
+        nonLiteralModuleLoads += 1;
+      }
     } else if (
       isCallExpression(node) &&
       (node.expression.kind === SyntaxKind.ImportKeyword ||
-        (isIdentifier(node.expression) && node.expression.text === "require"))
+        (isIdentifier(node.expression) && node.expression.text === "require") ||
+        (isPropertyAccessExpression(node.expression) &&
+          ((isIdentifier(node.expression.expression) &&
+            node.expression.expression.text === "require" &&
+            node.expression.name.text === "resolve") ||
+            (isIdentifier(node.expression.expression) &&
+              node.expression.expression.text === "module" &&
+              node.expression.name.text === "require"))))
     ) {
       const argument = node.arguments[0];
       if (node.arguments.length === 1 && argument && isStringLiteralLike(argument)) {
