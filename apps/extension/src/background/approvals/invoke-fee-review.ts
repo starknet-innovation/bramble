@@ -99,15 +99,13 @@ export const estimateInvokeApprovalFee = async (
 ): Promise<InvokeFeeReview> => {
   const { account, calls, preferences } = review;
   const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[account.networkId], preferences);
-  let deployed = true;
-  try {
-    deployed = await deps.runtimeRpc.getDeploymentStatus({
-      accountAddress: account.address,
-      rpcUrls,
-    });
-  } catch {
-    deployed = true;
-  }
+  // An unreadable deployment status must not block the review, so it fails open
+  // to "deployed": the estimate is then attempted and its own failure is what
+  // degrades the card, rather than a transport error silently reporting the
+  // account as undeployed and demanding a deployment the user does not need.
+  const deployed = await deps.runtimeRpc
+    .getDeploymentStatus({ accountAddress: account.address, rpcUrls })
+    .catch(() => true);
   let estimated: FeeEstimate | null = null;
   if (deployed) {
     try {

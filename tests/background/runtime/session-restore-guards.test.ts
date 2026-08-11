@@ -110,3 +110,67 @@ describe("unlock session persistence failures are swallowed", () => {
     expect(session.isUnlocked()).toBe(false);
   });
 });
+
+/**
+ * MCW-V09-114, in-memory half. A lock erases the plaintext mirror; when that
+ * erase fails, `eraseMirror` falls back to writing a durable revocation marker,
+ * and if THAT write also fails the only remaining refusal is the in-memory
+ * `mirrorStale` latch. `restore()` re-reads that latch after awaiting the
+ * pending mirror write, because the latch is set by the erase's own rejection
+ * handler and cannot be observed before that write settles.
+ *
+ * CodeQL reports the second read as "always false" and suggests deleting the
+ * branch; that analysis cannot model a latch set from an async rejection
+ * handler on the very queue being awaited. Deleting it lets a restore that
+ * raced a failed lock rehydrate the passphrase the user just revoked. This
+ * test is what makes that regression loud.
+ */
+describe("unlock session restore after an unprovable erase", () => {
+  // Nothing the lock writes can land: the erase rejects and so does the
+  // revocation marker, leaving a live-looking entry readable. Only the
+  // in-memory latch can refuse it.
+  const unerasableStore = (
+    entry: UnlockSessionMirrorEntry,
+  ): UnlockSessionStore & { clears: () => number } => {
+    let clears = 0;
+    return {
+      clears: () => clears,
+      async clear() {
+        clears += 1;
+        throw new Error("erase failed");
+      },
+      async load() {
+        return entry;
+      },
+      async save() {
+        throw new Error("marker write failed");
+      },
+    };
+  };
+
+  test("refuses to rehydrate from a mirror it could not prove it erased", async () => {
+    const store = unerasableStore({
+      expiresAt: Date.now() + 60_000,
+      passphrase: PASSPHRASE,
+    });
+    const session = createUnlockSession({ store });
+
+    session.unlock(PASSPHRASE);
+    await flush();
+
+    // Race it deliberately: lock() only QUEUES the erase, so restore() starts
+    // while the latch is still false and clears the guard at the top of
+    // restore(). The erase then fails while restore() is awaiting the write
+    // queue, which is the only window in which the post-await re-check matters.
+    session.lock();
+    expect(session.isUnlocked()).toBe(false);
+    const racing = session.restore();
+    await racing;
+
+    expect(store.clears()).toBeGreaterThan(0);
+    // load() still returns a live-looking entry; only the post-await latch read
+    // stands between that entry and a resurrected session.
+    expect(session.isUnlocked()).toBe(false);
+    expect(session.getPassphrase()).toBeNull();
+  });
+});
