@@ -131,6 +131,22 @@ const startJourney = async (
       buttonBusy(button, false);
       return;
     }
+    if (state.privateBalances === "setup-required" && state.registration === "registered") {
+      // Registered on chain, but this device holds no viewing key — an account
+      // re-added after a reset, or restored elsewhere. Only the ceremony is left:
+      // the pool's viewing key is write-once, so preparing a second registration
+      // would ask for something it refuses.
+      await deps.wallet.derivePrivacyViewingKey();
+      if (!scopeMatches(deps, scope)) {
+        return;
+      }
+      showToast("Viewing key ready. Reading your private balances…", "success");
+      // Drop the cached reading so the next paint re-reads through the normal
+      // discovery path, now that private reads can succeed.
+      deps.setDisclosure(emptyPrivacyDisclosure());
+      deps.paint();
+      return;
+    }
     if (state.registration !== "unregistered") {
       // Nothing to do: an activated account shields and unshields from Send, and
       // no surface offers this entry once registration has settled.

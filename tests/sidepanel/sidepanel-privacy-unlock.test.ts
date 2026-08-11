@@ -51,13 +51,16 @@ const preparation: PrivacyPreparation = {
   tokenId: TOKEN_ID,
 };
 
-const state = (privateBalances: PrivacyAccountState["privateBalances"]): PrivacyAccountState => ({
+const state = (
+  privateBalances: PrivacyAccountState["privateBalances"],
+  registration: PrivacyAccountState["registration"] = "unregistered",
+): PrivacyAccountState => ({
   accountId: account.id,
   balances: [],
   networkId: "SN_MAIN",
   poolFeeFri: "0x1",
   privateBalances,
-  registration: "unregistered",
+  registration,
   relayConfigured: true,
 });
 
@@ -65,6 +68,7 @@ const bindWith = (options: {
   readonly ceremony?: () => Promise<void>;
   readonly html: string;
   readonly journey?: PrivacyJourneyState;
+  readonly registration?: PrivacyAccountState["registration"];
 }) => {
   const order: string[] = [];
   const app = document.createElement("main");
@@ -73,7 +77,11 @@ const bindWith = (options: {
   bindPrivacy({
     app,
     balances: () => [],
-    disclosure: () => ({ error: null, loading: false, value: state("setup-required") }),
+    disclosure: () => ({
+      error: null,
+      loading: false,
+      value: state("setup-required", options.registration ?? "unregistered"),
+    }),
     generation: () => 0,
     journey: () => options.journey ?? { stage: "idle" },
     navigate: () => undefined,
@@ -95,7 +103,7 @@ const bindWith = (options: {
         return "0xhash";
       },
       async loadPrivacyState() {
-        return state("setup-required");
+        return state("setup-required", options.registration ?? "unregistered");
       },
       async preparePrivacyRegistration() {
         order.push("prepare-review");
@@ -124,6 +132,21 @@ describe("activating a hardware account with no retained viewing key", () => {
     // The review is where the key-custody disclosure lives, so nothing may be
     // derived before the user has seen it.
     expect(bound.order).toEqual(["prepare-review"]);
+  });
+
+  // The reported bug: an account re-added after clearing the extension is already
+  // registered on chain but holds no key locally. It was offered registration,
+  // which the pool refuses because a viewing key is write-once.
+  test("an already-registered account derives its key and registers nothing", async () => {
+    const bound = bindWith({
+      html: `<button data-privacy-register="${TOKEN_ID}">Generate your viewing key</button>`,
+      registration: "registered",
+    });
+
+    bound.app.querySelector<HTMLButtonElement>("[data-privacy-register]")?.click();
+    await settle();
+
+    expect(bound.order).toEqual(["derive"]);
   });
 
   test("confirming derives the key and then registers, in that order", async () => {

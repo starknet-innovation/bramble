@@ -203,7 +203,10 @@ const privateBreakdownFor = (
     return { kind: "loading" };
   }
   if (privacy.value.privateBalances === "setup-required") {
-    return { kind: "setup-required" };
+    // Registered already means the only thing missing is the key on this device.
+    return privacy.value.registration === "registered"
+      ? { kind: "key-required" }
+      : { kind: "setup-required" };
   }
   if (privacy.value.registration === "pending") {
     return { kind: "pending" };

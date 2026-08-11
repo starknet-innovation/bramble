@@ -31,10 +31,11 @@ const ledgerAccount = {
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 } as unknown as AccountRef;
 
-const ledgerHandler = () =>
+const ledgerHandler = (registered = true) =>
   buildStrk20Handler({
     accounts: [ledgerAccount],
     activeAccountId: () => ledgerAccount.id,
+    registered,
     viewingKeyUnavailable: true,
   });
 
@@ -47,23 +48,40 @@ type StateResponse = {
   };
 };
 
+const stateOf = async (registered: boolean): Promise<StateResponse["strk20State"]> => {
+  const response = (await ledgerHandler(registered)(
+    { type: "wallet.strk20State" },
+    STRK20_EXTENSION_SENDER,
+  )) as unknown as StateResponse;
+  return response.strk20State;
+};
+
 describe("Ledger private-balance state before the viewing-key ceremony", () => {
   test("reports setup-required with no balances instead of failing", async () => {
-    const handler = ledgerHandler();
-
-    const response = (await handler(
-      { type: "wallet.strk20State" },
-      STRK20_EXTENSION_SENDER,
-    )) as unknown as StateResponse;
+    const state = await stateOf(false);
 
     // Recoverable, not an error: the user simply has not run the device ceremony.
-    expect(response.strk20State.privateBalances).toBe("setup-required");
+    expect(state.privateBalances).toBe("setup-required");
     // No private read happened, so the balance list is empty as "unknown" — no
     // surface may render this as a zero private balance.
-    expect(response.strk20State.balances).toEqual([]);
-    expect(response.strk20State.registration).toBe("unregistered");
+    expect(state.balances).toEqual([]);
+    expect(state.registration).toBe("unregistered");
     // The pool fee is readable without the viewing key, and Send needs it.
-    expect(response.strk20State.poolFeeFri).toBe("0x1");
+    expect(state.poolFeeFri).toBe("0x1");
+  });
+
+  // An account re-added after clearing the extension, or restored on another
+  // device, is already registered on chain while holding no key locally. Reporting
+  // it as unregistered offered to register a second time, which the pool refuses
+  // because a viewing key is write-once — so the registration has to be read even
+  // when no key exists, and read from the pool, which needs none.
+  test("still reports registration for an account already in the pool", async () => {
+    const state = await stateOf(true);
+
+    expect(state.privateBalances).toBe("setup-required");
+    expect(state.registration).toBe("registered");
+    // Registered or not, nothing private was read, so no balance may be implied.
+    expect(state.balances).toEqual([]);
   });
 
   test("stays privileged — a dapp origin cannot read this state", async () => {

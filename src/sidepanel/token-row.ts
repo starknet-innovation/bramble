@@ -122,18 +122,33 @@ export type PrivateBreakdown =
   /** Registration broadcast, not yet visible to the privacy indexer. */
   | { readonly kind: "pending" }
   /**
-   * A hardware account with no viewing key derived for this pool yet. Distinct
-   * from `unregistered`: nothing private has been read, so the amount is unknown
-   * rather than absent, and the next step is the device ceremony, not registering.
+   * A hardware account with no viewing key derived for this pool yet, and no
+   * registration either. Distinct from `unregistered`: nothing private has been
+   * read, so the amount is unknown rather than absent, and the journey starts with
+   * the device ceremony before it registers.
    */
   | { readonly kind: "setup-required" }
+  /**
+   * Registered on chain, but this device holds no viewing key for the pool — an
+   * account re-added after a reset, or restored on another device. Kept apart from
+   * `setup-required` because the remaining step is only the ceremony: offering to
+   * register again names an action the pool refuses, since a viewing key is
+   * write-once.
+   */
+  | { readonly kind: "key-required" }
   | { readonly kind: "unregistered" };
 
 const privateBreakdownLine = (token: TokenBalance, breakdown: PrivateBreakdown): string => {
   const symbol = token.symbol;
-  // `setup-required` shares the unregistered wording deliberately: a hardware
-  // account still has to derive its viewing key first, but that is a step inside
-  // the same journey, not a different destination the user should reason about.
+  // An account that is registered but has no key on this device needs only the
+  // ceremony, so it says so. `setup-required` keeps the unregistered wording: the
+  // ceremony is a step inside that journey, not a different destination.
+  if (breakdown.kind === "key-required") {
+    return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="Generate your viewing key to read private balances">
+        <span class="token-breakdown-label">${icon("lock")}Private balance</span>
+        <span>Generate your viewing key</span>
+      </button>`;
+  }
   if (breakdown.kind === "setup-required" || breakdown.kind === "unregistered") {
     return `<button class="token-breakdown-register" data-privacy-register="${escapeHtml(token.id)}" type="button" title="Register to start shielding">
         <span class="token-breakdown-label">${icon("lock")}Private balance</span>

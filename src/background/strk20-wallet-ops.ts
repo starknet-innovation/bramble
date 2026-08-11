@@ -106,6 +106,11 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
     // setup state, not a failure — answer with it instead of attempting reads
     // that would all fail, and report no balances rather than implying zero.
     if (await needsViewingKeyCeremony(context)) {
+      // Registration still has to be read, and read from the pool directly: an
+      // account restored from its phrase or re-added on a new device is already
+      // registered on chain while holding no key locally. Reporting it as
+      // unregistered offered to register a second time, which the pool refuses —
+      // the account needs its key derived, not another registration.
       return {
         ok: true,
         strk20State: {
@@ -113,7 +118,11 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
           balances: [],
           networkId: context.accountContext.account.networkId,
           poolFeeFri: await requirePoolFee(service, context),
-          registration: "unregistered",
+          registration: await readStrk20RegistrationStatus(service, {
+            ...context.accountContext,
+            subject: context.accountContext.account.address,
+            token: context.token.address,
+          }),
           relayConfigured: context.accountContext.config?.paymaster !== undefined,
           privateBalances: "setup-required",
         },
