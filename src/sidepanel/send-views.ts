@@ -20,6 +20,7 @@ import {
   accountDisplayName,
   accountLabel,
   flowScreen,
+  hardwareBadge,
   noAccountEmpty,
 } from "./parts";
 import { liquidDots, liquidDotsFilter } from "./progress-motion";
@@ -76,7 +77,7 @@ const recipientAccountRow = (
     data-send-search="${escapeHtml(`${accountDisplayName(account, preferences)} ${account.address}`.toLowerCase())}">
     <span class="send-recipient-avatar">${accountAvatar(account.address)}</span>
     <span class="send-recipient-copy">
-      <strong>${escapeHtml(accountDisplayName(account, preferences))}</strong>
+      <strong>${escapeHtml(accountDisplayName(account, preferences))}${hardwareBadge(account)}</strong>
       <code>${escapeHtml(accountLabel(account.address))}</code>
       ${isSender ? "<small>Current account · shield into its private balance</small>" : ""}
     </span>

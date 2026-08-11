@@ -1,0 +1,52 @@
+/**
+ * What the Send recipient list tells the user about who they are paying.
+ *
+ * Split from sidepanel-transfer-ui by concern: that suite drives the transfer
+ * lifecycle, while these assert the rendered provenance of a candidate
+ * recipient. Pure render assertions — no wallet, device, or network.
+ */
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { sendFlow } from "../../src/sidepanel/flows";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "../../src/starknet/ledger-path";
+import type { WalletPreferences } from "../../src/storage/preferences-store";
+import { registerDom, unregisterDom } from "../support/groups-harness";
+import { account } from "../support/sidepanel-fixtures";
+import { walletStatus as status } from "../support/transfer-ui-harness";
+
+beforeAll(registerDom);
+afterAll(unregisterDom);
+
+const preferences: WalletPreferences = {
+  activeNetworkId: "SN_MAIN",
+  addressBook: [],
+  schemaVersion: 1,
+  tokens: [],
+};
+
+const ledgerAccount = {
+  ...account,
+  derivation: {
+    accountIndex: 0,
+    eip2645application: LEDGER_EIP2645_APPLICATION,
+    kind: "ledger" as const,
+    path: ledgerAccountPath(0),
+  },
+  publicKeyY: undefined,
+};
+
+const rowFor = (accounts: readonly (typeof account)[], address: string): string => {
+  const host = document.createElement("main");
+  host.innerHTML = sendFlow({ ...status, accounts }, accounts[0] ?? null, preferences);
+  return host.querySelector(`[data-send-recipient="${address}"]`)?.textContent ?? "";
+};
+
+describe("Send recipient list", () => {
+  // Choosing a recipient is a decision about an account, and a hardware account
+  // carries different signing and recovery consequences than a software one. The
+  // same badge that marks it in account selection marks it here, so the
+  // distinction never depends on which screen the user happens to be on.
+  test("marks a hardware account, and only a hardware account", () => {
+    expect(rowFor([ledgerAccount], ledgerAccount.address)).toContain("Hardware");
+    expect(rowFor([account], account.address)).not.toContain("Hardware");
+  });
+});
