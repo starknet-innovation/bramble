@@ -82,7 +82,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let importWordCount: 12 | 24 = 12;
   let generatedWasRevealed = false;
   let requiresVerification = false;
-  let accountSelected = false;
+  let accountSelected = true;
   let previewMatchesInput = false;
 
   const stepFor = (id: string): HTMLElement | undefined =>
@@ -210,7 +210,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     mainnetAckSatisfied(selectedNetworkId(), ackCheckbox?.checked ?? false);
 
   // Accounts this phrase already has beyond the first. Index 0 is left out: the
-  // "Primary account" row above already is it, and listing it twice invites
+  // "Account 1" row above already is it, and listing it twice invites
   // selecting one account and getting two.
   const discovered = createDiscoveredAccountsPanel({
     container: discoveredList,
@@ -369,8 +369,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     void wallet.previewAccount(mnemonic, selectedNetworkId()).then(
       (account) => {
         previewMatchesInput = true;
-        accountSelected = false;
-        accountButton?.setAttribute("aria-pressed", "false");
+        accountSelected = true;
+        accountButton?.setAttribute("aria-pressed", "true");
         if (previewAddress) {
           previewAddress.textContent = `${account.address.slice(0, 10)}…${account.address.slice(-8)}`;
           previewAddress.title = account.address;

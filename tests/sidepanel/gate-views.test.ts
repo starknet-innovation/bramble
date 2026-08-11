@@ -38,7 +38,11 @@ describe("onboarding gate view", () => {
     expect(html).toContain('data-onboarding-step="recovery"');
     expect(html).toContain('data-onboarding-step="password"');
     expect(html).toContain('data-onboarding-step="accounts"');
-    expect(html).toContain('aria-pressed="false"');
+    // The first account is preselected, like every account the scan adds beside
+    // it: each row is one the phrase already has, so the user unselects what they
+    // do not want rather than opting in one at a time.
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain("<strong>Account 1</strong>");
     expect(html.match(/data-recovery-kind="import"/g)?.length).toBe(24);
   });
 

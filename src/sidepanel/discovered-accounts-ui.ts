@@ -94,8 +94,8 @@ export const createDiscoveredAccountsPanel = (options: {
  * it, for the caller to place. Returning the text rather than writing it keeps
  * this module's only DOM writes inside the panel it owns.
  *
- * Index 0 is dropped: setup shows it as its own "Primary account" row, and
- * listing it twice invites selecting one account and getting two.
+ * Index 0 is dropped: setup shows it as its own "Account 1" row, and listing it
+ * twice invites selecting one account and getting two.
  */
 export const renderSetupScan = (
   panel: DiscoveredAccountsPanel,

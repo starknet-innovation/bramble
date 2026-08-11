@@ -266,15 +266,19 @@ const accountStep = (): string => `
     ${flowBack("Back to passphrase")}
     ${stepHead("wallet", "Choose accounts to add", "Select the Starknet accounts you want available when setup finishes.")}
     <div class="onboarding-fields">
+      <!-- The phrase's first account. Named "Account 1" to match the rows the
+           scan adds below it, and preselected like them: every row on this screen
+           is an account the phrase has, so the user unselects what they do not
+           want rather than opting in one at a time. -->
       <button
         class="onboarding-account"
         id="account-preview"
         type="button"
-        aria-pressed="false"
+        aria-pressed="true"
       >
         <span class="onboarding-account-avatar">01</span>
         <span class="onboarding-account-copy">
-          <strong>Primary account</strong>
+          <strong>Account 1</strong>
           <span data-preview-address>Deriving account…</span>
         </span>
         <span class="onboarding-account-check">${icon("check")}</span>

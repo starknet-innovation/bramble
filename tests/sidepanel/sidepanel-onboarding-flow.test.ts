@@ -116,7 +116,7 @@ describe("staged onboarding", () => {
     document.body.replaceChildren();
   });
 
-  test("imports, previews, explicitly selects, then persists one account", async () => {
+  test("imports, previews, then persists the preselected account", async () => {
     const flow = mount();
     click(flow.app, "#add-existing-button");
     expect(activeStep(flow.app)).toBe("method");
@@ -133,10 +133,12 @@ describe("staged onboarding", () => {
 
     expect(activeStep(flow.app)).toBe("accounts");
     expect(flow.previews).toEqual([[MNEMONIC, "SN_MAIN"]]);
-    expect(flow.app.querySelector("#account-preview")?.getAttribute("aria-pressed")).toBe("false");
+    // Preselected, like every other row on this screen: each one is an account the
+    // phrase has, so the user unselects rather than opting in. The Mainnet
+    // acknowledgement remains the explicit consent this screen requires.
+    expect(flow.app.querySelector("#account-preview")?.getAttribute("aria-pressed")).toBe("true");
     expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
 
-    click(flow.app, "#account-preview");
     const acknowledgement = flow.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
     if (!acknowledgement) {
       throw new Error("missing Mainnet acknowledgement");
@@ -177,7 +179,7 @@ describe("staged onboarding", () => {
     click(flow.app, "#review-account-button");
     await tick();
 
-    // Index 0 is the "Primary account" row, so only 3 and 7 are listed here —
+    // Index 0 is the "Account 1" row, so only 3 and 7 are listed here —
     // listing 0 twice would let one tap select two accounts.
     const rows = Array.from(
       flow.app.querySelectorAll<HTMLButtonElement>("[data-discovered-index]"),
@@ -187,8 +189,10 @@ describe("staged onboarding", () => {
     // wanting them.
     expect(rows.map((row) => row.getAttribute("aria-pressed"))).toEqual(["true", "true"]);
 
-    // Unselect account 7 and never select the primary: the wallet must come back
-    // holding account 3 alone.
+    // Account 1 comes preselected too, so unselect it along with account 7: the
+    // wallet must come back holding account 3 alone.
+    expect(flow.app.querySelector("#account-preview")?.getAttribute("aria-pressed")).toBe("true");
+    click(flow.app, "#account-preview");
     click(flow.app, '[data-discovered-index="7"]');
     const acknowledgement = flow.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
     if (!acknowledgement) {
@@ -205,6 +209,31 @@ describe("staged onboarding", () => {
     // The vault starts at the lowest selected position — 3, not 0.
     expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE, 3]]);
     expect(flow.addedIndexes).toEqual([]);
+  });
+
+  test("Account 1 can be unselected on its own", async () => {
+    const flow = mount();
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#review-account-button");
+    await tick();
+
+    // With nothing else found, unselecting the only account leaves nothing to
+    // create, so the submit must close rather than silently pick one.
+    click(flow.app, "#account-preview");
+    const acknowledgement = flow.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
+    if (!acknowledgement) {
+      throw new Error("missing Mainnet acknowledgement");
+    }
+    acknowledgement.checked = true;
+    acknowledgement.dispatchEvent(new window.Event("change", { bubbles: true }));
+
+    expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(true);
+    expect(flow.creations).toEqual([]);
   });
 
   test("a generated phrase is never scanned", async () => {
