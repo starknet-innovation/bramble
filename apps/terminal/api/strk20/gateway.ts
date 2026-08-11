@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { ApiRequest, ApiResponse } from "../_lib/http.js";
 import {
   authorizeOrigin,
   AVNU_PAYMASTER_URL,
@@ -28,7 +28,7 @@ const DISCOVERY_PATHS = new Set([
   "v1/sync/preflight_check",
 ]);
 
-const readRoute = (request: VercelRequest): { path: string; service: Service } | null => {
+const readRoute = (request: ApiRequest): { path: string; service: Service } | null => {
   const service = request.query.service;
   const path = request.query.path;
   const pathParts = Array.isArray(path) ? path : typeof path === "string" ? [path] : [];
@@ -41,13 +41,13 @@ const readRoute = (request: VercelRequest): { path: string; service: Service } |
   return { path: pathParts.join("/"), service };
 };
 
-const contentType = (request: VercelRequest): string =>
+const contentType = (request: ApiRequest): string =>
   String(request.headers["content-type"] ?? "")
     .split(";", 1)[0]
     ?.trim()
     .toLowerCase() ?? "";
 
-const readBody = async (request: VercelRequest): Promise<Uint8Array<ArrayBuffer> | null> => {
+const readBody = async (request: ApiRequest): Promise<Uint8Array<ArrayBuffer> | null> => {
   const chunks: Uint8Array[] = [];
   let length = 0;
   for await (const chunk of request) {
@@ -145,8 +145,8 @@ const upstreamFor = (service: Service): string | null => {
 
 const copyResponse = async (
   upstream: Response,
-  response: VercelResponse,
-): Promise<VercelResponse> => {
+  response: ApiResponse,
+): Promise<ApiResponse> => {
   if (!upstream.ok) {
     return reject(response, 502, "upstream_unavailable");
   }
@@ -201,9 +201,9 @@ const copyResponse = async (
 };
 
 export default async function handler(
-  request: VercelRequest,
-  response: VercelResponse,
-): Promise<VercelResponse | void> {
+  request: ApiRequest,
+  response: ApiResponse,
+): Promise<ApiResponse | void> {
   if (!authorizeOrigin(request, response, "extension")) {
     return;
   }

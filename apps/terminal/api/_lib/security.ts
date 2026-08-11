@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { ApiRequest, ApiResponse } from "./http.js";
 export {
   AVNU_PAYMASTER_URL,
   PRIVATE_SWAP_FEE_TOKEN,
@@ -76,7 +76,7 @@ const EXTENSION_ORIGIN_SHAPE = /^chrome-extension:\/\/[a-p]{32}$/;
 // present a chrome-extension:// origin. It is not software attestation; non-
 // browser clients can spoof HTTP headers, so deployment rate limits remain
 // mandatory.
-const isPrivilegedExtensionFetch = (request: VercelRequest): boolean =>
+const isPrivilegedExtensionFetch = (request: ApiRequest): boolean =>
   (request.headers.origin === undefined ||
     (typeof request.headers.origin === "string" &&
       EXTENSION_ORIGIN_SHAPE.test(request.headers.origin))) &&
@@ -85,7 +85,7 @@ const isPrivilegedExtensionFetch = (request: VercelRequest): boolean =>
   request.headers["sec-fetch-mode"] === "cors" &&
   request.headers["sec-fetch-dest"] === "empty";
 
-const originDecision = (request: VercelRequest, audience: GatewayAudience): OriginDecision => {
+const originDecision = (request: ApiRequest, audience: GatewayAudience): OriginDecision => {
   const origin = request.headers.origin;
   if (audience === "extension" && isPrivilegedExtensionFetch(request)) {
     return { allowed: true };
@@ -96,7 +96,7 @@ const originDecision = (request: VercelRequest, audience: GatewayAudience): Orig
   return { allowed: true, origin };
 };
 
-const setSecurityHeaders = (response: VercelResponse): void => {
+const setSecurityHeaders = (response: ApiResponse): void => {
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
   response.setHeader("Referrer-Policy", "no-referrer");
@@ -104,10 +104,10 @@ const setSecurityHeaders = (response: VercelResponse): void => {
 };
 
 export const reject = (
-  response: VercelResponse,
+  response: ApiResponse,
   status: number,
   code: string,
-): VercelResponse => {
+): ApiResponse => {
   setSecurityHeaders(response);
   return response.status(status).json({ error: code });
 };
@@ -118,8 +118,8 @@ export const reject = (
  * attestation; external rate limiting remains mandatory.
  */
 export const authorizeOrigin = (
-  request: VercelRequest,
-  response: VercelResponse,
+  request: ApiRequest,
+  response: ApiResponse,
   audience: GatewayAudience,
 ): boolean => {
   const decision = originDecision(request, audience);
@@ -166,7 +166,7 @@ export const isNonZeroFelt = (value: unknown): value is string =>
   isFelt(value) && BigInt(value) > 0n;
 
 export const readJsonBody = <T>(
-  request: VercelRequest,
+  request: ApiRequest,
   maxBytes: number,
 ): T | null => {
   const length = Number(request.headers["content-length"] ?? "0");

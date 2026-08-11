@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { ApiRequest, ApiResponse } from "../../api/_lib/http";
 import { authorizeOrigin, serviceUrl } from "../../api/_lib/security";
 import gatewayHandler from "../../api/strk20/gateway";
 import vercelConfig from "../../vercel.json";
@@ -25,7 +25,7 @@ const response = (): {
   readonly body: () => unknown;
   readonly headers: Map<string, string>;
   readonly statusCode: () => number;
-  readonly value: VercelResponse;
+  readonly value: ApiResponse;
 } => {
   const headers = new Map<string, string>();
   let body: unknown;
@@ -48,7 +48,7 @@ const response = (): {
       statusCode = status;
       return value;
     },
-  } as unknown as VercelResponse;
+  } as unknown as ApiResponse;
   return { body: () => body, headers, statusCode: () => statusCode, value };
 };
 
@@ -75,7 +75,7 @@ describe("privacy gateway security configuration", () => {
     const target = response();
     expect(
       authorizeOrigin(
-        { headers: { origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop" } } as VercelRequest,
+        { headers: { origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop" } } as ApiRequest,
         target.value,
         "extension",
       ),
@@ -88,7 +88,7 @@ describe("privacy gateway security configuration", () => {
     const target = response();
     expect(
       authorizeOrigin(
-        { headers: { origin }, method: "GET" } as VercelRequest,
+        { headers: { origin }, method: "GET" } as ApiRequest,
         target.value,
         "extension",
       ),
@@ -98,7 +98,7 @@ describe("privacy gateway security configuration", () => {
     process.env.MC_WALLET_EXTENSION_ORIGINS = "*";
     expect(
       authorizeOrigin(
-        { headers: { origin }, method: "GET" } as VercelRequest,
+        { headers: { origin }, method: "GET" } as ApiRequest,
         response().value,
         "extension",
       ),
@@ -117,7 +117,7 @@ describe("privacy gateway security configuration", () => {
             "sec-fetch-site": "none",
           },
           method: "GET",
-        } as VercelRequest,
+        } as ApiRequest,
         target.value,
         "extension",
       ),
@@ -138,7 +138,7 @@ describe("privacy gateway security configuration", () => {
             "sec-fetch-site": "none",
           },
           method: "POST",
-        } as unknown as VercelRequest,
+        } as unknown as ApiRequest,
         target.value,
         "extension",
       ),
@@ -163,7 +163,7 @@ describe("privacy gateway security configuration", () => {
               "sec-fetch-site": "none",
             },
             method: "POST",
-          } as unknown as VercelRequest,
+          } as unknown as ApiRequest,
           response().value,
           "extension",
         ),
@@ -185,7 +185,7 @@ describe("privacy gateway security configuration", () => {
       },
     ]) {
       expect(
-        authorizeOrigin({ headers, method: "GET" } as VercelRequest, response().value, "extension"),
+        authorizeOrigin({ headers, method: "GET" } as ApiRequest, response().value, "extension"),
       ).toBe(false);
     }
   });
@@ -220,7 +220,7 @@ describe("privacy gateway security configuration", () => {
         headers: { origin },
         method: "GET",
         query: { path: "health", service: "discovery" },
-      } as unknown as VercelRequest,
+      } as unknown as ApiRequest,
       target.value,
     );
     expect(target.statusCode()).toBe(502);

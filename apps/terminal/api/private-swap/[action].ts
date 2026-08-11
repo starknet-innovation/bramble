@@ -7,7 +7,7 @@ import {
   type PrivateFeeMode,
   type PrivateSwapCallAndProof,
 } from "@avnu/avnu-sdk";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { ApiRequest, ApiResponse } from "../_lib/http.js";
 import type { Call } from "starknet";
 import {
   authorizeOrigin,
@@ -173,9 +173,9 @@ const executorCallsFrom = (value: unknown): Call[] | null => {
 };
 
 export default async function handler(
-  request: VercelRequest,
-  response: VercelResponse,
-): Promise<VercelResponse | void> {
+  request: ApiRequest,
+  response: ApiResponse,
+): Promise<ApiResponse | void> {
   if (!authorizeOrigin(request, response, "terminal")) {
     return;
   }

@@ -3,7 +3,9 @@
  * deny-by-default dependency graph without adding a build-orchestration tool.
  */
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { PINNED_RUNTIME_FILES } from "./config-standards-policy";
+import { isOutsideRoot, sourceImports } from "./workspace-architecture-imports";
 
 type Manifest = {
   readonly dependencies?: Readonly<Record<string, string>>;
@@ -149,6 +151,7 @@ const EXCLUDED_DIRECTORIES = new Set([
   "node_modules",
   "output",
   "playwright-report",
+  "storybook-static",
   "target",
   "test-results",
   "vendor",
@@ -161,9 +164,6 @@ const EXTENSION_SURFACE_EDGES: Readonly<Record<string, readonly string[]>> = {
   sandbox: [],
   sidepanel: ["@mc-wallet/ledger-browser", "@mc-wallet/wallet-ui"],
 };
-
-const IMPORT_SPECIFIER =
-  /(?:import|export)\b[\s\S]*?\bfrom\s*["']([^"']+)["']|\bimport\s*["']([^"']+)["']/g;
 
 const failures: string[] = [];
 
@@ -213,6 +213,13 @@ for (const workspace of workspaces) {
   if (workspace.root !== "." && (await Bun.file(join(workspace.root, "bun.lock")).exists())) {
     failures.push(`${workspace.root}/bun.lock duplicates the root workspace lockfile`);
   }
+  const productionDependencies = workspace.manifest.dependencies ?? {};
+  const developmentDependencies = workspace.manifest.devDependencies ?? {};
+  for (const dependency of Object.keys(productionDependencies)) {
+    if (Object.hasOwn(developmentDependencies, dependency)) {
+      failures.push(`${workspace.name} declares ${dependency} in dependencies and devDependencies`);
+    }
+  }
   for (const [dependency, version] of dependencyEntries(workspace.manifest)) {
     if (!isExactVersion(version)) {
       failures.push(`${workspace.name} dependency ${dependency} must use an exact version`);
@@ -220,12 +227,33 @@ for (const workspace of workspaces) {
     if (dependency.startsWith("@mc-wallet/") && version !== "workspace:*") {
       failures.push(`${workspace.name} dependency ${dependency} must use workspace:*`);
     }
+    if (dependency.startsWith("@mc-wallet/")) {
+      if (!byName.has(dependency)) {
+        failures.push(`${workspace.name} declares unknown workspace ${dependency}`);
+      }
+      if (dependency === workspace.name) {
+        failures.push(`${workspace.name} may not depend on itself`);
+      }
+      if (!ALLOWED_EDGES[workspace.name]?.includes(dependency)) {
+        failures.push(`${workspace.name} may not declare dependency ${dependency}`);
+      }
+    }
   }
   for (const [key, target] of Object.entries(workspace.manifest.exports ?? {})) {
-    if (key.includes("*")) {
+    const exportSegments = key === "." ? [] : key.startsWith("./") ? key.slice(2).split("/") : [""];
+    if (
+      key.includes("*") ||
+      exportSegments.some((segment) => !segment || segment === "." || segment === "..")
+    ) {
       failures.push(`${workspace.name} export ${key} must be explicit`);
     }
-    if (!target.startsWith("./src/") || !(await Bun.file(join(workspace.root, target)).exists())) {
+    const sourceRoot = resolve(workspace.root, "src");
+    const exportTarget = resolve(workspace.root, target);
+    if (
+      !target.startsWith("./src/") ||
+      isOutsideRoot(sourceRoot, exportTarget) ||
+      !(await Bun.file(exportTarget).exists())
+    ) {
       failures.push(`${workspace.name} export ${key} must resolve to an existing source file`);
     }
   }
@@ -253,31 +281,72 @@ const walkTypeScript = async (root: string, isRepositoryRoot = false): Promise<s
   return files;
 };
 
-const graph = new Map<string, Set<string>>();
+const graph = new Map(
+  workspaces.map((workspace) => [
+    workspace.name,
+    new Set(
+      dependencyEntries(workspace.manifest)
+        .map(([dependency]) => dependency)
+        .filter((dependency) => byName.has(dependency)),
+    ),
+  ]),
+);
+const extensionRoot = resolve("apps/extension/src");
 for (const workspace of workspaces) {
-  const edges = new Set<string>();
-  graph.set(workspace.name, edges);
+  const edges = graph.get(workspace.name) ?? new Set<string>();
   for (const file of await walkTypeScript(workspace.root, workspace.root === ".")) {
     const source = await readFile(file, "utf8");
-    const extensionRelative = relative(resolve("apps/extension/src"), resolve(file));
-    const extensionSurface = extensionRelative.split("/")[0];
-    const surfaceEdges = EXTENSION_SURFACE_EDGES[extensionSurface ?? ""];
-    for (const match of source.matchAll(IMPORT_SPECIFIER)) {
-      const specifier = match[1] ?? match[2];
-      if (specifier?.startsWith(".")) {
-        const target = resolve(dirname(file), specifier);
-        if (relative(resolve(workspace.root), target).startsWith("..")) {
+    const imports = sourceImports(file, source);
+    const workspaceRelative = relative(resolve(workspace.root), resolve(file));
+    const workspaceSegments = workspaceRelative.split(sep);
+    const testOrToolSource =
+      workspaceSegments.includes("scripts") ||
+      workspaceSegments.includes("test") ||
+      workspaceSegments.includes("tests") ||
+      /\.test\.[^.]+$/.test(file);
+    const productionSource = !isOutsideRoot(resolve(workspace.root, "src"), file);
+    if (!testOrToolSource && imports.nonLiteralModuleLoads > 0) {
+      failures.push(`${file} contains a non-literal module load that cannot be boundary-checked`);
+    }
+    const extensionRelative = relative(extensionRoot, resolve(file));
+    const extensionSurface = isOutsideRoot(extensionRoot, file)
+      ? undefined
+      : extensionRelative.split(sep)[0];
+    const surfaceEdges = extensionSurface ? EXTENSION_SURFACE_EDGES[extensionSurface] : undefined;
+    for (const specifier of imports.specifiers) {
+      if (specifier.startsWith("/")) {
+        const runtimeFile = specifier.slice(1);
+        if (
+          workspace.name !== "@mc-wallet/extension" ||
+          !runtimeFile.startsWith("vendor/") ||
+          !PINNED_RUNTIME_FILES.includes(runtimeFile as (typeof PINNED_RUNTIME_FILES)[number])
+        ) {
+          failures.push(`${file} imports unpinned extension runtime file ${specifier}`);
+        }
+        continue;
+      }
+      if (specifier.startsWith(".") || isAbsolute(specifier)) {
+        const target = isAbsolute(specifier)
+          ? resolve(specifier)
+          : resolve(dirname(file), specifier);
+        if (isOutsideRoot(workspace.root, target)) {
           failures.push(`${file} imports across its workspace boundary via ${specifier}`);
         }
         if (
           surfaceEdges &&
-          relative(resolve("apps/extension/src", extensionSurface ?? ""), target).startsWith("..")
+          extensionSurface &&
+          isOutsideRoot(resolve(extensionRoot, extensionSurface), target)
         ) {
           failures.push(`${file} imports outside its extension surface via ${specifier}`);
         }
         continue;
       }
-      if (!specifier?.startsWith("@mc-wallet/")) {
+      if (!specifier.startsWith("@mc-wallet/")) {
+        if (surfaceEdges) {
+          failures.push(
+            `${file} may not import external module ${specifier} from the ${extensionSurface} surface`,
+          );
+        }
         continue;
       }
       const [scope, packageSegment, ...subpath] = specifier.split("/");
@@ -287,16 +356,17 @@ for (const workspace of workspaces) {
         failures.push(`${file} imports unknown workspace ${targetName}`);
         continue;
       }
-      if (targetName === workspace.name) {
-        continue;
-      }
       if (surfaceEdges && !surfaceEdges.includes(targetName)) {
         failures.push(`${file} may not import ${targetName} from the ${extensionSurface} surface`);
       }
-      if (
-        targetName === "@mc-wallet/testkit" &&
-        relative(resolve(workspace.root), resolve(file)).startsWith("src/")
-      ) {
+      const exportKey = subpath.length === 0 ? "." : `./${subpath.join("/")}`;
+      if (!Object.hasOwn(target.manifest.exports ?? {}, exportKey)) {
+        failures.push(`${file} imports undeclared ${targetName} export ${exportKey}`);
+      }
+      if (targetName === workspace.name) {
+        continue;
+      }
+      if (targetName === "@mc-wallet/testkit" && productionSource) {
         failures.push(`${file} may not import the testkit from production source`);
       }
       edges.add(targetName);
@@ -309,10 +379,6 @@ for (const workspace of workspaces) {
       }[targetName];
       if (declared !== "workspace:*") {
         failures.push(`${workspace.name} must declare ${targetName} as workspace:*`);
-      }
-      const exportKey = subpath.length === 0 ? "." : `./${subpath.join("/")}`;
-      if (!Object.hasOwn(target.manifest.exports ?? {}, exportKey)) {
-        failures.push(`${file} imports undeclared ${targetName} export ${exportKey}`);
       }
     }
   }
@@ -342,6 +408,11 @@ for (const name of graph.keys()) {
 for (const name of Object.keys(ALLOWED_EDGES)) {
   if (!byName.has(name)) {
     failures.push(`architecture policy names missing workspace ${name}`);
+  }
+}
+for (const [name, allowed] of Object.entries(ALLOWED_EDGES)) {
+  if (new Set(allowed).size !== allowed.length || allowed.includes(name)) {
+    failures.push(`architecture policy for ${name} must contain unique non-self edges`);
   }
 }
 for (const workspace of workspaces) {

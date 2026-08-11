@@ -155,25 +155,33 @@ flowchart TD
     lab[apps/ui-lab]
 
     core --> model
+    core --> protocol
     model --> protocol
     core --> store
-    model --> store
+    core --> vault
     store --> vault
     model --> vault
     core --> kms
+    model --> kms
     vault --> kms
     core --> starknet
     model --> starknet
-    core --> ledgerProtocol
+    protocol --> starknet
+    model --> ledgerProtocol
     ledgerProtocol --> ledgerBrowser
+    model --> ledgerBrowser
+    core --> features
     model --> features
     protocol --> features
     store --> features
     starknet --> features
-    vault --> features
     core --> ui
+    model --> ui
+    core --> walletUi
+    model --> walletUi
     protocol --> walletUi
     ui --> walletUi
+    features --> walletUi
     features --> extension
     walletUi --> extension
     kms --> extension
@@ -192,18 +200,17 @@ it is a standalone dapp that exercises the public provider surface without impor
 ### `foundation/core`
 
 Pure, environment-independent primitives: bounded JSON parsing, errors, identifiers, normalized
-origins, safe HTML text helpers, service URL validation, and branded Starknet scalar/address/hash
-values. It has no browser, DOM, storage, network, hardware, clock, entropy, or third-party runtime
-dependency.
+origins, safe HTML text helpers, network-error classification, and service URL validation. It has
+no browser, DOM, storage, network, hardware, clock, entropy, or third-party runtime dependency.
 
 It must not become a general `shared` barrel. Every export must be genuinely foundational and have
 multiple consumers.
 
 ### `foundation/wallet-model`
 
-Public account, network, token, address-book, preference, activity, allowance, NFT, and account
-selection values plus their pure parsers and smart constructors. Persistent versioned vault
-envelopes do not belong here.
+Public account, network, token, address-book, preference, passphrase-policy, Ledger-path, signing,
+and account-selection values plus their pure parsers and smart constructors. Persistent versioned
+vault envelopes and feature-owned activity, allowance, and NFT records do not belong here.
 
 Account selection and signing authority remain separate. A multisig can be a first-class selectable
 wallet account without pretending to own one signing key.
@@ -222,9 +229,9 @@ workspace-package consumer.
 
 ### `platform/store`
 
-The `KeyValueStore` port, immutable snapshot helpers, mutation serialization, JSON persistence
-primitives, and in-memory test implementation. It knows no wallet feature records and no Chrome
-API. Feature packages own their record types and repositories.
+The `KeyValueStore` port, namespaced-key and JSON guards, deny-by-default storage capabilities,
+mutation serialization, and in-memory test implementation. It knows no wallet feature records and
+no Chrome API. Feature packages own their record types and repositories.
 
 ### `platform/vault`
 
@@ -259,10 +266,10 @@ Each feature owns its domain-specific types, use cases, repository contract and 
 
 - `permissions`: phishing/blocklist decisions, origin history, and connected-site feed state.
 - `portfolio`: token balances, registry, prices, NFTs, and portfolio discovery.
-- `transactions`: review, verification, fee binding, submission, monitoring, activity, allowances,
-  declarations, transfers, and swap execution.
-- `multisig`: config/proposal/deployment models, discovery, repository, review packages, signing,
-  confirmation, and execution.
+- `transactions`: activity and transaction history, allowance discovery, route and fee checks,
+  AVNU quote/call adaptation, Ledger call verification, and explorer parsing.
+- `multisig`: on-chain configuration and proposal parsing, deployment construction, discovery,
+  repository persistence, synchronization, and confirmation-mode values.
 - `privacy`: STRK20 schemas, official SDK adapter, note-discovery/proving service, registration,
   recipient policy, preparation, and proof-boundary submission.
 - `settings`: account groups, public preferences, network overrides, and their validated stores.
@@ -332,9 +339,10 @@ key-boundary catalogs are independently enforced so adding a command cannot sile
 
 ### Reviewed transaction identity
 
-The review-to-submit path carries an opaque preparation identifier bound to the exact account,
-network, calls, amount, recipient, fee/resource bounds, and relevant policy state. Submission can
-consume only an unexpired preparation. Mutable external policy is rechecked at its last safe
+Where preparation and execution are split across asynchronous requests, swap and STRK20 paths use
+an opaque, one-time preparation identifier bound to the reviewed account, network, calls, fees,
+and relevant policy state. Other flows invalidate their local review when inputs change and parse
+the final submission independently. Mutable external policy is rechecked at its last safe
 asynchronous boundary.
 
 ### Secret capabilities
@@ -461,8 +469,8 @@ and a clean dependency graph pass from a fresh checkout.
 
 The reorganisation is complete only when:
 
-- `apps/extension` visibly contains every packaged extension surface and only composition/platform
-  code.
+- `apps/extension` visibly contains every packaged extension surface, browser adapters, and the
+  privileged cross-feature orchestration that must remain inside the background authority.
 - All reusable code lives behind explicit workspace exports and an acyclic deny-by-default graph.
 - Public Wallet API values have one type-and-decoder source of truth; extension-only commands retain
   exact application-boundary parsers and enforced dispatch/key-boundary catalogs.
