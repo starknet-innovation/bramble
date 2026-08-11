@@ -4,15 +4,15 @@
  * and later requests resolve immediately; denying leaves the token untracked.
  */
 import { describe, expect, test } from "bun:test";
-import { createApprovalQueue } from "../../src/background/approvals";
-import { walletEventBroadcasts } from "../../src/background/events";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { createMemoryStore } from "../../src/storage/kv";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
+import { walletEventBroadcasts } from "../../apps/extension/src/background/events";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { flushHeld, latestApprovalId } from "../support/held";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";

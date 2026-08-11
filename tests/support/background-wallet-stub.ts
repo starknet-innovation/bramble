@@ -6,15 +6,17 @@
  * `grantedAccountIdsFor` policy, so a suite cannot end up with two disagreeing
  * notions of what the origin may see.
  */
-import type { RuntimeSender } from "../../src/background/senders";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
-import { grantedAccountIdsFor } from "../../src/wallet/origin-grants";
+
+import { grantedAccountIdsFor } from "@mc-wallet/vault/origin-grants";
+import type { Vault } from "@mc-wallet/vault/schema";
 import type {
   CreateVaultAccountInput,
   OriginGrantInput,
   SignHashInput,
   WalletStatus,
-} from "../../src/wallet/vault-service";
+} from "@mc-wallet/vault/service";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
 
 /**
  * Single stub account used by the dispatcher suites.

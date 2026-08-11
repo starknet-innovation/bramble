@@ -1,4 +1,4 @@
-import { escapeHtml } from "../../../src/shared/html";
+import { escapeHtml } from "@mc-wallet/core/html";
 
 /**
  * Wraps related specimens in a documented catalog section.

@@ -6,16 +6,19 @@
  * handed invalid typed data.
  */
 import { describe, expect, test } from "bun:test";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   type ChainOpsDeps,
   executeSignApproval,
   handleChainOps,
-} from "../../src/background/chain-ops";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession, type UnlockSession } from "../../src/background/session";
-import { createMemoryStore } from "../../src/storage/kv";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
+} from "../../apps/extension/src/background/chain-ops";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import {
+  createUnlockSession,
+  type UnlockSession,
+} from "../../apps/extension/src/background/session";
 
 const ORIGIN = "https://dapp.example";
 const PASSPHRASE = "correct horse battery staple";

@@ -5,13 +5,10 @@
  * through the frozen preparation.
  */
 import { describe, expect, test } from "bun:test";
-import { canonicalFelt } from "../../src/starknet/networks";
-import type { Strk20Action } from "../../src/starknet/strk20/schemas";
-import type { Strk20Service, Strk20SubmissionPlan } from "../../src/starknet/strk20/service";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-} from "../../src/storage/preferences-store";
+import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import {
   buildStrk20Handler,
   STRK20_CALL_AND_PROOF,

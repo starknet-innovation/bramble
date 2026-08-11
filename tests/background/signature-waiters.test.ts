@@ -3,7 +3,7 @@
  * settle: an overwriting registry would orphan the earlier request forever.
  */
 import { describe, expect, test } from "bun:test";
-import { createSignatureWaiters } from "../../src/background/signature-waiters";
+import { createSignatureWaiters } from "../../apps/extension/src/background/signature-waiters";
 
 describe("createSignatureWaiters", () => {
   test("settles a registered waiter exactly once", async () => {

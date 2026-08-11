@@ -1,0 +1,37 @@
+{
+  "name": "@mc-wallet/transactions",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./activity": "./src/activity.ts",
+    "./alerts": "./src/alerts.ts",
+    "./allowance-discovery": "./src/allowance-discovery.ts",
+    "./allowance-scan": "./src/allowance-scan.ts",
+    "./allowance-store": "./src/allowance-store.ts",
+    "./allowances": "./src/allowances.ts",
+    "./avnu": "./src/avnu.ts",
+    "./fee-funds": "./src/fee-funds.ts",
+    "./ledger-verify": "./src/ledger-verify.ts",
+    "./send-routes": "./src/send-routes.ts",
+    "./starkscan": "./src/starkscan.ts",
+    "./starkscan-parsers": "./src/starkscan-parsers.ts",
+    "./starkscan-types": "./src/starkscan-types.ts",
+    "./starkscan-wallet": "./src/starkscan-wallet.ts",
+    "./tx-history": "./src/tx-history.ts",
+    "./tx-history-scan": "./src/tx-history-scan.ts",
+    "./verify": "./src/verify.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/starknet": "workspace:*",
+    "@mc-wallet/store": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*",
+    "starknet": "10.0.2"
+  }
+}

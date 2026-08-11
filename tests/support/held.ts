@@ -15,7 +15,7 @@ export const flushHeld = (): Promise<void> =>
     setTimeout(resolve, 0);
   });
 
-import type { RuntimeSender } from "../../src/background/senders";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
 
 type Handler = (message: unknown, sender?: RuntimeSender) => Promise<unknown>;
 

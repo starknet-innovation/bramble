@@ -2,7 +2,10 @@
  * Approval queue checks prove dapp connection prompts are explicit and removable.
  */
 import { describe, expect, test } from "bun:test";
-import { createApprovalQueue, MAX_PENDING_APPROVALS } from "../../src/background/approvals";
+import {
+  createApprovalQueue,
+  MAX_PENDING_APPROVALS,
+} from "../../apps/extension/src/background/approvals";
 
 const CONTEXT = {
   accountId: "SN_MAIN:0x1",

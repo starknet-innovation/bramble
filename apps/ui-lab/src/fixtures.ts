@@ -1,14 +1,14 @@
+import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { ActivityEntry } from "@mc-wallet/transactions/activity";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import type {
   DiscoveredNft,
   PendingApproval,
   TokenBalance,
   WalletStatus,
-} from "../../../src/popup/responses";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "../../../src/starknet/ledger-path";
-import type { ActivityEntry } from "../../../src/storage/activity-store";
-import type { MultisigProposalRecord, MultisigRecord } from "../../../src/storage/multisig-store";
-import type { WalletPreferences } from "../../../src/storage/preferences-store";
-import type { AccountRef } from "../../../src/storage/vault-schema";
+} from "@mc-wallet/wallet-ui/popup/responses";
 
 export const SOFTWARE_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";
 export const LEDGER_ADDRESS = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd";

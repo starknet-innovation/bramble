@@ -5,23 +5,24 @@
  * the payload has no calls, the wallet is locked, or the origin lost its grant.
  */
 import { describe, expect, test } from "bun:test";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec } from "starknet";
-import { createApprovalQueue } from "../../src/background/approvals";
-import type { LedgerSignQueue } from "../../src/background/ledger-sign-queue";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
+import type { LedgerSignQueue } from "../../apps/extension/src/background/ledger-sign-queue";
 import {
   executeInvokeApproval,
   handleProviderOps,
   type InvokeExecuteDeps,
   type ProviderOpsDeps,
-} from "../../src/background/provider-ops";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { createSignatureWaiters } from "../../src/background/signature-waiters";
-import { memoryActivityLog } from "../../src/storage/activity-store";
-import { memoryAllowanceStore } from "../../src/storage/allowance-store";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+} from "../../apps/extension/src/background/provider-ops";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { createSignatureWaiters } from "../../apps/extension/src/background/signature-waiters";
 
 const EXTENSION_ID = "extension-id";
 const ORIGIN = "https://a.test";

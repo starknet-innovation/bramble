@@ -3,7 +3,7 @@
  * and the privacy-gated forwarding decisions made by the content bridge.
  */
 import { describe, expect, test } from "bun:test";
-import { PAGE_TARGET } from "../../src/provider/bridge";
+import { PAGE_TARGET } from "@mc-wallet/wallet-protocol/bridge";
 import {
   accountsChangedEvent,
   addressesFromPayload,
@@ -12,7 +12,7 @@ import {
   networkChangedEvent,
   pageEventsFor,
   readProviderEvent,
-} from "../../src/provider/events";
+} from "@mc-wallet/wallet-protocol/events";
 
 const ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 const OTHER = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";

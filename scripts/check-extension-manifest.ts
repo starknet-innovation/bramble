@@ -6,7 +6,10 @@ import { readFile } from "node:fs/promises";
 const readJson = async (path: string): Promise<Record<string, unknown>> =>
   JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
 
-const manifest = await readJson("public/manifest.json");
+const extensionRoot = "apps/extension";
+const publicRoot = `${extensionRoot}/public`;
+const sourceRoot = `${extensionRoot}/src`;
+const manifest = await readJson(`${publicRoot}/manifest.json`);
 const packageJson = await readJson("package.json");
 
 const expectedBackgroundServiceWorker = "background/index.js";
@@ -44,8 +47,8 @@ const expectedHostPermissions = [
   // never participates in signing or transaction submission.
   "https://starkscan.co/*",
   // AVNU swap aggregator (quotes + build calldata) for the in-wallet swap
-  // flow, per network. Responses are validated in src/starknet/avnu.ts and
-  // policy-checked in src/background/swap-ops.ts before anything is signed.
+  // flow, per network. Responses are validated in packages/features/transactions/src/avnu.ts and
+  // policy-checked in apps/extension/src/background/swap-ops.ts before anything is signed.
   "https://starknet.api.avnu.fi/*",
   "https://sepolia.api.avnu.fi/*",
   // Maintained web3 phishing feed (issue #34): the default source for the live
@@ -154,7 +157,7 @@ const backgroundPath =
 if (backgroundPath !== expectedBackgroundServiceWorker) {
   failures.push("manifest background worker path must stay pinned");
 }
-await requireFile(`src/${backgroundPath.replace(/\.js$/, ".ts")}`);
+await requireFile(`${sourceRoot}/${backgroundPath.replace(/\.js$/, ".ts")}`);
 
 const action = hasOnlyKeys(manifest["action"], ["default_title"]) ? manifest["action"] : null;
 if (action?.["default_title"] !== expectedActionTitle) {
@@ -169,9 +172,9 @@ const sidePanelPath =
 if (sidePanelPath !== expectedSidePanel) {
   failures.push("manifest side panel path must stay pinned");
 }
-await requireFile(`public/${sidePanelPath}`);
+await requireFile(`${publicRoot}/${sidePanelPath}`);
 if (sidePanelPath) {
-  const sidePanelHtml = await readFile(`public/${sidePanelPath}`, "utf8");
+  const sidePanelHtml = await readFile(`${publicRoot}/${sidePanelPath}`, "utf8");
   const scriptTags = sidePanelHtml.match(/<script\b/gi) ?? [];
   if (
     scriptTags.length !== 1 ||
@@ -186,10 +189,10 @@ const sandbox = hasOnlyKeys(manifest["sandbox"], ["pages"]) ? manifest["sandbox"
 if (!sandbox || !hasOnly(sandbox["pages"], [expectedSandboxPage])) {
   failures.push("manifest sandbox pages must stay pinned to the collectible renderer");
 }
-await requireFile(`public/${expectedSandboxPage}`);
-await requireFile(`src/${expectedSandboxPage.replace(/\.html$/, ".ts")}`);
-if (await Bun.file(`public/${expectedSandboxPage}`).exists()) {
-  const sandboxHtml = await readFile(`public/${expectedSandboxPage}`, "utf8");
+await requireFile(`${publicRoot}/${expectedSandboxPage}`);
+await requireFile(`${sourceRoot}/${expectedSandboxPage.replace(/\.html$/, ".ts")}`);
+if (await Bun.file(`${publicRoot}/${expectedSandboxPage}`).exists()) {
+  const sandboxHtml = await readFile(`${publicRoot}/${expectedSandboxPage}`, "utf8");
   const sandboxScriptTags = sandboxHtml.match(/<script\b/gi) ?? [];
   if (
     sandboxScriptTags.length !== 1 ||
@@ -217,7 +220,7 @@ if (!Array.isArray(contentScripts) || contentScripts.length !== 1) {
     failures.push("content script path must stay pinned");
   }
   const [contentPath] = Array.isArray(contentScript?.["js"]) ? contentScript["js"] : [];
-  await requireFile(`src/${contentPath?.toString().replace(/\.js$/, ".ts")}`);
+  await requireFile(`${sourceRoot}/${contentPath?.toString().replace(/\.js$/, ".ts")}`);
 }
 
 const resources = manifest["web_accessible_resources"];
@@ -235,7 +238,7 @@ if (!Array.isArray(resources) || resources.length !== 1) {
   const [providerPath] = Array.isArray(resourceGroup?.["resources"])
     ? resourceGroup["resources"]
     : [];
-  await requireFile(`src/${providerPath?.toString().replace(/\.js$/, ".ts")}`);
+  await requireFile(`${sourceRoot}/${providerPath?.toString().replace(/\.js$/, ".ts")}`);
 }
 
 if (failures.length > 0) {

@@ -4,7 +4,7 @@
  * exercising the false branch of the input guard; a well-formed query parses.
  */
 import { describe, expect, test } from "bun:test";
-import { readGetPermissionsInput } from "../../src/background/provider-inputs";
+import { readGetPermissionsInput } from "../../apps/extension/src/background/provider-inputs";
 
 describe("readGetPermissionsInput invalid-shape branch", () => {
   test("returns null for malformed provider payloads", () => {

@@ -14,14 +14,15 @@
  * The device is a fake signer (a starknet.js key) — no hardware or transport.
  */
 import { describe, expect, test } from "bun:test";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import { ec } from "starknet";
-import { setApprovalNotifier } from "../../src/background/approval-notifier";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeResponse } from "../../src/background/runtime-types";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { ledgerAccountPath } from "../../src/starknet/ledger-path";
-import type { LedgerAccountRef, Vault } from "../../src/storage/vault-schema";
+import { setApprovalNotifier } from "../../apps/extension/src/background/approval-notifier";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeResponse } from "../../apps/extension/src/background/runtime-types";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { waitForPendingApprovals } from "../support/held";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 

@@ -4,7 +4,7 @@
  * with a non-string (or missing) chainId broadcasts accounts only.
  */
 import { describe, expect, test } from "bun:test";
-import { walletEventBroadcasts } from "../../src/background/events";
+import { walletEventBroadcasts } from "../../apps/extension/src/background/events";
 
 const accountsChanged = { event: "accountsChanged", type: "wallet.event" } as const;
 

@@ -6,15 +6,15 @@
  * including the distinct-account invariants their consumers rely on.
  */
 import { describe, expect, test } from "bun:test";
-import { isAccountRef } from "../../src/storage/vault-schema";
+import {
+  account as sidepanelAccount,
+  secondAccount as sidepanelSecondAccount,
+} from "@mc-wallet/testkit/sidepanel";
+import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   account as backgroundAccount,
   secondAccount as backgroundSecondAccount,
 } from "../support/background-wallet-stub";
-import {
-  account as sidepanelAccount,
-  secondAccount as sidepanelSecondAccount,
-} from "../support/sidepanel-fixtures";
 
 const accountFixtures: readonly (readonly [string, unknown])[] = [
   ["background account", backgroundAccount],

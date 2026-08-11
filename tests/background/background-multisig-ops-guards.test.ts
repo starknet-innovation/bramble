@@ -7,15 +7,15 @@
  * and tests/support/multisig-harness.ts.
  */
 import { describe, expect, test } from "bun:test";
-import type { ProposeMultisigInput } from "../../src/background/multisig-inputs";
-import type { MultisigOpsDeps } from "../../src/background/multisig-ops";
+import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ProposeMultisigInput } from "../../apps/extension/src/background/multisig-inputs";
+import type { MultisigOpsDeps } from "../../apps/extension/src/background/multisig-ops";
 import {
   buildMultisigProposalRecord,
   defaultSummary,
   isProposalSubmitPending,
   multisigRpc,
-} from "../../src/background/multisig-ops";
-import type { MultisigProposalRecord, MultisigRecord } from "../../src/storage/multisig-store";
+} from "../../apps/extension/src/background/multisig-ops";
 import {
   HARNESS_MULTISIG,
   HARNESS_TARGET,

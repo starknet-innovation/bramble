@@ -1,0 +1,35 @@
+{
+  "name": "@mc-wallet/vault",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./accounts": "./src/accounts.ts",
+    "./account-secrets": "./src/account-secrets.ts",
+    "./encrypted-store": "./src/encrypted-store.ts",
+    "./kms-port": "./src/kms-port.ts",
+    "./migrations": "./src/migrations.ts",
+    "./network-account": "./src/network-account.ts",
+    "./origin-grants": "./src/origin-grants.ts",
+    "./reveal": "./src/reveal.ts",
+    "./schema": "./src/schema.ts",
+    "./service": "./src/service.ts",
+    "./service-types": "./src/service-types.ts",
+    "./store-migration": "./src/store-migration.ts",
+    "./strk20-viewing-key": "./src/strk20-viewing-key.ts",
+    "./vault-account": "./src/vault-account.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/store": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*"
+  },
+  "devDependencies": {
+    "@mc-wallet/testkit": "workspace:*"
+  }
+}

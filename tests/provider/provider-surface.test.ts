@@ -4,8 +4,6 @@
  * input readers, and the pure watch-asset token builder.
  */
 import { describe, expect, test } from "bun:test";
-import { readGetPermissionsInput, readWatchAssetInput } from "../../src/background/provider-inputs";
-import { watchAssetToken } from "../../src/background/watch-asset";
 import {
   CONTENT_TARGET,
   PAGE_TARGET,
@@ -15,9 +13,14 @@ import {
   readProviderResponse,
   toProviderPayload,
   toRuntimeMessage,
-} from "../../src/provider/bridge";
-import { readProviderWatchAsset } from "../../src/provider/watch-asset-params";
-import { invalidRequestPayload, unknownError } from "../../src/shared/rpc-errors";
+} from "@mc-wallet/wallet-protocol/bridge";
+import { invalidRequestPayload, unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
+import { readProviderWatchAsset } from "@mc-wallet/wallet-protocol/watch-asset";
+import {
+  readGetPermissionsInput,
+  readWatchAssetInput,
+} from "../../apps/extension/src/background/provider-inputs";
+import { watchAssetToken } from "../../apps/extension/src/background/watch-asset";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 const tokenAddress = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";

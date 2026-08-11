@@ -1,7 +1,7 @@
+import { receipt } from "@mc-wallet/ui-kit/content";
+import { transactionRow } from "@mc-wallet/wallet-ui/sidepanel/home-tabs";
+import { balanceRow } from "@mc-wallet/wallet-ui/sidepanel/token-row";
 import type { Meta } from "@storybook/html-vite";
-import { transactionRow } from "../../../src/sidepanel/home-tabs";
-import { balanceRow } from "../../../src/sidepanel/token-row";
-import { receipt } from "../../../src/ui/content";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
 import { balances, softwareActivity } from "./fixtures";

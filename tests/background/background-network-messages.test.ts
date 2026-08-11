@@ -2,18 +2,18 @@
  * Background network message checks prove network switches keep account state reactive.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { networkRpcUrls, unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { STARKNET_NETWORKS } from "../../src/starknet/networks";
-import type { InvokeInput } from "../../src/starknet/rpc";
+import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { InvokeInput } from "@mc-wallet/starknet/rpc";
+import type { EnsureNetworkAccountInput, WalletStatus } from "@mc-wallet/vault/service";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
 import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-} from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
-import type { EnsureNetworkAccountInput, WalletStatus } from "../../src/wallet/vault-service";
+  networkRpcUrls,
+  unavailablePreferencesStore,
+} from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
 
 const account: AccountRef = {

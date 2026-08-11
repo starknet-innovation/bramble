@@ -1,8 +1,8 @@
+import { approvalCard } from "@mc-wallet/wallet-ui/sidepanel/approval-cards";
+import { collectibleCard } from "@mc-wallet/wallet-ui/sidepanel/home-tabs";
+import { nftGalleryCard, visibleNftItems } from "@mc-wallet/wallet-ui/sidepanel/nft-views";
+import { reviewPanel } from "@mc-wallet/wallet-ui/sidepanel/review-render";
 import type { Meta } from "@storybook/html-vite";
-import { approvalCard } from "../../../src/sidepanel/approval-cards";
-import { collectibleCard } from "../../../src/sidepanel/home-tabs";
-import { nftGalleryCard, visibleNftItems } from "../../../src/sidepanel/nft-views";
-import { reviewPanel } from "../../../src/sidepanel/review-render";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
 import { discoveredNft, invokeApproval, preferences, statusFor } from "./fixtures";

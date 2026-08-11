@@ -1,6 +1,6 @@
-import type { PendingApproval } from "../../../src/popup/responses";
-import { bindApprovals } from "../../../src/sidepanel/dashboard-bindings";
-import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
+import type { PendingApproval } from "@mc-wallet/wallet-ui/popup/responses";
+import { bindApprovals } from "@mc-wallet/wallet-ui/sidepanel/dashboard-bindings";
+import { createSidepanelRuntime } from "@mc-wallet/wallet-ui/sidepanel/runtime";
 import { invokeApproval, watchAssetApproval } from "./fixtures";
 import { approvalFixtures } from "./journey-fixtures";
 import { walletDashboard } from "./scenario-dashboard";

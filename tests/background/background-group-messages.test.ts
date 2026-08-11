@@ -4,9 +4,9 @@
  * malformed payloads.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { createMemoryStore } from "../../src/storage/kv";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
 import {
   account,
   contentSender,

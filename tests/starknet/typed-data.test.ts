@@ -3,17 +3,18 @@
  * mapping, and the origin-gated background signing path.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
+import { isTypedDataShape, typedDataHash } from "@mc-wallet/starknet/typed-data";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   readProviderRequestArguments,
   toProviderPayload,
   toRuntimeMessage,
-} from "../../src/provider/bridge";
-import { unknownError } from "../../src/shared/rpc-errors";
-import { isTypedDataShape, typedDataHash } from "../../src/starknet/typed-data";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+} from "@mc-wallet/wallet-protocol/bridge";
+import { unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { flushHeld, waitForPendingApprovals } from "../support/held";
 
 const account: AccountRef = {

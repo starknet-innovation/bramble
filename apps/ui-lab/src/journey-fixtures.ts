@@ -1,16 +1,16 @@
+import type { AccountGroups } from "@mc-wallet/settings/groups";
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
+import { allowanceId } from "@mc-wallet/transactions/allowance-store";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
+import { withTokenId } from "@mc-wallet/wallet-model/preferences";
 import type {
   ConnectedSite,
   PendingApproval,
   TokenBalance,
   WalletStatus,
-} from "../../../src/popup/responses";
-import type { AllowanceView } from "../../../src/starknet/allowance-discovery";
-import { DEFAULT_TOKENS } from "../../../src/starknet/networks";
-import type { AccountGroups } from "../../../src/storage/account-groups";
-import { allowanceId } from "../../../src/storage/allowance-store";
-import { withTokenId } from "../../../src/storage/preferences-entries";
-import type { WalletPreferences } from "../../../src/storage/preferences-store";
-import type { AccountRef } from "../../../src/storage/vault-schema";
+} from "@mc-wallet/wallet-ui/popup/responses";
 import { ledgerAccount, preferences, softwareAccount, statusFor, USDC_ADDRESS } from "./fixtures";
 
 const mainnetToken = (symbol: "ETH" | "STRK") => {

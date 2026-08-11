@@ -6,10 +6,10 @@
  * background sources actually handle.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { Vault } from "../../src/storage/vault-schema";
+import type { Vault } from "@mc-wallet/vault/schema";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import {
   account,
   contentSender,

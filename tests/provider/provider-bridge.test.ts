@@ -1,6 +1,4 @@
-/**
- * Provider bridge checks prove arbitrary page messages cannot reach privileged wallet commands.
- */
+/** Provider bridge boundary tests. */
 import { describe, expect, test } from "bun:test";
 import {
   CONTENT_TARGET,
@@ -14,8 +12,12 @@ import {
   readProviderResponse,
   toProviderPayload,
   toRuntimeMessage,
-} from "../../src/provider/bridge";
-import { invalidRequestPayload, unknownError, userRefusedOp } from "../../src/shared/rpc-errors";
+} from "@mc-wallet/wallet-protocol/bridge";
+import {
+  invalidRequestPayload,
+  unknownError,
+  userRefusedOp,
+} from "@mc-wallet/wallet-protocol/rpc-errors";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 const account = {

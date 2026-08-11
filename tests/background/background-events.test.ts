@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { walletEventBroadcasts } from "../../src/background/events";
+import { walletEventBroadcasts } from "../../apps/extension/src/background/events";
 
 const MAIN_CHAIN_ID = "0x534e5f4d41494e";
 const accountsChanged = { event: "accountsChanged", type: "wallet.event" } as const;
@@ -27,7 +27,7 @@ const SERVICE_MEMBER = /^ {4}(?:async )?([a-zA-Z0-9]+)[(:,]/gm;
 // Vault-service methods that persist a new activeAccountId, read out of the
 // source rather than listed by hand — the list can never silently go stale.
 const activeAccountMutators = async (): Promise<readonly string[]> => {
-  const source = await readFile("src/wallet/vault-service.ts", "utf8");
+  const source = await readFile("packages/platform/vault/src/service.ts", "utf8");
   const members = [...source.matchAll(SERVICE_MEMBER)].map((match) => ({
     at: match.index ?? 0,
     name: match[1] ?? "",
@@ -149,7 +149,7 @@ describe("walletEventBroadcasts", () => {
   });
 
   test("announces every vault mutation that re-selects the active account", async () => {
-    // Derived from src/wallet/vault-service.ts: a new method that persists an
+    // Derived from packages/platform/vault/src/service.ts: a new method that persists an
     // activeAccountId must be mapped to the message types that reach it, and
     // each of those must broadcast accountsChanged. Skipping that is the bug
     // where "Add account" silently disconnects every connected site.

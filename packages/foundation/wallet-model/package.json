@@ -1,0 +1,23 @@
+{
+  "name": "@mc-wallet/wallet-model",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./accounts": "./src/accounts.ts",
+    "./custom-network": "./src/custom-network.ts",
+    "./ledger-path": "./src/ledger-path.ts",
+    "./networks": "./src/networks.ts",
+    "./passphrase": "./src/passphrase.ts",
+    "./preferences": "./src/preferences.ts",
+    "./signing": "./src/signing.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*"
+  }
+}

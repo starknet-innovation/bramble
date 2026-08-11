@@ -1,10 +1,11 @@
 /**
  * Verifies the vendored multisig contract class against the class hashes
- * pinned in src/starknet/multisig-deploy.ts, so the extension can never
+ * pinned in the multisig feature package, so the extension can never
  * bundle (or declare) an artifact that drifted from the audited source.
  */
+
+import { MULTISIG_CLASS_HASH, MULTISIG_COMPILED_CLASS_HASH } from "@mc-wallet/multisig/deploy";
 import { hash } from "starknet";
-import { MULTISIG_CLASS_HASH, MULTISIG_COMPILED_CLASS_HASH } from "../src/starknet/multisig-deploy";
 
 const sierraPath = "vendor/multisig/multisig.contract_class.json";
 const casmPath = "vendor/multisig/multisig.compiled_contract_class.json";
@@ -25,7 +26,7 @@ const casm = await casmFile.json();
 const classHash = hash.computeContractClassHash(sierra);
 if (BigInt(classHash) !== BigInt(MULTISIG_CLASS_HASH)) {
   failures.push(
-    `class hash mismatch: artifact ${classHash} vs pinned ${MULTISIG_CLASS_HASH}; rebuild with bun run vendor:multisig and update src/starknet/multisig-deploy.ts deliberately`,
+    `class hash mismatch: artifact ${classHash} vs pinned ${MULTISIG_CLASS_HASH}; rebuild with bun run vendor:multisig and update packages/features/multisig/src/deploy.ts deliberately`,
   );
 }
 

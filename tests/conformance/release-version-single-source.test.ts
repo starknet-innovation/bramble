@@ -4,7 +4,7 @@
  * the exact checks that were missing when v0.4.0 shipped as mc-wallet-0.3.0.zip.
  *
  * The gate logic (scripts/release-version.ts) is pure, so it is exercised here
- * with fixtures. It also reads the REAL package.json and public/manifest.json to
+ * with fixtures. It also reads the real package and extension manifest files to
  * prove the repository's own two mirrored sources agree — the same invariant the
  * config-standards and manifest checks enforce, asserted here from the release
  * axis so a future edit that desyncs them fails this gate too.
@@ -173,9 +173,9 @@ describe("evaluateRelease", () => {
 });
 
 describe("repository sources", () => {
-  test("package.json and public/manifest.json expose one agreed release version", async () => {
+  test("package.json and the extension manifest expose one agreed release version", async () => {
     const packageJson = await readJson("package.json");
-    const manifestJson = await readJson("public/manifest.json");
+    const manifestJson = await readJson("apps/extension/public/manifest.json");
     const result = resolveSingleSourceVersion(packageJson["version"], manifestJson["version"]);
     expect(result.ok).toBe(true);
   });

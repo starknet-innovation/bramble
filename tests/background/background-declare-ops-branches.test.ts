@@ -5,21 +5,21 @@
  * on the happy path drives the injected signHash through the RPC submission.
  */
 import { describe, expect, test } from "bun:test";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec } from "starknet";
-import { createApprovalQueue } from "../../src/background/approvals";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
 import {
   type DeclareExecuteDeps,
   type DeclareOpsDeps,
   executeDeclareApproval,
   handleDeclareOps,
-} from "../../src/background/declare-ops";
-import type { LedgerSignQueue } from "../../src/background/ledger-sign-queue";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { createSignatureWaiters } from "../../src/background/signature-waiters";
-import type { AccountRef } from "../../src/storage/vault-schema";
+} from "../../apps/extension/src/background/declare-ops";
+import type { LedgerSignQueue } from "../../apps/extension/src/background/ledger-sign-queue";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { createSignatureWaiters } from "../../apps/extension/src/background/signature-waiters";
 
 const origin = "https://dapp.example";
 const passphrase = "correct horse battery staple";

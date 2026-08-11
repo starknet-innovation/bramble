@@ -5,13 +5,14 @@
  * Complements background-token-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { PriceService } from "../../src/starknet/prices";
-import { defaultWalletPreferences } from "../../src/storage/preferences-store";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import type { PriceService } from "@mc-wallet/portfolio/prices";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 
 const sender: RuntimeSender = {

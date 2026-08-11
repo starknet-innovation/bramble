@@ -2,7 +2,7 @@
 
 ## Boring Avatars
 
-`src/sidepanel/account-avatar.ts` is a framework-free SVG adaptation of the
+`packages/presentation/wallet-ui/src/sidepanel/account-avatar.ts` is a framework-free SVG adaptation of the
 Beam avatar component and deterministic utilities from
 [boringdesigners/boring-avatars](https://github.com/boringdesigners/boring-avatars),
 reviewed at commit `d0ff2582a8921b643a89de4a4912be28938a828b`.
@@ -31,9 +31,9 @@ SOFTWARE.
 
 ## Amicro micro-interactions
 
-The indeterminate progress treatment in `src/sidepanel/send-views.ts` and
-`src/sidepanel/styles-progress.ts`, plus the onboarding pulse and orbiting
-icons in `src/sidepanel/styles-onboarding-welcome.ts`, are framework-free
+The indeterminate progress treatment in `packages/presentation/wallet-ui/src/sidepanel/send-views.ts`
+and `styles-progress.ts`, plus the onboarding pulse and orbiting icons in
+`styles-onboarding-welcome.ts`, are framework-free
 CSS/SVG adaptations of the Liquid Dots, Concentric Pulse, and Fluid Dot Orbit
 components from
 [Subhan-code/Amicro--Micro-transitions-](https://github.com/Subhan-code/Amicro--Micro-transitions-),

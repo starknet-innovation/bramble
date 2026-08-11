@@ -1,12 +1,12 @@
-import type { Meta } from "@storybook/html-vite";
-import { button, iconButton, iconLink, segmentedControl } from "../../../src/ui/controls";
+import { button, iconButton, iconLink, segmentedControl } from "@mc-wallet/ui-kit/controls";
 import {
   checkboxField,
   inputControl,
   selectField,
   textareaField,
   textField,
-} from "../../../src/ui/fields";
+} from "@mc-wallet/ui-kit/fields";
+import type { Meta } from "@storybook/html-vite";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
 
@@ -24,7 +24,7 @@ export const Buttons: CatalogStory = {
       "Button hierarchy is semantic and shared. Primary actions advance the task; secondary and ghost actions preserve focus; danger is always explicit.",
       catalogGroup(
         "Hierarchy and states",
-        "Every specimen is rendered by src/ui/controls.ts.",
+        "Every specimen is rendered by packages/presentation/ui-kit/src/controls.ts.",
         `<div class="catalog-grid wide">
           ${catalogSample("Primary", `<div class="catalog-row">${button({ icon: "send", label: "Review send" })}${button({ disabled: true, label: "Unavailable" })}</div>`)}
           ${catalogSample("Secondary", `<div class="catalog-row">${button({ icon: "refresh", label: "Try again", variant: "secondary" })}${button({ label: "Small action", size: "small", variant: "secondary" })}</div>`)}

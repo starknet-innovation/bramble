@@ -190,6 +190,7 @@ jobs:
       - run: bun run check:cycles
       # The leading `./` prevents Bun from matching tests inside ignored vendor checkouts.
       - run: bun test ./tests
+      - run: bun run check:workspaces
       # Enforce the global unit-test coverage floor (scripts/check-coverage.ts).
       - name: Coverage floor
         run: bun run check:coverage

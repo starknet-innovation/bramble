@@ -10,8 +10,8 @@ import {
   type ProviderRequest,
   providerResponse,
   toRuntimeMessage,
-} from "../../src/provider/bridge";
-import { toProviderPayload } from "../../src/provider/bridge-results";
+} from "@mc-wallet/wallet-protocol/bridge";
+import { toProviderPayload } from "@mc-wallet/wallet-protocol/results";
 
 const origin = "https://dapp.example";
 const requestId = "123e4567-e89b-42d3-a456-426614174000";

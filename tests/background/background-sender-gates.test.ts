@@ -4,9 +4,9 @@
  * error scrubbing at the dispatch boundary.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { createUnlockSession } from "../../src/background/session";
-import type { SignHashInput } from "../../src/wallet/vault-service";
+import type { SignHashInput } from "@mc-wallet/vault/service";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import {
   contentSender,
   createWallet,

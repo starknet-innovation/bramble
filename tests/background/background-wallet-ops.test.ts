@@ -1,16 +1,13 @@
-/**
- * Wallet operations checks: the pre-sign review carries verification output
- * and fees, transfers are recorded in the activity feed, and the feed
- * refreshes pending statuses per network.
- */
+/** Wallet transaction and activity boundary tests. */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { TransactionStatusReport } from "../../src/starknet/rpc";
-import { type ActivityEntry, createActivityLog } from "../../src/storage/activity-store";
-import { createMemoryStore } from "../../src/storage/kv";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import { type ActivityEntry, createActivityLog } from "@mc-wallet/transactions/activity";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 

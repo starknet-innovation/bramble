@@ -1,5 +1,5 @@
+import { badge, callout, emptyState, pill, toast } from "@mc-wallet/ui-kit/content";
 import type { Meta } from "@storybook/html-vite";
-import { badge, callout, emptyState, pill, toast } from "../../../src/ui/content";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
 

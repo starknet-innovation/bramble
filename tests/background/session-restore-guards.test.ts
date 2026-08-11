@@ -8,7 +8,7 @@ import {
   createUnlockSession,
   type UnlockSessionState,
   type UnlockSessionStore,
-} from "../../src/background/session";
+} from "../../apps/extension/src/background/session";
 
 const PASSPHRASE = "correct horse battery staple";
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));

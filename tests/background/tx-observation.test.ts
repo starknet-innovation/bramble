@@ -10,6 +10,8 @@
  * user more than one notice.
  */
 import { describe, expect, test } from "bun:test";
+import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
+import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import {
   expiredObservations,
   failureNoticeMessage,
@@ -19,9 +21,7 @@ import {
   NOT_FOUND_FAILURE_THRESHOLD,
   reconciledOutcome,
   UNRESOLVED_WINDOW_MS,
-} from "../../src/background/tx-observation";
-import type { TransactionStatusReport } from "../../src/starknet/rpc";
-import type { ActivityEntry } from "../../src/storage/activity-store";
+} from "../../apps/extension/src/background/tx-observation";
 
 const entry = (overrides: Partial<ActivityEntry> = {}): ActivityEntry => ({
   accountId: "SN_MAIN:0x1",

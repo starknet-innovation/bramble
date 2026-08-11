@@ -14,12 +14,13 @@
  * never double-settles a result that already settled below.
  */
 import { describe, expect, test } from "bun:test";
-import { setApprovalNotifier } from "../../src/background/approval-notifier";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { WalletError } from "../../src/shared/errors";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import { WalletError } from "@mc-wallet/core/errors";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { setApprovalNotifier } from "../../apps/extension/src/background/approval-notifier";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { waitForPendingApprovals } from "../support/held";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 

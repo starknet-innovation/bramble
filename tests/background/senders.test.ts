@@ -8,7 +8,7 @@ import {
   isTrustedSender,
   type RuntimeSender,
   senderUrlOrigin,
-} from "../../src/background/senders";
+} from "../../apps/extension/src/background/senders";
 
 const extensionId = "extension-id";
 const extensionPage: RuntimeSender = {

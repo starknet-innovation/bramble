@@ -5,9 +5,9 @@
  * regression that lets a bad payload through would reach it and fail here.
  */
 import { describe, expect, test } from "bun:test";
-import { handlePreferenceOps } from "../../src/background/preference-ops";
-import { createMemoryStore } from "../../src/storage/kv";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import { handlePreferenceOps } from "../../apps/extension/src/background/preference-ops";
 
 const store = () => createPreferencesStore({ store: createMemoryStore() });
 

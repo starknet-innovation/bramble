@@ -1,9 +1,10 @@
 /**
  * Shared side-panel helpers for extension E2E tests.
  */
+
+import { BACKUP_VERIFY_POSITIONS } from "@mc-wallet/wallet-ui/sidepanel/backup-verify";
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { BACKUP_VERIFY_POSITIONS } from "../../src/sidepanel/backup-verify";
 
 export const VAULT_PASSPHRASE = "correct horse battery staple";
 

@@ -1,21 +1,21 @@
+import type { MultisigProposalRecord } from "@mc-wallet/multisig/repository";
 import {
   multisigAddFlow,
   multisigReceiveFlow,
   multisigSignersFlow,
   multisigTrackFlow,
   multisigWatchFlow,
-} from "../../../src/sidepanel/multisig-management-views";
-import { serializeMultisigReviewPackage } from "../../../src/sidepanel/multisig-model";
-import { bindMultisigProposalForm } from "../../../src/sidepanel/multisig-proposal-ui";
-import { createMultisigClient } from "../../../src/sidepanel/multisig-runtime";
-import { bindMultisigs, type MultisigUiDeps } from "../../../src/sidepanel/multisig-ui";
+} from "@mc-wallet/wallet-ui/sidepanel/multisig-management-views";
+import { serializeMultisigReviewPackage } from "@mc-wallet/wallet-ui/sidepanel/multisig-model";
+import { bindMultisigProposalForm } from "@mc-wallet/wallet-ui/sidepanel/multisig-proposal-ui";
+import { createMultisigClient } from "@mc-wallet/wallet-ui/sidepanel/multisig-runtime";
+import { bindMultisigs, type MultisigUiDeps } from "@mc-wallet/wallet-ui/sidepanel/multisig-ui";
 import {
   multisigDeployFlow,
   multisigDetailFlow,
   multisigProposeFlow,
   multisigsFlow,
-} from "../../../src/sidepanel/multisig-views";
-import type { MultisigProposalRecord } from "../../../src/storage/multisig-store";
+} from "@mc-wallet/wallet-ui/sidepanel/multisig-views";
 import {
   balances,
   discoveredNft,

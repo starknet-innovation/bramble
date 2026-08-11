@@ -6,9 +6,9 @@
  * Complements background-messages.test.ts and privileged-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import {
   contentSender,
   createWallet,

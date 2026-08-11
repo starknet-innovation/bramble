@@ -2,7 +2,7 @@
  * Background message parser checks reject ambiguous runtime command shapes.
  */
 import { describe, expect, test } from "bun:test";
-import { readPreviewAccountInput } from "../../src/background/account-creation-inputs";
+import { readPreviewAccountInput } from "../../apps/extension/src/background/account-creation-inputs";
 import {
   readAddAccountInput,
   readAddInvokeTransactionInput,
@@ -21,7 +21,7 @@ import {
   readTransferInput,
   readTypeOnlyInput,
   readUnlockInput,
-} from "../../src/background/message-inputs";
+} from "../../apps/extension/src/background/message-inputs";
 
 const approvalId = "123e4567-e89b-42d3-a456-426614174000";
 const accountId = "SN_SEPOLIA:0x123";

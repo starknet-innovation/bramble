@@ -1,4 +1,4 @@
-import { darkSkin } from "../../../src/ui/dark-skin";
+import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
 
 export const LAB_STYLES = `
   :root {

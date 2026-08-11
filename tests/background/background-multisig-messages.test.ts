@@ -1,11 +1,11 @@
 /** Multisig message handler tests. */
 import { describe, expect, test } from "bun:test";
+import type { MultisigProposalState } from "@mc-wallet/multisig/chain";
+import { predictMultisigAddress } from "@mc-wallet/multisig/deploy";
+import { type MultisigProposalRecord, memoryMultisigStore } from "@mc-wallet/multisig/repository";
+import { type ActivityLog, memoryActivityLog } from "@mc-wallet/transactions/activity";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { hash } from "starknet";
-import type { MultisigProposalState } from "../../src/starknet/multisig";
-import { predictMultisigAddress } from "../../src/starknet/multisig-deploy";
-import { type ActivityLog, memoryActivityLog } from "../../src/storage/activity-store";
-import { type MultisigProposalRecord, memoryMultisigStore } from "../../src/storage/multisig-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,

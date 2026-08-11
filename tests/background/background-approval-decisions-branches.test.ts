@@ -7,18 +7,18 @@
  *    result so the error-result passthrough returns are hit.
  */
 import { describe, expect, test } from "bun:test";
+import { DEFAULT_ORIGIN_GUARD } from "@mc-wallet/permissions/blocklist";
+import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import {
   type ApprovalDecisionDeps,
   handleApprovalDecision,
-} from "../../src/background/approval-decisions";
+} from "../../apps/extension/src/background/approval-decisions";
 import {
   type ApprovalQueue,
   createApprovalQueue,
   type PendingApproval,
-} from "../../src/background/approvals";
-import { createUnlockSession } from "../../src/background/session";
-import { DEFAULT_ORIGIN_GUARD } from "../../src/security/blocklist";
-import { memoryAllowanceStore } from "../../src/storage/allowance-store";
+} from "../../apps/extension/src/background/approvals";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const ORIGIN = "https://dapp.example";
 const uuid = () => crypto.randomUUID();

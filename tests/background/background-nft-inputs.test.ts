@@ -8,7 +8,7 @@ import {
   readDiscoverNftsInput,
   readReviewNftTransferInput,
   readTransferNftInput,
-} from "../../src/background/nft-inputs";
+} from "../../apps/extension/src/background/nft-inputs";
 
 const contract = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 

@@ -3,7 +3,7 @@
  * browser capabilities remain non-fatal.
  */
 import { describe, expect, test } from "bun:test";
-import { openOnboardingOnInstall } from "../../src/background/onboarding-surface";
+import { openOnboardingOnInstall } from "../../apps/extension/src/background/onboarding-surface";
 
 describe("full-page onboarding launch", () => {
   test("opens the extension onboarding tab on a fresh install", async () => {

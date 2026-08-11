@@ -3,14 +3,17 @@
  * consumed once before asynchronous submission begins.
  */
 import { describe, expect, test } from "bun:test";
-import { type ApprovalContext, createApprovalContext } from "../../src/background/approval-context";
+import type { TokenConfig } from "@mc-wallet/settings/preferences";
+import {
+  type ApprovalContext,
+  createApprovalContext,
+} from "../../apps/extension/src/background/approval-context";
 import {
   createStrk20WalletPreparationStore,
   type Strk20DepositPreparation,
   type Strk20RegistrationPreparation,
   strk20WalletPreparationPayload,
-} from "../../src/background/strk20-wallet-preparations";
-import type { TokenConfig } from "../../src/storage/preferences-store";
+} from "../../apps/extension/src/background/strk20-wallet-preparations";
 import { account } from "../support/background-wallet-stub";
 
 const token: TokenConfig = {

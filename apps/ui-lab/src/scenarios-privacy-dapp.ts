@@ -2,7 +2,7 @@
  * Dapp-facing STRK20 checkpoints. Every value is deterministic fixture data;
  * these stories never derive notes, request proofs, or contact a remote service.
  */
-import type { PendingApproval } from "../../../src/popup/responses";
+import type { PendingApproval } from "@mc-wallet/wallet-ui/popup/responses";
 import { RECIPIENT_ADDRESS, softwareAccount, statusFor, USDC_ADDRESS } from "./fixtures";
 import {
   ETH_TOKEN,

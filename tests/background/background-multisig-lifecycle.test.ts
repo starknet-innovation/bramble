@@ -5,9 +5,9 @@
  * keep the stored record only while the submit transaction is still pending.
  */
 import { describe, expect, test } from "bun:test";
-import type { MultisigProposalStatus } from "../../src/starknet/multisig";
-import { predictMultisigAddress } from "../../src/starknet/multisig-deploy";
-import type { MultisigProposalRecord } from "../../src/storage/multisig-store";
+import type { MultisigProposalStatus } from "@mc-wallet/multisig/chain";
+import { predictMultisigAddress } from "@mc-wallet/multisig/deploy";
+import type { MultisigProposalRecord } from "@mc-wallet/multisig/repository";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,

@@ -1,4 +1,4 @@
-import type { UiComponentId, UiFoundationId } from "../../../src/ui/catalog";
+import type { UiComponentId, UiFoundationId } from "@mc-wallet/ui-kit/catalog";
 
 /**
  * Storybook coverage registry for design foundations.

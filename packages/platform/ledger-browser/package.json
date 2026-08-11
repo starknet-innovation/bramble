@@ -1,0 +1,33 @@
+{
+  "name": "@mc-wallet/ledger-browser",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./broker-server": "./src/broker-server.ts",
+    "./connector": "./src/connector.ts",
+    "./grant-session": "./src/grant-session.ts",
+    "./grant-window": "./src/grant-window.ts",
+    "./grant-transport": "./src/grant-transport.js",
+    "./transport": "./src/transport.ts",
+    "./webhid": "./src/webhid-impl.js"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@ledgerhq/devices": "8.17.0",
+    "@ledgerhq/hw-app-starknet": "3.0.2",
+    "@ledgerhq/hw-transport-web-ble": "6.35.0",
+    "@ledgerhq/hw-transport-webhid": "6.36.0",
+    "@ledgerhq/hw-transport-webusb": "6.35.0",
+    "@mc-wallet/ledger-protocol": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*",
+    "buffer": "6.0.3"
+  },
+  "devDependencies": {
+    "@mc-wallet/testkit": "workspace:*"
+  }
+}

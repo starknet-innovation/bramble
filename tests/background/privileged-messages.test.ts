@@ -9,13 +9,16 @@ import {
   DAPP_MESSAGES,
   isPrivilegedMessage,
   type RuntimeSender,
-} from "../../src/background/senders";
+} from "../../apps/extension/src/background/senders";
 import { handleMessage } from "../support/unavailable-handler";
 
 const contentSender: RuntimeSender = { id: "mc-wallet-test", url: "https://dapp.example/app" };
 
 // The two modules through which a page can reach the background at all.
-const DAPP_FACING_SOURCES = ["src/provider/bridge.ts", "src/content/index.ts"];
+const DAPP_FACING_SOURCES = [
+  "packages/foundation/wallet-protocol/src/bridge.ts",
+  "apps/extension/src/content/index.ts",
+];
 
 // Broadcast event envelope: sent by the background, never a request into it.
 const OUTBOUND_ONLY = new Set(["wallet.event"]);

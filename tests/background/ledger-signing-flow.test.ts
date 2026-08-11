@@ -8,19 +8,20 @@
  * The device is a fake signer (a starknet.js key) — no hardware or transport.
  */
 import { describe, expect, test } from "bun:test";
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import { ec } from "starknet";
-import { executeSignApproval } from "../../src/background/chain-ops";
+import { executeSignApproval } from "../../apps/extension/src/background/chain-ops";
 import {
   createLedgerSignQueue,
   type LedgerSignQueue,
-} from "../../src/background/ledger-sign-queue";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { WalletStatusReader } from "../../src/background/wallet-reader";
-import { ledgerAccountPath } from "../../src/starknet/ledger-path";
-import type { WalletPreferences } from "../../src/storage/preferences-store";
-import type { LedgerAccountRef, Vault } from "../../src/storage/vault-schema";
+} from "../../apps/extension/src/background/ledger-sign-queue";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
+import type { WalletStatusReader } from "../../apps/extension/src/background/wallet-reader";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 
 const { starkCurve } = ec;

@@ -11,8 +11,12 @@ import {
   readProviderResponse,
   toProviderPayload,
   walletRpcException,
-} from "../../src/provider/bridge";
-import { invalidRequestPayload, unknownError, userRefusedOp } from "../../src/shared/rpc-errors";
+} from "@mc-wallet/wallet-protocol/bridge";
+import {
+  invalidRequestPayload,
+  unknownError,
+  userRefusedOp,
+} from "@mc-wallet/wallet-protocol/rpc-errors";
 
 const requestId = "123e4567-e89b-42d3-a456-426614174000";
 const request: ProviderRequest = { id: requestId, method: "wallet_addInvokeTransaction" };
@@ -52,7 +56,7 @@ describe("wallet_rpc error envelope", () => {
   });
 
   test("the content-script unsupported-method path emits a spec error object", () => {
-    // src/content/index.ts posts providerResponse(request, { error: invalidRequestPayload() }).
+    // apps/extension/src/content/index.ts posts providerResponse(request, { error: invalidRequestPayload() }).
     const response = providerResponse(request, { error: invalidRequestPayload() });
     expect(response).toEqual({
       error: invalidRequestPayload(),

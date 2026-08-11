@@ -5,15 +5,15 @@
  * so one site never sees another site's accounts or connection state.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   accountsChangedEvent,
   networkChangedEvent,
   pageEventsFor,
-} from "../../src/provider/events";
-import type { AccountRef } from "../../src/storage/vault-schema";
+} from "@mc-wallet/wallet-protocol/events";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const ORIGIN_A = "https://a.test";
 const ORIGIN_B = "https://b.test";

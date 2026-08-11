@@ -1,6 +1,6 @@
-import { SIDEPANEL_STYLES } from "../../../src/sidepanel/styles";
-import { darkSkin } from "../../../src/ui/dark-skin";
-import { defaultSkin } from "../../../src/ui/default-skin";
+import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
+import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
+import { SIDEPANEL_STYLES } from "@mc-wallet/wallet-ui/sidepanel/styles";
 import type { LabSurface, LabTheme } from "./types";
 
 const DESIGN_CONTRACT = `

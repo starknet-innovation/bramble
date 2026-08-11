@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   readSetDisplayInput,
   readSetStrk20NetworkConfigInput,
-} from "../../src/background/preference-inputs";
+} from "../../apps/extension/src/background/preference-inputs";
 
 describe("readSetDisplayInput", () => {
   test("reads a well-formed display-settings message", () => {

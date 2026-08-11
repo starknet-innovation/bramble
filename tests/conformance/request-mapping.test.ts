@@ -6,9 +6,9 @@
  * payload never reaches the background.
  */
 import { describe, expect, test } from "bun:test";
-import type { ProviderRequest, RuntimeMessage } from "../../src/provider/bridge";
-import { readProviderRequestArguments, toRuntimeMessage } from "../../src/provider/bridge";
-import { isRecord, type Json } from "../../src/shared/json";
+import { isRecord, type Json } from "@mc-wallet/core/json";
+import type { ProviderRequest, RuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
+import { readProviderRequestArguments, toRuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
 import { ORIGIN, REQUEST_ID, SPEC_METHODS } from "./wallet-rpc-spec";
 
 const isApiVersionOnly = (params: Json | undefined): boolean =>

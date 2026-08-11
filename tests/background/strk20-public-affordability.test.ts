@@ -1,8 +1,8 @@
 /** Public token and pool-fee affordability checks for account-mode privacy operations. */
 import { describe, expect, test } from "bun:test";
-import { assertPublicPoolSpendAffordable } from "../../src/background/strk20-op-context";
-import { STRK_TOKEN_ADDRESS, sameFelt } from "../../src/starknet/networks";
-import { defaultWalletPreferences } from "../../src/storage/preferences-store";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { assertPublicPoolSpendAffordable } from "../../apps/extension/src/background/strk20-op-context";
 import { account } from "../support/background-wallet-stub";
 
 const preferences = defaultWalletPreferences();

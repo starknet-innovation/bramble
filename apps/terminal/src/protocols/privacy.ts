@@ -2,17 +2,17 @@
  * Privacy integration — wraps the wallet's EXISTING native Starknet STRK20
  * shielded-pool surface (wallet_strk20*, Wallet-API 0.10.3). There is NO
  * external mixer contract here: these builders produce the canonical
- * STRK20_ACTION shapes from src/starknet/strk20/schemas.ts, which the existing
+ * STRK20_ACTION shapes from packages/foundation/wallet-protocol/src/strk20.ts, which the existing
  * pipeline already consumes.
  *
  * Existing surface this composes with (do not re-implement):
- * - Action/validation shapes: src/starknet/strk20/schemas.ts (Strk20*Action,
+ * - Action/validation shapes: packages/foundation/wallet-protocol/src/strk20.ts (Strk20*Action,
  *   readStrk20Actions).
  * - Prepare (balance/leak checks + proof): prepareStrk20CallAndProof in
- *   src/starknet/strk20/service.ts.
+ *   packages/features/privacy/src/service.ts.
  * - Background dispatch + approval hold: handleStrk20Ops
  *   ("wallet.strk20InvokeTransaction") and executeStrk20InvokeApproval in
- *   src/background/strk20-ops.ts, which calls runtimeRpc.submitInvokeTransaction.
+ *   apps/extension/src/background/strk20-ops.ts, which calls runtimeRpc.submitInvokeTransaction.
  *
  * So a shielded flow is: build actions here -> feed the batch to the STRK20
  * invoke path -> user approves -> executeStrk20InvokeApproval submits the

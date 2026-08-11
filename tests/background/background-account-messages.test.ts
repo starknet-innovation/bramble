@@ -4,11 +4,11 @@
  * re-entered in the message rather than taken from the cached session.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { AccountRef } from "../../src/storage/vault-schema";
-import type { AddDerivedAccountInput } from "../../src/wallet/vault-service";
+import type { AddDerivedAccountInput } from "@mc-wallet/vault/service";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const account: AccountRef = {
   address: "0xabcabcdef",

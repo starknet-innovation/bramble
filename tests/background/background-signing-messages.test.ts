@@ -2,10 +2,10 @@
  * Background signing message checks prove hash signing stays privileged and typed.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import type { AccountRef } from "../../src/storage/vault-schema";
-import type { SignHashInput, WalletStatus } from "../../src/wallet/vault-service";
+import type { SignHashInput, WalletStatus } from "@mc-wallet/vault/service";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
 
 const account: AccountRef = {
   address: "0xabcabcdef",

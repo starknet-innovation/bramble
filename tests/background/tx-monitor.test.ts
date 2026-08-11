@@ -6,14 +6,17 @@
  * of throwing on worker start.
  */
 import { describe, expect, test } from "bun:test";
-import { type AlarmsApi, startTransactionMonitor } from "../../src/background/tx-monitor";
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import {
+  type AlarmsApi,
+  startTransactionMonitor,
+} from "../../apps/extension/src/background/tx-monitor";
 import {
   FAST_OBSERVATION_PERIOD_MINUTES,
   SLOW_OBSERVATION_PERIOD_MINUTES,
-} from "../../src/background/tx-observation";
-import type { ReconcileDeps } from "../../src/background/tx-reconcile";
-import { memoryActivityLog } from "../../src/storage/activity-store";
-import type { WalletPreferences } from "../../src/storage/preferences-store";
+} from "../../apps/extension/src/background/tx-observation";
+import type { ReconcileDeps } from "../../apps/extension/src/background/tx-reconcile";
 
 const preferences: WalletPreferences = {
   activeNetworkId: "SN_MAIN",

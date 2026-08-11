@@ -1,22 +1,22 @@
-import type { MultisigClassState } from "../../../src/popup/multisig-responses";
+import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
+import type { ActivityEntry } from "@mc-wallet/transactions/activity";
+import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
+import type { MultisigClassState } from "@mc-wallet/wallet-ui/popup/multisig-responses";
 import type {
   ConnectedSite,
   DiscoveredNft,
   PendingApproval,
   WalletStatus,
-} from "../../../src/popup/responses";
-import type { MultisigSyncState } from "../../../src/sidepanel/multisig-sync";
+} from "@mc-wallet/wallet-ui/popup/responses";
+import type { MultisigSyncState } from "@mc-wallet/wallet-ui/sidepanel/multisig-sync";
 import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
-} from "../../../src/sidepanel/privacy-model";
-import type { BalanceState } from "../../../src/sidepanel/runtime";
-import { dashboard, type WalletView } from "../../../src/sidepanel/views";
-import type { AllowanceView } from "../../../src/starknet/allowance-discovery";
-import type { ClassHashVerification } from "../../../src/starknet/class-hash-verify";
-import type { ActivityEntry } from "../../../src/storage/activity-store";
-import type { MultisigProposalRecord, MultisigRecord } from "../../../src/storage/multisig-store";
-import type { WalletPreferences } from "../../../src/storage/preferences-store";
+} from "@mc-wallet/wallet-ui/sidepanel/privacy-model";
+import type { BalanceState } from "@mc-wallet/wallet-ui/sidepanel/runtime";
+import { dashboard, type WalletView } from "@mc-wallet/wallet-ui/sidepanel/views";
 import {
   balances,
   discoveredNft,

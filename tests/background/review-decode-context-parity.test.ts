@@ -14,16 +14,16 @@
  * agree with the shared Send-path computation.
  */
 import { describe, expect, test } from "bun:test";
-import { createApprovalQueue } from "../../src/background/approvals";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { verificationContext } from "../../src/background/wallet-ops";
-import { verifyCalls } from "../../src/starknet/verify";
-import { memoryActivityLog } from "../../src/storage/activity-store";
-import type { AddressBookEntry, WalletPreferences } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
+import type { AddressBookEntry, WalletPreferences } from "@mc-wallet/settings/preferences";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { verifyCalls } from "@mc-wallet/transactions/verify";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { verificationContext } from "../../apps/extension/src/background/wallet-ops";
 import { flushHeld } from "../support/held";
 
 const account: AccountRef = {
@@ -67,7 +67,7 @@ const preferencesStore = {
   async read() {
     return preferences;
   },
-} as unknown as import("../../src/storage/preferences-store").WalletPreferencesStore;
+} as unknown as import("@mc-wallet/settings/preferences").WalletPreferencesStore;
 
 const origin = "https://dapp.example";
 const contentSender: RuntimeSender = { id: "extension-id", url: `${origin}/app` };

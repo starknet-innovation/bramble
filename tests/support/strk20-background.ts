@@ -3,18 +3,15 @@
  * instrumented SDK calls, and helpers for held approval requests.
  */
 import { expect } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { WalletError } from "../../src/shared/errors";
-import type { InvokeInput } from "../../src/starknet/rpc";
-import { STRK20_NOT_REGISTERED, type Strk20Service } from "../../src/starknet/strk20/service";
-import type { ActivityLog } from "../../src/storage/activity-store";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-} from "../../src/storage/preferences-store";
+import { WalletError } from "@mc-wallet/core/errors";
+import { STRK20_NOT_REGISTERED, type Strk20Service } from "@mc-wallet/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { InvokeInput } from "@mc-wallet/starknet/rpc";
+import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import {
   contentSender,
   createWallet,

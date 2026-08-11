@@ -1,5 +1,7 @@
-import { locked, onboarding } from "../../../src/sidepanel/gate-views";
-import { ledgerMessage } from "../../../src/sidepanel/ledger/errors";
+import { ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
+import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
+import { locked, onboarding } from "@mc-wallet/wallet-ui/sidepanel/gate-views";
 import {
   addAccountChooser,
   ledgerAccountPicker,
@@ -7,12 +9,10 @@ import {
   ledgerDevicePicker,
   ledgerOnboardError,
   ledgerReadingPrompt,
-} from "../../../src/sidepanel/ledger/onboard-views";
-import { onboardingComplete } from "../../../src/sidepanel/onboarding-surface";
-import { bindOnboarding, bindUnlock } from "../../../src/sidepanel/onboarding-ui";
-import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
-import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "../../../src/starknet/ledger-path";
-import type { LedgerAccountRef } from "../../../src/storage/vault-schema";
+} from "@mc-wallet/wallet-ui/sidepanel/ledger/onboard-views";
+import { onboardingComplete } from "@mc-wallet/wallet-ui/sidepanel/onboarding-surface";
+import { bindOnboarding, bindUnlock } from "@mc-wallet/wallet-ui/sidepanel/onboarding-ui";
+import { createSidepanelRuntime } from "@mc-wallet/wallet-ui/sidepanel/runtime";
 import { invokeApproval, ledgerAccount, softwareAccount } from "./fixtures";
 import { emptyWalletStatus, lockedStatus } from "./journey-fixtures";
 import { messageType, nextTurn, updateForm } from "./scenario-runtime";

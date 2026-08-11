@@ -1,4 +1,4 @@
-import { RADIUS, SHADOW, SPACE, TYPE, WEIGHT } from "../../../src/ui/tokens";
+import { RADIUS, SHADOW, SPACE, TYPE, WEIGHT } from "@mc-wallet/ui-kit/tokens";
 
 /**
  * Storybook-only layout for presenting production design-system specimens.

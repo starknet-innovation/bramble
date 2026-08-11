@@ -3,7 +3,10 @@
  * survive worker restarts through the session store, and never outlive lock.
  */
 import { describe, expect, test } from "bun:test";
-import { createUnlockSession, type UnlockSessionState } from "../../src/background/session";
+import {
+  createUnlockSession,
+  type UnlockSessionState,
+} from "../../apps/extension/src/background/session";
 
 const PASSPHRASE = "correct horse battery staple";
 

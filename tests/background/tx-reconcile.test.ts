@@ -8,15 +8,15 @@
  * user already moved past turns out to have failed.
  */
 import { describe, expect, test } from "bun:test";
-import { UNRESOLVED_WINDOW_MS } from "../../src/background/tx-observation";
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { TransactionStatusReport } from "@mc-wallet/starknet/rpc";
+import { type ActivityEntry, memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { UNRESOLVED_WINDOW_MS } from "../../apps/extension/src/background/tx-observation";
 import {
   type ReconcileDeps,
   reconcileObserved,
   reconcileScope,
-} from "../../src/background/tx-reconcile";
-import type { TransactionStatusReport } from "../../src/starknet/rpc";
-import { type ActivityEntry, memoryActivityLog } from "../../src/storage/activity-store";
-import type { WalletPreferences } from "../../src/storage/preferences-store";
+} from "../../apps/extension/src/background/tx-reconcile";
 
 const ACCOUNT = "SN_MAIN:0x1";
 const OTHER_ACCOUNT = "SN_MAIN:0x9";

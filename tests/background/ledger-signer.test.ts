@@ -5,10 +5,13 @@
  * that does not verify — the last gate before a transaction is broadcast.
  */
 import { describe, expect, test } from "bun:test";
+import type { LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import { ec } from "starknet";
-import { type LedgerSignRequest, ledgerStarkHashSigner } from "../../src/background/ledger-signer";
-import { ledgerAccountPath } from "../../src/starknet/ledger-path";
-import type { LedgerAccountRef } from "../../src/storage/vault-schema";
+import {
+  type LedgerSignRequest,
+  ledgerStarkHashSigner,
+} from "../../apps/extension/src/background/ledger-signer";
 
 const { starkCurve } = ec;
 const PRIVATE_KEY = "0x1234567890abcdef";

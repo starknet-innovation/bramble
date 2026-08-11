@@ -1,7 +1,7 @@
+import { dockNavigation, menuLink, menuRow, optionRow } from "@mc-wallet/ui-kit/navigation";
+import { homeTabs } from "@mc-wallet/wallet-ui/sidepanel/home-tabs";
+import { flowHeader } from "@mc-wallet/wallet-ui/sidepanel/parts";
 import type { Meta } from "@storybook/html-vite";
-import { homeTabs } from "../../../src/sidepanel/home-tabs";
-import { flowHeader } from "../../../src/sidepanel/parts";
-import { dockNavigation, menuLink, menuRow, optionRow } from "../../../src/ui/navigation";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
 import { discoveredNft, statusFor } from "./fixtures";

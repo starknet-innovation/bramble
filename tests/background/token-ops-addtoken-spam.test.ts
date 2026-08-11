@@ -3,14 +3,14 @@
  * added but hidden by default, while a genuine token stays visible (A-L10).
  */
 import { describe, expect, test } from "bun:test";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import type { UnlockSession } from "../../src/background/session";
-import { handleTokenOps, type TokenOpsDeps } from "../../src/background/token-ops";
-import type { WalletStatusReader } from "../../src/background/wallet-reader";
-import type { PriceService } from "../../src/starknet/prices";
-import type { TokenMetadata } from "../../src/starknet/rpc";
-import { createMemoryStore } from "../../src/storage/kv";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
+import type { PriceService } from "@mc-wallet/portfolio/prices";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { TokenMetadata } from "@mc-wallet/starknet/rpc";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import type { UnlockSession } from "../../apps/extension/src/background/session";
+import { handleTokenOps, type TokenOpsDeps } from "../../apps/extension/src/background/token-ops";
+import type { WalletStatusReader } from "../../apps/extension/src/background/wallet-reader";
 
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 const SPOOF_ADDRESS = "0x00000000000000000000000000000000000000000000000000000000deadbeef";

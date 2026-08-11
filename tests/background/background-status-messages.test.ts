@@ -2,13 +2,13 @@
  * Background status message checks prove public wallet state is derived from vault state.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { defaultWalletPreferences } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
-import type { WalletStatus } from "../../src/wallet/vault-service";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import type { WalletStatus } from "@mc-wallet/vault/service";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const account: AccountRef = {
   address: "0xabcabcdef",

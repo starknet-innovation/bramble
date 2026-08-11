@@ -5,23 +5,24 @@
  */
 import { describe, expect, test } from "bun:test";
 import {
+  defaultWalletPreferences,
+  type WalletPreferences,
+  type WalletPreferencesStore,
+} from "@mc-wallet/settings/preferences";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { WalletStatus as VaultStatus } from "@mc-wallet/vault/service";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import {
   activeAccountContext,
   createActiveStateCoordinator,
   reconcileActiveAccount,
   reconcileUnlockedActiveAccount,
   statusResponse,
   switchActiveNetwork,
-} from "../../src/background/runtime-state";
-import { createUnlockSession } from "../../src/background/session";
-import type { WalletStatusReader } from "../../src/background/wallet-reader";
-import { STARKNET_NETWORKS } from "../../src/starknet/networks";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-  type WalletPreferencesStore,
-} from "../../src/storage/preferences-store";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
-import type { WalletStatus as VaultStatus } from "../../src/wallet/vault-service";
+} from "../../apps/extension/src/background/runtime-state";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
+import type { WalletStatusReader } from "../../apps/extension/src/background/wallet-reader";
 
 const vaultPassphrase = "correct horse battery staple";
 

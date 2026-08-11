@@ -3,13 +3,13 @@
  * state immediately before signing so stale local state cannot burn fees.
  */
 import { describe, expect, test } from "bun:test";
-import type { MultisigProposalStatus } from "../../src/starknet/multisig";
+import type { MultisigProposalStatus } from "@mc-wallet/multisig/chain";
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
   multisigId,
   multisigProposalId,
-} from "../../src/storage/multisig-store";
+} from "@mc-wallet/multisig/repository";
 import {
   HARNESS_MULTISIG,
   HARNESS_TARGET,

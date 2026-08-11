@@ -1,7 +1,7 @@
-import { serializeMultisigReviewPackage } from "../../../src/sidepanel/multisig-model";
-import type { MultisigPortfolioData } from "../../../src/sidepanel/multisig-portfolio";
-import { bindMultisigReviewTools } from "../../../src/sidepanel/multisig-review-ui";
-import { multisigDetailFlow } from "../../../src/sidepanel/multisig-views";
+import { serializeMultisigReviewPackage } from "@mc-wallet/wallet-ui/sidepanel/multisig-model";
+import type { MultisigPortfolioData } from "@mc-wallet/wallet-ui/sidepanel/multisig-portfolio";
+import { bindMultisigReviewTools } from "@mc-wallet/wallet-ui/sidepanel/multisig-review-ui";
+import { multisigDetailFlow } from "@mc-wallet/wallet-ui/sidepanel/multisig-views";
 import { multisig, pendingProposal, preferences, softwareAccount, statusFor } from "./fixtures";
 import type { FrameContext, ScenarioCheckpoint } from "./types";
 

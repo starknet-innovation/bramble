@@ -5,11 +5,11 @@
  * allowance recorded under a different account.
  */
 import { describe, expect, test } from "bun:test";
-import { handleAllowanceOps } from "../../src/background/allowance-ops";
-import { createUnlockSession } from "../../src/background/session";
-import type { WalletOpsDeps } from "../../src/background/wallet-ops";
-import { defaultWalletPreferences } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { handleAllowanceOps } from "../../apps/extension/src/background/allowance-ops";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
+import type { WalletOpsDeps } from "../../apps/extension/src/background/wallet-ops";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 
 const passphrase = "correct horse battery staple";

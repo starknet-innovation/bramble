@@ -56,9 +56,9 @@ support.
 ## Evidence on Hand
 
 - Product and architecture documentation in `README.md`, `CONTRIBUTING.md`, and `docs/`.
-- Production side-panel templates and bindings in `src/sidepanel/`.
-- Shared skin, scale, motion, and typography contracts in `src/ui/`.
-- Deterministic fixtures and test harnesses in `tests/support/`.
+- Production side-panel templates and bindings in `packages/presentation/wallet-ui/`.
+- Shared skin, scale, motion, and typography contracts in `packages/presentation/ui-kit/`.
+- Deterministic fixtures and test harnesses in `packages/testing/testkit/` and `tests/support/`.
 - Extension integration coverage in `tests/e2e/`.
 
 No customer claims, usage benchmarks, or safety guarantees beyond the implemented and tested

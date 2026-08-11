@@ -4,16 +4,13 @@
  * Sender trust gates live in background-sender-gates.test.ts.
  */
 import { describe, expect, test } from "bun:test";
-import { createApprovalQueue } from "../../src/background/approvals";
-import { createMessageHandler } from "../../src/background/messages";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import { createUnlockSession } from "../../src/background/session";
-import { createMemoryStore } from "../../src/storage/kv";
-import {
-  createPreferencesStore,
-  defaultWalletPreferences,
-} from "../../src/storage/preferences-store";
-import type { CreateVaultAccountInput, OriginGrantInput } from "../../src/wallet/vault-service";
+import { createPreferencesStore, defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { CreateVaultAccountInput, OriginGrantInput } from "@mc-wallet/vault/service";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import {
   account,
   contentSender,

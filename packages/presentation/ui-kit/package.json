@@ -1,0 +1,30 @@
+{
+  "name": "@mc-wallet/ui-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./catalog": "./src/catalog.ts",
+    "./content": "./src/content.ts",
+    "./controls": "./src/controls.ts",
+    "./dark-skin": "./src/dark-skin.ts",
+    "./default-skin": "./src/default-skin.ts",
+    "./fields": "./src/fields.ts",
+    "./html-attributes": "./src/html-attributes.ts",
+    "./icons": "./src/icons.ts",
+    "./navigation": "./src/navigation.ts",
+    "./skin": "./src/skin.ts",
+    "./spring": "./src/spring.ts",
+    "./theme": "./src/theme.ts",
+    "./tokens": "./src/tokens.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*"
+  }
+}

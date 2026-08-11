@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import {
   configureApprovalSurface,
   requestApprovalSurface,
-} from "../../src/background/approval-surface";
+} from "../../apps/extension/src/background/approval-surface";
 
 describe("approval surface", () => {
   test("opens the sender tab immediately for approval-capable dapp messages", async () => {

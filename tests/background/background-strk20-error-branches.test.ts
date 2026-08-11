@@ -7,21 +7,21 @@
  * background-strk20-messages.test.ts.
  */
 import { describe, expect, test } from "bun:test";
+import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { Strk20Service } from "@mc-wallet/privacy/service";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import type { InvokeInput } from "@mc-wallet/starknet/rpc";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import type { SignHashInput, WalletStatus } from "@mc-wallet/vault/service";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec } from "starknet";
-import type { LedgerSignQueue } from "../../src/background/ledger-sign-queue";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { executeStrk20InvokeApproval } from "../../src/background/strk20-ops";
-import type { OriginGuard } from "../../src/security/blocklist";
-import type { InvokeInput } from "../../src/starknet/rpc";
-import type { Strk20Service } from "../../src/starknet/strk20/service";
-import { memoryActivityLog } from "../../src/storage/activity-store";
-import { defaultWalletPreferences } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
-import type { SignHashInput, WalletStatus } from "../../src/wallet/vault-service";
+import type { LedgerSignQueue } from "../../apps/extension/src/background/ledger-sign-queue";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { executeStrk20InvokeApproval } from "../../apps/extension/src/background/strk20-ops";
 
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const origin = "https://example.com";

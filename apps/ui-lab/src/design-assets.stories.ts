@@ -1,7 +1,7 @@
+import { ICON_NAMES, icon } from "@mc-wallet/ui-kit/icons";
+import { accountAvatar } from "@mc-wallet/wallet-ui/sidepanel/parts";
+import { tokenGlyph } from "@mc-wallet/wallet-ui/sidepanel/token-row";
 import type { Meta } from "@storybook/html-vite";
-import { accountAvatar } from "../../../src/sidepanel/parts";
-import { tokenGlyph } from "../../../src/sidepanel/token-row";
-import { ICON_NAMES, icon } from "../../../src/ui/icons";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
 import { LEDGER_ADDRESS, SECOND_ADDRESS, SOFTWARE_ADDRESS, USDC_ADDRESS } from "./fixtures";

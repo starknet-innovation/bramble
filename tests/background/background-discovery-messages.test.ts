@@ -5,13 +5,17 @@
  * unresolvable-data branches to their spec errors.
  */
 import { describe, expect, test } from "bun:test";
+import type { DeploymentStatusInput } from "@mc-wallet/starknet/rpc";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { CallData, hash } from "starknet";
-import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "../../src/background/discovery-ops";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { DeploymentStatusInput } from "../../src/starknet/rpc";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import {
+  SUPPORTED_SPECS,
+  SUPPORTED_WALLET_API,
+} from "../../apps/extension/src/background/discovery-ops";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";

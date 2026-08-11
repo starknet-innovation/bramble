@@ -7,9 +7,9 @@
  * mutation and reaches the dapp as USER_REFUSED_OP (113).
  */
 import { describe, expect, test } from "bun:test";
-import type { RuntimeSender } from "../../src/background/senders";
-import type { ProviderMethod, RuntimeMessage } from "../../src/provider/bridge";
-import { toProviderPayload } from "../../src/provider/bridge";
+import type { ProviderMethod, RuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
+import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
 import {
   buildHarness,

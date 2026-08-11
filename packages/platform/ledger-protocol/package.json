@@ -1,0 +1,25 @@
+{
+  "name": "@mc-wallet/ledger-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./broker": "./src/broker.ts",
+    "./client": "./src/client.ts",
+    "./device-transition": "./src/device-transition.ts",
+    "./errors": "./src/errors.ts",
+    "./session": "./src/session.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@ledgerhq/devices": "8.17.0",
+    "@mc-wallet/wallet-model": "workspace:*"
+  },
+  "devDependencies": {
+    "@mc-wallet/testkit": "workspace:*"
+  }
+}

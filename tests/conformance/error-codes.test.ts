@@ -9,7 +9,7 @@
  * STRK20).
  */
 import { describe, expect, test } from "bun:test";
-import { toProviderPayload } from "../../src/provider/bridge";
+import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
 import { ERROR_CODES, SPEC_METHODS } from "./wallet-rpc-spec";
 
 // A representative background error string for each numeric code reachable

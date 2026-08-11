@@ -4,9 +4,9 @@
  * missing-params branch.
  */
 import { describe, expect, test } from "bun:test";
-import { readApiVersionParam, readTypedDataParam } from "../../src/provider/bridge-results";
-import { providerInvokeCalls } from "../../src/provider/invoke-params";
-import type { Json } from "../../src/shared/json";
+import type { Json } from "@mc-wallet/core/json";
+import { providerInvokeCalls } from "@mc-wallet/wallet-protocol/invoke";
+import { readApiVersionParam, readTypedDataParam } from "@mc-wallet/wallet-protocol/results";
 
 const asJson = (value: unknown): Json => value as Json;
 

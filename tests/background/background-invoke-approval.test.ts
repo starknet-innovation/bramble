@@ -5,20 +5,17 @@
  * on deny. Blocked or unconnected origins never reach the queue.
  */
 import { describe, expect, test } from "bun:test";
-import { createApprovalQueue } from "../../src/background/approvals";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { WalletError } from "../../src/shared/errors";
-import type { InvokeInput } from "../../src/starknet/rpc";
-import { verifyCalls } from "../../src/starknet/verify";
-import { memoryActivityLog } from "../../src/storage/activity-store";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-} from "../../src/storage/preferences-store";
+import { WalletError } from "@mc-wallet/core/errors";
+import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { InvokeInput } from "@mc-wallet/starknet/rpc";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { verifyCalls } from "@mc-wallet/transactions/verify";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
 import {
   invokeAccount as account,

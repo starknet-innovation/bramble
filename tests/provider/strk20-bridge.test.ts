@@ -9,8 +9,8 @@ import {
   readProviderResponse,
   toProviderPayload,
   toRuntimeMessage,
-} from "../../src/provider/bridge";
-import { readProviderParams } from "../../src/provider/request-params";
+} from "@mc-wallet/wallet-protocol/bridge";
+import { readProviderParams } from "@mc-wallet/wallet-protocol/request-params";
 
 const origin = "https://example.com";
 const token = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";

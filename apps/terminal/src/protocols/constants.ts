@@ -13,7 +13,7 @@
 
 /**
  * Canonical Starknet mainnet ERC20 token contract addresses, keyed by symbol.
- * ETH and STRK match src/starknet/networks.ts; the stablecoins and wrapped
+ * ETH and STRK match wallet-model/networks; the stablecoins and wrapped
  * assets are the verified mainnet deployments from the integrations recon.
  */
 export const MAINNET_TOKEN_ADDRESSES = {

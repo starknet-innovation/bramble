@@ -1,6 +1,6 @@
-import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
-import { createSwapClient } from "../../../src/sidepanel/swap-client";
-import { bindSwap } from "../../../src/sidepanel/swap-ui";
+import { createSidepanelRuntime } from "@mc-wallet/wallet-ui/sidepanel/runtime";
+import { createSwapClient } from "@mc-wallet/wallet-ui/sidepanel/swap-client";
+import { bindSwap } from "@mc-wallet/wallet-ui/sidepanel/swap-ui";
 import { statusFor } from "./fixtures";
 import { ETH_TOKEN, journeyBalances, journeyPreferences, STRK_TOKEN } from "./journey-fixtures";
 import { walletDashboard } from "./scenario-dashboard";

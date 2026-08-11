@@ -4,17 +4,17 @@
  * verification before any executor is reached.
  */
 import { describe, expect, test } from "bun:test";
-import { createApprovalContext } from "../../src/background/approval-context";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createApprovalContext } from "../../apps/extension/src/background/approval-context";
 import {
   type ApprovalDecisionDeps,
   handleApprovalDecision,
-} from "../../src/background/approval-decisions";
-import { createApprovalQueue } from "../../src/background/approvals";
-import { createUnlockSession } from "../../src/background/session";
-import { memoryActivityLog } from "../../src/storage/activity-store";
-import { memoryAllowanceStore } from "../../src/storage/allowance-store";
-import { defaultWalletPreferences } from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
+} from "../../apps/extension/src/background/approval-decisions";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const ORIGIN = "https://secure-dapp.example";
 const PASSPHRASE = "correct horse battery staple";

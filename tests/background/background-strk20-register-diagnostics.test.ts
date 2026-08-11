@@ -6,8 +6,8 @@
  * while note, proof, authorizing, and service-endpoint material does not.
  */
 import { describe, expect, test } from "bun:test";
-import { mapStrk20StageError } from "../../src/starknet/strk20/official-sdk-errors";
-import type { Strk20Service } from "../../src/starknet/strk20/service";
+import { mapStrk20StageError } from "@mc-wallet/privacy/official-sdk-errors";
+import type { Strk20Service } from "@mc-wallet/privacy/service";
 import { approveHeldStrk20, buildStrk20Handler, STRK20_ORIGIN } from "../support/strk20-background";
 
 // Every method the register path does not reach shares one rejecting stub, so

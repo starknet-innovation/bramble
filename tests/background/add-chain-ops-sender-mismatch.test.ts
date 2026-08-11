@@ -4,10 +4,13 @@
  * queued, closing the spoof where one page claims another's origin.
  */
 import { describe, expect, test } from "bun:test";
-import { type AddChainOpsDeps, handleAddChainOps } from "../../src/background/add-chain-ops";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createMemoryStore } from "../../src/storage/kv";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import {
+  type AddChainOpsDeps,
+  handleAddChainOps,
+} from "../../apps/extension/src/background/add-chain-ops";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
 
 const ORIGIN = "https://dapp.example";
 

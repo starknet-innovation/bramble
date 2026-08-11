@@ -3,8 +3,8 @@
  * fails closed when the wallet boundary does not provide it.
  */
 import { describe, expect, test } from "bun:test";
-import { strk20AccountContext } from "../../src/background/strk20-account-context";
-import { defaultWalletPreferences } from "../../src/storage/preferences-store";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import { strk20AccountContext } from "../../apps/extension/src/background/strk20-account-context";
 import { account, createWallet, vaultPassphrase } from "../support/background-wallet-stub";
 
 const resolved = {

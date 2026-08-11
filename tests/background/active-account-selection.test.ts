@@ -1,18 +1,19 @@
 /** Fail-closed cross-store account-selection invariants. */
 import { describe, expect, test } from "bun:test";
 import {
+  defaultWalletPreferences,
+  type WalletPreferencesStore,
+} from "@mc-wallet/settings/preferences";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import {
   runGuardedNetworkMutation,
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
-} from "../../src/background/active-network-mutation";
-import { selectActiveAccount } from "../../src/background/runtime-state";
-import { createUnlockSession } from "../../src/background/session";
-import type { WalletStatusReader } from "../../src/background/wallet-reader";
-import {
-  defaultWalletPreferences,
-  type WalletPreferencesStore,
-} from "../../src/storage/preferences-store";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+} from "../../apps/extension/src/background/active-network-mutation";
+import { selectActiveAccount } from "../../apps/extension/src/background/runtime-state";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
+import type { WalletStatusReader } from "../../apps/extension/src/background/wallet-reader";
 
 const vaultPassphrase = "correct horse battery staple";
 const mainnetAccount: AccountRef = {

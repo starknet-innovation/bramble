@@ -7,18 +7,19 @@
  * proposal-dropping store).
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { createUnlockSession } from "../../src/background/session";
-import type { MultisigProposalState } from "../../src/starknet/multisig";
-import { MULTISIG_CLASS_HASH } from "../../src/starknet/multisig-deploy";
-import { memoryActivityLog } from "../../src/storage/activity-store";
-import type { MultisigProposalRecord } from "../../src/storage/multisig-store";
+import type { MultisigProposalState } from "@mc-wallet/multisig/chain";
+import { MULTISIG_CLASS_HASH } from "@mc-wallet/multisig/deploy";
+import type { MultisigProposalRecord } from "@mc-wallet/multisig/repository";
 import {
   type MultisigStore,
   memoryMultisigStore,
   multisigOperationId,
-} from "../../src/storage/multisig-store";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+} from "@mc-wallet/multisig/repository";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,

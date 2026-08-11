@@ -5,16 +5,17 @@
  * and an unconfigured indexer yields an empty gallery.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { DiscoveredNft } from "../../src/starknet/nft-metadata";
-import type { NftTokenMetadata } from "../../src/starknet/nft-token-metadata";
-import { createMemoryStore } from "../../src/storage/kv";
-import { type MultisigRecord, memoryMultisigStore } from "../../src/storage/multisig-store";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import { type MultisigRecord, memoryMultisigStore } from "@mc-wallet/multisig/repository";
+import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
+import type { NftTokenMetadata } from "@mc-wallet/portfolio/nft-token-metadata";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { makeRuntimeRpc } from "../support/runtime-rpc-stub";
 
 const account: AccountRef = {

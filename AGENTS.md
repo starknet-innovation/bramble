@@ -20,7 +20,7 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 
 - `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
   `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class hash pin in
-  `src/starknet/multisig-deploy.ts` is only reproducible on that version); and
+  `packages/features/multisig/src/deploy.ts` is only reproducible on that version); and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,
   `check:krusty`/`check:multisig`/`check:privacy` and `build` fail — that is expected in offline
   sandboxes; run the rest of the gates and say so.
@@ -33,18 +33,16 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 
 ## Layout
 
-- `src/background` — privileged state, approvals, unlock sessions, message handlers, vault wiring.
-- `src/content` + `src/provider` — page ↔ background bridge; injected `window.starknet_mcWallet`.
-- `src/storage` — encrypted persistence, permission checks, schema validation, migrations.
-- `src/crypto` — Krusty KMS WASM adapter; validates all inputs/outputs at the boundary.
-- `src/starknet` — RPC, tokens, prices, deployment config, and STRK20 privacy SDK adapter.
-- `src/security` — phishing blocklist and lookalike heuristics.
-- `src/sidepanel` + `src/ui` — side-panel UI; pure view templates + skin/scale tokens.
-- `scripts/` — build, packaging, vendoring, and the custom standards checks.
-- `tests/<module>/` — unit/integration tests mirror the primary `src/` trust boundary;
-  `tests/starknet/strk20/` mirrors its source sub-package. Cross-cutting `conformance/`, browser
-  `e2e/`, shared `support/`, and build-tool `scripts/` suites stay separate;
-  `tests/support/fake-kms.ts` is the KMS test double.
+- `apps/extension` — MV3 static pages, entrypoints, browser storage adapter, privileged background
+  orchestration, and extension build. This is the only extension composition root.
+- `packages/foundation` — environment-independent values, validators, and provider/runtime protocol.
+- `packages/platform` — storage, encrypted vault, Krusty, Starknet RPC, and Ledger adapters.
+- `packages/features` — permissions, portfolio, transactions, multisig, privacy, and settings.
+- `packages/presentation` — UI Kit and the production wallet UI used by the extension and UI Lab.
+- `packages/testing/testkit` — shared deterministic test doubles; never a production dependency.
+- `scripts/` — packaging, vendoring, and custom standards checks.
+- Package unit tests live beside their owner in `packages/**/tests`. Cross-cutting `tests/`
+  contains background/integration, conformance, browser E2E, and shared support suites.
 
 ## Hard rules (enforced by `bun run check` and review)
 
@@ -60,7 +58,8 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 - Dynamic text renders via `textContent` or `escapeHtml`; string-HTML sinks only in audited files.
 - Extension messages are untrusted: validate type, origin, and capability in the background.
 - UI reads state only through permissioned stores, never raw browser storage; styling only through
-  skin/scale tokens (`src/ui/skin.ts`, `src/ui/tokens.ts`), no hard-coded colors.
+  skin/scale tokens (`packages/presentation/ui-kit/src/skin.ts` and `tokens.ts`), no hard-coded
+  colors.
 - Exported APIs need doc comments explaining trust boundaries and failure behavior (checked).
 - New dependencies: pinned exact, justified in the PR, used immediately. Prefer zero.
 - Never expose an STRK20 viewing key. Software-account viewing keys remain derived on demand and
@@ -72,9 +71,10 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 
 ## Schema migrations
 
-Vault schema is versioned (`CURRENT_SCHEMA_VERSION` in `src/storage/vault-schema.ts`). To change
-stored shape: bump the version, add exactly one adjacent step to `VAULT_MIGRATIONS` in
-`src/storage/migrations.ts`, update validators, and add tests for old, current, and invalid data.
+Vault schema is versioned (`CURRENT_SCHEMA_VERSION` in `packages/platform/vault/src/schema.ts`). To
+change stored shape: bump the version, add exactly one adjacent step to `VAULT_MIGRATIONS` in
+`packages/platform/vault/src/migrations.ts`, update validators, and add tests for old, current, and
+invalid data.
 Migrations must be deterministic. See README "Migration Workflow".
 
 ## Conventions
@@ -94,23 +94,24 @@ came from one agent re-deriving something another agent had already written. Bef
 helper, a constant, a validator, or a test stub, **grep for it first** — if something close
 exists, use or extend it in place rather than adding a sibling.
 
-- Felt helpers live in `src/starknet/networks.ts` (`sameFelt`, `canonicalFelt`,
+- Felt helpers live in `packages/foundation/wallet-model/src/networks.ts` (`sameFelt`, `canonicalFelt`,
   `isStarkFieldElement`, …). Never re-implement numeric felt comparison or `0x` canonicalization
   locally — three drifted copies of `sameFelt` once shipped.
-- Cross-layer limits are single-sourced (e.g. `MULTISIG_LIMITS` in `src/starknet/multisig.ts`,
+- Cross-layer limits are single-sourced (e.g. `MULTISIG_LIMITS` in
+  `packages/features/multisig/src/chain.ts`,
   consumed by inputs, storage, and deploy code). A limit that appears in two files as separate
   literals will eventually desynchronize.
 - Background message tests use the shared harness factories in `tests/support/` (e.g.
   `makeMultisigHarness`) instead of re-declaring wallet/RPC stubs per file, and
   `createMessageHandler` takes named options — wire collaborators by key, never positionally.
 - Two lists are enforced-derived and will fail tests if you bypass them: the dapp-reachable
-  message allowlist (`DAPP_MESSAGES` in `src/background/senders.ts`, checked against the
+  message allowlist (`DAPP_MESSAGES` in `apps/extension/src/background/senders.ts`, checked against the
   provider-bridge sources) and the key-boundary scan catalog
   (`tests/support/key-boundary-messages.ts`, checked against every handled `wallet.*` type). A
   new message type must be added to the catalog (and to `DAPP_MESSAGES` only if deliberately
   dapp-facing).
 - Activity summaries are load-bearing: dedup guards match on them (see
-  `src/background/multisig-tx-ops.ts`). Record deterministic, specific summaries, and never
+  `apps/extension/src/background/multisig-tx-ops.ts`). Record deterministic, specific summaries, and never
   change one without checking what greps for it.
 
 ## Cursor Cloud specific instructions

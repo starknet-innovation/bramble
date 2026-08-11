@@ -1,7 +1,7 @@
-import { nftSendFlow } from "../../../src/sidepanel/nft-send-view";
-import { bindNfts } from "../../../src/sidepanel/nft-ui";
-import { nftDetailFlow, nftGalleryFlow } from "../../../src/sidepanel/nft-views";
-import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
+import { nftSendFlow } from "@mc-wallet/wallet-ui/sidepanel/nft-send-view";
+import { bindNfts } from "@mc-wallet/wallet-ui/sidepanel/nft-ui";
+import { nftDetailFlow, nftGalleryFlow } from "@mc-wallet/wallet-ui/sidepanel/nft-views";
+import { createSidepanelRuntime } from "@mc-wallet/wallet-ui/sidepanel/runtime";
 import {
   discoveredNft,
   invokeApproval,

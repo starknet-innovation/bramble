@@ -1,9 +1,9 @@
+import { escapeHtml } from "@mc-wallet/core/html";
+import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
+import { defaultSkin } from "@mc-wallet/ui-kit/default-skin";
+import type { Skin } from "@mc-wallet/ui-kit/skin";
+import { EASE, MOTION, RADIUS, SHADOW, SPACE, TYPE } from "@mc-wallet/ui-kit/tokens";
 import type { Meta } from "@storybook/html-vite";
-import { escapeHtml } from "../../../src/shared/html";
-import { darkSkin } from "../../../src/ui/dark-skin";
-import { defaultSkin } from "../../../src/ui/default-skin";
-import type { Skin } from "../../../src/ui/skin";
-import { EASE, MOTION, RADIUS, SHADOW, SPACE, TYPE } from "../../../src/ui/tokens";
 import { CATALOG_META, type CatalogArgs, type CatalogStory, catalogFrame } from "./catalog-frame";
 import { catalogGroup, catalogSample } from "./catalog-markup";
 

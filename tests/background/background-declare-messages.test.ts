@@ -6,15 +6,15 @@
  * the large CONTRACT_CLASS is never surfaced in the approval snapshot.
  */
 import { describe, expect, test } from "bun:test";
-import { createApprovalQueue } from "../../src/background/approvals";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { WalletError } from "../../src/shared/errors";
-import type { DeclareInput } from "../../src/starknet/rpc";
-import type { AccountRef } from "../../src/storage/vault-schema";
+import { WalletError } from "@mc-wallet/core/errors";
+import type { DeclareInput } from "@mc-wallet/starknet/rpc";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
 
 const account: AccountRef = {

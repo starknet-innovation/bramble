@@ -5,7 +5,10 @@
  * token dedupe (A-L8).
  */
 import { describe, expect, test } from "bun:test";
-import { canonicalTokenAddress, watchAssetToken } from "../../src/background/watch-asset";
+import {
+  canonicalTokenAddress,
+  watchAssetToken,
+} from "../../apps/extension/src/background/watch-asset";
 
 const ADDRESS = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 

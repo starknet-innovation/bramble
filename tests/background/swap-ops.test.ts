@@ -5,12 +5,12 @@
  * wallet, bad input, aggregator errors) fails closed with an error response.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { SwapCall, SwapService } from "../../src/starknet/avnu";
-import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "../../src/starknet/networks";
-import { createActivityLog } from "../../src/storage/activity-store";
+import { createActivityLog } from "@mc-wallet/transactions/activity";
+import type { SwapCall, SwapService } from "@mc-wallet/transactions/avnu";
+import { DEFAULT_TOKENS, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const mainnetToken = (symbol: string): string =>
   DEFAULT_TOKENS.find((token) => token.networkId === "SN_MAIN" && token.symbol === symbol)
@@ -18,8 +18,9 @@ const mainnetToken = (symbol: string): string =>
 const ETH_TOKEN_ADDRESS = mainnetToken("ETH");
 const STRK_TOKEN_ADDRESS = mainnetToken("STRK");
 
-import { createMemoryStore } from "../../src/storage/kv";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 
 const account: AccountRef = {
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",

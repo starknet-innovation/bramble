@@ -3,20 +3,17 @@
  * registration/deposit details before their one-time submission.
  */
 import { describe, expect, test } from "bun:test";
-import { readStrk20WalletExecuteInput } from "../../src/background/strk20-wallet-inputs";
-import { STRK20_REGISTRATION_SUMMARY } from "../../src/background/strk20-wallet-ops";
-import { canonicalFelt } from "../../src/starknet/networks";
-import type { Strk20Action } from "../../src/starknet/strk20/schemas";
-import type { Strk20Service, Strk20SubmissionPlan } from "../../src/starknet/strk20/service";
+import type { Strk20Service, Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import {
   type ActivityLog,
   type ActivityStatus,
   memoryActivityLog,
-} from "../../src/storage/activity-store";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-} from "../../src/storage/preferences-store";
+} from "@mc-wallet/transactions/activity";
+import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { readStrk20WalletExecuteInput } from "../../apps/extension/src/background/strk20-wallet-inputs";
+import { STRK20_REGISTRATION_SUMMARY } from "../../apps/extension/src/background/strk20-wallet-ops";
 import { account } from "../support/background-wallet-stub";
 import {
   buildStrk20Handler,

@@ -6,13 +6,14 @@
  * session.
  */
 import { describe, expect, test } from "bun:test";
-import { createApprovalQueue } from "../../src/background/approvals";
-import { walletEventBroadcasts } from "../../src/background/events";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { memoryOriginHistory } from "../../src/storage/origin-history";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import { memoryOriginHistory } from "@mc-wallet/permissions/origin-history";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
+import { walletEventBroadcasts } from "../../apps/extension/src/background/events";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 import { flushHeld } from "../support/held";
 
 const account: AccountRef = {

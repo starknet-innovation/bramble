@@ -3,10 +3,10 @@
  * keeping a corrupt store envelope distinct.
  */
 import { describe, expect, test } from "bun:test";
-import { unlockFailureError } from "../../src/background/unlock-errors";
-import { WalletError } from "../../src/shared/errors";
-import { createEncryptedStore, encryptJson } from "../../src/storage/encrypted-store";
-import { createMemoryStore } from "../../src/storage/kv";
+import { WalletError } from "@mc-wallet/core/errors";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createEncryptedStore, encryptJson } from "@mc-wallet/vault/encrypted-store";
+import { unlockFailureError } from "../../apps/extension/src/background/unlock-errors";
 
 const vaultKey = "mc-wallet:vault";
 

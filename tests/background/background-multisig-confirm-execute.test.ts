@@ -6,7 +6,7 @@
  * confirmation or execute a proposal this wallet cannot reconstruct.
  */
 import { describe, expect, test } from "bun:test";
-import { buildMultisigConfirmCall, buildMultisigExecuteCall } from "../../src/starknet/multisig";
+import { buildMultisigConfirmCall, buildMultisigExecuteCall } from "@mc-wallet/multisig/chain";
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
@@ -14,7 +14,7 @@ import {
   memoryMultisigStore,
   multisigId,
   multisigProposalId,
-} from "../../src/storage/multisig-store";
+} from "@mc-wallet/multisig/repository";
 import {
   HARNESS_MULTISIG,
   HARNESS_OTHER_SIGNER,

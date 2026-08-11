@@ -1,9 +1,12 @@
-import { ledgerMessage } from "../../../src/sidepanel/ledger/errors";
-import type { LedgerSignView } from "../../../src/sidepanel/ledger/sign-session";
-import { ledgerSignScreen } from "../../../src/sidepanel/ledger/sign-views";
-import { createSidepanelRuntime } from "../../../src/sidepanel/runtime";
-import { sendFlow } from "../../../src/sidepanel/send-views";
-import { bindTransfer, markTransferLedgerAuthorized } from "../../../src/sidepanel/transfer-ui";
+import { ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
+import type { LedgerSignView } from "@mc-wallet/wallet-ui/sidepanel/ledger/sign-session";
+import { ledgerSignScreen } from "@mc-wallet/wallet-ui/sidepanel/ledger/sign-views";
+import { createSidepanelRuntime } from "@mc-wallet/wallet-ui/sidepanel/runtime";
+import { sendFlow } from "@mc-wallet/wallet-ui/sidepanel/send-views";
+import {
+  bindTransfer,
+  markTransferLedgerAuthorized,
+} from "@mc-wallet/wallet-ui/sidepanel/transfer-ui";
 import { ledgerAccount, RECIPIENT_ADDRESS, statusFor } from "./fixtures";
 import {
   journeyBalances,

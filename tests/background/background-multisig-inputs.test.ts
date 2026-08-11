@@ -13,7 +13,7 @@ import {
   readMultisigProposalActionInput,
   readProposeMultisigInput,
   readTrackMultisigProposalInput,
-} from "../../src/background/multisig-inputs";
+} from "../../apps/extension/src/background/multisig-inputs";
 
 const ADDR = "0x111111111111111111111111111111111111111111111111111111111111111";
 const TARGET = "0x222222222222222222222222222222222222222222222222222222222222222";

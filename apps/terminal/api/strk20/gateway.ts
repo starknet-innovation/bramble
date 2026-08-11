@@ -47,7 +47,7 @@ const contentType = (request: VercelRequest): string =>
     ?.trim()
     .toLowerCase() ?? "";
 
-const readBody = async (request: VercelRequest): Promise<Uint8Array | null> => {
+const readBody = async (request: VercelRequest): Promise<Uint8Array<ArrayBuffer> | null> => {
   const chunks: Uint8Array[] = [];
   let length = 0;
   for await (const chunk of request) {

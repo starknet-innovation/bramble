@@ -5,7 +5,7 @@
  * genuine estimate failure so the UI can offer a retry.
  */
 import { describe, expect, test } from "bun:test";
-import { resolveReviewFee } from "../../src/background/wallet-ops";
+import { resolveReviewFee } from "../../apps/extension/src/background/wallet-ops";
 
 const fee = { overallFee: "2500000000000000", unit: "FRI" } as const;
 

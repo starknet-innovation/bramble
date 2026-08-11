@@ -1,6 +1,6 @@
 /** Invoke-fee snapshot and retry-update invariants for the approval queue. */
 import { describe, expect, test } from "bun:test";
-import { createApprovalQueue } from "../../src/background/approvals";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
 
 const ORIGIN = "https://fee.example";
 const CONTEXT = {

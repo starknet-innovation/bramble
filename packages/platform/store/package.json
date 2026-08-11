@@ -1,0 +1,19 @@
+{
+  "name": "@mc-wallet/store",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./access": "./src/access.ts",
+    "./kv": "./src/kv.ts",
+    "./mutation": "./src/mutation.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*"
+  }
+}

@@ -1,6 +1,6 @@
-import type { HomeTab } from "../../../src/sidepanel/home-tabs";
-import { bindHomeUi } from "../../../src/sidepanel/home-ui";
-import type { SidepanelWallet } from "../../../src/sidepanel/runtime";
+import type { HomeTab } from "@mc-wallet/wallet-ui/sidepanel/home-tabs";
+import { bindHomeUi } from "@mc-wallet/wallet-ui/sidepanel/home-ui";
+import type { SidepanelWallet } from "@mc-wallet/wallet-ui/sidepanel/runtime";
 import { discoveredNft, softwareAccount, statusFor } from "./fixtures";
 import {
   allowances,

@@ -1,4 +1,4 @@
-import type { WalletView } from "../../../src/sidepanel/views";
+import type { WalletView } from "@mc-wallet/wallet-ui/sidepanel/views";
 
 export type LabSurface = "fullpage" | "popup" | "sidepanel";
 export type LabTheme = "dark" | "light";

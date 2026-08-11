@@ -4,7 +4,7 @@
  * chain descriptor reject. Also covers the internal camelCase re-validator.
  */
 import { describe, expect, test } from "bun:test";
-import { isProviderChain, readProviderChain } from "../../src/provider/add-chain-params";
+import { isProviderChain, readProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
 
 const base = {
   chain_id: "0x534e5f4b4154414e41",

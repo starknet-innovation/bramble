@@ -1,0 +1,33 @@
+{
+  "name": "@mc-wallet/wallet-protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./add-chain": "./src/add-chain.ts",
+    "./bridge": "./src/bridge.ts",
+    "./declare": "./src/declare.ts",
+    "./deployment": "./src/deployment.ts",
+    "./events": "./src/events.ts",
+    "./invoke-limits": "./src/invoke-limits.ts",
+    "./invoke": "./src/invoke.ts",
+    "./methods": "./src/methods.ts",
+    "./request-params": "./src/request-params.ts",
+    "./results": "./src/results.ts",
+    "./rpc-errors": "./src/rpc-errors.ts",
+    "./runtime-message": "./src/runtime-message.ts",
+    "./strk20": "./src/strk20.ts",
+    "./strk20-bridge": "./src/strk20-bridge.ts",
+    "./watch-asset": "./src/watch-asset.ts",
+    "./versions": "./src/versions.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*"
+  }
+}

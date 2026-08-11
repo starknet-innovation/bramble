@@ -1,0 +1,20 @@
+{
+  "name": "@mc-wallet/permissions",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./blocklist": "./src/blocklist.ts",
+    "./origin-history": "./src/origin-history.ts",
+    "./phishing-feed": "./src/phishing-feed.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  },
+  "dependencies": {
+    "@mc-wallet/core": "workspace:*",
+    "@mc-wallet/store": "workspace:*"
+  }
+}

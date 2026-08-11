@@ -4,14 +4,15 @@
  * all gated to extension-page senders.
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { PriceService } from "../../src/starknet/prices";
-import type { TokenMetadata } from "../../src/starknet/rpc";
-import { createMemoryStore } from "../../src/storage/kv";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
-import type { AccountRef, Vault } from "../../src/storage/vault-schema";
+import type { PriceService } from "@mc-wallet/portfolio/prices";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { TokenMetadata } from "@mc-wallet/starknet/rpc";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import type { Vault } from "@mc-wallet/vault/schema";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const USDC = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";

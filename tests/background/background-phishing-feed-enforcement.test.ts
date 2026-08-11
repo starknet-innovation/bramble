@@ -6,12 +6,12 @@
  * post-release phishing domain "starknet-rewards-2026.com".
  */
 import { describe, expect, test } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { createOriginGuard } from "../../src/security/blocklist";
-import type { AccountRef } from "../../src/storage/vault-schema";
+import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
+import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/session";
 
 const FEED_ONLY = "https://starknet-rewards-2026.com";
 const CLEAN = "https://legit-starknet-dapp.xyz";

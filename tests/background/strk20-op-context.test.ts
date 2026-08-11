@@ -10,8 +10,8 @@ import { describe, expect, test } from "bun:test";
 import type {
   ActivePrivacyContext,
   Strk20WalletOpsDeps,
-} from "../../src/background/strk20-op-context";
-import { errorText, publicBalance } from "../../src/background/strk20-op-context";
+} from "../../apps/extension/src/background/strk20-op-context";
+import { errorText, publicBalance } from "../../apps/extension/src/background/strk20-op-context";
 
 const TOKEN = {
   address: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7",

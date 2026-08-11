@@ -1,5 +1,5 @@
+import { WALLET_VIEWS } from "@mc-wallet/wallet-ui/sidepanel/views";
 import { expect, userEvent, within } from "storybook/test";
-import { WALLET_VIEWS } from "../../../src/sidepanel/views";
 import { walletScenarios } from "./scenarios";
 import { assertCheckpointReady, LAB_META, type LabMeta, type LabStory } from "./story-helpers";
 

@@ -4,7 +4,7 @@
  * unknown id is a no-op rather than resolving the wrong request.
  */
 import { describe, expect, test } from "bun:test";
-import { createLedgerSignQueue } from "../../src/background/ledger-sign-queue";
+import { createLedgerSignQueue } from "../../apps/extension/src/background/ledger-sign-queue";
 
 const request = {
   accountId: "SN_MAIN:0x1",

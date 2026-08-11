@@ -2,15 +2,16 @@
  * Deterministic private-balance checkpoints. These render production templates
  * with fixture values only: no vault, hardware, prover, indexer, or RPC access.
  */
+
+import { STRK20_MAINNET_POOL } from "@mc-wallet/privacy/config";
 import type {
   PrivacyDisclosureState,
   PrivacyJourneyState,
-} from "../../../src/sidepanel/privacy-model";
+} from "@mc-wallet/wallet-ui/sidepanel/privacy-model";
 import type {
   PrivacyPreparation,
   PrivateBalanceView,
-} from "../../../src/sidepanel/privacy-runtime";
-import { STRK20_MAINNET_POOL } from "../../../src/starknet/strk20/config";
+} from "@mc-wallet/wallet-ui/sidepanel/privacy-runtime";
 import { softwareAccount, statusFor } from "./fixtures";
 import { ETH_TOKEN, journeyBalances, journeyPreferences, journeyPrices } from "./journey-fixtures";
 import { walletDashboard } from "./scenario-dashboard";
