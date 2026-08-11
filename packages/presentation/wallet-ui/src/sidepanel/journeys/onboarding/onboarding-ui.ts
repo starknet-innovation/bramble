@@ -162,7 +162,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     const unknown = !incomplete && !wordAssist.wordsKnown(importWordCount);
     wordAssist.refreshWordValidity();
     if (recoveryContinue) {
-      recoveryContinue.disabled = incomplete || unknown;
+      // Emptiness only — BIP39 membership stays advisory; Krusty validates.
+      recoveryContinue.disabled = incomplete;
     }
     if (recoveryResult) {
       recoveryResult.textContent = incomplete
@@ -170,7 +171,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
           ? `Enter all ${importWordCount} words to continue.`
           : ""
         : unknown
-          ? "Fix highlighted words before continuing."
+          ? "Highlighted words are not in the BIP39 English list."
           : "";
     }
     previewMatchesInput = false;
@@ -265,8 +266,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   bindRecoveryImportControls({
     fillWords,
     importInputs,
-    importWordCount: () => importWordCount,
     importedMnemonic,
+    isRecoveryActive: () =>
+      steps.find((step) => !step.hidden)?.dataset["onboardingStep"] === "recovery",
     recoveryContinue,
     recoveryResult,
     refreshPassword,

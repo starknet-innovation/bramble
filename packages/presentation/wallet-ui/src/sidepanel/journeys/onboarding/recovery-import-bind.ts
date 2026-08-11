@@ -1,6 +1,10 @@
 /**
  * Import-grid input wiring for pasting, space-to-advance, and Continue that
  * asks Krusty to validate the full phrase before the passphrase step.
+ *
+ * Local BIP39 membership highlighting stays advisory. Only Krusty's
+ * validateMnemonic verdict may advance the flow, and stale async completions
+ * are discarded when the phrase or recovery step has changed.
  */
 
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -8,7 +12,6 @@ import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 
 type WordAssist = {
   readonly hideSuggestions: () => void;
-  readonly wordsKnown: (count: number) => boolean;
 };
 
 type RecoveryImportBind = {
@@ -18,8 +21,8 @@ type RecoveryImportBind = {
     kind: "generated" | "import",
   ) => void;
   readonly importInputs: readonly HTMLInputElement[];
-  readonly importWordCount: () => 12 | 24;
   readonly importedMnemonic: () => string;
+  readonly isRecoveryActive: () => boolean;
   readonly recoveryContinue: HTMLButtonElement | null;
   readonly recoveryResult: HTMLElement | null;
   readonly refreshRecovery: () => void;
@@ -37,8 +40,8 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): void => {
   const {
     fillWords,
     importInputs,
-    importWordCount,
     importedMnemonic,
+    isRecoveryActive,
     recoveryContinue,
     recoveryResult,
     refreshPassword,
@@ -49,8 +52,12 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): void => {
     wordAssist,
   } = deps;
 
+  let validateGeneration = 0;
+
   for (const [index, input] of importInputs.entries()) {
     input.addEventListener("input", () => {
+      validateGeneration += 1;
+      buttonBusy(recoveryContinue, false);
       const pastedWords = input.value.trim().split(/\s+/).filter(Boolean);
       if (pastedWords.length === 12 || pastedWords.length === 24) {
         fillWords(importInputs, pastedWords, "import");
@@ -66,6 +73,8 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): void => {
       }
     });
     input.addEventListener("paste", (event) => {
+      validateGeneration += 1;
+      buttonBusy(recoveryContinue, false);
       const words = event.clipboardData?.getData("text").trim().split(/\s+/).filter(Boolean) ?? [];
       if (words.length !== 12 && words.length !== 24) {
         return;
@@ -78,16 +87,25 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): void => {
 
   recoveryContinue?.addEventListener("click", () => {
     const phrase = importedMnemonic();
-    if (!wordAssist.wordsKnown(importWordCount())) {
+    if (phrase.length === 0 || phrase.split(/\s+/).some((word) => word.length === 0)) {
       refreshRecovery();
       return;
     }
+    validateGeneration += 1;
+    const requestId = validateGeneration;
     buttonBusy(recoveryContinue, true);
     if (recoveryResult) {
       recoveryResult.textContent = "Checking recovery phrase…";
     }
     void wallet.validateMnemonic(phrase).then(
       (valid) => {
+        if (
+          requestId !== validateGeneration ||
+          importedMnemonic() !== phrase ||
+          !isRecoveryActive()
+        ) {
+          return;
+        }
         buttonBusy(recoveryContinue, false);
         if (!valid) {
           if (recoveryResult) {
@@ -105,6 +123,13 @@ export const bindRecoveryImportControls = (deps: RecoveryImportBind): void => {
         refreshPassword();
       },
       (error: unknown) => {
+        if (
+          requestId !== validateGeneration ||
+          importedMnemonic() !== phrase ||
+          !isRecoveryActive()
+        ) {
+          return;
+        }
         const message = errorMessage(error, "Could not check this recovery phrase");
         if (recoveryResult) {
           recoveryResult.textContent = message;

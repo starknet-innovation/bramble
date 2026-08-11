@@ -181,21 +181,45 @@ describe("staged onboarding", () => {
     expect(flow.creations).toEqual([]);
   });
 
-  test("blocks Continue when a recovery word is not in the BIP39 list", async () => {
-    const flow = mount();
+  test("keeps BIP39 membership advisory without blocking Continue", async () => {
+    const flow = mount({ validateMnemonic: async () => false });
     click(flow.app, "#add-existing-button");
     click(flow.app, "#recovery-method-button");
     const words = MNEMONIC.split(" ");
     words[0] = "notaword";
-    setValue(flow.app, 'input[name="import-word-0"]', words.join(" "));
-    expect(flow.app.querySelector<HTMLButtonElement>("#recovery-continue")?.disabled).toBe(true);
+    const phrase = words.join(" ");
+    setValue(flow.app, 'input[name="import-word-0"]', phrase);
+    expect(flow.app.querySelector<HTMLButtonElement>("#recovery-continue")?.disabled).toBe(false);
     expect(
       flow.app.querySelector('input[name="import-word-0"]')?.classList.contains("is-invalid"),
     ).toBe(true);
     expect(flow.app.querySelector("#recovery-result")?.textContent).toBe(
-      "Fix highlighted words before continuing.",
+      "Highlighted words are not in the BIP39 English list.",
     );
-    expect(flow.validations).toEqual([]);
+    click(flow.app, "#recovery-continue");
+    await tick();
+    expect(flow.validations).toEqual([phrase]);
+    expect(activeStep(flow.app)).toBe("recovery");
+  });
+
+  test("discards a stale validation after the phrase changes", async () => {
+    let release: ((valid: boolean) => void) | undefined;
+    const flow = mount({
+      validateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    const edited = MNEMONIC.replace("habit", "hope");
+    setValue(flow.app, 'input[name="import-word-0"]', edited);
+    release?.(true);
+    await tick();
+    expect(activeStep(flow.app)).toBe("recovery");
+    expect(flow.validations).toEqual([MNEMONIC]);
   });
 
   test("keeps an invalid checksum phrase on the recovery step", async () => {
