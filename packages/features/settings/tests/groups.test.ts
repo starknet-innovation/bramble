@@ -44,6 +44,10 @@ describe("createGroup", () => {
     expect(groups[0]?.id).toBe("group");
   });
 
+  test("trims collapsed edge separators", () => {
+    expect(createGroup([], "---Alpha---", "folder")[0]?.id).toBe("alpha");
+  });
+
   test("rejects invalid names and icons", () => {
     expect(() => createGroup([], "   ", "folder")).toThrow("Invalid group name");
     expect(() => createGroup([], "x".repeat(65), "folder")).toThrow("Invalid group name");

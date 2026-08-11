@@ -23,6 +23,7 @@
  * simply shows the empty state and the manual watch form.
  */
 import { isRecord } from "@mc-wallet/core/json";
+import { trimTrailingSlashes } from "@mc-wallet/core/service-url";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import { type DiscoveredNft, normalizeIndexerNft } from "./nft-metadata";
 
@@ -61,7 +62,7 @@ export const MAX_DISCOVERED_NFTS = 100;
 // Joins the configured indexer base URL with the ownership sub-path, tolerating a
 // trailing slash on the base so both `https://i` and `https://i/` behave.
 const ownedNftsUrl = (indexerUrl: string, address: string, networkId: StarknetNetworkId): string =>
-  `${indexerUrl.replace(/\/+$/, "")}/accounts/${address}/nfts?network=${networkId}`;
+  `${trimTrailingSlashes(indexerUrl)}/accounts/${address}/nfts?network=${networkId}`;
 
 // Extracts the record array from either a bare array body or a `{ nfts: [...] }`
 // envelope; anything else yields no records.

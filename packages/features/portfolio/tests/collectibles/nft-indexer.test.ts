@@ -57,6 +57,16 @@ describe("createHttpNftIndexer", () => {
     expect(calls[0]).toBe(`https://indexer.example/api/accounts/${address}/nfts?network=SN_MAIN`);
   });
 
+  test("normalizes an adversarial trailing-slash run in linear time", async () => {
+    const { http, calls } = httpReturning([]);
+    await createHttpNftIndexer(http).listOwnedNfts({
+      address,
+      indexerUrl: `https://indexer.example/api${"/".repeat(8_192)}`,
+      networkId: "SN_MAIN",
+    });
+    expect(calls[0]).toBe(`https://indexer.example/api/accounts/${address}/nfts?network=SN_MAIN`);
+  });
+
   test("parses a { nfts: [...] } envelope, dedupes, and drops malformed records", async () => {
     const { http } = httpReturning({ nfts: [record("1"), record("1"), { token_id: "3" }] });
     const nfts = await createHttpNftIndexer(http).listOwnedNfts({

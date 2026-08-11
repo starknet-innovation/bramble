@@ -60,4 +60,28 @@ describe("accountDrawer badge", () => {
     // Exactly one badge — only the Ledger row carries it.
     expect(html.match(/pill-hardware/g)?.length).toBe(1);
   });
+
+  test("escapes status, account labels, and group names before composing drawer markup", () => {
+    const unsafe = '<img src=x onerror="steal()">';
+    const status: WalletStatus = {
+      accountCount: 1,
+      accounts: [account],
+      activeAccountId: account.id,
+      hasVault: true,
+      locked: false,
+      network: unsafe,
+      networkId: "SN_MAIN",
+      networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+      ready: true,
+    };
+    const html = accountDrawer(status, account, {
+      ...preferences,
+      accountLabels: { [account.id]: unsafe },
+      groups: [{ accountIds: [account.id], icon: "folder", id: "unsafe", name: unsafe }],
+    });
+
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain('onerror="');
+    expect(html).toContain("&lt;img");
+  });
 });

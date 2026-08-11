@@ -75,6 +75,11 @@ describe("STRK20 detail sanitizer", () => {
     expect(sanitizeStrk20Detail(`${"reason ".repeat(160)}`).length).toBeLessThanOrEqual(800);
     expect(sanitizeStrk20Detail("  collapse\n\tthe   space ")).toBe("collapse the space");
   });
+
+  test("bounds repeated hostile service input before redaction", () => {
+    expect(sanitizeStrk20Detail(`https://${"a".repeat(20_000)}.example/prove`)).toBe("[endpoint]");
+    expect(sanitizeStrk20Detail(`${"A".repeat(20_000)}!`)).toBe("[value]");
+  });
 });
 
 describe("STRK20 stage error mapping", () => {

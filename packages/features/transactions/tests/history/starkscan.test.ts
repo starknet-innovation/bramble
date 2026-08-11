@@ -14,6 +14,30 @@ const jsonResponse = (value: unknown, init?: ResponseInit): Response =>
   });
 
 describe("Starkscan client boundary", () => {
+  test("normalizes an adversarial trailing-slash run before requesting", async () => {
+    let requested = "";
+    const client = createStarkscanClient({
+      baseUrl: `https://api.starkscan.test/v1${"/".repeat(8_192)}`,
+      async http(url) {
+        requested = url;
+        return jsonResponse({
+          address: ACCOUNT,
+          totalActivityCount: 0,
+          latestActivityBlock: null,
+          activityCountExact: true,
+          classHash: null,
+          isAccount: true,
+          createdOnIso: null,
+          deployedAtTxHash: null,
+          deployedByAddress: null,
+        });
+      },
+    });
+
+    await client.getAddress("SN_MAIN", ACCOUNT);
+    expect(requested).toBe(`https://api.starkscan.test/v1/SN_MAIN/address/${ACCOUNT}`);
+  });
+
   test("builds authenticated routes and parses complete token holdings", async () => {
     const requests: Array<{ init: RequestInit; url: string }> = [];
     const client = createStarkscanClient({

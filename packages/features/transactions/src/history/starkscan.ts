@@ -2,6 +2,7 @@
  * Authenticated or relay-backed Starkscan HTTP client and endpoint surface.
  */
 import { isRecord } from "@mc-wallet/core/json";
+import { trimTrailingSlashes } from "@mc-wallet/core/service-url";
 import { canonicalFelt, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import {
   parseStarkscanAddress,
@@ -215,7 +216,7 @@ export const createStarkscanClient = ({
   http = (url, init) => fetch(url, init),
   timeoutMs = DEFAULT_TIMEOUT_MS,
 }: StarkscanClientOptions): StarkscanClient => {
-  const base = baseUrl.replace(/\/+$/, "");
+  const base = trimTrailingSlashes(baseUrl);
   const request = async <T>(
     chainId: StarkscanChainId,
     route: string,

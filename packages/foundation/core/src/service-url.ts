@@ -4,6 +4,17 @@
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost"]);
 
 /**
+ * Removes trailing URL separators in linear time without a backtracking regex.
+ */
+export const trimTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
+/**
  * Checks a user-configured service endpoint without performing network access.
  */
 export const isServiceUrl = (value: unknown): value is string => {
