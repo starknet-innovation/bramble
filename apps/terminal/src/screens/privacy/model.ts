@@ -7,7 +7,7 @@ import {
   MAINNET_TOKEN_DECIMALS,
   type MainnetTokenSymbol,
 } from "../../protocols/constants";
-import type { PrivateSwapFee } from "../../protocols/private-swap-client";
+import type { PrivateSwapFee } from "../../protocols/avnu/private-swap-client";
 
 export type Mode = "balances" | "deposit" | "register" | "swap" | "transfer" | "withdraw";
 export type TokenOption = {

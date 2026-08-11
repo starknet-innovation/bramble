@@ -3,18 +3,16 @@
  * sender identities, wallet double, and injectable RPC so approval tests do
  * not drift on their security boundary setup.
  */
-import { createApprovalQueue } from "../../src/background/approvals";
-import { createMessageHandler } from "../../src/background/messages";
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import type { InvokeInput } from "../../src/starknet/rpc";
-import { memoryActivityLog } from "../../src/storage/activity-store";
-import type {
-  WalletPreferences,
-  WalletPreferencesStore,
-} from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
+
+import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { InvokeInput } from "@mc-wallet/starknet/rpc";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
+import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 
 export const invokeAccount: AccountRef = {

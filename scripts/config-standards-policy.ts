@@ -11,26 +11,36 @@ export const DEPENDENCY_FIELDS = [
 
 export const EXPECTED_PACKAGE_MANAGER = "bun@1.3.3";
 
+export const EXPECTED_WORKSPACES = ["apps/*", "packages/*/*"] as const;
+
 export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
+  "@mc-wallet/testkit": "workspace:*",
   "@biomejs/biome": "2.5.6",
-  "@happy-dom/global-registrator": "20.11.1",
   "@playwright/test": "1.62.1",
   "@types/bun": "1.3.14",
   "@types/node": "26.1.2",
-  "happy-dom": "20.11.1",
   knip: "6.31.0",
   madge: "8.0.0",
   typescript: "6.0.3",
 };
 
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
-  "@ledgerhq/devices": "8.17.0",
-  "@ledgerhq/hw-app-starknet": "3.0.2",
-  "@ledgerhq/hw-transport": "6.35.6",
-  "@ledgerhq/hw-transport-web-ble": "6.35.0",
-  "@ledgerhq/hw-transport-webhid": "6.36.0",
-  "@ledgerhq/hw-transport-webusb": "6.35.0",
-  buffer: "6.0.3",
+  "@mc-wallet/core": "workspace:*",
+  "@mc-wallet/kms-krusty": "workspace:*",
+  "@mc-wallet/ledger-protocol": "workspace:*",
+  "@mc-wallet/multisig": "workspace:*",
+  "@mc-wallet/permissions": "workspace:*",
+  "@mc-wallet/privacy": "workspace:*",
+  "@mc-wallet/portfolio": "workspace:*",
+  "@mc-wallet/starknet": "workspace:*",
+  "@mc-wallet/store": "workspace:*",
+  "@mc-wallet/settings": "workspace:*",
+  "@mc-wallet/transactions": "workspace:*",
+  "@mc-wallet/ui-kit": "workspace:*",
+  "@mc-wallet/vault": "workspace:*",
+  "@mc-wallet/wallet-ui": "workspace:*",
+  "@mc-wallet/wallet-model": "workspace:*",
+  "@mc-wallet/wallet-protocol": "workspace:*",
   starknet: "10.0.2",
 };
 
@@ -94,23 +104,25 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 ] as const;
 
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
-  build: "bun run scripts/build-extension.ts",
+  build: "bun run --filter @mc-wallet/extension build",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun test ./tests",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
   "check:coverage": "bun run scripts/check-coverage.ts",
-  "check:cycles": "madge --circular --extensions ts src",
+  "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
   "check:deadcode": "knip --no-exit-code",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",
-  "check:imports": "bun run scripts/check-import-layers.ts",
+  "check:imports": "bun run scripts/check-workspace-architecture.ts",
   "check:krusty": "bun run scripts/check-krusty-adapter.ts",
   "check:lint": "biome check .",
   "check:multisig": "bun run scripts/check-multisig-class.ts",
   "check:privacy": "bun run scripts/check-privacy-sdk.ts",
   "check:release-version": "bun run scripts/release-version.ts",
   "check:types": "tsc --noEmit",
+  "check:workspaces":
+    "bun run --filter './packages/**' check && bun run --filter @mc-wallet/extension check && bun run --filter @mc-wallet/terminal check && bun run --filter @mc-wallet/ui-lab check:static",
   changelog: "bun run scripts/generate-changelog.ts",
   format: "biome check --write .",
   "package:extension": "bun run scripts/package-extension.ts",
@@ -158,12 +170,23 @@ export const WALLET_MAX_COGNITIVE_COMPLEXITY = 12;
  * Globs that receive the strict wallet-logic cognitive-complexity override.
  */
 export const WALLET_COMPLEXITY_GLOBS = [
-  "src/wallet/**",
-  "src/background/**",
-  "src/starknet/**",
-  "src/storage/**",
-  "src/shared/**",
-  "src/provider/**",
+  "apps/extension/src/background/**",
+  "apps/extension/src/provider/**",
+  "packages/foundation/core/src/**",
+  "packages/foundation/wallet-model/src/**",
+  "packages/foundation/wallet-protocol/src/**",
+  "packages/platform/store/src/**",
+  "packages/platform/vault/src/**",
+  "packages/platform/kms-krusty/src/**",
+  "packages/platform/ledger-browser/src/**",
+  "packages/platform/ledger-protocol/src/**",
+  "packages/platform/starknet/src/**",
+  "packages/features/privacy/src/**",
+  "packages/features/multisig/src/**",
+  "packages/features/portfolio/src/**",
+  "packages/features/permissions/src/**",
+  "packages/features/transactions/src/**",
+  "packages/features/settings/src/**",
 ] as const;
 
 export const REQUIRED_BIOME_NURSERY_RULES: Readonly<Record<string, string>> = {

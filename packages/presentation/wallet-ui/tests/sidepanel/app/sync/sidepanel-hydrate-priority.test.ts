@@ -1,0 +1,310 @@
+/**
+ * Home hydration paints balance/price state before slower history/deployment
+ * jobs, and stale hydration generations cannot mutate or repaint the cache.
+ */
+import { describe, expect, test } from "bun:test";
+import type { WalletStatus } from "../../../../src/popup/responses/responses";
+import { emptyRenderCache } from "../../../../src/sidepanel/app/rendering/render-cache";
+import { hydrateView } from "../../../../src/sidepanel/app/sync/hydrate";
+import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime";
+
+const status: WalletStatus = {
+  accountCount: 1,
+  accounts: [],
+  activeAccountId: "SN_MAIN:0x1",
+  hasVault: true,
+  locked: false,
+  network: "Starknet Mainnet",
+  networkId: "SN_MAIN",
+  networks: [{ id: "SN_MAIN", name: "Starknet Mainnet" }],
+  ready: true,
+};
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  return {
+    promise: new Promise<T>((next) => {
+      resolve = next;
+    }),
+    resolve,
+  };
+};
+
+const flush = async (): Promise<void> => {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
+
+const emptyMultisigClient = {
+  async loadMultisigs() {
+    return { multisigs: [], proposals: [] };
+  },
+};
+
+describe("home hydration priority", () => {
+  test("paints critical balances and prices before deferred home data", async () => {
+    const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
+    const prices = deferred<Awaited<ReturnType<SidepanelWallet["loadPrices"]>>>();
+    const activity = deferred<Awaited<ReturnType<SidepanelWallet["loadActivity"]>>>();
+    const deployment = deferred<boolean>();
+    const nfts = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();
+    const watched = deferred<Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>>();
+    const cache = emptyRenderCache();
+    let paints = 0;
+    const run = hydrateView({
+      activeView: "home",
+      cache,
+      deployment: { load: () => deployment.promise },
+      multisig: emptyMultisigClient,
+      paint: () => {
+        paints += 1;
+      },
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        discoverNfts: () => nfts.promise,
+        loadWatchedNfts: () => watched.promise,
+        loadActivity: () => activity.promise,
+        loadBalances: () => balances.promise,
+        loadPrices: () => prices.promise,
+      },
+    } as never);
+
+    balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
+    prices.resolve({ asOf: 1, changes: {}, prices: { "0x1": 1 }, stale: false });
+    await flush();
+    expect(paints).toBe(1);
+    expect(cache.prices).toEqual({ "0x1": 1 });
+
+    deployment.resolve(true);
+    activity.resolve({ entries: [], historyUnavailable: false });
+    nfts.resolve([]);
+    watched.resolve([]);
+    await run;
+    expect(paints).toBeGreaterThanOrEqual(2);
+    expect(cache.deployment).toBe(true);
+  });
+
+  test("streams watched NFT metadata into the home cache", async () => {
+    const cache = emptyRenderCache();
+    await hydrateView({
+      activeView: "home",
+      cache,
+      deployment: { load: async () => true },
+      multisig: emptyMultisigClient,
+      paint: () => undefined,
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        discoverNfts: async () => [],
+        loadWatchedNfts: async () => [
+          {
+            collection: "MC Punks",
+            contract: "0x123",
+            id: "SN_MAIN:0x123:0",
+            image: "https://cdn.example/punk.png",
+            name: "Punk #0",
+            networkId: "SN_MAIN",
+            tokenId: "0",
+          },
+        ],
+        loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+        loadBalances: async () => ({
+          accountId: "SN_MAIN:0x1",
+          balances: [],
+          networkId: "SN_MAIN",
+        }),
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    expect(cache.discoveredNfts).toHaveLength(1);
+  });
+
+  test("paints watched artwork before slow portfolio and indexer jobs finish", async () => {
+    const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
+    const prices = deferred<Awaited<ReturnType<SidepanelWallet["loadPrices"]>>>();
+    const indexed = deferred<Awaited<ReturnType<SidepanelWallet["discoverNfts"]>>>();
+    const watched = deferred<Awaited<ReturnType<SidepanelWallet["loadWatchedNfts"]>>>();
+    const cache = emptyRenderCache();
+    let paints = 0;
+    const run = hydrateView({
+      activeView: "home",
+      cache,
+      deployment: { load: async () => true },
+      multisig: emptyMultisigClient,
+      paint: () => {
+        paints += 1;
+      },
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        discoverNfts: () => indexed.promise,
+        loadActivity: async () => ({ entries: [], historyUnavailable: false }),
+        loadBalances: () => balances.promise,
+        loadPrices: () => prices.promise,
+        loadWatchedNfts: () => watched.promise,
+      },
+    } as never);
+
+    watched.resolve([
+      {
+        collection: "MC Punks",
+        contract: "0x123",
+        id: "SN_MAIN:0x123:0",
+        image: "https://cdn.example/punk.png",
+        name: "Punk #0",
+        networkId: "SN_MAIN",
+        tokenId: "0",
+      },
+    ]);
+    await flush();
+    expect(cache.discoveredNfts).toHaveLength(1);
+    expect(paints).toBe(1);
+
+    balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
+    prices.resolve({ asOf: null, changes: {}, prices: {}, stale: false });
+    indexed.resolve([]);
+    await run;
+  });
+
+  test("drops stale hydration results and paints", async () => {
+    const balances = deferred<Awaited<ReturnType<SidepanelWallet["loadBalances"]>>>();
+    const cache = emptyRenderCache();
+    let current = true;
+    let paints = 0;
+    const run = hydrateView({
+      activeView: "tokens",
+      cache,
+      deployment: {},
+      isCurrent: () => current,
+      multisig: emptyMultisigClient,
+      paint: () => {
+        paints += 1;
+      },
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        loadBalances: () => balances.promise,
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    current = false;
+    balances.resolve({ accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" });
+    await run;
+    expect(paints).toBe(0);
+    expect(cache.balances).toEqual({ error: "wallet locked" });
+  });
+
+  test("rejects a balance response scoped to another account", async () => {
+    const cache = emptyRenderCache();
+    await hydrateView({
+      activeView: "tokens",
+      cache,
+      deployment: {},
+      multisig: emptyMultisigClient,
+      paint: () => undefined,
+      selectedMultisigId: null,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        loadBalances: async () => ({
+          accountId: "SN_MAIN:0x999",
+          balances: [],
+          networkId: "SN_MAIN",
+        }),
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    expect(cache.balances).toEqual({ error: "balances unavailable" });
+  });
+
+  test("hydrates a multisig home from the shared account balance scope", async () => {
+    const multisigId = "SN_MAIN:0x7123";
+    const sharedBalances = {
+      accountId: multisigId,
+      balances: [
+        {
+          address: "0x3306",
+          balance: "125000000",
+          decimals: 6,
+          formatted: "125",
+          id: "SN_MAIN:USDC:0x3306",
+          name: "USD Coin",
+          networkId: "SN_MAIN" as const,
+          symbol: "USDC",
+        },
+      ],
+      networkId: "SN_MAIN" as const,
+    };
+    const cache = emptyRenderCache();
+    let signerBalanceReads = 0;
+    const sharedBalanceReads: string[] = [];
+    const sharedActivityReads: (string | undefined)[] = [];
+    const sharedNftReads: unknown[][] = [];
+    const record = {
+      address: "0x7123",
+      id: multisigId,
+      networkId: "SN_MAIN" as const,
+      quorum: 2,
+      signers: ["0x1", "0x2"],
+    };
+
+    await hydrateView({
+      activeView: "multisig-home",
+      cache,
+      deployment: {},
+      multisig: {
+        loadBalances: async (id: string) => {
+          sharedBalanceReads.push(id);
+          return sharedBalances;
+        },
+        loadMultisigs: async () => ({ multisigs: [record], proposals: [] }),
+        refreshMultisig: async () => undefined,
+      },
+      paint: () => undefined,
+      selectedMultisigId: multisigId,
+      selectedTokenId: null,
+      status,
+      wallet: {
+        discoverNfts: async (...input: readonly unknown[]) => {
+          sharedNftReads.push([...input]);
+          return [
+            {
+              collection: "Shared collection",
+              contract: "0x456",
+              id: "SN_MAIN:0x456:7",
+              image: "",
+              name: "Shared NFT #7",
+              networkId: "SN_MAIN",
+              tokenId: "7",
+            },
+          ];
+        },
+        loadBalances: async () => {
+          signerBalanceReads += 1;
+          return { accountId: "SN_MAIN:0x1", balances: [], networkId: "SN_MAIN" };
+        },
+        loadActivity: async (accountId?: string) => {
+          sharedActivityReads.push(accountId);
+          return { entries: [], historyUnavailable: false };
+        },
+        loadPrices: async () => ({ asOf: null, changes: {}, prices: {}, stale: false }),
+      },
+    } as never);
+
+    expect(sharedBalanceReads).toEqual([multisigId]);
+    expect(sharedActivityReads).toEqual([multisigId]);
+    expect(signerBalanceReads).toBe(0);
+    expect(cache.multisigBalanceId).toBe(multisigId);
+    expect(cache.multisigBalances).toEqual(sharedBalances);
+    expect(sharedNftReads).toEqual([[true, `${status.networkId}:${multisigId}`, multisigId]]);
+    expect(cache.multisigNftId).toBe(multisigId);
+    expect(cache.multisigNfts).toHaveLength(1);
+  });
+});

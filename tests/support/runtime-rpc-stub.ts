@@ -7,7 +7,7 @@
  * and `submitInvokeTransaction` echo their inputs so a transfer/invoke assertion
  * sees the token and calls it submitted without any override.
  */
-import type { RuntimeRpc } from "../../src/background/runtime-rpc";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
 
 /**
  * Builds a complete RuntimeRpc stub from the shared defaults, applying any

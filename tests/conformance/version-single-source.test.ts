@@ -1,12 +1,12 @@
 /**
  * Guards that the advertised version strings have exactly one definition. Both
  * the REAL background discovery response and the conformance fixtures must read
- * from src/shared/versions, so the wire values and the test expectations can
+ * from wallet-protocol/versions, so the wire values and test expectations can
  * never silently drift apart. Also pins wallet_supportedSpecs to the JSON-RPC
  * spec version the bundled starknet client actually targets (0.10.0).
  */
 import { describe, expect, test } from "bun:test";
-import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "../../src/shared/versions";
+import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@mc-wallet/wallet-protocol/versions";
 import { buildHarness, CONTENT_SENDER } from "./harness";
 import { API_VERSION, ORIGIN } from "./spec-fixtures";
 import { specMethod } from "./wallet-rpc-spec";

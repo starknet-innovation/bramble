@@ -2,7 +2,7 @@
  * Bottom status bar with wallet, network, and live data-source state.
  */
 import type { ReactNode } from "react";
-import { useWallet } from "../wallet/WalletProvider";
+import { useWallet } from "../wallet/connection/WalletProvider";
 import { shortenAddress } from "./screens";
 
 /**

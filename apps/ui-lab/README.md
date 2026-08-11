@@ -10,9 +10,8 @@ broadcast path.
 Requirements:
 
 - Bun 1.3.3 (the version pinned by this package and CI).
-- The repository and UI Lab lockfiles installed independently. This keeps Storybook tooling out of
-  the production extension dependency graph while allowing the lab to type-check the production
-  modules it renders.
+- The root workspace lockfile. Storybook remains a private app workspace and cannot enter the
+  production extension dependency graph.
 
 From a fresh clone:
 
@@ -20,7 +19,6 @@ From a fresh clone:
 cd /path/to/mc-wallet
 bun install --frozen-lockfile
 cd apps/ui-lab
-bun install --frozen-lockfile
 bun run storybook
 ```
 
@@ -36,7 +34,7 @@ Open **Design system** first when changing shared interface code. The catalog is
 Foundations, Controls, Feedback, Data display, Cards, Navigation, and Assets. It renders the real
 production skins, styles, renderers, and domain components—never Storybook-only replicas.
 
-The source of truth lives in `src/ui/`:
+The source of truth lives in `packages/presentation/ui-kit/src/`:
 
 - `tokens.ts`, `skin.ts`, `default-skin.ts`, and `dark-skin.ts` own foundations.
 - `controls.ts`, `fields.ts`, `content.ts`, `navigation.ts`, and `icons.ts` own reusable
@@ -44,7 +42,7 @@ The source of truth lives in `src/ui/`:
 - `catalog.ts` is the authoritative inventory. `tests/ui/design-system.test.ts` fails when an
   inventory item lacks Storybook coverage, a renderer stops escaping dynamic content, or a
   side-panel template bypasses shared fields and structural primitives.
-- Wallet-specific cards and rows remain close to their domain in `src/sidepanel/`, but their
+- Wallet-specific cards and rows live in `packages/presentation/wallet-ui/src/sidepanel/`, and their
   Storybook stories import those production renderers directly.
 
 When adding a shared component, grep for an existing pattern first, extend the library in place,

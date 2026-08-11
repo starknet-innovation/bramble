@@ -1,8 +1,8 @@
 /**
  * Barrel for the terminal's real data layer. Screens import hooks + formatters
- * from "../data". Every hook returns live API / on-chain data (no sample rows).
+ * from "./index". Every hook returns live API / on-chain data (no sample rows).
  */
-export { fetchJson, HttpError, withRpc } from "./client";
+export { fetchJson, HttpError, withRpc } from "./core/client";
 export {
   AVNU_BASE,
   AVNU_MARKETS_BASE,
@@ -11,7 +11,7 @@ export {
   EXTENDED_WS_BASE,
   RPC_URLS,
   STARKSCAN_BASE,
-} from "./endpoints";
+} from "./core/endpoints";
 export {
   CANDLE_INTERVALS,
   CANDLE_TYPES,
@@ -29,7 +29,7 @@ export {
   usePerpsMarketStats,
   usePerpsMarkets,
   usePerpsTrades,
-} from "./extended";
+} from "./extended/index";
 export type {
   CandleInterval,
   CandleType,
@@ -41,7 +41,7 @@ export type {
   ExtendedOrderBook,
   ExtendedOrderBookLevel,
   ExtendedPublicTrade,
-} from "./extended";
+} from "./extended/index";
 export {
   formatCompactUsd,
   formatPct,
@@ -49,30 +49,30 @@ export {
   formatSignedUsd,
   formatTokenAmount,
   formatUsd,
-} from "./format";
+} from "./core/format";
 export {
   readFollowedAssets,
   toggleFollowedAsset,
   useFollowedAssets,
-} from "./follows";
-export type { FollowedAsset } from "./follows";
-export { KNOWN_TOKENS, type KnownToken } from "./knownTokens";
-export { useAsyncResource } from "./useAsyncResource";
-export { useBalances } from "./useBalances";
-export { toAvnuCandles, useCandles } from "./useCandles";
-export { usePortfolio, type UsePortfolioResult } from "./usePortfolio";
-export { usePrices } from "./usePrices";
+} from "./social/follows";
+export type { FollowedAsset } from "./social/follows";
+export { KNOWN_TOKENS, type KnownToken } from "./market/knownTokens";
+export { useAsyncResource } from "./core/useAsyncResource";
+export { useBalances } from "./market/useBalances";
+export { toAvnuCandles, useCandles } from "./market/useCandles";
+export { usePortfolio, type UsePortfolioResult } from "./market/usePortfolio";
+export { usePrices } from "./market/usePrices";
 export {
   fetchTokenTrades,
   parseEkuboTokenTrades,
   useTokenTrades,
-} from "./useTokenTrades";
+} from "./market/useTokenTrades";
 export {
   fetchWalletActivity,
   parseWalletActivity,
   useChainPulse,
   useWalletActivity,
-} from "./starkscan";
+} from "./activity/starkscan";
 export type {
   ChainBlock,
   ChainEvent,
@@ -80,8 +80,8 @@ export type {
   ChainPulse,
   ChainTransaction,
   WalletActivity,
-} from "./starkscan";
-export { useTokens } from "./useTokens";
+} from "./activity/starkscan";
+export { useTokens } from "./market/useTokens";
 export {
   fetchVesuMarkets,
   fetchVesuPositions,
@@ -99,7 +99,7 @@ export {
   useVesuRewards,
   useVesuVaults,
   vesuFixed,
-} from "./vesu";
+} from "./vesu/index";
 export type {
   VesuMarket,
   VesuMarketsData,
@@ -108,7 +108,7 @@ export type {
   VesuRewards,
   VesuRedeem,
   VesuVault,
-} from "./vesu";
+} from "./vesu/index";
 export type {
   Holding,
   PortfolioData,
@@ -118,4 +118,4 @@ export type {
   TokenBalance,
   TokenRow,
   TokenTrade,
-} from "./types";
+} from "./core/types";

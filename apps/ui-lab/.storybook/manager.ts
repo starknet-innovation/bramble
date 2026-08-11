@@ -1,6 +1,6 @@
+import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
 import { addons } from "storybook/manager-api";
 import { create } from "storybook/theming/create";
-import { darkSkin } from "../../../src/ui/dark-skin";
 
 const tokens = darkSkin.tokens;
 

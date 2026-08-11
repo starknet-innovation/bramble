@@ -4,13 +4,13 @@
  * the browser under test.
  */
 
-import { isServiceUrl } from "../../src/shared/service-url";
+import { isServiceUrl } from "@mc-wallet/core/service-url";
+import { parseTokenAmount } from "@mc-wallet/starknet/rpc";
 import {
   isNonZeroStarkFieldElement,
   isStarkPrivateKey,
   normalizeFeltInput,
-} from "../../src/starknet/networks";
-import { parseTokenAmount } from "../../src/starknet/rpc";
+} from "@mc-wallet/wallet-model/networks";
 
 const MAINNET_ACK = "I_UNDERSTAND_THIS_WRITES_TO_MAINNET";
 const PUBLIC_CALLER_ACK = "I_UNDERSTAND_THIS_LINKS_PRIVATE_ACTIONS";

@@ -9,7 +9,7 @@ several public APIs.
 ```bash
 bun install
 bun run dev        # UI-only Vite server on http://localhost:5273
-bun run dev:full   # Vercel dev server, including privacy gateway/functions
+bun run dev:full   # pinned on-demand Vercel dev server, including API functions
 bun run build      # tsc --noEmit && vite build
 bun run build:contract # rebuild + hash-check the OpenZeppelin Punk class
 bun run typecheck  # tsc --noEmit

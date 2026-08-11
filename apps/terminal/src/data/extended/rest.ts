@@ -17,7 +17,7 @@
  * `/info/markets/{market}/trades` as UNCONFIRMED); public trades are sourced from
  * the WS `publicTrades` stream instead — see `ws.ts` / `usePerpsTrades`.
  */
-import { getJson } from "../cache";
+import { getJson } from "../core/cache";
 import type { CandleInterval, CandleType } from "./config";
 import { restUrls } from "./config";
 import {

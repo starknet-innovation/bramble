@@ -18,9 +18,9 @@
     "skipLibCheck": false,
     "strict": true,
     "target": "ES2022",
-    "types": ["bun-types"],
+    "types": ["bun"],
     "useUnknownInCatchVariables": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["scripts/**/*.ts", "src/**/*.ts", "tests/**/*.ts"]
+  "include": ["apps/extension/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
 }

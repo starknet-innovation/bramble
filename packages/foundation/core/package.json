@@ -1,0 +1,20 @@
+{
+  "name": "@mc-wallet/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./errors": "./src/errors.ts",
+    "./html": "./src/html.ts",
+    "./ids": "./src/ids.ts",
+    "./json": "./src/json.ts",
+    "./network-error": "./src/network-error.ts",
+    "./origin": "./src/origin.ts",
+    "./service-url": "./src/service-url.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types && bun run test",
+    "check:types": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test ./tests"
+  }
+}

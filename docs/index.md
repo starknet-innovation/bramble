@@ -21,14 +21,16 @@ boundaries, release controls, and security posture.
   [runbook](https://github.com/starknet-innovation/mc-wallet/tree/main/apps/ui-lab) covers local
   setup, testing, static builds, review controls, and safety boundaries.
 - [Architecture and internals](architecture/) explains the runtime and data model.
+- [Modular architecture](modular-architecture/) defines the package boundaries, typed invariants,
+  target repository, migration sequence, and completion gates for the modular-monolith refactor.
 - [Wallet store architecture](wallet-store/) maps every persistent and session store, account
   scoping, Chrome update migration, and optional Ledger viewing-key custody.
 - [STRK20 privacy integration](strk20-privacy/) documents the pinned SDK, service contract,
   privileged data flow, failure boundaries, and deployment inputs.
 - [Security audit](security-audit/) tracks the directory-by-directory review of the current
   released baseline.
-- [Source package audit](security-audit/src-package-audit/) aggregates the completed review of all
-  12 immediate packages under `src/`.
+- [Source package audit](security-audit/src-package-audit/) preserves the completed review of the
+  pre-workspace source layout that formed the v0.9 audit baseline.
 - [v0.6 release audit](security-audit/releases/v0.6/) records the Ledger and multisig PR reviews,
   remediations, validation evidence, and residual third-party boundaries.
 - [v0.7 release assurance](security-audit/releases/v0.7/) records the NFT ownership, metadata,

@@ -3,7 +3,7 @@
  * tag, artifact, and changelog from drifting away from it (issue #59).
  *
  * The release version is defined once in `package.json` (`version`);
- * `public/manifest.json` mirrors it and `check-config-standards` /
+ * `apps/extension/public/manifest.json` mirrors it and `check-config-standards` /
  * `check-extension-manifest` already forbid the two from diverging. What was
  * missing — and why `v0.4.0` shipped as `mc-wallet-0.3.0.zip` — is a gate tying
  * the *tag* to that value. `evaluateRelease` is that gate: given the package and
@@ -12,7 +12,7 @@
  *
  * The exported functions are PURE (no I/O) so they can be unit tested without a
  * checkout or a git remote; only `main()` reads `package.json` /
- * `public/manifest.json` and writes `GITHUB_OUTPUT`.
+ * `apps/extension/public/manifest.json` and writes `GITHUB_OUTPUT`.
  */
 import { readFile } from "node:fs/promises";
 
@@ -86,12 +86,12 @@ export const resolveSingleSourceVersion = (
   }
   if (typeof manifestVersion !== "string" || !RELEASE_VERSION.test(manifestVersion)) {
     problems.push(
-      `public/manifest.json version must be X.Y.Z (got ${JSON.stringify(manifestVersion)})`,
+      `apps/extension/public/manifest.json version must be X.Y.Z (got ${JSON.stringify(manifestVersion)})`,
     );
   }
   if (problems.length === 0 && packageVersion !== manifestVersion) {
     problems.push(
-      `package.json (${String(packageVersion)}) and public/manifest.json (${String(manifestVersion)}) versions must match`,
+      `package.json (${String(packageVersion)}) and apps/extension/public/manifest.json (${String(manifestVersion)}) versions must match`,
     );
   }
   return problems.length === 0
@@ -125,7 +125,7 @@ export const evaluateRelease = (input: GateInput): ReleaseEvaluation => {
       kind = "release";
       if (branchVersion !== version) {
         problems.push(
-          `release branch ${input.headRef} implies version ${branchVersion} but package/manifest is ${version}; bump package.json and public/manifest.json to ${branchVersion} before promoting`,
+          `release branch ${input.headRef} implies version ${branchVersion} but package/manifest is ${version}; bump package.json and apps/extension/public/manifest.json to ${branchVersion} before promoting`,
         );
       }
     } else if (isHotfixBranch(input.headRef)) {
@@ -139,7 +139,7 @@ export const evaluateRelease = (input: GateInput): ReleaseEvaluation => {
       const hotfixTag = tagForVersion(version);
       if ((input.existingTags ?? []).includes(hotfixTag)) {
         problems.push(
-          `hotfix promotion ${input.headRef} resolves to ${version}, whose tag ${hotfixTag} already exists — the hotfix did not bump package.json/public/manifest.json; bump to a new version before promoting`,
+          `hotfix promotion ${input.headRef} resolves to ${version}, whose tag ${hotfixTag} already exists — the hotfix did not bump package.json/apps/extension/public/manifest.json; bump to a new version before promoting`,
         );
       } else {
         notes.push(`hotfix promotion ${input.headRef}: releasing package version ${version}`);
@@ -176,7 +176,7 @@ export const main = async (
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<number> => {
   const packageJson = await readJson("package.json");
-  const manifestJson = await readJson("public/manifest.json");
+  const manifestJson = await readJson("apps/extension/public/manifest.json");
   const evaluation = evaluateRelease({
     packageVersion: packageJson["version"],
     manifestVersion: manifestJson["version"],

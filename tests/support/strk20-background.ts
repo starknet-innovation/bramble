@@ -3,20 +3,17 @@
  * instrumented SDK calls, and helpers for held approval requests.
  */
 import { expect } from "bun:test";
-import { createMessageHandler } from "../../src/background/messages";
-import { unavailablePreferencesStore } from "../../src/background/runtime-state";
-import type { RuntimeSender } from "../../src/background/senders";
-import { createUnlockSession } from "../../src/background/session";
-import { WalletError } from "../../src/shared/errors";
-import type { InvokeInput } from "../../src/starknet/rpc";
-import { STRK20_NOT_REGISTERED, type Strk20Service } from "../../src/starknet/strk20/service";
-import type { ActivityLog } from "../../src/storage/activity-store";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-} from "../../src/storage/preferences-store";
-import type { AccountRef } from "../../src/storage/vault-schema";
-import { LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE } from "../../src/wallet/strk20-viewing-key";
+import { WalletError } from "@mc-wallet/core/errors";
+import { STRK20_NOT_REGISTERED, type Strk20Service } from "@mc-wallet/privacy/service";
+import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
+import type { InvokeInput } from "@mc-wallet/starknet/rpc";
+import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import { LEDGER_STRK20_VIEWING_KEY_UNAVAILABLE } from "@mc-wallet/vault/strk20-viewing-key";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
+import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import {
   contentSender,
   createWallet,

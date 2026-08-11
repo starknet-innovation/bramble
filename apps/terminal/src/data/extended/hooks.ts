@@ -9,8 +9,8 @@
  * uses.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Resource } from "../types";
-import { useAsyncResource } from "../useAsyncResource";
+import type { Resource } from "../core/types";
+import { useAsyncResource } from "../core/useAsyncResource";
 import type { CandleInterval, CandleType } from "./config";
 import { wsUrls } from "./config";
 import { parseCandles, parseFundingRate, parsePublicTrades } from "./parse";

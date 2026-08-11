@@ -1,0 +1,19 @@
+{
+  "name": "@mc-wallet/testkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./fake-kms": "./src/fake-kms.ts",
+    "./ledger-management": "./src/ledger-management.ts",
+    "./sidepanel": "./src/sidepanel.ts"
+  },
+  "scripts": {
+    "check": "bun run check:types",
+    "check:types": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mc-wallet/settings": "workspace:*",
+    "@mc-wallet/wallet-model": "workspace:*"
+  }
+}

@@ -70,12 +70,23 @@
   "overrides": [
     {
       "includes": [
-        "src/wallet/**",
-        "src/background/**",
-        "src/starknet/**",
-        "src/storage/**",
-        "src/shared/**",
-        "src/provider/**"
+        "apps/extension/src/background/**",
+        "apps/extension/src/provider/**",
+        "packages/foundation/core/src/**",
+        "packages/foundation/wallet-model/src/**",
+        "packages/foundation/wallet-protocol/src/**",
+        "packages/platform/store/src/**",
+        "packages/platform/vault/src/**",
+        "packages/platform/kms-krusty/src/**",
+        "packages/platform/ledger-browser/src/**",
+        "packages/platform/ledger-protocol/src/**",
+        "packages/platform/starknet/src/**",
+        "packages/features/privacy/src/**",
+        "packages/features/multisig/src/**",
+        "packages/features/portfolio/src/**",
+        "packages/features/permissions/src/**",
+        "packages/features/transactions/src/**",
+        "packages/features/settings/src/**"
       ],
       "linter": {
         "rules": {

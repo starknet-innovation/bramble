@@ -18,7 +18,7 @@ listing. Two paths exist and share the same packaged bytes:
 
 Both automated paths share one heavy pipeline (`release-build.yml`) and one
 **single-source version gate**: the tag must equal the `package.json` /
-`public/manifest.json` version, or the release fails before any artifact is
+`apps/extension/public/manifest.json` version, or the release fails before any artifact is
 built (`bun run check:release-version`). Source and dependencies execute on the
 self-hosted builder with read-only repository permission; a fresh hosted job
 receives the narrow write permission needed to publish inert release artifacts.
@@ -42,7 +42,7 @@ step relies on.
    explicitly deferred to a later milestone; the release's acceptance criteria
    are met; no unresolved release-blocking regressions remain (check the
    `Nightly: release/vX.Y — failing checks` tracking issue, if any).
-2. **Version metadata.** Bump `package.json` **and** `public/manifest.json` to
+2. **Version metadata.** Bump `package.json` **and** `apps/extension/public/manifest.json` to
    `X.Y.0` in lockstep (section 1) and run the single-source guard.
 3. **Gates green.** Required PR CI is green on the release-branch tip; the
    nightly / full suite (E2E, dependency audit, build — `.github/workflows/nightly.yml`)
@@ -76,7 +76,7 @@ older release branch. See DEVELOPMENT.md → "Hotfixes & backports".
 ## 1. Versioning and bump
 
 The release version has **one source of truth**: `package.json` → `version`.
-`public/manifest.json` → `version` mirrors it, and three gates forbid drift
+`apps/extension/public/manifest.json` → `version` mirrors it, and three gates forbid drift
 (issue #59):
 
 - `scripts/check-config-standards.ts` and `scripts/check-extension-manifest.ts`
@@ -215,7 +215,7 @@ Required before review will pass:
 - **Data-usage** disclosures (what is collected, how it is used/shared).
 - **Permissions justification** for every requested permission and host
   permission. For this MV3 Starknet wallet, expect to justify the RPC/host
-  permissions in `public/manifest.json` (Starknet Foundation RPC, CoinGecko,
+  permissions in `apps/extension/public/manifest.json` (Starknet Foundation RPC, CoinGecko,
   and the local devnet hosts), the `alarms` permission that schedules background
   transaction reconciliation, and side-panel/storage usage. Vague or missing
   justifications are the most common rejection reason.

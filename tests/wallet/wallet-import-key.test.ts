@@ -4,14 +4,14 @@
  * is routed to the encrypted vault (never plaintext, never echoed).
  */
 import { describe, expect, test } from "bun:test";
-import { readImportAccountInput } from "../../src/background/import-inputs";
-import { createEncryptedStore } from "../../src/storage/encrypted-store";
-import { createMemoryStore } from "../../src/storage/kv";
-import type { AccountRef } from "../../src/storage/vault-schema";
-import { isAccountRef } from "../../src/storage/vault-schema";
-import { deriveImportedAccount, nextAccountIndex, sameWalletKey } from "../../src/wallet/accounts";
-import { createWalletVaultService } from "../../src/wallet/vault-service";
-import { fakeKms } from "../support/fake-kms";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import { fakeKms } from "@mc-wallet/testkit/fake-kms";
+import { deriveImportedAccount, nextAccountIndex, sameWalletKey } from "@mc-wallet/vault/accounts";
+import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
+import { createWalletVaultService } from "@mc-wallet/vault/service";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { readImportAccountInput } from "../../apps/extension/src/background/accounts/import-inputs";
 
 const vaultKey = "mc-wallet:vault";
 const migrationKey = "mc-wallet:vault-migration";

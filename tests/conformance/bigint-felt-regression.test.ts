@@ -12,8 +12,8 @@ import {
   readProviderRequestArguments,
   toRuntimeMessage,
   walletRpcException,
-} from "../../src/provider/bridge";
-import { invalidRequestPayload } from "../../src/shared/rpc-errors";
+} from "@mc-wallet/wallet-protocol/bridge";
+import { invalidRequestPayload } from "@mc-wallet/wallet-protocol/rpc-errors";
 import { TOKEN } from "./spec-fixtures";
 import { ORIGIN, REQUEST_ID } from "./wallet-rpc-spec";
 

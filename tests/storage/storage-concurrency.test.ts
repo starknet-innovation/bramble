@@ -4,16 +4,16 @@
  * background events cannot silently overwrite one another.
  */
 import { describe, expect, test } from "bun:test";
-import { createActivityLog } from "../../src/storage/activity-store";
-import { createAllowanceStore } from "../../src/storage/allowance-store";
-import { createMemoryStore } from "../../src/storage/kv";
 import {
   createMultisigStore,
   type MultisigRecord,
   multisigId,
-} from "../../src/storage/multisig-store";
-import { createOriginHistoryStore } from "../../src/storage/origin-history";
-import { createPreferencesStore } from "../../src/storage/preferences-store";
+} from "@mc-wallet/multisig/repository";
+import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
+import { createActivityLog } from "@mc-wallet/transactions/activity";
+import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";

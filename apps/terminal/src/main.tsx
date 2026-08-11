@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { WalletProvider } from "./wallet/WalletProvider";
+import { WalletProvider } from "./wallet/connection/WalletProvider";
 import "./styles/theme.css";
 import "./styles/perps-workspace.css";
 import "./styles/swap.css";

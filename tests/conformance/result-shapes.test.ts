@@ -6,7 +6,7 @@
  * arrays carry the right member shape, booleans are literal `true`).
  */
 import { describe, expect, test } from "bun:test";
-import { toProviderPayload } from "../../src/provider/bridge";
+import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
 import { SPEC_METHODS } from "./wallet-rpc-spec";
 
 describe("wallet_rpc result shapes", () => {

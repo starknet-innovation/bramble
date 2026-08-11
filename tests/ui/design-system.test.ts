@@ -6,20 +6,20 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { UI_COMPONENTS, UI_FOUNDATIONS } from "@mc-wallet/ui-kit/catalog";
+import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
+import { button, iconButton } from "@mc-wallet/ui-kit/controls";
+import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
+import { selectField, textField } from "@mc-wallet/ui-kit/fields";
+import { uiAttributes } from "@mc-wallet/ui-kit/html-attributes";
+import { ICON_NAMES } from "@mc-wallet/ui-kit/icons";
+import type { WalletStatus } from "@mc-wallet/wallet-ui/lab";
+import { onboarding } from "@mc-wallet/wallet-ui/lab";
 import {
   COMPONENT_STORY_COVERAGE,
   FOUNDATION_STORY_COVERAGE,
-} from "../../apps/ui-lab/src/catalog-coverage";
-import { LAB_STYLES } from "../../apps/ui-lab/src/lab-styles";
-import type { WalletStatus } from "../../src/popup/responses";
-import { onboarding } from "../../src/sidepanel/gate-views";
-import { UI_COMPONENTS, UI_FOUNDATIONS } from "../../src/ui/catalog";
-import { emptyState, pill, receipt } from "../../src/ui/content";
-import { button, iconButton } from "../../src/ui/controls";
-import { darkSkin } from "../../src/ui/dark-skin";
-import { selectField, textField } from "../../src/ui/fields";
-import { uiAttributes } from "../../src/ui/html-attributes";
-import { ICON_NAMES } from "../../src/ui/icons";
+} from "../../apps/ui-lab/src/runtime/catalog-coverage";
+import { LAB_STYLES } from "../../apps/ui-lab/src/runtime/lab-styles";
 
 const status: WalletStatus = {
   accountCount: 0,
@@ -122,7 +122,7 @@ describe("design system", () => {
   });
 
   test("keeps reusable primitive markup behind the production library", () => {
-    const root = join(import.meta.dir, "../../src/sidepanel");
+    const root = join(import.meta.dir, "../../packages/presentation/wallet-ui/src/sidepanel");
     const files = readdirSync(root, { encoding: "utf8", recursive: true }).filter((path) =>
       path.endsWith(".ts"),
     );
