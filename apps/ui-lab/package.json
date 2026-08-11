@@ -8,6 +8,7 @@
     "build": "storybook build",
     "check": "bun run check:types && bun run check:lint && bun run test",
     "check:lint": "biome check .",
+    "check:static": "bun run check:types && bun run check:lint",
     "check:types": "tsc --noEmit",
     "chromatic": "chromatic --exit-zero-on-changes --only-changed",
     "dev": "storybook dev -p 6006 --no-open",
