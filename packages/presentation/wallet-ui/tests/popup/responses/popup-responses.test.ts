@@ -14,6 +14,7 @@ import {
   isPreferencesResponse,
   isRevealSecretsResponse,
   isTransferResponse,
+  isValidateMnemonicResponse,
   isWalletStatus,
 } from "../../../src/popup/responses/responses";
 
@@ -154,6 +155,10 @@ describe("popup response validators", () => {
     expect(isGenerateMnemonicResponse({ mnemonic: "too short", ok: true })).toBe(false);
     expect(isGenerateMnemonicResponse({ mnemonic, ok: false })).toBe(false);
     expect(isGenerateMnemonicResponse({ debug: true, mnemonic, ok: true })).toBe(false);
+    expect(isValidateMnemonicResponse({ ok: true, valid: true })).toBe(true);
+    expect(isValidateMnemonicResponse({ ok: true, valid: false })).toBe(true);
+    expect(isValidateMnemonicResponse({ ok: true, valid: "yes" })).toBe(false);
+    expect(isValidateMnemonicResponse({ mnemonic, ok: true, valid: true })).toBe(false);
   });
 
   test("validates reveal-secrets responses", () => {

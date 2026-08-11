@@ -14,7 +14,7 @@ import { registerDom, unregisterDom } from "../../../support/groups-harness";
 beforeAll(registerDom);
 afterAll(unregisterDom);
 
-const MNEMONIC = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu";
+const MNEMONIC = "habit hope tip crystal because grunt nation idea electric witness alert like";
 const PASSPHRASE = "fixture vault passphrase";
 
 const status: WalletStatus = {
@@ -66,13 +66,16 @@ const activeStep = (root: ParentNode): string | undefined =>
     (step) => !step.hidden,
   )?.dataset["onboardingStep"];
 
-const mount = () => {
+const mount = (options?: {
+  readonly validateMnemonic?: (mnemonic: string) => Promise<boolean>;
+}) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
   const previews: Array<readonly [string, string]> = [];
   const creations: Array<readonly [string, string, string]> = [];
+  const validations: string[] = [];
   let renders = 0;
   const wallet = {
     createAccount(mnemonic: string, networkId: string, vaultPassphrase: string) {
@@ -85,6 +88,10 @@ const mount = () => {
       previews.push([mnemonic, networkId]);
       return Promise.resolve(account);
     },
+    validateMnemonic(mnemonic: string) {
+      validations.push(mnemonic);
+      return options?.validateMnemonic?.(mnemonic) ?? Promise.resolve(true);
+    },
   } as unknown as SidepanelWallet;
   bindOnboarding({
     app,
@@ -93,7 +100,7 @@ const mount = () => {
     },
     wallet,
   });
-  return { app, creations, previews, renders: () => renders };
+  return { app, creations, previews, renders: () => renders, validations };
 };
 
 describe("staged onboarding", () => {
@@ -109,7 +116,9 @@ describe("staged onboarding", () => {
     setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
     expect(flow.app.querySelector<HTMLButtonElement>("#recovery-continue")?.disabled).toBe(false);
     click(flow.app, "#recovery-continue");
+    await tick();
 
+    expect(flow.validations).toEqual([MNEMONIC]);
     expect(activeStep(flow.app)).toBe("password");
     setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
     setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
@@ -163,13 +172,44 @@ describe("staged onboarding", () => {
     click(flow.app, "#generated-continue");
 
     expect(activeStep(flow.app)).toBe("verify");
-    setValue(flow.app, 'input[name="verify-0"]', "gamma");
-    setValue(flow.app, 'input[name="verify-1"]', "eta");
-    setValue(flow.app, 'input[name="verify-2"]', "lambda");
+    setValue(flow.app, 'input[name="verify-0"]', "tip");
+    setValue(flow.app, 'input[name="verify-1"]', "nation");
+    setValue(flow.app, 'input[name="verify-2"]', "alert");
     expect(flow.app.querySelector<HTMLButtonElement>("#verify-continue")?.disabled).toBe(false);
     click(flow.app, "#verify-continue");
     expect(activeStep(flow.app)).toBe("password");
     expect(flow.creations).toEqual([]);
+  });
+
+  test("blocks Continue when a recovery word is not in the BIP39 list", async () => {
+    const flow = mount();
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    const words = MNEMONIC.split(" ");
+    words[0] = "notaword";
+    setValue(flow.app, 'input[name="import-word-0"]', words.join(" "));
+    expect(flow.app.querySelector<HTMLButtonElement>("#recovery-continue")?.disabled).toBe(true);
+    expect(
+      flow.app.querySelector('input[name="import-word-0"]')?.classList.contains("is-invalid"),
+    ).toBe(true);
+    expect(flow.app.querySelector("#recovery-result")?.textContent).toBe(
+      "Fix highlighted words before continuing.",
+    );
+    expect(flow.validations).toEqual([]);
+  });
+
+  test("keeps an invalid checksum phrase on the recovery step", async () => {
+    const flow = mount({ validateMnemonic: async () => false });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    await tick();
+    expect(activeStep(flow.app)).toBe("recovery");
+    expect(flow.app.querySelector("#recovery-result")?.textContent).toBe(
+      "This recovery phrase is not valid.",
+    );
+    expect(flow.validations).toEqual([MNEMONIC]);
   });
 
   test("keeps the Ledger route distinct and reversible", () => {

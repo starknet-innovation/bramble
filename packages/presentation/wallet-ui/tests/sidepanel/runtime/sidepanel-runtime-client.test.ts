@@ -212,6 +212,18 @@ describe("secret and mnemonic flows", () => {
     await expect(runtimeReturning({}).generateMnemonic()).rejects.toThrow("wallet unavailable");
   });
 
+  test("validateMnemonic returns the Krusty verdict and throws otherwise", async () => {
+    const { sent, wallet } = captureRuntime({ ok: true, valid: true });
+    await expect(wallet.validateMnemonic("seed words")).resolves.toBe(true);
+    expect(sent[0]).toEqual({ mnemonic: "seed words", type: "wallet.validateMnemonic" });
+    await expect(
+      runtimeReturning({ ok: true, valid: false }).validateMnemonic("bad"),
+    ).resolves.toBe(false);
+    await expect(runtimeReturning({}).validateMnemonic("seed")).rejects.toThrow(
+      "mnemonic validation unavailable",
+    );
+  });
+
   test("revealSecrets returns the whole reveal response and throws on failure", async () => {
     const { sent, wallet } = captureRuntime(revealSecretsResponse);
     expect(await wallet.revealSecrets("pass")).toEqual(revealSecretsResponse);

@@ -15,6 +15,8 @@ import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import { verifyBackupWords } from "./backup-verify";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
+import { bindRecoveryImportControls } from "./recovery-import-bind";
+import { bindRecoveryWordAssist } from "./recovery-word-assist";
 
 /**
  * Dependencies the onboarding binding closes over.
@@ -27,9 +29,10 @@ export type OnboardingUiDeps = {
 
 /**
  * Binds the staged first-run journey. Recovery material stays in this page and
- * is sent only to the privileged KMS-backed preview/create messages. Preview
- * returns public account metadata and writes nothing; creation remains the
- * final, explicitly confirmed step.
+ * is sent only to the privileged KMS-backed validate/preview/create messages.
+ * Import Continue asks Krusty to validate the phrase before the passphrase
+ * step; preview returns public account metadata and writes nothing; creation
+ * remains the final, explicitly confirmed step.
  */
 export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const { app, wallet } = deps;
@@ -148,15 +151,26 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     }
   };
 
+  const recoveryFields = form.querySelector<HTMLElement>(
+    '[data-onboarding-step="recovery"] .onboarding-fields',
+  );
+  const wordAssist = bindRecoveryWordAssist(importInputs, recoveryFields ?? form);
+
   const refreshRecovery = (): void => {
     const words = wordsFrom(importInputs, importWordCount);
+    const incomplete = words.some((word) => word.length === 0);
+    const unknown = !incomplete && !wordAssist.wordsKnown(importWordCount);
+    wordAssist.refreshWordValidity();
     if (recoveryContinue) {
-      recoveryContinue.disabled = words.some((word) => word.length === 0);
+      recoveryContinue.disabled = incomplete || unknown;
     }
     if (recoveryResult) {
-      recoveryResult.textContent =
-        words.some((word) => word.length === 0) && words.some((word) => word.length > 0)
+      recoveryResult.textContent = incomplete
+        ? words.some((word) => word.length > 0)
           ? `Enter all ${importWordCount} words to continue.`
+          : ""
+        : unknown
+          ? "Fix highlighted words before continuing."
           : "";
     }
     previewMatchesInput = false;
@@ -248,37 +262,21 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     refreshRecovery();
   });
 
-  for (const [index, input] of importInputs.entries()) {
-    input.addEventListener("input", () => {
-      const pastedWords = input.value.trim().split(/\s+/).filter(Boolean);
-      if (pastedWords.length === 12 || pastedWords.length === 24) {
-        fillWords(importInputs, pastedWords, "import");
-      }
-      refreshRecovery();
-    });
-    input.addEventListener("keydown", (event) => {
-      if (event.key === " " && input.value.trim().length > 0) {
-        event.preventDefault();
-        importInputs[index + 1]?.focus();
-      } else if (event.key === "Backspace" && input.value.length === 0) {
-        importInputs[index - 1]?.focus();
-      }
-    });
-    input.addEventListener("paste", (event) => {
-      const words = event.clipboardData?.getData("text").trim().split(/\s+/).filter(Boolean) ?? [];
-      if (words.length !== 12 && words.length !== 24) {
-        return;
-      }
-      event.preventDefault();
-      fillWords(importInputs, words, "import");
-      refreshRecovery();
-    });
-  }
-
-  recoveryContinue?.addEventListener("click", () => {
-    mnemonic = importedMnemonic();
-    showStep("password");
-    refreshPassword();
+  bindRecoveryImportControls({
+    fillWords,
+    importInputs,
+    importWordCount: () => importWordCount,
+    importedMnemonic,
+    recoveryContinue,
+    recoveryResult,
+    refreshPassword,
+    refreshRecovery,
+    setMnemonic: (phrase) => {
+      mnemonic = phrase;
+    },
+    showPasswordStep: () => showStep("password"),
+    wallet,
+    wordAssist,
   });
 
   const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");

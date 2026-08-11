@@ -184,8 +184,8 @@ const methodStep = (): string => `
 const recoveryStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="recovery" hidden>
     ${flowBack("Back to wallet methods")}
-    ${stepHead("book", "Enter your recovery phrase", "Type each word, or paste the complete phrase into the first field.")}
-    <div class="onboarding-fields">
+    ${stepHead("book", "Enter your recovery phrase", "Type each word, or paste the complete phrase into the first field. Unknown words are flagged as you go.")}
+    <div class="onboarding-fields recovery-fields">
       <div class="recovery-grid" data-recovery-grid="import">${recoveryWordInputs("import")}</div>
       <button class="onboarding-inline-action" id="phrase-length-toggle" type="button">Use a 24-word phrase</button>
       <p id="recovery-result" role="status"></p>
