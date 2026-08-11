@@ -10,7 +10,7 @@ const SUGGESTION_LIMIT = 5;
 
 /**
  * Binds spell-check and completion UI onto the import recovery inputs.
- * Returns helpers the onboarding binder uses to refresh Continue gating.
+ * Returns helpers the onboarding binder uses for advisory word feedback.
  */
 export const bindRecoveryWordAssist = (
   inputs: readonly HTMLInputElement[],

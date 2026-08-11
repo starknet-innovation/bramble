@@ -85,16 +85,27 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     steps.find((step) => step.dataset["onboardingStep"] === id);
   const transitionStep = createOnboardingStepTransition(app, steps);
 
+  let invalidateValidation = (): void => {};
+  let refreshRecovery = (): void => {};
+
   const showStep = (id: string, direction: OnboardingDirection = "forward", push = true): void => {
     const next = stepFor(id);
     const current = steps.find((step) => !step.hidden);
     if (!next || current === next) {
       return;
     }
+    const wasRecovery = current?.dataset["onboardingStep"] === "recovery";
+    const nextIsRecovery = id === "recovery";
     if (push && history.at(-1) !== id) {
       history.push(id);
     }
     transitionStep(next, direction);
+    if (wasRecovery !== nextIsRecovery) {
+      invalidateValidation();
+      if (nextIsRecovery) {
+        refreshRecovery();
+      }
+    }
   };
 
   const goBack = (): void => {
@@ -122,7 +133,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   };
 
   const wordsFrom = (inputs: readonly HTMLInputElement[], count: number): readonly string[] =>
-    inputs.slice(0, count).map((input) => input.value.trim());
+    inputs.slice(0, count).map((input) => input.value.trim().toLowerCase());
 
   const importedMnemonic = (): string => wordsFrom(importInputs, importWordCount).join(" ").trim();
 
@@ -134,7 +145,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     const count: 12 | 24 = words.length > 12 ? 24 : 12;
     setWordCount(inputs, count, kind);
     for (const [index, input] of inputs.entries()) {
-      input.value = words[index] ?? "";
+      input.value = (words[index] ?? "").trim().toLowerCase();
     }
   };
 
@@ -156,7 +167,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   );
   const wordAssist = bindRecoveryWordAssist(importInputs, recoveryFields ?? form);
 
-  const refreshRecovery = (): void => {
+  refreshRecovery = (): void => {
     const words = wordsFrom(importInputs, importWordCount);
     const incomplete = words.some((word) => word.length === 0);
     const unknown = !incomplete && !wordAssist.wordsKnown(importWordCount);
@@ -260,13 +271,15 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   form.querySelector("#phrase-length-toggle")?.addEventListener("click", () => {
     setWordCount(importInputs, importWordCount === 12 ? 24 : 12, "import");
+    invalidateValidation();
     refreshRecovery();
   });
 
-  bindRecoveryImportControls({
+  ({ invalidateValidation } = bindRecoveryImportControls({
     fillWords,
     importInputs,
     importedMnemonic,
+    importWordCount: () => importWordCount,
     isRecoveryActive: () =>
       steps.find((step) => !step.hidden)?.dataset["onboardingStep"] === "recovery",
     recoveryContinue,
@@ -279,7 +292,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     showPasswordStep: () => showStep("password"),
     wallet,
     wordAssist,
-  });
+  }));
 
   const createNew = form.querySelector<HTMLButtonElement>("#create-new-button");
   createNew?.addEventListener("click", () => {

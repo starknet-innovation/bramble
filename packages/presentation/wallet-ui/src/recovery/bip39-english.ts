@@ -4,6 +4,8 @@
  * Membership and prefix suggestions help catch typos while typing. Full phrase
  * checksum validation remains Krusty-only via wallet.validateMnemonic — this
  * module never validates a mnemonic and never substitutes for KMS crypto.
+ * Callers should send Krusty the canonical lowercase BIP39 spelling; this
+ * helper lowercases only for local membership checks.
  */
 
 const BIP39_ENGLISH_WORDS =

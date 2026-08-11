@@ -58,6 +58,7 @@ const recoveryWordInputs = (kind: "generated" | "import"): string =>
         hidden: index >= 12,
       },
       autocomplete: "off",
+      autocapitalize: "off",
       className: "recovery-word",
       inputmode: "text",
       name: `${kind}-word-${index}`,

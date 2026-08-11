@@ -44,6 +44,7 @@ export type InputControlProps = {
   readonly ariaLabel: string;
   readonly attributes?: UiAttributes;
   readonly autocomplete?: string;
+  readonly autocapitalize?: "none" | "off";
   readonly className?: string;
   readonly disabled?: boolean;
   readonly inputmode?: "decimal" | "numeric" | "text";
@@ -63,6 +64,7 @@ export const inputControl = ({
   ariaLabel,
   attributes,
   autocomplete,
+  autocapitalize,
   className,
   disabled = false,
   inputmode,
@@ -74,7 +76,7 @@ export const inputControl = ({
   type = "text",
   value,
 }: InputControlProps): string =>
-  `<input${className ? ` class="${uiClassNames(className)}"` : ""}${name ? ` name="${escapeHtml(name)}"` : ""} type="${type}" aria-label="${escapeHtml(ariaLabel)}"${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${readonly ? " readonly" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />`;
+  `<input${className ? ` class="${uiClassNames(className)}"` : ""}${name ? ` name="${escapeHtml(name)}"` : ""} type="${type}" aria-label="${escapeHtml(ariaLabel)}"${autocomplete ? ` autocomplete="${escapeHtml(autocomplete)}"` : ""}${autocapitalize ? ` autocapitalize="${autocapitalize}"` : ""}${inputmode ? ` inputmode="${inputmode}"` : ""}${maxlength === undefined ? "" : ` maxlength="${maxlength}"`}${placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : ""}${spellcheck === undefined ? "" : ` spellcheck="${spellcheck}"`}${value === undefined ? "" : ` value="${escapeHtml(value)}"`}${readonly ? " readonly" : ""}${disabled ? " disabled" : ""}${uiAttributes(attributes)} />`;
 
 /**
  * Renders an escaped single-line field. Browser capability attributes are

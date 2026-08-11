@@ -222,6 +222,65 @@ describe("staged onboarding", () => {
     expect(flow.validations).toEqual([MNEMONIC]);
   });
 
+  test("discards a stale validation after the phrase length changes", async () => {
+    let release: ((valid: boolean) => void) | undefined;
+    const flow = mount({
+      validateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    click(flow.app, "#phrase-length-toggle");
+    release?.(true);
+    await tick();
+    expect(activeStep(flow.app)).toBe("recovery");
+    expect(flow.app.querySelector<HTMLButtonElement>("#recovery-continue")?.disabled).toBe(true);
+    expect(flow.validations).toEqual([MNEMONIC]);
+  });
+
+  test("discards a stale validation after leaving and re-entering recovery", async () => {
+    let release: ((valid: boolean) => void) | undefined;
+    const flow = mount({
+      validateMnemonic: () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    });
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    click(flow.app, '[data-onboarding-step="recovery"] [data-onboarding-back]');
+    expect(activeStep(flow.app)).toBe("method");
+    click(flow.app, "#recovery-method-button");
+    expect(activeStep(flow.app)).toBe("recovery");
+    release?.(true);
+    await tick();
+    expect(activeStep(flow.app)).toBe("recovery");
+    expect(flow.validations).toEqual([MNEMONIC]);
+  });
+
+  test("normalizes capitalized recovery words before Krusty validation", async () => {
+    const flow = mount();
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    const capitalized = MNEMONIC.split(" ")
+      .map((word) => word[0]?.toUpperCase() + word.slice(1))
+      .join(" ");
+    setValue(flow.app, 'input[name="import-word-0"]', capitalized);
+    expect(
+      flow.app.querySelector('input[name="import-word-0"]')?.getAttribute("autocapitalize"),
+    ).toBe("off");
+    click(flow.app, "#recovery-continue");
+    await tick();
+    expect(flow.validations).toEqual([MNEMONIC]);
+    expect(activeStep(flow.app)).toBe("password");
+  });
+
   test("keeps an invalid checksum phrase on the recovery step", async () => {
     const flow = mount({ validateMnemonic: async () => false });
     click(flow.app, "#add-existing-button");
