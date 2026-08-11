@@ -22,14 +22,14 @@ import {
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { account, preferences } from "@mc-wallet/testkit/sidepanel";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { WalletStatus } from "../../src/popup/responses";
-import { accountDrawer } from "../../src/sidepanel/account-drawer";
-import { accountFlow } from "../../src/sidepanel/flows";
-import { healTransientGroupState } from "../../src/sidepanel/group-state";
-import type { GroupControlDeps } from "../../src/sidepanel/group-ui";
-import { bindGroupControls } from "../../src/sidepanel/group-ui";
-import type { HomeUiDeps } from "../../src/sidepanel/home-ui";
-import { bindHomeUi } from "../../src/sidepanel/home-ui";
+import type { WalletStatus } from "../../src/popup/responses/responses";
+import { accountFlow } from "../../src/sidepanel/app/screens/flows";
+import type { HomeUiDeps } from "../../src/sidepanel/journeys/portfolio/home-ui";
+import { bindHomeUi } from "../../src/sidepanel/journeys/portfolio/home-ui";
+import { healTransientGroupState } from "../../src/sidepanel/journeys/settings/group-state";
+import type { GroupControlDeps } from "../../src/sidepanel/journeys/settings/group-ui";
+import { bindGroupControls } from "../../src/sidepanel/journeys/settings/group-ui";
+import { accountDrawer } from "../../src/sidepanel/shell/account-drawer";
 
 // Minimal WAAPI + matchMedia so the toast/motion helpers run under happy-dom
 // (which ships neither): reduced motion routes through a no-op cut-to-final.

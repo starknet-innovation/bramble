@@ -3,7 +3,7 @@
  * Used by tests that exercise dispatch-layer behavior (privilege gating,
  * message-shape rejection) without any vault behind it.
  */
-import { createMessageHandler } from "../../apps/extension/src/background/messages";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 
 const unavailableVaultStatus = () => ({
   accountCount: 0,

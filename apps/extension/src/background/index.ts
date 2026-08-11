@@ -28,7 +28,6 @@ import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history"
 import {
   type ApprovalSurfacePreference,
   createPreferencesStore,
-  type WalletPreferences,
 } from "@mc-wallet/settings/preferences";
 import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
 import {
@@ -36,22 +35,23 @@ import {
   VAULT_STORE_KEY,
 } from "@mc-wallet/vault/store-migration";
 import { createWalletVaultService } from "@mc-wallet/vault/service";
-import { setApprovalNotifier } from "./approval-notifier";
+import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
   type ApprovalSurfaceBrowser,
   configureApprovalSurface,
   requestApprovalSurface,
-} from "./approval-surface";
-import { createApprovalQueue } from "./approvals";
-import { walletEventBroadcasts } from "./events";
-import { createMessageHandler } from "./messages";
-import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboarding-surface";
-import { defaultRuntimeRpc } from "./runtime-rpc";
-import { createActiveStateCoordinator, reconcileUnlockedActiveAccount } from "./runtime-state";
-import type { RuntimeSender } from "./senders";
-import { createUnlockSession, type UnlockSessionStore } from "./session";
-import { type AlarmsApi, startTransactionMonitor } from "./tx-monitor";
-import { createWalletReader } from "./wallet-reader";
+} from "./approvals/approval-surface";
+import { createApprovalQueue } from "./approvals/approvals";
+import { walletEventBroadcasts } from "./runtime/events";
+import { createMessageHandler } from "./routing/messages";
+import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboarding/onboarding-surface";
+import { defaultRuntimeRpc } from "./runtime/runtime-rpc";
+import { createActiveStateCoordinator, reconcileUnlockedActiveAccount } from "./runtime/runtime-state";
+import type { RuntimeSender } from "./routing/senders";
+import { createUnlockSession, type UnlockSessionStore } from "./runtime/session";
+import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
+import { createWalletReader } from "./accounts/wallet-reader";
+import { createBackgroundPreferences } from "./settings/preferences-adapter";
 
 type RuntimeApi = {
   readonly getURL?: (path: string) => string;
@@ -156,18 +156,15 @@ const wallet = vaultStores
 const preferences = storageReady
   .then(() => createPreferencesStore({ store: createBrowserLocalStore() }))
   .catch(() => null);
+const preferenceStore = createBackgroundPreferences({
+  onApprovalSurface: updateApprovalSurface,
+  store: preferences,
+});
 void preferences
   .then(async (store) => {
     updateApprovalSurface((await store?.read())?.approvalSurface ?? "side-panel");
   })
   .catch(() => undefined);
-const readPreferences = async (): Promise<WalletPreferences> => {
-  const store = await preferences;
-  if (!store) {
-    throw new Error("preferences unavailable");
-  }
-  return store.read();
-};
 const activityLog = (() => {
   try {
     return createActivityLog({ store: createBrowserLocalStore() });
@@ -270,155 +267,7 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   activeStateCoordinator,
   approvals,
   session,
-  preferencesStore: {
-    async addCustomNetwork(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.addCustomNetwork(input);
-    },
-    async addNft(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.addNft(input);
-    },
-    async createGroup(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.createGroup(input);
-    },
-    async importPreferences(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      const next = await store.importPreferences(input);
-      updateApprovalSurface(next.approvalSurface ?? "side-panel");
-      return next;
-    },
-    read: readPreferences,
-    async removeAddress(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.removeAddress(input);
-    },
-    async removeGroup(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.removeGroup(input);
-    },
-    async removeNft(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.removeNft(input);
-    },
-    async renameGroup(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.renameGroup(input);
-    },
-    async setAccountInGroup(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setAccountInGroup(input);
-    },
-    async setGroupIcon(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setGroupIcon(input);
-    },
-    async setNftIndexerUrl(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setNftIndexerUrl(input);
-    },
-    async setNftSpam(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setNftSpam(input);
-    },
-    async setAccountLabel(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setAccountLabel(input);
-    },
-    async setDisplay(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      const next = await store.setDisplay(input);
-      if (input.approvalSurface !== undefined) {
-        updateApprovalSurface(input.approvalSurface);
-      }
-      return next;
-    },
-    async saveAddress(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.saveAddress(input);
-    },
-    async setActiveNetwork(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setActiveNetwork(input);
-    },
-    async setRpcOverride(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setRpcOverride(input);
-    },
-    async setStrk20NetworkConfig(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setStrk20NetworkConfig(input);
-    },
-    async setTokenHidden(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.setTokenHidden(input);
-    },
-    async upsertToken(input) {
-      const store = await preferences;
-      if (!store) {
-        throw new Error("preferences unavailable");
-      }
-      return store.upsertToken(input);
-    },
-  },
+  preferencesStore: preferenceStore,
   runtimeRpc,
   originGuard,
   ...(activityLog ? { activity: activityLog } : {}),
@@ -439,7 +288,7 @@ if (activityLog) {
     browser: extensionApi,
     deps: {
       activity: activityLog,
-      preferencesStore: { read: readPreferences },
+      preferencesStore: preferenceStore,
       runtimeRpc: defaultRuntimeRpc,
     },
     now: systemClock,

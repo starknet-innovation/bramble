@@ -6,7 +6,7 @@
  */
 
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { createSidepanelRuntime } from "../../src/sidepanel/runtime";
+import { createSidepanelRuntime } from "../../src/sidepanel/runtime/runtime";
 
 export const APPROVAL_ID = "123e4567-e89b-42d3-a456-426614174000";
 const ON_CHAIN = "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3";

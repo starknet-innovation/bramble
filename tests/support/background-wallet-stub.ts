@@ -16,7 +16,7 @@ import type {
   WalletStatus,
 } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /**
  * Single stub account used by the dispatcher suites.

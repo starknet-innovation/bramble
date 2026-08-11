@@ -17,7 +17,7 @@ import type {
 } from "@mc-wallet/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import type { Strk20NetworkConfig } from "./config";
-import type { PaymasterAuthorizationReview } from "./paymaster-typed-data";
+import type { PaymasterAuthorizationReview } from "./paymaster/paymaster-typed-data";
 
 /**
  * Wallet-API NOT_REGISTERED (118).

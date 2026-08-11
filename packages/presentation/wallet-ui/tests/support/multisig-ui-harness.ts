@@ -3,7 +3,10 @@
  * detached app element and binds the real multisig UI handlers to it, so each
  * suite exercises the shipped bindings rather than a re-declared stub tree.
  */
-import { bindMultisigs, type MultisigUiDeps } from "../../src/sidepanel/multisig-ui";
+import {
+  bindMultisigs,
+  type MultisigUiDeps,
+} from "../../src/sidepanel/journeys/multisig/multisig-ui";
 
 /**
  * Mounts view HTML with the real multisig bindings attached. `overrides`

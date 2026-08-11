@@ -8,11 +8,11 @@ import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/setti
 import type { InvokeInput } from "@mc-wallet/starknet/rpc";
 import { memoryActivityLog } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { createApprovalQueue } from "../../apps/extension/src/background/approvals";
-import { createMessageHandler } from "../../apps/extension/src/background/messages";
-import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
-import type { RuntimeSender } from "../../apps/extension/src/background/senders";
-import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
+import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 
 export const invokeAccount: AccountRef = {

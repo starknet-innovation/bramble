@@ -1,4 +1,4 @@
-import { fetchJson, HttpError } from "../client";
+import { fetchJson, HttpError } from "../core/client";
 import { VESU_API_BASE } from "../../protocols/constants";
 import {
   parseVesuMarkets,

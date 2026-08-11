@@ -27,15 +27,16 @@ const BROWSER_GLOBAL_FILES = new Set([
   "apps/extension/src/ledger-grant/index.ts",
   "apps/extension/src/provider/inpage.ts",
   "apps/extension/src/sandbox/render.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/dom.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/focus-memo.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/activity-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/index.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/sync/lifecycle.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/activity-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
   "packages/platform/ledger-browser/src/grant-window.ts",
   "packages/platform/ledger-browser/src/transport.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/scene-renderer.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/settings-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/transfer-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/scene-renderer.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/settings-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-ui.ts",
   "apps/extension/src/browser-storage.ts",
 ]);
 const ENCRYPTED_STORE_WIRING_FILES = new Set([
@@ -43,7 +44,7 @@ const ENCRYPTED_STORE_WIRING_FILES = new Set([
   "packages/platform/vault/src/encrypted-store.ts",
 ]);
 const RANDOM_UUID_FILES = new Set([
-  "apps/extension/src/background/approvals.ts",
+  "apps/extension/src/background/approvals/approvals.ts",
   "apps/extension/src/provider/inpage.ts",
   "packages/platform/ledger-browser/src/grant-window.ts",
 ]);
@@ -52,91 +53,91 @@ const RAW_ERROR_BOUNDARY_FILES = new Set([
   "apps/extension/src/content/index.ts",
 ]);
 const SECRET_MATERIAL_FILES = new Set([
-  "apps/extension/src/background/account-hash-signer.ts",
-  "apps/extension/src/background/account-creation-inputs.ts",
+  "apps/extension/src/background/ledger/account-hash-signer.ts",
+  "apps/extension/src/background/accounts/account-creation-inputs.ts",
   // Keeps the unlocked vault credential inside the privileged worker while
   // coordinating fail-closed network/vault commits; never persists or emits it.
-  "apps/extension/src/background/active-network-mutation.ts",
-  "apps/extension/src/background/add-chain-ops.ts",
-  "apps/extension/src/background/approval-decisions.ts",
-  "apps/extension/src/background/chain-ops.ts",
-  "apps/extension/src/background/discovery-ops.ts",
-  "apps/extension/src/background/declare-ops.ts",
-  "apps/extension/src/background/import-inputs.ts",
-  "apps/extension/src/background/ledger-ops.ts",
-  "apps/extension/src/background/ledger-sign-queue.ts",
-  "apps/extension/src/background/ledger-signer.ts",
-  "apps/extension/src/background/signature-waiters.ts",
+  "apps/extension/src/background/runtime/active-network-mutation.ts",
+  "apps/extension/src/background/provider/add-chain-ops.ts",
+  "apps/extension/src/background/approvals/approval-decisions.ts",
+  "apps/extension/src/background/transactions/chain-ops.ts",
+  "apps/extension/src/background/portfolio/discovery-ops.ts",
+  "apps/extension/src/background/transactions/declare-ops.ts",
+  "apps/extension/src/background/accounts/import-inputs.ts",
+  "apps/extension/src/background/ledger/ledger-ops.ts",
+  "apps/extension/src/background/ledger/ledger-sign-queue.ts",
+  "apps/extension/src/background/ledger/ledger-signer.ts",
+  "apps/extension/src/background/approvals/signature-waiters.ts",
   "apps/extension/src/background/index.ts",
-  "apps/extension/src/background/message-inputs.ts",
+  "apps/extension/src/background/routing/message-inputs.ts",
   // Wires collaborators by name only. Its sole match is the `./signature-waiters`
   // import path; it holds no secret material and touches no key operations.
-  "apps/extension/src/background/message-context.ts",
-  "apps/extension/src/background/messages.ts",
-  "apps/extension/src/background/provider-ops.ts",
-  "apps/extension/src/background/origins-ops.ts",
-  "apps/extension/src/background/strk20-account-context.ts",
-  "apps/extension/src/background/strk20-ops.ts",
+  "apps/extension/src/background/routing/message-context.ts",
+  "apps/extension/src/background/routing/messages.ts",
+  "apps/extension/src/background/provider/provider-ops.ts",
+  "apps/extension/src/background/settings/origins-ops.ts",
+  "apps/extension/src/background/privacy/strk20-account-context.ts",
+  "apps/extension/src/background/privacy/strk20-ops.ts",
   // Active-account context split from strk20-wallet-ops; the vault passphrase
   // only transits into the protected signer wiring, never logged or stored.
-  "apps/extension/src/background/strk20-op-context.ts",
-  "apps/extension/src/background/strk20-wallet-ops.ts",
-  "apps/extension/src/background/runtime-state.ts",
-  "apps/extension/src/background/runtime-types.ts",
-  "apps/extension/src/background/session.ts",
+  "apps/extension/src/background/privacy/strk20-op-context.ts",
+  "apps/extension/src/background/privacy/strk20-wallet-ops.ts",
+  "apps/extension/src/background/runtime/runtime-state.ts",
+  "apps/extension/src/background/runtime/runtime-types.ts",
+  "apps/extension/src/background/runtime/session.ts",
   "packages/platform/ledger-protocol/src/broker.ts",
-  "apps/extension/src/background/unlock-errors.ts",
-  "apps/extension/src/background/wallet-ops.ts",
-  "apps/extension/src/background/wallet-reader.ts",
-  "apps/extension/src/background/ledger-inputs.ts",
+  "apps/extension/src/background/routing/unlock-errors.ts",
+  "apps/extension/src/background/accounts/wallet-ops.ts",
+  "apps/extension/src/background/accounts/wallet-reader.ts",
+  "apps/extension/src/background/ledger/ledger-inputs.ts",
   "packages/platform/kms-krusty/src/adapter.ts",
-  "packages/foundation/wallet-model/src/signing.ts",
+  "packages/foundation/wallet-model/src/accounts/signing.ts",
   // Pure length policy only; carries no passphrase value across a boundary.
-  "packages/foundation/wallet-model/src/passphrase.ts",
+  "packages/foundation/wallet-model/src/preferences/passphrase.ts",
   "packages/testing/testkit/src/fake-kms.ts",
-  "packages/presentation/wallet-ui/src/popup/responses.ts",
-  "packages/presentation/wallet-ui/src/popup/responses-ledger.ts",
-  "packages/foundation/wallet-protocol/src/results.ts",
-  "packages/foundation/wallet-protocol/src/bridge.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/dom.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/focus-memo.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/gate-views.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses.ts",
+  "packages/presentation/wallet-ui/src/popup/responses/responses-ledger.ts",
+  "packages/foundation/wallet-protocol/src/provider/results.ts",
+  "packages/foundation/wallet-protocol/src/provider/bridge.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/gate-views.ts",
   "packages/platform/ledger-protocol/src/client.ts",
   "packages/platform/ledger-protocol/src/errors.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/ledger/first-run.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/ledger/onboard-entry.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/ledger/runtime-client.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/ledger/sign-runtime.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/ledger/sign-session.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/ledger/sign-views.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/import-key-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/index.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/onboarding-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/onboarding-views.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/reveal-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/runtime.ts",
-  "packages/features/transactions/src/ledger-verify.ts",
-  "packages/platform/starknet/src/provider.ts",
-  "packages/platform/starknet/src/rpc.ts",
-  "packages/features/privacy/src/call-set-signer.ts",
-  "packages/features/privacy/src/official-sdk-service.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/first-run.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/onboard-entry.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/runtime-client.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-session.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/ledger/sign-views.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/import-key-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
+  "packages/features/transactions/src/routing/ledger-verify.ts",
+  "packages/platform/starknet/src/rpc/provider.ts",
+  "packages/platform/starknet/src/rpc/rpc.ts",
+  "packages/features/privacy/src/policy/call-set-signer.ts",
+  "packages/features/privacy/src/sdk/official-sdk-service.ts",
   // CallSet signing and viewing-key wiring extracted from official-sdk-service;
   // same Krusty-delegated boundary, no secret ever stored or logged here.
-  "packages/features/privacy/src/official-sdk-transfers.ts",
-  "packages/features/privacy/src/paymaster.ts",
+  "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
+  "packages/features/privacy/src/paymaster/paymaster.ts",
   "packages/features/privacy/src/service.ts",
-  "packages/platform/vault/src/account-secrets.ts",
+  "packages/platform/vault/src/accounts/account-secrets.ts",
   "packages/platform/vault/src/encrypted-store.ts",
   "packages/platform/vault/src/kms-port.ts",
-  "packages/platform/vault/src/migrations.ts",
-  "packages/platform/vault/src/schema.ts",
-  "packages/platform/vault/src/store-migration.ts",
-  "packages/platform/vault/src/accounts.ts",
-  "packages/platform/vault/src/strk20-viewing-key.ts",
-  "packages/platform/vault/src/network-account.ts",
-  "packages/platform/vault/src/reveal.ts",
-  "packages/platform/vault/src/service.ts",
-  "packages/platform/vault/src/service-types.ts",
+  "packages/platform/vault/src/schema/migrations.ts",
+  "packages/platform/vault/src/schema/schema.ts",
+  "packages/platform/vault/src/schema/store-migration.ts",
+  "packages/platform/vault/src/accounts/accounts.ts",
+  "packages/platform/vault/src/accounts/strk20-viewing-key.ts",
+  "packages/platform/vault/src/accounts/network-account.ts",
+  "packages/platform/vault/src/service/reveal.ts",
+  "packages/platform/vault/src/service/service.ts",
+  "packages/platform/vault/src/service/service-types.ts",
 ]);
 const SECRET_MATERIAL_PATTERN =
   /\b(?:accountSecrets|mnemonic|mnemonicPassphrase|passphrase|privateKey|seed|signature|signingKey|signingKeys|vaultPassphrase|viewingKey)\b/i;
@@ -165,21 +166,21 @@ const DYNAMIC_CODE_PATTERN =
   /\b(?:eval|importScripts)\s*\(|\bnew Function\b|\b(?:setTimeout|setInterval)\s*\(\s*["']|import\s*\(\s*["']https?:\/\//;
 const GITHUB_ACTION_REF_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/;
 const HTML_SINK_FILES = new Set([
-  "packages/presentation/wallet-ui/src/sidepanel/dom.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/focus-memo.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/index.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/tokens-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/transfer-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/shared/dom.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/focus-memo.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/start.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/tokens-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-ui.ts",
   // Send-screen rendering split out of transfer-ui.ts; the review panels it
   // writes come from the same escaped markup helpers that file used.
-  "packages/presentation/wallet-ui/src/sidepanel/transfer-render.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/send/transfer-render.ts",
   // Swap screen dynamic regions (chips, picker rows, receipts): every
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
-  "packages/presentation/wallet-ui/src/sidepanel/swap-ui.ts",
-  "packages/presentation/wallet-ui/src/sidepanel/swap-picker.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/swap/swap-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/swap/swap-picker.ts",
   // Shell replacement extracted from the sidepanel entrypoint; it receives
   // fully escaped production templates and owns no dynamic template content.
-  "packages/presentation/wallet-ui/src/sidepanel/scene-renderer.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/app/rendering/scene-renderer.ts",
   // Collectible animation renderer: document.write of the untrusted on-chain
   // data:text/html, confined by the manifest sandbox page's isolated security
   // principal and egress-blocking CSP (never executed in a privileged page) —
@@ -190,8 +191,8 @@ const HTML_SINK_PATTERN =
   /\b(?:createContextualFragment|document\.write|innerHTML|insertAdjacentHTML|outerHTML|srcdoc)\b/;
 const VAULT_SERVICE_WIRING_FILES = new Set([
   "apps/extension/src/background/index.ts",
-  "packages/platform/vault/src/store-migration.ts",
-  "packages/platform/vault/src/service.ts",
+  "packages/platform/vault/src/schema/store-migration.ts",
+  "packages/platform/vault/src/service/service.ts",
 ]);
 
 const failures: string[] = [];
@@ -323,9 +324,9 @@ for (const file of await walk(".")) {
 
   if (
     isProductionTypeScript(file) &&
-    file !== "apps/extension/src/background/session.ts" &&
-    file !== "packages/features/portfolio/src/prices.ts" &&
-    file !== "packages/features/transactions/src/activity.ts" &&
+    file !== "apps/extension/src/background/runtime/session.ts" &&
+    file !== "packages/features/portfolio/src/tokens/prices.ts" &&
+    file !== "packages/features/transactions/src/activity/activity.ts" &&
     file !== "packages/features/permissions/src/phishing-feed.ts" &&
     /\bDate\.now\(/.test(text)
   ) {

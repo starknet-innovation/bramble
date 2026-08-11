@@ -5,17 +5,17 @@
  */
 import { X } from "lucide-react";
 import { type ComponentType, type ReactNode, useState } from "react";
-import Discover from "./screens/Discover";
-import NftStudio from "./screens/NftStudio";
-import Lending from "./screens/Lending";
-import Perps from "./screens/Perps";
-import Portfolio from "./screens/Portfolio";
-import Privacy from "./screens/Privacy";
-import Tokens from "./screens/Tokens";
+import Discover from "./screens/discover/Discover";
+import NftStudio from "./screens/nft/NftStudio";
+import Lending from "./screens/lending/Lending";
+import Perps from "./screens/perps/Perps";
+import Portfolio from "./screens/portfolio/Portfolio";
+import Privacy from "./screens/privacy/Privacy";
+import Tokens from "./screens/tokens/Tokens";
 import { BottomBar } from "./shell/BottomBar";
 import { type ScreenId, screenFromHash } from "./shell/screens";
 import { TopNav } from "./shell/TopNav";
-import { useWallet } from "./wallet/WalletProvider";
+import { useWallet } from "./wallet/connection/WalletProvider";
 
 type ScreenProps = { readonly onNavigate: (screen: ScreenId) => void };
 

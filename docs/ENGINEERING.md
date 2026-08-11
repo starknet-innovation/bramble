@@ -27,8 +27,8 @@ Read these in order before your first change:
 4. **[docs/ARCHITECTURE.md](../architecture/)** — the deep tour: trust
    boundaries, the pinned account/multisig class hashes, the dApp provider
    surface, storage migrations, and the design system.
-5. **[docs/MODULAR_ARCHITECTURE.md](../modular-architecture/)** — the target
-   package graph, typed invariants, migration order, and enforcement gates.
+5. **[docs/MODULAR_ARCHITECTURE.md](../modular-architecture/)** — the implemented
+   package graph, internal capability layout, typed invariants, and enforcement gates.
 6. **[DEVELOPMENT.md](https://github.com/starknet-innovation/mc-wallet/blob/main/DEVELOPMENT.md)** — day-to-day developer workflow.
 7. **[docs/security-audit/](../security-audit/)** — threat model, methodology,
    findings, and the directory-by-directory reviews.
@@ -110,7 +110,7 @@ Key invariants (see `docs/ARCHITECTURE.md` §dApp Provider and `AGENTS.md`):
 - The page never talks to the background directly; it sees only
   `window.starknet_mcWallet`. Provider and content entrypoints remain on the untrusted side.
 - The dapp-reachable method set is the enforced-derived `DAPP_MESSAGES` allowlist
-  in `apps/extension/src/background/senders.ts`; a new dapp-facing method must be added there
+  in `apps/extension/src/background/routing/senders.ts`; a new dapp-facing method must be added there
   deliberately.
 - Krusty KMS owns all wallet crypto. If it is unavailable, the wallet fails
   closed — there is no local signing fallback.

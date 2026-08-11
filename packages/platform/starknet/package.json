@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./class-hash-verify": "./src/class-hash-verify.ts",
-    "./declare": "./src/declare.ts",
-    "./deployment": "./src/deployment.ts",
-    "./provider": "./src/provider.ts",
-    "./rpc": "./src/rpc.ts",
-    "./rpc-assets": "./src/rpc-assets.ts",
-    "./rpc-submit": "./src/rpc-submit.ts",
-    "./typed-data": "./src/typed-data.ts"
+    "./class-hash-verify": "./src/transactions/class-hash-verify.ts",
+    "./declare": "./src/transactions/declare.ts",
+    "./deployment": "./src/transactions/deployment.ts",
+    "./provider": "./src/rpc/provider.ts",
+    "./rpc": "./src/rpc/rpc.ts",
+    "./rpc-assets": "./src/rpc/rpc-assets.ts",
+    "./rpc-submit": "./src/rpc/rpc-submit.ts",
+    "./typed-data": "./src/transactions/typed-data.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

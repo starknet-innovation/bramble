@@ -2,7 +2,7 @@
  * Shared side-panel helpers for extension E2E tests.
  */
 
-import { BACKUP_VERIFY_POSITIONS } from "@mc-wallet/wallet-ui/sidepanel/backup-verify";
+import { BACKUP_VERIFY_POSITIONS } from "@mc-wallet/wallet-ui/lab";
 import type { Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 

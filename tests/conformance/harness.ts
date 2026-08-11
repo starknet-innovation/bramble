@@ -10,11 +10,11 @@
 import type { Strk20Service } from "@mc-wallet/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { WalletStatus } from "@mc-wallet/vault/service";
-import { createMessageHandler } from "../../apps/extension/src/background/messages";
-import type { RuntimeRpc } from "../../apps/extension/src/background/runtime-rpc";
-import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
-import type { RuntimeSender } from "../../apps/extension/src/background/senders";
-import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import type { RuntimeRpc } from "../../apps/extension/src/background/runtime/runtime-rpc";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
+import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { ACCOUNT, CALL_AND_PROOF, ORIGIN } from "./spec-fixtures";
 
 /** Extension id every harness sender claims. */

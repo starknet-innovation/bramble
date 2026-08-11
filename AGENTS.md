@@ -58,7 +58,7 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 - Dynamic text renders via `textContent` or `escapeHtml`; string-HTML sinks only in audited files.
 - Extension messages are untrusted: validate type, origin, and capability in the background.
 - UI reads state only through permissioned stores, never raw browser storage; styling only through
-  skin/scale tokens (`packages/presentation/ui-kit/src/skin.ts` and `tokens.ts`), no hard-coded
+  skin/scale tokens (`packages/presentation/ui-kit/src/theme/skin.ts` and `tokens.ts`), no hard-coded
   colors.
 - Exported APIs need doc comments explaining trust boundaries and failure behavior (checked).
 - New dependencies: pinned exact, justified in the PR, used immediately. Prefer zero.
@@ -71,9 +71,9 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 
 ## Schema migrations
 
-Vault schema is versioned (`CURRENT_SCHEMA_VERSION` in `packages/platform/vault/src/schema.ts`). To
+Vault schema is versioned (`CURRENT_SCHEMA_VERSION` in `packages/platform/vault/src/schema/schema.ts`). To
 change stored shape: bump the version, add exactly one adjacent step to `VAULT_MIGRATIONS` in
-`packages/platform/vault/src/migrations.ts`, update validators, and add tests for old, current, and
+`packages/platform/vault/src/schema/migrations.ts`, update validators, and add tests for old, current, and
 invalid data.
 Migrations must be deterministic. See README "Migration Workflow".
 
@@ -83,7 +83,7 @@ Migrations must be deterministic. See README "Migration Workflow".
   single-caller speculative abstractions. Explicit return types at exported boundaries.
 - Tests document invariants — when changing storage, permissions, signing paths, or migrations,
   the corresponding test file must change too (e.g.
-  `tests/background/key-boundary.test.ts` sanctions every path that may expose secret material).
+  `tests/background/routing/key-boundary.test.ts` sanctions every path that may expose secret material).
 - Commit style follows the existing history: imperative summary line, optional scope prefix like
   `ci:`, body explains the why.
 
@@ -94,7 +94,7 @@ came from one agent re-deriving something another agent had already written. Bef
 helper, a constant, a validator, or a test stub, **grep for it first** — if something close
 exists, use or extend it in place rather than adding a sibling.
 
-- Felt helpers live in `packages/foundation/wallet-model/src/networks.ts` (`sameFelt`, `canonicalFelt`,
+- Felt helpers live in `packages/foundation/wallet-model/src/networks/networks.ts` (`sameFelt`, `canonicalFelt`,
   `isStarkFieldElement`, …). Never re-implement numeric felt comparison or `0x` canonicalization
   locally — three drifted copies of `sameFelt` once shipped.
 - Cross-layer limits are single-sourced (e.g. `MULTISIG_LIMITS` in
@@ -105,13 +105,13 @@ exists, use or extend it in place rather than adding a sibling.
   `makeMultisigHarness`) instead of re-declaring wallet/RPC stubs per file, and
   `createMessageHandler` takes named options — wire collaborators by key, never positionally.
 - Two lists are enforced-derived and will fail tests if you bypass them: the dapp-reachable
-  message allowlist (`DAPP_MESSAGES` in `apps/extension/src/background/senders.ts`, checked against the
+  message allowlist (`DAPP_MESSAGES` in `apps/extension/src/background/routing/senders.ts`, checked against the
   provider-bridge sources) and the key-boundary scan catalog
   (`tests/support/key-boundary-messages.ts`, checked against every handled `wallet.*` type). A
   new message type must be added to the catalog (and to `DAPP_MESSAGES` only if deliberately
   dapp-facing).
 - Activity summaries are load-bearing: dedup guards match on them (see
-  `apps/extension/src/background/multisig-tx-ops.ts`). Record deterministic, specific summaries, and never
+  `apps/extension/src/background/multisig/multisig-tx-ops.ts`). Record deterministic, specific summaries, and never
   change one without checking what greps for it.
 
 ## Cursor Cloud specific instructions

@@ -11,7 +11,7 @@ import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
 import { createWalletVaultService } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
-import { readImportAccountInput } from "../../apps/extension/src/background/import-inputs";
+import { readImportAccountInput } from "../../apps/extension/src/background/accounts/import-inputs";
 
 const vaultKey = "mc-wallet:vault";
 const migrationKey = "mc-wallet:vault-migration";

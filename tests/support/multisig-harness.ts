@@ -11,9 +11,9 @@ import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/rep
 import type { ActivityLog, ActivityStatus } from "@mc-wallet/transactions/activity";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { createMessageHandler } from "../../apps/extension/src/background/messages";
-import type { RuntimeSender } from "../../apps/extension/src/background/senders";
-import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 
 /**
  * Address of the multisig contract the harness watches.

@@ -6,7 +6,7 @@
  */
 
 import { account } from "@mc-wallet/testkit/sidepanel";
-import type { WalletStatus } from "../../src/popup/responses";
+import type { WalletStatus } from "../../src/popup/responses/responses";
 
 const originalSetTimeout = globalThis.setTimeout;
 

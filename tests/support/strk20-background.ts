@@ -8,10 +8,10 @@ import { STRK20_NOT_REGISTERED, type Strk20Service } from "@mc-wallet/privacy/se
 import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { InvokeInput } from "@mc-wallet/starknet/rpc";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
-import { createMessageHandler } from "../../apps/extension/src/background/messages";
-import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime-state";
-import type { RuntimeSender } from "../../apps/extension/src/background/senders";
-import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import { unavailablePreferencesStore } from "../../apps/extension/src/background/runtime/runtime-state";
+import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import {
   contentSender,
   createWallet,

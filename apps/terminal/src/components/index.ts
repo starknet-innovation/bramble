@@ -1,6 +1,6 @@
 /**
  * Barrel for the terminal's shared presentational components. Screen agents
- * import these from "../components".
+ * import these from "./index".
  */
 export { Card, type CardProps } from "./Card";
 export {

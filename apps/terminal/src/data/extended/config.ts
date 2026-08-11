@@ -5,7 +5,7 @@
  * paths and centralizes the candle interval/type enums shared by the REST and WS
  * candle endpoints. Nothing here performs I/O.
  */
-import { EXTENDED_REST_BASE, EXTENDED_WS_BASE } from "../endpoints";
+import { EXTENDED_REST_BASE, EXTENDED_WS_BASE } from "../core/endpoints";
 
 /**
  * ISO-8601 candle intervals accepted by both the candles REST endpoint and the

@@ -17,7 +17,7 @@ import {
   getNftTokenUri,
 } from "@mc-wallet/starknet/rpc-assets";
 import { byteArray, RpcProvider } from "starknet";
-import { digestApprovalPayload } from "../../apps/extension/src/background/approval-context";
+import { digestApprovalPayload } from "../../apps/extension/src/background/approvals/approval-context";
 
 const CONTRACT = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 const OWNER = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";

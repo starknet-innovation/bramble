@@ -13,13 +13,13 @@ import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
 import { selectField, textField } from "@mc-wallet/ui-kit/fields";
 import { uiAttributes } from "@mc-wallet/ui-kit/html-attributes";
 import { ICON_NAMES } from "@mc-wallet/ui-kit/icons";
-import type { WalletStatus } from "@mc-wallet/wallet-ui/popup/responses";
-import { onboarding } from "@mc-wallet/wallet-ui/sidepanel/gate-views";
+import type { WalletStatus } from "@mc-wallet/wallet-ui/lab";
+import { onboarding } from "@mc-wallet/wallet-ui/lab";
 import {
   COMPONENT_STORY_COVERAGE,
   FOUNDATION_STORY_COVERAGE,
-} from "../../apps/ui-lab/src/catalog-coverage";
-import { LAB_STYLES } from "../../apps/ui-lab/src/lab-styles";
+} from "../../apps/ui-lab/src/runtime/catalog-coverage";
+import { LAB_STYLES } from "../../apps/ui-lab/src/runtime/lab-styles";
 
 const status: WalletStatus = {
   accountCount: 0,

@@ -28,15 +28,15 @@ import {
   EXTENDED_WS_DIRECT_BASE,
   RPC_DIRECT_URLS,
   STARKSCAN_DIRECT_BASE,
-} from "../src/data/endpoints";
+} from "../src/data/core/endpoints";
 import {
   parseChainPulse,
   parseStarkscanBalances,
   parseWalletActivity,
-} from "../src/data/starkscan";
-import { toAvnuRows, toEkuboRows } from "../src/data/useTokens";
-import { toAvnuCandles } from "../src/data/useCandles";
-import { parseEkuboTokenTrades } from "../src/data/useTokenTrades";
+} from "../src/data/activity/starkscan";
+import { toAvnuRows, toEkuboRows } from "../src/data/market/useTokens";
+import { toAvnuCandles } from "../src/data/market/useCandles";
+import { parseEkuboTokenTrades } from "../src/data/market/useTokenTrades";
 import { parseVesuMarkets, parseVesuPositions } from "../src/data/vesu/parse";
 import {
   parseCandles,
@@ -51,14 +51,14 @@ import {
   buildQuotesUrl,
   parseBuildResponse,
   parseQuoteResponse,
-} from "../src/protocols/avnu-swap";
+} from "../src/protocols/avnu/avnu-swap";
 import {
   MAINNET_TOKEN_ADDRESSES,
   VESU_ADDRESSES,
   VESU_API_BASE,
 } from "../src/protocols/constants";
 import { STARKNET_NETWORKS } from "../src/protocols/support/networks";
-import { parseVesuMultiplyExactOutQuote } from "../src/protocols/vesu-multiply";
+import { parseVesuMultiplyExactOutQuote } from "../src/protocols/vesu/vesu-multiply";
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const SAMPLE_MARKET = "BTC-USD";

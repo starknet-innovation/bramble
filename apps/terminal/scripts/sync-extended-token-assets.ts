@@ -4,7 +4,7 @@
  * Missing CDN artwork is deliberately skipped so TokenIcon keeps its fallback.
  */
 import { mkdir } from "node:fs/promises";
-import { EXTENDED_REST_DIRECT_BASE } from "../src/data/endpoints";
+import { EXTENDED_REST_DIRECT_BASE } from "../src/data/core/endpoints";
 
 const MARKET_URL = `${EXTENDED_REST_DIRECT_BASE}/info/markets`;
 const CDN_BASE = "https://cdn.extended.exchange/crypto";

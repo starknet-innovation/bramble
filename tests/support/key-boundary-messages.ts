@@ -7,7 +7,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { RuntimeSender } from "../../apps/extension/src/background/senders";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { type KeyBoundaryMessage, strk20KeyBoundaryMessages } from "./key-boundary-strk20-messages";
 
 /**

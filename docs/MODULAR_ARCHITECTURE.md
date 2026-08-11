@@ -82,6 +82,18 @@ apps/
     public/
     src/
       background/
+        accounts/
+        approvals/
+        ledger/
+        multisig/
+        onboarding/
+        portfolio/
+        privacy/
+        provider/
+        routing/
+        runtime/
+        settings/
+        transactions/
       content/
       provider/
       sidepanel/
@@ -134,6 +146,39 @@ tests/
 
 This is an ownership map, not a requirement to create empty packages. A package is introduced only
 when production code and a meaningful boundary move into it.
+
+### Internal capability layout
+
+Package boundaries own trust and dependency direction; capability folders make each package
+legible without inventing more packages. The enforced examples are:
+
+```text
+apps/extension/src/background/
+  index.ts                 # privileged composition only
+  routing/                 # message parsing, sender gates, dispatch context
+  runtime/                 # session, RPC capabilities, active state, events
+  accounts/ approvals/ ledger/ multisig/ onboarding/
+  portfolio/ privacy/ provider/ settings/ transactions/
+
+packages/presentation/wallet-ui/src/sidepanel/
+  index.ts                 # production entry export only
+  app/
+    start.ts               # UI composition
+    navigation/ rendering/ screens/ sync/
+  journeys/                # onboarding, send, swap, privacy, multisig, etc.
+  runtime/ shared/ shell/ styles/
+
+apps/terminal/src/
+  data/ protocols/ screens/ wallet/   # each subdivided by owned protocol or user task
+
+apps/ui-lab/src/
+  fixtures/ runtime/ scenarios/ stories/
+```
+
+The same rule applies inside feature, foundation, platform, and presentation workspaces: related
+implementation and its mirrored tests share a named capability folder. A cohesive directory is
+not split merely to reduce a file count; a new folder must identify a real behavior, trust boundary,
+or user journey. Package root files are limited to intentional entrypoints and boundary ports.
 
 ## Dependency direction
 
@@ -372,6 +417,8 @@ The repository must enforce the architecture offline:
 11. Source standards apply inside every package, including file size, secret-field names, clock,
    entropy, DOM sinks, exported documentation, and dependency pins.
 12. Cross-workspace relative imports fail; there is no legacy-import allowance.
+13. Declared implementation roots reject new loose TypeScript files, so background, Terminal,
+    UI Lab, and major package internals cannot silently become flat again.
 
 ## Development workflow
 
@@ -398,66 +445,8 @@ bun run package:extension
 
 Package-local checks improve iteration speed; they never authorize a release.
 
-## Migration record and acceptance gates
-
-### 1. Workspace substrate
-
-- Add root Bun workspaces and shared strict compiler settings.
-- Reuse the existing custom standards toolchain to enforce package dependencies and exports.
-- Align duplicated tool versions without changing extension runtime dependencies.
-- Preserve source paths and build output initially.
-
-Acceptance: frozen install, existing checks, and extension package are unchanged in behavior.
-
-### 2. Foundation contracts
-
-- Extract core primitives and wallet models.
-- Co-locate protocol types with their runtime decoders.
-- Derive dapp and approval classifications from the protocol registry.
-- Make UI Lab consume public package exports while Terminal remains an external provider client.
-
-Acceptance: provider-facing request/response definitions have one wallet source; content and
-in-page bundles contain only permitted foundation/application modules.
-
-### 3. Platform boundaries
-
-- Separate generic store primitives from feature records.
-- Extract vault and Krusty adapter boundaries.
-- Reduce Starknet to generic chain behavior.
-- Separate Ledger protocol/state from browser hardware transports.
-
-Acceptance: store, vault, Starknet, and Ledger dependency directions are acyclic; secret scans and
-KMS/vendor checks remain green.
-
-### 4. Feature ownership
-
-- Extract privacy and multisig first, then transactions, portfolio, and permissions.
-- Move each feature's records, repositories, chain adapters, application operations, and tests
-  together.
-- Keep background handlers responsible for privileged authorization and cross-feature orchestration,
-  while feature rules and chain adapters remain in their owning packages.
-
-Acceptance: a feature can run its unit tests without compiling unrelated features, and no feature
-imports Chrome or presentation code.
-
-### 5. Presentation and application roots
-
-- Extract UI Kit and Wallet UI.
-- Replace UI Lab deep imports with public package exports.
-- Move the six extension entrypoints, static pages, Chrome adapters, and build script under
-  `apps/extension`.
-
-Acceptance: each entrypoint is a thin composition root; bundle-closure policy passes; Storybook,
-extension E2E, and visual scenarios use the same production UI package.
-
-### 6. Remove compatibility paths
-
-- Remove temporary old-path re-exports and legacy import allowances.
-- Remove nested lockfiles and duplicated tool configuration.
-- Update architecture, engineering, audit, development, and release documentation.
-
-Acceptance: full checks, build, all Chromium E2E tests, extension packaging, checksum verification,
-and a clean dependency graph pass from a fresh checkout.
+The completed extraction sequence and its acceptance criteria are retained in the
+[migration record](../modular-architecture-migration/).
 
 ## Non-goals
 

@@ -6,6 +6,13 @@ import { readdir, readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { PINNED_RUNTIME_FILES } from "./config-standards-policy";
 import { isOutsideRoot, sourceImports } from "./workspace-architecture-imports";
+import {
+  DEVELOPMENT_SOURCE_FILES,
+  EXCLUDED_DIRECTORIES,
+  EXTENSION_SURFACE_EDGES,
+  NON_LITERAL_MODULE_LOADS,
+  STRUCTURED_SOURCE_ROOTS,
+} from "./workspace-architecture-policy";
 
 type Manifest = {
   readonly dependencies?: Readonly<Record<string, string>>;
@@ -145,38 +152,18 @@ const ALLOWED_EDGES: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
-const EXCLUDED_DIRECTORIES = new Set([
-  ".git",
-  "artifacts",
-  "dist",
-  "node_modules",
-  "output",
-  "playwright-report",
-  "storybook-static",
-  "target",
-  "test-results",
-  "vendor",
-]);
-
 const SOURCE_EXTENSIONS = new Set([".cjs", ".cts", ".js", ".jsx", ".mjs", ".mts", ".ts", ".tsx"]);
 
-const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
-  ["packages/presentation/wallet-ui/tests/support/groups-harness.ts", 1],
-  ["scripts/check-krusty-adapter.ts", 1],
-  ["scripts/check-privacy-sdk.ts", 1],
-]);
-
-const DEVELOPMENT_SOURCE_FILES = new Set(["apps/terminal/src/data/extended/dev-bridge.ts"]);
-
-const EXTENSION_SURFACE_EDGES: Readonly<Record<string, readonly string[]>> = {
-  content: ["@mc-wallet/wallet-protocol"],
-  "ledger-grant": ["@mc-wallet/ledger-browser", "@mc-wallet/ledger-protocol", "@mc-wallet/ui-kit"],
-  provider: ["@mc-wallet/wallet-protocol"],
-  sandbox: [],
-  sidepanel: ["@mc-wallet/ledger-browser", "@mc-wallet/wallet-ui"],
-};
-
 const failures: string[] = [];
+
+for (const [root, allowedFiles] of Object.entries(STRUCTURED_SOURCE_ROOTS)) {
+  const allowed = new Set(allowedFiles);
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (entry.isFile() && SOURCE_EXTENSIONS.has(extname(entry.name)) && !allowed.has(entry.name)) {
+      failures.push(`${root}/${entry.name} must live in a named capability directory`);
+    }
+  }
+}
 
 const readManifest = async (path: string): Promise<Manifest> =>
   JSON.parse(await readFile(path, "utf8")) as Manifest;
@@ -419,6 +406,13 @@ for (const workspace of workspaces) {
       }
       if (surfaceEdges && !surfaceEdges.includes(targetName)) {
         failures.push(`${file} may not import ${targetName} from the ${extensionSurface} surface`);
+      }
+      if (
+        specifier === "@mc-wallet/wallet-ui/lab" &&
+        productionSource &&
+        workspace.name !== "@mc-wallet/ui-lab"
+      ) {
+        failures.push(`${file} may not import the development-only Wallet UI lab surface`);
       }
       const exportKey = subpath.length === 0 ? "." : `./${subpath.join("/")}`;
       if (!Object.hasOwn(target.manifest.exports ?? {}, exportKey)) {

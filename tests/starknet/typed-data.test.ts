@@ -12,9 +12,9 @@ import {
   toRuntimeMessage,
 } from "@mc-wallet/wallet-protocol/bridge";
 import { unknownError } from "@mc-wallet/wallet-protocol/rpc-errors";
-import { createMessageHandler } from "../../apps/extension/src/background/messages";
-import type { RuntimeSender } from "../../apps/extension/src/background/senders";
-import { createUnlockSession } from "../../apps/extension/src/background/session";
+import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
+import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
+import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import { flushHeld, waitForPendingApprovals } from "../support/held";
 
 const account: AccountRef = {

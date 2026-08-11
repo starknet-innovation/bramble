@@ -1,6 +1,6 @@
 import { RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
-import { TokenIcon } from "../../components";
+import { TokenIcon } from "../../components/index";
 
 export type PrivateBalanceItem = {
   readonly address: string;

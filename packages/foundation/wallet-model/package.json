@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./accounts": "./src/accounts.ts",
-    "./custom-network": "./src/custom-network.ts",
-    "./ledger-path": "./src/ledger-path.ts",
-    "./networks": "./src/networks.ts",
-    "./passphrase": "./src/passphrase.ts",
-    "./preferences": "./src/preferences.ts",
-    "./signing": "./src/signing.ts"
+    "./accounts": "./src/accounts/accounts.ts",
+    "./custom-network": "./src/networks/custom-network.ts",
+    "./ledger-path": "./src/accounts/ledger-path.ts",
+    "./networks": "./src/networks/networks.ts",
+    "./passphrase": "./src/preferences/passphrase.ts",
+    "./preferences": "./src/preferences/preferences.ts",
+    "./signing": "./src/accounts/signing.ts"
   },
   "scripts": {
     "check": "bun run check:types && bun run test",

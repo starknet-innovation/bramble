@@ -47,8 +47,8 @@ const expectedHostPermissions = [
   // never participates in signing or transaction submission.
   "https://starkscan.co/*",
   // AVNU swap aggregator (quotes + build calldata) for the in-wallet swap
-  // flow, per network. Responses are validated in packages/features/transactions/src/avnu.ts and
-  // policy-checked in apps/extension/src/background/swap-ops.ts before anything is signed.
+  // flow, per network. Responses are validated in packages/features/transactions/src/swap/avnu.ts and
+  // policy-checked in apps/extension/src/background/transactions/swap-ops.ts before anything is signed.
   "https://starknet.api.avnu.fi/*",
   "https://sepolia.api.avnu.fi/*",
   // Maintained web3 phishing feed (issue #34): the default source for the live

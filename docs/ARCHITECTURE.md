@@ -38,11 +38,11 @@ local signing fallback.
 Token tracking spans a few narrow modules:
 
 - Custom tokens: the privileged `wallet.addToken { address }` message reads `name`, `symbol`, and
-  `decimals` on-chain through `getTokenMetadata` in `packages/platform/starknet/src/rpc.ts` (felt short-string and
+  `decimals` on-chain through `getTokenMetadata` in `packages/platform/starknet/src/rpc/rpc.ts` (felt short-string and
   Cairo ByteArray decoding), normalizes the symbol, and stores it through `preferencesStore`. The
-  UI lives on the tokens flow (`packages/presentation/wallet-ui/src/sidepanel/token-flows.ts`), reachable from the home Balances
+  UI lives on the tokens flow (`packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/token-flows.ts`), reachable from the home Balances
   header and Settings.
-- Auto-detection: `packages/features/portfolio/src/token-registry.ts` vendors a curated mainnet registry (ETH, STRK,
+- Auto-detection: `packages/features/portfolio/src/tokens/token-registry.ts` vendors a curated mainnet registry (ETH, STRK,
   USDC, USDT, DAI, WBTC). `wallet.detectTokens` probes `balanceOf` for registry tokens not yet
   tracked and returns held ones as one-tap suggestions. Registry addresses marked `VERIFY` are
   advisory; a wrong address simply fails its probe and is never surfaced, and detection never
@@ -51,13 +51,13 @@ Token tracking spans a few narrow modules:
   confusable folding, absurd decimals, empty names). Flagged tokens are hidden from home by
   default; the tokens flow reveals them with a warning. A backwards-compatible optional
   `hiddenTokens` preference (like `rpcOverrides`) records user hide/show choices.
-- Prices: `packages/features/portfolio/src/prices.ts` fetches CoinGecko `simple/token_price` and `market_chart` for
+- Prices: `packages/features/portfolio/src/tokens/prices.ts` fetches CoinGecko `simple/token_price` and `market_chart` for
   the `starknet` platform (host permission `https://api.coingecko.com/*`), cached in storage with a
   ~5 minute TTL behind an injected clock. Fetching happens only in the background worker through an
   injected `fetch`; every failure degrades to cached-or-empty so the UI omits fiat when offline.
   Home balance rows and the hero portfolio total use `preferences.displayCurrency`.
 - Token detail: tapping a balance row opens a detail flow with the current price, a self-drawn
-  7-day SVG sparkline (`packages/presentation/wallet-ui/src/sidepanel/sparkline.ts`), holdings, and contract facts.
+  7-day SVG sparkline (`packages/presentation/wallet-ui/src/sidepanel/journeys/portfolio/sparkline.ts`), holdings, and contract facts.
 
 Known limitations (v1): registry coverage is mainnet-only and address-verified from public token
 lists; fiat prices depend on CoinGecko's Starknet coverage and address normalization, so some
@@ -75,7 +75,7 @@ Accounts use the OpenZeppelin `AccountUpgradeable` preset, pinned by Krusty KMS.
   (identical on Mainnet and Sepolia). Source of truth: the vendored Krusty KMS
   manifest `crates/kms/src/oz_account_class_manifest.json` at the commit pinned
   in `scripts/vendor-krusty.ts`. Address derivation matches `ozAccountDeployment`
-  in `packages/platform/starknet/src/deployment.ts` (constructor `constructor(public_key: felt252)`).
+  in `packages/platform/starknet/src/transactions/deployment.ts` (constructor `constructor(public_key: felt252)`).
 - Audit: OpenZeppelin Contracts for Cairo audit reports —
   <https://github.com/OpenZeppelin/cairo-contracts/tree/main/audits> (API docs:
   <https://docs.openzeppelin.com/contracts-cairo/3.x/api/account#AccountUpgradeable>).
@@ -166,8 +166,8 @@ Recovery boundaries are deliberately explicit:
 
 ## Migration Workflow
 
-1. Bump `CURRENT_SCHEMA_VERSION` in `packages/platform/vault/src/schema.ts`.
-2. Add one adjacent step to `VAULT_MIGRATIONS` in `packages/platform/vault/src/migrations.ts`.
+1. Bump `CURRENT_SCHEMA_VERSION` in `packages/platform/vault/src/schema/schema.ts`.
+2. Add one adjacent step to `VAULT_MIGRATIONS` in `packages/platform/vault/src/schema/migrations.ts`.
 3. Update schema validators and tests for old, current, and invalid vault data.
 4. Exercise `readMigratedVault` staging, verification, restart recovery, and idempotence tests.
 5. Run `bun run check`, `bun run build`, and `bun run package:extension`.
@@ -190,7 +190,7 @@ copy; invalid data never reaches the primary write. See [Wallet store architectu
 - **Backup verification (onboarding).** Generating a fresh phrase reveals confirmation inputs for
   words 3, 7, and 11. Those positions are deterministic on purpose: randomness would need a
   clock/entropy boundary that repo standards keep out of pure UI code, and fixed positions keep the
-  predicate (`verifyBackupWords` in `packages/presentation/wallet-ui/src/sidepanel/backup-verify.ts`) pure and exhaustively
+  predicate (`verifyBackupWords` in `packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/backup-verify.ts`) pure and exhaustively
   testable. Create stays disabled until the words match. Pasting an existing phrase skips
   verification.
 - **Add account.** `wallet.addAccount { networkId }` (privileged, session-authenticated) delegates
@@ -203,14 +203,14 @@ copy; invalid data never reaches the primary write. See [Wallet store architectu
   the passphrase re-entered in the message (never the cached session), verifies it via `readVault`,
   and returns `{ mnemonic, privateKey }` for the active account. The settings-reachable reveal
   screen re-authenticates, warns strongly, blurs the values until tapped, and never persists them —
-  they are wiped on the next render. `tests/background/key-boundary.test.ts` sanctions this reveal only for an
+  they are wiped on the next render. `tests/background/routing/key-boundary.test.ts` sanctions this reveal only for an
   extension-page sender with the correct passphrase.
 
 ### Import private key
 
 Raw-key import is shipped as the privileged, extension-page-only `wallet.importAccount` operation.
 The wallet must already be unlocked; the message carries the target network and pasted key but not
-the vault passphrase. `apps/extension/src/background/import-inputs.ts` accepts only an exact request shape and a
+the vault passphrase. `apps/extension/src/background/accounts/import-inputs.ts` accepts only an exact request shape and a
 canonical, non-zero Stark private key. Dapps cannot reach this message type.
 
 `deriveImportedAccount` keeps key handling inside the existing Krusty boundary: Krusty recovers the
@@ -225,30 +225,24 @@ import without returning a usable account.
 
 Side panel styling is layered so each axis can be updated in one place:
 
-- Colors: `Skin` tokens in `packages/presentation/ui-kit/src/skin.ts`. Replace `defaultSkin` in `packages/presentation/wallet-ui/src/sidepanel/index.ts`
-  to swap the palette; `applySkin` rejects missing, extra, hidden, or accessor tokens.
+- Colors: `Skin` tokens live in `packages/presentation/ui-kit/src/theme/skin.ts`; the concrete
+  palettes live beside it in `default-skin.ts` and `dark-skin.ts`. `applySkin` rejects missing,
+  extra, hidden, or accessor tokens.
 - Scales: spacing, radius, type, control metrics, plus `WEIGHT`, `TRACKING` (size-specific
   letter-spacing), a `SIZE` height scale, an elevation `SHADOW` scale, strong `EASE` curves, and
-  named `SPRING` presets (Apple's response/damping form) all live in `packages/presentation/ui-kit/src/tokens.ts`.
-- Motion primitives: `packages/presentation/ui-kit/src/spring.ts` turns a spring preset into a native CSS/WAAPI `linear()`
-  easing + settle duration (no dependency, CSP-safe). `packages/presentation/wallet-ui/src/sidepanel/motion.ts` exposes
+  named `SPRING` presets (Apple's response/damping form) all live in `packages/presentation/ui-kit/src/theme/tokens.ts`.
+- Motion primitives: `packages/presentation/ui-kit/src/motion/spring.ts` turns a spring preset into a native CSS/WAAPI `linear()`
+  easing + settle duration (no dependency, CSP-safe). `packages/presentation/wallet-ui/src/sidepanel/shared/motion.ts` exposes
   `prefersReducedMotion()`, an interruptible WAAPI `animate()`/`spring()` wrapper (cancels
   in-flight animations, cuts to the final state under reduced motion), and a `stagger()` helper.
-- Stylesheet layers: `packages/presentation/wallet-ui/src/sidepanel/styles.ts` composes the base layer (`styles-base.ts`), the
-  Liquid Glass material and token emission (`styles-material.ts`), component classes
-  (`styles-components.ts`), view-transition choreography (`styles-transitions.ts`), and the
-  home/motion layer (`styles-home.ts`, composed last so its reduced-motion block wins).
-
-Material: opt a surface into Apple-style Liquid Glass by adding `class="glass"` (add `glass-enter`
-to materialize on entry). It provides `backdrop-filter` blur + saturate, a skin-driven tint, an
-inset specular edge highlight, and a depth shadow. Use it sparingly — one translucent layer at a
-time, never stacked. It degrades to a solid panel where `backdrop-filter` is unsupported and
-frosts to near-solid under `prefers-reduced-transparency` / `prefers-contrast`. Applied to the
-floating chrome and consequential surfaces — the bottom dock, the account drawer, dApp
-approval/sign cards, and toasts — while content surfaces (rows, tiles, detail tiles) stay solid.
+- Stylesheet layers: `packages/presentation/wallet-ui/src/sidepanel/styles/index.ts` composes
+  shared core layers and named journey layers for onboarding, portfolio, privacy, send, settings,
+  swap, and multisig. The home/onboarding layers are composed last so their reduced-motion rules
+  win. Surfaces remain flat and skin-driven; spacing, contrast, elevation, and motion carry the
+  hierarchy without a second material system.
 
 Gestures: the account drawer and toasts are drag-dismissible with 1:1 pointer tracking and
-velocity-projected momentum (`projectMomentum` in `packages/presentation/wallet-ui/src/sidepanel/motion.ts`) deciding whether a
+velocity-projected momentum (`projectMomentum` in `packages/presentation/wallet-ui/src/sidepanel/shared/motion.ts`) deciding whether a
 release falls closed or springs back; both cut to their resting state under `prefers-reduced-motion`.
 
 Interaction contract: controls are borderless — structure comes from elevation and spacing — and
@@ -273,7 +267,7 @@ The injected `window.starknet_mcWallet` object follows the get-starknet/starknet
 `isPreauthorized()` resolves `true` when the origin's grant covers the wallet's active account. The
 object is frozen and installed as a non-configurable global.
 
-`request` accepts these methods, mapped to safe background messages by `packages/foundation/wallet-protocol/src/bridge.ts`:
+`request` accepts these methods, mapped to safe background messages by `packages/foundation/wallet-protocol/src/provider/bridge.ts`:
 `wallet_requestAccounts`/`mc_requestAccounts`, `mc_accounts`, `wallet_requestChainId`,
 `wallet_switchStarknetChain`, `wallet_addInvokeTransaction`, `wallet_signTypedData`,
 `wallet_getPermissions` (returns `["accounts"]` when the origin is connected, else `[]`), and
@@ -286,7 +280,7 @@ Grants and provider events are isolated per origin: each origin reads only its o
 (`pageEventsFor`), so multiple connected sites never observe each other's state.
 
 A grant records which accounts a site was ever approved for; the active account decides which single
-one of them it may see right now (`grantedAccountIdsFor` in `packages/platform/vault/src/origin-grants.ts`).
+one of them it may see right now (`grantedAccountIdsFor` in `packages/platform/vault/src/service/origin-grants.ts`).
 `wallet.getGrantedAccounts` returns the active account when the grant covers it and `[]` otherwise —
 no grant, no active account, or an active account the grant does not name. So an origin whose grant
 misses the active account reads as disconnected: the page receives `accountsChanged([])`, and
