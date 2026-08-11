@@ -3,9 +3,10 @@
  * appearance (theme and currency), and non-secret backup export/restore.
  */
 import type { WalletStatus } from "../popup/responses";
+import { createDiscoveredAccountsPanel } from "./discovered-accounts-ui";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { bindGroupControls } from "./group-ui";
-import { restoreOutcomeMessage, restoreSeedAccounts } from "./restore-accounts";
+import { addAccountsAtIndexes, restoreOutcomeMessage } from "./restore-accounts";
 import type { SidepanelWallet } from "./runtime";
 
 /**
@@ -74,36 +75,65 @@ export const bindAddAccount = (deps: SettingsUiDeps): void => {
 
 /**
  * Binds "Find my other accounts" on the account flow: scans this wallet's
- * recovery phrase for accounts that already exist on chain and adds the ones it
- * does not hold yet.
+ * recovery phrase for accounts that already exist on chain, lists them with every
+ * new one preselected, and adds only what the user confirms.
  *
- * Reachable from the accounts surface rather than only from import, because a
- * wallet imported before this existed is exactly the wallet that needs it. The
- * scan makes several network reads, so the button reports progress and stays busy
- * until the run settles.
+ * Reachable from the accounts surface rather than only from setup, because a
+ * wallet imported before this existed is exactly the wallet that needs it.
  */
 export const bindRestoreAccounts = (deps: SettingsUiDeps): void => {
   const button = deps.app?.querySelector<HTMLButtonElement>("#restore-accounts");
   const result = deps.app?.querySelector<HTMLElement>("#new-account-result");
+  const say = (message: string): void => {
+    if (result) {
+      result.textContent = message;
+    }
+  };
+  let found = 0;
+  const panel = createDiscoveredAccountsPanel({
+    confirm: {
+      label: "Add selected accounts",
+      onConfirm: () => {
+        const chosen = panel.selected();
+        if (chosen.length === 0) {
+          say("Select at least one account to add.");
+          return;
+        }
+        say("Adding the selected accounts…");
+        void addAccountsAtIndexes(deps.wallet, deps.networkId(), chosen).then(
+          async (added) => {
+            showToast(restoreOutcomeMessage({ added, found }), "success");
+            // The re-render clears the list, which is right: its selection
+            // described a scan that has now been acted on.
+            await rerender(deps);
+          },
+          (error: unknown) => {
+            say(errorMessage(error, "Could not add the selected accounts"));
+          },
+        );
+      },
+    },
+    container: deps.app?.querySelector<HTMLElement>("#discovered-accounts") ?? null,
+  });
+
   button?.addEventListener("click", () => {
     buttonBusy(button, true);
-    if (result) {
-      result.textContent = "Checking the chain for accounts from your recovery phrase…";
-    }
-    void restoreSeedAccounts(deps.wallet, deps.networkId()).then(
-      async (outcome) => {
-        if (result) {
-          result.textContent = "";
+    say("Checking the chain for accounts from your recovery phrase…");
+    void deps.wallet.scanSeedAccounts().then(
+      (candidates) => {
+        found = candidates.length;
+        const addable = candidates.filter((candidate) => !candidate.alreadyAdded);
+        if (addable.length === 0) {
+          panel.clear();
+          showToast(restoreOutcomeMessage({ added: 0, found }), "success");
+        } else {
+          panel.render(candidates);
+          say("Select the accounts to add, then confirm.");
         }
-        showToast(restoreOutcomeMessage(outcome), "success");
-        // Re-render either way: an added account has to appear in the list, and a
-        // run that added nothing still leaves the button to un-busy.
-        await rerender(deps);
+        buttonBusy(button, false);
       },
       (error: unknown) => {
-        if (result) {
-          result.textContent = errorMessage(error, "Could not scan for accounts");
-        }
+        say(errorMessage(error, "Could not scan for accounts"));
         buttonBusy(button, false);
       },
     );

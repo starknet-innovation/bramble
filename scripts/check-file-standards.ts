@@ -109,6 +109,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/popup/responses-ledger.ts",
   "src/provider/bridge-results.ts",
   "src/provider/bridge.ts",
+  // Sends the phrase being recovered to the privileged scan so setup can list its
+  // accounts before a vault exists; never stores, logs, or receives one back.
+  "src/sidepanel/accounts-runtime-client.ts",
   "src/sidepanel/dom.ts",
   "src/sidepanel/focus-memo.ts",
   "src/sidepanel/gate-views.ts",
@@ -125,6 +128,13 @@ const SECRET_MATERIAL_FILES = new Set([
   "src/sidepanel/onboarding-ui.ts",
   "src/sidepanel/onboarding-views.ts",
   "src/sidepanel/reveal-ui.ts",
+  // Compares the two vault-passphrase fields to report whether they agree. Reads
+  // their values only to compare them; stores, logs, and returns nothing.
+  "src/sidepanel/vault-passphrase-fields.ts",
+  // Passes the phrase being recovered to the privileged create message so a
+  // restored wallet can start from the account the user chose; never stores or
+  // logs one.
+  "src/sidepanel/restore-accounts.ts",
   "src/sidepanel/runtime.ts",
   "src/starknet/ledger-verify.ts",
   "src/starknet/provider.ts",
@@ -194,6 +204,11 @@ const HTML_SINK_FILES = new Set([
   // interpolation passes through escapeHtml/tokenGlyph — audited 2026-07.
   "src/sidepanel/swap-ui.ts",
   "src/sidepanel/swap-picker.ts",
+  // The one writer of discovered-account rows, shared by setup and the accounts
+  // screen so only one file renders them. Every interpolation comes from
+  // discovered-accounts-view, which escapes all dynamic text; this file adds only
+  // a fixed label and an integer index.
+  "src/sidepanel/discovered-accounts-ui.ts",
   // Shell replacement extracted from the sidepanel entrypoint; it receives
   // fully escaped production templates and owns no dynamic template content.
   "src/sidepanel/scene-renderer.ts",

@@ -8,13 +8,18 @@
  * accepts the real-funds acknowledgement.
  */
 import type { WalletStatus } from "../popup/responses";
-import { isVaultPassphrase } from "../storage/encrypted-store";
 import { verifyBackupWords } from "./backup-verify";
+import {
+  createDiscoveredAccountsPanel,
+  renderSetupScan,
+  setupScanFailedMessage,
+} from "./discovered-accounts-ui";
 import { buttonBusy, errorMessage, showToast } from "./dom";
 import { MAINNET_NETWORK_ID, mainnetAckSatisfied } from "./mainnet-ack";
 import { createOnboardingStepTransition, type OnboardingDirection } from "./onboarding-transition";
-import { restoreOutcomeMessage, restoreSeedAccounts } from "./restore-accounts";
+import { createWalletWithAccounts } from "./restore-accounts";
 import type { SidepanelWallet } from "./runtime";
+import { vaultPassphraseState } from "./vault-passphrase-fields";
 
 /**
  * Dependencies the onboarding binding closes over.
@@ -67,6 +72,8 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const submitButton = form.querySelector<HTMLButtonElement>("#create-wallet-button");
   const accountButton = form.querySelector<HTMLButtonElement>("#account-preview");
   const previewAddress = form.querySelector<HTMLElement>("[data-preview-address]");
+  const discoveredList = form.querySelector<HTMLElement>("#discovered-accounts");
+  const discoveredResult = form.querySelector<HTMLElement>("#discovered-result");
   const phraseToggle = form.querySelector<HTMLButtonElement>("#phrase-toggle");
   const generatedGrid = form.querySelector<HTMLElement>('[data-recovery-grid="generated"]');
   const walletReady = form.dataset["walletReady"] === "true";
@@ -162,30 +169,20 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     previewMatchesInput = false;
   };
 
-  const passwordOk = (): boolean => {
-    const value = passphraseInput?.value ?? "";
-    return isVaultPassphrase(value) && value === (confirmationInput?.value ?? "");
-  };
+  const passwordState = () =>
+    vaultPassphraseState(passphraseInput?.value ?? "", confirmationInput?.value ?? "");
 
   const refreshPassword = (): void => {
-    const value = passphraseInput?.value ?? "";
-    const confirmation = confirmationInput?.value ?? "";
-    const validLength = isVaultPassphrase(value);
-    const matches = value === confirmation && confirmation.length > 0;
+    const state = passwordState();
     if (passwordResult) {
-      passwordResult.textContent = !validLength
-        ? "Enter at least 12 characters"
-        : matches
-          ? "Passphrases match"
-          : "Passphrases do not match";
+      passwordResult.textContent = state.requirement;
     }
-    passwordRequirement?.classList.toggle("is-ready", validLength && matches);
+    passwordRequirement?.classList.toggle("is-ready", state.satisfied);
     if (reviewAccount) {
-      reviewAccount.disabled = !passwordOk();
+      reviewAccount.disabled = !state.ok;
     }
     if (passphraseResult) {
-      passphraseResult.textContent =
-        confirmation.length > 0 && !matches ? "Enter the same passphrase in both fields." : "";
+      passphraseResult.textContent = state.confirmationHint;
     }
     previewMatchesInput = false;
   };
@@ -212,11 +209,21 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const ackSatisfied = (): boolean =>
     mainnetAckSatisfied(selectedNetworkId(), ackCheckbox?.checked ?? false);
 
+  // Accounts this phrase already has beyond the first. Index 0 is left out: the
+  // "Primary account" row above already is it, and listing it twice invites
+  // selecting one account and getting two.
+  const discovered = createDiscoveredAccountsPanel({
+    container: discoveredList,
+    onToggle: () => refreshAccountGate(),
+  });
+
   const refreshAccountGate = (): void => {
     if (submitButton) {
+      // Either the primary account or any discovered one is enough: a user
+      // restoring only accounts 3 and 7 must not be forced to take account 1.
       submitButton.disabled = !(
         walletReady &&
-        accountSelected &&
+        (accountSelected || discovered.selected().length > 0) &&
         previewMatchesInput &&
         ackSatisfied()
       );
@@ -347,7 +354,7 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   });
 
   reviewAccount?.addEventListener("click", () => {
-    if (!passwordOk()) {
+    if (!passwordState().ok) {
       refreshPassword();
       return;
     }
@@ -376,6 +383,23 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
         refreshAccountGate();
         showStep("accounts");
         buttonBusy(reviewAccount, false);
+        // A phrase this wallet just generated has nothing on chain by definition,
+        // so only a typed one is worth scanning. Best effort: an unreachable node
+        // leaves the primary account selectable rather than blocking setup.
+        if (!requiresVerification) {
+          if (discoveredResult) {
+            discoveredResult.textContent = "Looking for your other accounts…";
+          }
+          const describe = (text: string): void => {
+            if (discoveredResult) {
+              discoveredResult.textContent = text;
+            }
+          };
+          void wallet.scanSeedAccounts(mnemonic).then(
+            (candidates) => describe(renderSetupScan(discovered, candidates)),
+            () => describe(setupScanFailedMessage()),
+          );
+        }
       },
       (error: unknown) => {
         const message = errorMessage(error, "Could not derive this account");
@@ -390,9 +414,12 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    if (!accountSelected || !previewMatchesInput) {
+    const chosen = [...(accountSelected ? [0] : []), ...discovered.selected()].sort(
+      (left, right) => left - right,
+    );
+    if (chosen.length === 0 || !previewMatchesInput) {
       if (result) {
-        result.textContent = "Select the account before continuing.";
+        result.textContent = "Select at least one account before continuing.";
       }
       return;
     }
@@ -404,34 +431,28 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       return;
     }
     buttonBusy(submitButton, true);
-    // `requiresVerification` is set only when this wallet generated the phrase
-    // itself, so its absence here means the user typed an existing one — the case
-    // that may already have accounts on chain. A freshly generated phrase has
-    // none by definition, so it is not worth a single network read.
-    const restoreExisting = !requiresVerification;
-    void wallet.createAccount(mnemonic, selectedNetworkId(), passphraseInput?.value ?? "").then(
-      async () => {
-        showToast("Wallet created", "success");
-        // Best effort, and deliberately after the wallet is usable: an
-        // unreachable node must not turn a successful import into a failure. The
-        // accounts surface offers the same scan to run again.
-        const restored = restoreExisting
-          ? await restoreSeedAccounts(wallet, selectedNetworkId()).catch(() => null)
-          : null;
-        if (restored && restored.added > 0) {
-          showToast(restoreOutcomeMessage(restored), "success");
-        }
+    const networkId = selectedNetworkId();
+    void createWalletWithAccounts(wallet, {
+      accountIndexes: chosen,
+      mnemonic,
+      networkId,
+      vaultPassphrase: passphraseInput?.value ?? "",
+    })
+      .then(async (added) => {
+        showToast(
+          added === 1 ? "Wallet created" : `Wallet created with ${added} accounts`,
+          "success",
+        );
         await deps.render(await wallet.loadStatus());
-      },
-      (error: unknown) => {
+      })
+      .catch((error: unknown) => {
         const message = errorMessage(error, "Account import failed");
         showToast(message, "error");
         if (result) {
           result.textContent = message;
         }
         buttonBusy(submitButton, false);
-      },
-    );
+      });
   });
 
   syncNetworkGate();

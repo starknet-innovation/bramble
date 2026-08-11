@@ -15,7 +15,7 @@
 import { STARKNET_NETWORKS } from "../starknet/networks";
 import { discoveryTokensForNetwork } from "../starknet/token-registry";
 import type { WalletPreferencesStore } from "../storage/preferences-store";
-import { readTypeOnlyInput } from "./message-inputs";
+import { readSeedScanInput } from "./message-inputs";
 import type { RuntimeRpc } from "./runtime-rpc";
 import { networkRpcUrls } from "./runtime-state";
 import type { RuntimeResponse, SeedScanCandidateView } from "./runtime-types";
@@ -64,9 +64,15 @@ const probeAddress =
 /**
  * Handles `wallet.scanSeedAccounts` and returns null for other message types.
  *
- * Fails closed on a locked wallet, a vault with no stored phrase, and an
- * unreachable node — reporting "no accounts found" because a node was down would
- * invite the user to conclude their accounts are gone.
+ * Two callers, two phrase sources. A recovery in progress supplies the phrase it
+ * is restoring and needs no unlocked session — there is no vault yet, and this
+ * mirrors `wallet.previewAccount`, which the same screen already uses. An
+ * existing wallet supplies nothing and the phrase is read from its vault, which
+ * does require an unlocked session.
+ *
+ * Fails closed on a locked wallet with no phrase supplied, a vault holding no
+ * phrase, and an unreachable node — reporting "no accounts found" because a node
+ * was down would invite the user to conclude their accounts are gone.
  */
 export const handleSeedScanOps = async (
   deps: SeedScanOpsDeps,
@@ -76,11 +82,12 @@ export const handleSeedScanOps = async (
   if (messageType !== "wallet.scanSeedAccounts") {
     return null;
   }
-  if (!readTypeOnlyInput(message, "wallet.scanSeedAccounts")) {
+  const input = readSeedScanInput(message);
+  if (!input) {
     return { error: "invalid seed scan request" };
   }
   const vaultPassphrase = deps.session.getPassphrase();
-  if (!vaultPassphrase) {
+  if (!input.mnemonic && !vaultPassphrase) {
     return { error: "wallet locked" };
   }
   const scan = deps.wallet.scanSeedAccounts;
@@ -91,12 +98,18 @@ export const handleSeedScanOps = async (
   const networkId = preferences.activeNetworkId;
   const network = STARKNET_NETWORKS[networkId];
   try {
-    const vault = await deps.wallet.readVault(vaultPassphrase);
-    const existing = new Set(vault.accounts.map((account) => account.id));
+    // Only an existing wallet has accounts to compare against; during recovery
+    // nothing is held yet, so every candidate is new by definition.
+    const existing = new Set(
+      input.mnemonic || !vaultPassphrase
+        ? []
+        : (await deps.wallet.readVault(vaultPassphrase)).accounts.map((account) => account.id),
+    );
     const candidates = await scan({
+      ...(input.mnemonic ? { mnemonic: input.mnemonic } : {}),
       networkId,
       probe: probeAddress(deps, networkId, networkRpcUrls(network, preferences)),
-      vaultPassphrase,
+      ...(vaultPassphrase ? { vaultPassphrase } : {}),
     });
     return {
       candidates: candidates.map(

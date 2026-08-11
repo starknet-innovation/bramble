@@ -244,12 +244,19 @@ export type WalletVaultService = {
   readonly readVault: (vaultPassphrase: string) => Promise<Vault>;
   readonly revokeOrigin: (input: RevokeOriginInput) => Promise<readonly ConnectedSite[]>;
   /**
-   * Finds the HD accounts a restored recovery phrase already has on chain, using
-   * the injected `probe` for every chain answer. Returns public account metadata
-   * only and persists nothing — the caller decides which candidates to add.
+   * Finds the HD accounts a recovery phrase already has on chain, using the
+   * injected `probe` for every chain answer. Returns public account metadata only
+   * and persists nothing — the caller decides which candidates to add.
+   *
+   * Supply `mnemonic` to scan a phrase being recovered, before any vault exists;
+   * supply `vaultPassphrase` instead to scan the phrase an existing vault already
+   * holds. Exactly one source is needed, and neither is ever returned.
    */
   readonly scanSeedAccounts: (
-    input: SeedAccountScanInput & { readonly vaultPassphrase: string },
+    input: SeedAccountScanInput & {
+      readonly mnemonic?: string;
+      readonly vaultPassphrase?: string;
+    },
   ) => Promise<readonly SeedAccountCandidate[]>;
   readonly setActiveAccount: (input: SetActiveAccountInput) => Promise<AccountRef>;
   readonly signHash: (input: SignHashInput) => Promise<StarkSignature>;

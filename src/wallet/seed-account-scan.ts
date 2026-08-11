@@ -8,15 +8,14 @@
  *
  * Derivation runs through Krusty and yields public metadata only
  * ({@link deriveAccountRef}); no private key is materialized, returned, or
- * logged, and the phrase is read from the already-decrypted vault rather than
- * accepted from a caller. The probe is injected so this module stays free of
- * network and clock access and can be tested against fixed chain answers.
+ * logged. The probe is injected so this module stays free of network and clock
+ * access and can be tested against fixed chain answers.
  */
 
 import type { KrustyKms } from "../crypto/krusty";
 import { WalletError } from "../shared/errors";
 import type { StarknetNetworkId } from "../starknet/networks";
-import type { DerivedAccountRef, Vault } from "../storage/vault-schema";
+import type { DerivedAccountRef } from "../storage/vault-schema";
 import { deriveAccountRef } from "./accounts";
 
 /**
@@ -74,17 +73,21 @@ export type SeedAccountScanInput = {
  * and reported when it qualifies, so a caller can tell a restored phrase's first
  * account apart from one that was never used.
  *
- * Throws a {@link WalletError} when the vault holds no recovery phrase — a
- * Ledger-only or raw-key vault has no HD positions to walk. A probe that throws
+ * Takes the phrase directly rather than a vault, because the walk has to run
+ * during recovery — before any vault exists — to populate the screen where the
+ * user chooses which accounts to add. The caller decides where the phrase came
+ * from: an existing vault, or the one being recovered.
+ *
+ * Throws a {@link WalletError} on an empty phrase. A probe that throws
  * propagates: a scan that silently treats an unreachable node as "no accounts
  * here" would report an empty wallet as the truth.
  */
 export const scanSeedAccounts = async (
   kms: KrustyKms,
-  vault: Vault,
+  mnemonic: string,
   input: SeedAccountScanInput,
 ): Promise<readonly SeedAccountCandidate[]> => {
-  if (!vault.mnemonic) {
+  if (mnemonic.trim().length === 0) {
     throw new WalletError("No recovery phrase stored for this wallet");
   }
   const found: SeedAccountCandidate[] = [];
@@ -92,7 +95,7 @@ export const scanSeedAccounts = async (
   for (let accountIndex = 0; accountIndex <= SEED_SCAN_MAX_INDEX; accountIndex += 1) {
     const account = await deriveAccountRef(kms, {
       accountIndex,
-      mnemonic: vault.mnemonic,
+      mnemonic,
       networkId: input.networkId,
     });
     const { deployed, funded } = await input.probe(account.address);

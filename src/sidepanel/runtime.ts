@@ -126,12 +126,17 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "import account failed");
     },
+    // `accountIndex` sets which HD position becomes the vault's first account.
+    // Recovery needs it: a user restoring only accounts 3 and 7 must not be given
+    // account 0 as well just because a vault has to start somewhere.
     async createAccount(
       mnemonic: string,
       networkId: string,
       vaultPassphrase: string,
+      accountIndex?: number,
     ): Promise<void> {
       const response = await sendMessage({
+        ...(accountIndex === undefined ? {} : { accountIndex }),
         mnemonic,
         networkId,
         type: "wallet.createAccount",

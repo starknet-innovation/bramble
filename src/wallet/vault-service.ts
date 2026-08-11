@@ -130,6 +130,15 @@ export const createWalletVaultService = ({
       return vault;
     });
 
+  // A vault-sourced scan needs the passphrase; the phrase-sourced form does not
+  // carry one. Fail closed rather than handing `undefined` to the store.
+  const requireVaultPassphrase = (vaultPassphrase: string | undefined): string => {
+    if (vaultPassphrase === undefined) {
+      throw new WalletError("Passphrase must be at least 12 characters");
+    }
+    return vaultPassphrase;
+  };
+
   const originIo = {
     readVault,
     readVaultSnapshot,
@@ -367,14 +376,23 @@ export const createWalletVaultService = ({
       return kms.generateMnemonic();
     },
     previewAccount: (input) => deriveAccountRef(kms, input),
-    // The vault read completes before any probe runs, so the mutation queue is
-    // never held across the network round trips this walk makes. Holding it
-    // would block every other vault operation for the length of a whole scan.
-    scanSeedAccounts: async (input) =>
-      scanSeedAccounts(kms, await readVault(input.vaultPassphrase), {
+    // Either phrase source, resolved here so no caller outside this service ever
+    // holds one: a recovery in progress supplies the phrase it is restoring, and
+    // an existing wallet supplies its passphrase instead and the phrase is read
+    // from the vault. The vault read completes before any probe runs, so the
+    // mutation queue is never held across this walk's network round trips —
+    // holding it would block every other vault operation for a whole scan.
+    scanSeedAccounts: async (input) => {
+      const mnemonic =
+        input.mnemonic ?? (await readVault(requireVaultPassphrase(input.vaultPassphrase))).mnemonic;
+      if (!mnemonic) {
+        throw new WalletError("No recovery phrase stored for this wallet");
+      }
+      return scanSeedAccounts(kms, mnemonic, {
         networkId: input.networkId,
         probe: input.probe,
-      }),
+      });
+    },
     grantOrigin: (input) => grantOriginAccess(originIo, input),
     getGrantedAccounts: (origin, vaultPassphrase) =>
       grantedAccountsFor(originIo, origin, vaultPassphrase),

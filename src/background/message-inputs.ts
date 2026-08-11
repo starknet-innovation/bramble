@@ -268,6 +268,28 @@ export const readSetActiveNetworkInput = (
 };
 
 /**
+ * Parses recovery-phrase scan messages.
+ *
+ * `mnemonic` is optional and carries the phrase being recovered, for the setup
+ * screen that must list a phrase's accounts before any vault exists. Omitted, the
+ * background reads the phrase from the unlocked vault instead — so a caller can
+ * never name a *different* wallet's phrase for an unlocked session to scan. The
+ * network is never carried: it comes from wallet state.
+ */
+export const readSeedScanInput = (message: unknown): { readonly mnemonic?: string } | null => {
+  if (
+    !isRecord(message) ||
+    !hasOnlyKnownKeys(message, ["mnemonic", "type"]) ||
+    message["type"] !== "wallet.scanSeedAccounts" ||
+    (message["mnemonic"] !== undefined &&
+      (typeof message["mnemonic"] !== "string" || message["mnemonic"].trim().length === 0))
+  ) {
+    return null;
+  }
+  return message["mnemonic"] === undefined ? {} : { mnemonic: message["mnemonic"] };
+};
+
+/**
  * Parses add-account messages; the passphrase comes from the unlocked session,
  * not the message, so only the target network and HD position are carried.
  *

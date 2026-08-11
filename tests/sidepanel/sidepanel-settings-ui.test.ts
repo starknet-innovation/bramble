@@ -12,6 +12,7 @@ import {
   bindBackup,
   bindContacts,
   bindGroups,
+  bindRestoreAccounts,
   type SettingsUiDeps,
 } from "../../src/sidepanel/settings-ui";
 import { registerDom, unregisterDom } from "../support/groups-harness";
@@ -295,5 +296,101 @@ describe("settings UI bindings", () => {
     await tick();
     expect(importButton?.disabled).toBe(false);
     expect(app.querySelector("#backup-result")?.textContent).not.toBe("");
+  });
+
+  // The reported bug's other half: the accounts surface must offer a choice, not
+  // add everything it finds.
+  describe("finding a phrase's other accounts", () => {
+    const html =
+      '<button id="restore-accounts">Find</button><div id="discovered-accounts"></div><p id="new-account-result"></p>';
+
+    const candidate = (accountIndex: number, alreadyAdded = false) => ({
+      accountIndex,
+      address: `0xa${accountIndex}`,
+      alreadyAdded,
+      deployed: true,
+      funded: false,
+    });
+
+    test("lists what it finds and adds only the confirmed selection", async () => {
+      const added: (number | undefined)[] = [];
+      const { app, calls, deps } = mount(html, {
+        addAccount: async (_networkId, accountIndex) => {
+          added.push(accountIndex);
+          return "SN_MAIN:0xadded";
+        },
+        scanSeedAccounts: async () => [candidate(0), candidate(3), candidate(7)],
+      });
+      bindRestoreAccounts(deps);
+
+      app.querySelector<HTMLButtonElement>("#restore-accounts")?.click();
+      await tick();
+
+      const rows = Array.from(app.querySelectorAll<HTMLButtonElement>("[data-discovered-index]"));
+      expect(rows.map((row) => row.dataset["discoveredIndex"])).toEqual(["0", "3", "7"]);
+      expect(rows.every((row) => row.getAttribute("aria-pressed") === "true")).toBe(true);
+      // Nothing is added by finding them.
+      expect(added).toEqual([]);
+
+      app.querySelector<HTMLButtonElement>('[data-discovered-index="3"]')?.click();
+      app.querySelector<HTMLButtonElement>("#discovered-confirm")?.click();
+      await tick();
+
+      expect(added).toEqual([0, 7]);
+      expect(calls.render).toBe(1);
+    });
+
+    test("offers no confirm control when every account is already held", async () => {
+      const { app, deps } = mount(html, {
+        addAccount: async () => "SN_MAIN:0xadded",
+        scanSeedAccounts: async () => [candidate(0, true), candidate(3, true)],
+      });
+      bindRestoreAccounts(deps);
+
+      app.querySelector<HTMLButtonElement>("#restore-accounts")?.click();
+      await tick();
+
+      // Nothing to choose, so the list is cleared rather than left showing rows
+      // that cannot be acted on.
+      expect(app.querySelectorAll("[data-discovered-index]")).toHaveLength(0);
+      expect(app.querySelector("#discovered-confirm")).toBeNull();
+    });
+
+    test("refuses a confirm with nothing selected", async () => {
+      const added: (number | undefined)[] = [];
+      const { app, deps } = mount(html, {
+        addAccount: async (_networkId, accountIndex) => {
+          added.push(accountIndex);
+          return "SN_MAIN:0xadded";
+        },
+        scanSeedAccounts: async () => [candidate(3)],
+      });
+      bindRestoreAccounts(deps);
+
+      app.querySelector<HTMLButtonElement>("#restore-accounts")?.click();
+      await tick();
+      app.querySelector<HTMLButtonElement>('[data-discovered-index="3"]')?.click();
+      app.querySelector<HTMLButtonElement>("#discovered-confirm")?.click();
+      await tick();
+
+      expect(added).toEqual([]);
+      expect(app.querySelector("#new-account-result")?.textContent).toContain(
+        "Select at least one account",
+      );
+    });
+
+    test("surfaces a failed scan rather than reporting no accounts", async () => {
+      const { app, deps } = mount(html, {
+        scanSeedAccounts: async () => {
+          throw new Error("node unreachable");
+        },
+      });
+      bindRestoreAccounts(deps);
+
+      app.querySelector<HTMLButtonElement>("#restore-accounts")?.click();
+      await tick();
+
+      expect(app.querySelector("#new-account-result")?.textContent).toContain("node unreachable");
+    });
   });
 });

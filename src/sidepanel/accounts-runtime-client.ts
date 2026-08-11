@@ -4,10 +4,11 @@
  * position. Spread into the main side-panel runtime client so callers see one
  * flat wallet surface (the same arrangement as ./ledger/runtime-client).
  *
- * Split from ./runtime for the file-size budget, and these two in particular
- * because neither carries secret material: only a network id and an HD index
- * cross, and the scan's reply is public account metadata. Recovery phrases and
- * raw keys stay in the main client, which is audited for that.
+ * Split from ./runtime for the file-size budget. The scan accepts the phrase
+ * being recovered, because the setup screen has to list a phrase's accounts
+ * before any vault exists — the same privileged request `wallet.previewAccount`
+ * already makes from that screen. The phrase is sent and never stored, logged, or
+ * returned; every reply here is public account metadata.
  */
 
 import {
@@ -28,10 +29,13 @@ export type AccountsRuntimeClient = {
    */
   readonly addAccount: (networkId: string, accountIndex?: number) => Promise<string>;
   /**
-   * Reports the HD positions this wallet's recovery phrase already has on chain.
-   * The phrase never leaves the background; only public metadata comes back.
+   * Reports the HD positions a recovery phrase already has on chain.
+   *
+   * Pass `mnemonic` during setup, where the phrase being recovered has no vault
+   * yet; omit it for an unlocked wallet and the background reads its own. Either
+   * way only public metadata comes back — no phrase is ever returned.
    */
-  readonly scanSeedAccounts: () => Promise<readonly SeedScanCandidate[]>;
+  readonly scanSeedAccounts: (mnemonic?: string) => Promise<readonly SeedScanCandidate[]>;
 };
 
 /**
@@ -53,8 +57,11 @@ export const createAccountsRuntimeClient = (
     }
     throw responseError(response, "add account failed");
   },
-  async scanSeedAccounts() {
-    const response = await sendMessage({ type: "wallet.scanSeedAccounts" });
+  async scanSeedAccounts(mnemonic) {
+    const response = await sendMessage({
+      ...(mnemonic === undefined ? {} : { mnemonic }),
+      type: "wallet.scanSeedAccounts",
+    });
     if (isSeedScanResponse(response)) {
       return response.candidates;
     }

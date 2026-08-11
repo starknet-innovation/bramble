@@ -4,7 +4,7 @@
  * and persistence happens only after the final Mainnet acknowledgement.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { WalletStatus } from "../../src/popup/responses";
+import type { SeedScanCandidate, WalletStatus } from "../../src/popup/responses";
 import { onboarding } from "../../src/sidepanel/gate-views";
 import { bindOnboarding } from "../../src/sidepanel/onboarding-ui";
 import type { SidepanelWallet } from "../../src/sidepanel/runtime";
@@ -66,17 +66,28 @@ const activeStep = (root: ParentNode): string | undefined =>
     (step) => !step.hidden,
   )?.dataset["onboardingStep"];
 
-const mount = () => {
+const mount = (discovered: readonly SeedScanCandidate[] = []) => {
   document.body.replaceChildren();
   const app = document.createElement("div");
   app.replaceChildren(document.createRange().createContextualFragment(onboarding(status)));
   document.body.append(app);
   const previews: Array<readonly [string, string]> = [];
-  const creations: Array<readonly [string, string, string]> = [];
+  const creations: Array<readonly [string, string, string, number | undefined]> = [];
+  const scans: (string | undefined)[] = [];
+  const addedIndexes: (number | undefined)[] = [];
   let renders = 0;
   const wallet = {
-    createAccount(mnemonic: string, networkId: string, vaultPassphrase: string) {
-      creations.push([mnemonic, networkId, vaultPassphrase]);
+    addAccount(_networkId: string, accountIndex?: number) {
+      addedIndexes.push(accountIndex);
+      return Promise.resolve("SN_MAIN:0xadded");
+    },
+    createAccount(
+      mnemonic: string,
+      networkId: string,
+      vaultPassphrase: string,
+      accountIndex?: number,
+    ) {
+      creations.push([mnemonic, networkId, vaultPassphrase, accountIndex]);
       return Promise.resolve();
     },
     generateMnemonic: () => Promise.resolve(MNEMONIC),
@@ -84,6 +95,10 @@ const mount = () => {
     previewAccount(mnemonic: string, networkId: string) {
       previews.push([mnemonic, networkId]);
       return Promise.resolve(account);
+    },
+    scanSeedAccounts(mnemonic?: string) {
+      scans.push(mnemonic);
+      return Promise.resolve(discovered);
     },
   } as unknown as SidepanelWallet;
   bindOnboarding({
@@ -93,7 +108,7 @@ const mount = () => {
     },
     wallet,
   });
-  return { app, creations, previews, renders: () => renders };
+  return { addedIndexes, app, creations, previews, renders: () => renders, scans };
 };
 
 describe("staged onboarding", () => {
@@ -134,8 +149,70 @@ describe("staged onboarding", () => {
     flow.app.querySelector<HTMLFormElement>("#create-form")?.requestSubmit();
     await tick();
 
-    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE]]);
+    // The vault starts at the selected position, which for the primary-only case
+    // is index 0.
+    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE, 0]]);
+    expect(flow.addedIndexes).toEqual([]);
+    // A typed phrase is scanned so its other accounts can be offered; a generated
+    // one is not, having nothing on chain by definition.
+    expect(flow.scans).toEqual([MNEMONIC]);
     expect(flow.renders()).toBe(1);
+  });
+
+  // The reported bug: recovery listed one account, then added every account the
+  // phrase had. The list must show them all, and only what is selected may be
+  // added.
+  test("lists a phrase's other accounts and adds only the selected ones", async () => {
+    const flow = mount([
+      { accountIndex: 0, address: "0xa0", alreadyAdded: false, deployed: true, funded: false },
+      { accountIndex: 3, address: "0xa3", alreadyAdded: false, deployed: true, funded: false },
+      { accountIndex: 7, address: "0xa7", alreadyAdded: false, deployed: false, funded: true },
+    ]);
+    click(flow.app, "#add-existing-button");
+    click(flow.app, "#recovery-method-button");
+    setValue(flow.app, 'input[name="import-word-0"]', MNEMONIC);
+    click(flow.app, "#recovery-continue");
+    setValue(flow.app, 'input[name="vaultPassphrase"]', PASSPHRASE);
+    setValue(flow.app, 'input[name="vaultPassphraseConfirm"]', PASSPHRASE);
+    click(flow.app, "#review-account-button");
+    await tick();
+
+    // Index 0 is the "Primary account" row, so only 3 and 7 are listed here —
+    // listing 0 twice would let one tap select two accounts.
+    const rows = Array.from(
+      flow.app.querySelectorAll<HTMLButtonElement>("[data-discovered-index]"),
+    );
+    expect(rows.map((row) => row.dataset["discoveredIndex"])).toEqual(["3", "7"]);
+    // Preselected: every candidate has on-chain evidence, so the common case is
+    // wanting them.
+    expect(rows.map((row) => row.getAttribute("aria-pressed"))).toEqual(["true", "true"]);
+
+    // Unselect account 7 and never select the primary: the wallet must come back
+    // holding account 3 alone.
+    click(flow.app, '[data-discovered-index="7"]');
+    const acknowledgement = flow.app.querySelector<HTMLInputElement>('input[name="mainnetAck"]');
+    if (!acknowledgement) {
+      throw new Error("missing Mainnet acknowledgement");
+    }
+    acknowledgement.checked = true;
+    acknowledgement.dispatchEvent(new window.Event("change", { bubbles: true }));
+    expect(flow.app.querySelector<HTMLButtonElement>("#create-wallet-button")?.disabled).toBe(
+      false,
+    );
+    flow.app.querySelector<HTMLFormElement>("#create-form")?.requestSubmit();
+    await tick();
+
+    // The vault starts at the lowest selected position — 3, not 0.
+    expect(flow.creations).toEqual([[MNEMONIC, "SN_MAIN", PASSPHRASE, 3]]);
+    expect(flow.addedIndexes).toEqual([]);
+  });
+
+  test("a generated phrase is never scanned", async () => {
+    const flow = mount();
+    click(flow.app, "#create-new-button");
+    await tick();
+
+    expect(flow.scans).toEqual([]);
   });
 
   test("requires revealing and confirming a generated backup before password setup", async () => {

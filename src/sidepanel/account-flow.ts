@@ -120,6 +120,9 @@ export const accountFlow = (
         </div>
         ${networkAccounts.length === 0 && networkMultisigs.length === 0 ? noAccountEmpty(status) : ""}
         <p id="picker-result" role="status"></p>
+        <!-- Accounts found on chain for this wallet's recovery phrase, filled in
+             by the scan with their own selection and confirm control. -->
+        <div id="discovered-accounts" data-discovered-state="idle"></div>
         <p id="new-account-result" role="status"></p>
       </section>
       ${groupsSection(groups, status.accounts, preferences, expandedGroupId, status.networks)}

@@ -11,8 +11,6 @@
  * Chain answers come from a fixed probe — no RPC, no node, no device.
  */
 import { describe, expect, test } from "bun:test";
-import { createEncryptedStore } from "../../src/storage/encrypted-store";
-import { createMemoryStore } from "../../src/storage/kv";
 import { deriveAccountRef } from "../../src/wallet/accounts";
 import {
   SEED_SCAN_GAP_LIMIT,
@@ -20,10 +18,8 @@ import {
   type SeedScanProbeResult,
   scanSeedAccounts,
 } from "../../src/wallet/seed-account-scan";
-import { createWalletVaultService } from "../../src/wallet/vault-service";
 import { fakeKms } from "../support/fake-kms";
 
-const vaultPassphrase = "correct horse battery staple";
 const mnemonic = "test test test test test test test test test test test junk";
 
 // The shared fake returns one constant keypair for every derivation, which would
@@ -42,17 +38,6 @@ const indexedKms = () => {
       };
     },
   };
-};
-
-const seededVault = async (kms: ReturnType<typeof indexedKms>) => {
-  const store = createMemoryStore();
-  const service = createWalletVaultService({
-    encryptedStore: createEncryptedStore(store, "mc-wallet:vault"),
-    kms,
-    migrationStore: createEncryptedStore(store, "mc-wallet:vault-migration"),
-  });
-  await service.createAccount({ mnemonic, networkId: "SN_MAIN", vaultPassphrase });
-  return { service, vault: await service.readVault(vaultPassphrase) };
 };
 
 // Answers by HD index rather than by address, so a case reads as the on-chain
@@ -88,9 +73,8 @@ const addressesByIndex = async (
 
 const runScan = async (qualifying: Readonly<Record<number, SeedScanProbeResult>>) => {
   const kms = indexedKms();
-  const { vault } = await seededVault(kms);
   const probed: string[] = [];
-  const found = await scanSeedAccounts(kms, vault, {
+  const found = await scanSeedAccounts(kms, mnemonic, {
     networkId: "SN_MAIN",
     probe: probeFor(qualifying, await addressesByIndex(kms), probed),
   });
@@ -143,28 +127,22 @@ describe("scanning a restored phrase for its on-chain accounts", () => {
 
   test("an unreachable node fails the scan instead of reporting an empty wallet", async () => {
     const kms = indexedKms();
-    const { vault } = await seededVault(kms);
 
     // Reporting "no accounts" because a node was down would invite the user to
     // conclude their accounts are gone.
     await expect(
-      scanSeedAccounts(kms, vault, {
+      scanSeedAccounts(kms, mnemonic, {
         networkId: "SN_MAIN",
         probe: () => Promise.reject(new Error("node unreachable")),
       }),
     ).rejects.toThrow("node unreachable");
   });
 
-  test("a vault with no recovery phrase has no positions to walk", async () => {
+  test("an empty phrase has no positions to walk", async () => {
     const kms = indexedKms();
-    const { vault } = await seededVault(kms);
 
     await expect(
-      scanSeedAccounts(
-        kms,
-        { ...vault, mnemonic: null },
-        { networkId: "SN_MAIN", probe: async () => deployed },
-      ),
+      scanSeedAccounts(kms, "   ", { networkId: "SN_MAIN", probe: async () => deployed }),
     ).rejects.toThrow("No recovery phrase stored for this wallet");
   });
 });

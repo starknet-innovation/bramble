@@ -264,7 +264,7 @@ const passwordStep = (): string => `
 const accountStep = (): string => `
   <section class="onboarding-step" data-onboarding-step="accounts" hidden>
     ${flowBack("Back to passphrase")}
-    ${stepHead("wallet", "Choose accounts to add", "Select the Starknet account you want available when setup finishes.")}
+    ${stepHead("wallet", "Choose accounts to add", "Select the Starknet accounts you want available when setup finishes.")}
     <div class="onboarding-fields">
       <button
         class="onboarding-account"
@@ -279,6 +279,11 @@ const accountStep = (): string => `
         </span>
         <span class="onboarding-account-check">${icon("check")}</span>
       </button>
+      <!-- Accounts this phrase already has on chain beyond the first, filled in
+           by the scan. Empty for a phrase with nothing else deployed or funded,
+           and for a phrase this wallet generated. -->
+      <div id="discovered-accounts" data-discovered-state="idle"></div>
+      <p id="discovered-result" class="hint" role="status"></p>
       ${mainnetAcknowledgement(
         "mainnetAck",
         "mainnet-ack",
@@ -290,7 +295,7 @@ const accountStep = (): string => `
       ${button({
         attributes: { id: "create-wallet-button" },
         disabled: true,
-        label: "Add selected account",
+        label: "Add selected accounts",
         type: "submit",
       })}
     </div>
