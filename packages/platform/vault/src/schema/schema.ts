@@ -9,7 +9,7 @@ import {
   isAccountRef,
   isKeylessAccount,
 } from "@mc-wallet/wallet-model/accounts";
-import { isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { isStarkPrivateKey } from "@mc-wallet/wallet-model/networks";
 import {
   type AccountSecretRef,
   hasValidAccountSecretBindings,
@@ -122,7 +122,11 @@ const isSigningKeyRef = (value: unknown): value is SigningKeyRef =>
   hasOnlyKnownKeys(value, ["accountId", "privateKey"]) &&
   isAccountId(value["accountId"]) &&
   typeof value["privateKey"] === "string" &&
-  isNonZeroStarkFieldElement(value["privateKey"]);
+  // The signing-scalar rule, not the wider non-zero-felt one: a stored key at or
+  // above the curve order is not a key the signer can honour — it would be
+  // reduced mod n and sign for a different account than the record names — so a
+  // vault carrying one is refused rather than decrypted into use.
+  isStarkPrivateKey(value["privateKey"]);
 
 const isOriginGrant = (value: unknown): value is OriginGrant =>
   isRecord(value) &&

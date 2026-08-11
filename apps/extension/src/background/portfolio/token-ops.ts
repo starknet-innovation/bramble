@@ -5,6 +5,8 @@
  * extension-page messages.
  */
 
+import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+import { isTokenSymbol } from "@mc-wallet/core/json";
 import {
   STARKNET_NETWORKS,
   type StarknetNetworkId,
@@ -19,6 +21,7 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
+
 import { readAddTokenInput, readSetTokenHiddenInput, readTokenChartInput } from "./token-inputs";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 
@@ -69,7 +72,7 @@ const buildTokenRecord = (
   metadata: TokenMetadata,
 ): TokenRecord | null => {
   const symbol = metadata.symbol.trim().toUpperCase();
-  if (!/^[A-Z0-9]{2,12}$/.test(symbol)) {
+  if (!isTokenSymbol(symbol)) {
     return null;
   }
   const trimmedName = metadata.name.trim().slice(0, 64);
@@ -119,7 +122,10 @@ const handleAddToken: TokenHandler = async (deps, message) => {
     ok: true,
     preferences: await preferencesStore.setTokenHidden({
       hidden: true,
-      tokenId: `${network.id}:${record.symbol}:${record.address}`,
+      // The id the store derived, never a second interpolation of the same
+      // three fields: a locally re-derived id that drifted from `withTokenId`
+      // hides nothing while reporting success.
+      tokenId: withTokenId(record).id,
     }),
   };
 };

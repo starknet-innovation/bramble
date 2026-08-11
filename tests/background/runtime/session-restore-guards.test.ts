@@ -6,7 +6,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   createUnlockSession,
-  type UnlockSessionState,
+  type UnlockSessionMirrorEntry,
   type UnlockSessionStore,
 } from "../../../apps/extension/src/background/runtime/session";
 
@@ -28,7 +28,7 @@ const rejectingStore = (): UnlockSessionStore => ({
 });
 
 const memoryStore = () => {
-  let state: UnlockSessionState | null = null;
+  let state: UnlockSessionMirrorEntry | null = null;
   return {
     async clear() {
       state = null;
@@ -36,7 +36,7 @@ const memoryStore = () => {
     async load() {
       return state;
     },
-    async save(next: UnlockSessionState) {
+    async save(next: UnlockSessionMirrorEntry) {
       state = next;
     },
     snapshot: () => state,
@@ -52,7 +52,7 @@ describe("unlock session restore guard", () => {
 
   test("restore is a no-op when a passphrase is already set", async () => {
     const store = memoryStore();
-    const session = createUnlockSession(100_000, () => Date.now(), store);
+    const session = createUnlockSession({ now: () => Date.now(), store, ttlMs: 100_000 });
     session.unlock(PASSPHRASE);
     // Wipe the mirror so a restore that did NOT early-return would observably
     // clear or change the in-memory passphrase; the guard keeps it intact.
@@ -63,11 +63,11 @@ describe("unlock session restore guard", () => {
   test("restore that reads back a live state rehydrates the passphrase", async () => {
     const store = memoryStore();
     const now = 10_000;
-    const writer = createUnlockSession(100_000, () => now, store);
+    const writer = createUnlockSession({ now: () => now, store, ttlMs: 100_000 });
     writer.unlock(PASSPHRASE);
     await flush();
 
-    const reader = createUnlockSession(100_000, () => now, store);
+    const reader = createUnlockSession({ now: () => now, store, ttlMs: 100_000 });
     expect(reader.isUnlocked()).toBe(false);
     await reader.restore();
     expect(reader.getPassphrase()).toBe(PASSPHRASE);
@@ -76,7 +76,11 @@ describe("unlock session restore guard", () => {
 
 describe("unlock session persistence failures are swallowed", () => {
   test("a rejecting save during unlock does not throw", async () => {
-    const session = createUnlockSession(100_000, () => Date.now(), rejectingStore());
+    const session = createUnlockSession({
+      now: () => Date.now(),
+      store: rejectingStore(),
+      ttlMs: 100_000,
+    });
     expect(() => session.unlock(PASSPHRASE)).not.toThrow();
     await flush();
     // The in-memory unlock still holds even though the persist failed.
@@ -84,7 +88,11 @@ describe("unlock session persistence failures are swallowed", () => {
   });
 
   test("a rejecting clear during lock does not throw", async () => {
-    const session = createUnlockSession(100_000, () => Date.now(), rejectingStore());
+    const session = createUnlockSession({
+      now: () => Date.now(),
+      store: rejectingStore(),
+      ttlMs: 100_000,
+    });
     session.unlock(PASSPHRASE);
     await flush();
     expect(() => session.lock()).not.toThrow();
@@ -93,7 +101,11 @@ describe("unlock session persistence failures are swallowed", () => {
   });
 
   test("a rejecting load during restore leaves the session locked", async () => {
-    const session = createUnlockSession(100_000, () => Date.now(), rejectingStore());
+    const session = createUnlockSession({
+      now: () => Date.now(),
+      store: rejectingStore(),
+      ttlMs: 100_000,
+    });
     await session.restore();
     expect(session.isUnlocked()).toBe(false);
   });

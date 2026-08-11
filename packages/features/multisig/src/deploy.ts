@@ -13,7 +13,11 @@ import { WalletError } from "@mc-wallet/core/errors";
 import { isRecord } from "@mc-wallet/core/json";
 import { MULTISIG_LIMITS } from "@mc-wallet/multisig/chain";
 import { withRpcFallback } from "@mc-wallet/starknet/provider";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import {
+  isNonZeroStarkFieldElement,
+  isStarkFieldElement,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
 import type { Call, RpcProvider } from "starknet";
 import { CallData, constants, hash } from "starknet";
 
@@ -133,7 +137,7 @@ const requirePinnedCompiledClass = (casm: unknown): void => {
   } catch {
     throw new WalletError("Declared multisig class is malformed");
   }
-  if (BigInt(computed) !== BigInt(MULTISIG_COMPILED_CLASS_HASH)) {
+  if (!sameFelt(computed, MULTISIG_COMPILED_CLASS_HASH)) {
     throw new WalletError("Declared multisig class does not match the pinned compiled class hash");
   }
 };
@@ -177,7 +181,7 @@ export const requireMultisigContractClass = (artifact: unknown): unknown => {
   const computed = hash.computeContractClassHash(
     artifact as Parameters<typeof hash.computeContractClassHash>[0],
   );
-  if (BigInt(computed) !== BigInt(MULTISIG_CLASS_HASH)) {
+  if (!sameFelt(computed, MULTISIG_CLASS_HASH)) {
     throw new WalletError("Bundled multisig class does not match the pinned class hash");
   }
   return artifact;

@@ -113,6 +113,19 @@ exists, use or extend it in place rather than adding a sibling.
 - Activity summaries are load-bearing: dedup guards match on them (see
   `apps/extension/src/background/multisig/multisig-tx-ops.ts`). Record deterministic, specific summaries, and never
   change one without checking what greps for it.
+- Numeric and lexical constants that more than one layer reads are single-sourced too:
+  `UINT128_LIMIT` in `src/starknet/networks.ts` (the uint256 limb bound, the unlimited-allowance
+  cut-off, and the STRK20 pool-fee ceiling all derive from it — never write `1n << 128n`), the
+  lowercase-hex grammar behind `isStarkFieldElement`/`isHexChainId`, and `isNetworkLabel` in
+  `src/shared/json.ts` for chain ids and names (bounded on the raw string, since the background
+  re-validates untrimmed message text), and `isServiceUrlList` in `src/shared/service-url.ts` for a
+  chain's endpoint arrays. `tests/conformance/shared-helper-single-source.test.ts` and its
+  `shared-grammar-single-source` sibling fail when a private copy reappears.
+- Workflow gates read `.github/workflows` from disk (`scripts/workflow-inventory.ts`), both `.yml`
+  and `.yaml` since GitHub runs either; do not add a hand-maintained workflow list. A new workflow
+  is checked automatically, and takes the self-hosted runner or a privileged trigger only by gaining
+  a reviewed policy in `scripts/workflow-security-policy.ts`. The same module owns the `uses:`
+  extraction, which fails closed: a reference it cannot resolve is reported as unpinned.
 
 ## Cursor Cloud specific instructions
 

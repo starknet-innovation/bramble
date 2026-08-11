@@ -60,7 +60,11 @@ describe("createApprovalQueue invoke fee review", () => {
       summaries: ["Invoke"],
     });
 
-    const updated = queue.updateInvokeFee(id, {
+    const revision = queue.beginInvokeFeeEstimate(id);
+    if (!revision) {
+      throw new Error("expected a fee-slot claim for a queued invoke");
+    }
+    const updated = queue.updateInvokeFee(revision, {
       fee: { overallFee: "77", unit: "FRI" },
       feeAffordability: "unknown",
       feeEstimateFailed: false,
@@ -70,6 +74,50 @@ describe("createApprovalQueue invoke fee review", () => {
     expect(updated).toMatchObject({ fee: { overallFee: "77", unit: "FRI" } });
     expect(queue.get(id)?.feeEstimateFailed).toBe(false);
     expect(queue.payload(id)).toEqual({ calls });
+  });
+
+  // Two wallet surfaces can each press "retry fee" on the same card, and the
+  // wallet cannot control which node answers first. Whichever estimate was
+  // STARTED last is the one the card ends up showing, so it must also be the one
+  // the queue holds — the older estimate resolving last must write nothing, or
+  // the approval is bound to a ceiling no surface ever displayed.
+  test("an estimate that resolves after a newer one writes nothing", () => {
+    const queue = createApprovalQueue();
+    const review = (overallFee: string) => ({
+      fee: { overallFee, unit: "FRI" },
+      feeAffordability: "unknown" as const,
+      feeEstimateFailed: false,
+      feeEstimatePending: false,
+      requiresDeployment: false,
+    });
+    const { id } = queue.requestInvoke({
+      calls,
+      context: CONTEXT,
+      fee: {
+        fee: null,
+        feeAffordability: "unknown",
+        feeEstimateFailed: false,
+        feeEstimatePending: true,
+        requiresDeployment: false,
+      },
+      flags: [],
+      origin: ORIGIN,
+      summaries: ["Invoke"],
+    });
+
+    const older = queue.beginInvokeFeeEstimate(id);
+    const newer = queue.beginInvokeFeeEstimate(id);
+    if (!older || !newer) {
+      throw new Error("expected both fee-slot claims for a queued invoke");
+    }
+    expect(queue.updateInvokeFee(newer, review("9999999"))).toMatchObject({
+      fee: { overallFee: "9999999", unit: "FRI" },
+    });
+    expect(queue.updateInvokeFee(older, review("2000"))).toBeNull();
+    expect(queue.get(id)?.fee).toEqual({ overallFee: "9999999", unit: "FRI" });
+    // The superseded write is dropped whole: a stale "still estimating" marker
+    // would disable the approve button for an estimate that already landed.
+    expect(queue.get(id)?.feeEstimatePending).toBe(false);
   });
 
   test("updateInvokeFee rejects unknown ids and non-invoke approvals", () => {
@@ -83,8 +131,12 @@ describe("createApprovalQueue invoke fee review", () => {
       requiresDeployment: false,
     } as const;
 
-    expect(queue.updateInvokeFee("9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01", review)).toBeNull();
-    expect(queue.updateInvokeFee(connect.id, review)).toBeNull();
+    expect(queue.beginInvokeFeeEstimate("9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01")).toBeNull();
+    expect(queue.beginInvokeFeeEstimate(connect.id)).toBeNull();
+    expect(
+      queue.updateInvokeFee({ id: "9e107d9d-372b-4b6b-8d0a-df1b6c8f6e01", revision: 1 }, review),
+    ).toBeNull();
+    expect(queue.updateInvokeFee({ id: connect.id, revision: 1 }, review)).toBeNull();
     expect(queue.get(connect.id)?.fee).toBeUndefined();
   });
 });

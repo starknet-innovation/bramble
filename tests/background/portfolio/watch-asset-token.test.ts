@@ -5,10 +5,8 @@
  * token dedupe (A-L8).
  */
 import { describe, expect, test } from "bun:test";
-import {
-  canonicalTokenAddress,
-  watchAssetToken,
-} from "../../../apps/extension/src/background/provider/watch-asset";
+import { canonicalAddress } from "@mc-wallet/wallet-model/networks";
+import { watchAssetToken } from "../../../apps/extension/src/background/provider/watch-asset";
 
 const ADDRESS = "0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8";
 
@@ -40,15 +38,15 @@ describe("watch-asset token name charset (A-M3)", () => {
 
 describe("watch-asset address canonicalization (A-L8)", () => {
   test("folds case and leading-zero padding to one canonical address", () => {
-    expect(canonicalTokenAddress("0xABC")).toBe(canonicalTokenAddress("0x0abc"));
-    expect(canonicalTokenAddress("0xAbC")).toBe(canonicalTokenAddress("0xabc"));
-    expect(canonicalTokenAddress("0x0")).toBeNull();
-    expect(canonicalTokenAddress("not-hex")).toBeNull();
+    expect(canonicalAddress("0xABC")).toBe(canonicalAddress("0x0abc"));
+    expect(canonicalAddress("0xAbC")).toBe(canonicalAddress("0xabc"));
+    expect(canonicalAddress("0x0")).toBeNull();
+    expect(canonicalAddress("not-hex")).toBeNull();
   });
 
   test("keeps a full-width address stable and lowercase", () => {
-    expect(canonicalTokenAddress(ADDRESS)).toBe(ADDRESS);
-    expect(canonicalTokenAddress(ADDRESS.toUpperCase().replace("0X", "0x"))).toBe(ADDRESS);
+    expect(canonicalAddress(ADDRESS)).toBe(ADDRESS);
+    expect(canonicalAddress(ADDRESS.toUpperCase().replace("0X", "0x"))).toBe(ADDRESS);
   });
 
   test("stores a canonical address so mixed-case variants produce one token", () => {

@@ -4,7 +4,9 @@
  * executeDeclareApproval fails closed on a locked wallet or a revoked grant, and
  * on the happy path drives the injected signHash through the RPC submission.
  */
+
 import { describe, expect, test } from "bun:test";
+import { memoryActivityLog } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ec } from "starknet";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
@@ -170,6 +172,7 @@ describe("executeDeclareApproval", () => {
       session.unlock(passphrase);
     }
     return {
+      activity: memoryActivityLog(),
       preferencesStore: unavailablePreferencesStore,
       runtimeRpc: {
         async submitDeclareTransaction(input: {
@@ -210,6 +213,7 @@ describe("executeDeclareApproval", () => {
     const signed: string[] = [];
     return {
       ...(queue ? { ledgerSignQueue: queue } : {}),
+      activity: memoryActivityLog(),
       preferencesStore: unavailablePreferencesStore,
       runtimeRpc: {
         async submitDeclareTransaction(input: {

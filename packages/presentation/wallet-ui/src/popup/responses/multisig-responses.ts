@@ -7,6 +7,7 @@ import {
   isMultisigConfirmationMode,
   type MultisigConfirmationMode,
 } from "@mc-wallet/multisig/confirmation";
+
 import {
   isMultisigProposalRecord,
   isMultisigRecord,
@@ -14,6 +15,7 @@ import {
   type MultisigRecord,
 } from "@mc-wallet/multisig/repository";
 import { isMultisigSyncWarning, type MultisigSyncWarning } from "@mc-wallet/multisig/sync";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 import { isFeeShape } from "./responses-transfer";
@@ -23,7 +25,7 @@ import { isFeeShape } from "./responses-transfer";
  */
 export type MultisigConfirmationReviewResponse = {
   readonly confirmationReview: {
-    readonly fee: { readonly overallFee: string; readonly unit: string } | null;
+    readonly fee: FeeEstimate | null;
     readonly feeEstimateFailed: boolean;
     readonly mode: MultisigConfirmationMode;
     readonly proposalId: string;

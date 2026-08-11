@@ -5,27 +5,35 @@
  * unit-testable; the actual event/allowance queries live in ./allowance-scan.
  */
 
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+
 import {
   type AllowanceRecord,
   allowanceId,
   hasValidAllowanceFields,
 } from "@mc-wallet/transactions/allowance-store";
+
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
   sameFelt,
+  UINT128_LIMIT,
+  uint256Felts,
 } from "@mc-wallet/wallet-model/networks";
 import { hash } from "starknet";
 
-const UINT_128_SHIFT = 128n;
-
 /**
  * A uint256 amount at or above this threshold is treated as an effectively
- * unlimited allowance for display. Matches the side panel's own cut-off: any
- * value that sets the high 128-bit word is far beyond a real spend cap.
+ * unlimited allowance: any value that sets the high 128-bit word is far beyond
+ * a real spend cap. The one shared cut-off — the pre-sign verifier's
+ * unlimited-approval risk flag (@mc-wallet/transactions/verify) and the
+ * allowance manager's display both read it here, so a transaction flagged
+ * before signing is the same one the manager later lists as unlimited. Do not
+ * re-derive the `1n << 128n` literal locally — the exponent itself is
+ * `UINT128_LIMIT` in @mc-wallet/wallet-model/networks, the same bound the
+ * shared uint256 join holds each limb to.
  */
-export const UNLIMITED_ALLOWANCE_THRESHOLD = 1n << 128n;
+export const UNLIMITED_ALLOWANCE_THRESHOLD = UINT128_LIMIT;
 
 /**
  * The Starknet event selector emitted by an ERC20 `approve`.
@@ -33,17 +41,30 @@ export const UNLIMITED_ALLOWANCE_THRESHOLD = 1n << 128n;
 export const APPROVAL_EVENT_KEY = hash.getSelectorFromName("Approval");
 
 /**
- * Where a listed allowance came from: `wallet` for approvals this wallet
- * submitted (tracked locally) and `external` for ones discovered on-chain.
+ * Where a listed allowance came from: `wallet` for approvals the active account
+ * submitted through this wallet (tracked locally), `multisig` for ones a
+ * watched multisig granted when this account executed a proposal (tracked
+ * locally under the multisig's own scope, and revokable only by proposing from
+ * that multisig), and `external` for ones discovered on-chain.
  */
-export type AllowanceSource = "external" | "wallet";
+export type AllowanceSource = "external" | "multisig" | "wallet";
 
 /**
  * A tracked allowance enriched with its origin for display. Extends the stored
  * record shape so wallet-granted entries carry through unchanged.
+ *
+ * `unconfirmedToken` marks a row whose contract the wallet cannot say is a
+ * fungible token: an ERC721 `approve(to, token_id)` and an ERC20
+ * `approve(spender, amount)` are the same three felts, so on a contract that is
+ * neither a tracked token nor answering an `allowance(owner, spender)` read the
+ * amount may be an item id rather than a spend cap. Derived per listing (never
+ * stored), only `true` is representable, and the manager must neither state the
+ * value as an allowance nor offer the ERC20 revoke for such a row — on an
+ * ERC721, `approve(spender, 0)` approves item #0 instead of revoking.
  */
 export type AllowanceView = AllowanceRecord & {
   readonly source: AllowanceSource;
+  readonly unconfirmedToken?: true;
 };
 
 /**
@@ -54,6 +75,17 @@ export type ExternalAllowance = {
   readonly amount: string;
   readonly spender: string;
   readonly token: string;
+};
+
+/**
+ * The live on-chain amount of one allowance the wallet already tracks, keyed by
+ * that record's id. Produced by a direct `allowance(owner, spender)` read (see
+ * ./allowance-scan), which — unlike event-driven discovery — reaches tokens the
+ * user does not track and owners that are not the active account.
+ */
+export type AllowanceReading = {
+  readonly amount: string;
+  readonly id: string;
 };
 
 /**
@@ -87,12 +119,17 @@ export const isAllowanceView = (value: unknown): value is AllowanceView =>
     "accountId",
     "amount",
     "id",
+    "lowerBound",
     "networkId",
     "source",
     "spender",
     "token",
+    "unconfirmedToken",
   ]) &&
-  (value["source"] === "external" || value["source"] === "wallet") &&
+  (value["source"] === "external" ||
+    value["source"] === "multisig" ||
+    value["source"] === "wallet") &&
+  (value["unconfirmedToken"] === undefined || value["unconfirmedToken"] === true) &&
   hasValidAllowanceFields(value);
 
 /**
@@ -127,64 +164,128 @@ export const decodeApprovalEvent = (event: {
  * Parses an ERC20 uint256 `allowance` response `[low, high]` into a decimal
  * string, or null when the response is not a valid uint256 pair.
  */
-export const parseAllowanceAmount = (response: readonly string[]): string | null => {
-  const low = response[0];
-  const high = response[1];
-  if (typeof low !== "string" || typeof high !== "string") {
+export const parseAllowanceAmount = (response: readonly string[]): string | null =>
+  uint256Felts(response[0], response[1])?.toString() ?? null;
+
+// Adopts the on-chain reading of one (token, spender) pair when it is the
+// stronger statement about what the spender may take. Both readings can be
+// incomplete: the local log cannot see grants made outside this wallet,
+// increases applied on top of them, or entries the retention cap evicted (such
+// a record is marked `lowerBound`), while the on-chain read cannot see an
+// approval this wallet has broadcast but the network has not mined yet, and it
+// is simply absent whenever the node fails, is offline, or is hostile. Taking
+// the LARGER never understates a spender's reach — the only direction that can
+// hide a drainer — and no answer at all leaves the tracked figure standing.
+//
+// A reading that is at least the tracked figure also RESOLVES a lower bound:
+// the chain has now stated the standing allowance for that exact pair, so the
+// row stops being an "at least" and becomes exact. A smaller reading leaves the
+// record — and its lower-bound marking — alone.
+const withOnChainAmount = (view: AllowanceView, onChain: string | undefined): AllowanceView => {
+  if (!isBaseUnitsAmount(onChain) || !isBaseUnitsAmount(view.amount)) {
+    return view;
+  }
+  if (BigInt(onChain) < BigInt(view.amount)) {
+    return view;
+  }
+  // Rebuilt field by field rather than spread, so the resolved `lowerBound`
+  // marking is dropped rather than carried over. Re-validated before adoption,
+  // so a scan that answered with an out-of-range value cannot push a record
+  // past the field rules the message boundary enforces.
+  const candidate: AllowanceView = {
+    accountId: view.accountId,
+    amount: onChain,
+    id: view.id,
+    networkId: view.networkId,
+    source: view.source,
+    spender: view.spender,
+    token: view.token,
+  };
+  return isAllowanceView(candidate) ? candidate : view;
+};
+
+// One discovered allowance as a display view for the active account, or null
+// when it is already revoked (a zero amount), malformed, or fails the field
+// rules the message boundary enforces.
+const externalView = (
+  entry: ExternalAllowance,
+  accountId: string,
+  networkId: AllowanceRecord["networkId"],
+): AllowanceView | null => {
+  if (entry.amount === "0") {
     return null;
   }
-  try {
-    return (BigInt(low) + (BigInt(high) << UINT_128_SHIFT)).toString();
-  } catch {
+  const id = allowanceId({ accountId, networkId, ...entry });
+  const token = canonicalFelt(entry.token);
+  const spender = canonicalFelt(entry.spender);
+  if (!id || !token || !spender) {
     return null;
   }
+  const candidate: AllowanceView = {
+    accountId,
+    amount: entry.amount,
+    id,
+    networkId,
+    source: "external",
+    spender,
+    token,
+  };
+  return isAllowanceView(candidate) ? candidate : null;
 };
 
 /**
- * Merges the wallet's locally tracked allowances with externally discovered
- * ones for a single account and network. Wallet-granted entries take
- * precedence: an external allowance for the same (token, spender) is dropped so
- * the list never shows a duplicate, and zero-amount externals (already revoked)
- * are omitted. Externals are appended after the wallet entries.
+ * Merges the wallet's locally tracked allowances — the active account's own,
+ * plus any granted by a watched multisig this account executed for — with the
+ * ones discovered on-chain, for a single network.
+ *
+ * Locally tracked entries take precedence as ENTRIES: an external allowance for
+ * the same (token, spender) is dropped so the list never shows a duplicate, and
+ * zero-amount externals (already revoked) are omitted. Their AMOUNT, however,
+ * comes from the on-chain reading whenever that reading is at least as large
+ * (see `withOnChainAmount`), so a grant this wallet only partly knows about — an
+ * `increase_allowance` on top of an approval granted elsewhere — is never listed
+ * as less than the spender can take, and a record marked as a lower bound stops
+ * being one as soon as the chain answers for it. Readings taken per tracked
+ * record (`readings`, which reach untracked tokens and multisig-owned scopes)
+ * take precedence over amounts inferred from the event-driven external scan,
+ * which can only ever speak for the active account. Externals are appended after
+ * the locally tracked entries. Pure: it reads only what it is handed.
  */
-export const mergeAllowanceViews = (
-  inWallet: readonly AllowanceRecord[],
-  external: readonly ExternalAllowance[],
-  account: { readonly id: string },
-  networkId: AllowanceRecord["networkId"],
-): readonly AllowanceView[] => {
-  const walletViews: AllowanceView[] = inWallet.map((record) => ({ ...record, source: "wallet" }));
-  const seen = new Set(walletViews.map((view) => view.id));
+export const mergeAllowanceViews = (input: {
+  readonly account: { readonly id: string };
+  readonly external: readonly ExternalAllowance[];
+  readonly inWallet: readonly AllowanceRecord[];
+  readonly multisig?: readonly AllowanceRecord[];
+  readonly networkId: AllowanceRecord["networkId"];
+  readonly readings?: readonly AllowanceReading[];
+}): readonly AllowanceView[] => {
+  const { account, external, inWallet, networkId } = input;
+  const onChainAmounts = new Map<string, string>();
+  // The event scan speaks only for the ACTIVE account's address, so its results
+  // are keyed under that account's ids...
+  for (const entry of external) {
+    const id = allowanceId({ accountId: account.id, networkId, ...entry });
+    if (id) {
+      onChainAmounts.set(id, entry.amount);
+    }
+  }
+  // ...while a per-record reading already carries the id of the record it was
+  // taken for, whichever scope owns it, and therefore wins.
+  for (const reading of input.readings ?? []) {
+    onChainAmounts.set(reading.id, reading.amount);
+  }
+  const trackedViews: AllowanceView[] = [
+    ...inWallet.map((record): AllowanceView => ({ ...record, source: "wallet" })),
+    ...(input.multisig ?? []).map((record): AllowanceView => ({ ...record, source: "multisig" })),
+  ].map((view) => withOnChainAmount(view, onChainAmounts.get(view.id)));
+  const seen = new Set(trackedViews.map((view) => view.id));
   const externalViews: AllowanceView[] = [];
   for (const entry of external) {
-    if (entry.amount === "0") {
-      continue;
-    }
-    const id = allowanceId({
-      accountId: account.id,
-      amount: entry.amount,
-      networkId,
-      spender: entry.spender,
-      token: entry.token,
-    });
-    const token = canonicalFelt(entry.token);
-    const spender = canonicalFelt(entry.spender);
-    if (!id || !token || !spender || seen.has(id)) {
-      continue;
-    }
-    const candidate: AllowanceView = {
-      accountId: account.id,
-      amount: entry.amount,
-      id,
-      networkId,
-      source: "external",
-      spender,
-      token,
-    };
-    if (isAllowanceView(candidate)) {
-      seen.add(id);
+    const candidate = externalView(entry, account.id, networkId);
+    if (candidate && !seen.has(candidate.id)) {
+      seen.add(candidate.id);
       externalViews.push(candidate);
     }
   }
-  return [...walletViews, ...externalViews];
+  return [...trackedViews, ...externalViews];
 };

@@ -1,6 +1,6 @@
 {
   "name": "mc-wallet",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -53,6 +53,7 @@
   "dependencies": {
     "@mc-wallet/core": "workspace:*",
     "@mc-wallet/kms-krusty": "workspace:*",
+    "@mc-wallet/ledger-protocol": "workspace:*",
     "@mc-wallet/multisig": "workspace:*",
     "@mc-wallet/permissions": "workspace:*",
     "@mc-wallet/privacy": "workspace:*",

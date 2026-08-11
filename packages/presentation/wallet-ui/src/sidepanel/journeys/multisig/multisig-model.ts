@@ -5,6 +5,7 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+
 import {
   isMultisigProposalRecord,
   isMultisigRecord,
@@ -14,6 +15,7 @@ import {
 } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { verifyCalls } from "@mc-wallet/transactions/verify";
+import { verificationContext } from "@mc-wallet/transactions/verify-decode";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { Call } from "starknet";
@@ -74,11 +76,17 @@ export const multisigProposalEffect = (
       targetLabel,
     };
   }
-  const report = verifyCalls([asCall(call)], {
-    account,
-    addressBook: preferences?.addressBook ?? [],
-    tokens: preferences?.tokens ?? [],
-  });
+  // Built through the shared trusted-set builder rather than a local literal,
+  // so this review scopes contacts, tokens, and watched collections to the
+  // account's network exactly as every background review path does.
+  const report = verifyCalls(
+    [asCall(call)],
+    verificationContext(account, {
+      addressBook: preferences?.addressBook ?? [],
+      nfts: preferences?.nfts ?? [],
+      tokens: preferences?.tokens ?? [],
+    }),
+  );
   return {
     flags: report.flags.map((flag) => flag.message),
     summary: report.calls[0]?.summary ?? `Call ${call.entrypoint} on ${targetLabel}`,

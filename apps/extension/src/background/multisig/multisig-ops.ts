@@ -8,6 +8,8 @@
  * multisig operations live in multisig-tx-ops.ts.
  */
 
+
+import { multisigCallMatchesId } from "@mc-wallet/multisig/chain";
 import {
   canonicalFelt,
   STARKNET_NETWORKS,
@@ -30,9 +32,10 @@ import {
   readTrackMultisigProposalInput,
 } from "./multisig-inputs";
 import { refreshMultisigProposals } from "./multisig-proposal-status";
-import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
+import { activeAccountContext, networkRpcUrls, type ActiveAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
+
 
 const MAX_NEW_PROPOSALS_PER_REFRESH = 20;
 
@@ -51,7 +54,7 @@ export type MultisigOpsDeps = WalletOpsDeps & {
  * watched record, guaranteed to be on the active network.
  */
 export type MultisigContext = {
-  readonly account: Awaited<ReturnType<typeof activeAccountContext>> & { readonly error?: never };
+  readonly account: ActiveAccountContext & { readonly error?: never };
   readonly record: MultisigRecord;
   readonly rpcUrls: readonly string[];
 };
@@ -84,16 +87,27 @@ export const refreshSignerMembership = async (
 };
 
 /**
- * Resolves a selected vault account and watched multisig by id, enforcing that
- * both live on the active network. Omitting the signer preserves the legacy
- * active-account behavior for non-transaction operations.
+ * Resolves a watched multisig by id against an account context the caller has
+ * already resolved, enforcing that both live on the active network. Omitting
+ * `signerAccountId` preserves the active-account behavior for non-transaction
+ * operations.
+ *
+ * The account context is an argument rather than something resolved here
+ * because resolving it is what decides whether the unlock window is renewed:
+ * a handler the side panel polls passes {@link observedAccountContext} and a
+ * handler the user just triggered passes {@link activeAccountContext}. Taking
+ * the resolved value keeps that choice visible at the call site instead of
+ * hiding one renewal behind a shared helper (MCW-V09-105).
  */
 export const multisigContext = async (
   deps: MultisigOpsDeps,
-  id: string,
-  signerAccountId?: string,
+  input: {
+    readonly active: ActiveAccountContext;
+    readonly id: string;
+    readonly signerAccountId?: string | undefined;
+  },
 ): Promise<{ readonly error: string } | MultisigContext> => {
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  const { active: context, id, signerAccountId } = input;
   if (context.error !== undefined) {
     return { error: context.error };
   }
@@ -232,7 +246,8 @@ const listMultisigs: MultisigOpsHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.multisigs")) {
     return { error: "invalid multisigs request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  // Panel-poll traffic: observe the session, never extend it.
+  const context = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { multisigs: [], ok: true, proposals: [] };
   }
@@ -285,7 +300,12 @@ const loadMultisigBalances: MultisigOpsHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid multisig balances request" };
   }
-  const resolved = await multisigContext(deps, input.id);
+  // Panel-poll traffic (side-panel hydration re-reads these balances on its
+  // ambient cadence): observe the session, never extend it.
+  const resolved = await multisigContext(deps, {
+    active: await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    id: input.id,
+  });
   if ("error" in resolved) {
     return { error: resolved.error };
   }
@@ -308,7 +328,12 @@ const refreshMultisig: MultisigOpsHandler = async (deps, message) => {
   if (!input) {
     return { error: "invalid refresh multisig request" };
   }
-  const resolved = await multisigContext(deps, input.id);
+  // Also panel-poll traffic: every hydration of a multisig view re-reads the
+  // on-chain config, with no user action behind it.
+  const resolved = await multisigContext(deps, {
+    active: await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    id: input.id,
+  });
   if ("error" in resolved) {
     return { error: resolved.error };
   }
@@ -361,12 +386,29 @@ const refreshMultisig: MultisigOpsHandler = async (deps, message) => {
   };
 };
 
+// Re-tracking is the documented way out of a record whose stored call hashes to
+// some other id (a hostile RPC answer persisted by an earlier version). Carrying
+// that call over would leave the record exactly as poisoned as it was, so a
+// stored call that does not bind to the tracked id is dropped and the record
+// continues as id-only — the shape the acknowledgment paths can act on.
+const retainedProposalCall = (
+  existing: MultisigProposalRecord | undefined,
+  txId: string,
+): MultisigProposalRecord["call"] =>
+  existing?.call && multisigCallMatchesId(existing.call, existing.call.salt, txId)
+    ? existing.call
+    : null;
+
 const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
   const input = readTrackMultisigProposalInput(message);
   if (!input) {
     return { error: "invalid track proposal request" };
   }
-  const resolved = await multisigContext(deps, input.multisigId);
+  // User-initiated: the user pasted a proposal id and pressed track.
+  const resolved = await multisigContext(deps, {
+    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    id: input.multisigId,
+  });
   if ("error" in resolved) {
     return { error: resolved.error };
   }
@@ -396,7 +438,7 @@ const trackMultisigProposal: MultisigOpsHandler = async (deps, message) => {
   }
   const existing = (await deps.multisigStore.listProposals()).find((p) => p.id === id);
   const proposal: MultisigProposalRecord = {
-    call: input.call ?? existing?.call ?? null,
+    call: input.call ?? retainedProposalCall(existing, input.txId),
     confirmations: status.confirmations,
     confirmedBySigner: status.confirmedBySigner,
     confirmedBySignerAddress: resolved.account.account.address,

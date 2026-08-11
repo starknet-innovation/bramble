@@ -1,7 +1,17 @@
 /**
- * Wallet adapters that prefer exact Starkscan reads and preserve RPC fallback.
+ * Wallet read adapters whose trust order is RPC first, explorer gateway second.
+ *
+ * The Starkscan readers below (`getStarkscanTokenBalances`,
+ * `getStarkscanTransactionHistory`) are the gateway lane and are exported for
+ * the fallback wiring and its tests; the two `createRpcFirst*` factories are
+ * what production consumes, and they reach the gateway only after the user's own
+ * endpoints have failed AND the user's per-network `explorerFallback`
+ * preference permits it. The names say which source is tried first on purpose:
+ * an earlier spelling ("StarkscanPreferred") outlived the ordering it described
+ * and read as an endorsement of the third party.
  */
 
+import { isSafeDecimals } from "@mc-wallet/core/json";
 import {
   type BalanceInput,
   formatTokenAmount,
@@ -9,15 +19,17 @@ import {
   type TokenBalance,
 } from "@mc-wallet/starknet/rpc";
 import { type ActivityEntry, isActivityEntry } from "@mc-wallet/transactions/activity";
-import { canonicalFelt, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { TokenConfig } from "@mc-wallet/wallet-model/preferences";
+import { canonicalFelt, type StarknetNetworkId, sameFelt } from "@mc-wallet/wallet-model/networks";
+import {
+  type ExplorerLanePreferences,
+  explorerFallbackAllowed,
+  type TokenConfig,
+} from "@mc-wallet/wallet-model/preferences";
+
 import type { StarkscanClient } from "./starkscan";
 import type { StarkscanTransfer } from "./starkscan-types";
 import { MAX_HISTORY_ENTRIES, onChainActivityEntry, type TransferDirection } from "./tx-history";
 import { scanTransactionHistory, type TransactionHistoryScan } from "./tx-history-scan";
-
-const usableDecimals = (value: number | null): value is number =>
-  value !== null && Number.isSafeInteger(value) && value >= 0 && value <= 36;
 
 const usableSymbol = (value: string | null): value is string =>
   value !== null && value.trim().length > 0 && value.length <= 64;
@@ -31,7 +43,7 @@ const matchingToken = (
   if (configured !== undefined) {
     return configured;
   }
-  if (!usableDecimals(transfer.tokenDecimals) || !usableSymbol(transfer.tokenSymbol)) {
+  if (!isSafeDecimals(transfer.tokenDecimals) || !usableSymbol(transfer.tokenSymbol)) {
     return null;
   }
   return {
@@ -165,29 +177,94 @@ export const getStarkscanTokenBalances = async (
 };
 
 /**
- * Makes indexed holdings the fast path and latest-state Starknet RPC the
- * bounded fallback. The indexer never participates in signing or submission.
+ * Collaborators the RPC-first read adapters are built from.
+ *
+ * `readPreferences` is the live preferences read, not a snapshot: the lane is
+ * re-authorized on each outage, so turning it off in Settings takes effect on
+ * the next refresh without re-wiring the background.
  */
-export const createStarkscanPreferredBalances =
-  (client: StarkscanClient): typeof getTokenBalances =>
+export type RpcFirstReadOptions = {
+  readonly client: StarkscanClient;
+  readonly readPreferences: () => Promise<ExplorerLanePreferences>;
+};
+
+// Fails closed in both directions that are not an explicit "yes": a request
+// whose network cannot be identified, and a preferences read that throws (the
+// store is unavailable, or holds a record this build refuses), leave the
+// gateway unused so an infrastructure fault can never widen disclosure.
+const gatewayAllowedFor = async (
+  readPreferences: () => Promise<ExplorerLanePreferences>,
+  networkId: StarknetNetworkId | undefined,
+): Promise<boolean> => {
+  if (networkId === undefined) {
+    return false;
+  }
+  try {
+    return explorerFallbackAllowed(await readPreferences(), networkId);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Serves balances from the user's configured Starknet RPC and falls back to the
+ * public explorer gateway only when every configured endpoint fails and the
+ * user's `explorerFallback` preference permits that lane for the network.
+ *
+ * The configured endpoints are the user's own trust and privacy choice, and
+ * latest-state RPC is authoritative; the gateway is a third party that learns
+ * every address it is asked about and whose numbers the wallet cannot verify.
+ * Asking it first disclosed each account on every refresh and let it shape what
+ * the balance screen showed, so it is reached only when the wallet would
+ * otherwise have no balances at all — and only with permission (MCW-V09-129).
+ * A user on the built-in RPCs keeps the outage rescue by default; a user who
+ * configured an `rpcOverride` for the network gets the RPC failure instead, and
+ * can re-enable the lane in Settings. When both sources run and both fail, the
+ * RPC failure is what propagates — the gateway must never explain away the
+ * user's own endpoint. Neither source participates in signing or submission.
+ */
+export const createRpcFirstBalances =
+  ({ client, readPreferences }: RpcFirstReadOptions): typeof getTokenBalances =>
   async (input, makeProvider) => {
     try {
-      return await getStarkscanTokenBalances(client, input);
-    } catch {
-      return getTokenBalances(input, makeProvider);
+      return await getTokenBalances(input, makeProvider);
+    } catch (rpcFailure) {
+      if (!(await gatewayAllowedFor(readPreferences, input.tokens[0]?.networkId))) {
+        throw rpcFailure;
+      }
+      try {
+        return await getStarkscanTokenBalances(client, input);
+      } catch {
+        throw rpcFailure;
+      }
     }
   };
 
 /**
- * Makes indexed transfers the fast activity path while preserving the existing
- * RPC scanner as a fail-closed availability fallback.
+ * Serves activity from the RPC transfer scanner and falls back to indexed
+ * explorer transfers only when the configured endpoints fail and the lane is
+ * permitted for the network.
+ *
+ * Same trust ordering and same `explorerFallback` gate as
+ * {@link createRpcFirstBalances}: the gateway sees the account address only
+ * when the user's own endpoints cannot answer and the user has not refused the
+ * lane. A refused or failed gateway re-throws the RPC failure, so the caller
+ * still degrades to the local activity log with an honest "history unavailable"
+ * indicator rather than a third party's account of the outage.
  */
-export const createStarkscanPreferredHistory =
-  (client: StarkscanClient): typeof scanTransactionHistory =>
+export const createRpcFirstHistory =
+  ({ client, readPreferences }: RpcFirstReadOptions): typeof scanTransactionHistory =>
   async (input, makeProvider) => {
     try {
-      return await getStarkscanTransactionHistory(client, input);
-    } catch {
-      return scanTransactionHistory(input, makeProvider);
+      return await scanTransactionHistory(input, makeProvider);
+    } catch (rpcFailure) {
+      if (!(await gatewayAllowedFor(readPreferences, input.networkId))) {
+        throw rpcFailure;
+      }
+      try {
+        return await getStarkscanTransactionHistory(client, input);
+      } catch {
+        throw rpcFailure;
+      }
     }
   };

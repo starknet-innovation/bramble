@@ -2,8 +2,10 @@
  * Strict parsers for extension-only STRK20 wallet journey messages.
  */
 
+import { isSha256Digest } from "@mc-wallet/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { isTransferAmount } from "../routing/message-inputs";
+
 
 /**
  * The asset, counterparty, and decimal amount every value-moving journey takes.
@@ -92,7 +94,6 @@ export const readStrk20WalletExecuteInput = (
   isRecord(message) &&
   hasOnlyKnownKeys(message, ["preparationId", "type"]) &&
   message["type"] === "wallet.strk20Execute" &&
-  typeof message["preparationId"] === "string" &&
-  /^sha256:[0-9a-f]{64}$/.test(message["preparationId"])
+  isSha256Digest(message["preparationId"])
     ? { preparationId: message["preparationId"] }
     : null;

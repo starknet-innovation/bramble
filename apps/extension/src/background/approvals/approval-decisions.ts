@@ -4,6 +4,11 @@
  * hash, tracked token, or new chain id) and clears the approval;
  * `wallet.denyOrigin` rejects the held request with a spec USER_REFUSED_OP so
  * the dapp promise settles rather than hanging. Only extension pages reach here.
+ *
+ * An approve decision may carry the fee the deciding surface was displaying.
+ * That echo — not the queue's copy at claim time — is what a fee-bearing
+ * submission is held to, and a queue that has moved on from it refuses the
+ * decision instead of substituting its own figure.
  */
 
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
@@ -12,6 +17,7 @@ import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import { executeAddChainApproval } from "../provider/add-chain-ops";
+
 import { approvalPayloadMatchesContext } from "./approval-context";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
 import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
@@ -24,11 +30,16 @@ import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
 import type { SignatureWaiters } from "./signature-waiters";
 import {
+  executeStrk20DisclosureApproval,
+  executeStrk20InvokeApproval,
+} from "../privacy/strk20-approval-execution";
+import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
 } from "../privacy/strk20-approval-types";
-import { executeStrk20DisclosureApproval, executeStrk20InvokeApproval } from "../privacy/strk20-ops";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { type FeeEstimate, sameFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+
 
 /**
  * Dependencies for resolving a queued approval into its settled result.
@@ -61,7 +72,18 @@ type ApplyResult =
       readonly respond: (listPending: () => readonly PendingApproval[]) => RuntimeResponse;
     };
 
-type ApproveApplier = (deps: ApprovalDecisionDeps, claim: ApprovalClaim) => Promise<ApplyResult>;
+/**
+ * What the deciding surface reported about its own render, alongside the id it
+ * decided. Only the fee travels today; it is separate from the claimed approval
+ * because it describes the CARD, not the queue entry.
+ */
+type ApproveDecision = { readonly reviewedFee?: FeeEstimate };
+
+type ApproveApplier = (
+  deps: ApprovalDecisionDeps,
+  claim: ApprovalClaim,
+  decision: ApproveDecision,
+) => Promise<ApplyResult>;
 
 const reject = (response: RuntimeResponse): ApplyResult => ({ response, status: "reject" });
 
@@ -87,9 +109,20 @@ const applyWatchAsset: ApproveApplier = async (deps, { approval }) => {
   };
 };
 
-const applyInvoke: ApproveApplier = async (deps, { approval, payload }) => {
+const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision) => {
   if (!payload) {
     return reject(NOT_FOUND);
+  }
+  const reviewedFee = decision.reviewedFee;
+  // The ceiling is the figure the clicking surface says it was displaying, and
+  // it only binds if the queue still agrees with it. A fee slot can be replaced
+  // between paint and click — a retry pressed on a second open wallet surface
+  // re-estimates the same approval — so a card that has not repainted since
+  // would otherwise consent to a snapshot it never showed. A moved figure is
+  // refused rather than substituted: the honest answer is "re-review", not a
+  // ceiling of the wallet's own choosing.
+  if (reviewedFee && !(approval.fee && sameFeeEstimate(reviewedFee, approval.fee))) {
+    return reject({ error: "the fee changed since this request was reviewed" });
   }
   const result = await executeInvokeApproval(
     {
@@ -105,6 +138,11 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }) => {
       ...(approval.context === undefined ? {} : { context: approval.context }),
       origin: approval.origin,
       payload,
+      // No echo means the surface displayed no fee to consent to (still
+      // estimating, or the estimate failed), so the submission goes out unbound
+      // — honest, and the same treatment the panel send journeys give a review
+      // they could not price.
+      ...(reviewedFee ? { reviewedFee } : {}),
     },
   );
   return settleExecutor(result);
@@ -117,6 +155,7 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
   const result = await executeStrk20InvokeApproval(
     {
       activity: deps.activity,
+      allowanceStore: deps.allowanceStore,
       preferencesStore: deps.preferencesStore,
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
@@ -150,6 +189,7 @@ const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }
   const result = await executeStrk20DisclosureApproval(
     {
       activity: deps.activity,
+      allowanceStore: deps.allowanceStore,
       preferencesStore: deps.preferencesStore,
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
@@ -219,6 +259,7 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }) => {
   }
   const result = await executeDeclareApproval(
     {
+      activity: deps.activity,
       preferencesStore: deps.preferencesStore,
       runtimeRpc: deps.runtimeRpc,
       session: deps.session,
@@ -229,6 +270,15 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }) => {
       ...(approval.context === undefined ? {} : { context: approval.context }),
       declare: payload.declare,
       origin: approval.origin,
+      // The declaration fee shown on the card. Null (estimate failed) leaves
+      // the submission unbound, which is honest — no fee was reviewed.
+      ...(approval.declaration?.fee ? { reviewedFee: approval.declaration.fee } : {}),
+      // The deployment fee shown on the same card, for an undeployed account.
+      // The card adds the two into an "Estimated total", so both halves of that
+      // total are bound or the total is a number the wallet does not stand by.
+      ...(approval.declaration?.deploymentFee
+        ? { reviewedDeploymentFee: approval.declaration.deploymentFee }
+        : {}),
     },
   );
   return settleExecutor(result);
@@ -341,7 +391,9 @@ const applyApproveDecision = async (
   }
   let result: ApplyResult;
   try {
-    result = await APPROVE_APPLIERS[claim.approval.kind](deps, claim);
+    result = await APPROVE_APPLIERS[claim.approval.kind](deps, claim, {
+      ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+    });
   } catch {
     return settleClaimError(deps, input.id, { error: "approval execution failed" });
   }

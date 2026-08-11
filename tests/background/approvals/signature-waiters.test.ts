@@ -25,7 +25,9 @@ describe("createSignatureWaiters", () => {
     // the first approval id, and both held responses must settle.
     const firstTab = waiters.register("approval-1");
     const secondTab = waiters.register("approval-1");
-    expect(waiters.pending()).toBe(1);
+    // pending() counts held responses, not approval ids: both tabs are memory
+    // this registry is holding.
+    expect(waiters.pending()).toBe(2);
 
     waiters.settle("approval-1", { accounts: [], ok: true });
     await expect(firstTab).resolves.toEqual({ accounts: [], ok: true });

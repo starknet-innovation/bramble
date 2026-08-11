@@ -19,9 +19,18 @@
  * (MetaMask's eth-phishing-detect), a `blacklist` key is accepted as an alias
  * and any additional fields (fuzzylist, whitelist, tolerance) are ignored.
  */
+import {
+  type BoundedHttpFetch,
+  type BoundedHttpResponse,
+  fetchBoundedJson,
+  HTTP_BODY_LIMITS,
+} from "@mc-wallet/core/http-json";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { KeyValueStore } from "@mc-wallet/store/kv";
 
+// Clock boundary for this module: the feed's TTL is the only time it reads, and
+// callers may inject their own clock. Kept local so the phishing feed does not
+// depend on an unrelated feature package for a one-line reader.
 const systemClock = (): number => Date.now();
 
 /**
@@ -48,17 +57,20 @@ const MAX_DOMAINS = 100_000;
 const HOST_PATTERN = /^[a-z0-9.-]+$/;
 
 /**
- * Minimal HTTP response subset consumed from the injected fetch.
+ * Minimal HTTP response subset consumed from the injected fetch: the shared
+ * bounded-read shape.
  */
-export type PhishingFeedResponse = {
-  readonly json: () => Promise<unknown>;
-  readonly ok: boolean;
-};
+export type PhishingFeedResponse = BoundedHttpResponse;
 
 /**
- * Injectable network fetch used only by the background worker.
+ * Injectable network fetch used only by the background worker. Production wires
+ * the shared `untrustedFetch`, which carries the boundary's request options (no
+ * cookies, no referrer, redirects refused) and its deadline signal through to
+ * the real `fetch`. Reads go through the shared bounded reader either way, so a
+ * source that answers with an endless or never-finished body is cut off rather
+ * than buffered into the worker even when a test double ignores the options.
  */
-export type PhishingFeedFetch = (url: string) => Promise<PhishingFeedResponse>;
+export type PhishingFeedFetch = BoundedHttpFetch;
 
 /**
  * The live feed: a synchronous snapshot accessor for enforcement plus an async
@@ -186,13 +198,14 @@ export const createPhishingFeed = ({
     return readPhishingCache(stored, source, currentTime);
   };
 
+  // Never throws: a non-ok status, a transport error, an over-budget body, an
+  // exchange that outlives its deadline, or a malformed payload all resolve to
+  // null so the caller keeps the cached snapshot instead of regressing.
   const fetchDomains = async (): Promise<readonly string[] | null> => {
     try {
-      const response = await fetch(source);
-      if (!response.ok) {
-        return null;
-      }
-      return parsePhishingFeed(await response.json());
+      return parsePhishingFeed(
+        await fetchBoundedJson(fetch, source, HTTP_BODY_LIMITS.phishingFeed),
+      );
     } catch {
       return null;
     }

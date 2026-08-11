@@ -2,7 +2,9 @@
  * Multisig screen templates: settings entry, list/add/deploy affordances,
  * detail lifecycle actions, and the declare-first deploy gate.
  */
+
 import { describe, expect, test } from "bun:test";
+import { multisigTransactionId } from "@mc-wallet/multisig/chain";
 import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { MultisigClassState } from "../../../../src/popup/responses/multisig-responses";
@@ -53,21 +55,28 @@ const multisig: MultisigRecord = {
   signers: [account.address, "0x444444444444444444444444444444444444444444444444444444444444444"],
 };
 
+// Filed under the id its own call hashes to, exactly as a real record is: a
+// record whose call hashes elsewhere is the recovery shape the panel treats
+// differently, and every assertion below is about the ordinary one.
+const proposalCall = {
+  calldata: ["0x5"],
+  contractAddress: "0x555555555555555555555555555555555555555555555555555555555555555",
+  entrypoint: "transfer",
+  salt: "0x0",
+} as const;
+
+const boundTxId = multisigTransactionId(proposalCall, proposalCall.salt);
+
 const proposal: MultisigProposalRecord = {
-  call: {
-    calldata: ["0x5"],
-    contractAddress: "0x555555555555555555555555555555555555555555555555555555555555555",
-    entrypoint: "transfer",
-    salt: "0x0",
-  },
+  call: proposalCall,
   confirmations: 2,
   confirmedBySigner: true,
   confirmedBySignerAddress: account.address,
-  id: `${multisig.id}:0xabc`,
+  id: `${multisig.id}:${boundTxId}`,
   multisigId: multisig.id,
   state: "confirmed",
   summary: "Pay vendor",
-  txId: "0xabc",
+  txId: boundTxId,
 };
 
 const render = (
@@ -262,6 +271,24 @@ describe("multisig views", () => {
     expect(html).toContain("data-ms-requires-ack");
     expect(html).toContain("data-ms-ack");
     expect(html).toContain("does not include its call");
+  });
+
+  // EXT-M4: a legacy record whose stored call hashes to some other id. The one
+  // thing the user may still do is withdraw their confirmation from the id
+  // itself, so the row must carry the acknowledgment affordance for revoke
+  // while confirm and execute stay closed and the stored call stays labelled.
+  test("detail offers an acknowledged recovery revoke for an unbound record", () => {
+    const unbound = { ...proposal, id: `${multisig.id}:0xabc`, txId: "0xabc" };
+    const html = render("multisig-detail", [multisig], [unbound]);
+
+    expect(html).toContain("data-ms-ack");
+    expect(html).toMatch(/data-ms-revoke="[^"]+"[^>]*data-ms-requires-ack="true"/);
+    expect(html).toContain("does not hash to its proposal id");
+    expect(html).toContain("Stored call details (does not match this id)");
+    expect(html).not.toContain("data-ms-execute");
+    expect(html).toMatch(
+      /data-ms-action-allowed="false"[^>]*data-ms-confirm-open="[^"]+"[^>]*disabled/,
+    );
   });
 
   test("executed proposals render without lifecycle actions", () => {

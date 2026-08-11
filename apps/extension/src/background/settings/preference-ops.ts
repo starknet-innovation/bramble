@@ -14,6 +14,7 @@ import {
   readSetAccountInGroupInput,
   readSetAccountLabelInput,
   readSetDisplayInput,
+  readSetExplorerFallbackInput,
   readSetGroupIconInput,
   readSetRpcOverrideInput,
   readSetStrk20NetworkConfigInput,
@@ -100,6 +101,11 @@ const PREFERENCE_HANDLERS: Readonly<Record<string, PreferenceHandler>> = {
   ),
   "wallet.setDisplay": parseThen(readSetDisplayInput, "invalid display request", (store, input) =>
     store.setDisplay(input),
+  ),
+  "wallet.setExplorerFallback": parseThen(
+    readSetExplorerFallbackInput,
+    "invalid explorer fallback request",
+    (store, input) => store.setExplorerFallback(input),
   ),
   "wallet.setGroupIcon": parseThen(readSetGroupIconInput, "invalid group request", (store, input) =>
     store.setGroupIcon(input),

@@ -11,12 +11,14 @@ import {
   isMultisigConfirmationMode,
   type MultisigConfirmationMode,
 } from "@mc-wallet/multisig/confirmation";
+
 import {
   isMultisigCallInput,
   isMultisigEntrypoint,
   MULTISIG_LIMITS,
   type MultisigCallInput,
 } from "@mc-wallet/multisig/chain";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 
 // Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
 // proposal id runs to ~144 characters, so the cap must sit comfortably above.
@@ -171,6 +173,12 @@ export type MultisigProposalActionInput = {
  */
 export type ConfirmMultisigProposalInput = MultisigProposalActionInput & {
   readonly mode: MultisigConfirmationMode;
+  /**
+   * The fee `wallet.prepareMultisigConfirmation` displayed for these exact
+   * calls, echoed back on submit. The background turns it into the ceiling the
+   * co-signing invoke may sign under (MCW-V09-119).
+   */
+  readonly reviewedFee?: FeeEstimate;
 };
 
 /**
@@ -185,6 +193,7 @@ export const readConfirmMultisigProposalInput = (
   hasOnlyKnownKeys(message, [
     "mode",
     "proposalId",
+    "reviewedFee",
     "signerAccountId",
     "type",
     "untrackedVerified",
@@ -193,10 +202,12 @@ export const readConfirmMultisigProposalInput = (
   isMultisigConfirmationMode(message["mode"]) &&
   isId(message["proposalId"]) &&
   (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
+  (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"])) &&
   (message["untrackedVerified"] === undefined || message["untrackedVerified"] === true)
     ? {
         mode: message["mode"],
         proposalId: message["proposalId"],
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
         ...(message["signerAccountId"] === undefined
           ? {}
           : { signerAccountId: message["signerAccountId"] }),

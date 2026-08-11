@@ -22,6 +22,12 @@
  * degrades to an empty list, so a discovery outage never blocks the gallery — it
  * simply shows the empty state and the manual watch form.
  */
+
+import {
+  type BoundedHttpFetch,
+  fetchBoundedJson,
+  HTTP_BODY_LIMITS,
+} from "@mc-wallet/core/http-json";
 import { isRecord } from "@mc-wallet/core/json";
 import { trimTrailingSlashes } from "@mc-wallet/core/service-url";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
@@ -37,12 +43,13 @@ export type NftIndexerInput = {
 };
 
 /**
- * The injected HTTP transport: a `fetch`-shaped function whose `ok` flag and
- * JSON body the client inspects.
+ * The injected HTTP transport, `fetch`-shaped so the wiring that owns network
+ * access forwards the boundary's request options and deadline straight through.
+ * Reads go through the shared bounded reader, so an indexer answering with an
+ * endless or never-finished body is cut off rather than buffered into the
+ * worker.
  */
-export type NftIndexerHttp = (
-  url: string,
-) => Promise<{ readonly ok: boolean; readonly json: () => Promise<unknown> }>;
+export type NftIndexerHttp = BoundedHttpFetch;
 
 /**
  * Injectable NFT discovery service used by the background message handler.
@@ -77,15 +84,12 @@ const recordsFrom = (body: unknown): readonly unknown[] => {
 };
 
 // Fetches and JSON-parses the indexer response, degrading to null on a non-ok
-// status, a transport error, or a malformed body so a discovery outage surfaces
-// as an empty gallery rather than a thrown error.
+// status, a transport error, an over-budget body, an exchange that outlives its
+// deadline, or a malformed body — so a discovery outage surfaces as an empty
+// gallery rather than a thrown error or a parked request.
 const fetchIndexerBody = async (http: NftIndexerHttp, url: string): Promise<unknown | null> => {
   try {
-    const response = await http(url);
-    if (!response.ok) {
-      return null;
-    }
-    return await response.json();
+    return await fetchBoundedJson(http, url, HTTP_BODY_LIMITS.nftIndexer);
   } catch {
     return null;
   }

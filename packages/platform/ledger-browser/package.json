@@ -23,6 +23,7 @@
     "@ledgerhq/hw-transport-web-ble": "6.35.0",
     "@ledgerhq/hw-transport-webhid": "6.36.0",
     "@ledgerhq/hw-transport-webusb": "6.35.0",
+    "@mc-wallet/core": "workspace:*",
     "@mc-wallet/ledger-protocol": "workspace:*",
     "@mc-wallet/wallet-model": "workspace:*",
     "buffer": "6.0.3"

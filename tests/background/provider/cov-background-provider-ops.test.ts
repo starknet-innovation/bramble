@@ -69,6 +69,7 @@ const providerDeps = (locked: boolean): ProviderOpsDeps => {
     session.unlock(vaultPassphrase);
   }
   return {
+    allowanceStore: memoryAllowanceStore(),
     approvals: createApprovalQueue(),
     extensionId: EXTENSION_ID,
     preferencesStore: unavailablePreferencesStore,
@@ -220,7 +221,10 @@ const ledgerExecuteDeps = (
     ...(queue ? { ledgerSignQueue: queue } : {}),
     preferencesStore: {
       async read() {
-        return { activeNetworkId: "SN_MAIN" };
+        // Complete enough for the shared trusted-set builder every submit path
+        // runs (verificationContext): a stub missing these lists would fail the
+        // bookkeeping rather than the behaviour under test.
+        return { activeNetworkId: "SN_MAIN", addressBook: [], nfts: [], tokens: [] };
       },
     } as unknown as InvokeExecuteDeps["preferencesStore"],
     runtimeRpc: {
@@ -326,7 +330,10 @@ describe("executeInvokeApproval failure branches", () => {
       allowanceStore: memoryAllowanceStore(),
       preferencesStore: {
         async read() {
-          return { activeNetworkId: "SN_MAIN" };
+          // Complete enough for the shared trusted-set builder every submit path
+          // runs (verificationContext): a stub missing these lists would fail the
+          // bookkeeping rather than the behaviour under test.
+          return { activeNetworkId: "SN_MAIN", addressBook: [], nfts: [], tokens: [] };
         },
       } as unknown as InvokeExecuteDeps["preferencesStore"],
       runtimeRpc: {

@@ -3,7 +3,9 @@
  * cannot re-enable a statically forbidden signer action, and explicit retry
  * controls rehydrate instead of leaving a false empty state.
  */
+
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { multisigTransactionId } from "@mc-wallet/multisig/chain";
 import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { serializeMultisigReviewPackage } from "../../../../src/sidepanel/journeys/multisig/multisig-model";
@@ -310,17 +312,26 @@ describe("bindMultisigs", () => {
       quorum: 2,
       signers: [first.address, second.address],
     };
+    // Filed under the id its call hashes to; an unbound record would render the
+    // recovery acknowledgment instead of a directly clickable confirmation.
+    const call = {
+      calldata: ["0x1"],
+      contractAddress: "0x456",
+      entrypoint: "transfer",
+      salt: "0x0",
+    } as const;
+    const txId = multisigTransactionId(call, call.salt);
     const proposal: MultisigProposalRecord = {
-      call: { calldata: ["0x1"], contractAddress: "0x456", entrypoint: "transfer", salt: "0x0" },
+      call,
       confirmations: 1,
       confirmedBySigner: true,
       confirmedBySignerAddress: first.address,
       confirmedSignerAddresses: [first.address],
-      id: `${record.id}:0x789`,
+      id: `${record.id}:${txId}`,
       multisigId: record.id,
       state: "pending",
       summary: "Pay contributor",
-      txId: "0x789",
+      txId,
     };
     const calls: string[] = [];
     const app = mount(

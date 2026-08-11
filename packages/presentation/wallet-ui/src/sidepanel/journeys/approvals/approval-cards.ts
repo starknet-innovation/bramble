@@ -15,23 +15,51 @@ import {
   reviewPanel,
   riskFlagMessages,
 } from "../../shared/review-render";
-import { signRequestDetails } from "../../shared/sign-request";
+import { SIGN_REQUEST_UNCLASSIFIED_WARNING, signRequestView } from "../../shared/sign-request";
 
-// Shared approve/deny controls (one long template line so it is not re-wrapped);
-// `approve` is disabled when the wallet is locked or the origin is blocked.
-const decisionRow = (approval: PendingApproval, label: string, locked: boolean): string =>
-  `<div class="button-row">${button({
-    attributes: { "data-approval-action": "approve", "data-approval-id": approval.id },
-    disabled: locked || approval.blocked === true,
-    icon: "check",
-    label,
-  })}${button({
+const denyButton = (approval: PendingApproval): string =>
+  button({
     attributes: { "data-approval-action": "deny", "data-approval-id": approval.id },
     icon: "x",
     label: "Deny",
     tone: "danger",
     variant: "secondary",
-  })}</div>`;
+  });
+
+// Shared approve/deny controls (one long template line so it is not re-wrapped);
+// `approve` is disabled when the wallet is locked or the origin is blocked.
+// `reviewedFee`, when the card priced the request, is stamped onto the approve
+// control so the click reports the figure THIS paint showed. The background
+// binds the submission to that echo and refuses if its own copy has moved
+// since, which is how a card left open behind a re-estimate on another wallet
+// surface cannot approve a ceiling the user never read.
+const decisionRow = (
+  approval: PendingApproval,
+  label: string,
+  locked: boolean,
+  reviewedFee?: PendingApproval["fee"],
+): string =>
+  `<div class="button-row">${button({
+    attributes: {
+      "data-approval-action": "approve",
+      ...(reviewedFee
+        ? {
+            "data-approval-fee": reviewedFee.overallFee,
+            "data-approval-fee-unit": reviewedFee.unit,
+          }
+        : {}),
+      "data-approval-id": approval.id,
+    },
+    disabled: locked || approval.blocked === true,
+    icon: "check",
+    label,
+  })}${denyButton(approval)}</div>`;
+
+// Used when the card cannot describe what approving would commit to: the
+// approve control is absent rather than merely disabled, so a partial view can
+// never be approved by mistake.
+const denyOnlyRow = (approval: PendingApproval): string =>
+  `<div class="button-row">${denyButton(approval)}</div>`;
 
 const contextDetails = (approval: PendingApproval): string => {
   const context = approval.context;
@@ -239,20 +267,35 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       ${contextDisclosure(approval)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
-    ${decisionRow(approval, "Approve", status.locked || approval.feeEstimatePending === true)}
+    ${decisionRow(
+      approval,
+      "Approve",
+      status.locked || approval.feeEstimatePending === true,
+      approval.fee ?? undefined,
+    )}
   </li>`;
 
-const signCard = (approval: PendingApproval, status: WalletStatus): string => `
+// A sign card only offers to sign what the decoder could place on one side of
+// the signed hash or the other; an unclassified payload gets the warning and a
+// Deny-only row instead, because a partial view of a message is exactly what a
+// hostile payload wants the user to trust.
+const signCard = (approval: PendingApproval, status: WalletStatus): string => {
+  const view = signRequestView(approval.typedData);
+  return `
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Sign request")}
       <p class="hint">${status.locked ? "Unlock the wallet to review and sign this message." : "Review exactly what this site asks you to sign. Signing does not move funds — only sign messages you understand."}</p>
       ${contextDisclosure(approval)}
     </div>
-    ${signRequestDetails(approval.typedData)}
-    ${reviewPanel(approval.insights ?? [])}
-    ${decisionRow(approval, "Sign", status.locked)}
+    ${view.html}
+    ${reviewPanel([
+      ...(view.classified ? [] : [SIGN_REQUEST_UNCLASSIFIED_WARNING]),
+      ...(approval.insights ?? []),
+    ])}
+    ${view.classified ? decisionRow(approval, "Sign", status.locked) : denyOnlyRow(approval)}
   </li>`;
+};
 
 const strk20Card = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">

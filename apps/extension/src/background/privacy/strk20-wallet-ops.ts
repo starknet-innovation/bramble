@@ -6,6 +6,7 @@
  * is produced.
  */
 
+import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import { WalletError } from "@mc-wallet/core/errors";
 import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
@@ -13,12 +14,14 @@ import {
   readStrk20Balances,
   readStrk20RegistrationStatus,
   registerStrk20Account,
+  type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@mc-wallet/privacy/service";
 import { systemClock } from "@mc-wallet/transactions/activity";
 import { approvalPayloadMatchesContext, createApprovalContext } from "../approvals/approval-context";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
@@ -27,12 +30,15 @@ import {
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
+import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
 import { handleStrk20SendOps } from "./strk20-send-ops";
 import { readStrk20WalletExecuteInput } from "./strk20-wallet-inputs";
 import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
 } from "./strk20-wallet-preparations";
+import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
+import { verificationContext } from "@mc-wallet/transactions/verify";
 
 /**
  * Re-exported deps type so existing wiring keeps one import site.
@@ -78,7 +84,13 @@ const hasPendingRegistration = async (
 };
 
 const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
-  const context = await resolvePrivacyContext(deps);
+  // The privacy screen re-reads this disclosure on every hydration and, while a
+  // registration is settling, on a three-second poll. It is pure observation of
+  // state the user did not ask for again, so it must not extend the unlock
+  // window — otherwise one open panel keeps the wallet unlocked forever.
+  const context = await resolvePrivacyContext(deps, {
+    active: await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+  });
   if ("error" in context) {
     return { error: context.error };
   }
@@ -143,7 +155,10 @@ const stateResponse = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse
 };
 
 const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<RuntimeResponse> => {
-  const context = await resolvePrivacyContext(deps);
+  // User-initiated: the user pressed "activate private balances".
+  const context = await resolvePrivacyContext(deps, {
+    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+  });
   if ("error" in context) {
     return { error: context.error };
   }
@@ -253,16 +268,46 @@ const executePreparation = async (
   if (!preparation) {
     return { error: "Privacy preparation not found" };
   }
-  const context = await resolvePrivacyContext(deps, preparation.token.id);
+  // User-initiated: the user confirmed a reviewed preparation.
+  const context = await resolvePrivacyContext(deps, {
+    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    tokenId: preparation.token.id,
+  });
   if ("error" in context) {
     return { error: context.error };
   }
   if (!(await preparationStillMatches(preparation, context))) {
     return { error: "Privacy preparation changed" };
   }
+  // Re-applied after review, exactly as the dapp-facing invoke re-applies it
+  // after consent: the contact this recipient mimics may have been saved while
+  // the confirmation was on screen, and this is the last point before the batch
+  // is proved and relayed. A registration names no recipient.
+  const refusal =
+    preparation.kind === "register"
+      ? null
+      : refusePoisonedStrk20Actions(
+          context.accountContext.account,
+          context.preferences,
+          preparation.actions,
+        );
+  if (refusal) {
+    return refusal;
+  }
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
     const result = await submitPreparation(deps, service, preparation, context);
+    // Entering the pool approves it to pull the deposit and its fee from the
+    // account's PUBLIC balance, so those grants are tracked exactly like any
+    // other approval this wallet submits — see `Strk20SubmissionResult`. Filed
+    // BEFORE the activity line so a failing activity write cannot lose the
+    // record of a grant that is already on chain.
+    await recordApproveAllowances({
+      assets: verificationContext(context.accountContext.account, context.preferences),
+      calls: result.allowanceGrants ?? [],
+      owner: allowanceOwner(context.accountContext.account),
+      store: deps.allowanceStore,
+    });
     await deps.activity.record({
       accountId: context.accountContext.account.id,
       ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
@@ -283,7 +328,7 @@ const submitPreparation = async (
   service: ReturnType<typeof strk20ServiceForRuntime>,
   preparation: Strk20WalletPreparation,
   context: ActivePrivacyContext,
-): Promise<{ readonly transactionHash: string }> => {
+): Promise<Strk20SubmissionResult> => {
   if (preparation.kind === "deposit") {
     return submitPreparedDeposit(deps, service, preparation, context);
   }
@@ -333,7 +378,7 @@ const submitPreparedPrivateBatch = async (
   service: ReturnType<typeof strk20ServiceForRuntime>,
   preparation: Extract<Strk20WalletPreparation, { readonly kind: "transfer" | "withdraw" }>,
   context: ActivePrivacyContext,
-): Promise<{ readonly transactionHash: string }> => {
+): Promise<Strk20SubmissionResult> => {
   const registration = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
     token: context.token.address,
@@ -365,7 +410,7 @@ const submitPreparedDeposit = async (
   service: ReturnType<typeof strk20ServiceForRuntime>,
   preparation: Extract<Strk20WalletPreparation, { readonly kind: "deposit" }>,
   context: ActivePrivacyContext,
-): Promise<{ readonly transactionHash: string }> => {
+): Promise<Strk20SubmissionResult> => {
   if (preparation.plan.mode !== "account") {
     throw new Error("Shielding route changed");
   }

@@ -24,9 +24,10 @@ import {
   recordClaimedMultisigSubmission,
   releaseMultisigOperation,
 } from "./multisig-submission";
-import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
+import { activeAccountContext, networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { signerForContext } from "../accounts/wallet-ops";
+
 
 type MultisigDeployHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
@@ -34,7 +35,9 @@ const multisigClassStatus: MultisigDeployHandler = async (deps, message) => {
   if (!readTypeOnlyInput(message, "wallet.multisigClassStatus")) {
     return { error: "invalid class status request" };
   }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  // Read-only status the multisig-deploy screen re-reads on every ambient
+  // hydration, so it observes the unlock window and never extends it.
+  const context = await observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
   if (context.error !== undefined) {
     return { error: context.error };
   }

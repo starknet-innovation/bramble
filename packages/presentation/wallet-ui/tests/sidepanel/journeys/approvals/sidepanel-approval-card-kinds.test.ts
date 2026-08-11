@@ -73,6 +73,14 @@ describe("approvalCard renders each approval kind", () => {
             { name: "from", type: "felt" },
             { name: "contents", type: "felt" },
           ],
+          // The revision 0 domain struct: without it the payload identifies no
+          // revision, nothing in it reaches a hash, and the card is required to
+          // withhold the approve control rather than describe it as signed.
+          StarkNetDomain: [
+            { name: "name", type: "felt" },
+            { name: "version", type: "felt" },
+            { name: "chainId", type: "felt" },
+          ],
         },
       },
     };

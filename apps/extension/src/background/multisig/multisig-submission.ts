@@ -26,7 +26,7 @@ type OperationKeyInput = Omit<OperationClaimInput, "pendingError">;
 type OperationClaim = { readonly error: string } | { readonly operationId: string };
 
 /**
- * Proposal actions serialized independently for each signer and tx id.
+ * Proposal actions serialized per signer, watched multisig, and tx id.
  */
 export type MultisigProposalOperationKind = Extract<
   MultisigOperationRecord["kind"],
@@ -36,6 +36,7 @@ export type MultisigProposalOperationKind = Extract<
 type ProposalOperationClaimInput = {
   readonly accountId: string;
   readonly kind: MultisigProposalOperationKind;
+  readonly multisigId: string;
   readonly networkId: MultisigOperationRecord["networkId"];
   readonly pendingError: string;
   readonly txId: string;
@@ -120,18 +121,35 @@ const isProposalOperation = (
   operation.kind === "confirm" || operation.kind === "execute" || operation.kind === "revoke";
 
 /**
- * Atomically reserves one signer action for a proposal. An unresolved or
- * unreadable prior submission of the same action stays blocked. The caller has
- * already refreshed and validated the proposal's chain state, so an opposite
- * action cannot represent the same intent (for example, revoke is valid only
- * after confirm has landed). Rejected/reverted submissions are retryable; an
- * accepted inverse action releases older accepted claims.
+ * Atomically reserves one signer action for a proposal, scoped to the watched
+ * multisig it runs against: transaction ids hash `(call, salt)` and not the
+ * contract, so the same id can name a live proposal on two different multisigs
+ * and neither may block the other.
+ *
+ * Any unresolved or unreadable prior BROADCAST for that `(signer, multisig,
+ * txId)` stays blocked, whatever its kind. Kind-separated claims used to let an
+ * execute and a revoke broadcast together: the state each one validated was
+ * read while the other was still unmined, so both passed their gates and both
+ * paid a fee for a pair of transactions that contradict each other. A claim
+ * still carrying no transaction hash is not a broadcast and is never releasable
+ * by anything here, so it blocks its own kind only — otherwise one lost
+ * bookkeeping write would permanently strand every action on the proposal,
+ * recovery revoke included. Legacy claims carry no multisig and block every
+ * contract, which fails closed for the one upgrade during which they can still
+ * be in flight. Rejected/reverted submissions are retryable; an accepted
+ * inverse action releases older accepted claims.
  */
 export const claimMultisigProposalOperation = async (
   deps: MultisigOpsDeps,
   input: ProposalOperationClaimInput,
 ): Promise<OperationClaim> => {
-  const operationId = multisigOperationId(input.kind, input.networkId, input.accountId, input.txId);
+  const operationId = multisigOperationId(
+    input.kind,
+    input.networkId,
+    input.accountId,
+    input.txId,
+    input.multisigId,
+  );
   if (!operationId) {
     return { error: "invalid multisig proposal operation claim" };
   }
@@ -145,6 +163,7 @@ export const claimMultisigProposalOperation = async (
       isProposalOperation(operation) &&
       operation.accountId === input.accountId &&
       operation.networkId === input.networkId &&
+      (operation.multisigId === undefined || operation.multisigId === input.multisigId) &&
       sameFelt(operation.target, input.txId);
     const sameSignerProposal = operations.filter(matchesSignerProposal);
     const settledElsewhere = operations.filter((operation) => {
@@ -189,11 +208,23 @@ export const claimMultisigProposalOperation = async (
         error: pendingClaimError(input.pendingError, existing.transactionHash),
       };
     }
+    // Kind-blind only for claims that reached the wire: a still-unmined
+    // BROADCAST of any kind blocks the next action, because the chain still
+    // reports the state that transaction has not yet changed.
+    //
+    // A claim with no transaction hash never reached the wire, and nothing can
+    // ever release it — the release filters above all need an activity status,
+    // and the hash write after broadcast is best-effort. So a lost bookkeeping
+    // write, or a worker torn down between the claim and the hash, would
+    // otherwise wedge every action on this proposal forever, including the
+    // recovery revoke MCW-V09-102 exists to keep reachable. It therefore blocks
+    // its own kind only, which is exactly the double-click race it was written
+    // for and exactly the pre-namespace behavior.
     const unresolved = sameSignerProposal.find((operation) => {
-      if (operation.kind !== input.kind) return false;
-      const status = operation.transactionHash
-        ? activityByHash.get(operation.transactionHash)?.status
-        : undefined;
+      if (operation.transactionHash === undefined) {
+        return operation.kind === input.kind;
+      }
+      const status = activityByHash.get(operation.transactionHash)?.status;
       return status === undefined || isUnresolvedActivityStatus(status);
     });
     if (unresolved) {
@@ -205,6 +236,7 @@ export const claimMultisigProposalOperation = async (
       accountId: input.accountId,
       id: operationId,
       kind: input.kind,
+      multisigId: input.multisigId,
       networkId: input.networkId,
       target: input.txId,
     });

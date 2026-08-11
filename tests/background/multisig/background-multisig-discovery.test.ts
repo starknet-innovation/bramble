@@ -7,9 +7,9 @@ import {
   HARNESS_MULTISIG,
   HARNESS_SUBMIT_HASH,
   HARNESS_TARGET,
-  HARNESS_TX_ID,
   harnessAccount,
   harnessExtensionSender,
+  harnessTxId,
   makeMultisigHarness,
 } from "../../support/multisig-harness";
 
@@ -112,22 +112,23 @@ describe("multisig proposal discovery and communication", () => {
       entrypoint: "transfer",
       salt: "0x0",
     };
+    const txId = harnessTxId(call);
 
     await expect(
       handler(
         {
           call,
           multisigId: watched.multisig.id,
-          txId: HARNESS_TX_ID,
+          txId,
           type: "wallet.trackMultisigProposal",
         },
         harnessExtensionSender,
       ),
-    ).resolves.toMatchObject({ ok: true, proposal: { call, txId: HARNESS_TX_ID } });
+    ).resolves.toMatchObject({ ok: true, proposal: { call, txId } });
     await expect(
       handler(
         {
-          proposalId: `${watched.multisig.id}:${HARNESS_TX_ID}`,
+          proposalId: `${watched.multisig.id}:${txId}`,
           type: "wallet.executeMultisigProposal",
         },
         harnessExtensionSender,

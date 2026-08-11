@@ -24,7 +24,15 @@ const extensionOrigins = (extensionId: string): readonly string[] => [
   `moz-extension://${extensionId}`,
 ];
 
-const senderOrigins = (sender: RuntimeSender | undefined): readonly string[] =>
+/**
+ * Every browser-supplied origin signal present on a runtime sender
+ * (`sender.origin` and the origin of `sender.url`), with missing ones dropped.
+ * These come from the browser, never from the message body, so they are the only
+ * origin evidence a gate may trust. Returns an empty list when the sender
+ * carries no origin at all, which every caller must treat as untrusted rather
+ * than as a match.
+ */
+export const senderOrigins = (sender: RuntimeSender | undefined): readonly string[] =>
   [sender?.origin, senderUrlOrigin(sender)].filter((origin): origin is string => !!origin);
 
 /**

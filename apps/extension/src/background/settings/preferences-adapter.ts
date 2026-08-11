@@ -46,6 +46,10 @@ export const createBackgroundPreferences = ({
       if (input.approvalSurface !== undefined) onApprovalSurface(input.approvalSurface);
       return next;
     },
+    // The explorer read lane is a disclosure decision (MCW-V09-129), so it is
+    // delegated through the same fail-closed gate: with storage unavailable the
+    // choice is refused rather than recorded against a half-built store.
+    setExplorerFallback: async (input) => (await required()).setExplorerFallback(input),
     setGroupIcon: async (input) => (await required()).setGroupIcon(input),
     setNftIndexerUrl: async (input) => (await required()).setNftIndexerUrl(input),
     setNftSpam: async (input) => (await required()).setNftSpam(input),

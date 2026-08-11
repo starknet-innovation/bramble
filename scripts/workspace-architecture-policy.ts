@@ -48,9 +48,15 @@ export const NON_LITERAL_MODULE_LOADS = new Map<string, number>([
 
 /**
  * Generated or external directories excluded from workspace source analysis.
+ *
+ * `.playwright-cli` holds the browser-trace cache a local Playwright session
+ * writes; it is git-ignored, is already skipped by the file-standards and lint
+ * gates, and its captured page scripts are not workspace source. Scanning it
+ * made this gate fail on any machine that had ever driven the browser locally.
  */
 export const EXCLUDED_DIRECTORIES = new Set([
   ".git",
+  ".playwright-cli",
   "artifacts",
   "dist",
   "node_modules",

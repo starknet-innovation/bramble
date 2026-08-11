@@ -6,8 +6,10 @@
  * these pin the argument order per route — a deposit that dropped its recipient
  * once credited the sender while every screen reported a payment.
  */
+
 import { describe, expect, test } from "bun:test";
 import { routeFor } from "@mc-wallet/transactions/send-routes";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { PrivacyPreparation } from "../../../../src/sidepanel/journeys/privacy/privacy-runtime";
 import type { TransferFields } from "../../../../src/sidepanel/journeys/send/transfer-model";
 import {
@@ -19,12 +21,24 @@ import type { SidepanelWallet } from "../../../../src/sidepanel/runtime/runtime"
 
 const RECIPIENT = "0x02a3f4b1c5d6e7089a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f6071";
 
+const account = {
+  address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  id: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+  networkId: "SN_MAIN",
+} as unknown as AccountRef;
+
 const fields = {
+  accountId: account.id,
   amount: "1.5",
   recipient: RECIPIENT,
+  tokenAddress: "0x1",
   tokenId: "SN_MAIN:STRK:0x1",
 } as TransferFields;
 
+// The recipient policy is enforced in the background, inside each preparation
+// handler (MCW-V09-109), so the dispatch itself is pure routing. The stub still
+// answers the panel's ordinary status/preferences reads so a future binding
+// change does not fail here for an unrelated reason.
 const recordingWallet = (): {
   readonly calls: readonly (readonly unknown[])[];
   readonly wallet: SidepanelWallet;
@@ -39,6 +53,8 @@ const recordingWallet = (): {
   return {
     calls,
     wallet: {
+      loadPreferences: async () => ({ addressBook: [], tokens: [] }),
+      loadStatus: async () => ({ accounts: [account], networkId: "SN_MAIN" }),
       preparePrivacyDeposit: record("deposit"),
       preparePrivacyTransfer: record("transfer"),
       preparePrivacyWithdraw: record("withdraw"),

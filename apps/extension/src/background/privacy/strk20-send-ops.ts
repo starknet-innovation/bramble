@@ -8,6 +8,7 @@
  * bridge.
  */
 
+import { activeAccountContext } from "../runtime/runtime-state";
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -23,6 +24,7 @@ import {
 } from "@mc-wallet/privacy/service";
 import { createApprovalContext } from "../approvals/approval-context";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
@@ -31,6 +33,7 @@ import {
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
+import { refusePoisonedStrk20Recipients } from "./strk20-recipient-policy";
 import {
   readStrk20DepositPreparationInput,
   readStrk20RecipientStatusInput,
@@ -38,6 +41,49 @@ import {
   readStrk20WithdrawPreparationInput,
 } from "./strk20-wallet-inputs";
 import { strk20WalletPreparationPayload } from "./strk20-wallet-preparations";
+
+// The shared recipient policy, applied to the three pool routes before anything
+// is prepared. It is the same function the dapp-facing prepare and invoke routes
+// apply, so the two halves of the privacy product line cannot drift apart.
+// Refusing at preparation means a poisoned recipient never reaches a reviewed,
+// digested preparation the user could confirm — so a preparation that exists is
+// one whose recipient passed.
+const refusePoisonedPoolRecipient = (
+  context: ActivePrivacyContext,
+  recipient: string,
+): { readonly error: string } | null =>
+  refusePoisonedStrk20Recipients(context.accountContext.account, context.preferences, [
+    { recipient, token: context.token.address },
+  ]);
+
+/**
+ * One entry gate for the three pool routes: parse the destination felt, resolve
+ * the active privacy context for the chosen token, then apply the shared
+ * recipient policy — in that order, so no route can be prepared for an address
+ * the wallet refuses to pay. Returns the resolved context and canonical
+ * recipient, or the error response the caller returns unchanged.
+ */
+const openPoolRoute = async (
+  deps: Strk20WalletOpsDeps,
+  input: { readonly recipient: string; readonly tokenId: string },
+): Promise<
+  | { readonly context: ActivePrivacyContext; readonly recipient: string }
+  | { readonly error: string }
+> => {
+  const recipient = canonicalFelt(input.recipient);
+  if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
+    return { error: "Enter a valid Starknet address" };
+  }
+  // User-initiated: the user composed a send and asked for a preparation.
+  const context = await resolvePrivacyContext(deps, {
+    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    tokenId: input.tokenId,
+  });
+  if ("error" in context) {
+    return { error: context.error };
+  }
+  return refusePoisonedPoolRecipient(context, recipient) ?? { context, recipient };
+};
 
 const recipientStatus = async (
   deps: Strk20WalletOpsDeps,
@@ -47,7 +93,12 @@ const recipientStatus = async (
   if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
     return { error: "Enter a valid Starknet address" };
   }
-  const context = await resolvePrivacyContext(deps, input.tokenId);
+  // User-initiated: this probe is debounced behind the recipient the user is
+  // typing, so it only ever runs because the user acted.
+  const context = await resolvePrivacyContext(deps, {
+    active: await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore),
+    tokenId: input.tokenId,
+  });
   if ("error" in context) {
     return { error: context.error };
   }
@@ -66,14 +117,11 @@ const transferPreparation = async (
   deps: Strk20WalletOpsDeps,
   input: { readonly amount: string; readonly recipient: string; readonly tokenId: string },
 ): Promise<RuntimeResponse> => {
-  const recipient = canonicalFelt(input.recipient);
-  if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
-    return { error: "Enter a valid Starknet address" };
+  const opened = await openPoolRoute(deps, input);
+  if ("error" in opened) {
+    return opened;
   }
-  const context = await resolvePrivacyContext(deps, input.tokenId);
-  if ("error" in context) {
-    return { error: context.error };
-  }
+  const { context, recipient } = opened;
   if (sameFelt(recipient, context.accountContext.account.address)) {
     return { error: "Private sends to the sending account are not supported" };
   }
@@ -157,14 +205,11 @@ const withdrawPreparation = async (
   deps: Strk20WalletOpsDeps,
   input: { readonly amount: string; readonly recipient: string; readonly tokenId: string },
 ): Promise<RuntimeResponse> => {
-  const recipient = canonicalFelt(input.recipient);
-  if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
-    return { error: "Enter a valid Starknet address" };
+  const opened = await openPoolRoute(deps, input);
+  if ("error" in opened) {
+    return opened;
   }
-  const context = await resolvePrivacyContext(deps, input.tokenId);
-  if ("error" in context) {
-    return { error: context.error };
-  }
+  const { context, recipient } = opened;
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
     const registration = await readStrk20RegistrationStatus(service, {
@@ -268,14 +313,11 @@ const depositPreparation = async (
   deps: Strk20WalletOpsDeps,
   input: { readonly amount: string; readonly recipient: string; readonly tokenId: string },
 ): Promise<RuntimeResponse> => {
-  const recipient = canonicalFelt(input.recipient);
-  if (recipient === null || !isNonZeroStarkFieldElement(recipient)) {
-    return { error: "Enter a valid Starknet address" };
+  const opened = await openPoolRoute(deps, input);
+  if ("error" in opened) {
+    return opened;
   }
-  const context = await resolvePrivacyContext(deps, input.tokenId);
-  if ("error" in context) {
-    return { error: context.error };
-  }
+  const { context, recipient } = opened;
   try {
     const service = strk20ServiceForRuntime(deps.runtimeRpc);
     const registrationError = await depositRegistrationError(service, context, recipient);

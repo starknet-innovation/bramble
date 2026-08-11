@@ -3,10 +3,11 @@
  */
 
 import { isUuid } from "@mc-wallet/core/ids";
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord, isDecimalAmountText } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+
 import {
   isHexChainId,
   isStarkFieldElement,
@@ -17,7 +18,8 @@ import { INVOKE_LIMITS } from "@mc-wallet/wallet-protocol/invoke-limits";
 import { isStrk20Proof, type Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Call } from "starknet";
 import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
-import type { OriginGrantInput, SignHashInput } from "@mc-wallet/vault/service";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+
 
 export { readCreateAccountInput } from "../accounts/account-creation-inputs";
 
@@ -26,7 +28,7 @@ export { readCreateAccountInput } from "../accounts/account-creation-inputs";
  * and swap input readers; parsing/scaling happens later via parseTokenAmount).
  */
 export const isTransferAmount = (value: unknown): value is string =>
-  typeof value === "string" && /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(value.trim());
+  typeof value === "string" && isDecimalAmountText(value.trim());
 
 const isFeltLikeString = (value: unknown): value is string => {
   if (
@@ -89,31 +91,6 @@ export const readActivityInput = (message: unknown): { readonly accountId?: stri
 };
 
 /**
- * Parses privileged origin-grant messages and normalizes origins.
- */
-export const readGrantOriginInput = (message: unknown): OriginGrantInput | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "origin", "type", "vaultPassphrase"]) ||
-    message["type"] !== "wallet.grantOrigin" ||
-    !isVaultPassphrase(message["vaultPassphrase"])
-  ) {
-    return null;
-  }
-
-  const origin = normalizeWalletOrigin(message["origin"]);
-  if (!origin || (message["accountId"] !== undefined && !isAccountId(message["accountId"]))) {
-    return null;
-  }
-
-  return {
-    ...(message["accountId"] === undefined ? {} : { accountId: message["accountId"] }),
-    origin,
-    vaultPassphrase: message["vaultPassphrase"],
-  };
-};
-
-/**
  * Parses connected-site revocation messages and normalizes the origin.
  */
 export const readRevokeOriginInput = (message: unknown): { readonly origin: string } | null => {
@@ -158,19 +135,34 @@ export const readGetGrantedAccountsInput = (
 };
 
 /**
- * Parses popup approval decisions by pending approval id.
+ * Parses popup approval decisions by pending approval id, plus the optional fee
+ * the deciding surface was displaying when the user clicked.
+ *
+ * The echo is what binds a fee-bearing approval to the figure that was actually
+ * on screen: the queue's own copy can be replaced by a re-estimate from another
+ * open surface between the paint and the click, so an approval that submitted
+ * under whatever the queue held at claim time would enforce a ceiling nobody
+ * read. Untrusted input like any other field — a malformed echo refuses the
+ * whole message rather than being dropped, because a silently dropped ceiling is
+ * an unbound submission wearing the appearance of a bound one.
  */
-export const readApprovalIdInput = (message: unknown): { readonly id: string } | null => {
+export const readApprovalIdInput = (
+  message: unknown,
+): { readonly id: string; readonly reviewedFee?: FeeEstimate } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["id", "type"]) ||
+    !hasOnlyKnownKeys(message, ["id", "reviewedFee", "type"]) ||
     (message["type"] !== "wallet.approveOrigin" && message["type"] !== "wallet.denyOrigin") ||
     typeof message["id"] !== "string" ||
-    !isUuid(message["id"])
+    !isUuid(message["id"]) ||
+    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"]))
   ) {
     return null;
   }
-  return { id: message["id"] };
+  return {
+    id: message["id"],
+    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
+  };
 };
 
 /**
@@ -316,12 +308,26 @@ const readTransferFields = (
   readonly accountId: string;
   readonly amount: string;
   readonly recipient: string;
+  /**
+   * The fee the review step displayed, echoed back by the panel on send. The
+   * background turns it into a signing ceiling (MCW-V09-119); absent means the
+   * caller reviewed no fee and the send is bounded only by the node's quote.
+   */
+  readonly reviewedFee?: FeeEstimate;
   readonly speed: "fast" | "standard";
   readonly tokenId: string;
 } | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "amount", "recipient", "speed", "tokenId", "type"]) ||
+    !hasOnlyKnownKeys(message, [
+      "accountId",
+      "amount",
+      "recipient",
+      "reviewedFee",
+      "speed",
+      "tokenId",
+      "type",
+    ]) ||
     message["type"] !== type ||
     !isAccountId(message["accountId"]) ||
     !isTransferAmount(message["amount"]) ||
@@ -329,6 +335,7 @@ const readTransferFields = (
     !isStarkFieldElement(message["recipient"]) ||
     typeof message["tokenId"] !== "string" ||
     message["tokenId"].length === 0 ||
+    (message["reviewedFee"] !== undefined && !isFeeEstimate(message["reviewedFee"])) ||
     (message["speed"] !== undefined &&
       message["speed"] !== "fast" &&
       message["speed"] !== "standard")
@@ -340,6 +347,7 @@ const readTransferFields = (
     accountId: message["accountId"],
     amount: message["amount"].trim(),
     recipient: message["recipient"],
+    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
     speed: message["speed"] === "fast" ? "fast" : "standard",
     tokenId: message["tokenId"],
   };
@@ -375,32 +383,6 @@ export const readTransferInput = (message: unknown): ReturnType<typeof readTrans
  */
 export const readReviewTransferInput = (message: unknown): ReturnType<typeof readTransferFields> =>
   readTransferFields(message, "wallet.reviewTransfer");
-
-/**
- * Parses privileged hash-signing requests without accepting non-hex hashes.
- */
-export const readSignHashInput = (message: unknown): SignHashInput | null => {
-  if (
-    !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["accountId", "messageHash", "type", "vaultPassphrase"]) ||
-    message["type"] !== "wallet.signHash" ||
-    typeof message["messageHash"] !== "string" ||
-    !isStarkFieldElement(message["messageHash"]) ||
-    !isVaultPassphrase(message["vaultPassphrase"])
-  ) {
-    return null;
-  }
-
-  if (message["accountId"] !== undefined && !isAccountId(message["accountId"])) {
-    return null;
-  }
-
-  return {
-    ...(message["accountId"] === undefined ? {} : { accountId: message["accountId"] }),
-    messageHash: message["messageHash"],
-    vaultPassphrase: message["vaultPassphrase"],
-  };
-};
 
 /**
  * Parses popup unlock messages carrying the vault passphrase.
@@ -448,6 +430,7 @@ export {
   readSetAccountInGroupInput,
   readSetAccountLabelInput,
   readSetDisplayInput,
+  readSetExplorerFallbackInput,
   readSetGroupIconInput,
   readSetRpcOverrideInput,
   readSetStrk20NetworkConfigInput,

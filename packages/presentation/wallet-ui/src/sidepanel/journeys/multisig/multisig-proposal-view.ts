@@ -4,7 +4,7 @@
  * enough to audit directly.
  */
 import { escapeHtml } from "@mc-wallet/core/html";
-import { confirmationCompletesQuorum } from "@mc-wallet/multisig/chain";
+import { confirmationCompletesQuorum, multisigCallMatchesId } from "@mc-wallet/multisig/chain";
 import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { emptyState } from "@mc-wallet/ui-kit/content";
@@ -14,6 +14,7 @@ import type { UiAttributes } from "@mc-wallet/ui-kit/html-attributes";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { icon } from "../../shared/icons";
+
 import {
   accountAvatar,
   accountDisplayName,
@@ -50,6 +51,16 @@ const actionAttributes = (
   ...(requiresAck ? { "data-ms-requires-ack": "true" } : {}),
 });
 
+// A stored record whose call does not hash to the id it is filed under: the
+// panel cannot honestly describe it, and the background refuses to confirm or
+// execute it. The one action that stays open is withdrawing a confirmation,
+// because `revoke_confirmation` consumes the id alone — so the row offers the
+// same acknowledgment affordance an id-only proposal gets, and nothing else.
+// Re-derived here with the shared checker, never with a local hash comparison.
+const isUnboundRecord = (proposal: MultisigProposalRecord): boolean =>
+  proposal.call !== null &&
+  !multisigCallMatchesId(proposal.call, proposal.call.salt, proposal.txId);
+
 const confirmationCandidates = (
   proposal: MultisigProposalRecord,
   localSigners: readonly AccountRef[],
@@ -82,31 +93,37 @@ const proposalActions = (
       : undefined;
   const revokeAllowed = revokeSigner !== undefined;
   const requiresAck = proposal.call === null;
+  const unbound = isUnboundRecord(proposal);
   const execute =
     proposal.state === "confirmed"
-      ? proposal.call
-        ? preferredSigner
-          ? button({
-              attributes: {
-                "data-ms-execute": proposal.id,
-                "data-ms-signer-id": preferredSigner.id,
-              },
-              icon: "send",
-              label: "Execute",
-              size: "small",
-              variant: "secondary",
-            })
-          : '<span class="hint proposal-action-hint">This wallet does not own a current signer for execution.</span>'
-        : '<span class="hint proposal-action-hint">Execute from the proposing wallet because pasted ids do not carry call data.</span>'
+      ? unbound
+        ? '<span class="hint proposal-action-hint">The stored call does not match this proposal id, so it cannot be executed from here.</span>'
+        : proposal.call
+          ? preferredSigner
+            ? button({
+                attributes: {
+                  "data-ms-execute": proposal.id,
+                  "data-ms-signer-id": preferredSigner.id,
+                },
+                icon: "send",
+                label: "Execute",
+                size: "small",
+                variant: "secondary",
+              })
+            : '<span class="hint proposal-action-hint">This wallet does not own a current signer for execution.</span>'
+          : '<span class="hint proposal-action-hint">Execute from the proposing wallet because pasted ids do not carry call data.</span>'
       : "";
   return `<div class="proposal-actions" aria-label="Proposal actions">
     ${button({
       attributes: {
-        "data-ms-action-allowed": String(confirmAllowed),
+        "data-ms-action-allowed": String(confirmAllowed && !unbound),
         "data-ms-confirm-open": proposal.id,
+        // Never carries the acknowledgment marker when the record is merely
+        // unbound: checking the box must not re-enable a confirm the background
+        // refuses anyway, because confirming attributes this id to that call.
         ...(requiresAck ? { "data-ms-requires-ack": "true" } : {}),
       },
-      disabled: !confirmAllowed || requiresAck,
+      disabled: !confirmAllowed || requiresAck || unbound,
       icon: "check",
       label: "Confirm",
       size: "small",
@@ -117,10 +134,10 @@ const proposalActions = (
         "revoke",
         proposal.id,
         revokeAllowed,
-        requiresAck,
+        requiresAck || unbound,
         revokeSigner?.id,
       ),
-      disabled: !revokeAllowed || requiresAck,
+      disabled: !revokeAllowed || requiresAck || unbound,
       icon: "x",
       label: "Revoke",
       size: "small",
@@ -188,7 +205,7 @@ const confirmationReview = (
               ${effect.flags.map((flag) => `<p class="review-flag">${escapeHtml(flag)}</p>`).join("")}`
             : ""
         }
-        ${technicalDetails(proposal)}
+        ${technicalDetails(proposal, record)}
         ${
           canConfirmAndExecute
             ? `<div class="multisig-confirm-modes" role="group" aria-label="Confirmation action">
@@ -253,7 +270,7 @@ const confirmationReview = (
   </section>`;
 };
 
-const technicalDetails = (proposal: MultisigProposalRecord): string => {
+const technicalDetails = (proposal: MultisigProposalRecord, record: MultisigRecord): string => {
   if (!proposal.call) {
     return `<div class="review-panel" role="note">
       <p class="review-flag">The pasted proposal id does not include its call. Verify the exact effect independently before confirming.</p>
@@ -261,9 +278,19 @@ const technicalDetails = (proposal: MultisigProposalRecord): string => {
     </div>`;
   }
   const call = proposal.call;
-  return `<details class="disclosure proposal-disclosure">
+  // The stored call is shown unchanged and explicitly labelled as not matching,
+  // never quietly relabelled as this proposal's contents: the id below is the
+  // only thing revoking will act on, so it is printed in full for an
+  // out-of-band check rather than in the truncated row form.
+  const mismatchNotice = isUnboundRecord(proposal)
+    ? `<div class="review-panel" role="note">
+      <p class="review-flag">The call stored with this proposal does not hash to its proposal id, so the wallet cannot say what it does. Confirming and executing are refused. Revoking withdraws your confirmation from proposal id <code>${escapeHtml(proposal.txId)}</code> on multisig <code>${escapeHtml(record.address)}</code> and does nothing else.</p>
+      <label class="hint"><input type="checkbox" data-ms-ack /> I checked this proposal id independently</label>
+    </div>`
+    : "";
+  return `${mismatchNotice}<details class="disclosure proposal-disclosure">
     <summary>
-      <span class="menu-copy"><strong>Call details</strong></span>
+      <span class="menu-copy"><strong>${mismatchNotice ? "Stored call details (does not match this id)" : "Call details"}</strong></span>
       <span class="disclosure-mark">${icon("chevronRight")}</span>
     </summary>
     <div class="disclosure-body">
@@ -349,7 +376,7 @@ const proposalRow = (
           : ""
       }
       <div class="proposal-review-links">
-        ${technicalDetails(proposal)}
+        ${technicalDetails(proposal, record)}
         ${button({
           attributes: { "data-ms-review-open": proposal.id },
           icon: "qrCode",

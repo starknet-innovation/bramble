@@ -49,12 +49,12 @@ const vault = {
 
 // A well-formed SNIP-12 typed message that hashes cleanly for the account.
 const TYPED_DATA = {
-  domain: { chainId: "0x534e5f4d41494e", name: "Example", version: "1" },
+  domain: { chainId: "0x534e5f4d41494e", name: "Example", revision: "1", version: "1" },
   message: { contents: "hello" },
   primaryType: "Mail",
   types: {
     Mail: [{ name: "contents", type: "felt" }],
-    StarkNetDomain: [
+    StarknetDomain: [
       { name: "name", type: "felt" },
       { name: "version", type: "felt" },
       { name: "chainId", type: "felt" },

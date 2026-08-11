@@ -5,8 +5,18 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { isNonZeroStarkFieldElement, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import {
+  isNonZeroStarkFieldElement,
+  STARKNET_NETWORKS,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
 import { type Account, CallData, hash, type RpcProvider } from "starknet";
+import {
+  authorizedSpendFor,
+  exceedsReviewedFee,
+  type FeeEstimate,
+  nodeFeeEstimate,
+} from "../rpc/fee-bounds";
 import {
   IndeterminateRpcWriteError,
   isContractNotFoundError,
@@ -42,7 +52,7 @@ export const ozAccountDeployment = (account: AccountRef): AccountDeployment => {
       constructorCalldata,
       0,
     );
-    if (BigInt(computed) === BigInt(account.address)) {
+    if (sameFelt(computed, account.address)) {
       return {
         addressSalt,
         classHash: account.classHash,
@@ -66,33 +76,79 @@ const isAccountDeployed = async (provider: RpcProvider, address: string): Promis
   }
 };
 
+/**
+ * Refusal shown when a deployment would sign for more than the card that
+ * offered it displayed. Separate wording from the invoke refusal because the
+ * transaction being refused is one the user did not ask for directly — it is
+ * the deployment the wallet submits on their behalf first.
+ */
+export const REVIEWED_DEPLOYMENT_FEE_EXCEEDED =
+  "The account deployment fee rose above the amount you reviewed. Nothing was submitted — review it again.";
+
+// The bounds a deployment signs under. Without a reviewed fee this is `{}`,
+// leaving starknet.js to estimate internally — the pre-existing behaviour of a
+// deployment nobody was shown a price for. With one, the estimate is taken
+// here, the spend its bounds authorise is checked against the reviewed figure,
+// and those same bounds are then signed.
+const checkedDeploymentBounds = async (
+  starknetAccount: Account,
+  payload: Parameters<Account["deployAccount"]>[0],
+  reviewedFee: FeeEstimate | undefined,
+): Promise<Record<string, unknown>> => {
+  if (!reviewedFee) {
+    return {};
+  }
+  const estimate = await starknetAccount.estimateAccountDeployFee(payload);
+  const authorized = authorizedSpendFor(estimate, "standard");
+  if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
+    throw new WalletError(REVIEWED_DEPLOYMENT_FEE_EXCEEDED);
+  }
+  return { resourceBounds: estimate.resourceBounds };
+};
+
 const deployAccountContract = async (
   starknetAccount: Account,
   account: AccountRef,
+  reviewedFee?: FeeEstimate,
 ): Promise<DeploySubmission> => {
   const deployment = ozAccountDeployment(account);
-  const submitted = await starknetAccount.deployAccount({
+  const payload = {
     addressSalt: deployment.addressSalt,
     classHash: deployment.classHash,
     constructorCalldata: [...deployment.constructorCalldata],
     contractAddress: deployment.contractAddress,
-  });
+  };
+  const bounds = await checkedDeploymentBounds(starknetAccount, payload, reviewedFee);
+  const submitted = await starknetAccount.deployAccount(
+    payload,
+    bounds as Parameters<Account["deployAccount"]>[1],
+  );
   return { transactionHash: submitted.transaction_hash };
 };
 
 /**
  * Ensures the counterfactual account contract is deployed before invoking.
+ *
+ * `reviewedFee` is the deployment fee the caller's approval card displayed —
+ * the declare card shows one, and includes it in the "Estimated total" the user
+ * consents to. When present it binds this transaction the same way a reviewed
+ * invoke fee binds the invoke: a deployment whose cost has outrun it is refused
+ * before anything is signed, so the total on the card is a figure the wallet
+ * holds itself to rather than a figure it merely displayed. Absent means no
+ * deployment fee was shown, and the deployment stays bounded only by the node's
+ * own quote.
  */
 export const ensureAccountDeployed = async (
   provider: RpcProvider,
   starknetAccount: Account,
   account: AccountRef,
+  reviewedFee?: FeeEstimate,
 ): Promise<void> => {
   if (await isAccountDeployed(provider, account.address)) {
     return;
   }
   try {
-    const submitted = await deployAccountContract(starknetAccount, account);
+    const submitted = await deployAccountContract(starknetAccount, account, reviewedFee);
     await provider.waitForTransaction(submitted.transactionHash);
   } catch (error) {
     if (error instanceof IndeterminateRpcWriteError) {
@@ -130,6 +186,12 @@ export type DeploymentStatusInput = {
  */
 export type DeployAccountInput = {
   readonly account: AccountRef;
+  /**
+   * The deployment fee a user reviewed, if one was shown. Supplying it makes
+   * that figure a ceiling — see {@link ensureAccountDeployed}. Absent on the
+   * estimate path and wherever no fee was displayed.
+   */
+  readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
   readonly signHash: StarkHashSigner;
 };
@@ -142,12 +204,13 @@ export type DeploySubmission = {
 };
 
 /**
- * Network fee estimate for deploying the wallet account, before signing.
+ * Network fee estimate for deploying the wallet account, before signing. The
+ * same shape as every other reviewed fee — one definition in `./fee-bounds`,
+ * re-exported under the name this surface already uses — so a deployment fee
+ * can be carried back into {@link ensureAccountDeployed} as a ceiling without
+ * being converted between two structurally identical types on the way.
  */
-export type AccountDeploymentFeeEstimate = {
-  readonly overallFee: string;
-  readonly unit: string;
-};
+export type AccountDeploymentFeeEstimate = FeeEstimate;
 
 /**
  * Reads whether an account contract exists on-chain.
@@ -189,10 +252,7 @@ export const estimateAccountDeploymentFee = async (
         },
         { skipValidate: true },
       );
-      return {
-        overallFee: BigInt(estimate.overall_fee).toString(),
-        unit: typeof estimate.unit === "string" ? estimate.unit : "FRI",
-      };
+      return nodeFeeEstimate(estimate);
     },
     makeProvider,
   );
@@ -202,7 +262,7 @@ export const estimateAccountDeploymentFee = async (
  * account the user explicitly asked to deploy.
  */
 export const submitAccountDeployment = async (
-  { account, rpcUrls, signHash }: DeployAccountInput,
+  { account, reviewedFee, rpcUrls, signHash }: DeployAccountInput,
   makeProvider?: (nodeUrl: string) => RpcProvider,
   makeAccount: typeof krustyAccount = krustyAccount,
 ): Promise<DeploySubmission> =>
@@ -213,7 +273,7 @@ export const submitAccountDeployment = async (
       if (await isAccountDeployed(provider, account.address)) {
         throw new WalletError("Account is already deployed");
       }
-      return deployAccountContract(makeAccount(provider, account, signHash), account);
+      return deployAccountContract(makeAccount(provider, account, signHash), account, reviewedFee);
     },
     makeProvider,
   );

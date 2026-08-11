@@ -9,7 +9,8 @@
  * background boundary before it is trusted. Ownership itself is proven over RPC
  * elsewhere (`owner_of`); nothing here authorizes a transfer.
  */
-import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+
 import {
   canonicalFelt,
   isNonZeroStarkFieldElement,
@@ -74,9 +75,7 @@ export type NftAttribute = {
 };
 
 const isTokenIdString = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= MAX_TOKEN_ID_DIGITS &&
-  /^(?:0|[1-9][0-9]*)$/.test(value);
+  isBaseUnitsAmount(value) && value.length <= MAX_TOKEN_ID_DIGITS;
 
 const isPrivateIpv4 = (hostname: string): boolean => {
   const parts = hostname.split(".").map(Number);

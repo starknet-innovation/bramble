@@ -198,6 +198,23 @@ export const readImportPreferencesInput = (
     : null;
 
 /**
+ * Parses an explicit per-network explorer-fallback choice. Extension-page only
+ * and untrusted like every other message: an unknown key, a non-boolean
+ * `enabled`, or an unknown network yields null so the caller answers with an
+ * error instead of recording a disclosure decision the user did not make.
+ */
+export const readSetExplorerFallbackInput = (
+  message: unknown,
+): { readonly enabled: boolean; readonly networkId: StarknetNetworkId } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["enabled", "networkId", "type"]) &&
+  message["type"] === "wallet.setExplorerFallback" &&
+  isStarknetNetworkId(message["networkId"]) &&
+  typeof message["enabled"] === "boolean"
+    ? { enabled: message["enabled"], networkId: message["networkId"] }
+    : null;
+
+/**
  * Parses custom RPC override requests. An empty rpcUrl clears the override.
  */
 export const readSetRpcOverrideInput = (

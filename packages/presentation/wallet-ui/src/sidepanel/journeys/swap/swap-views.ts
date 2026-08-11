@@ -8,13 +8,16 @@
  * ./styles-swap.ts.
  */
 
-import { emptyState, receipt } from "@mc-wallet/ui-kit/content";
+import { emptyState, receipt, receiptRows } from "@mc-wallet/ui-kit/content";
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
 import { inputControl } from "@mc-wallet/ui-kit/fields";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { WalletStatus } from "../../../popup/responses/responses";
+import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
+import { compactAmount } from "../portfolio/token-row";
+import { SWAP_LOSS_WARN_PERCENT } from "./swap-client";
 
 // One tradable panel: label, amount region, token chip, and the USD/balance
 // line. The sell side carries a real input plus Max; the buy side is output.
@@ -123,3 +126,65 @@ export const swapFlow = (status: WalletStatus, account: AccountRef | null): stri
     )
   );
 };
+
+/**
+ * The figures the confirm receipt states. `minBuyAmount` is the minimum the
+ * BACKGROUND decoded out of the frozen route calldata, not one derived here —
+ * that separation is the whole point of the row.
+ */
+export type SwapConfirmFigures = {
+  readonly buyAmount: string;
+  readonly buySymbol: string;
+  readonly gasFeesInUsd: number;
+  readonly lossPercent: number;
+  readonly minBuyAmount: string;
+  readonly sellAmount: string;
+  readonly sellSymbol: string;
+  readonly valueDelta: number | null;
+};
+
+/**
+ * Renders the confirm-stage receipt. Pure: it states only what it is given, and
+ * every row is a claim the wallet can stand behind — the minimum comes off the
+ * frozen preparation and is labelled as enforced, while the aggregator's fee
+ * guess is labelled as not. Nothing here recomputes a figure the transaction
+ * carries; a row the wallet cannot back would be a false assurance on the last
+ * screen before signing.
+ */
+export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
+  receiptRows([
+    { label: "You sell", value: `${compactAmount(figures.sellAmount)} ${figures.sellSymbol}` },
+    {
+      label: "You receive (est.)",
+      value: `${compactAmount(figures.buyAmount)} ${figures.buySymbol}`,
+    },
+    {
+      label: "Minimum received",
+      value: `${compactAmount(figures.minBuyAmount)} ${figures.buySymbol} (wallet-enforced)`,
+    },
+    ...(figures.valueDelta === null
+      ? []
+      : [
+          {
+            label: "Value change",
+            value: `${figures.valueDelta > 0 ? "+" : ""}${figures.valueDelta.toFixed(2)}%`,
+            valueTone:
+              figures.lossPercent >= SWAP_LOSS_WARN_PERCENT
+                ? ("danger" as const)
+                : ("default" as const),
+          },
+        ]),
+    // Deliberately NOT labelled "Network fee". Every other reviewed send in the
+    // wallet shows a fee the wallet estimated itself and then binds the
+    // submission to (MCW-V09-119); this figure is the aggregator's own USD
+    // guess, carried through unchanged, and no resource bound is signed against
+    // it. Labelling it like the others would claim an assurance that is not
+    // there. For the same reason there is no "Slippage cap" row: it restated a
+    // panel-local constant, where the enforced minimum above states the value
+    // the signed call actually carries.
+    {
+      label: "Aggregator fee estimate",
+      value: `≈ ${formatFiat(figures.gasFeesInUsd, "usd")} (not wallet-enforced)`,
+    },
+    { label: "Route", value: "AVNU aggregator" },
+  ]);

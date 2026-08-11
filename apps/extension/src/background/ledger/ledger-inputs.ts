@@ -168,6 +168,10 @@ export type CompleteLedgerSignRequest =
   | { readonly id: string; readonly r: string; readonly s: string }
   | { readonly error: string; readonly id: string };
 
+// Deliberately not `isNetworkLabel` (shared/json): these are a queue id the
+// wallet itself minted and a rejection code, matched exactly by the queue, not
+// free text a user reads. Trimming or capping them would change which callbacks
+// resolve a pending device signature, so this rule stays local and literal.
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 

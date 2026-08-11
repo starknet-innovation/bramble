@@ -77,6 +77,13 @@ const cases: ReadonlyArray<{ error: string; message: Record<string, unknown>; ty
     type: "wallet.setRpcOverride",
   },
   {
+    // A non-boolean `enabled` must not be coerced: only a literal `true` may
+    // ever record consent to disclose the account address to an explorer.
+    error: "invalid explorer fallback request",
+    message: { enabled: "yes", networkId: "SN_MAIN", type: "wallet.setExplorerFallback" },
+    type: "wallet.setExplorerFallback",
+  },
+  {
     error: "invalid indexer endpoint request",
     message: { type: "wallet.setNftIndexerUrl" },
     type: "wallet.setNftIndexerUrl",
@@ -123,6 +130,18 @@ describe("handlePreferenceOps input validation", () => {
     });
     expect(response).toMatchObject({ ok: true });
     expect((await preferencesStore.read()).rpcOverrides?.SN_MAIN).toBe("https://rpc.example.com");
+  });
+
+  test("applies a well-formed explorer fallback choice (MCW-V09-129)", async () => {
+    const preferencesStore = store();
+    const response = await handlePreferenceOps(preferencesStore, "wallet.setExplorerFallback", {
+      enabled: false,
+      networkId: "SN_MAIN",
+      type: "wallet.setExplorerFallback",
+    });
+
+    expect(response).toMatchObject({ ok: true });
+    expect((await preferencesStore.read()).explorerFallback).toEqual({ SN_MAIN: false });
   });
 
   test("applies and clears complete STRK20 network routing", async () => {

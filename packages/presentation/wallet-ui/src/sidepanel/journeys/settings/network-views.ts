@@ -1,10 +1,18 @@
-/** Network selection and advanced endpoint views. */
+/**
+ * Network selection and the advanced-endpoints settings screen: which
+ * infrastructure the wallet talks to on the active network, and which third
+ * party is allowed to see the account address.
+ *
+ * Read-only: submitting a field sends a privileged extension message through
+ * `./endpoint-ui.ts`, and every rendered state comes from the preferences the
+ * background returned. No value here is written directly to storage.
+ */
 
 import { escapeHtml } from "@mc-wallet/core/html";
 import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import { explorerFallbackAllowed, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import { button } from "@mc-wallet/ui-kit/controls";
-import { textField } from "@mc-wallet/ui-kit/fields";
+import { checkboxField, textField } from "@mc-wallet/ui-kit/fields";
 import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
@@ -27,6 +35,40 @@ const strk20ConfigFor = (
 const nftIndexerUrlFor = (preferences: WalletPreferences | null): string =>
   preferences?.nftIndexerUrl ?? "";
 
+// Resolved, not stored: an untouched network shows the default this user gets
+// (on for built-in endpoints, off once they configured their own RPC), so the
+// checkbox never claims a decision the user has not made. Preferences that
+// failed to load render as off — the same fail-closed answer the background
+// gives — rather than as a permission the user cannot see the basis for.
+const explorerFallbackFor = (
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): boolean =>
+  preferences !== null &&
+  isStarknetNetworkId(status.networkId) &&
+  explorerFallbackAllowed(preferences, status.networkId);
+
+const explorerFallbackForm = (status: WalletStatus, allowed: boolean): string =>
+  `<form id="explorer-fallback-form">
+    <p class="hint">If every endpoint above fails, the wallet can ask a public block explorer for balances and history on ${escapeHtml(status.network)}. The explorer then learns which addresses you hold, and its numbers cannot be verified against the chain. Leave this off to see an error instead.</p>
+    ${checkboxField({
+      checked: allowed,
+      name: "explorerFallback",
+      text: "Allow a public explorer when my endpoints are unreachable",
+    })}
+    ${button({
+      icon: "check",
+      label: "Save fallback choice",
+      type: "submit",
+      variant: "secondary",
+    })}
+    <p id="explorer-fallback-result" role="status"></p>
+  </form>`;
+
+// One collapsed advanced-endpoint editor: a scannable summary row (name +
+// configured/default state) that opens into the form. Keeps the network
+// screen's primary task — picking a network — front and centre, with expert
+// plumbing one deliberate tap deeper.
 const endpointDisclosure = (
   id: string,
   title: string,
@@ -80,13 +122,17 @@ export const networkFlow = (status: WalletStatus, preferences: WalletPreferences
   );
 
 /**
- * Renders the security-sensitive custom service endpoint editor.
+ * Renders the security-sensitive custom service endpoint editor: expert RPC,
+ * prover, NFT-indexer, and explorer-fallback settings, away from the primary
+ * network picker. Read-only — every field submits a privileged message and the
+ * rendered state always comes from the preferences the background returned.
  */
 export const advancedNetworkFlow = (
   status: WalletStatus,
   preferences: WalletPreferences | null,
 ): string => {
   const privacy = strk20ConfigFor(status, preferences);
+  const explorerAllowed = explorerFallbackFor(status, preferences);
   return (
     flowHeader("Advanced endpoints", status, "Only change infrastructure you trust") +
     flowScreen(
@@ -118,6 +164,12 @@ export const advancedNetworkFlow = (
             })}
             <p id="rpc-result" role="status"></p>
           </form>`,
+        )}
+        ${endpointDisclosure(
+          "explorer-fallback",
+          "Explorer fallback",
+          explorerAllowed ? "Allowed" : "Off",
+          explorerFallbackForm(status, explorerAllowed),
         )}
         ${endpointDisclosure(
           "strk20-services",

@@ -4,6 +4,7 @@
  * executable action batch.
  */
 
+import { isSha256Digest } from "@mc-wallet/core/ids";
 import { WalletError } from "@mc-wallet/core/errors";
 import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import type { PaymasterAuthorizationReview } from "@mc-wallet/privacy/paymaster-typed-data";
@@ -11,8 +12,8 @@ import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
 import type { TokenConfig } from "@mc-wallet/settings/preferences";
 import type { ApprovalContext } from "../approvals/approval-context";
 
+
 const MAX_PREPARATIONS = 20;
-const PREPARATION_ID_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 type BasePreparation = {
   readonly context: ApprovalContext;
@@ -186,7 +187,7 @@ export const createStrk20WalletPreparationStore = (): Strk20WalletPreparationSto
   const pending = new Map<string, Strk20WalletPreparation>();
   return {
     claim(id) {
-      if (!PREPARATION_ID_PATTERN.test(id)) {
+      if (!isSha256Digest(id)) {
         return null;
       }
       const preparation = pending.get(id);
@@ -198,7 +199,7 @@ export const createStrk20WalletPreparationStore = (): Strk20WalletPreparationSto
     },
     put(preparation) {
       const copy = structuredClone(preparation);
-      if (!PREPARATION_ID_PATTERN.test(copy.id) || copy.id !== copy.context.payloadDigest) {
+      if (!isSha256Digest(copy.id) || copy.id !== copy.context.payloadDigest) {
         throw new WalletError("Invalid privacy preparation commitment");
       }
       pending.set(copy.id, copy);

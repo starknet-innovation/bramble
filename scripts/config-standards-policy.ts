@@ -27,6 +27,7 @@ export const EXPECTED_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
 export const EXPECTED_DEPENDENCIES: Readonly<Record<string, string>> = {
   "@mc-wallet/core": "workspace:*",
   "@mc-wallet/kms-krusty": "workspace:*",
+  "@mc-wallet/ledger-protocol": "workspace:*",
   "@mc-wallet/multisig": "workspace:*",
   "@mc-wallet/permissions": "workspace:*",
   "@mc-wallet/privacy": "workspace:*",

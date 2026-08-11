@@ -4,16 +4,24 @@
  * tests do not each re-declare ~140 lines of stubbing.
  */
 
-import type { MultisigProposalStatus } from "@mc-wallet/multisig/chain";
+import {
+  type MultisigProposalStatus,
+  type MultisigTransactionIdInput,
+  multisigTransactionId,
+} from "@mc-wallet/multisig/chain";
 import { MULTISIG_CLASS_HASH } from "@mc-wallet/multisig/deploy";
 import type { MultisigProposalDiscovery } from "@mc-wallet/multisig/discovery";
 import { type MultisigStore, memoryMultisigStore } from "@mc-wallet/multisig/repository";
+import type { InvokeInput } from "@mc-wallet/starknet/rpc-submit";
 import type { ActivityLog, ActivityStatus } from "@mc-wallet/transactions/activity";
+import type { AllowanceReading } from "@mc-wallet/transactions/allowance-discovery";
+import type { TrackedAllowanceScan } from "@mc-wallet/transactions/allowance-scan";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
+import type { WalletPreferencesStore } from "../../packages/features/settings/src/preferences-types";
 
 /**
  * Address of the multisig contract the harness watches.
@@ -32,10 +40,42 @@ export const HARNESS_OTHER_SIGNER =
   "0x444444444444444444444444444444444444444444444444444444444444444";
 
 /**
- * Full-length transaction id so composed proposal ids exercise their real
- * ~139-character length (a short stub once masked an id-length cap).
+ * Full-length transaction id that no harness call hashes to.
+ *
+ * Two uses, both deliberate. On a call-less record it stands in for a proposal
+ * tracked by id alone, at the real ~139-character composed proposal id length
+ * (a short stub once masked an id-length cap). On a call-bearing record it is
+ * the unbound id — the shape a hostile RPC answer or a tampered store would
+ * leave behind — which every confirm, revoke, and execute path must refuse.
+ * Fixtures that expect an action to succeed must file the call under
+ * {@link harnessTxId} instead.
  */
 export const HARNESS_TX_ID = `0x7${"a".repeat(62)}`;
+
+/**
+ * The real MultisigComponent id for a harness proposal's `(call, salt)` pair.
+ * Fixtures that store an executable call must file it under this id — that is
+ * the same derivation the wallet re-runs before it will build an execute
+ * invoke, so a hand-picked id would (correctly) be refused.
+ */
+export const harnessTxId = (call: {
+  readonly calldata: readonly string[];
+  readonly contractAddress: string;
+  readonly entrypoint: string;
+  readonly salt: string;
+}): string => multisigTransactionId(call, call.salt);
+
+/**
+ * Id of the canonical harness proposal — {@link HARNESS_TARGET}, `transfer`,
+ * calldata `["0x5", "0x0"]`, salt `0x0` — as MultisigComponent derives it.
+ * Propose tests assert against this rather than a hand-picked felt.
+ */
+export const HARNESS_PROPOSED_TX_ID = harnessTxId({
+  calldata: ["0x5", "0x0"],
+  contractAddress: HARNESS_TARGET,
+  entrypoint: "transfer",
+  salt: "0x0",
+});
 
 /**
  * Transaction hash returned by submitted invoke calls.
@@ -87,12 +127,23 @@ export type MultisigHarnessOptions = {
   readonly getTokenBalances?: (input: {
     readonly accountAddress: string;
   }) => Promise<readonly never[]>;
+  readonly getTrackedAllowances?: (
+    input: TrackedAllowanceScan,
+  ) => Promise<readonly AllowanceReading[]>;
   readonly loadClass?: () => Promise<unknown>;
   readonly multisigStore?: MultisigStore;
   readonly multisigConfig?: () => {
     readonly quorum: number;
     readonly signers: readonly string[];
   };
+  /**
+   * Preferences the handler reads its trusted set (contacts, tokens) from.
+   * Omitted, the handler falls back to the unavailable store, which is what
+   * every lifecycle fixture wants; a recipient-policy fixture must supply a
+   * real one, because "which addresses does this wallet trust" is exactly what
+   * the policy is deciding against.
+   */
+  readonly preferencesStore?: WalletPreferencesStore;
   readonly proposalDiscovery?: () => MultisigProposalDiscovery;
   readonly proposalStatus?: (signer: string) => MultisigProposalStatus;
   readonly signers?: readonly string[];
@@ -113,7 +164,11 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
   const invokeCalls: (readonly unknown[])[] = [];
   const estimatedCalls: (readonly unknown[])[] = [];
   const submittedAccounts: string[] = [];
+  // Whole submit inputs, not just the calls: MCW-V09-119 is about what travels
+  // ALONGSIDE them (the reviewed fee ceiling), which a calls-only capture hides.
+  const submittedInvokes: InvokeInput[] = [];
   const balanceReads: string[] = [];
+  const trackedAllowanceReads: TrackedAllowanceScan[] = [];
   const declared: unknown[] = [];
   const accounts = options.accounts ?? [harnessAccount];
   let activeAccountId = options.activeAccountId ?? accounts[0]?.id ?? harnessAccount.id;
@@ -167,6 +222,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.loadClass ? { loadMultisigClass: options.loadClass } : {}),
     multisigStore,
+    ...(options.preferencesStore ? { preferencesStore: options.preferencesStore } : {}),
     // The default in-memory activity log stamps entries at epoch 0, so the
     // reconciliation clock must agree or every harness transaction reads as
     // long past its observation window.
@@ -189,6 +245,10 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
       async getTokenMetadata() {
         return { decimals: 18, name: "Ether", symbol: "ETH" };
       },
+      async getTrackedAllowances(input) {
+        trackedAllowanceReads.push(input);
+        return options.getTrackedAllowances?.(input) ?? [];
+      },
       async getTransactionStatuses() {
         return Object.fromEntries(
           Object.entries(options.transactionStatuses?.() ?? {}).map(([hash, status]) => [
@@ -198,8 +258,12 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
         );
       },
       multisig: {
-        async computeTransactionId() {
-          return HARNESS_TX_ID;
+        // Derived, never fabricated: the production reader now returns the
+        // locally computed id and only cross-checks the node, so a stub that
+        // invented an id would let fixtures store proposals no chain could
+        // ever hold.
+        async computeTransactionId(input: MultisigTransactionIdInput) {
+          return multisigTransactionId(input.call, input.salt);
         },
         ...(options.proposalDiscovery
           ? {
@@ -250,6 +314,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
       async submitInvokeTransaction(input) {
         invokeCalls.push(input.calls);
         submittedAccounts.push(input.account.id);
+        submittedInvokes.push(input);
         if (options.submitInvoke) {
           const result = await options.submitInvoke(input.calls);
           return { calls: input.calls, transactionHash: result.transactionHash };
@@ -267,5 +332,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     invokeCalls,
     multisigStore,
     submittedAccounts,
+    submittedInvokes,
+    trackedAllowanceReads,
   };
 };

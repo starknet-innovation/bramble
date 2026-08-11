@@ -47,6 +47,12 @@ export type Strk20HarnessOptions = {
   /** Wall clock used to age the pending-registration window. */
   readonly now?: () => number;
   readonly preferences?: WalletPreferences;
+  /**
+   * Re-read on every access, for suites that change the trusted set (a contact
+   * saved between consent and submission) while a request is in flight. Takes
+   * precedence over `preferences`.
+   */
+  readonly preferencesRead?: () => WalletPreferences;
   readonly proveCalls?: { value: number };
   readonly publicBalance?: string;
   readonly registerCalls?: { value: number };
@@ -56,26 +62,17 @@ export type Strk20HarnessOptions = {
 };
 
 /**
- * Builds the real background handler around an instrumented STRK20 service.
+ * Builds the instrumented STRK20 service the harness runs against: a registered
+ * account, a fixed private balance, and a prepared call-and-proof pair, with
+ * optional counters so a suite can assert how often the pool was touched.
+ *
+ * Exported because the key-boundary scan wires the same service into its own
+ * handler — a second hand-written double would let the two drift into
+ * disagreeing about what a live privacy response looks like.
  */
-export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
-  const session = createUnlockSession();
-  session.unlock(vaultPassphrase);
-  const defaults = defaultWalletPreferences();
-  const mainnetStrk20 = defaults.strk20Networks?.SN_MAIN;
-  if (!mainnetStrk20) {
-    throw new Error("missing default STRK20 test config");
-  }
-  const preferences = options.preferences ?? {
-    ...defaults,
-    activeNetworkId: "SN_SEPOLIA" as const,
-    strk20Networks: {
-      ...defaults.strk20Networks,
-      SN_SEPOLIA: mainnetStrk20,
-    },
-  };
+export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Service => {
   const { balanceCalls, proveCalls, registerCalls, subaccountCalls } = options;
-  const strk20: Strk20Service = options.strk20 ?? {
+  return {
     async prepare() {
       if (proveCalls) {
         proveCalls.value += 1;
@@ -130,13 +127,35 @@ export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
       return { transactionHash: "0x123" };
     },
   };
+};
+
+/**
+ * Builds the real background handler around an instrumented STRK20 service.
+ */
+export const buildStrk20Handler = (options: Strk20HarnessOptions = {}) => {
+  const session = createUnlockSession();
+  session.unlock(vaultPassphrase);
+  const defaults = defaultWalletPreferences();
+  const mainnetStrk20 = defaults.strk20Networks?.SN_MAIN;
+  if (!mainnetStrk20) {
+    throw new Error("missing default STRK20 test config");
+  }
+  const preferences = options.preferences ?? {
+    ...defaults,
+    activeNetworkId: "SN_SEPOLIA" as const,
+    strk20Networks: {
+      ...defaults.strk20Networks,
+      SN_SEPOLIA: mainnetStrk20,
+    },
+  };
+  const strk20: Strk20Service = options.strk20 ?? makeStrk20Service(options);
   return createMessageHandler(createWallet(), "extension-id", {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.now ? { now: options.now } : {}),
     preferencesStore: {
       ...unavailablePreferencesStore,
       async read() {
-        return preferences;
+        return options.preferencesRead?.() ?? preferences;
       },
     },
     runtimeRpc: makeRuntimeRpc({

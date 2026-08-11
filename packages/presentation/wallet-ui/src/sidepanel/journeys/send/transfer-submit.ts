@@ -19,15 +19,11 @@ import type { TransferFields } from "./transfer-model";
  */
 export type TransferReview = Awaited<ReturnType<SidepanelWallet["reviewTransfer"]>>;
 
-/**
- * Starts the preparation a pool route needs, or `null` for a public transfer,
- * which reviews through the fee estimator instead.
- */
-export const preparationFor = (
+const preparePrivateRoute = (
   route: SendRoute,
   fields: TransferFields,
   wallet: SidepanelWallet,
-): Promise<PrivacyPreparation> | null => {
+): Promise<PrivacyPreparation> => {
   if (route.id === "public-private") {
     // Every route passes the composed recipient through, deposits included. The
     // recipient being a required argument rather than an optional extra is what
@@ -38,11 +34,28 @@ export const preparationFor = (
   if (route.id === "private-private") {
     return wallet.preparePrivacyTransfer(fields.tokenId, fields.recipient, fields.amount);
   }
-  if (route.id === "private-public") {
-    return wallet.preparePrivacyWithdraw(fields.tokenId, fields.recipient, fields.amount);
-  }
-  return null;
+  return wallet.preparePrivacyWithdraw(fields.tokenId, fields.recipient, fields.amount);
 };
+
+/**
+ * Starts the preparation a pool route needs, or `null` for a public transfer,
+ * which reviews through the fee estimator instead.
+ *
+ * The recipient policy is NOT applied here. It is enforced in the background,
+ * inside each preparation handler (the extension's background/privacy/strk20-send-ops.ts), through
+ * the same shared `refuseOnPoisonedRecipient` the public ERC20 send, the NFT
+ * send, the swap, and the dapp invoke use. That placement is the point: this
+ * message is untrusted like any other, so a panel-side gate could only ever be
+ * advisory, and duplicating the verifier's trusted-set scoping here would be a
+ * fourth copy of a rule that must not drift. A refused recipient rejects the
+ * returned promise with the verifier's own wording and prepares nothing.
+ */
+export const preparationFor = (
+  route: SendRoute,
+  fields: TransferFields,
+  wallet: SidepanelWallet,
+): Promise<PrivacyPreparation> | null =>
+  route.id === "public-public" ? null : preparePrivateRoute(route, fields, wallet);
 
 /**
  * The copy shown when a route's preparation fails, named per route so the toast
@@ -66,6 +79,14 @@ export const preparationFailure = (route: SendRoute): string => {
  * private balance, and a deposit's own fee lands in the estimate the account
  * route already produces, so the public STRK guard has nothing to say. `unknown`
  * renders no notice.
+ *
+ * `flags` is empty by construction, not by omission. The only recipient flag
+ * that can refuse a send — address poisoning — is applied in the background
+ * before a preparation exists, so a preparation this function is handed is one
+ * whose recipient already passed it; `self-transfer` is the ordinary case for a
+ * shield or an unshield to your own account, and `unknown-contract` is a
+ * statement about a token the route resolved from the wallet's own list. A flag
+ * rendered here would therefore be either impossible or noise.
  */
 export const preparedReview = (preparation: PrivacyPreparation): TransferReview =>
   ({
