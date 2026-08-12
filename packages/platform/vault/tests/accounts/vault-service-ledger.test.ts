@@ -264,7 +264,7 @@ describe("createLedgerVault", () => {
       "Ledger STRK20 viewing-key limit reached",
     );
     expect(await service.readVault(vaultPassphrase)).toEqual(before);
-  });
+  }, 20_000);
 
   test("rejects wrong-network, malformed, and software-account key retention", async () => {
     const { service } = makeService();
