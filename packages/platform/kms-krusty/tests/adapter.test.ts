@@ -8,7 +8,7 @@ const createModule = (signatureR = "0x1") => ({
   deriveOzAccountAddress() {
     return "0xabc";
   },
-  deriveStrk20ViewingKey() {
+  deriveScopedStrk20ViewingKey() {
     return "0x456";
   },
   foldStrk20ViewingKey() {
@@ -63,7 +63,7 @@ describe("createKrustyKms", () => {
   test("returns field-element account derivation results", async () => {
     const kms = createKrustyKms(createModule());
 
-    await expect(kms.deriveStrk20ViewingKey("0x123", "0x1", "0x2")).resolves.toBe("0x456");
+    await expect(kms.deriveScopedStrk20ViewingKey("0x123", "0x1", "0x2")).resolves.toBe("0x456");
     await expect(kms.deriveStarknetKeypair("seed words", 0, 0)).resolves.toEqual({
       privateKey: "0x123",
       publicKeyX: "0xabc",
@@ -76,7 +76,7 @@ describe("createKrustyKms", () => {
     const kms = createKrustyKms(createModule());
 
     await expect(kms.strk20ViewingKeyMessageHash("0x1", "0x2")).resolves.toBe("0xabc");
-    await expect(kms.foldStrk20ViewingKey("0x1", "0x2")).resolves.toBe("0x789");
+    await expect(kms.foldStrk20ViewingKey("0x9", "0x1", "0x1", "0x2")).resolves.toBe("0x789");
 
     // The scope must be canonical: two spellings of one pool would otherwise
     // derive two different keys, and a registered key cannot be changed.
@@ -90,9 +90,45 @@ describe("createKrustyKms", () => {
       "Invalid STRK20 viewing-key scope",
     );
     // (r, s) come from a device the wallet does not control.
-    await expect(kms.foldStrk20ViewingKey("nope", "0x2")).rejects.toThrow(
+    await expect(kms.foldStrk20ViewingKey("0x9", "0x1", "nope", "0x2")).rejects.toThrow(
       "Invalid STRK20 viewing-key signature input",
     );
+  });
+
+  test("binds the scoped derivation and refuses a build offering only the unscoped one", async () => {
+    // The KMS exports both `deriveStrk20ViewingKey` (private key only) and
+    // `deriveScopedStrk20ViewingKey` (private key + chain + pool). Extra
+    // arguments are silently dropped in JS, so binding the wrong one would derive
+    // an unscoped key the pool does not recognize — with nothing throwing. The
+    // adapter must therefore fail closed on a module that lacks the scoped
+    // export, rather than falling back to the unscoped one that happens to exist.
+    const { deriveScopedStrk20ViewingKey: _omitted, ...unscopedOnly } = {
+      ...createModule(),
+      deriveStrk20ViewingKey() {
+        return "0xunscoped";
+      },
+    };
+
+    expect(() => createKrustyKms(unscopedOnly)).toThrow(
+      "Krusty KMS export missing: deriveScopedStrk20ViewingKey",
+    );
+  });
+
+  test("passes the signature's subject through to the fold", async () => {
+    // The fold verifies (r, s) against the public key and message hash, so the
+    // adapter must hand all four through in order. A dropped or reordered
+    // argument would make every device signature unverifiable.
+    const seen: unknown[][] = [];
+    const kms = createKrustyKms({
+      ...createModule(),
+      foldStrk20ViewingKey(...args: unknown[]) {
+        seen.push(args);
+        return "0x789";
+      },
+    });
+
+    await expect(kms.foldStrk20ViewingKey("0x9", "0xa", "0x1", "0x2")).resolves.toBe("0x789");
+    expect(seen).toEqual([["0x9", "0xa", "0x1", "0x2"]]);
   });
 
   test("rejects ceremony output the wallet cannot use as a viewing key", async () => {
@@ -104,7 +140,7 @@ describe("createKrustyKms", () => {
         return "0x0";
       },
     });
-    await expect(outOfRange.foldStrk20ViewingKey("0x1", "0x2")).rejects.toThrow(
+    await expect(outOfRange.foldStrk20ViewingKey("0x9", "0x1", "0x1", "0x2")).rejects.toThrow(
       "Krusty KMS returned an invalid STRK20 viewing key",
     );
 
@@ -153,10 +189,10 @@ describe("createKrustyKms", () => {
     await expect(kms.deriveStarknetKeypair("   ", 0, 0)).rejects.toThrow(
       "Invalid Stark derivation input",
     );
-    await expect(kms.deriveStrk20ViewingKey("0x0", "0x1", "0x2")).rejects.toThrow(
+    await expect(kms.deriveScopedStrk20ViewingKey("0x0", "0x1", "0x2")).rejects.toThrow(
       "Invalid STRK20 viewing-key input",
     );
-    await expect(kms.deriveStrk20ViewingKey("0x1", "0x0", "0x2")).rejects.toThrow(
+    await expect(kms.deriveScopedStrk20ViewingKey("0x1", "0x0", "0x2")).rejects.toThrow(
       "Invalid STRK20 viewing-key input",
     );
     expect(addressDerived).toBe(false);
@@ -200,10 +236,10 @@ describe("createKrustyKms", () => {
     await expect(
       createKrustyKms({
         ...createModule(),
-        deriveStrk20ViewingKey() {
+        deriveScopedStrk20ViewingKey() {
           return "0x0";
         },
-      }).deriveStrk20ViewingKey("0x123", "0x1", "0x2"),
+      }).deriveScopedStrk20ViewingKey("0x123", "0x1", "0x2"),
     ).rejects.toThrow("Krusty KMS returned an invalid STRK20 viewing key");
   });
 

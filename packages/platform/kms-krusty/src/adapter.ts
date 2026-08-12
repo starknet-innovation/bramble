@@ -101,7 +101,9 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
     typeof init === "function" ? Promise.resolve((init as Callable)()) : Promise.resolve();
 
   const deriveOzAccountAddress = requireFunction(module, "deriveOzAccountAddress");
-  const deriveStrk20ViewingKey = requireFunction(module, "deriveStrk20ViewingKey");
+  // The scoped derivation, deliberately not the unscoped `deriveStrk20ViewingKey`
+  // the KMS also exports — see KmsPort.deriveScopedStrk20ViewingKey.
+  const deriveScopedStrk20ViewingKey = requireFunction(module, "deriveScopedStrk20ViewingKey");
   const foldStrk20ViewingKey = requireFunction(module, "foldStrk20ViewingKey");
   const strk20ViewingKeyMessageHash = requireFunction(module, "strk20ViewingKeyMessageHash");
   const deriveStarknetKeypair = requireFunction(module, "deriveStarknetKeypair");
@@ -127,7 +129,7 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       }
       return result;
     },
-    async deriveStrk20ViewingKey(privateKey, chainId, poolAddress) {
+    async deriveScopedStrk20ViewingKey(privateKey, chainId, poolAddress) {
       await ready;
       if (
         !isNonZeroStarkFieldElement(privateKey) ||
@@ -136,20 +138,26 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
       ) {
         throw new WalletError("Invalid STRK20 viewing-key input");
       }
-      const result = await deriveStrk20ViewingKey(privateKey, chainId, poolAddress);
+      const result = await deriveScopedStrk20ViewingKey(privateKey, chainId, poolAddress);
       if (typeof result !== "string" || !isNonZeroStarkFieldElement(result)) {
         throw new WalletError("Krusty KMS returned an invalid STRK20 viewing key");
       }
       return result;
     },
-    async foldStrk20ViewingKey(r, s) {
+    async foldStrk20ViewingKey(publicKey, messageHash, r, s) {
       await ready;
-      // (r, s) arrive from a device the wallet does not control, so they are
-      // checked as field elements before crossing into WASM.
-      if (!isStarkFieldElement(r) || !isStarkFieldElement(s)) {
+      // (r, s) arrive from a device the wallet does not control, and the KMS
+      // verifies them against publicKey/messageHash, so all four are checked as
+      // field elements before crossing into WASM.
+      if (
+        !isNonZeroStarkFieldElement(publicKey) ||
+        !isStarkFieldElement(messageHash) ||
+        !isStarkFieldElement(r) ||
+        !isStarkFieldElement(s)
+      ) {
         throw new WalletError("Invalid STRK20 viewing-key signature input");
       }
-      const result = await foldStrk20ViewingKey(r, s);
+      const result = await foldStrk20ViewingKey(publicKey, messageHash, r, s);
       // The fold promises a key in [1, n/2]; isStarkPrivateKey pins the range
       // this wallet will accept, so a WASM build that broke that guarantee
       // fails closed here instead of registering an unusable key with the pool.

@@ -43,8 +43,11 @@ const ledgerVault = async () => {
 
 // The fake KMS models both stages as pure functions of their inputs, so the
 // expected key can be recomputed here without reimplementing any crypto.
+// The real fold verifies (r, s) against the signature's public key and message
+// hash; the fake ignores that subject, so the placeholders here are inert and the
+// expected key stays a function of (r, s) alone.
 const expectedKey = async (r: string, s: string): Promise<string> =>
-  fakeKms().foldStrk20ViewingKey(r, s);
+  fakeKms().foldStrk20ViewingKey("0x0", "0x0", r, s);
 const expectedHash = async (chainId: string, poolAddress: string): Promise<string> =>
   fakeKms().strk20ViewingKeyMessageHash(chainId, poolAddress);
 

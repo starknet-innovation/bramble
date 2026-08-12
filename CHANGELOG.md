@@ -24,6 +24,14 @@ is cut. See DEVELOPMENT.md and RELEASING.md.
 - The Send recipient list marks a hardware-backed account with the same
   **Hardware** tag as the account selector.
 
+### Changed
+- The vendored Krusty KMS pin now tracks a commit on the upstream default branch
+  rather than a pull-request branch tip, so the build no longer depends on a
+  revision that could be rebased away. The wallet uses the KMS's scoped
+  viewing-key derivation explicitly, and the viewing-key fold now verifies the
+  device signature against the account's public key and the signed scope before
+  producing a key.
+
 ### Fixed
 - A registered Ledger account re-added after an extension reset now offers to
   generate its viewing key, instead of offering a second registration the privacy

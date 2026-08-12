@@ -5,11 +5,17 @@ import { mkdir } from "node:fs/promises";
 
 const repo = "https://github.com/starknet-innovation/krusty-kms.git";
 const target = "vendor/krusty-kms";
-// Tip of upstream PR #42 (feat/strk20-viewing-key-stages), which exposes the two
-// hashing stages either side of the signature so a Ledger can supply the middle
-// step. PROVISIONAL: re-point this at the merge commit once #42 lands — a PR
-// branch tip can be rebased or squashed away, and this pin must stay fetchable.
-const KRUSTY_KMS_REVISION = "174e23216d4243407f077106ec4f8ea1c8ee08d9";
+// A commit on upstream `main`, reachable and immutable — no longer a PR branch
+// tip that could be rebased or squashed out from under this pin.
+//
+// This is the first pin to carry upstream #42, which exposes the two hashing
+// stages either side of the signature so a Ledger can supply the middle step. It
+// landed with a different shape than the branch this used to track: scoping is an
+// additive `deriveScopedStrk20ViewingKey` rather than a new signature on
+// `deriveStrk20ViewingKey`, and the fold now takes the public key and message
+// hash so it verifies the signature instead of trusting the caller. The adapter
+// tracks that shape; `check:krusty` pins both against the real wasm.
+const KRUSTY_KMS_REVISION = "f1a036c78cdc2f09e173edd6ff4b19a307a44732";
 
 const run = async (cmd: string[], cwd = "."): Promise<void> => {
   const child = Bun.spawn(cmd, { cwd, stderr: "inherit", stdout: "inherit" });

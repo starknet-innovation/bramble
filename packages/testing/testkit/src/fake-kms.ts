@@ -5,7 +5,7 @@ export const fakeKms = (validMnemonic = true) => ({
   async deriveOzAccountAddress(publicKeyX: string, classHash: string, _salt?: string) {
     return `0x${publicKeyX.slice(2)}${classHash.slice(2, 8)}`;
   },
-  async deriveStrk20ViewingKey(_privateKey: string, _chainId: string, _poolAddress: string) {
+  async deriveScopedStrk20ViewingKey(_privateKey: string, _chainId: string, _poolAddress: string) {
     return "0x654321";
   },
   // The two ceremony stages model the real ones' load-bearing properties without
@@ -14,7 +14,7 @@ export const fakeKms = (validMnemonic = true) => ({
   // (r, s) (so a test can prove the stored key came from the device signature).
   // Both return canonical non-zero felts well inside the curve order, because the
   // ceremony validates them exactly as it validates real Krusty output.
-  async foldStrk20ViewingKey(r: string, s: string) {
+  async foldStrk20ViewingKey(_publicKey: string, _messageHash: string, r: string, s: string) {
     const folded = (BigInt(r) * 0x10001n + BigInt(s)) % 0xffff_ffff_ffff_ffffn;
     return `0x${(folded === 0n ? 1n : folded).toString(16)}`;
   },

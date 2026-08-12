@@ -22,22 +22,42 @@ export type KmsPort = {
     classHash: string,
     salt?: string,
   ) => Promise<string>;
-  readonly deriveStrk20ViewingKey: (
+  /**
+   * Derives the STRK20 viewing key for one exact chain and pool.
+   *
+   * Named for the scope on purpose. The KMS also exposes an *unscoped*
+   * `deriveStrk20ViewingKey` taking only a private key, and the two are one
+   * argument apart in a language that silently ignores extra arguments — a port
+   * member called `deriveStrk20ViewingKey` would invite a caller to bind to the
+   * unscoped function and derive a key the pool does not recognize, with nothing
+   * failing. Only the scoped derivation belongs in this wallet.
+   */
+  readonly deriveScopedStrk20ViewingKey: (
     privateKey: string,
     chainId: string,
     poolAddress: string,
   ) => Promise<string>;
   /**
-   * Folds a signature over {@link KmsPort.strk20ViewingKeyMessageHash} into a
-   * viewing key. The second of the two stages {@link deriveStrk20ViewingKey}
-   * composes, exposed so a Ledger — which never reveals its private key — can
-   * supply the signature itself and still land on a key this derivation
-   * recognizes.
+   * Folds a device signature over {@link KmsPort.strk20ViewingKeyMessageHash}
+   * into a viewing key. The second of the two stages
+   * {@link deriveScopedStrk20ViewingKey} composes, exposed so a Ledger — which
+   * never reveals its private key — can supply the signature itself and still
+   * land on a key this derivation recognizes.
+   *
+   * `publicKey` and `messageHash` are the signature's own subject: the KMS
+   * verifies `(r, s)` against them before folding, so a signature from another
+   * key or over another scope cannot produce a key. That is a second gate behind
+   * the caller's own verify, not a replacement for it.
    *
    * The result is secret material: it goes only to the encrypted vault, never to
    * messages, logs, preferences, or UI state.
    */
-  readonly foldStrk20ViewingKey: (r: string, s: string) => Promise<string>;
+  readonly foldStrk20ViewingKey: (
+    publicKey: string,
+    messageHash: string,
+    r: string,
+    s: string,
+  ) => Promise<string>;
   /**
    * Computes the message a viewing key is derived by signing, for one canonical
    * chain and pool. Carries no secret material — it is a hash of public scope —

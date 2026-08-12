@@ -63,7 +63,7 @@ export const deriveVaultStrk20ViewingKey = async (
   if (!signingKey) {
     throw new WalletError("Signing key unavailable");
   }
-  return kms.deriveStrk20ViewingKey(signingKey.privateKey, chainId, poolAddress);
+  return kms.deriveScopedStrk20ViewingKey(signingKey.privateKey, chainId, poolAddress);
 };
 
 /**
@@ -118,7 +118,13 @@ export const prepareLedgerStrk20ViewingKey = async (
   }
   const messageHash = await kms.strk20ViewingKeyMessageHash(scope.chainId, scope.poolAddress);
   const signature = await input.sign(messageHash);
-  const viewingKey = canonicalFelt(await kms.foldStrk20ViewingKey(signature.r, signature.s));
+  // The account's own key and the exact message it was asked to sign: the fold
+  // verifies (r, s) against them, so a signature from another device — or over
+  // another pool's scope — cannot yield a key. The caller's verify-before-use
+  // gate stays in place; this is the second one.
+  const viewingKey = canonicalFelt(
+    await kms.foldStrk20ViewingKey(account.publicKeyX, messageHash, signature.r, signature.s),
+  );
   if (!viewingKey) {
     throw new WalletError("Invalid Ledger STRK20 viewing key");
   }
