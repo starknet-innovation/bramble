@@ -56,9 +56,10 @@ const option = (
  * `aria-hidden` because the input's own `aria-label` already names the word.
  *
  * The cell itself must never carry `hidden`: the 12/24 toggle owns visibility by
- * setting `hidden` on the inputs, and the UA sheet applies `display: none`
- * `!important` to `[hidden]`, so a wrapper marked hidden here could not be shown
- * again. `.recovery-word-cell:has(> input[hidden])` follows the input instead.
+ * setting `hidden` on the inputs, and the shell's global
+ * `[hidden] { display: none !important }` (styles-components.ts) outranks any
+ * cell rule, so a wrapper marked hidden here could not be shown again.
+ * `.recovery-word-cell:has(> input[hidden])` follows the input instead.
  */
 const recoveryWordInputs = (kind: "generated" | "import"): string =>
   Array.from(

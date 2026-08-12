@@ -236,16 +236,26 @@ export const ONBOARDING_STYLES = `
     gap: ${SPACE.xs};
   }
   .recovery-word-cell:has(> input[hidden]) { display: none; }
+  /* The position is a static marker, not part of the phrase: keep it out of a
+     drag-selection so copying the grid never yields interleaved digits. */
   .recovery-word-cell > span:first-child {
+    font-family: var(--mc-font-mono);
     font-size: ${TYPE.micro.size};
     font-variant-numeric: tabular-nums;
     min-width: 2ch;
     text-align: right;
+    user-select: none;
   }
+  /* The number takes width the field used to have, so the field claims the rest
+     explicitly and trades side padding for glyphs — centred text does not need
+     the inset. The longest BIP39 words then fit from 400px up, and land within a
+     pixel of the content box at the 320px floor. */
   .recovery-word {
+    flex: 1;
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.caption.size};
-    padding: 0 ${SPACE.sm};
+    min-width: 0;
+    padding: 0 ${SPACE.xs};
     text-align: center;
   }
   .recovery-grid.is-masked .recovery-word {
@@ -253,6 +263,10 @@ export const ONBOARDING_STYLES = `
     pointer-events: none;
     user-select: none;
   }
+  /* A label forwards clicks to its control even when the control itself is
+     pointer-events:none, so the cell must opt out too or the masked phrase
+     stays clickable through the number and the gap around it. */
+  .recovery-grid.is-masked .recovery-word-cell { pointer-events: none; }
   .onboarding-inline-action {
     background: transparent;
     color: var(--mc-muted);

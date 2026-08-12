@@ -45,13 +45,19 @@ describe("onboarding gate view", () => {
   test("numbers every recovery word as content that survives a filled cell", () => {
     const html = onboarding(status);
 
-    expect(html.match(/class="recovery-word-cell"/g)?.length).toBe(48);
-    // Visibility stays on the inputs: a `hidden` cell could not be revealed
-    // again, because the UA sheet marks `[hidden]` display:none !important.
-    expect(html).not.toContain('class="recovery-word-cell" hidden');
-    expect(html).toContain('<span aria-hidden="true">1</span><input class="recovery-word"');
-    expect(html).toContain('<span aria-hidden="true">12</span><input class="recovery-word"');
-    expect(html).toContain('<span aria-hidden="true">24</span><input class="recovery-word"');
+    const cellsIn = (kind: "generated" | "import"): readonly string[] => {
+      const grid = html.split(`data-recovery-grid="${kind}"`)[1]?.split("</div>")[0] ?? "";
+      return grid.split('<label class="recovery-word-cell">').slice(1);
+    };
+
+    for (const kind of ["generated", "import"] as const) {
+      const cells = cellsIn(kind);
+      expect(cells.length).toBe(24);
+      // Each cell states its own 1-based position, ahead of its own input.
+      expect(
+        cells.map((cell) => cell.match(/^<span aria-hidden="true">(\d+)<\/span>/)?.[1]),
+      ).toEqual(Array.from({ length: 24 }, (_, index) => `${index + 1}`));
+    }
     expect(html).not.toContain('placeholder="1"');
   });
 
