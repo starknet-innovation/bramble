@@ -1,6 +1,11 @@
 /**
  * Small error helper for fail-closed domain checks.
  */
+import { isRecord } from "./json";
+
+/**
+ * Curated domain error safe to surface across the wallet's dapp boundary.
+ */
 export class WalletError extends Error {
   public constructor(message: string) {
     super(message);
@@ -29,14 +34,53 @@ export const walletErrorMessage = (error: unknown, fallback: string): string =>
 
 /** Longest diagnostic kept; a node can reject with a very large payload. */
 const MAX_DETAIL_LENGTH = 600;
+const RPC_REASON_KEYS = ["execution_error", "revert_error"] as const;
+
+// starknet.js puts an RpcError's full request params in `message`, while the
+// response that explains a rejection is kept separately in `baseError`. Reading
+// the former would put calldata into a wallet diagnostic and hide the reason.
+const rpcReason = (data: unknown): string => {
+  if (typeof data === "string") {
+    return data;
+  }
+  if (!isRecord(data)) {
+    return "";
+  }
+  for (const key of RPC_REASON_KEYS) {
+    const value = data[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return "";
+};
+
+const rpcDetail = (baseError: unknown): string => {
+  if (!isRecord(baseError)) {
+    return "";
+  }
+  const code = typeof baseError["code"] === "number" ? String(baseError["code"]) : "";
+  const message = typeof baseError["message"] === "string" ? baseError["message"] : "";
+  return [code, message, rpcReason(baseError["data"])].filter((part) => part !== "").join(" ");
+};
+
+const detailText = (error: unknown): string => {
+  const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
+  // An RPC envelope means `error.message` is a request dump, even if the
+  // envelope itself is malformed. Do not fall back to that request body.
+  if (baseError !== undefined) {
+    return rpcDetail(baseError);
+  }
+  return error instanceof Error ? error.message : typeof error === "string" ? error : "";
+};
 
 /**
- * Extracts the caught error's own text as a diagnostic for the **wallet's own
- * surfaces only** — the panel's status line and its copy-for-a-bug-report
- * control. This is the counterpart to {@link walletErrorMessage}: that function
- * deliberately collapses an uncurated error to a generic message so internal
- * detail never crosses the dapp boundary, which also threw away the one thing a
- * user needs to understand a rejected transaction (the node's reason).
+ * Extracts a caught error's diagnostic text for the **wallet's own surfaces
+ * only** — the panel's status line and its copy-for-a-bug-report control. This
+ * is the counterpart to {@link walletErrorMessage}: that function deliberately
+ * collapses an uncurated error to a generic message so internal detail never
+ * crosses the dapp boundary, which also threw away the one thing a user needs
+ * to understand a rejected transaction (the node's reason).
  *
  * Callers must keep the two apart: send {@link walletErrorMessage} to the page
  * and this only to the extension's own UI. Never persist or log the result.
@@ -46,8 +90,7 @@ const MAX_DETAIL_LENGTH = 600;
  * themselves. Output is trimmed and truncated to a bounded length.
  */
 export const errorDetail = (error: unknown, summary: string): string | null => {
-  const raw = error instanceof Error ? error.message : typeof error === "string" ? error : "";
-  const trimmed = raw.trim();
+  const trimmed = detailText(error).trim();
   if (trimmed === "" || trimmed === summary) {
     return null;
   }
