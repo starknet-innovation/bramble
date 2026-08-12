@@ -111,6 +111,7 @@ export type ProposeMultisigInput = {
   readonly calldata: readonly string[];
   readonly entrypoint: string;
   readonly multisigId: string;
+  readonly reviewedFee?: FeeEstimate;
   readonly salt: string;
   readonly signerAccountId?: string;
   readonly summary?: string;
@@ -126,6 +127,7 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
     "calldata",
     "entrypoint",
     "multisigId",
+    "reviewedFee",
     "salt",
     "signerAccountId",
     "summary",
@@ -139,12 +141,14 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
   isMultisigEntrypoint(message["entrypoint"]) &&
   isFeltList(message["calldata"], MAX_CALLDATA_FELTS) &&
   isOptionalSalt(message["salt"]) &&
+  (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"])) &&
   (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
   isOptionalSummary(message["summary"])
     ? {
         calldata: message["calldata"],
         entrypoint: message["entrypoint"] as string,
         multisigId: message["multisigId"] as string,
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
         salt: message["salt"] ?? "0x0",
         ...(message["signerAccountId"] === undefined
           ? {}
@@ -161,6 +165,7 @@ export const readProposeMultisigInput = (message: unknown): ProposeMultisigInput
  */
 export type MultisigProposalActionInput = {
   readonly proposalId: string;
+  readonly reviewedFee?: FeeEstimate;
   readonly signerAccountId?: string;
   readonly untrackedVerified?: boolean;
 };
@@ -224,15 +229,16 @@ export const readMultisigProposalActionInput = (
 ): MultisigProposalActionInput | null => {
   const keys =
     type === "wallet.executeMultisigProposal"
-      ? (["proposalId", "signerAccountId", "type"] as const)
-      : (["proposalId", "signerAccountId", "type", "untrackedVerified"] as const);
+      ? (["proposalId", "reviewedFee", "signerAccountId", "type"] as const)
+      : (["proposalId", "reviewedFee", "signerAccountId", "type", "untrackedVerified"] as const);
   if (
     !(
       isRecord(message) &&
       hasOnlyKnownKeys(message, keys) &&
       message["type"] === type &&
       isId(message["proposalId"]) &&
-      (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"]))
+      (message["signerAccountId"] === undefined || isAccountId(message["signerAccountId"])) &&
+      (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"]))
     )
   ) {
     return null;
@@ -242,6 +248,7 @@ export const readMultisigProposalActionInput = (
   }
   return {
     proposalId: message["proposalId"],
+    ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
     ...(message["signerAccountId"] === undefined
       ? {}
       : { signerAccountId: message["signerAccountId"] }),
@@ -291,6 +298,7 @@ export const readTrackMultisigProposalInput = (
  */
 export type DeployMultisigInput = {
   readonly quorum: number;
+  readonly reviewedFee?: FeeEstimate;
   readonly salt: string;
   readonly signers: readonly string[];
 };
@@ -301,7 +309,7 @@ export type DeployMultisigInput = {
  */
 export const readDeployMultisigInput = (message: unknown): DeployMultisigInput | null =>
   isRecord(message) &&
-  hasOnlyKnownKeys(message, ["quorum", "salt", "signers", "type"]) &&
+  hasOnlyKnownKeys(message, ["quorum", "reviewedFee", "salt", "signers", "type"]) &&
   message["type"] === "wallet.deployMultisig" &&
   Array.isArray(message["signers"]) &&
   message["signers"].length >= 1 &&
@@ -313,9 +321,11 @@ export const readDeployMultisigInput = (message: unknown): DeployMultisigInput |
   Number.isSafeInteger(message["quorum"]) &&
   message["quorum"] >= 1 &&
   message["quorum"] <= message["signers"].length &&
+  (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"])) &&
   isOptionalSalt(message["salt"])
     ? {
         quorum: message["quorum"],
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
         salt: message["salt"] ?? "0x0",
         signers: message["signers"] as readonly string[],
       }

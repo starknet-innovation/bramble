@@ -3,6 +3,7 @@
  */
 
 import type { Strk20NetworkConfig } from "@mc-wallet/privacy/config";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isOkResponse } from "../../popup/responses/multisig-responses";
 import {
@@ -21,6 +22,7 @@ import {
   isDeploymentStatusResponse,
   isDetectTokensResponse,
   isErrorResponse,
+  isFeeReviewResponse,
   isGenerateMnemonicResponse,
   isPreferencesResponse,
   isPricesResponse,
@@ -153,8 +155,12 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "account preview unavailable");
     },
-    async deployAccount(): Promise<string> {
-      const response = await sendMessage({ type: "wallet.deployAccount" });
+    async deployAccount(reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
+      const response = await sendMessage({
+        ...(reviewedFee ? { reviewedFee } : {}),
+        type: "wallet.deployAccount",
+      });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
@@ -256,8 +262,13 @@ export const createSidepanelRuntime = (runtime?: RuntimeApi) => {
       const response = await sendMessage({ type: "wallet.allowances" });
       return isAllowancesResponse(response) ? response.allowances : [];
     },
-    async revokeAllowance(id: string): Promise<string> {
-      const response = await sendMessage({ id, type: "wallet.revokeAllowance" });
+    async revokeAllowance(id: string, reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
+      const response = await sendMessage({
+        id,
+        ...(reviewedFee ? { reviewedFee } : {}),
+        type: "wallet.revokeAllowance",
+      });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }

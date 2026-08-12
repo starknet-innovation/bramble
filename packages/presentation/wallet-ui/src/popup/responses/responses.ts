@@ -62,7 +62,12 @@ export {
 /**
  * Re-exported transfer-review validators for one import path.
  */
-export { isTransferReviewResponse, type TransferReviewResponse } from "./responses-transfer";
+export {
+  type FeeReviewResponse,
+  isFeeReviewResponse,
+  isTransferReviewResponse,
+  type TransferReviewResponse,
+} from "./responses-transfer";
 /**
  * Re-exported on-chain class-hash verification validator for one import path.
  */

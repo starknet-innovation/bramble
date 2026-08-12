@@ -396,23 +396,24 @@ const localHandler = (opts: {
   });
 };
 
-const localWatchAndPropose = (handler: ReturnType<typeof localHandler>) =>
-  handler(
+const localWatchAndPropose = async (handler: ReturnType<typeof localHandler>) => {
+  const watched = await handler(
     { address: HARNESS_MULTISIG, name: "Treasury", type: "wallet.addMultisig" },
     harnessExtensionSender,
-  ).then((watched) =>
-    handler(
-      {
-        calldata: ["0x5", "0x0"],
-        entrypoint: "transfer",
-        multisigId: (watched as { multisig: { id: string } }).multisig.id,
-        summary: "Pay vendor",
-        to: HARNESS_TARGET,
-        type: "wallet.proposeMultisigTx",
-      },
-      harnessExtensionSender,
-    ),
   );
+  const message = {
+    calldata: ["0x5", "0x0"],
+    entrypoint: "transfer",
+    multisigId: (watched as { multisig: { id: string } }).multisig.id,
+    summary: "Pay vendor",
+    to: HARNESS_TARGET,
+    type: "wallet.proposeMultisigTx",
+  };
+  const response = await handler(message, harnessExtensionSender);
+  return "feeReview" in response
+    ? handler({ ...message, reviewedFee: response.feeReview }, harnessExtensionSender)
+    : response;
+};
 
 describe("multisig propose compose/store envelopes", () => {
   test("rejects when the computed transaction id is not a felt", async () => {

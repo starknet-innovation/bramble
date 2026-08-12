@@ -32,6 +32,8 @@ import type { Call } from "starknet";
 import { signerForContext } from "../accounts/wallet-ops";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { activeAccountContext } from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import { requiredFeeReview } from "../transactions/fee-review";
 import {
   type MultisigContext,
   type MultisigOpsDeps,
@@ -152,10 +154,12 @@ export const submitAndRecord = async (
   resolved: MultisigContext,
   calls: readonly Call[],
   summary: string,
+  reviewedFee: FeeEstimate,
 ): Promise<string> => {
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: resolved.account.account,
     calls,
+    reviewedFee,
     rpcUrls: resolved.rpcUrls,
     signHash: signerForContext(deps, resolved.account),
   });
@@ -173,17 +177,16 @@ export const submitAndRecord = async (
  * Submits a claimed proposal action, releasing the claim if the broadcast
  * itself fails so a transient RPC fault cannot wedge the signer's slot.
  *
- * `reviewedFee` is the estimate the confirmation review showed for these exact
- * calls; supplying it makes that figure the ceiling this co-signing invoke may
- * sign under, so a cost that has moved since the review is refused rather than
- * signed (MCW-V09-119). Omitted where no fee was reviewed.
+ * `reviewedFee` is the estimate the user reviewed for these exact calls. It is
+ * the ceiling this invoke may sign under, so a cost that moved after review is
+ * refused rather than signed (MCW-V09-119).
  */
 export const submitClaimedAndRecord = async (
   deps: MultisigOpsDeps,
   resolved: MultisigContext,
   plan: ProposalActionPlan,
   operationId: string,
-  reviewedFee?: FeeEstimate,
+  reviewedFee: FeeEstimate,
 ): Promise<string> => {
   // Read BEFORE the broadcast, though it is only used after it: everything
   // past the submit is bookkeeping, and a preferences read that failed there
@@ -198,7 +201,7 @@ export const submitClaimedAndRecord = async (
     result = await deps.runtimeRpc.submitInvokeTransaction({
       account: resolved.account.account,
       calls: plan.calls,
-      ...(reviewedFee ? { reviewedFee } : {}),
+      reviewedFee,
       rpcUrls: resolved.rpcUrls,
       signHash: signerForContext(deps, resolved.account),
     });
@@ -230,6 +233,23 @@ export const submitClaimedAndRecord = async (
   }
   return result.transactionHash;
 };
+
+/**
+ * Returns the fee review required before signing the supplied exact calls.
+ */
+export const requiredMultisigFeeReview = (
+  deps: MultisigOpsDeps,
+  resolved: MultisigContext,
+  calls: readonly Call[],
+): Promise<RuntimeResponse> =>
+  requiredFeeReview(() =>
+    deps.runtimeRpc.estimateInvokeFee({
+      account: resolved.account.account,
+      calls,
+      rpcUrls: resolved.rpcUrls,
+      signHash: signerForContext(deps, resolved.account),
+    }),
+  );
 
 /**
  * Looks up a stored proposal by id and resolves the signer context for it, or

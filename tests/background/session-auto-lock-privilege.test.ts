@@ -75,7 +75,11 @@ const makeHarness = async () => {
   await preferencesStore.setActiveNetwork("SN_SEPOLIA");
   const handler = createMessageHandler(createWallet(), "extension-id", {
     preferencesStore,
-    runtimeRpc: makeRuntimeRpc(),
+    runtimeRpc: makeRuntimeRpc({
+      async estimateAccountDeploymentFee() {
+        return { overallFee: "1", unit: "FRI" };
+      },
+    }),
     session,
   });
   session.unlock(vaultPassphrase);

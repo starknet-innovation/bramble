@@ -22,6 +22,7 @@ import { createMessageHandler } from "../../apps/extension/src/background/routin
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
 import type { WalletPreferencesStore } from "../../packages/features/settings/src/preferences-types";
+import { isFeeReviewResponse } from "../../packages/presentation/wallet-ui/src/popup/responses/responses";
 
 /**
  * Address of the multisig contract the harness watches.
@@ -218,7 +219,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
       };
     },
   };
-  const handler = createMessageHandler(walletStub, "extension-id", {
+  const rawHandler = createMessageHandler(walletStub, "extension-id", {
     ...(options.activity ? { activity: options.activity } : {}),
     ...(options.loadClass ? { loadMultisigClass: options.loadClass } : {}),
     multisigStore,
@@ -230,6 +231,9 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     runtimeRpc: {
       async estimateInvokeFee(input) {
         estimatedCalls.push(input.calls);
+        return { overallFee: "1", unit: "FRI" };
+      },
+      async estimateDeclareFee() {
         return { overallFee: "1", unit: "FRI" };
       },
       async getDeploymentStatus() {
@@ -324,6 +328,15 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     },
     session,
   });
+  // Lifecycle tests use the harness like the panel: an action first reviews
+  // its exact fee, then echoes it back. Security tests can call rawHandler to
+  // assert the fail-closed first response directly.
+  const handler: typeof rawHandler = async (message, sender) => {
+    const response = await rawHandler(message, sender);
+    return isFeeReviewResponse(response) && typeof message === "object" && message !== null
+      ? rawHandler({ ...message, reviewedFee: response.feeReview }, sender)
+      : response;
+  };
   return {
     balanceReads,
     declared,
@@ -331,6 +344,7 @@ export const makeMultisigHarness = (options: MultisigHarnessOptions = {}) => {
     handler,
     invokeCalls,
     multisigStore,
+    rawHandler,
     submittedAccounts,
     submittedInvokes,
     trackedAllowanceReads,

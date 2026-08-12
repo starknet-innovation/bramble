@@ -232,6 +232,7 @@ export const bindMultisigConfirmation = (deps: MultisigUiDeps): void => {
         return;
       }
       const reviewedFee = reviewedFees.get(panel);
+      if (!reviewedFee) return;
       buttonBusy(button, true);
       setChoicesDisabled(panel, true);
       panel.dataset["msSubmitting"] = "true";
@@ -243,7 +244,7 @@ export const bindMultisigConfirmation = (deps: MultisigUiDeps): void => {
         .confirmProposal({
           mode,
           proposalId,
-          ...(reviewedFee ? { reviewedFee } : {}),
+          reviewedFee,
           signerAccountId,
           ...(acknowledgment?.checked === true ? { untrackedVerified: true } : {}),
         })
@@ -259,6 +260,8 @@ export const bindMultisigConfirmation = (deps: MultisigUiDeps): void => {
             await deps.render(await deps.wallet.loadStatus());
           },
           (error: unknown) => {
+            reviewedFees.delete(panel);
+            panel.dataset["msReviewReady"] = "false";
             const failed = errorMessage(
               error,
               mode === "confirm-and-execute" ? "Confirm and execute failed" : "Confirmation failed",

@@ -262,6 +262,12 @@ type TransferReviewResponse = {
   };
 };
 
+/** Fee a wallet-initiated operation must display before its confirmation. */
+type FeeReviewResponse = {
+  readonly feeReview: FeeEstimate;
+  readonly ok: true;
+};
+
 /**
  * Pre-sign fee review for one exact multisig confirmation operation.
  */
@@ -438,6 +444,7 @@ export type RuntimeResponse =
   | DeploymentStatusResponse
   | DetectTokensResponse
   | DiscoverNftsResponse
+  | FeeReviewResponse
   | SupportedVersionsResponse
   | TransferReviewResponse
   | GenerateMnemonicResponse

@@ -49,9 +49,13 @@ class FakeAccount {
   public async estimateDeclareFee(
     payload: Record<string, unknown>,
     details: Record<string, unknown>,
-  ): Promise<{ overall_fee: bigint; unit: string }> {
+  ): Promise<{ overall_fee: bigint; resourceBounds: unknown; unit: string }> {
     estimateCalls.push({ details, payload });
-    return { overall_fee: 2_500_000_000_000_000n, unit: "FRI" };
+    return {
+      overall_fee: 2_500_000_000_000_000n,
+      resourceBounds: { l1_gas: { max_amount: 2_500_000_000_000_000n, max_price_per_unit: 2n } },
+      unit: "FRI",
+    };
   }
 }
 
@@ -93,7 +97,7 @@ describe("submitDeclareTransaction", () => {
       makeAccount,
     );
 
-    expect(fee).toEqual({ overallFee: "2500000000000000", unit: "FRI" });
+    expect(fee).toEqual({ overallFee: "5000000000000000", unit: "FRI" });
     expect(signed).toBe(false);
     expect(estimateCalls).toEqual([
       {

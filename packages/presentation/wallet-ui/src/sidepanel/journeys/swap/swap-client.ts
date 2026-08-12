@@ -12,6 +12,7 @@ import {
   isRecord,
   isRiskFlagCode,
 } from "@mc-wallet/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { RuntimeApi } from "../../runtime/runtime";
 import { responseError } from "../../runtime/runtime-errors";
 
@@ -41,6 +42,7 @@ export type SwapPreparationView = {
   // signed call enforces.
   readonly minBuyAmount: string;
   readonly payloadDigest: string;
+  readonly reviewedFee: FeeEstimate;
   readonly summaries: readonly string[];
 };
 
@@ -67,10 +69,18 @@ const isSwapQuoteView = (value: unknown): value is SwapQuoteView =>
 
 const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["flags", "id", "minBuyAmount", "payloadDigest", "summaries"]) &&
+  hasOnlyKnownKeys(value, [
+    "flags",
+    "id",
+    "minBuyAmount",
+    "payloadDigest",
+    "reviewedFee",
+    "summaries",
+  ]) &&
   isSha256Digest(value["id"]) &&
   value["payloadDigest"] === value["id"] &&
   isDecimalAmountText(value["minBuyAmount"]) &&
+  isFeeEstimate(value["reviewedFee"]) &&
   Array.isArray(value["summaries"]) &&
   value["summaries"].length > 0 &&
   value["summaries"].length <= 4 &&

@@ -50,6 +50,7 @@ const record: MultisigRecord = {
   quorum: 1,
   signers: [account.address],
 };
+const reviewedFee = { overallFee: "1000", unit: "FRI" } as const;
 
 const basePreferences = defaultWalletPreferences();
 const preferences = {
@@ -112,7 +113,7 @@ describe("guided Multisig actions", () => {
     const app = mount(flow, {
       async proposeTransaction(value) {
         proposals.push(value);
-        return "0xaaa";
+        return value.reviewedFee ? "0xaaa" : reviewedFee;
       },
     } as MultisigUiDeps["multisig"]);
     const recipient = [
@@ -126,7 +127,8 @@ describe("guided Multisig actions", () => {
     }
     const form = app.querySelector<HTMLFormElement>("#multisig-propose-form");
     form?.requestSubmit();
-    expect(proposals).toEqual([]);
+    for (let turn = 0; turn < 3; turn += 1) await Promise.resolve();
+    expect(proposals).toHaveLength(1);
     expect(form?.dataset["proposalStage"]).toBe("review");
     expect(app.querySelector(".proposal-review-stack")).not.toBeNull();
     form?.requestSubmit();
@@ -153,7 +155,7 @@ describe("guided Multisig actions", () => {
       summary: `Send 1.25 ${token.symbol} to Research treasury`,
       to,
     };
-    expect(proposals).toEqual([expected]);
+    expect(proposals).toEqual([expected, { ...expected, reviewedFee }]);
   });
 
   test("selects wallet contacts, then requires stable deployment review", async () => {
@@ -166,9 +168,11 @@ describe("guided Multisig actions", () => {
         preferences,
       ),
       {
-        async deployMultisig(signers, quorum, salt) {
-          deployments.push({ quorum, salt, signers });
-          return { address: "0x777", ok: true, tracked: true, transactionHash: "0x888" };
+        async deployMultisig(signers, quorum, salt, fee) {
+          deployments.push({ ...(fee ? { reviewedFee: fee } : {}), quorum, salt, signers });
+          return fee
+            ? { address: "0x777", ok: true, tracked: true, transactionHash: "0x888" }
+            : reviewedFee;
         },
       } as MultisigUiDeps["multisig"],
     );
@@ -181,13 +185,15 @@ describe("guided Multisig actions", () => {
     expect(rules?.hidden).toBe(false);
     const form = app.querySelector<HTMLFormElement>("#multisig-deploy-form");
     form?.requestSubmit();
-    expect(deployments).toEqual([]);
+    for (let turn = 0; turn < 3; turn += 1) await Promise.resolve();
+    expect(deployments).toHaveLength(1);
     expect(app.querySelector("#multisig-deploy-review")?.textContent).toContain("Deployment rules");
     form?.requestSubmit();
     for (let turn = 0; turn < 6; turn += 1) {
       await Promise.resolve();
     }
-    expect(deployments).toEqual([{ quorum: 1, salt: "0x0", signers: [account.address, "0x555"] }]);
+    const expected = { quorum: 1, salt: "0x0", signers: [account.address, "0x555"] };
+    expect(deployments).toEqual([expected, { ...expected, reviewedFee }]);
     expect(document.querySelector<HTMLElement>(".toast-text")?.textContent ?? "").toContain(
       "added to watched multisigs",
     );

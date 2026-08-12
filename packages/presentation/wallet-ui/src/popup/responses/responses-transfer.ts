@@ -25,6 +25,24 @@ export type TransferReviewResponse = {
   };
 };
 
+/**
+ * Network fee returned before a wallet-initiated operation may be confirmed.
+ */
+export type FeeReviewResponse = {
+  readonly feeReview: FeeEstimate;
+  readonly ok: true;
+};
+
+/**
+ * Checks a wallet-initiated fee review before any extension page renders it.
+ */
+export const isFeeReviewResponse = (value: unknown): value is FeeReviewResponse =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, ["feeReview", "ok"]) &&
+  value["ok"] === true &&
+  isFeeEstimate(value["feeReview"]);
+
 const isRiskFlagShape = (value: unknown): value is { code: string; message: string } =>
   isRecord(value) &&
   hasOnlyKnownKeys(value, ["code", "message"]) &&

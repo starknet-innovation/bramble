@@ -150,19 +150,26 @@ describe("bindMultisigs", () => {
       },
       {
         multisig: {
-          async declareClass() {
+          async declareClass(reviewed) {
             declarations += 1;
-            return submitted;
+            return reviewed ? submitted : { overallFee: "1", unit: "FRI" };
           },
         } as MultisigUiDeps["multisig"],
       },
     );
     const declareButton = app.querySelector<HTMLButtonElement>("#multisig-declare");
     declareButton?.click();
-    declareButton?.click();
-    await Promise.resolve();
+    for (let turn = 0; turn < 3; turn += 1) await Promise.resolve();
 
     expect(declarations).toBe(1);
+    expect(declareButton?.disabled).toBe(false);
+    expect(app.querySelector("#multisig-declare-result")?.textContent).toContain(
+      "Maximum network fee",
+    );
+
+    declareButton?.click();
+    await Promise.resolve();
+    expect(declarations).toBe(2);
     expect(declareButton?.disabled).toBe(true);
     expect(declareButton?.hasAttribute("data-busy")).toBe(true);
     expect(app.querySelector("#multisig-declare-result")?.textContent).toBe("Submitting declare…");
@@ -192,7 +199,7 @@ describe("bindMultisigs", () => {
         multisig: {
           async proposeTransaction(proposal) {
             proposals.push(proposal);
-            return "0xabc";
+            return proposal.reviewedFee ? "0xabc" : { overallFee: "1", unit: "FRI" };
           },
         } as MultisigUiDeps["multisig"],
         selectedMultisigId: () => "SN_MAIN:0x999",
@@ -202,7 +209,8 @@ describe("bindMultisigs", () => {
     const submit = app.querySelector<HTMLButtonElement>('button[type="submit"]');
 
     form?.requestSubmit();
-    expect(proposals).toEqual([]);
+    for (let turn = 0; turn < 3; turn += 1) await Promise.resolve();
+    expect(proposals).toHaveLength(1);
     expect(form?.dataset["proposalStage"]).toBe("review");
     expect(app.querySelector("#multisig-propose-review")?.textContent).toContain(
       "Transaction details",
@@ -211,16 +219,18 @@ describe("bindMultisigs", () => {
 
     form?.requestSubmit();
     await Promise.resolve();
+    const expected = {
+      calldata: ["0x456", "0x1"],
+      entrypoint: "transfer",
+      multisigId: "SN_MAIN:0x999",
+      salt: "0x789",
+      signerAccountId: "SN_MAIN:0x123",
+      summary: "Pay contributor",
+      to: "0x123",
+    };
     expect(proposals).toEqual([
-      {
-        calldata: ["0x456", "0x1"],
-        entrypoint: "transfer",
-        multisigId: "SN_MAIN:0x999",
-        salt: "0x789",
-        signerAccountId: "SN_MAIN:0x123",
-        summary: "Pay contributor",
-        to: "0x123",
-      },
+      expected,
+      { ...expected, reviewedFee: { overallFee: "1", unit: "FRI" } },
     ]);
   });
 

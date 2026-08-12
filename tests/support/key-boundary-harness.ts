@@ -31,6 +31,7 @@ import {
   createUnlockSession,
   type UnlockSession,
 } from "../../apps/extension/src/background/runtime/session";
+import { isFeeReviewResponse } from "../../packages/presentation/wallet-ui/src/popup/responses/responses";
 import { flushHeld, latestApprovalId, reviewedApprovalFee } from "./held";
 import {
   ETH,
@@ -127,6 +128,9 @@ export const makeKeyBoundaryHarness = async (
       if (raced !== null) {
         if (!raced.ok) {
           throw raced.cause;
+        }
+        if (isFeeReviewResponse(raced.value)) {
+          return settle({ ...message, reviewedFee: raced.value.feeReview }, sender);
         }
         return raced.value;
       }

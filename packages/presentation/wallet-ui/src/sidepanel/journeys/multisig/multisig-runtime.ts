@@ -6,6 +6,7 @@
 
 import type { MultisigConfirmationMode } from "@mc-wallet/multisig/confirmation";
 import type { MultisigProposalCall } from "@mc-wallet/multisig/repository";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import {
   isMultisigClassStatusResponse,
   isMultisigConfirmationReviewResponse,
@@ -22,6 +23,7 @@ import {
 import {
   isBalancesResponse,
   isErrorResponse,
+  isFeeReviewResponse,
   isTransferResponse,
 } from "../../../popup/responses/responses";
 import type { RuntimeApi, ScopedBalanceState } from "../../runtime/runtime";
@@ -62,20 +64,19 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
     /**
      * Submits the reviewed confirmation. `reviewedFee` must be the estimate
      * `prepareConfirmation` returned and this panel displayed; the background
-     * makes it the ceiling the co-signing invoke may sign under. Omitted when
-     * no estimate was shown, which leaves the send bounded only by the node.
+     * makes it the ceiling the co-signing invoke may sign under.
      */
     async confirmProposal(input: {
       readonly mode: MultisigConfirmationMode;
       readonly proposalId: string;
-      readonly reviewedFee?: MultisigReviewFee;
+      readonly reviewedFee: MultisigReviewFee;
       readonly signerAccountId: string;
       readonly untrackedVerified?: boolean;
     }): Promise<string> {
       const response = await sendMessage({
         mode: input.mode,
         proposalId: input.proposalId,
-        ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+        reviewedFee: input.reviewedFee,
         signerAccountId: input.signerAccountId,
         type: "wallet.confirmMultisigProposal",
         ...(input.untrackedVerified ? { untrackedVerified: true } : {}),
@@ -103,8 +104,12 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       }
       throw responseError(response, "confirmation review failed");
     },
-    async declareClass(): Promise<string> {
-      const response = await sendMessage({ type: "wallet.declareMultisigClass" });
+    async declareClass(reviewedFee?: FeeEstimate): Promise<FeeEstimate | string> {
+      const response = await sendMessage({
+        ...(reviewedFee ? { reviewedFee } : {}),
+        type: "wallet.declareMultisigClass",
+      });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
@@ -114,24 +119,33 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       signers: readonly string[],
       quorum: number,
       salt: string,
-    ): Promise<MultisigDeployResponse> {
+      reviewedFee?: FeeEstimate,
+    ): Promise<FeeEstimate | MultisigDeployResponse> {
       const response = await sendMessage({
         quorum,
+        ...(reviewedFee ? { reviewedFee } : {}),
         ...(salt ? { salt } : {}),
         signers,
         type: "wallet.deployMultisig",
       });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isMultisigDeployResponse(response)) {
         return response;
       }
       throw responseError(response, "deploy failed");
     },
-    async executeProposal(proposalId: string, signerAccountId: string): Promise<string> {
+    async executeProposal(
+      proposalId: string,
+      signerAccountId: string,
+      reviewedFee?: FeeEstimate,
+    ): Promise<FeeEstimate | string> {
       const response = await sendMessage({
         proposalId,
+        ...(reviewedFee ? { reviewedFee } : {}),
         signerAccountId,
         type: "wallet.executeMultisigProposal",
       });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }
@@ -183,21 +197,24 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       readonly calldata: readonly string[];
       readonly entrypoint: string;
       readonly multisigId: string;
+      readonly reviewedFee?: FeeEstimate;
       readonly salt: string;
       readonly signerAccountId: string;
       readonly summary: string;
       readonly to: string;
-    }): Promise<string> {
+    }): Promise<FeeEstimate | string> {
       const response = await sendMessage({
         calldata: input.calldata,
         entrypoint: input.entrypoint,
         multisigId: input.multisigId,
+        ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
         ...(input.salt ? { salt: input.salt } : {}),
         signerAccountId: input.signerAccountId,
         ...(input.summary ? { summary: input.summary } : {}),
         to: input.to,
         type: "wallet.proposeMultisigTx",
       });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isMultisigProposalResponse(response) && response.transactionHash) {
         return response.transactionHash;
       }
@@ -234,13 +251,16 @@ export const createMultisigClient = (runtime?: RuntimeApi) => {
       proposalId: string,
       signerAccountId: string,
       untrackedVerified?: boolean,
-    ): Promise<string> {
+      reviewedFee?: FeeEstimate,
+    ): Promise<FeeEstimate | string> {
       const response = await sendMessage({
         proposalId,
+        ...(reviewedFee ? { reviewedFee } : {}),
         signerAccountId,
         type: "wallet.revokeMultisigConfirmation",
         ...(untrackedVerified ? { untrackedVerified: true } : {}),
       });
+      if (isFeeReviewResponse(response)) return response.feeReview;
       if (isTransferResponse(response)) {
         return response.transactionHash;
       }

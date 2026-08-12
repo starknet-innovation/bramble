@@ -18,7 +18,7 @@ import {
   authorizedSpendFor,
   exceedsReviewedFee,
   type FeeEstimate,
-  nodeFeeEstimate,
+  reviewedSpendFor,
 } from "../rpc/fee-bounds";
 
 /**
@@ -93,7 +93,7 @@ export const estimateDeclareFee = async (
         input.account,
         input.signHash,
       ).estimateDeclareFee(declarePayload(input), { skipValidate: true });
-      return nodeFeeEstimate(estimate);
+      return reviewedSpendFor(estimate, "standard");
     },
     makeProvider,
   );

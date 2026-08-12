@@ -6,6 +6,7 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { isSha256Digest } from "@mc-wallet/core/ids";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { Call } from "starknet";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalRiskFlag } from "../approvals/approvals";
@@ -28,6 +29,7 @@ export type SwapPreparation = {
   // the preparation so the confirm card states the figure the transaction
   // enforces rather than one the panel computed alongside it.
   readonly minBuyAmount: string;
+  readonly reviewedFee: FeeEstimate;
   readonly sellSymbol: string;
   readonly summaries: readonly string[];
 };
@@ -40,6 +42,7 @@ export type SwapPreparationReview = {
   readonly id: string;
   readonly minBuyAmount: string;
   readonly payloadDigest: string;
+  readonly reviewedFee: FeeEstimate;
   readonly summaries: readonly string[];
 };
 
@@ -58,6 +61,7 @@ export const swapPreparationPayload = (
   calls: preparation.calls,
   flags: preparation.flags,
   minBuyAmount: preparation.minBuyAmount,
+  reviewedFee: preparation.reviewedFee,
   sellSymbol: preparation.sellSymbol,
   summaries: preparation.summaries,
 });
@@ -106,6 +110,7 @@ export const createSwapPreparationStore = (): SwapPreparationStore => {
         id: copy.id,
         minBuyAmount: copy.minBuyAmount,
         payloadDigest: copy.context.payloadDigest,
+        reviewedFee: { ...copy.reviewedFee },
         summaries: [...copy.summaries],
       };
     },

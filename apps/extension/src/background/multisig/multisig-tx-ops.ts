@@ -47,6 +47,7 @@ import {
   recordGuardError,
   refreshAfterAction,
   refusePoisonedProposalRecipient,
+  requiredMultisigFeeReview,
   reserveProposalAction,
   resolveMultisigTarget,
   submitAndRecord,
@@ -101,11 +102,16 @@ const proposeMultisigTx: MultisigTxHandler = async (deps, message) => {
     return { error: "invalid propose request" };
   }
   const summary = defaultSummary(input);
+  const calls = [buildMultisigSubmitCall(target.record.address, call, input.salt)];
+  if (!input.reviewedFee) {
+    return requiredMultisigFeeReview(deps, target, calls);
+  }
   const transactionHash = await submitAndRecord(
     deps,
     target,
-    [buildMultisigSubmitCall(target.record.address, call, input.salt)],
+    calls,
     `Propose: ${summary}`,
+    input.reviewedFee,
   );
   const proposal = buildMultisigProposalRecord({
     id,
@@ -216,6 +222,9 @@ const prepareMultisigConfirmation: MultisigTxHandler = async (deps, message) => 
 const confirmMultisigProposal: MultisigTxHandler = async (deps, message) => {
   const context = await confirmationContext(deps, message, "wallet.confirmMultisigProposal");
   if ("error" in context) return context;
+  if (!context.input.reviewedFee) {
+    return requiredMultisigFeeReview(deps, context.found.resolved, context.plan.calls);
+  }
   const claim = await reserveProposalAction(deps, context.found, "confirm");
   if ("error" in claim) return claim;
   const transactionHash = await submitClaimedAndRecord(
@@ -249,16 +258,21 @@ const revokeMultisigConfirmation: MultisigTxHandler = async (deps, message) => {
   if ("error" in status) return status;
   const guardError = revokeGuard(status);
   if (guardError) return { error: guardError };
+  const plan = {
+    calls: [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
+    summary: `Revoke confirmation: ${found.proposal.summary}`,
+  };
+  if (!input.reviewedFee) {
+    return requiredMultisigFeeReview(deps, found.resolved, plan.calls);
+  }
   const claim = await reserveProposalAction(deps, found, "revoke");
   if ("error" in claim) return claim;
   const transactionHash = await submitClaimedAndRecord(
     deps,
     found.resolved,
-    {
-      calls: [buildMultisigRevokeCall(found.resolved.record.address, found.proposal.txId)],
-      summary: `Revoke confirmation: ${found.proposal.summary}`,
-    },
+    plan,
     claim.operationId,
+    input.reviewedFee,
   );
   await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };
@@ -286,17 +300,22 @@ const executeMultisigProposal: MultisigTxHandler = async (deps, message) => {
   if (status.state !== "confirmed") {
     return { error: `cannot execute a proposal that is ${status.state}` };
   }
+  const plan = {
+    calls: [buildMultisigExecuteCall(found.resolved.record.address, executable, executable.salt)],
+    executed: executable,
+    summary: `Execute: ${found.proposal.summary}`,
+  };
+  if (!input.reviewedFee) {
+    return requiredMultisigFeeReview(deps, found.resolved, plan.calls);
+  }
   const claim = await reserveProposalAction(deps, found, "execute");
   if ("error" in claim) return claim;
   const transactionHash = await submitClaimedAndRecord(
     deps,
     found.resolved,
-    {
-      calls: [buildMultisigExecuteCall(found.resolved.record.address, executable, executable.salt)],
-      executed: executable,
-      summary: `Execute: ${found.proposal.summary}`,
-    },
+    plan,
     claim.operationId,
+    input.reviewedFee,
   );
   await refreshAfterAction(deps, found).catch(() => undefined);
   return { ok: true, transactionHash };

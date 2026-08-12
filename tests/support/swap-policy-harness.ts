@@ -188,6 +188,9 @@ export const makeSwapHarness = (build: readonly SwapCall[]) => {
   const handler = createMessageHandler(walletStub, "extension-id", {
     activity,
     runtimeRpc: {
+      async estimateInvokeFee() {
+        return { overallFee: "1", unit: "FRI" };
+      },
       async submitInvokeTransaction({ calls }: { readonly calls: readonly unknown[] }) {
         submitted.push(calls);
         return { calls: [], transactionHash: "0x5aa9" };

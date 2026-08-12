@@ -72,6 +72,23 @@ export const readTypeOnlyInput = (message: unknown, type: string): boolean =>
   isRecord(message) && hasOnlyKnownKeys(message, ["type"]) && message["type"] === type;
 
 /**
+ * Parses a wallet-initiated action whose first call requests a fee review and
+ * whose confirming call echoes that exact reviewed fee.
+ */
+export const readFeeReviewInput = (
+  message: unknown,
+  type: string,
+): { readonly reviewedFee?: FeeEstimate } | null =>
+  isRecord(message) &&
+  hasOnlyKnownKeys(message, ["reviewedFee", "type"]) &&
+  message["type"] === type &&
+  (message["reviewedFee"] === undefined || isFeeEstimate(message["reviewedFee"]))
+    ? {
+        ...(isFeeEstimate(message["reviewedFee"]) ? { reviewedFee: message["reviewedFee"] } : {}),
+      }
+    : null;
+
+/**
  * Parses an activity request for either the active signer or one explicitly
  * selected watched account. The background resolves and authorizes the scope;
  * this boundary accepts only a well-formed account id and no unknown fields.

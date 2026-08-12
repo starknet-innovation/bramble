@@ -51,13 +51,15 @@ const NO_GRANT_POSSIBLE: Readonly<Record<string, string>> = {
     "the manager itself: revoke builds approve(spender, 0) and writes the cleared record directly, and refuses a contract that is a watched NFT collection",
   "declare-ops.ts":
     "declares a class; a declaration carries no calls at all, so no allowance can be granted",
+  "deployment-ops.ts":
+    "deploys the selected account contract; a deployment carries no calls, so no allowance can be granted",
   "multisig-deploy-ops.ts":
     "submits only the UDC deployment and class declaration the wallet builds from pinned constants",
   "nft-ops.ts":
     "submits only the ERC721/ERC1155 transfer the wallet builds; an NFT approval's second argument is a token id, not an amount, and must never be filed as an ERC20 allowance",
   "runtime-rpc.ts": "defines the seams; it wires the RPC functions and submits nothing itself",
   "wallet-ops.ts":
-    "submits only the ERC20 transfer and the account deployment the wallet builds from the user's own inputs; neither carries an approve",
+    "submits only the ERC20 transfer the wallet builds from the user's own inputs; it carries no approve",
 };
 
 // Recurses the background capability folders, keyed by file name: the

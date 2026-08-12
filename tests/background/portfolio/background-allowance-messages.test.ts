@@ -138,7 +138,12 @@ describe("allowance manager messages", () => {
     };
     const id = listed.allowances[0]?.id ?? "";
 
-    const revoke = await handler({ id, type: "wallet.revokeAllowance" }, extensionSender);
+    const review = await handler({ id, type: "wallet.revokeAllowance" }, extensionSender);
+    expect(review).toEqual({ feeReview: { overallFee: "1", unit: "FRI" }, ok: true });
+    const revoke = await handler(
+      { id, reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.revokeAllowance" },
+      extensionSender,
+    );
     expect(revoke).toEqual({ ok: true, transactionHash: "0x7cd" });
 
     const revokeCall = invokeCalls.at(-1)?.[0] as { calldata: string[]; entrypoint: string };

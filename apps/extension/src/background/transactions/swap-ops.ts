@@ -196,6 +196,17 @@ const swapPrepareResponse = async (
     if (policy.error !== undefined) {
       return { error: policy.error };
     }
+    const rpcUrls = networkRpcUrls(STARKNET_NETWORKS[networkId], preferences);
+    const signHash = signerForContext(deps, context);
+    const reviewedFee = await deps.runtimeRpc
+      .estimateInvokeFee({ account, calls, rpcUrls, signHash })
+      .catch(() => null);
+    if (!reviewedFee) {
+      return {
+        error:
+          "The network fee could not be estimated. Check the RPC endpoint and retry before signing.",
+      };
+    }
     const minBuyText = formatTokenAmount(policy.route.minBuyAmount, buyToken.decimals);
     // The route's own summary is WALLET-AUTHORED from the decoded calldata, not
     // the verifier's generic "Call multi_route_swap on 0x…". That generic line
@@ -210,6 +221,7 @@ const swapPrepareResponse = async (
       calls,
       flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
       minBuyAmount: minBuyText,
+      reviewedFee,
       sellSymbol: sellToken.symbol,
       summaries: report.calls.map((call, index) =>
         index === routeIndex
@@ -273,6 +285,7 @@ const swapExecuteResponse = async (
     const result = await deps.runtimeRpc.submitInvokeTransaction({
       account: context.account,
       calls: preparation.calls,
+      reviewedFee: preparation.reviewedFee,
       rpcUrls: networkRpcUrls(STARKNET_NETWORKS[context.networkId], preferences),
       signHash: signerForContext(deps, context),
     });

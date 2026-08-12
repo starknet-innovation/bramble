@@ -15,7 +15,7 @@ import {
   authorizedSpendFor,
   exceedsReviewedFee,
   type FeeEstimate,
-  nodeFeeEstimate,
+  reviewedSpendFor,
 } from "../rpc/fee-bounds";
 import {
   IndeterminateRpcWriteError,
@@ -252,7 +252,7 @@ export const estimateAccountDeploymentFee = async (
         },
         { skipValidate: true },
       );
-      return nodeFeeEstimate(estimate);
+      return reviewedSpendFor(estimate, "standard");
     },
     makeProvider,
   );

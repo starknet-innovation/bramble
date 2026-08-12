@@ -220,12 +220,18 @@ describe("estimateAccountDeploymentFee", () => {
         ({
           async estimateAccountDeployFee(payload: unknown, details: unknown) {
             received = [payload, details];
-            return { overall_fee: 1_500_000_000_000_000n, unit: "FRI" };
+            return {
+              overall_fee: 1_500_000_000_000_000n,
+              resourceBounds: {
+                l1_gas: { max_amount: 1_500_000_000_000_000n, max_price_per_unit: 2n },
+              },
+              unit: "FRI",
+            };
           },
         }) as unknown as Account,
     );
 
-    expect(estimate).toEqual({ overallFee: "1500000000000000", unit: "FRI" });
+    expect(estimate).toEqual({ overallFee: "3000000000000000", unit: "FRI" });
     expect(signed).toBe(false);
     expect(received).toEqual([
       {

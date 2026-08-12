@@ -46,6 +46,7 @@ import {
   observedAccountContext,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { requiredFeeReview } from "../transactions/fee-review";
 import { readRevokeAllowanceInput } from "./allowance-inputs";
 
 /**
@@ -265,11 +266,23 @@ const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
   }
   const call = buildErc20ApproveCall(target.token, target.spender, 0n);
   const report = verifyCalls([call], trusted);
+  const signHash = signerForContext(deps, context);
+  if (!input.reviewedFee) {
+    return requiredFeeReview(() =>
+      deps.runtimeRpc.estimateInvokeFee({
+        account: context.account,
+        calls: [call],
+        rpcUrls,
+        signHash,
+      }),
+    );
+  }
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: context.account,
     calls: [call],
+    reviewedFee: input.reviewedFee,
     rpcUrls,
-    signHash: signerForContext(deps, context),
+    signHash,
   });
   // Written before the activity line: the log is what makes a residual grant
   // visible and revokable, so it must not depend on a second store's write

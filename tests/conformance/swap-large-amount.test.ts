@@ -137,6 +137,7 @@ const mountSwap = (): { readonly sent: unknown[] } => {
               // minimum of its own beside the transaction.
               minBuyAmount: MIN_BUY_AMOUNT,
               payloadDigest: PREPARATION_ID,
+              reviewedFee: { overallFee: "1", unit: "FRI" },
               summaries: ["Allow 0x2c56…e7c2 to spend 1 ETH"],
             },
           };

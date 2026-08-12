@@ -3,8 +3,11 @@
  * proposals, confirm/revoke/execute them, and deploy or declare through the
  * background message client. Pure templates live in multisig-views.ts.
  */
+
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { normalizeFeltInput } from "@mc-wallet/wallet-model/networks";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
+import { formatFeeEstimate } from "../../shared/review-render";
 import { bindMultisigConfirmation } from "./multisig-confirmation-ui";
 import { bindMultisigDeploy } from "./multisig-deploy-ui";
 import { parseMultisigReviewPackage } from "./multisig-model";
@@ -17,6 +20,8 @@ import type { MultisigUiDeps } from "./multisig-ui-deps";
  * Re-exports the multisig binder contract for existing callers.
  */
 export type { MultisigUiDeps } from "./multisig-ui-deps";
+
+const PROPOSAL_ACTION_FEES = new WeakMap<HTMLButtonElement, FeeEstimate>();
 
 const rerender = async (deps: MultisigUiDeps): Promise<void> => {
   await deps.render(await deps.wallet.loadStatus());
@@ -235,20 +240,22 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
       proposalId: string,
       signerAccountId: string,
       untrackedVerified?: boolean,
-    ) => Promise<string>;
+      reviewedFee?: FeeEstimate,
+    ) => Promise<FeeEstimate | string>;
     readonly success: string;
   }[] = [
     {
       attribute: "[data-ms-revoke]",
       key: "msRevoke",
-      run: (id, signerAccountId, untrackedVerified) =>
-        deps.multisig.revokeConfirmation(id, signerAccountId, untrackedVerified),
+      run: (id, signerAccountId, untrackedVerified, reviewedFee) =>
+        deps.multisig.revokeConfirmation(id, signerAccountId, untrackedVerified, reviewedFee),
       success: "Revocation submitted",
     },
     {
       attribute: "[data-ms-execute]",
       key: "msExecute",
-      run: (id, signerAccountId) => deps.multisig.executeProposal(id, signerAccountId),
+      run: (id, signerAccountId, _untrackedVerified, reviewedFee) =>
+        deps.multisig.executeProposal(id, signerAccountId, reviewedFee),
       success: "Execution submitted",
     },
   ];
@@ -269,10 +276,35 @@ const bindProposalActions = (deps: MultisigUiDeps): void => {
           showToast("Verify the proposal and check the acknowledgment first", "error");
           return;
         }
-        runAction(deps, button, "multisig-proposal-result", "Submitting…", async () => {
-          await action.run(proposalId, signerAccountId, ack ? true : undefined);
-          return action.success;
-        });
+        buttonBusy(button, true);
+        setResult(
+          deps,
+          "multisig-proposal-result",
+          PROPOSAL_ACTION_FEES.has(button) ? "Submitting…" : "Estimating network fee…",
+        );
+        const reviewedFee = PROPOSAL_ACTION_FEES.get(button);
+        if (reviewedFee) PROPOSAL_ACTION_FEES.delete(button);
+        void action.run(proposalId, signerAccountId, ack ? true : undefined, reviewedFee).then(
+          async (response) => {
+            if (typeof response !== "string") {
+              PROPOSAL_ACTION_FEES.set(button, response);
+              const fee = formatFeeEstimate(response);
+              setResult(deps, "multisig-proposal-result", `Maximum network fee: ${fee}`);
+              button.lastChild?.replaceWith(`Confirm · ${fee}`);
+              buttonBusy(button, false);
+              return;
+            }
+            showToast(action.success, "success");
+            await rerender(deps);
+          },
+          (error: unknown) => {
+            PROPOSAL_ACTION_FEES.delete(button);
+            const failed = errorMessage(error, "Request failed");
+            showToast(failed, "error");
+            setResult(deps, "multisig-proposal-result", failed);
+            buttonBusy(button, false);
+          },
+        );
       });
     });
   }

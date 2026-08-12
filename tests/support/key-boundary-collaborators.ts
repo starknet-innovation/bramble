@@ -286,6 +286,9 @@ const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
 /** Builds the Starknet read/write double bound to one harness' chain state. */
 export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
   makeRuntimeRpc({
+    async estimateAccountDeploymentFee() {
+      return { overallFee: "1", unit: "FRI" };
+    },
     async getDeploymentStatus() {
       return state.accountDeployed;
     },

@@ -32,6 +32,7 @@ import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
   readActivityInput,
+  readFeeReviewInput,
   readReviewTransferInput,
   readTransferInput,
   readTypeOnlyInput,
@@ -50,6 +51,7 @@ import type { UnlockSession } from "../runtime/session";
 import { readStrkBalance } from "../transactions/fee-guard";
 import { failureNoticeMessage } from "../transactions/tx-observation";
 import { reconcileScope } from "../transactions/tx-reconcile";
+import { submitReviewedAccountDeployment } from "./deployment-ops";
 import type { WalletStatusReader } from "./wallet-reader";
 
 /**
@@ -138,6 +140,19 @@ export const resolveReviewFee = (input: {
 
 type WalletOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
+const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
+  const input = readFeeReviewInput(message, "wallet.deployAccount");
+  if (!input) return { error: "invalid deploy account request" };
+  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
+  if (context.error !== undefined) return { error: context.error };
+  return submitReviewedAccountDeployment(deps, {
+    account: context.account,
+    networkId: context.networkId,
+    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+    signHash: accountHashSigner(deps, context.account, context.vaultPassphrase),
+  });
+};
+
 // Side-panel reads use the non-renewing session so ambient polling cannot hold
 // the wallet unlocked. User actions keep the renewing account-context path.
 const passiveAccountContext = (deps: WalletOpsDeps) =>
@@ -199,30 +214,6 @@ const handleVerifyClassHash: WalletOpsHandler = async (deps, message) => {
     ),
   });
   return { accountId: context.account.id, ok: true, verification };
-};
-
-const handleDeployAccount: WalletOpsHandler = async (deps, message) => {
-  if (!readTypeOnlyInput(message, "wallet.deployAccount")) {
-    return { error: "invalid deploy account request" };
-  }
-  const context = await activeAccountContext(deps.wallet, deps.session, deps.preferencesStore);
-  if (context.error !== undefined) {
-    return { error: context.error };
-  }
-  const { account, networkId, vaultPassphrase } = context;
-  const result = await deps.runtimeRpc.submitAccountDeployment({
-    account,
-    rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], await deps.preferencesStore.read()),
-    signHash: accountHashSigner(deps, account, vaultPassphrase),
-  });
-  await deps.activity.record({
-    accountId: account.id,
-    hash: result.transactionHash,
-    kind: "deploy",
-    networkId,
-    summary: "Deploy account contract",
-  });
-  return { ok: true, transactionHash: result.transactionHash };
 };
 
 const handleReviewTransfer: WalletOpsHandler = async (deps, message) => {

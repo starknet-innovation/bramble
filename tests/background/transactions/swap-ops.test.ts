@@ -178,6 +178,9 @@ const makeHarness = (options?: {
       ? { ...activity, record: () => Promise.reject(new Error("storage quota exceeded")) }
       : activity,
     runtimeRpc: {
+      async estimateInvokeFee() {
+        return { overallFee: "1", unit: "FRI" };
+      },
       async submitInvokeTransaction({ calls }: { readonly calls: readonly unknown[] }) {
         submitted.push(calls);
         return { calls: [], transactionHash: "0x5aa9" };

@@ -154,7 +154,10 @@ describe("Ledger signing flow through the dispatcher", () => {
   test("signerFor routes a Ledger account to the device queue and verifies", async () => {
     const { handler, signHashResults } = handlerWith(deviceQueue(PRIVATE_KEY));
 
-    const response = await handler({ type: "wallet.deployAccount" }, extensionSender);
+    const response = await handler(
+      { reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.deployAccount" },
+      extensionSender,
+    );
 
     expect(response).toEqual({ ok: true, transactionHash: "0xdeploy" });
     expect(signHashResults).toHaveLength(1);
@@ -174,7 +177,10 @@ describe("Ledger signing flow through the dispatcher", () => {
   test("fails closed when the device returns a signature that does not verify", async () => {
     const { handler, signHashResults } = handlerWith(deviceQueue("0xdeadbeef"));
 
-    const response = await handler({ type: "wallet.deployAccount" }, extensionSender);
+    const response = await handler(
+      { reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.deployAccount" },
+      extensionSender,
+    );
 
     expect(response).toEqual({ error: "Ledger signature verification failed" });
     expect(signHashResults).toHaveLength(0);
@@ -203,7 +209,10 @@ describe("Ledger signing flow through the dispatcher", () => {
       }),
       session,
     });
-    const response = await handler({ type: "wallet.deployAccount" }, extensionSender);
+    const response = await handler(
+      { reviewedFee: { overallFee: "1", unit: "FRI" }, type: "wallet.deployAccount" },
+      extensionSender,
+    );
     expect(response).toEqual({ error: "unreachable" });
   });
 });

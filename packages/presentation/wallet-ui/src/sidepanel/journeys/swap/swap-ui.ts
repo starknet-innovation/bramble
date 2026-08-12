@@ -245,6 +245,7 @@ const paintSwapStages = (root: Element, figures: SwapFigures): void => {
     gasFeesInUsd: quote.gasFeesInUsd,
     lossPercent: figures.lossPercent,
     minBuyAmount: preparation.minBuyAmount,
+    networkFee: preparation.reviewedFee,
     sellAmount: quote.sellAmount,
     sellSymbol: sellToken.symbol,
     valueDelta,

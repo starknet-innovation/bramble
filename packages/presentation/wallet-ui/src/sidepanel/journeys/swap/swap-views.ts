@@ -16,7 +16,9 @@ import type { WalletStatus } from "../../../popup/responses/responses";
 import { formatFiat } from "../../shared/fiat";
 import { icon } from "../../shared/icons";
 import { flowHeader, flowScreen, noAccountEmpty } from "../../shared/parts";
+import { formatFeeEstimate } from "../../shared/review-render";
 import { compactAmount } from "../portfolio/token-row";
+import type { SwapPreparationView } from "./swap-client";
 import { SWAP_LOSS_WARN_PERCENT } from "./swap-client";
 
 // One tradable panel: label, amount region, token chip, and the USD/balance
@@ -138,6 +140,7 @@ export type SwapConfirmFigures = {
   readonly gasFeesInUsd: number;
   readonly lossPercent: number;
   readonly minBuyAmount: string;
+  readonly networkFee: SwapPreparationView["reviewedFee"];
   readonly sellAmount: string;
   readonly sellSymbol: string;
   readonly valueDelta: number | null;
@@ -174,12 +177,10 @@ export const swapConfirmReceipt = (figures: SwapConfirmFigures): string =>
                 : ("default" as const),
           },
         ]),
-    // Deliberately NOT labelled "Network fee". Every other reviewed send in the
-    // wallet shows a fee the wallet estimated itself and then binds the
-    // submission to (MCW-V09-119); this figure is the aggregator's own USD
-    // guess, carried through unchanged, and no resource bound is signed against
-    // it. Labelling it like the others would claim an assurance that is not
-    // there. For the same reason there is no "Slippage cap" row: it restated a
+    { label: "Maximum network fee", value: formatFeeEstimate(figures.networkFee) },
+    // This remains separate from the reviewed network fee: it is the
+    // aggregator's USD guess, not a resource bound the wallet signs. For the
+    // same reason there is no "Slippage cap" row: it restated a
     // panel-local constant, where the enforced minimum above states the value
     // the signed call actually carries.
     {
