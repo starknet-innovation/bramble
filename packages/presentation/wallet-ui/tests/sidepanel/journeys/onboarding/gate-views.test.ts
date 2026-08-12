@@ -46,6 +46,24 @@ describe("onboarding gate view", () => {
     expect(html.match(/data-recovery-kind="import"/g)?.length).toBe(24);
   });
 
+  test("numbers every recovery word as content that survives a filled cell", () => {
+    const html = onboarding(status);
+
+    const cellsIn = (kind: "generated" | "import"): readonly string[] => {
+      const grid = html.split(`data-recovery-grid="${kind}"`)[1]?.split("</div>")[0] ?? "";
+      return grid.split('<label class="recovery-word-cell">').slice(1);
+    };
+
+    for (const kind of ["generated", "import"] as const) {
+      const cells = cellsIn(kind);
+      expect(cells.length).toBe(24);
+      expect(
+        cells.map((cell) => cell.match(/^<span aria-hidden="true">(\d+)<\/span>/)?.[1]),
+      ).toEqual(Array.from({ length: 24 }, (_, index) => `${index + 1}`));
+    }
+    expect(html).not.toContain('placeholder="1"');
+  });
+
   test("masks generated words until a deliberate reveal", () => {
     const html = onboarding(status);
 
