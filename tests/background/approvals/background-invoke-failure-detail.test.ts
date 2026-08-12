@@ -29,12 +29,12 @@ import {
 // `walletErrorMessage` collapses it to "invoke request failed" — correct for the
 // page and useless to the user. The reason travels as `detail` on the panel's
 // response only; the held dapp promise must never see it.
-const makeRejectingSubmitHarness = (reason: string) => {
+const makeRejectingSubmitHarness = (reason: unknown) => {
   const session = createUnlockSession();
   session.unlock(vaultPassphrase);
   const rpc = {
     async submitInvokeTransaction(): Promise<never> {
-      throw new Error(reason);
+      throw reason;
     },
   } as unknown as RuntimeRpc;
   const handler = createMessageHandler(walletStub([account]), "extension-id", {
@@ -51,7 +51,15 @@ describe("a rejected invoke explains itself to the panel only", () => {
   const REASON = "Account balance is smaller than the transaction's max_fee";
 
   test("the panel gets the node's reason and the dapp gets the curated message", async () => {
-    const { handler } = makeRejectingSubmitHarness(REASON);
+    const { handler } = makeRejectingSubmitHarness(
+      Object.assign(new Error('RPC: starknet_estimateFee with params {"request":["0xtrade"]}'), {
+        baseError: {
+          code: 41,
+          data: { execution_error: REASON },
+          message: "Transaction execution error",
+        },
+      }),
+    );
 
     const held = handler(invokeMessage(), contentSender);
     await flushHeld();
@@ -60,7 +68,7 @@ describe("a rejected invoke explains itself to the panel only", () => {
     // The panel's own response carries the reason, so the side panel can show and
     // copy why the transaction died.
     await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual({
-      detail: REASON,
+      detail: `41 Transaction execution error ${REASON}`,
       error: "invoke request failed",
     });
     // The dapp boundary sees the curated message and nothing else: `detail` is an

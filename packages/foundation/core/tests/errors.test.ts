@@ -34,6 +34,29 @@ describe("errorDetail", () => {
     );
   });
 
+  test("uses the RPC response envelope instead of starknet.js's request dump", () => {
+    const request =
+      'RPC: starknet_estimateFee with params {"request":[{"calldata":["0xuser-trade"]}]}';
+    const error = Object.assign(new Error(request), {
+      baseError: {
+        code: 41,
+        data: { execution_error: "Execution failed: insufficient fee balance" },
+        message: "Transaction execution error",
+      },
+    });
+
+    expect(errorDetail(error, "invoke request failed")).toBe(
+      "41 Transaction execution error Execution failed: insufficient fee balance",
+    );
+  });
+
+  test("never falls back to a raw request when an RPC envelope is malformed", () => {
+    const request = 'RPC: starknet_estimateFee with params {"request":["0xuser-trade"]}';
+    const error = Object.assign(new Error(request), { baseError: null });
+
+    expect(errorDetail(error, "invoke request failed")).toBeNull();
+  });
+
   test("returns null when it would only repeat the summary or add nothing", () => {
     // Callers omit the field on null, so an error whose own message is already
     // the curated one does not get shown twice.
