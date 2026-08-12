@@ -250,7 +250,7 @@ export const createOfficialStrk20Service = ({
       }
       try {
         const transfers = transfersFor(sdk, input);
-        await transfers.discoverNotes();
+        await retryStrk20ServiceRead(() => transfers.discoverNotes(), pauseForServiceRetry);
         const subaccount = transfers.build().subaccounts(input.dappName);
         const commitment =
           input.nonce === undefined

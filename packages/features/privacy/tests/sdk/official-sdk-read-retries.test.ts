@@ -46,7 +46,7 @@ describe("official STRK20 SDK read retries", () => {
       { balance: "0x5", token },
     ]);
     expect(attempts).toBe(2);
-    expect(pauses).toEqual([[1, 30_000]]);
+    expect(pauses).toEqual([[1, 5_000]]);
   });
 
   test("reports persistent discovery throttling without service detail", async () => {
@@ -106,6 +106,35 @@ describe("official STRK20 SDK read retries", () => {
     }
 
     await expect(poolFee({ ...context })).resolves.toBe("0x7");
+    expect(attempts).toBe(2);
+    expect(pauses).toEqual([[1, 2_000]]);
+  });
+
+  test("retries a throttled subaccount discovery before deriving its commitment", async () => {
+    let attempts = 0;
+    const pauses: (readonly [number, number | undefined])[] = [];
+    const sdk = runtime(() => ({
+      build: () => builder(executeResult()),
+      async discoverNotes() {
+        attempts += 1;
+        if (attempts === 1) {
+          throw rateLimitError("2");
+        }
+        return { notes: new Map() };
+      },
+      executeWithInvocation: async () => executeResult(),
+    }));
+    const service = createOfficialStrk20Service({
+      pauseForServiceRetry: async (attempt, retryAfter) => {
+        pauses.push([attempt, retryAfter]);
+      },
+      providerFor,
+      sdk,
+    });
+
+    await expect(service.subaccountCommitment({ ...context, dappName: "vesu" })).resolves.toBe(
+      "0x456",
+    );
     expect(attempts).toBe(2);
     expect(pauses).toEqual([[1, 2_000]]);
   });

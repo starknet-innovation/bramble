@@ -145,16 +145,30 @@ describe("STRK20 stage error mapping", () => {
     expect(isRetryableStrk20ServiceError(new Error("Failed to fetch"))).toBe(false);
   });
 
-  test("uses only bounded delta-seconds retry hints from service failures", () => {
+  test("uses bounded delta-seconds retry hints from plain and Fetch response headers", () => {
     const retryAfter = Object.assign(new Error("HTTP 429"), {
       response: { headers: { "retry-after": "2" } },
     });
     expect(strk20RetryAfterMilliseconds(retryAfter)).toBe(2_000);
     expect(
       strk20RetryAfterMilliseconds(
+        Object.assign(new Error("HTTP 429"), {
+          response: { headers: new Headers({ "retry-after": "3" }) },
+        }),
+      ),
+    ).toBe(3_000);
+    expect(
+      strk20RetryAfterMilliseconds(
+        Object.assign(new Error("HTTP 429"), {
+          response: new Response(null, { headers: { "retry-after": "4" } }),
+        }),
+      ),
+    ).toBe(4_000);
+    expect(
+      strk20RetryAfterMilliseconds(
         Object.assign(new Error("HTTP 429"), { response: { headers: { "retry-after": "45" } } }),
       ),
-    ).toBe(30_000);
+    ).toBe(5_000);
     expect(
       strk20RetryAfterMilliseconds(
         Object.assign(new Error("HTTP 429"), { response: { headers: { "retry-after": "soon" } } }),

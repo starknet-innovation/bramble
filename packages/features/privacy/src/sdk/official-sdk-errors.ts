@@ -61,22 +61,50 @@ const CATEGORY_MARKERS: readonly (readonly [RegExp, Strk20ErrorCategory])[] = [
 ];
 
 const REVERT_KEYS = ["revert_error", "execution_error"] as const;
-const RETRY_AFTER_MAX_MS = 30_000;
+// The retry policy makes at most two pauses for one read, so this keeps a
+// single private-service read from waiting longer than ten seconds in total.
+const RETRY_AFTER_MAX_MS = 5_000;
 
-const retryAfterValue = (value: unknown): unknown => {
-  if (!isRecord(value)) {
+const retryAfterField = (value: Record<string, unknown>): unknown =>
+  value["retry-after"] ?? value["retry_after"] ?? value["retryAfter"];
+
+const propertyOf = (value: unknown, key: string): unknown => {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) {
     return undefined;
   }
-  return (
-    value["retry-after"] ??
-    value["retry_after"] ??
-    value["retryAfter"] ??
-    (isRecord(value["headers"])
-      ? (value["headers"]["retry-after"] ??
-        value["headers"]["retry_after"] ??
-        value["headers"]["retryAfter"])
-      : undefined)
-  );
+  try {
+    return (value as Record<string, unknown>)[key];
+  } catch {
+    // The SDK error is untrusted: a proxy or accessor must not turn parsing a
+    // retry hint into a new failure.
+    return undefined;
+  }
+};
+
+const retryAfterHeader = (headers: unknown): unknown => {
+  if (isRecord(headers)) {
+    return retryAfterField(headers);
+  }
+  const get = propertyOf(headers, "get");
+  if (typeof get !== "function") {
+    return undefined;
+  }
+  try {
+    return get.call(headers, "retry-after");
+  } catch {
+    return undefined;
+  }
+};
+
+const retryAfterValue = (value: unknown): unknown => {
+  if (isRecord(value)) {
+    const direct = retryAfterField(value);
+    if (direct !== undefined) {
+      return direct;
+    }
+    return retryAfterHeader(value["headers"]);
+  }
+  return retryAfterHeader(propertyOf(value, "headers"));
 };
 
 // Structured revert text carried by an RPC error's `data`. Only plain strings
