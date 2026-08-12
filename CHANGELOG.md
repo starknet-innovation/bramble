@@ -8,6 +8,32 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [Unreleased]
+
+### Added
+- Accounts held on a Ledger can now use STRK20 private balances. The viewing key
+  is derived on the device — it signs a hash of the account's exact chain and pool
+  scope, which the KMS folds into the key — and is retained only in encrypted
+  custody bound to that account, chain, pool, and derivation scheme.
+- Device approval prompts name what each one authorizes, and an operation that
+  genuinely needs two signatures now numbers them, so a second prompt is no longer
+  unexplained.
+- Importing a recovery phrase lists the accounts that phrase already has on chain,
+  found by deployment or by an STRK, ETH, USDC, or strkBTC balance. Every account
+  found is listed and preselected, and only the ones selected are added.
+- The Send recipient list marks a hardware-backed account with the same
+  **Hardware** tag as the account selector.
+
+### Fixed
+- A registered Ledger account re-added after an extension reset now offers to
+  generate its viewing key, instead of offering a second registration the privacy
+  pool refuses.
+- Approve and Confirm are disabled when the account's STRK balance cannot cover a
+  transaction's estimated fee, and the notice says what unblocks it. An unreadable
+  balance still blocks nothing.
+- A transaction the network rejects now reports the node's own reason in the panel
+  and copies it to the clipboard, rather than only "invoke request failed".
+
 ## [0.9.0] - 2026-08-10
 
 Account-safe upgrades, one coherent public/private Send journey, managed service
