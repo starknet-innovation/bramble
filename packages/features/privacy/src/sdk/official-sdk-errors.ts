@@ -177,6 +177,12 @@ const markerFor = <T>(text: string, markers: readonly (readonly [RegExp, T])[]):
  * envelopes are read structurally so starknet.js request bodies stay ignored.
  */
 export const isRetryableStrk20ServiceError = (error: unknown): boolean => {
+  // WalletError is already a reviewed terminal result from an inner boundary.
+  // Retrying it here would re-enter a larger operation after its own bounded
+  // service retry has already been exhausted.
+  if (error instanceof WalletError) {
+    return false;
+  }
   const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
   if (isRecord(baseError) && baseError["code"] === -32_005) {
     return true;
@@ -191,7 +197,7 @@ export const isRetryableStrk20ServiceError = (error: unknown): boolean => {
  */
 export const strk20RetryAfterMilliseconds = (error: unknown): number | undefined => {
   const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
-  const response = (error as { readonly response?: unknown } | null | undefined)?.response;
+  const response = propertyOf(error, "response");
   for (const value of [error, baseError, response]) {
     const retryAfter = retryAfterValue(value);
     const seconds =

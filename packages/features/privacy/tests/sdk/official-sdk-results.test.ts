@@ -174,6 +174,14 @@ describe("STRK20 stage error mapping", () => {
         Object.assign(new Error("HTTP 429"), { response: { headers: { "retry-after": "soon" } } }),
       ),
     ).toBeUndefined();
+    const throwingResponse = new Error("HTTP 429");
+    Object.defineProperty(throwingResponse, "response", {
+      get() {
+        throw new Error("untrusted response accessor");
+      },
+    });
+    expect(isRetryableStrk20ServiceError(throwingResponse)).toBe(true);
+    expect(strk20RetryAfterMilliseconds(throwingResponse)).toBeUndefined();
   });
 
   test("preserves reviewed wallet errors and the protocol base message", () => {
