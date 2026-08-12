@@ -5,37 +5,35 @@
  */
 
 import { walletErrorMessage } from "@mc-wallet/core/errors";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { typedDataHash } from "@mc-wallet/starknet/typed-data";
 import {
   networkIdForChainId,
   STARKNET_NETWORKS,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import { typedDataHash } from "@mc-wallet/starknet/typed-data";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { accountHashSigner } from "../ledger/account-hash-signer";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
+import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
+import type { SignatureWaiters } from "../approvals/signature-waiters";
+import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
-
 import {
   readOriginRequestInput,
   readSignTypedDataInput,
   readSwitchChainInput,
 } from "../routing/message-inputs";
+import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import {
   type ActiveStateCoordinator,
   runActiveStateMutation,
   switchActiveNetwork,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
-import type { UnlockSession, PassiveUnlockSession } from "../runtime/session";
-import type { SignatureWaiters } from "../approvals/signature-waiters";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
-
+import type { PassiveUnlockSession, UnlockSession } from "../runtime/session";
 
 /**
  * Dependencies for the provider chain and signing operations.
@@ -259,7 +257,9 @@ export const handleChainOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const handler = CHAIN_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(CHAIN_OPS_HANDLERS, messageType)
+    ? CHAIN_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message, sender) : null;
 };
 

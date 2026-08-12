@@ -62,11 +62,7 @@ const sameToken = (left: TokenRow, right: TokenRow): boolean =>
   canonicalAddress(left.address) !== null &&
   canonicalAddress(left.address) === canonicalAddress(right.address);
 
-const parsePairEvent = (
-  value: unknown,
-  selected: TokenRow,
-  quote: TokenRow,
-): PairEvent | null => {
+const parsePairEvent = (value: unknown, selected: TokenRow, quote: TokenRow): PairEvent | null => {
   if (!isRecord(value) || value["type"] !== 0) {
     return null;
   }
@@ -136,7 +132,7 @@ export const parseEkuboTokenTrades = (
       if (
         event.selectedDelta === 0n ||
         event.quoteDelta === 0n ||
-        (event.selectedDelta < 0n) === (event.quoteDelta < 0n)
+        event.selectedDelta < 0n === event.quoteDelta < 0n
       ) {
         return [];
       }
@@ -175,10 +171,7 @@ export const parseEkuboTokenTrades = (
     .sort((left, right) => right.timestampMs - left.timestampMs);
 };
 
-const quoteCandidates = (
-  selected: TokenRow,
-  tokens: readonly TokenRow[],
-): readonly TokenRow[] => {
+const quoteCandidates = (selected: TokenRow, tokens: readonly TokenRow[]): readonly TokenRow[] => {
   const rank = (token: TokenRow): number => {
     const symbol = token.symbol.toUpperCase();
     const bridged = /BRIDGED/i.test(token.name) || symbol === "USDC.E";
@@ -200,7 +193,7 @@ const quoteCandidates = (
 };
 
 /** Fetches the first liquid preferred quote pair for one selected token. */
-export const fetchTokenTrades = async (
+const fetchTokenTrades = async (
   selected: TokenRow,
   tokens: readonly TokenRow[],
   signal: AbortSignal,
@@ -232,9 +225,7 @@ export const useTokenTrades = (
   selected: TokenRow | null,
   tokens: readonly TokenRow[],
 ): Resource<readonly TokenTrade[]> => {
-  const candidatesKey = tokens
-    .map((token) => `${token.address}:${token.priceUsd ?? ""}`)
-    .join(",");
+  const candidatesKey = tokens.map((token) => `${token.address}:${token.priceUsd ?? ""}`).join(",");
   const fetcher = useCallback(
     (signal: AbortSignal) =>
       selected === null ? Promise.resolve([]) : fetchTokenTrades(selected, tokens, signal),

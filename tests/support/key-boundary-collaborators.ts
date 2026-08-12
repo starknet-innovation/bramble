@@ -209,6 +209,7 @@ export const swapService: SwapService = {
  * scan's one-way flips cannot leak into the next.
  */
 export type KeyBoundaryChainState = {
+  accountDeployed: boolean;
   multisigClassDeclared: boolean;
   // Per-transaction-id chain answers, so one seeded proposal can read as
   // unconfirmed (confirm), confirmed by this signer (revoke), or at quorum
@@ -222,6 +223,7 @@ const PUBLIC_BALANCE = (100n * 10n ** 18n).toString();
 
 /** Fresh chain and pool readings for one harness. */
 export const makeChainState = (): KeyBoundaryChainState => ({
+  accountDeployed: false,
   multisigClassDeclared: true,
   proposalStatuses: new Map<string, MultisigProposalStatus>(),
   strk20Registered: true,
@@ -284,10 +286,8 @@ const strk20ServiceFor = (state: KeyBoundaryChainState): Strk20Service => {
 /** Builds the Starknet read/write double bound to one harness' chain state. */
 export const runtimeRpcFor = (state: KeyBoundaryChainState): RuntimeRpc =>
   makeRuntimeRpc({
-    // Counterfactual: `wallet.deploymentData` only answers for an account the
-    // chain has not seen yet, and no entry needs the deployed reading.
     async getDeploymentStatus() {
-      return false;
+      return state.accountDeployed;
     },
     async getNftOwner() {
       return account.address;

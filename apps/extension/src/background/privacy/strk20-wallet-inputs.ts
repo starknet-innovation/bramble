@@ -6,7 +6,6 @@ import { isSha256Digest } from "@mc-wallet/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { isTransferAmount } from "../routing/message-inputs";
 
-
 /**
  * The asset, counterparty, and decimal amount every value-moving journey takes.
  */

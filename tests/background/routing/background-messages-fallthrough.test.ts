@@ -43,6 +43,14 @@ describe("message router fall-through", () => {
       error: "unsupported message",
     });
   });
+
+  test("prototype property names are unsupported, never dispatch entries", async () => {
+    for (const type of ["constructor", "toString", "__proto__"]) {
+      await expect(handlerUnlocked()({ type }, sender)).resolves.toEqual({
+        error: "unsupported message",
+      });
+    }
+  });
 });
 
 describe("per-command invalid-input guards", () => {

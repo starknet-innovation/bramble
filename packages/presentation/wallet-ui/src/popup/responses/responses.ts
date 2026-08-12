@@ -4,7 +4,11 @@
 
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
 import { type ActivityEntry, isActivityEntry } from "@mc-wallet/transactions/activity";
-import { isStarkFieldElement, isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import {
+  isHexChainId,
+  isStarkFieldElement,
+  isStarknetNetworkId,
+} from "@mc-wallet/wallet-model/networks";
 
 /**
  * Re-exported approval and connected-site validators for one import path.
@@ -351,7 +355,14 @@ export const isTransferResponse = (value: unknown): value is TransferResponse =>
  * narrowing; use `readPendingApprovals` when the entries are needed.
  */
 export const isApprovalDecisionResponse = (value: unknown): boolean =>
-  isAccountsResponse(value) || readPendingApprovals(value) !== null;
+  isAccountsResponse(value) ||
+  readPendingApprovals(value) !== null ||
+  (isRecord(value) &&
+    isJson(value) &&
+    hasOnlyKnownKeys(value, ["chainId", "ok", "pending"]) &&
+    value["ok"] === true &&
+    isHexChainId(value["chainId"]) &&
+    readPendingApprovals({ ok: true, pending: value["pending"] }) !== null);
 
 /**
  * Activity feed response accepted from the background boundary. The feed merges

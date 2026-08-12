@@ -46,7 +46,7 @@ export type WatchAssetToken = {
 /**
  * One decoded risk flag surfaced on an invoke approval card.
  */
-export type ApprovalRiskFlag = {
+type ApprovalRiskFlag = {
   readonly code: string;
   readonly message: string;
 };
@@ -54,7 +54,7 @@ export type ApprovalRiskFlag = {
 /**
  * Display-safe declaration facts returned without exposing the contract class.
  */
-export type DeclarationReview = {
+type DeclarationReview = {
   readonly abiEntryCount: number;
   readonly accountDeployment: "deployed" | "undeployed" | "unknown";
   readonly classHash?: string;
@@ -71,7 +71,7 @@ export type DeclarationReview = {
  * Exact account, network, chain, and private-payload digest reviewed by the
  * user for a security-sensitive approval.
  */
-export type ApprovalContext = {
+type ApprovalContext = {
   readonly accountId: string;
   readonly chainId: string;
   readonly networkId: string;

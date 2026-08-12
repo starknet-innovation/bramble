@@ -1,43 +1,41 @@
 /**
  * MV3 background entrypoint. All privileged wallet state stays behind this worker.
  */
-import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
-import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
+
 import { untrustedFetch } from "@mc-wallet/core/http-json";
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
-import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
-import { createPhishingFeed } from "@mc-wallet/permissions/phishing-feed";
-import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
 import { MULTISIG_CLASS_ARTIFACT } from "@mc-wallet/multisig/deploy";
+import { createMultisigStore } from "@mc-wallet/multisig/repository";
+import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
+import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
+import { createPhishingFeed } from "@mc-wallet/permissions/phishing-feed";
 import { createPriceService, unavailablePriceService } from "@mc-wallet/portfolio/prices";
-
+import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
 import {
   createOfficialStrk20Service,
   type PrivacySdkRuntime,
 } from "@mc-wallet/privacy/official-sdk-service";
 import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
-import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
-import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import {
-  createBrowserLocalStore,
-  createBrowserSessionStore,
-  requireTrustedStorageAccess,
-} from "../browser-storage";
-import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
-import { createMultisigStore } from "@mc-wallet/multisig/repository";
-import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
 import {
   type ApprovalSurfacePreference,
   createPreferencesStore,
   type WalletPreferences,
 } from "@mc-wallet/settings/preferences";
-import { createStrk20MaturityStore } from "@mc-wallet/privacy/maturity-store";
-import {
-  VAULT_MIGRATION_STORE_KEY,
-  VAULT_STORE_KEY,
-} from "@mc-wallet/vault/store-migration";
+import { createActivityLog, systemClock } from "@mc-wallet/transactions/activity";
+import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import { createSwapService, unavailableSwapService } from "@mc-wallet/transactions/avnu";
+import { createEncryptedStore, type EncryptedStore } from "@mc-wallet/vault/encrypted-store";
 import { createWalletVaultService } from "@mc-wallet/vault/service";
+import { VAULT_MIGRATION_STORE_KEY, VAULT_STORE_KEY } from "@mc-wallet/vault/store-migration";
+import type { WalletEventMessage } from "@mc-wallet/wallet-protocol/events";
+import * as krustyModule from "/vendor/krusty-kms/pkg/krusty_kms_wasm.js";
+import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min.js";
+import {
+  createBrowserLocalStore,
+  createBrowserSessionStore,
+  requireTrustedStorageAccess,
+} from "../browser-storage";
+import { createWalletReader } from "./accounts/wallet-reader";
 import { setApprovalNotifier } from "./approvals/approval-notifier";
 import {
   type ApprovalSurfaceBrowser,
@@ -45,17 +43,22 @@ import {
   createApprovalSurfaceOpener,
 } from "./approvals/approval-surface";
 import { createApprovalQueue } from "./approvals/approvals";
-import { walletEventBroadcasts } from "./runtime/events";
+import {
+  type OnboardingSurfaceBrowser,
+  openOnboardingOnInstall,
+} from "./onboarding/onboarding-surface";
 import { createMessageHandler } from "./routing/messages";
-import { type OnboardingSurfaceBrowser, openOnboardingOnInstall } from "./onboarding/onboarding-surface";
+import type { RuntimeSender } from "./routing/senders";
+import { walletEventBroadcasts } from "./runtime/events";
+import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
+import {
+  createActiveStateCoordinator,
+  reconcileUnlockedActiveAccount,
+} from "./runtime/runtime-state";
 import type { SessionAlarmsApi } from "./runtime/session-expiry-alarm";
 import { createBackgroundUnlockSession } from "./runtime/unlock-session-boot";
-import { createDefaultRuntimeRpc } from "./runtime/runtime-rpc";
-import { createActiveStateCoordinator, reconcileUnlockedActiveAccount } from "./runtime/runtime-state";
-import type { RuntimeSender } from "./routing/senders";
-import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
-import { createWalletReader } from "./accounts/wallet-reader";
 import { createBackgroundPreferences } from "./settings/preferences-adapter";
+import { type AlarmsApi, startTransactionMonitor } from "./transactions/tx-monitor";
 
 type RuntimeApi = {
   readonly getURL?: (path: string) => string;

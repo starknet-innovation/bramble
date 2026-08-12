@@ -1,11 +1,11 @@
 /**
  * Browser boundary for opening the wallet approval surface from a dapp gesture.
  */
-import { type OriginGuard } from "@mc-wallet/permissions/blocklist";
+
 import { isRecord } from "@mc-wallet/core/json";
+import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
 import type { ApprovalSurfacePreference } from "@mc-wallet/settings/preferences";
 import { APPROVAL_SURFACE_MESSAGES, type RuntimeSender, senderOrigins } from "../routing/senders";
-
 
 /**
  * Minimal Chrome UI boundaries used to configure and open approval UI.

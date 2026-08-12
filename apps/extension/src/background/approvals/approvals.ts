@@ -6,20 +6,28 @@
  * queued approval is allowed to show its readers.
  */
 
-import { systemClock } from "@mc-wallet/transactions/activity";
 import { WalletError } from "@mc-wallet/core/errors";
 import { isUuid } from "@mc-wallet/core/ids";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
+import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
+import { systemClock } from "@mc-wallet/transactions/activity";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { ProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
 import type { ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
 import type { Strk20Action, Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Call } from "starknet";
-import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
-
+import {
+  matchesStrk20DisclosureKind,
+  type Strk20DisclosureApprovalKind,
+  type Strk20DisclosureRequest,
+} from "../privacy/strk20-approval-types";
 import type { ApprovalContext } from "./approval-context";
 import type { InvokeFeeRevision } from "./approval-limits";
-import { approvalAdmissionRefusal, isExpiredApproval } from "./approval-limits";
+import {
+  approvalAdmissionRefusal,
+  approvalCapacityVictim,
+  isExpiredApproval,
+} from "./approval-limits";
 import {
   type ApprovalPayload,
   cloneApprovalCall,
@@ -35,11 +43,6 @@ import {
   type PendingApproval,
   type WatchAssetToken,
 } from "./approval-snapshot";
-import {
-  matchesStrk20DisclosureKind,
-  type Strk20DisclosureApprovalKind,
-  type Strk20DisclosureRequest,
-} from "../privacy/strk20-approval-types";
 
 /**
  * Queue admission caps and the abandoned-approval TTL. Re-exported here so the
@@ -64,7 +67,6 @@ export type { ApprovalKind, ApprovalPayload } from "./approval-payload";
  */
 export type {
   ApprovalRiskFlag,
-  DeclarationReview,
   InvokeFeeReview,
   PendingApproval,
   WatchAssetToken,
@@ -73,14 +75,13 @@ export type {
 type ApprovalEntry = ApprovalRequest & { readonly feeRevision: number; readonly queuedAt: number };
 
 /**
- * Observer invoked with the approval ids one TTL sweep dropped. Expiry frees an
- * admission slot, so whatever holds state keyed by an approval id — above all
- * the waiter registry holding the dapp's parked response — must release it here,
- * otherwise the queue stops bounding that state. It runs after the entries are
- * already removed, so the queue is consistent when called; an observer that
- * throws propagates out of the read that triggered the sweep, never swallowed.
+ * Observer invoked with approval ids removed without a user decision: either
+ * TTL expiry or fair replacement at the global cap. Whatever holds state keyed
+ * by an approval id — above all the waiter registry holding the dapp's parked
+ * response — must release it here, otherwise the queue stops bounding that
+ * state. Entries are already removed when it runs.
  */
-export type ApprovalExpiryObserver = (ids: readonly string[]) => void;
+type ApprovalDropObserver = (ids: readonly string[]) => void;
 
 /**
  * Atomically claimed approval snapshot and its private execution payload. Once
@@ -95,7 +96,6 @@ export type ApprovalClaim = {
  * In-memory dapp approval queue for connection, watch-asset, and invoke prompts.
  */
 export type ApprovalQueue = {
-  readonly approve: (id: string) => PendingApproval | null;
   /**
    * Claims the fee slot of a queued invoke approval, invalidating every claim
    * outstanding on it; null unless the id is a queued invoke.
@@ -107,16 +107,15 @@ export type ApprovalQueue = {
    */
   readonly canAdmit: (origin: string) => string | null;
   readonly claim: (id: string) => ApprovalClaim | null;
-  readonly deny: (id: string) => PendingApproval | null;
   readonly get: (id: string) => PendingApproval | null;
   readonly list: () => readonly PendingApproval[];
   /**
-   * Registers the {@link ApprovalExpiryObserver} for this queue. Exactly one
+   * Registers the {@link ApprovalDropObserver} for this queue. Exactly one
    * observer is held — a second call replaces the first — because the runtime
    * registers it once while wiring the router context. Registration is the only
    * way expiry becomes visible: the sweep is lazy and fires no event of its own.
    */
-  readonly observeExpiry: (observe: ApprovalExpiryObserver) => void;
+  readonly observeDrops: (observe: ApprovalDropObserver) => void;
   readonly payload: (id: string) => ApprovalPayload | null;
   readonly request: (origin: string) => PendingApproval;
   readonly requestAddChain: (input: {
@@ -211,19 +210,15 @@ export type ApprovalQueueOptions = {
  * timer runs in the service worker — and an expired approval reads as absent:
  * it is never listed, claimed, approved, or denied. Because expiry frees an
  * admission slot, the swept ids are reported to the registered
- * {@link ApprovalExpiryObserver} so held dapp responses parked behind them are
+ * {@link ApprovalDropObserver} so held dapp responses parked behind them are
  * released too; without that observer the queue would stop bounding the
  * privileged worker's parked-promise heap.
  */
 export const createApprovalQueue = (options: ApprovalQueueOptions = {}): ApprovalQueue => {
   const pending = new Map<string, ApprovalEntry>();
   const now = options.now ?? systemClock;
-  let expiryObserver: ApprovalExpiryObserver = () => undefined;
+  let dropObserver: ApprovalDropObserver = () => undefined;
 
-  // Drops abandoned prompts so an ignored queue drains itself instead of
-  // holding admission slots the user will never spend. Entries are removed
-  // before the observer runs so the queue is already consistent when whatever
-  // is keyed by those ids is released.
   const sweep = (): void => {
     const at = now();
     const expired: string[] = [];
@@ -238,12 +233,9 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
     for (const id of expired) {
       pending.delete(id);
     }
-    expiryObserver(expired);
+    dropObserver(expired);
   };
 
-  // Live queue contents with abandoned prompts already dropped. Every read and
-  // write goes through this or `entry`, so an expired approval is never listed,
-  // matched as a dedupe hit, or counted against an admission cap.
   const queued = (): readonly ApprovalEntry[] => {
     sweep();
     return [...pending.values()];
@@ -262,12 +254,6 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
     return approval ? approvalSnapshot(approval) : null;
   };
 
-  const remove = (id: string): PendingApproval | null => {
-    const approval = get(id);
-    pending.delete(id);
-    return approval;
-  };
-
   const claim = (id: string): ApprovalClaim | null => {
     const approval = entry(id);
     if (!approval) {
@@ -281,16 +267,21 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
   };
 
   const enqueue = (approval: ApprovalRequest): PendingApproval => {
-    const refusal = approvalAdmissionRefusal(queued(), approval.origin);
+    const live = queued();
+    const refusal = approvalAdmissionRefusal(live, approval.origin);
     if (refusal) {
       throw new WalletError(refusal);
+    }
+    const victim = approvalCapacityVictim(live);
+    if (victim) {
+      pending.delete(victim.id);
+      dropObserver([victim.id]);
     }
     pending.set(approval.id, { ...approval, feeRevision: 0, queuedAt: now() });
     return approvalSnapshot(approval);
   };
 
   return {
-    approve: remove,
     beginInvokeFeeEstimate(id) {
       const approval = entry(id);
       if (approval?.kind !== "invoke") {
@@ -302,13 +293,12 @@ export const createApprovalQueue = (options: ApprovalQueueOptions = {}): Approva
     },
     canAdmit: (origin) => approvalAdmissionRefusal(queued(), origin),
     claim,
-    deny: remove,
     get,
     list() {
       return queued().map(approvalSnapshot);
     },
-    observeExpiry(observe) {
-      expiryObserver = observe;
+    observeDrops(observe) {
+      dropObserver = observe;
     },
     payload(id) {
       const approval = entry(id);

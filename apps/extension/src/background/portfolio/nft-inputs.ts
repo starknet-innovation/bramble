@@ -1,14 +1,13 @@
 /**
  * Pure parsers for NFT gallery runtime messages from extension pages.
  */
-import { hasOnlyKnownKeys, isRecord, isBaseUnitsAmount } from "@mc-wallet/core/json";
-
+import { hasOnlyKnownKeys, isBaseUnitsAmount, isRecord } from "@mc-wallet/core/json";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import {
   isNonZeroStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 
 const isTokenId = (value: unknown): value is string =>
   isBaseUnitsAmount(value) && value.length <= 78;

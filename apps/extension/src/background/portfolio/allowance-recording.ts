@@ -13,10 +13,11 @@
  * — so a read or write failure is swallowed per change and leaves that entry
  * untracked rather than downgraded.
  */
-import type { Call } from "starknet";
+
+import type { AllowanceOwner, AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { type ApprovedAssets, allowanceChangesFromCalls } from "@mc-wallet/transactions/allowances";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { AllowanceOwner, AllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import type { Call } from "starknet";
 
 /**
  * One bookkeeping request: the log to write, the submitted calls, the scope

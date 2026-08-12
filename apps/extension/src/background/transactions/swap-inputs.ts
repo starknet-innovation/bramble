@@ -8,7 +8,6 @@ import { isSha256Digest } from "@mc-wallet/core/ids";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { isTransferAmount } from "../routing/message-inputs";
 
-
 const isQuoteIdText = (value: unknown): value is string =>
   typeof value === "string" && /^[A-Za-z0-9-]{1,120}$/.test(value);
 

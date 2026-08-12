@@ -87,6 +87,8 @@ describe("bounded boundary reads", () => {
       },
       "https://feed.example",
       BUDGET,
+      DEADLINE_MS,
+      { credentials: "include", redirect: "follow", referrerPolicy: "unsafe-url" },
     );
     expect(init?.credentials).toBe("omit");
     expect(init?.redirect).toBe("error");
@@ -137,7 +139,7 @@ describe("bounded boundary reads", () => {
   });
 
   test("reads a normal body under the default deadline", async () => {
-    expect(HTTP_REQUEST_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(HTTP_REQUEST_TIMEOUT_MS).toBe(15_000);
     expect(
       await fetchBoundedJson(async () => okJson({ blocklist: ["evil.example"] }), "u", BUDGET),
     ).toEqual({ blocklist: ["evil.example"] });

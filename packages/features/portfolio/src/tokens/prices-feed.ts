@@ -26,6 +26,11 @@ import type { DisplayCurrency } from "@mc-wallet/wallet-model/preferences";
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CHART_DAYS = 7;
 
+/**
+ * Maximum price points accepted for one seven-day chart response or cache entry.
+ */
+export const PRICE_CHART_POINT_LIMIT = 2_048;
+
 // CoinGecko platform id; only Starknet mainnet has fiat coverage.
 const PLATFORM_FOR_NETWORK: Readonly<Partial<Record<StarknetNetworkId, string>>> = {
   SN_MAIN: "starknet",
@@ -120,7 +125,7 @@ const parseChartBody = (body: Record<string, unknown>): readonly number[] => {
     return [];
   }
   const points: number[] = [];
-  for (const pair of series) {
+  for (const pair of series.slice(0, PRICE_CHART_POINT_LIMIT)) {
     if (Array.isArray(pair) && isFinitePriceNumber(pair[1])) {
       points.push(pair[1]);
     }
@@ -143,10 +148,19 @@ export const fetchAddressPrices = (
   address: string,
 ): Promise<PriceOutcome> =>
   readJsonRecord(http, priceRequestUrl(platform, address))
-    .then(
-      (body) =>
-        ({ address, changes: parseChanges(body), ok: true, prices: parsePriceBody(body) }) as const,
-    )
+    .then((body) => {
+      const key = normalizePriceAddress(address);
+      const parsedChanges = parseChanges(body);
+      const parsedPrices = parsePriceBody(body);
+      const change = parsedChanges[key];
+      const price = parsedPrices[key];
+      return {
+        address,
+        changes: change === undefined ? {} : { [key]: change },
+        ok: true,
+        prices: price === undefined ? {} : { [key]: price },
+      } as const;
+    })
     .catch(() => ({ address, ok: false }) as const);
 
 /**

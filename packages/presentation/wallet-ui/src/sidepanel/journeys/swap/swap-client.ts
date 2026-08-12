@@ -12,8 +12,8 @@ import {
   isRecord,
   isRiskFlagCode,
 } from "@mc-wallet/core/json";
-import { isErrorResponse } from "../../../popup/responses/responses";
 import type { RuntimeApi } from "../../runtime/runtime";
+import { responseError } from "../../runtime/runtime-errors";
 
 /**
  * Display-ready quote consumed by the swap screen: decimal amounts plus the
@@ -64,9 +64,6 @@ const isSwapQuoteView = (value: unknown): value is SwapQuoteView =>
   value["quoteId"].length > 0 &&
   isDecimalAmountText(value["sellAmount"]) &&
   isUsd(value["sellAmountInUsd"]);
-
-const responseError = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
 
 const isSwapPreparationView = (value: unknown): value is SwapPreparationView =>
   isRecord(value) &&

@@ -37,10 +37,7 @@ const packageSourceRoots = (): readonly string[] =>
  * Tests and tooling are deliberately excluded — only code that ships is bound
  * by the rules these scans enforce.
  */
-export const WORKSPACE_SOURCE_ROOTS: readonly string[] = [
-  EXTENSION_SRC_DIR,
-  ...packageSourceRoots(),
-];
+const WORKSPACE_SOURCE_ROOTS: readonly string[] = [EXTENSION_SRC_DIR, ...packageSourceRoots()];
 
 const filesUnder = (dir: string): readonly string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

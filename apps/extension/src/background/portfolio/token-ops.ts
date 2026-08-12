@@ -5,25 +5,24 @@
  * extension-page messages.
  */
 
-import { withTokenId } from "@mc-wallet/wallet-model/preferences";
 import { isTokenSymbol } from "@mc-wallet/core/json";
+import type { PriceService } from "@mc-wallet/portfolio/prices";
+import { isLikelySpam, knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
+import type { TokenConfig, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { isTransportRpcError, type TokenMetadata } from "@mc-wallet/starknet/rpc";
 import {
   STARKNET_NETWORKS,
   type StarknetNetworkId,
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
-import type { PriceService } from "@mc-wallet/portfolio/prices";
-import { isTransportRpcError, type TokenMetadata } from "@mc-wallet/starknet/rpc";
-import { isLikelySpam, knownTokensForNetwork } from "@mc-wallet/portfolio/token-registry";
-import type { TokenConfig, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
-
 import { readAddTokenInput, readSetTokenHiddenInput, readTokenChartInput } from "./token-inputs";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
 
 /**
  * Dependencies shared by the token operation handlers.
@@ -228,6 +227,8 @@ export const handleTokenOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = TOKEN_HANDLERS[messageType];
+  const handler = Object.hasOwn(TOKEN_HANDLERS, messageType)
+    ? TOKEN_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message) : null;
 };

@@ -66,21 +66,40 @@ export const isExpiredApproval = (approval: QueuedApproval, now: number): boolea
  * The refusal message for admitting one more approval for `origin` to a queue
  * already holding `queued`, or null when there is room. Expired entries must be
  * swept before this is consulted, otherwise abandoned prompts count against the
- * caps. The global cap is checked first so a queue that is full for everyone
- * reports that rather than blaming the requesting site.
+ * caps. At the global cap a represented origin is refused, while a new origin
+ * is admitted by replacing one queued prompt; otherwise enough attacker-owned
+ * origins could permanently deny every later site a consent slot.
  */
 export const approvalAdmissionRefusal = (
   queued: readonly QueuedApproval[],
   origin: string,
 ): string | null => {
-  if (queued.length >= MAX_PENDING_APPROVALS) {
-    return "Too many pending approvals";
-  }
   const forOrigin = queued.filter((approval) => approval.origin === origin).length;
   if (forOrigin >= MAX_PENDING_APPROVALS_PER_ORIGIN) {
     return "Too many pending approvals for this site";
   }
+  if (queued.length >= MAX_PENDING_APPROVALS && forOrigin > 0) {
+    return "Too many pending approvals";
+  }
   return null;
+};
+
+/**
+ * Oldest approval belonging to the most represented origin when a new origin
+ * needs room at the global cap, or null while the queue has room.
+ */
+export const approvalCapacityVictim = <T extends QueuedApproval>(
+  queued: readonly T[],
+): T | null => {
+  if (queued.length < MAX_PENDING_APPROVALS) {
+    return null;
+  }
+  const counts = new Map<string, number>();
+  for (const approval of queued) {
+    counts.set(approval.origin, (counts.get(approval.origin) ?? 0) + 1);
+  }
+  const largestShare = Math.max(...counts.values());
+  return queued.find((approval) => counts.get(approval.origin) === largestShare) ?? null;
 };
 
 /**

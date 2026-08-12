@@ -17,22 +17,7 @@
  * browser/DOM boundary exercised against Chromium and physical hardware.
  */
 
-import { LedgerRejection, ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
-import { type LedgerTransport, newStarknetClient } from "@mc-wallet/ledger-browser/webhid";
-import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
-import { applySkin } from "@mc-wallet/ui-kit/skin";
-import {
-  ledgerBrokerChannelName,
-  ledgerBrokerSessionFromHash,
-} from "@mc-wallet/ledger-protocol/broker";
 import { serveLedgerBroker } from "@mc-wallet/ledger-browser/broker-server";
-import {
-  alternateLedgerTransport,
-  type LedgerConnectionMethod,
-  ledgerGrantDiagnostic,
-  ledgerGrantFailure,
-  transportForConnectionMethod,
-} from "./grant-flow";
 import { probeLedgerGrantClient } from "@mc-wallet/ledger-browser/grant-session";
 import {
   closeGrantTransport,
@@ -42,6 +27,21 @@ import {
   requestGrantTransport,
   supportedGrantTransportKinds,
 } from "@mc-wallet/ledger-browser/grant-transport";
+import { type LedgerTransport, newStarknetClient } from "@mc-wallet/ledger-browser/webhid";
+import {
+  ledgerBrokerChannelName,
+  ledgerBrokerSessionFromHash,
+} from "@mc-wallet/ledger-protocol/broker";
+import { LedgerRejection, ledgerMessage } from "@mc-wallet/ledger-protocol/errors";
+import { darkSkin } from "@mc-wallet/ui-kit/dark-skin";
+import { applySkin } from "@mc-wallet/ui-kit/skin";
+import {
+  alternateLedgerTransport,
+  type LedgerConnectionMethod,
+  ledgerGrantDiagnostic,
+  ledgerGrantFailure,
+  transportForConnectionMethod,
+} from "./grant-flow";
 import { LEDGER_GRANT_STYLES } from "./styles";
 import { ledgerTransitionProgress } from "./transition-progress";
 

@@ -4,14 +4,13 @@
  * executable action batch.
  */
 
-import { isSha256Digest } from "@mc-wallet/core/ids";
 import { WalletError } from "@mc-wallet/core/errors";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import { isSha256Digest } from "@mc-wallet/core/ids";
 import type { PaymasterAuthorizationReview } from "@mc-wallet/privacy/paymaster-typed-data";
 import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
 import type { TokenConfig } from "@mc-wallet/settings/preferences";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import type { ApprovalContext } from "../approvals/approval-context";
-
 
 const MAX_PREPARATIONS = 20;
 
@@ -50,7 +49,7 @@ export type Strk20DepositPreparation = BasePreparation & {
  * Frozen one-time shielded transfer, always routed through the private relay.
  * The recipient is committed by the digest alongside the action batch.
  */
-export type Strk20TransferPreparation = BasePreparation & {
+type Strk20TransferPreparation = BasePreparation & {
   readonly actions: readonly Strk20Action[];
   readonly amount: string;
   readonly amountRaw: string;
@@ -63,7 +62,7 @@ export type Strk20TransferPreparation = BasePreparation & {
  * Frozen one-time withdrawal (unshield), always routed through the private
  * relay. The public destination is committed by the digest with the batch.
  */
-export type Strk20WithdrawPreparation = BasePreparation & {
+type Strk20WithdrawPreparation = BasePreparation & {
   readonly actions: readonly Strk20Action[];
   readonly amount: string;
   readonly amountRaw: string;

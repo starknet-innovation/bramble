@@ -106,11 +106,11 @@ export const EXPECTED_CONTRIBUTING_RULES = [
 export const EXPECTED_PACKAGE_SCRIPTS: Readonly<Record<string, string>> = {
   build: "bun run --filter @mc-wallet/extension build",
   check:
-    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun run test && bun run check:workspaces",
+    "bun run check:types && bun run check:lint && bun run check:files && bun run check:imports && bun run check:cycles && bun run check:deadcode && bun run check:extension && bun run check:krusty && bun run check:multisig && bun run check:privacy && bun run test && bun run check:workspaces",
   "check:audit": "bun audit --audit-level=high",
   "check:coverage": "bun run scripts/check-coverage.ts",
   "check:cycles": "madge --circular --extensions ts apps/extension/src packages",
-  "check:deadcode": "knip --no-exit-code",
+  "check:deadcode": "knip",
   "check:extension": "bun run scripts/check-extension-manifest.ts",
   "check:files":
     "bun run scripts/check-file-standards.ts && bun run scripts/check-config-standards.ts",

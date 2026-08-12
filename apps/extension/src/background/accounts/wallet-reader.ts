@@ -11,10 +11,8 @@
  * inputs to the service behind the vault boundary.
  */
 
-import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
-import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
+import type { Vault } from "@mc-wallet/vault/schema";
 import type {
   AddDerivedAccountInput,
   AddLedgerAccountInput,
@@ -31,6 +29,8 @@ import type {
   WalletStatus as VaultStatus,
   WalletVaultService,
 } from "@mc-wallet/vault/service";
+import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
 
 /**
  * Narrow wallet service surface consumed by background message dispatch.

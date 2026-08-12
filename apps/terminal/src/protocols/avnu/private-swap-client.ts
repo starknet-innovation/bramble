@@ -5,8 +5,7 @@ import { sameAddress } from "../support/networks";
 import type { Strk20Action } from "../support/strk20-schemas";
 
 const FELT = /^0x[0-9a-fA-F]{1,64}$/;
-const STARK_FIELD_PRIME =
-  0x800000000000011000000000000000000000000000000000000000000000001n;
+const STARK_FIELD_PRIME = 0x800000000000011000000000000000000000000000000000000000000000001n;
 const TRANSACTION_HASH = /^0x0[0-8][0-9a-fA-F]{62}$/;
 
 type PrivateFeeMode = {
@@ -105,14 +104,7 @@ export const fetchPrivateSwapPlan = async (input: {
   });
   if (
     !isRecord(value) ||
-    !hasOnlyKeys(value, [
-      "actions",
-      "buyAmount",
-      "executor",
-      "fee",
-      "quoteId",
-      "sellAmount",
-    ]) ||
+    !hasOnlyKeys(value, ["actions", "buyAmount", "executor", "fee", "quoteId", "sellAmount"]) ||
     !Array.isArray(value["actions"]) ||
     !isNonZeroFelt(value["buyAmount"]) ||
     !isNonZeroFelt(value["executor"]) ||
@@ -147,27 +139,6 @@ export const fetchPrivateSwapPlan = async (input: {
     quoteId: value["quoteId"],
     sellAmount: value["sellAmount"],
   };
-};
-
-/**
- * Fetches the sponsored-private fee through the same-origin server boundary;
- * no paymaster credential enters the browser bundle.
- */
-export const fetchPrivateSwapFee = async (
-  feeMode: PrivateFeeMode,
-): Promise<PrivateSwapFee> => {
-  const value = await post("fee", { feeMode });
-  if (
-    !isRecord(value) ||
-    !hasOnlyKeys(value, ["amount", "recipient", "token"]) ||
-    !isNonZeroFelt(value["amount"]) ||
-    !isNonZeroFelt(value["recipient"]) ||
-    !isNonZeroFelt(value["token"]) ||
-    !sameAddress(value["token"], feeMode.poolFeeToken)
-  ) {
-    throw new Error("Private swap service returned an invalid fee.");
-  }
-  return { amount: value["amount"], recipient: value["recipient"], token: value["token"] };
 };
 
 /**

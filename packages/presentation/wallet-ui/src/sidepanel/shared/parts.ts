@@ -4,6 +4,7 @@
 
 import { escapeHtml } from "@mc-wallet/core/html";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import { shortAddress } from "@mc-wallet/transactions/verify-decode";
 import { emptyState, pill } from "@mc-wallet/ui-kit/content";
 import { iconButton } from "@mc-wallet/ui-kit/controls";
 import type { IconName } from "@mc-wallet/ui-kit/icons";
@@ -80,8 +81,7 @@ export const isWalletView = (value: unknown): value is WalletView =>
 /**
  * Truncates a Starknet address for display.
  */
-export const accountLabel = (address: string): string =>
-  `${address.slice(0, 6)}…${address.slice(-4)}`;
+export const accountLabel = (address: string): string => shortAddress(address);
 
 const NAME_ADJECTIVES = [
   "Amber",

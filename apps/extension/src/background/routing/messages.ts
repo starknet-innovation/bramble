@@ -2,23 +2,45 @@
  * Typed extension message handling for the background service worker.
  */
 
-import { DEFAULT_NETWORK } from "@mc-wallet/wallet-model/networks";
 import { activeAccountSecrets } from "@mc-wallet/vault/service";
+import { DEFAULT_NETWORK } from "@mc-wallet/wallet-model/networks";
 import { readCreateAccountInput } from "../accounts/account-creation-inputs";
+import { readImportAccountInput } from "../accounts/import-inputs";
+import { handleWalletOps, type WalletOpsDeps } from "../accounts/wallet-ops";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { handleApprovalDecision } from "../approvals/approval-decisions";
+import { enrichApprovals } from "../approvals/approval-insights";
+import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import { handleLedgerOps } from "../ledger/ledger-ops";
+import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
+import { handleMultisigTxOps } from "../multisig/multisig-tx-ops";
+import { handleOnboardingOps } from "../onboarding/onboarding-ops";
+import { handleAllowanceOps } from "../portfolio/allowance-ops";
+import { handleDiscoveryOps } from "../portfolio/discovery-ops";
+import { handleNftOps } from "../portfolio/nft-ops";
+import { handleTokenOps } from "../portfolio/token-ops";
+import { handleStrk20Ops } from "../privacy/strk20-ops";
+import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
+import { handleAddChainOps } from "../provider/add-chain-ops";
+import { handleProviderOps } from "../provider/provider-ops";
 import {
   runUnlockedNetworkMutation,
   runVaultCreationWithNetwork,
 } from "../runtime/active-network-mutation";
-import { handleAddChainOps } from "../provider/add-chain-ops";
-import { handleAllowanceOps } from "../portfolio/allowance-ops";
-import { handleApprovalDecision } from "../approvals/approval-decisions";
-import { enrichApprovals } from "../approvals/approval-insights";
-import { notifyApprovalsChanged } from "../approvals/approval-notifier";
+import {
+  reconcileActiveAccount,
+  reconcileUnlockedActiveAccount,
+  selectActiveAccount,
+  statusResponse,
+  switchActiveNetwork,
+} from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import { createUnlockSession } from "../runtime/session";
+import { handleOriginOps } from "../settings/origins-ops";
+import { handlePreferenceOps } from "../settings/preference-ops";
 import { handleChainOps } from "../transactions/chain-ops";
 import { handleDeclareOps } from "../transactions/declare-ops";
-import { handleDiscoveryOps } from "../portfolio/discovery-ops";
-import { readImportAccountInput } from "../accounts/import-inputs";
-import { handleLedgerOps } from "../ledger/ledger-ops";
+import { handleSwapOps } from "../transactions/swap-ops";
 import { type MessageHandlerOptions, type RouterContext, routerContext } from "./message-context";
 import {
   readAddAccountInput,
@@ -30,35 +52,13 @@ import {
   readTypeOnlyInput,
   readUnlockInput,
 } from "./message-inputs";
-import { handleMultisigOps, type MultisigOpsDeps } from "../multisig/multisig-ops";
-import { handleMultisigTxOps } from "../multisig/multisig-tx-ops";
-import { handleNftOps } from "../portfolio/nft-ops";
-import { handleOnboardingOps } from "../onboarding/onboarding-ops";
-import { handleOriginOps } from "../settings/origins-ops";
-import { handlePreferenceOps } from "../settings/preference-ops";
-import { handleProviderOps } from "../provider/provider-ops";
-import {
-  reconcileActiveAccount,
-  reconcileUnlockedActiveAccount,
-  selectActiveAccount,
-  statusResponse,
-  switchActiveNetwork,
-} from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
 import {
   isClaimedSenderOrigin,
   isExtensionPageSender,
   parseGatedMessage,
   type RuntimeSender,
 } from "./senders";
-import { createUnlockSession } from "../runtime/session";
-import { handleStrk20Ops } from "../privacy/strk20-ops";
-import { handleStrk20WalletOps } from "../privacy/strk20-wallet-ops";
-import { handleSwapOps } from "../transactions/swap-ops";
-import { handleTokenOps } from "../portfolio/token-ops";
 import { unlockFailureError } from "./unlock-errors";
-import { handleWalletOps, type WalletOpsDeps } from "../accounts/wallet-ops";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
 
 type RouterHandler = (
   ctx: RouterContext,

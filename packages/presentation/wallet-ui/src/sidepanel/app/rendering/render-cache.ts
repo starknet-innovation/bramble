@@ -62,10 +62,7 @@ export type RenderData = {
  * Empty account-scoped NFT lanes used on account/network switches so an old
  * gallery never flashes while fresh ownership proofs are in flight.
  */
-export const emptyNftCache = (): Pick<
-  RenderData,
-  "discoveredNfts" | "indexedNfts" | "watchedNfts"
-> => ({
+const emptyNftCache = (): Pick<RenderData, "discoveredNfts" | "indexedNfts" | "watchedNfts"> => ({
   discoveredNfts: [],
   indexedNfts: [],
   watchedNfts: [],
@@ -75,7 +72,7 @@ export const emptyNftCache = (): Pick<
  * Empty account-scoped activity lane used during account/network switches so
  * transactions and degraded-history state never flash under another account.
  */
-export const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "transactions"> => ({
+const emptyActivityCache = (): Pick<RenderData, "historyUnavailable" | "transactions"> => ({
   historyUnavailable: false,
   transactions: [],
 });

@@ -2,8 +2,7 @@
  * Pure parsers for token-management runtime messages from extension pages.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isNonZeroStarkFieldElement, canonicalAddress } from "@mc-wallet/wallet-model/networks";
-
+import { canonicalAddress, isNonZeroStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 
 /**
  * Parses custom-token add requests carrying a contract address.

@@ -96,7 +96,7 @@ describe("approval queue per-origin cap (MCW-V09-116)", () => {
     );
   });
 
-  test("still reports the global cap when the queue is full for everyone", () => {
+  test("replaces an overrepresented prompt so a new origin cannot be starved", () => {
     const queue = createApprovalQueue();
     // One origin can no longer reach the global cap by itself: it is stopped by
     // its own share first, and with the exact per-origin message.
@@ -114,8 +114,16 @@ describe("approval queue per-origin cap (MCW-V09-116)", () => {
     }
 
     expect(queue.list()).toHaveLength(origins * MAX_PENDING_APPROVALS_PER_ORIGIN);
-    // A site holding none of the queue is told the queue is full, not blamed.
-    expect(() => queue.request("https://late.example")).toThrow(GLOBAL_REFUSAL);
+    const oldest = queue.list()[0];
+    const late = queue.request("https://late.example");
+
+    expect(queue.list()).toHaveLength(MAX_PENDING_APPROVALS);
+    expect(queue.get(oldest?.id ?? "")).toBeNull();
+    expect(queue.get(late.id)).toEqual(late);
+    // Once represented, that origin cannot use replacement to grow its share.
+    expect(() =>
+      queue.requestWatchAsset({ origin: late.origin, token: token(MAX_PENDING_APPROVALS + 1) }),
+    ).toThrow(GLOBAL_REFUSAL);
   });
 
   test("frees the origin's slots as its prompts are claimed", () => {
@@ -157,8 +165,6 @@ describe("approval queue TTL sweep (MCW-V09-116)", () => {
     expect(queue.get(approval.id)).toBeNull();
     expect(queue.payload(approval.id)).toBeNull();
     expect(queue.claim(approval.id)).toBeNull();
-    expect(queue.approve(approval.id)).toBeNull();
-    expect(queue.deny(approval.id)).toBeNull();
   });
 
   test("drains an abandoned flood so the queue admits new prompts again", () => {
@@ -203,7 +209,7 @@ describe("approval queue TTL sweep (MCW-V09-116)", () => {
     const queue = createApprovalQueue({ now: () => now });
     const seenDuringSweep: (unknown | null)[] = [];
     const reported: string[][] = [];
-    queue.observeExpiry((ids) => {
+    queue.observeDrops((ids) => {
       reported.push([...ids]);
       // The entries are already gone when the observer runs, so a release path
       // that re-reads the queue can never resurrect an expired approval.
@@ -227,7 +233,7 @@ describe("approval queue TTL sweep (MCW-V09-116)", () => {
     let now = 1_700_000_000_000;
     const queue = createApprovalQueue({ now: () => now });
     const reported: string[][] = [];
-    queue.observeExpiry((ids) => reported.push([...ids]));
+    queue.observeDrops((ids) => reported.push([...ids]));
     const approval = queue.request(HONEST);
 
     // A rewound clock preserves the prompt rather than dropping one the user may

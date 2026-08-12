@@ -8,19 +8,18 @@
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { ozAccountDeployment } from "@mc-wallet/starknet/deployment";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import { API_VERSION_PATTERN } from "@mc-wallet/wallet-protocol/results";
 import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@mc-wallet/wallet-protocol/versions";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import { ozAccountDeployment } from "@mc-wallet/starknet/deployment";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { PassiveUnlockSession } from "../runtime/session";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-
 
 /**
  * Re-exported from the single-source versions module so callers importing them
@@ -164,6 +163,8 @@ export const handleDiscoveryOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const handler = DISCOVERY_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(DISCOVERY_OPS_HANDLERS, messageType)
+    ? DISCOVERY_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, messageType, message, sender) : null;
 };

@@ -10,14 +10,14 @@
  * fallback and never an empty signature. Kept in one place so the choice can
  * never drift between the wallet-initiated and dapp-initiated flows.
  */
-import { type PassiveUnlockSession, captureSessionAuthorization } from "../runtime/session";
+
 import { WalletError } from "@mc-wallet/core/errors";
-import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
 import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
+import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 import type { LedgerSignQueue } from "./ledger-sign-queue";
 import { ledgerStarkHashSigner } from "./ledger-signer";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-
 
 /**
  * Collaborators the account signer chooses between. `ledgerSignQueue` is

@@ -13,10 +13,8 @@ import type { PendingApproval } from "./approvals";
  * transaction approvals may come from an already-connected origin; the
  * reputation layer still treats the pending action as a fresh trust decision.
  *
- * First-seen history is read *before* being recorded, so the very first time an
- * origin surfaces a prompt it is correctly reported as never-before-seen; the
- * record then persists it so later prompts reflect the real history. This keeps
- * the "first time seen" reputation branch reachable instead of dead.
+ * Listing is read-only: the origin becomes seen only when the user decides the
+ * prompt, so ambient panel polling cannot weaken the warning mid-review.
  */
 export const enrichApprovals = async (
   approvals: readonly PendingApproval[],
@@ -31,7 +29,6 @@ export const enrichApprovals = async (
         firstSeenAt,
         now: history.now(),
       });
-      await history.record(approval.origin);
       return {
         ...approval,
         blocked: insight.blocked,

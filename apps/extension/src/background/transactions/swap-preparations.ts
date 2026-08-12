@@ -4,12 +4,11 @@
  * until a single confirm action atomically claims them.
  */
 
-import { isSha256Digest } from "@mc-wallet/core/ids";
 import { WalletError } from "@mc-wallet/core/errors";
+import { isSha256Digest } from "@mc-wallet/core/ids";
 import type { Call } from "starknet";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { ApprovalRiskFlag } from "../approvals/approvals";
-
 
 const MAX_SWAP_PREPARATIONS = 20;
 

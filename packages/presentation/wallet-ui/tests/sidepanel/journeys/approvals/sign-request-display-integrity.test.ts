@@ -136,6 +136,27 @@ describe("the not-signed block is bounded", () => {
   });
 });
 
+describe("signed fields are never hidden behind the row cap", () => {
+  test("renders every signed message field inside the signed block", () => {
+    const fields = Array.from({ length: SIGN_ROW_LIMIT + 10 }, (_, index) => ({
+      name: `f${index}`,
+      type: "felt",
+    }));
+    const message = Object.fromEntries(fields.map(({ name }, index) => [name, `0x${index + 1}`]));
+    const payload: Json = {
+      domain: DOMAIN,
+      message,
+      primaryType: "Msg",
+      types: { Msg: fields, StarknetDomain: DOMAIN_TYPE },
+    };
+    expect(isTypedDataShape(payload)).toBe(true);
+
+    const signed = signBlockBody(signRequestView(payload).html, SIGNED_MESSAGE_LABEL) as string;
+    expect(keysOf(signed)).toContain(`f${SIGN_ROW_LIMIT + 9}`);
+    expect(signed).not.toContain("more values not shown");
+  });
+});
+
 describe("every key the card prints obeys the SNIP-12 name grammar", () => {
   test("bidi, zero-width, homoglyph and overlong undeclared keys are sanitized", () => {
     const payload: Json = {

@@ -394,6 +394,12 @@ describe("multisig confirm and execute", () => {
     await expect(handler(message, harnessExtensionSender)).resolves.toMatchObject({
       error: expect.stringContaining("proposal action in progress"),
     });
+    await expect(
+      handler(
+        { proposalId: proposal.id, type: "wallet.revokeMultisigConfirmation" },
+        harnessExtensionSender,
+      ),
+    ).resolves.toMatchObject({ error: expect.any(String) });
     expect(invokeCalls).toHaveLength(1);
   });
 });

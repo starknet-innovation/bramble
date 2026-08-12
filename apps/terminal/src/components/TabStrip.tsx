@@ -4,7 +4,7 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 
-export type TabStripItem<T extends string> = {
+type TabStripItem<T extends string> = {
   readonly value: T;
   readonly label: ReactNode;
 };

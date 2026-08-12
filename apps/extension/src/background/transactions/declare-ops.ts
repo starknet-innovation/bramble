@@ -8,30 +8,29 @@
  * layer; on deny the held request settles as a refusal.
  */
 
-import { type ActivityLog } from "@mc-wallet/transactions/activity";
 import { walletErrorMessage } from "@mc-wallet/core/errors";
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import { isProviderDeclare, type ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { accountHashSigner } from "../ledger/account-hash-signer";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
+import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
+import type { SignatureWaiters } from "../approvals/signature-waiters";
+import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { PassiveUnlockSession } from "../runtime/session";
-import type { SignatureWaiters } from "../approvals/signature-waiters";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-
 
 /**
  * Dependencies for the dapp declare handler.

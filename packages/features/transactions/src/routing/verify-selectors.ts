@@ -63,18 +63,6 @@ export const isDecreaseAllowanceEntrypoint = (entrypoint: string): boolean =>
   DECREASE_ENTRYPOINTS.includes(entrypoint);
 
 /**
- * Reports whether an entrypoint grants collection-wide operator authority over
- * an NFT contract (either spelling of `set_approval_for_all`). Exact match; any
- * other selector reports false.
- *
- * This grants strictly MORE than any ERC20 allowance — every item the owner
- * holds in that collection, present and future, until revoked — so callers must
- * treat a true result as at least as dangerous as an unlimited approval.
- */
-export const isOperatorApprovalEntrypoint = (entrypoint: string): boolean =>
-  OPERATOR_APPROVAL_ENTRYPOINTS.includes(entrypoint);
-
-/**
  * The plain `transfer_from(from, to, amount_or_id: u256)` duals: four felts,
  * shared by ERC20 and ERC721.
  */

@@ -38,6 +38,18 @@ const HYDRATE_SOURCE = join(
   REPO_DIR,
   "packages/presentation/wallet-ui/src/sidepanel/app/sync/hydrate.ts",
 );
+const LIFECYCLE_SOURCE = join(
+  REPO_DIR,
+  "packages/presentation/wallet-ui/src/sidepanel/app/sync/lifecycle.ts",
+);
+const PRIVACY_SOURCE = join(
+  REPO_DIR,
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/privacy/privacy-ui.ts",
+);
+const TRANSACTION_ALERTS_SOURCE = join(
+  REPO_DIR,
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/approvals/tx-alerts-ui.ts",
+);
 
 const TTL_MS = 60_000;
 const UNLOCKED_AT = 1_000;
@@ -68,7 +80,7 @@ const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
 };
 
 // The two ambient readers that live outside hydration: the always-on refresh in
-// the panel's app/start.ts (status, then the queued failure notices that
+// the panel lifecycle (status, then the queued failure notices that
 // journeys/approvals/tx-alerts-ui.ts drains behind it), and the three-second
 // disclosure poll journeys/privacy/privacy-pending-poll.ts runs while a
 // registration settles.
@@ -220,6 +232,18 @@ describe("panel polling cannot hold the wallet unlocked", () => {
     );
 
     expect([...called].filter((call) => HYDRATED_CALL_MESSAGES[call] === undefined)).toEqual([]);
+  });
+
+  test("the three ambient readers outside hydration remain classified", async () => {
+    const [lifecycle, privacy, transactionAlerts] = await Promise.all([
+      readFile(LIFECYCLE_SOURCE, "utf8"),
+      readFile(PRIVACY_SOURCE, "utf8"),
+      readFile(TRANSACTION_ALERTS_SOURCE, "utf8"),
+    ]);
+
+    expect(lifecycle).toContain("render(await wallet.loadStatus())");
+    expect(transactionAlerts).toContain("wallet.loadTransactionAlerts()");
+    expect(privacy).toContain("load: () => deps.wallet.loadPrivacyState()");
   });
 });
 

@@ -15,14 +15,11 @@
  * is produced or a transaction is broadcast. The second is not redundant — the
  * contact a recipient mimics can be saved while the prompt is on screen.
  *
- * Three action shapes, not one, because "an invoke names no recipient" is true
- * of exactly one of them: a `subaccount_invoke` carries full spec INVOKE_CALLs
- * whose recipient the shared verifier decodes, so it is gated like every other
- * value-moving line, while a flat `invoke` carries no entry point at all and is
- * deliberately left ungated. Both are driven below so neither reading can be
- * assumed from the other.
+ * Flat invokes have no selector, so their calldata is conservatively scanned;
+ * subaccount invokes carry full calls and use the exact shared decoder.
  */
 import { describe, expect, test } from "bun:test";
+import type { Strk20Service } from "@mc-wallet/privacy/service";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { flushHeld, waitForPendingApprovals } from "../support/held";
 import {
@@ -34,10 +31,12 @@ import {
 import {
   approveHeldStrk20,
   buildStrk20Handler,
+  makeStrk20Service,
   STRK20_CONTENT_SENDER,
   STRK20_EXTENSION_SENDER,
   STRK20_ORIGIN,
   STRK20_TOKEN,
+  type Strk20Handler,
 } from "../support/strk20-background";
 
 const action = (type: "transfer" | "withdraw", recipient: string) => ({
@@ -61,6 +60,18 @@ const prepareMessage = (type: "transfer" | "withdraw", recipient: string) => ({
 });
 
 const routes = ["transfer", "withdraw"] as const;
+
+const expectRefusedWithoutPrompt = async (
+  handler: Strk20Handler,
+  message: Readonly<Record<string, unknown>>,
+): Promise<void> => {
+  const response = handler(message, STRK20_CONTENT_SENDER);
+  await flushHeld();
+  await expect(
+    handler({ type: "wallet.pendingApprovals" }, STRK20_EXTENSION_SENDER),
+  ).resolves.toMatchObject({ pending: [] });
+  await expect(response).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
+};
 
 // A `subaccount_invoke` carries full spec INVOKE_CALLs — contract, entry point,
 // and felt calldata — which is exactly the shape `wallet.addInvokeTransaction`
@@ -97,23 +108,13 @@ describe("dapp-facing STRK20 invoke", () => {
     test(`refuses a poisoned ${kind} instead of queueing a prompt to confirm`, async () => {
       const handler = buildStrk20Handler({ preferences: poolPreferences() });
 
-      await expect(
-        handler(invokeMessage(kind, POISONED_RECIPIENT), STRK20_CONTENT_SENDER),
-      ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
-      await expect(
-        handler({ type: "wallet.pendingApprovals" }, STRK20_EXTENSION_SENDER),
-      ).resolves.toMatchObject({ pending: [] });
+      await expectRefusedWithoutPrompt(handler, invokeMessage(kind, POISONED_RECIPIENT));
     });
 
     test(`refuses a poisoned ${kind} preparation`, async () => {
       const handler = buildStrk20Handler({ preferences: poolPreferences() });
 
-      await expect(
-        handler(prepareMessage(kind, POISONED_RECIPIENT), STRK20_CONTENT_SENDER),
-      ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
-      await expect(
-        handler({ type: "wallet.pendingApprovals" }, STRK20_EXTENSION_SENDER),
-      ).resolves.toMatchObject({ pending: [] });
+      await expectRefusedWithoutPrompt(handler, prepareMessage(kind, POISONED_RECIPIENT));
     });
 
     test(`still submits a ${kind} to a recipient the wallet does not recognize`, async () => {
@@ -130,23 +131,13 @@ describe("dapp-facing STRK20 invoke", () => {
   test("refuses a poisoned sub-account invoke instead of queueing a prompt to confirm", async () => {
     const handler = buildStrk20Handler({ preferences: subaccountPoolPreferences() });
 
-    await expect(
-      handler(subaccountInvokeMessage(POISONED_RECIPIENT), STRK20_CONTENT_SENDER),
-    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
-    await expect(
-      handler({ type: "wallet.pendingApprovals" }, STRK20_EXTENSION_SENDER),
-    ).resolves.toMatchObject({ pending: [] });
+    await expectRefusedWithoutPrompt(handler, subaccountInvokeMessage(POISONED_RECIPIENT));
   });
 
   test("refuses a poisoned sub-account invoke preparation", async () => {
     const handler = buildStrk20Handler({ preferences: subaccountPoolPreferences() });
 
-    await expect(
-      handler(subaccountPrepareMessage(POISONED_RECIPIENT), STRK20_CONTENT_SENDER),
-    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
-    await expect(
-      handler({ type: "wallet.pendingApprovals" }, STRK20_EXTENSION_SENDER),
-    ).resolves.toMatchObject({ pending: [] });
+    await expectRefusedWithoutPrompt(handler, subaccountPrepareMessage(POISONED_RECIPIENT));
   });
 
   test("still submits a sub-account invoke paying a recipient the wallet does not recognize", async () => {
@@ -162,32 +153,20 @@ describe("dapp-facing STRK20 invoke", () => {
     expect(proveCalls.value).toBe(1);
   });
 
-  // The flat `invoke` action is the one shape that stays ungated, and this pins
-  // why: it is `{type, contract, calldata}` with NO entry point, so there is no
-  // selector to decode and no recipient slot to read. The public dapp route
-  // cannot express such a call either — `readProviderInvoke` rejects a call with
-  // no entrypoint — so excluding it loses no parity, whereas guessing a
-  // recipient out of `calldata[0]` would invent one this wallet cannot justify.
-  test("passes a flat invoke action, which names no entry point and so no recipient", async () => {
+  test("refuses a poisoned felt hidden in selector-free flat invoke calldata", async () => {
     const handler = buildStrk20Handler({ preferences: poolPreferences() });
 
-    await expect(
-      approveHeldStrk20(
-        handler,
+    await expectRefusedWithoutPrompt(handler, {
+      actions: [
         {
-          actions: [
-            {
-              calldata: [POISONED_RECIPIENT, "0x1", "0x0"],
-              contract: STRK20_TOKEN,
-              type: "invoke",
-            },
-          ],
-          origin: STRK20_ORIGIN,
-          type: "wallet.strk20InvokeTransaction",
+          calldata: ["0x1", POISONED_RECIPIENT, "0x0"],
+          contract: STRK20_TOKEN,
+          type: "invoke",
         },
-        "strk20-invoke",
-      ),
-    ).resolves.toMatchObject({ ok: true });
+      ],
+      origin: STRK20_ORIGIN,
+      type: "wallet.strk20InvokeTransaction",
+    });
   });
 });
 
@@ -222,6 +201,31 @@ describe("post-consent enforcement", () => {
       ),
     ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
     // Nothing was proved: the refusal happens before the pool is touched.
+    expect(proveCalls.value).toBe(0);
+  });
+
+  test("re-reads recipient policy at the proof boundary, not only when execution starts", async () => {
+    let current: WalletPreferences = { ...poolPreferences(), addressBook: [] };
+    const proveCalls = { value: 0 };
+    const base = makeStrk20Service();
+    const strk20: Strk20Service = {
+      ...base,
+      async submitActions({ beforeProof }) {
+        current = poolPreferences();
+        await beforeProof?.();
+        proveCalls.value += 1;
+        return { transactionHash: "0x123" };
+      },
+    };
+    const handler = buildStrk20Handler({
+      preferencesRead: () => current,
+      proveCalls,
+      strk20,
+    });
+
+    await expect(
+      approveHeldStrk20(handler, invokeMessage("withdraw", POISONED_RECIPIENT), "strk20-invoke"),
+    ).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
     expect(proveCalls.value).toBe(0);
   });
 

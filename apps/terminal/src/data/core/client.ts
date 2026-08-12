@@ -9,7 +9,7 @@
  */
 import type { RpcProvider } from "starknet";
 import { withRpcFallback } from "../../protocols/support/provider";
-import { RPC_URLS } from "./endpoints";
+import { RPC_DIRECT_URLS } from "./endpoints";
 
 /**
  * Thrown when an HTTP request completes with a non-2xx status. Carries the
@@ -88,4 +88,4 @@ export const fetchJson = async <T>(url: string, opts?: RequestInit): Promise<T> 
  * downtime fails over to the next endpoint.
  */
 export const withRpc = <T>(run: (provider: RpcProvider) => Promise<T>): Promise<T> =>
-  withRpcFallback([...RPC_URLS], run);
+  withRpcFallback([...RPC_DIRECT_URLS], run);

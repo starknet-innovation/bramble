@@ -99,10 +99,7 @@ export const refuseOnPoisonedRecipient = (
 export const isLookalikeAddress = (candidate: string, trusted: string): boolean => {
   const left = canonical(candidate);
   const right = canonical(trusted);
-  if (left === right || left.length < 14 || right.length < 14) {
-    return false;
-  }
-  return left.slice(0, 8) === right.slice(0, 8) && left.slice(-4) === right.slice(-4);
+  return left !== right && shortAddress(left) === shortAddress(right);
 };
 
 // Each rule is a pure predicate returning the flag it raises or null; the
@@ -294,7 +291,9 @@ const flagsForCall = (
   // not in the token registry, so it does not raise the unknown-contract flag —
   // its own approval flags describe the risk precisely.
   const known =
-    tokenFor(context.tokens, call.contractAddress) !== undefined || decoded.kind === "nft-approval";
+    tokenFor(context.tokens, call.contractAddress) !== undefined ||
+    decoded.kind === "nft-approval" ||
+    context.knownContracts?.some((contract) => sameFelt(contract, call.contractAddress)) === true;
   const recipient = recipientForFlags(call, calldata);
   const candidates: readonly (RiskFlag | null)[] = [
     unknownContractFlag(call, known),

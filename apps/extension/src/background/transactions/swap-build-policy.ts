@@ -14,10 +14,14 @@
  * than what was hoped for.
  */
 import { isAvnuSwapEntrypoint, MAX_SWAP_CALLS } from "@mc-wallet/transactions/avnu";
-import { type AvnuRoute, avnuRouteIntentError, decodeAvnuRoute } from "@mc-wallet/transactions/avnu-route";
-import { sameFelt, uint256Felts } from "@mc-wallet/wallet-model/networks";
+import {
+  type AvnuRoute,
+  avnuRouteIntentError,
+  decodeAvnuRoute,
+} from "@mc-wallet/transactions/avnu-route";
 import type { DecodedCall } from "@mc-wallet/transactions/verify";
 import { isApproveEntrypoint } from "@mc-wallet/transactions/verify-selectors";
+import { sameFelt, uint256Felts } from "@mc-wallet/wallet-model/networks";
 
 /**
  * One call exactly as the aggregator returned it, already narrowed to felts and
@@ -62,6 +66,11 @@ const approvalCallPolicyError = (call: BuiltCall, intent: SwapIntent): string | 
   // past the sell-token restriction under a selector only one of them knows.
   if (!isApproveEntrypoint(call.entrypoint)) {
     return null;
+  }
+  // Additive allowance selectors cannot encode the exact reviewed post-state:
+  // the response does not control (or even report) the existing allowance.
+  if (call.entrypoint !== "approve") {
+    return "swap build requested an additive token allowance";
   }
   if (!sameFelt(call.contractAddress, intent.sellTokenAddress)) {
     return "swap build touched an unexpected token approval";

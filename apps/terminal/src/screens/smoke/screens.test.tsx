@@ -37,8 +37,10 @@ vi.mock("../../protocols/index", async () => {
   const actual = await vi.importActual<typeof import("../../protocols/index")>("../../protocols/index");
   return {
     ...actual,
-    avnu: { ...actual.avnu, buildSwapCalls: swaps.avnuBuild, quoteSwap: swaps.avnuQuote },
-    ekubo: { ...actual.ekubo, buildSwapCalls: swaps.ekuboBuild, quoteSwap: swaps.ekuboQuote },
+    buildAvnuSwapCalls: swaps.avnuBuild,
+    buildEkuboSwapCalls: swaps.ekuboBuild,
+    quoteAvnuSwap: swaps.avnuQuote,
+    quoteEkuboSwap: swaps.ekuboQuote,
   };
 });
 

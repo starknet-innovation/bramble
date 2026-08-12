@@ -3,12 +3,13 @@
  * but never authorize a transaction: action handlers perform a fresh chain
  * read for the selected signer immediately before every broadcast.
  */
-import { canonicalFelt, sameFelt } from "@mc-wallet/wallet-model/networks";
+
 import type {
   MultisigProposalRecord,
   MultisigRecord,
   MultisigStore,
 } from "@mc-wallet/multisig/repository";
+import { canonicalFelt, sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { WalletOpsDeps } from "../accounts/wallet-ops";
 
 type ProposalStatusDeps = WalletOpsDeps & { readonly multisigStore: MultisigStore };

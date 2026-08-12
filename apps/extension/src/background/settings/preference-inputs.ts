@@ -3,15 +3,18 @@
  * RPC overrides, and backup imports.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@mc-wallet/privacy/config";
+import { type AccountGroupIcon, isAccountGroupIcon } from "@mc-wallet/settings/groups";
 import { isAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import { isStrk20NetworkConfig, type Strk20NetworkConfig } from "@mc-wallet/privacy/config";
-import { type AccountGroupIcon, isAccountGroupIcon } from "@mc-wallet/settings/groups";
-import { isApprovalSurfacePreference, isDisplayCurrency } from "@mc-wallet/wallet-model/preferences";
+import {
+  isApprovalSurfacePreference,
+  isDisplayCurrency,
+} from "@mc-wallet/wallet-model/preferences";
 
 const isGroupNameText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.trim().length <= 64;

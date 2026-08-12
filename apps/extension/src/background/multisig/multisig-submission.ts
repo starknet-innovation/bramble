@@ -6,9 +6,9 @@
  * failure response.
  */
 
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import { type ActivityLog, isUnresolvedActivityStatus } from "@mc-wallet/transactions/activity";
 import { type MultisigOperationRecord, multisigOperationId } from "@mc-wallet/multisig/repository";
+import { type ActivityLog, isUnresolvedActivityStatus } from "@mc-wallet/transactions/activity";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 import type { MultisigOpsDeps } from "./multisig-ops";
 
 type SetupOperationKind = Extract<MultisigOperationRecord["kind"], "declare" | "deploy">;
@@ -126,18 +126,17 @@ const isProposalOperation = (
  * contract, so the same id can name a live proposal on two different multisigs
  * and neither may block the other.
  *
- * Any unresolved or unreadable prior BROADCAST for that `(signer, multisig,
- * txId)` stays blocked, whatever its kind. Kind-separated claims used to let an
+ * Any unresolved or unreadable prior claim for that `(signer, multisig, txId)`
+ * stays blocked, whatever its kind. Kind-separated claims used to let an
  * execute and a revoke broadcast together: the state each one validated was
  * read while the other was still unmined, so both passed their gates and both
  * paid a fee for a pair of transactions that contradict each other. A claim
- * still carrying no transaction hash is not a broadcast and is never releasable
- * by anything here, so it blocks its own kind only — otherwise one lost
- * bookkeeping write would permanently strand every action on the proposal,
- * recovery revoke included. Legacy claims carry no multisig and block every
- * contract, which fails closed for the one upgrade during which they can still
- * be in flight. Rejected/reverted submissions are retryable; an accepted
- * inverse action releases older accepted claims.
+ * still carrying no transaction hash may be racing a broadcast or may have lost
+ * its post-broadcast bookkeeping write, so it also blocks every kind. Legacy
+ * claims carry no multisig and block every contract, which fails closed for the
+ * one upgrade during which they can still be in flight. Rejected/reverted
+ * submissions are retryable; an accepted inverse action releases older
+ * accepted claims.
  */
 export const claimMultisigProposalOperation = async (
   deps: MultisigOpsDeps,
@@ -185,6 +184,9 @@ export const claimMultisigProposalOperation = async (
         (left, right) => (left.activity?.submittedAt ?? 0) - (right.activity?.submittedAt ?? 0),
       );
     const latestAccepted = accepted.at(-1)?.operation.id;
+    const existing = sameSignerProposal.find(
+      (operation) => operation.id === operationId && operation.id === latestAccepted,
+    );
     await Promise.all([
       ...settledElsewhere.map((operation) => deps.multisigStore.releaseOperation(operation.id)),
       ...sameSignerProposal
@@ -195,35 +197,22 @@ export const claimMultisigProposalOperation = async (
           return (
             activity?.status === "rejected" ||
             activity?.status === "reverted" ||
-            (activity?.status === "accepted" && operation.id !== latestAccepted)
+            (activity?.status === "accepted" && operation.id !== existing?.id)
           );
         })
         .map((operation) => deps.multisigStore.releaseOperation(operation.id)),
     ]);
-    const existing = sameSignerProposal.find(
-      (operation) => operation.id === operationId && operation.id === latestAccepted,
-    );
     if (existing) {
       return {
         error: pendingClaimError(input.pendingError, existing.transactionHash),
       };
     }
-    // Kind-blind only for claims that reached the wire: a still-unmined
-    // BROADCAST of any kind blocks the next action, because the chain still
-    // reports the state that transaction has not yet changed.
-    //
-    // A claim with no transaction hash never reached the wire, and nothing can
-    // ever release it — the release filters above all need an activity status,
-    // and the hash write after broadcast is best-effort. So a lost bookkeeping
-    // write, or a worker torn down between the claim and the hash, would
-    // otherwise wedge every action on this proposal forever, including the
-    // recovery revoke MCW-V09-102 exists to keep reachable. It therefore blocks
-    // its own kind only, which is exactly the double-click race it was written
-    // for and exactly the pre-namespace behavior.
+    // Every unresolved claim is kind-blind. In particular, no hash does NOT
+    // prove no broadcast: the worker can be torn down after the RPC answers but
+    // before the best-effort hash write. Availability must lose to duplicate or
+    // contradictory signing when the outcome is unknowable.
     const unresolved = sameSignerProposal.find((operation) => {
-      if (operation.transactionHash === undefined) {
-        return operation.kind === input.kind;
-      }
+      if (operation.transactionHash === undefined) return true;
       const status = activityByHash.get(operation.transactionHash)?.status;
       return status === undefined || isUnresolvedActivityStatus(status);
     });
@@ -232,7 +221,10 @@ export const claimMultisigProposalOperation = async (
         error: pendingClaimError(input.pendingError, unresolved.transactionHash),
       };
     }
-    const claim = await deps.multisigStore.claimOperation({
+    // This store mutation repeats the kind-blind conflict check atomically with
+    // the write. The reads above provide cleanup and a useful hash in the error;
+    // they are not the concurrency control.
+    const claim = await deps.multisigStore.claimProposalOperation({
       accountId: input.accountId,
       id: operationId,
       kind: input.kind,

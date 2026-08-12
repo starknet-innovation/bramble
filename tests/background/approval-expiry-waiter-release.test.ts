@@ -18,12 +18,14 @@ import { errorForMessage, userRefusedOp } from "@mc-wallet/wallet-protocol/rpc-e
 import {
   APPROVAL_TTL_MS,
   createApprovalQueue,
+  MAX_PENDING_APPROVALS,
+  MAX_PENDING_APPROVALS_PER_ORIGIN,
 } from "../../apps/extension/src/background/approvals/approvals";
 import {
   createSignatureWaiters,
-  EXPIRED_APPROVAL_RESPONSE,
+  DROPPED_APPROVAL_RESPONSE,
   MAX_WAITERS_PER_APPROVAL,
-  releaseWaitersOnApprovalExpiry,
+  releaseWaitersOnApprovalDrop,
   type SignatureWaiters,
 } from "../../apps/extension/src/background/approvals/signature-waiters";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
@@ -56,7 +58,7 @@ const boundRegistry = () => {
   const approvals = createApprovalQueue({ now: () => clock.now });
   const waiters = createSignatureWaiters();
   const changes: number[] = [];
-  releaseWaitersOnApprovalExpiry(approvals, waiters, () => changes.push(clock.now));
+  releaseWaitersOnApprovalDrop(approvals, waiters, () => changes.push(clock.now));
   return { approvals, changes, clock, waiters };
 };
 
@@ -82,6 +84,32 @@ const floodRound = (
 };
 
 describe("approval expiry releases parked dapp responses (MCW-V09-115)", () => {
+  test("capacity replacement rejects the evicted request and releases its waiter", async () => {
+    const { approvals, changes, waiters } = boundRegistry();
+    for (let site = 0; site < MAX_PENDING_APPROVALS / MAX_PENDING_APPROVALS_PER_ORIGIN; site += 1) {
+      for (let slot = 0; slot < MAX_PENDING_APPROVALS_PER_ORIGIN; slot += 1) {
+        approvals.requestWatchAsset({
+          origin: `https://site-${site}.example`,
+          token: token(site * MAX_PENDING_APPROVALS_PER_ORIGIN + slot),
+        });
+      }
+    }
+    const oldest = approvals.list()[0];
+    if (!oldest) {
+      throw new Error("full approval queue fixture unavailable");
+    }
+    const held = waiters.register(oldest.id);
+
+    const admitted = approvals.request("https://late.example");
+
+    expect(approvals.list()).toHaveLength(MAX_PENDING_APPROVALS);
+    expect(approvals.get(oldest.id)).toBeNull();
+    expect(approvals.get(admitted.id)).toEqual(admitted);
+    expect(waiters.pending()).toBe(0);
+    expect(changes).toHaveLength(1);
+    await expect(held).resolves.toEqual(DROPPED_APPROVAL_RESPONSE);
+  });
+
   test("an ignored flood does not grow the registry across TTL periods", async () => {
     const { approvals, clock, waiters } = boundRegistry();
     const held: Promise<unknown>[] = [];
@@ -97,7 +125,7 @@ describe("approval expiry releases parked dapp responses (MCW-V09-115)", () => {
 
     expect(held.length).toBeGreaterThan(0);
     for (const response of await Promise.all(held)) {
-      expect(response).toEqual(EXPIRED_APPROVAL_RESPONSE);
+      expect(response).toEqual(DROPPED_APPROVAL_RESPONSE);
     }
   });
 
@@ -148,7 +176,7 @@ describe("approval expiry releases parked dapp responses (MCW-V09-115)", () => {
     clock.now += APPROVAL_TTL_MS;
     expect(approvals.list()).toEqual([]);
     expect(waiters.pending()).toBe(0);
-    expect(await Promise.all(held)).toEqual(held.map(() => EXPIRED_APPROVAL_RESPONSE));
+    expect(await Promise.all(held)).toEqual(held.map(() => DROPPED_APPROVAL_RESPONSE));
 
     // The lockout is bounded by the TTL: the origin can prompt again afterwards.
     const next = approvals.request(ATTACKER);
@@ -191,6 +219,6 @@ describe("the router context binds expiry to the queue it is given", () => {
       ok: true,
       pending: [],
     });
-    expect(await Promise.all(held)).toEqual([EXPIRED_APPROVAL_RESPONSE, EXPIRED_APPROVAL_RESPONSE]);
+    expect(await Promise.all(held)).toEqual([DROPPED_APPROVAL_RESPONSE, DROPPED_APPROVAL_RESPONSE]);
   });
 });

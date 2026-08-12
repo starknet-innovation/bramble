@@ -17,7 +17,7 @@ import type { PrivacyPreparation } from "../privacy/privacy-runtime";
 /**
  * Friendly validation copy shared by the recipient screen and review failures.
  */
-export const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
+const INVALID_RECIPIENT_MESSAGE = "Enter a valid Starknet address.";
 
 const INVALID_REVIEW_ERRORS = new Set([
   "invalid nft transfer review request",

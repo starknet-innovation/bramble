@@ -188,6 +188,7 @@ jobs:
       - run: bun run check:extension
       - run: bun run check:imports
       - run: bun run check:cycles
+      - run: bun run check:deadcode
       # The leading `./` prevents Bun from matching tests inside ignored vendor checkouts.
       - run: bun test ./tests
       - run: bun run check:workspaces

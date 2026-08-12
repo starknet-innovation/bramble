@@ -5,15 +5,14 @@
  * missing network configuration, Ledger accounts, and untracked tokens.
  */
 
-import { withTokenId } from "@mc-wallet/wallet-model/preferences";
-import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
 import { canonicalStrk20PoolFee } from "@mc-wallet/privacy/service";
 import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
-import { networkRpcUrls, type ActiveAccountContext } from "../runtime/runtime-state";
-
+import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { withTokenId } from "@mc-wallet/wallet-model/preferences";
+import type { WalletOpsDeps } from "../accounts/wallet-ops";
+import { type ActiveAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import { strk20AccountContext } from "./strk20-account-context";
 import type { Strk20WalletPreparationStore } from "./strk20-wallet-preparations";
-import type { WalletOpsDeps } from "../accounts/wallet-ops";
 
 /**
  * Extension-owned privacy dependencies, including the one-time preparation

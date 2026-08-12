@@ -163,6 +163,16 @@ describe("swap build policy covers the whole call set", () => {
     expect(submitted).toHaveLength(0);
   });
 
+  test("an additive allowance cannot masquerade as the reviewed exact approval", async () => {
+    for (const entrypoint of ["increase_allowance", "increaseAllowance"]) {
+      const { response, submitted } = prepareSwap([{ ...approveRouter, entrypoint }, routeCall]);
+      await expect(response).resolves.toEqual({
+        error: "swap build requested an additive token allowance",
+      });
+      expect(submitted).toHaveLength(0);
+    }
+  });
+
   // MCW-V09-130: the gate reads the approval's uint256 through the one shared
   // limb join. A malformed limb has to become this refusal — not a thrown
   // BigInt SyntaxError out of the handler, and above all not a zero that the

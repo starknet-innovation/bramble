@@ -3,11 +3,7 @@
  * tests can stub network access.
  */
 
-import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
-import { type ExplorerLanePreferences } from "@mc-wallet/wallet-model/preferences";
-import { type ExternalAllowanceScan, scanExternalAllowances, type TrackedAllowanceScan, readTrackedAllowances } from "@mc-wallet/transactions/allowance-scan";
-import { type VerifyClassHashInput, verifyAccountClassHash } from "@mc-wallet/starknet/class-hash-verify";
-
+import { untrustedFetch } from "@mc-wallet/core/http-json";
 import {
   computeMultisigTransactionId,
   getMultisigConfig,
@@ -16,10 +12,7 @@ import {
   type MultisigProposalStatusInput,
   type MultisigTransactionIdInput,
 } from "@mc-wallet/multisig/chain";
-import {
-  isMultisigClassDeclared,
-  type MultisigClassStatusInput,
-} from "@mc-wallet/multisig/deploy";
+import { isMultisigClassDeclared, type MultisigClassStatusInput } from "@mc-wallet/multisig/deploy";
 import {
   discoverMultisigProposalIds,
   type MultisigProposalDiscoveryInput,
@@ -34,6 +27,12 @@ import {
   type NftTokenMetadata,
   resolveNftMetadataUri,
 } from "@mc-wallet/portfolio/nft-token-metadata";
+import type { Strk20Service } from "@mc-wallet/privacy/service";
+import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
+import {
+  type VerifyClassHashInput,
+  verifyAccountClassHash,
+} from "@mc-wallet/starknet/class-hash-verify";
 import {
   type BalanceInput,
   type DeclareInput,
@@ -61,20 +60,27 @@ import {
   type TransactionStatusInput,
   type TransferInput,
 } from "@mc-wallet/starknet/rpc";
+import {
+  type ExternalAllowanceScan,
+  readTrackedAllowances,
+  scanExternalAllowances,
+  type TrackedAllowanceScan,
+} from "@mc-wallet/transactions/allowance-scan";
 import { createStarkscanClient, type StarkscanHttp } from "@mc-wallet/transactions/starkscan";
 import {
   createRpcFirstBalances,
   createRpcFirstHistory,
 } from "@mc-wallet/transactions/starkscan-wallet";
-import type { Strk20Service } from "@mc-wallet/privacy/service";
-import type { scanTransactionHistory, TransactionHistoryScan } from "@mc-wallet/transactions/tx-history-scan";
-import { untrustedFetch } from "@mc-wallet/core/http-json";
-
+import type {
+  scanTransactionHistory,
+  TransactionHistoryScan,
+} from "@mc-wallet/transactions/tx-history-scan";
+import type { ExplorerLanePreferences } from "@mc-wallet/wallet-model/preferences";
 
 /**
  * Injectable multisig read operations used by the multisig message handlers.
  */
-export type MultisigRpc = {
+type MultisigRpc = {
   readonly computeTransactionId: (
     input: MultisigTransactionIdInput,
   ) => ReturnType<typeof computeMultisigTransactionId>;

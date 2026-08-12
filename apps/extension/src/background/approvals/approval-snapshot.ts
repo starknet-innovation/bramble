@@ -11,9 +11,9 @@
  * what it received cannot reach back into live queue state.
  */
 import type { DeclareFeeEstimate } from "@mc-wallet/starknet/declare";
+import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import type { FeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import type { Strk20Action, Strk20WithdrawAction } from "@mc-wallet/wallet-protocol/strk20";
 import type { ApprovalContext } from "./approval-context";
 import { type ApprovalKind, type ApprovalPayload, cloneApprovalValue } from "./approval-payload";

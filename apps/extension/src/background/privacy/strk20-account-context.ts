@@ -2,17 +2,16 @@
  * Shared protected-account boundary for dapp and extension-owned STRK20 flows.
  */
 
-import { type PassiveUnlockSession, captureSessionAuthorization } from "../runtime/session";
 import { WalletError } from "@mc-wallet/core/errors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import { type Strk20Service, unavailableStrk20Service } from "@mc-wallet/privacy/service";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-
+import { captureSessionAuthorization, type PassiveUnlockSession } from "../runtime/session";
 
 /**
  * Resolves the injected STRK20 adapter, retaining the fail-closed default for

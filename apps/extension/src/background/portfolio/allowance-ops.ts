@@ -20,21 +20,33 @@
  * ../starknet/verify-decode).
  */
 
-import { type TrackedAllowancePair } from "@mc-wallet/transactions/allowance-scan";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, type StarknetNetworkId, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { type ExternalAllowance, mergeAllowanceViews, type AllowanceReading, type AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
-import { approvedAssetKind, type ApprovedAssets } from "@mc-wallet/transactions/allowances";
 import { buildErc20ApproveCall } from "@mc-wallet/starknet/rpc";
+import {
+  type AllowanceReading,
+  type AllowanceView,
+  type ExternalAllowance,
+  mergeAllowanceViews,
+} from "@mc-wallet/transactions/allowance-discovery";
+import type { TrackedAllowancePair } from "@mc-wallet/transactions/allowance-scan";
+import { type AllowanceRecord, allowanceTarget } from "@mc-wallet/transactions/allowance-store";
+import { type ApprovedAssets, approvedAssetKind } from "@mc-wallet/transactions/allowances";
 import { verifyCalls } from "@mc-wallet/transactions/verify";
-import { allowanceTarget, type AllowanceRecord } from "@mc-wallet/transactions/allowance-store";
-import { readRevokeAllowanceInput } from "./allowance-inputs";
-import { readTypeOnlyInput } from "../routing/message-inputs";
-import { activeAccountContext, networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import { isWatchedNftContract } from "@mc-wallet/transactions/verify-decode";
-
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import {
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
+import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
+import { readTypeOnlyInput } from "../routing/message-inputs";
+import {
+  activeAccountContext,
+  networkRpcUrls,
+  observedAccountContext,
+} from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import { readRevokeAllowanceInput } from "./allowance-inputs";
 
 /**
  * Discovers ERC20 allowances granted outside this wallet for the active
@@ -296,6 +308,8 @@ export const handleAllowanceOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = ALLOWANCE_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(ALLOWANCE_OPS_HANDLERS, messageType)
+    ? ALLOWANCE_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message) : null;
 };

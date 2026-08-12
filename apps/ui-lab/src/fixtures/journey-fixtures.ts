@@ -25,7 +25,7 @@ const mainnetToken = (symbol: "ETH" | "STRK") => {
 
 export const ETH_TOKEN = mainnetToken("ETH");
 export const STRK_TOKEN = mainnetToken("STRK");
-export const SPAM_TOKEN = withTokenId({
+const SPAM_TOKEN = withTokenId({
   address: "0x099999",
   decimals: 6,
   name: "USD Coin reward",
@@ -38,7 +38,7 @@ if (!usdcToken) {
   throw new Error("Missing production USDC fixture");
 }
 
-export const groups: AccountGroups = [
+const groups: AccountGroups = [
   {
     accountIds: [softwareAccount.id, ledgerAccount.id],
     icon: "briefcase",
@@ -155,7 +155,7 @@ export const emptyNetworkStatus: WalletStatus = {
   networkId: "SN_SEPOLIA",
 };
 
-export const importedAccount: AccountRef = {
+const importedAccount: AccountRef = {
   address: "0x6234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
   classHash: "0x111",
   derivation: { kind: "imported-raw-key" },

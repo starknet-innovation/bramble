@@ -3,7 +3,14 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
+import {
+  defaultWalletPreferences,
+  type WalletPreferences,
+  type WalletPreferencesStore,
+} from "@mc-wallet/settings/preferences";
 import { serializeStoreMutations } from "@mc-wallet/store/mutation";
+import type { Vault } from "@mc-wallet/vault/schema";
+import { findVaultAccount } from "@mc-wallet/vault/vault-account";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   DEFAULT_NETWORK,
@@ -11,13 +18,7 @@ import {
   type StarknetNetwork,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import {
-  defaultWalletPreferences,
-  type WalletPreferences,
-  type WalletPreferencesStore,
-} from "@mc-wallet/settings/preferences";
-import type { Vault } from "@mc-wallet/vault/schema";
-import { findVaultAccount } from "@mc-wallet/vault/vault-account";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { runGuardedNetworkMutation } from "./active-network-mutation";
 import type { NetworkOption, WalletStatus } from "./runtime-types";
 import {
@@ -25,8 +26,6 @@ import {
   type PassiveUnlockSession,
   type UnlockSession,
 } from "./session";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-
 
 const networkOptions = (): readonly NetworkOption[] =>
   Object.values(STARKNET_NETWORKS).map((network) => ({

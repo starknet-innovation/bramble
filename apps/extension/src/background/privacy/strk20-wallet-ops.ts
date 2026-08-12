@@ -6,10 +6,7 @@
  * is produced.
  */
 
-import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import { WalletError } from "@mc-wallet/core/errors";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
-import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
 import {
   readStrk20Balances,
   readStrk20RegistrationStatus,
@@ -17,11 +14,18 @@ import {
   type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@mc-wallet/privacy/service";
+import { formatTokenAmount } from "@mc-wallet/starknet/rpc";
 import { systemClock } from "@mc-wallet/transactions/activity";
-import { approvalPayloadMatchesContext, createApprovalContext } from "../approvals/approval-context";
+import { verificationContext } from "@mc-wallet/transactions/verify";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import {
+  approvalPayloadMatchesContext,
+  createApprovalContext,
+} from "../approvals/approval-context";
+import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import { readTypeOnlyInput } from "../routing/message-inputs";
+import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
@@ -37,8 +41,6 @@ import {
   type Strk20WalletPreparation,
   strk20WalletPreparationPayload,
 } from "./strk20-wallet-preparations";
-import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
-import { verificationContext } from "@mc-wallet/transactions/verify";
 
 /**
  * Re-exported deps type so existing wiring keeps one import site.
@@ -333,7 +335,7 @@ const submitPreparation = async (
     return submitPreparedDeposit(deps, service, preparation, context);
   }
   if (preparation.kind === "transfer" || preparation.kind === "withdraw") {
-    return submitPreparedPrivateBatch(service, preparation, context);
+    return submitPreparedPrivateBatch(deps, service, preparation, context);
   }
   const registration = await readStrk20RegistrationStatus(service, {
     ...context.accountContext,
@@ -371,10 +373,26 @@ const assertRecipientRegistration = async (
   }
 };
 
+const assertCurrentRecipientPolicy = async (
+  deps: Strk20WalletOpsDeps,
+  preparation: Exclude<Strk20WalletPreparation, { readonly kind: "register" }>,
+  context: ActivePrivacyContext,
+): Promise<void> => {
+  const refusal = refusePoisonedStrk20Actions(
+    context.accountContext.account,
+    await deps.preferencesStore.read(),
+    preparation.actions,
+  );
+  if (refusal) {
+    throw new WalletError(refusal.error);
+  }
+};
+
 // Transfers and withdrawals share their submission guard: both spend shielded
 // balance through the relay, so both re-check registration and the balance at
 // submit time rather than trusting the reviewed preparation.
 const submitPreparedPrivateBatch = async (
+  deps: Strk20WalletOpsDeps,
   service: ReturnType<typeof strk20ServiceForRuntime>,
   preparation: Extract<Strk20WalletPreparation, { readonly kind: "transfer" | "withdraw" }>,
   context: ActivePrivacyContext,
@@ -396,11 +414,12 @@ const submitPreparedPrivateBatch = async (
   return submitStrk20Actions(service, {
     ...context.accountContext,
     actions: preparation.actions,
-    ...(preparation.kind === "transfer"
-      ? {
-          beforeProof: () => assertRecipientRegistration(service, preparation.recipient, context),
-        }
-      : {}),
+    beforeProof: async () => {
+      if (preparation.kind === "transfer") {
+        await assertRecipientRegistration(service, preparation.recipient, context);
+      }
+      await assertCurrentRecipientPolicy(deps, preparation, context);
+    },
     plan: preparation.plan,
   });
 };
@@ -430,7 +449,10 @@ const submitPreparedDeposit = async (
   return submitStrk20Actions(service, {
     ...context.accountContext,
     actions: preparation.actions,
-    beforeProof: () => assertRecipientRegistration(service, preparation.recipient, context),
+    beforeProof: async () => {
+      await assertRecipientRegistration(service, preparation.recipient, context);
+      await assertCurrentRecipientPolicy(deps, preparation, context);
+    },
     plan: preparation.plan,
   });
 };

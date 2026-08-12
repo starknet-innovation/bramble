@@ -84,10 +84,10 @@ export type SignRequestView = {
 const row = ([key, value]: SignRequestRow): string =>
   `<div class="sign-row"><span class="sign-key">${escapeHtml(key)}</span><span class="sign-val">${escapeHtml(signValueText(value))}</span></div>`;
 
-// The row count is capped as well as the block height: the count is what decides
-// how far the decision controls sit from the top of the card, and a site
-// controls it directly through undeclared keys.
-const rows = (entries: readonly SignRequestRow[]): string => {
+// Only unsigned, site-supplied extras are row-capped. Signed rows live in a
+// height-bounded scrolling block and must all remain inspectable there: hiding
+// one behind raw JSON would separate the consent surface from the signed hash.
+const cappedRows = (entries: readonly SignRequestRow[]): string => {
   const shown = entries.slice(0, SIGN_ROW_LIMIT);
   const hidden = entries.length - shown.length;
   const overflow =
@@ -96,6 +96,8 @@ const rows = (entries: readonly SignRequestRow[]): string => {
       : "";
   return `${shown.map(row).join("")}${overflow}`;
 };
+
+const signedRows = (entries: readonly SignRequestRow[]): string => entries.map(row).join("");
 
 // Section labels are fixed strings, never interpolated from the payload: a
 // site-chosen `primaryType` such as "shown by the site but NOT signed" would
@@ -108,7 +110,11 @@ const section = (label: string, body: string, modifier = ""): string =>
     : `<p class="eyebrow">${escapeHtml(label)}</p><div class="sign-block${modifier}">${body}</div>`;
 
 const unsignedSection = (label: string, split: SignRequestSplit): string =>
-  section(`${label} — shown by the site but NOT signed`, rows(split.unsigned), " sign-unsigned");
+  section(
+    `${label} — shown by the site but NOT signed`,
+    cappedRows(split.unsigned),
+    " sign-unsigned",
+  );
 
 /**
  * Renders the decoded domain, primary-type message fields, and a raw view of a
@@ -122,7 +128,7 @@ export const signRequestView = (typedData: unknown): SignRequestView => {
   if (!isRecord(typedData)) {
     return {
       classified: false,
-      html: `<div class="sign-block">${rows([["data", typedData]])}</div>`,
+      html: `<div class="sign-block">${cappedRows([["data", typedData]])}</div>`,
     };
   }
   const decoded = decodeSignRequest(typedData);
@@ -130,9 +136,9 @@ export const signRequestView = (typedData: unknown): SignRequestView => {
   return {
     classified: !decoded.domain.unclassified && !decoded.message.unclassified,
     html: `
-    ${section("Domain", rows(decoded.domain.signed))}
+    ${section("Domain", signedRows(decoded.domain.signed))}
     ${unsignedSection("Domain", decoded.domain)}
-    ${section("Message", rows(decoded.message.signed))}
+    ${section("Message", signedRows(decoded.message.signed))}
     ${unsignedSection("Message", decoded.message)}
     <details class="sign-raw"><summary>Raw typed data</summary><pre>${raw}</pre></details>`,
   };

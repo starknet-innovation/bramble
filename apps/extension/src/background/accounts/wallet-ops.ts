@@ -1,23 +1,12 @@
-/**
- * RPC-heavy wallet operations dispatched from the background message handler:
- * balances, deployment, transfer review and submission, and the activity feed.
- */
+/** RPC-backed wallet operations dispatched from the background message handler. */
 
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { MultisigStore } from "@mc-wallet/multisig/repository";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
-  STARKNET_NETWORKS,
-  STRK_TOKEN_ADDRESS,
-  type StarknetNetworkId,
-  sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import { buildErc20TransferCall, type FeeEstimate, parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { mergeActivity } from "@mc-wallet/transactions/tx-history";
-import {
-  refuseOnPoisonedRecipient,
-  verificationContext,
-  verifyCalls,
-} from "@mc-wallet/transactions/verify";
+  buildErc20TransferCall,
+  type FeeEstimate,
+  parseTokenAmount,
+} from "@mc-wallet/starknet/rpc";
 import {
   type ActivityEntry,
   type ActivityLog,
@@ -25,10 +14,21 @@ import {
   systemClock,
 } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { MultisigStore } from "@mc-wallet/multisig/repository";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import { mergeActivity } from "@mc-wallet/transactions/tx-history";
+import {
+  refuseOnPoisonedRecipient,
+  verificationContext,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import {
+  STARKNET_NETWORKS,
+  STRK_TOKEN_ADDRESS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
-import { readStrkBalance } from "../transactions/fee-guard";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
   readActivityInput,
@@ -47,6 +47,7 @@ import {
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { UnlockSession } from "../runtime/session";
+import { readStrkBalance } from "../transactions/fee-guard";
 import { failureNoticeMessage } from "../transactions/tx-observation";
 import { reconcileScope } from "../transactions/tx-reconcile";
 import type { WalletStatusReader } from "./wallet-reader";
@@ -137,12 +138,8 @@ export const resolveReviewFee = (input: {
 
 type WalletOpsHandler = (deps: WalletOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
-// Active-account context for the read-only handlers the side panel polls while
-// open (balances, deployment/class-hash checks, activity, failure notices). The
-// panel refreshes on a fixed ambient cadence, so renewing the inactivity window
-// here would hold the wallet unlocked for as long as the panel is visible;
-// `observedAccountContext` takes only the non-renewing half of the session, so
-// these cannot extend it. User actions (transfer, deploy) keep the renewing path.
+// Side-panel reads use the non-renewing session so ambient polling cannot hold
+// the wallet unlocked. User actions keep the renewing account-context path.
 const passiveAccountContext = (deps: WalletOpsDeps) =>
   observedAccountContext(deps.wallet, deps.session, deps.preferencesStore);
 
@@ -421,7 +418,9 @@ export const handleWalletOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = WALLET_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(WALLET_OPS_HANDLERS, messageType)
+    ? WALLET_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message) : null;
 };
 

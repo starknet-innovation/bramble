@@ -44,15 +44,21 @@ const RECIPIENT = "0x0511a2b3c4d5e6f7";
 
 // What an approval whose fee moved between paint and click is refused with.
 const MOVED_FEE_REFUSAL = "the fee changed since this request was reviewed";
+const FEE_REVIEW_REQUIRED = {
+  error: "retry the fee estimate before approving this transaction",
+};
 
 type Handler = ReturnType<typeof makeHarness>["handler"];
 
 // The fee the approval card would be painting right now. Read from the same
 // pending-approvals snapshot the panel renders from, so a test echoes what a
 // user would have seen rather than a figure written into the test.
-const paintedFee = async (handler: Handler, id: string): Promise<FeeEstimate | undefined> => {
+const paintedFee = async (
+  handler: Handler,
+  id: string,
+): Promise<FeeEstimate | null | undefined> => {
   const pending = await waitForPendingApprovals<{
-    readonly fee?: FeeEstimate;
+    readonly fee?: FeeEstimate | null;
     readonly id: string;
   }>(handler, extensionSender);
   return pending.find((approval) => approval.id === id)?.fee;
@@ -79,10 +85,7 @@ describe("dapp invoke approval carries its reviewed fee into submission", () => 
     expect(invoked[0]?.reviewedFee).toEqual(REVIEWED);
   });
 
-  // The queue's current figure must never bind on its own. A surface that
-  // reports no fee reviewed gets an unbound submission — never a ceiling the
-  // wallet picked up from a snapshot that surface never rendered.
-  test("a decision that echoes no fee submits unbound, never the queue's copy", async () => {
+  test("a decision that echoes no fee is refused without consuming the request", async () => {
     const { handler, invoked } = makeHarness();
     const held = handler(invokeMessage(), contentSender);
     const id = await latestApprovalId(handler, extensionSender);
@@ -90,11 +93,14 @@ describe("dapp invoke approval carries its reviewed fee into submission", () => 
     await flushHeld();
     expect(await paintedFee(handler, id)).toEqual(REVIEWED);
 
-    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
-    await held;
+    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual(
+      FEE_REVIEW_REQUIRED,
+    );
 
-    expect(invoked).toHaveLength(1);
-    expect(invoked[0]?.reviewedFee).toBeUndefined();
+    expect(invoked).toHaveLength(0);
+    expect(await paintedFee(handler, id)).toEqual(REVIEWED);
+    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
+    await held;
   });
 
   // The finding: two wallet surfaces are open on one request, a retry on the
@@ -129,10 +135,17 @@ describe("dapp invoke approval carries its reviewed fee into submission", () => 
     await expect(
       handler({ id, reviewedFee: painted, type: "wallet.approveOrigin" }, extensionSender),
     ).resolves.toEqual({ error: MOVED_FEE_REFUSAL });
-    // The dapp's held request settles with the same refusal rather than hanging.
-    expect(await held).toEqual({ error: MOVED_FEE_REFUSAL });
-
     expect(invoked).toHaveLength(0);
+    expect(await paintedFee(handler, id)).toEqual(estimates[1] as FeeEstimate);
+
+    // A stale surface did not decide the request. The freshly painted surface
+    // can still approve it under the figure it now shows.
+    await expect(
+      handler({ id, reviewedFee: estimates[1], type: "wallet.approveOrigin" }, extensionSender),
+    ).resolves.toMatchObject({ ok: true });
+    await held;
+    expect(invoked).toHaveLength(1);
+    expect(invoked[0]?.reviewedFee).toEqual(estimates[1] as FeeEstimate);
   });
 
   // The echo is untrusted input like any other message field, and the same
@@ -199,9 +212,7 @@ describe("dapp invoke approval carries its reviewed fee into submission", () => 
     expect(invoked[0]?.reviewedFee).toEqual({ overallFee: "9999999", unit: "FRI" });
   });
 
-  test("submits unbound when the estimate failed, rather than inventing a ceiling", async () => {
-    // A card that could not show a fee has no consent to enforce. The honest
-    // outcome is an unbound submission, not a fabricated limit.
+  test("refuses approval when the estimate failed and leaves retry available", async () => {
     const { handler, invoked } = makeHarness([account], undefined, {
       estimateInvokeFee: () => Promise.reject(new Error("node down")),
     });
@@ -210,11 +221,14 @@ describe("dapp invoke approval carries its reviewed fee into submission", () => 
     await flushHeld();
     await flushHeld();
 
-    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
-    await held;
+    await expect(handler({ id, type: "wallet.approveOrigin" }, extensionSender)).resolves.toEqual(
+      FEE_REVIEW_REQUIRED,
+    );
 
-    expect(invoked).toHaveLength(1);
-    expect(invoked[0]?.reviewedFee).toBeUndefined();
+    expect(invoked).toHaveLength(0);
+    expect(await paintedFee(handler, id)).toBeNull();
+    await handler({ id, type: "wallet.denyOrigin" }, extensionSender);
+    await held;
   });
 });
 

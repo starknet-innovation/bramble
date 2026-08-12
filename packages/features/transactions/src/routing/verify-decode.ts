@@ -66,6 +66,8 @@ export type DecodedCall = {
 export type VerificationContext = {
   readonly account: AccountRef;
   readonly addressBook: readonly AddressBookEntry[];
+  /** Wallet-pinned application contracts that should not raise an unknown-contract warning. */
+  readonly knownContracts?: readonly string[];
   /**
    * Collections this account watches. Optional because a context can be built
    * where the wallet holds no NFT knowledge at all; absent means "no collection

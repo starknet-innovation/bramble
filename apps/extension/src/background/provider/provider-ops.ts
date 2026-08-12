@@ -1,50 +1,49 @@
-/**
- * dApp-facing provider operations dispatched from the background message
- * handler: origin permission queries, watch-asset requests, and per-transaction
- * invoke prompts. These reach the background from the content bridge, so each
- * verifies the claimed origin and re-checks the phishing blocklist — a blocked
- * origin gets nothing back even if it still holds an old connection grant.
- */
+/** Dapp provider operations validate origin and phishing policy on every request. */
 
-import { strk20AccountContext } from "../privacy/strk20-account-context";
-import { standingAllowanceTotals } from "@mc-wallet/transactions/allowances";
 import { walletErrorMessage } from "@mc-wallet/core/errors";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { STARKNET_NETWORKS, canonicalAddress } from "@mc-wallet/wallet-model/networks";
-import type { Call } from "starknet";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import { mapStrk20StageError } from "@mc-wallet/privacy/official-sdk-errors";
 import { unavailableStrk20Service } from "@mc-wallet/privacy/service";
-import { verifyCalls, refuseOnPoisonedRecipient } from "@mc-wallet/transactions/verify";
+import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { accountHashSigner } from "../ledger/account-hash-signer";
+import { standingAllowanceTotals } from "@mc-wallet/transactions/allowances";
+import {
+  refuseOnPoisonedRecipient,
+  verificationContext,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
+import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import { canonicalAddress, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { Call } from "starknet";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
+import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalPayload, ApprovalQueue } from "../approvals/approvals";
+import {
+  estimateInvokeApprovalFee,
+  FAILED_INVOKE_FEE,
+  PENDING_INVOKE_FEE,
+} from "../approvals/invoke-fee-review";
+import type { SignatureWaiters } from "../approvals/signature-waiters";
+import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
+import { strk20AccountContext } from "../privacy/strk20-account-context";
 import { readAddInvokeTransactionInput } from "../routing/message-inputs";
-
+import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import type { RuntimeRpc } from "../runtime/runtime-rpc";
+import { networkRpcUrls } from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import type { PassiveUnlockSession } from "../runtime/session";
 import {
   readGetPermissionsInput,
   readRetryApprovalFeeInput,
   readWatchAssetInput,
 } from "./provider-inputs";
-import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import { networkRpcUrls } from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
-import type { PassiveUnlockSession } from "../runtime/session";
-import type { SignatureWaiters } from "../approvals/signature-waiters";
-import { verificationContext } from "@mc-wallet/transactions/verify";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { watchAssetToken } from "./watch-asset";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
-import { FAILED_INVOKE_FEE, PENDING_INVOKE_FEE, estimateInvokeApprovalFee } from "../approvals/invoke-fee-review";
-import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
-
 
 /**
  * Dependencies shared by the dapp provider operation handlers.
@@ -393,7 +392,9 @@ export const handleProviderOps = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const handler = PROVIDER_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(PROVIDER_OPS_HANDLERS, messageType)
+    ? PROVIDER_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message, sender) : null;
 };
 

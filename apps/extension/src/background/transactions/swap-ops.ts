@@ -14,24 +14,30 @@
  * response — nothing is signed on a path that could not be fully checked.
  */
 
+import type { TokenConfig } from "@mc-wallet/settings/preferences";
+import { formatTokenAmount, parseTokenAmount } from "@mc-wallet/starknet/rpc";
 import { avnuRouterAddress, type SwapService } from "@mc-wallet/transactions/avnu";
 import { reviewedMinBuyAmount } from "@mc-wallet/transactions/avnu-route";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { formatTokenAmount, parseTokenAmount } from "@mc-wallet/starknet/rpc";
-import { refuseOnPoisonedRecipient, verifyCalls } from "@mc-wallet/transactions/verify";
+import {
+  refuseOnPoisonedRecipient,
+  verificationContext,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
 import { canonical, shortAddress } from "@mc-wallet/transactions/verify-decode";
 import { isApproveEntrypoint } from "@mc-wallet/transactions/verify-selectors";
-import type { TokenConfig } from "@mc-wallet/settings/preferences";
+import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { signerForContext, type WalletOpsDeps } from "../accounts/wallet-ops";
+import {
+  approvalPayloadMatchesContext,
+  createApprovalContext,
+} from "../approvals/approval-context";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
-import { approvalPayloadMatchesContext, createApprovalContext } from "../approvals/approval-context";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
-import { signerForContext, type WalletOpsDeps } from "../accounts/wallet-ops";
-import { verificationContext } from "@mc-wallet/transactions/verify";
 
 /**
  * Dependencies for the swap handler: the shared wallet-ops set plus the AVNU
@@ -167,10 +173,14 @@ const swapPrepareResponse = async (
       contractAddress: call.contractAddress,
       entrypoint: call.entrypoint,
     }));
+    const routerAddress = avnuRouterAddress(networkId);
     // Decoded first: the policy reads the verifier's per-call kind so it judges
     // the same decode the reviewer will read, and the report is discarded with
     // the build when the policy rejects it.
-    const report = verifyCalls(calls, verificationContext(account, preferences));
+    const report = verifyCalls(calls, {
+      ...verificationContext(account, preferences),
+      knownContracts: [routerAddress],
+    });
     const policy = buildPolicy(calls, report.calls, {
       // Every side of every equality below is wallet-side: the pair comes from
       // the TRACKED registry, the beneficiary from the unlocked account, the
@@ -178,7 +188,7 @@ const swapPrepareResponse = async (
       // network's pin. None of them is anything the response can influence.
       buyTokenAddress: buyToken.address,
       minBuyAmount,
-      routerAddress: avnuRouterAddress(networkId),
+      routerAddress,
       sellAmount,
       sellTokenAddress: sellToken.address,
       takerAddress: account.address,
@@ -242,6 +252,11 @@ const swapExecuteResponse = async (
     return { error: "swap preparation changed" };
   }
   try {
+    const assets = verificationContext(context.account, preferences);
+    const reviewedAssets = {
+      ...assets,
+      knownContracts: [avnuRouterAddress(context.networkId)],
+    };
     // Re-verified against the account's live trusted set immediately before the
     // batch goes out, and refused — not annotated — when the reviewed route pays
     // a recipient that mimics a saved address. Same shared policy, same wording,
@@ -251,9 +266,7 @@ const swapExecuteResponse = async (
     // account, so today nothing reaches here with a recipient the verifier can
     // read. That is exactly why it belongs — if either rule is ever widened,
     // the recipient rule must not be the thing that quietly went missing.
-    const refusal = refuseOnPoisonedRecipient(
-      verifyCalls(preparation.calls, verificationContext(context.account, preferences)),
-    );
+    const refusal = refuseOnPoisonedRecipient(verifyCalls(preparation.calls, reviewedAssets));
     if (refusal) {
       return refusal;
     }
@@ -272,7 +285,7 @@ const swapExecuteResponse = async (
     // quota, an IO fault) must not be able to lose the record of a grant that
     // is already on chain.
     await recordApproveAllowances({
-      assets: verificationContext(context.account, preferences),
+      assets,
       calls: preparation.calls,
       owner: allowanceOwner(context.account),
       store: deps.allowanceStore,

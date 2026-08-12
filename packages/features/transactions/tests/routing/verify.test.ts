@@ -284,6 +284,14 @@ describe("isLookalikeAddress", () => {
         contact.address,
       ),
     ).toBe(true);
+    // The card displays four hex digits at the front. Matching only those four
+    // must be enough to refuse, even when the next two differ.
+    expect(
+      isLookalikeAddress(
+        "0x777affffffffffffffffffffffffffffffffffffffffffffffffffffaabbcc",
+        contact.address,
+      ),
+    ).toBe(true);
   });
 
   test("accepts identical and unrelated addresses", () => {

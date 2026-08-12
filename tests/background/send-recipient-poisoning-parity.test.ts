@@ -44,7 +44,7 @@ import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../apps/extension/src/background/runtime/session";
-import { latestApprovalId } from "../support/held";
+import { latestApprovalId, reviewedApprovalFee } from "../support/held";
 import {
   CLEAN_RECIPIENT,
   POISONED_RECIPIENT,
@@ -250,9 +250,10 @@ describe("dapp invoke", () => {
       contentSender,
     );
     const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
 
     await preferencesStore.saveAddress({ address: CONTACT, label: "Friend", networkId: "SN_MAIN" });
-    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
 
     await expect(held).resolves.toEqual({ error: expect.stringContaining("closely mimics") });
     expect(submitted).toEqual([]);
@@ -269,8 +270,9 @@ describe("dapp invoke", () => {
       contentSender,
     );
     const id = await latestApprovalId(handler, extensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
 
-    await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
 
     await expect(held).resolves.toMatchObject({ ok: true });
     expect(submitted).toEqual(["invoke"]);

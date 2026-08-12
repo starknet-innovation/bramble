@@ -46,7 +46,7 @@ export type Strk20TransferAction = {
  * STRK20_INVOKE_ACTION: invoke an arbitrary contract as part of the same STRK20
  * transaction. Calldata items are FELTs or wallet-resolved placeholder strings.
  */
-export type Strk20InvokeAction = {
+type Strk20InvokeAction = {
   readonly calldata: readonly string[];
   readonly contract: string;
   readonly type: "invoke";

@@ -3,8 +3,6 @@
  * accountsChanged/networkChanged subscriptions and delegates to the content
  * bridge.
  */
-import { invalidRequestPayload } from "@mc-wallet/wallet-protocol/rpc-errors";
-import { isHexChainId } from "@mc-wallet/wallet-protocol/results";
 
 import {
   CONTENT_TARGET,
@@ -15,6 +13,8 @@ import {
   walletRpcException,
 } from "@mc-wallet/wallet-protocol/bridge";
 import { createProviderEventHub, readProviderEvent } from "@mc-wallet/wallet-protocol/events";
+import { isHexChainId } from "@mc-wallet/wallet-protocol/results";
+import { invalidRequestPayload } from "@mc-wallet/wallet-protocol/rpc-errors";
 
 type PendingRequest = {
   readonly reject: (error: Error) => void;

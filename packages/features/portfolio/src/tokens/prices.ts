@@ -23,10 +23,13 @@ import {
   fetchChartPoints,
   isFinitePriceNumber,
   normalizePriceAddress,
+  PRICE_CHART_POINT_LIMIT,
   type PriceEntry,
   type PriceOutcome,
   priceFeedPlatform,
 } from "./prices-feed";
+
+export { PRICE_CHART_POINT_LIMIT } from "./prices-feed";
 
 /**
  * Browser storage key for the fiat price cache.
@@ -259,7 +262,7 @@ export const createPriceService = ({
       ) {
         entries[key] = {
           fetchedAt: value["fetchedAt"],
-          points: value["points"].filter(isFinitePriceNumber),
+          points: value["points"].filter(isFinitePriceNumber).slice(0, PRICE_CHART_POINT_LIMIT),
         };
       }
     }

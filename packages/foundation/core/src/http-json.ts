@@ -292,7 +292,7 @@ export const fetchBoundedJson = async (
   const deadline = AbortSignal.timeout(timeoutMs);
   const expiry = expiryOf(deadline);
   const response = await Promise.race([
-    http(url, { ...UNTRUSTED_REQUEST_INIT, ...request, signal: deadline }),
+    http(url, { ...request, ...UNTRUSTED_REQUEST_INIT, signal: deadline }),
     expiry,
   ]);
   if (!response.ok) {

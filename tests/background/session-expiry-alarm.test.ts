@@ -125,6 +125,44 @@ describe("unlock session expiry alarm", () => {
     expect(alarms.cleared()).toEqual(["mc-wallet:session-expiry"]);
   });
 
+  test("still erases the plaintext mirror when alarm cancellation throws", async () => {
+    let mirrored: unknown = null;
+    const brittle: SessionAlarmsApi = {
+      clear() {
+        throw new Error("extension context invalidated");
+      },
+      create() {},
+      onAlarm: { addListener() {} },
+    };
+    const session = createUnlockSession({
+      expiryTimer: wiredTimer(brittle),
+      now: () => UNLOCKED_AT,
+      store: {
+        async clear() {
+          mirrored = null;
+        },
+        async load() {
+          return mirrored;
+        },
+        async save(entry) {
+          mirrored = entry;
+        },
+      },
+      ttlMs: TTL_MS,
+    });
+
+    session.unlock(vaultPassphrase);
+    await flushMicrotasks();
+    expect(mirrored).toEqual({
+      expiresAt: UNLOCKED_AT + TTL_MS,
+      passphrase: vaultPassphrase,
+    });
+
+    expect(() => session.lock()).not.toThrow();
+    await session.mirrorCleared();
+    expect(mirrored).toBeNull();
+  });
+
   test("ignores alarms belonging to other schedules", () => {
     let now = UNLOCKED_AT;
     const alarms = fakeAlarms();

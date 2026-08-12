@@ -70,7 +70,12 @@ export const createSessionExpiryTimer = (
   return {
     cancel() {
       pending = null;
-      void alarms.clear(SESSION_EXPIRY_ALARM).catch(() => undefined);
+      try {
+        void alarms.clear(SESSION_EXPIRY_ALARM).catch(() => undefined);
+      } catch {
+        // A structural test double can throw synchronously, and browser APIs
+        // have done so when their runtime context was already invalidated.
+      }
     },
     schedule(atMs, onElapsed) {
       pending = onElapsed;

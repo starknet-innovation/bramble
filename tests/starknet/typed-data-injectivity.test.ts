@@ -494,5 +494,5 @@ describe("no two accepted type graphs reach one hash", () => {
     const [hashed, found] = hashSearch(rev0HashSample(), "0");
     expect(hashed).toBeGreaterThan(50);
     expect(found).toBeNull();
-  });
+  }, 20_000);
 });

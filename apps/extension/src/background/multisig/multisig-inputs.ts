@@ -5,20 +5,19 @@
  * and the multisig contract enforces them again at execution time.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isAccountId } from "@mc-wallet/wallet-model/accounts";
-import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
-import {
-  isMultisigConfirmationMode,
-  type MultisigConfirmationMode,
-} from "@mc-wallet/multisig/confirmation";
-
 import {
   isMultisigCallInput,
   isMultisigEntrypoint,
   MULTISIG_LIMITS,
   type MultisigCallInput,
 } from "@mc-wallet/multisig/chain";
+import {
+  isMultisigConfirmationMode,
+  type MultisigConfirmationMode,
+} from "@mc-wallet/multisig/confirmation";
 import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import { isAccountId } from "@mc-wallet/wallet-model/accounts";
+import { isNonZeroStarkFieldElement, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 
 // Stored ids compose `<networkId>:<address>:<txId>`; with full-length felts a
 // proposal id runs to ~144 characters, so the cap must sit comfortably above.

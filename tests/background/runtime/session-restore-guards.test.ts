@@ -119,11 +119,10 @@ describe("unlock session persistence failures are swallowed", () => {
  * pending mirror write, because the latch is set by the erase's own rejection
  * handler and cannot be observed before that write settles.
  *
- * CodeQL reports the second read as "always false" and suggests deleting the
- * branch; that analysis cannot model a latch set from an async rejection
- * handler on the very queue being awaited. Deleting it lets a restore that
- * raced a failed lock rehydrate the passphrase the user just revoked. This
- * test is what makes that regression loud.
+ * The latch is set inside the queued erase before the queue tail settles, so a
+ * restore released by that tail must observe it. Deleting the post-await check
+ * lets a restore that raced a failed lock rehydrate the passphrase the user
+ * just revoked. This test makes that regression loud.
  */
 describe("unlock session restore after an unprovable erase", () => {
   // Nothing the lock writes can land: the erase rejects and so does the

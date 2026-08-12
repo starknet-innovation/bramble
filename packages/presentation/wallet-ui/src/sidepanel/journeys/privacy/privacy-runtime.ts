@@ -21,7 +21,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import { isTokenId } from "@mc-wallet/wallet-model/preferences";
 import { STRK20_LIMITS } from "@mc-wallet/wallet-protocol/strk20";
-import { isErrorResponse } from "../../../popup/responses/responses";
+import { responseError } from "../../runtime/runtime-errors";
 
 /**
  * Display-safe private balance derived from validated SDK note totals.
@@ -77,9 +77,6 @@ export type PrivacyPreparation = {
   readonly symbol: string;
   readonly tokenId: string;
 };
-
-const errorFrom = (response: unknown, fallback: string): Error =>
-  new Error(isErrorResponse(response) ? response.error : fallback);
 
 const MAX_SUMMARIES = 32;
 const MAX_SUMMARY_CHARACTERS = 256;
@@ -339,7 +336,7 @@ export const createPrivacyRuntimeClient = (
     ) {
       return response["transactionHash"];
     }
-    throw errorFrom(response, "Private transaction failed");
+    throw responseError(response, "Private transaction failed");
   },
   async loadPrivacyState(): Promise<PrivacyAccountState> {
     const response = await sendMessage({ type: "wallet.strk20State" });
@@ -347,7 +344,7 @@ export const createPrivacyRuntimeClient = (
     if (state) {
       return state;
     }
-    throw errorFrom(response, "Private balances unavailable");
+    throw responseError(response, "Private balances unavailable");
   },
   async preparePrivacyDeposit(
     tokenId: string,
@@ -364,7 +361,7 @@ export const createPrivacyRuntimeClient = (
     if (preparation) {
       return preparation;
     }
-    throw errorFrom(response, "Shielding preparation failed");
+    throw responseError(response, "Shielding preparation failed");
   },
   async preparePrivacyRegistration(): Promise<PrivacyPreparation> {
     const response = await sendMessage({ type: "wallet.strk20PrepareRegistration" });
@@ -372,7 +369,7 @@ export const createPrivacyRuntimeClient = (
     if (preparation) {
       return preparation;
     }
-    throw errorFrom(response, "Privacy activation preparation failed");
+    throw responseError(response, "Privacy activation preparation failed");
   },
   async preparePrivacyTransfer(
     tokenId: string,
@@ -394,7 +391,7 @@ export const createPrivacyRuntimeClient = (
     if (preparation) {
       return preparation;
     }
-    throw errorFrom(response, "Private send preparation failed");
+    throw responseError(response, "Private send preparation failed");
   },
   async preparePrivacyWithdraw(
     tokenId: string,
@@ -416,7 +413,7 @@ export const createPrivacyRuntimeClient = (
     if (preparation) {
       return preparation;
     }
-    throw errorFrom(response, "Unshielding preparation failed");
+    throw responseError(response, "Unshielding preparation failed");
   },
   async loadPrivacyRecipientStatus(
     tokenId: string,
@@ -436,6 +433,6 @@ export const createPrivacyRuntimeClient = (
     ) {
       return response["strk20RecipientRegistration"];
     }
-    throw errorFrom(response, "Recipient check unavailable");
+    throw responseError(response, "Recipient check unavailable");
   },
 });

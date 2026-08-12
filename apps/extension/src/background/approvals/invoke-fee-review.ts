@@ -14,18 +14,19 @@
  * skipped, so a review can never open a Ledger prompt before the user approves,
  * and every failure degrades to a retryable state rather than a guess.
  */
-import type { Call } from "starknet";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+
+import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { StarkHashSigner } from "@mc-wallet/starknet/provider";
 import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { InvokeFeeReview } from "./approvals";
-import { readStrkBalance } from "../transactions/fee-guard";
+import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { Call } from "starknet";
+import { resolveReviewFee } from "../accounts/wallet-ops";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
-import { resolveReviewFee } from "../accounts/wallet-ops";
+import { readStrkBalance } from "../transactions/fee-guard";
+import type { InvokeFeeReview } from "./approvals";
 
 /**
  * Dependencies needed to estimate the fee for a queued dapp invoke.

@@ -18,7 +18,7 @@ import { createUnlockSession } from "../../apps/extension/src/background/runtime
 import { ACCOUNT, CALL_AND_PROOF, ORIGIN } from "./spec-fixtures";
 
 /** Extension id every harness sender claims. */
-export const EXTENSION_ID = "extension-id";
+const EXTENSION_ID = "extension-id";
 /** A privileged extension-page sender (drives approve/deny + pending list). */
 export const EXTENSION_SENDER: RuntimeSender = {
   id: EXTENSION_ID,
@@ -158,7 +158,7 @@ const rpcStub = (bump: Bump): RuntimeRpc => ({
     return { overallFee: "1", unit: "FRI" };
   },
   async getDeploymentStatus() {
-    return false;
+    return true;
   },
   async getNftOwner() {
     return "0x0";

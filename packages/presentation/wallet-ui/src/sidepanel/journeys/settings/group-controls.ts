@@ -25,7 +25,7 @@ import { icon } from "../../shared/icons";
  * held in a hidden input (`data-group-icon-value`) that ./group-ui.ts updates
  * as options are pressed; `selected` seeds the initial choice.
  */
-export const groupIconPicker = (selected: AccountGroupIcon = "folder"): string => `
+const groupIconPicker = (selected: AccountGroupIcon = "folder"): string => `
   <div class="group-icon-picker" role="radiogroup" aria-label="Group icon">
     ${GROUP_ICONS.map(
       (glyph) =>

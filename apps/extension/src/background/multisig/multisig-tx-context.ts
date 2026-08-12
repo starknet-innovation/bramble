@@ -15,20 +15,39 @@
  * `{ error }` rather than throwing, except for RPC faults inside a claimed
  * submission, which release the claim and rethrow.
  */
-import type { Call } from "starknet";
-import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+
 import type { MultisigCallInput, MultisigProposalStatus } from "@mc-wallet/multisig/chain";
-import { refuseOnPoisonedRecipient, verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
-import type { MultisigProposalCall, MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
-import { withAddressBookId } from "@mc-wallet/wallet-model/preferences";
-import type { AddressBookEntry } from "@mc-wallet/settings/preferences";
+import {
+  type MultisigProposalCall,
+  type MultisigProposalRecord,
+  multisigAddressBookEntry,
+} from "@mc-wallet/multisig/repository";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
+import {
+  refuseOnPoisonedRecipient,
+  verificationContext,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
+import type { Call } from "starknet";
+import { signerForContext } from "../accounts/wallet-ops";
 import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
-import { type MultisigContext, type MultisigOpsDeps, multisigContext, multisigRpc, refreshSignerMembership } from "./multisig-ops";
+import { activeAccountContext } from "../runtime/runtime-state";
+import {
+  type MultisigContext,
+  type MultisigOpsDeps,
+  multisigContext,
+  multisigRpc,
+  refreshSignerMembership,
+} from "./multisig-ops";
 import { bindingError, requireUntrackedVerification } from "./multisig-proposal-guards";
 import { confirmedSignersAfterStatus, isProposalSubmitPending } from "./multisig-proposal-status";
-import { claimMultisigProposalOperation, type MultisigProposalOperationKind, recordClaimedMultisigSubmission, recordSubmittedActivity, releaseMultisigOperation } from "./multisig-submission";
-import { activeAccountContext } from "../runtime/runtime-state";
-import { signerForContext } from "../accounts/wallet-ops";
+import {
+  claimMultisigProposalOperation,
+  type MultisigProposalOperationKind,
+  recordClaimedMultisigSubmission,
+  recordSubmittedActivity,
+  releaseMultisigOperation,
+} from "./multisig-submission";
 
 /**
  * A stored proposal together with the signer context an action on it resolved
@@ -78,13 +97,6 @@ export const resolveMultisigTarget = async (
 // refused alongside a lookalike of a saved contact. It can only ever add a
 // refusal, never remove one, and it goes through the shared id builder so the
 // synthetic entry is spelled exactly like a stored contact.
-const watchedMultisigContact = (record: MultisigRecord): AddressBookEntry =>
-  withAddressBookId({
-    address: record.address,
-    label: record.name ?? "Watched multisig",
-    networkId: record.networkId,
-  });
-
 /**
  * The recipient policy for a multisig proposal's INNER call — the call the
  * multisig itself will run — applied before the wallet broadcasts anything that
@@ -122,7 +134,7 @@ export const refusePoisonedProposalRecipient = async (
       ],
       verificationContext(resolved.account.account, {
         ...preferences,
-        addressBook: [...preferences.addressBook, watchedMultisigContact(resolved.record)],
+        addressBook: [...preferences.addressBook, multisigAddressBookEntry(resolved.record)],
       }),
     ),
   );

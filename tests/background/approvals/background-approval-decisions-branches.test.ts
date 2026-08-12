@@ -8,6 +8,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_ORIGIN_GUARD } from "@mc-wallet/permissions/blocklist";
+import { memoryOriginHistory } from "@mc-wallet/permissions/origin-history";
 import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import {
   type ApprovalDecisionDeps,
@@ -21,6 +22,7 @@ import {
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 
 const ORIGIN = "https://dapp.example";
+const REVIEWED_FEE = { overallFee: "1", unit: "FRI" as const };
 const uuid = () => crypto.randomUUID();
 const CONTEXT = {
   accountId: "SN_MAIN:0x1",
@@ -62,6 +64,7 @@ const baseDeps = (
     allowanceStore: memoryAllowanceStore(),
     approvals,
     guard: DEFAULT_ORIGIN_GUARD,
+    originHistory: memoryOriginHistory(),
     preferencesStore: throwing("preferencesStore"),
     runtimeRpc: throwing("runtimeRpc"),
     session: createUnlockSession(),
@@ -74,9 +77,7 @@ const baseDeps = (
 // payload returns a fixed value; approve/deny/list track removal.
 const doubleQueue = (approval: PendingApproval | null, payload: unknown): ApprovalQueue =>
   ({
-    approve: () => approval,
     claim: () => (approval ? { approval, payload: payload as never } : null),
-    deny: () => approval,
     get: () => approval,
     list: () => [],
     payload: () => payload,
@@ -92,6 +93,11 @@ const doubleQueue = (approval: PendingApproval | null, payload: unknown): Approv
   }) as unknown as ApprovalQueue;
 
 const approve = (id: string) => ({ id, type: "wallet.approveOrigin" as const });
+const approveInvoke = (id: string) => ({
+  id,
+  reviewedFee: REVIEWED_FEE,
+  type: "wallet.approveOrigin" as const,
+});
 
 describe("handleApprovalDecision invalid input / not-found", () => {
   test("rejects a malformed approve request", async () => {
@@ -143,10 +149,25 @@ describe("handleApprovalDecision missing-payload guards", () => {
       const id = uuid();
       // watch-asset reaches its own missing-token guard (token undefined);
       // the others reach the missing-payload guard.
-      const approval = { id, kind, origin: ORIGIN } as PendingApproval;
+      const approval = {
+        id,
+        kind,
+        origin: ORIGIN,
+        ...(kind === "invoke"
+          ? {
+              fee: REVIEWED_FEE,
+              feeEstimateFailed: false,
+              feeEstimatePending: false,
+            }
+          : {}),
+      } as PendingApproval;
       const deps = baseDeps(doubleQueue(approval, payload));
       await expect(
-        handleApprovalDecision(deps, "wallet.approveOrigin", approve(id)),
+        handleApprovalDecision(
+          deps,
+          "wallet.approveOrigin",
+          kind === "invoke" ? approveInvoke(id) : approve(id),
+        ),
       ).resolves.toEqual({ error: "approval not found" });
     });
   }
@@ -163,7 +184,7 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
     const approvals = createApprovalQueue();
     const { id } = approvals.requestInvoke({
       fee: {
-        fee: null,
+        fee: REVIEWED_FEE,
         feeAffordability: "unknown",
         feeEstimateFailed: false,
         feeEstimatePending: false,
@@ -176,7 +197,7 @@ describe("handleApprovalDecision error-result passthrough (locked session)", () 
       summaries: ["Transfer"],
     });
     await expect(
-      handleApprovalDecision(lockedDeps(approvals), "wallet.approveOrigin", approve(id)),
+      handleApprovalDecision(lockedDeps(approvals), "wallet.approveOrigin", approveInvoke(id)),
     ).resolves.toEqual({ error: "wallet locked" });
   });
 

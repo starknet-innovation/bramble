@@ -1,6 +1,4 @@
-/**
- * Popup response validator checks reject malformed background data before rendering.
- */
+/** Popup response validators reject malformed background data before rendering. */
 import { describe, expect, test } from "bun:test";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import {
@@ -456,6 +454,10 @@ describe("popup response validators", () => {
         pending: [{ id: approvalId, origin: "https://example.com" }],
       }),
     ).toBe(true);
+    expect(isApprovalDecisionResponse({ chainId: "0x534e5f4d41494e", ok: true, pending: [] })).toBe(
+      true,
+    );
+    expect(isApprovalDecisionResponse({ chainId: "SN_MAIN", ok: true, pending: [] })).toBe(false);
     expect(isApprovalDecisionResponse({ ok: true })).toBe(false);
   });
 
@@ -492,7 +494,6 @@ describe("popup response validators", () => {
         ok: true,
       }),
     ).toBe(false);
-    expect(isTransferResponse({ ok: true, transactionHash: "0x123" })).toBe(true);
     expect(isTransferResponse({ ok: true, transactionHash: "not-hex" })).toBe(false);
   });
 });

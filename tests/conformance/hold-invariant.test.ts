@@ -10,7 +10,12 @@ import { describe, expect, test } from "bun:test";
 import type { ProviderMethod, RuntimeMessage } from "@mc-wallet/wallet-protocol/bridge";
 import { toProviderPayload } from "@mc-wallet/wallet-protocol/bridge";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
-import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
+import {
+  flushHeld,
+  latestApprovalId,
+  reviewedApprovalFee,
+  waitForPendingApprovals,
+} from "../support/held";
 import {
   buildHarness,
   CONNECT_ORIGIN,
@@ -74,7 +79,14 @@ describe("state-change hold invariant", () => {
         expect(await waitForPendingApprovals(handler, EXTENSION_SENDER)).toHaveLength(1);
 
         const id = await latestApprovalId(handler, EXTENSION_SENDER);
-        await handler({ id, type: "wallet.approveOrigin" }, EXTENSION_SENDER);
+        const reviewedFee =
+          entry.method === "wallet_addInvokeTransaction"
+            ? await reviewedApprovalFee(handler, EXTENSION_SENDER, id)
+            : undefined;
+        await handler(
+          { id, ...(reviewedFee ? { reviewedFee } : {}), type: "wallet.approveOrigin" },
+          EXTENSION_SENDER,
+        );
 
         const result = (await held) as Record<string, unknown>;
         expect("error" in result).toBe(false);

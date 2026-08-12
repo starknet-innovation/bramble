@@ -335,6 +335,9 @@ describe("swap operations", () => {
     expect("swapPreparation" in prepared ? prepared.swapPreparation.minBuyAmount : "").toBe(
       "12.4375",
     );
+    expect(
+      "swapPreparation" in prepared ? prepared.swapPreparation.flags.map((flag) => flag.code) : [],
+    ).not.toContain("unknown-contract");
     const response = await handler({ preparationId, type: "wallet.swapExecute" }, extensionSender);
     expect(response).toEqual({ ok: true, transactionHash: "0x5aa9" });
     expect(buildRequests[0]).toMatchObject({
@@ -373,7 +376,7 @@ describe("swap operations", () => {
     expect(submitted).toHaveLength(0);
   });
 
-  test("the approve-only-sell-token policy covers both increase_allowance spellings", async () => {
+  test("rejects both additive allowance spellings regardless of token", async () => {
     // Which selectors grant spend is defined once, by isApproveEntrypoint in
     // @mc-wallet/transactions/verify-selectors. If this gate kept its own list, a build
     // could route an approval onto another token under a spelling only the
@@ -389,7 +392,7 @@ describe("swap operations", () => {
       const { handler, submitted } = makeHarness({ build: rogue });
 
       await expect(prepareSwap(handler)).resolves.toEqual({
-        error: "swap build touched an unexpected token approval",
+        error: "swap build requested an additive token allowance",
       });
       expect(submitted).toHaveLength(0);
     }

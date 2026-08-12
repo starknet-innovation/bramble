@@ -33,7 +33,7 @@ const isValidTtl = (ttlMs: number): boolean =>
 /**
  * Persisted unlock session snapshot.
  */
-export type UnlockSessionState = {
+type UnlockSessionState = {
   readonly expiresAt: number;
   readonly passphrase: string;
 };
@@ -44,7 +44,7 @@ export type UnlockSessionState = {
  * a later MV3 worker reading the same session-storage entry stays locked
  * instead of resurrecting a session the user revoked.
  */
-export type UnlockSessionRevocation = { readonly revoked: true };
+type UnlockSessionRevocation = { readonly revoked: true };
 
 /**
  * Everything the mirror may hold: a live snapshot, or the revocation marker a
@@ -117,8 +117,8 @@ export type UnlockSession = PassiveUnlockSession & {
 };
 
 /**
- * The unlock that authorized an operation: the session generation and the
- * passphrase that were live when it started, plus the one predicate that says
+ * The unlock that authorized an operation: the session generation that was
+ * live when it started, plus the one predicate that says
  * whether that unlock is still the current one. This is the single definition
  * of "the session I was authorized under has not moved" — every long-running
  * background operation re-checks it before committing a side effect instead of
@@ -132,7 +132,6 @@ export type SessionAuthorization = {
    * a locked session is permanently false, so callers fail closed.
    */
   readonly isCurrent: () => boolean;
-  readonly passphrase: string | null;
 };
 
 const authorizationFor = (
@@ -145,7 +144,6 @@ const authorizationFor = (
     passphrase !== null &&
     session.generation() === generation &&
     session.peekPassphrase() === passphrase,
-  passphrase,
 });
 
 /**
@@ -210,7 +208,7 @@ const eraseMirror = async (mirror: UnlockSessionStore): Promise<void> => {
  * the explicit lock the user is waiting on. The promise is already handled;
  * a listener that ignores it cannot cause an unhandled rejection.
  */
-export type UnlockSessionClearListener = (mirrorCleared: Promise<void>) => void;
+type UnlockSessionClearListener = (mirrorCleared: Promise<void>) => void;
 
 /**
  * Everything the unlock session is wired to, by name. Collaborators are keyed
@@ -310,9 +308,15 @@ export const createUnlockSession = ({
       mirrorClear = Promise.resolve();
       return;
     }
-    mirrorClear = enqueueMirrorWrite(() => eraseMirror(mirror)).catch((error: unknown) => {
-      mirrorStale = true;
-      throw error;
+    mirrorClear = enqueueMirrorWrite(async () => {
+      try {
+        await eraseMirror(mirror);
+      } catch (error) {
+        // Set the latch inside the queued operation, before the queue tail can
+        // settle and release a racing restore().
+        mirrorStale = true;
+        throw error;
+      }
     });
     // The outcome is surfaced through `mirrorCleared()` and to `onClear`; this
     // catch exists only so an unobserved failure never escalates to an
@@ -325,8 +329,10 @@ export const createUnlockSession = ({
     passphrase = null;
     persistedAt = 0;
     generationCounter += 1;
-    expiryTimer?.cancel();
     clearMirror();
+    // Timer teardown is best-effort. Queue the security-critical mirror erase
+    // first so a broken runtime scheduler cannot leave plaintext behind.
+    expiryTimer?.cancel();
     // Drop any derived-key cache (e.g. the vault AES key) so locking or expiry
     // leaves no usable key material behind in worker memory, and hand over the
     // erase outcome so an expiry that could not clear the mirror is as visible

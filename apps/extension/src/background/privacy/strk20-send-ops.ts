@@ -8,21 +8,21 @@
  * bridge.
  */
 
-import { activeAccountContext } from "../runtime/runtime-state";
-import {
-  canonicalFelt,
-  isNonZeroStarkFieldElement,
-  sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import { isStrk20Felt } from "@mc-wallet/wallet-protocol/strk20";
-import { parseTokenAmount } from "@mc-wallet/starknet/rpc";
 import {
   quoteStrk20Actions,
   readStrk20Balances,
   readStrk20RegistrationStatus,
   summarizeStrk20Plan,
 } from "@mc-wallet/privacy/service";
+import { parseTokenAmount } from "@mc-wallet/starknet/rpc";
+import {
+  canonicalFelt,
+  isNonZeroStarkFieldElement,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
+import { isStrk20Felt } from "@mc-wallet/wallet-protocol/strk20";
 import { createApprovalContext } from "../approvals/approval-context";
+import { activeAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 
 import { strk20ServiceForRuntime } from "./strk20-account-context";

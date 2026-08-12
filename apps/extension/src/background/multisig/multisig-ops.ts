@@ -8,15 +8,7 @@
  * multisig operations live in multisig-tx-ops.ts.
  */
 
-
 import { multisigCallMatchesId } from "@mc-wallet/multisig/chain";
-import {
-  canonicalFelt,
-  STARKNET_NETWORKS,
-  type StarknetNetworkId,
-  sameFelt,
-} from "@mc-wallet/wallet-model/networks";
-import type { MultisigSyncWarning } from "@mc-wallet/multisig/sync";
 import {
   type MultisigProposalRecord,
   type MultisigRecord,
@@ -24,7 +16,22 @@ import {
   multisigId,
   multisigProposalId,
 } from "@mc-wallet/multisig/repository";
+import type { MultisigSyncWarning } from "@mc-wallet/multisig/sync";
+import {
+  canonicalFelt,
+  STARKNET_NETWORKS,
+  type StarknetNetworkId,
+  sameFelt,
+} from "@mc-wallet/wallet-model/networks";
+import type { WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
+import {
+  type ActiveAccountContext,
+  activeAccountContext,
+  networkRpcUrls,
+  observedAccountContext,
+} from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
 import {
   type ProposeMultisigInput,
   readAddMultisigInput,
@@ -32,10 +39,6 @@ import {
   readTrackMultisigProposalInput,
 } from "./multisig-inputs";
 import { refreshMultisigProposals } from "./multisig-proposal-status";
-import { activeAccountContext, networkRpcUrls, type ActiveAccountContext, observedAccountContext } from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { WalletOpsDeps } from "../accounts/wallet-ops";
-
 
 const MAX_NEW_PROPOSALS_PER_REFRESH = 20;
 
@@ -474,6 +477,6 @@ export const handleMultisigOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(OPS_HANDLERS, messageType) ? OPS_HANDLERS[messageType] : undefined;
   return handler ? handler(deps, message) : null;
 };

@@ -7,10 +7,10 @@
  * on one must never wedge the other. Within one `(signer, multisig, txId)` the
  * claim is kind-blind instead — an execute and a revoke broadcast from the same
  * stale chain read contradict each other and both pay a fee, so the second one
- * waits until the first settles (and is admitted again once it fails). That
- * kind-blindness covers broadcasts only: a claim still carrying no transaction
- * hash has nothing that can ever release it, so it must not be allowed to strand
- * the recovery revoke (EXT-M4) it does not conflict with.
+ * waits until the first settles (and is admitted again once it fails). A
+ * missing transaction hash is still kind-blind: it may mean the worker died
+ * after broadcast but before bookkeeping, and treating that ambiguity as proof
+ * that nothing reached the wire reopens the race.
  */
 import { describe, expect, test } from "bun:test";
 import {
@@ -199,7 +199,7 @@ describe("multisig proposal claim scope", () => {
     ]);
   });
 
-  test("a claim that never reached the wire does not strand the opposite action", async () => {
+  test("a hashless claim blocks the opposite action because broadcast is ambiguous", async () => {
     const { handler, invokeCalls, multisigStore, records } = await seed({
       addresses: [HARNESS_MULTISIG],
       confirmedBySigner: true,
@@ -207,9 +207,9 @@ describe("multisig proposal claim scope", () => {
     const ownerId = records[0]?.id ?? "";
     await orphanClaim(multisigStore, "confirm", ownerId);
 
-    // No broadcast contradicts this revoke — there is no confirm transaction,
-    // only a reservation whose outcome was never written back — and no code path
-    // will ever release that reservation, so blocking here would be permanent.
+    // A hashless claim is indistinguishable from a successful broadcast whose
+    // bookkeeping write was interrupted. Fail closed rather than signing a
+    // contradictory action from stale chain state.
     await expect(
       handler(
         {
@@ -218,10 +218,10 @@ describe("multisig proposal claim scope", () => {
         },
         harnessExtensionSender,
       ),
-    ).resolves.toMatchObject({ ok: true });
-    expect(invokeCalls.flat()).toMatchObject([
-      { calldata: [SHARED_TX_ID], entrypoint: "revoke_confirmation" },
-    ]);
+    ).resolves.toEqual({
+      error: "this signer already has a proposal action in progress — wait for it to settle",
+    });
+    expect(invokeCalls).toEqual([]);
   });
 
   test("a claim that never reached the wire still deduplicates its own kind", async () => {
@@ -250,5 +250,56 @@ describe("multisig proposal claim scope", () => {
       error: "this signer already has a proposal action in progress — wait for it to settle",
     });
     expect(invokeCalls.flat()).toEqual([]);
+  });
+
+  test("a settled inverse action does not strand the next action", async () => {
+    const activity = memoryActivityLog(() => 1);
+    const { handler, invokeCalls, records } = await seed({
+      activity,
+      addresses: [HARNESS_MULTISIG],
+      confirmedBySigner: true,
+      state: "confirmed",
+    });
+    const proposalId = multisigProposalId(records[0]?.id ?? "", SHARED_TX_ID) ?? "";
+
+    await expect(
+      handler({ proposalId, type: "wallet.executeMultisigProposal" }, harnessExtensionSender),
+    ).resolves.toMatchObject({ ok: true });
+    await activity.updateStatuses(
+      { [HARNESS_SUBMIT_HASH]: { status: "accepted" } },
+      { accountId: records[0]?.id ?? "", networkId: "SN_MAIN" },
+    );
+
+    await expect(
+      handler({ proposalId, type: "wallet.revokeMultisigConfirmation" }, harnessExtensionSender),
+    ).resolves.toMatchObject({ ok: true });
+    expect(invokeCalls.flat()).toMatchObject([
+      { entrypoint: "execute_transaction" },
+      { entrypoint: "revoke_confirmation" },
+    ]);
+  });
+
+  test("concurrent execute and revoke atomically admit exactly one broadcast", async () => {
+    const { handler, invokeCalls, records } = await seed({
+      addresses: [HARNESS_MULTISIG],
+      confirmedBySigner: true,
+      state: "confirmed",
+    });
+    const proposalId = multisigProposalId(records[0]?.id ?? "", SHARED_TX_ID) ?? "";
+
+    const results = await Promise.all([
+      handler({ proposalId, type: "wallet.executeMultisigProposal" }, harnessExtensionSender),
+      handler({ proposalId, type: "wallet.revokeMultisigConfirmation" }, harnessExtensionSender),
+    ]);
+
+    expect(results.filter((result) => "ok" in result)).toHaveLength(1);
+    expect(results.filter((result) => "error" in result)).toEqual([
+      { error: expect.stringContaining("proposal action in progress") },
+    ]);
+    expect(invokeCalls).toHaveLength(1);
+    const entrypoint = (invokeCalls[0]?.[0] as { readonly entrypoint?: string } | undefined)
+      ?.entrypoint;
+    expect(entrypoint).toBeDefined();
+    expect(["execute_transaction", "revoke_confirmation"]).toContain(entrypoint ?? "");
   });
 });

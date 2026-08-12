@@ -7,6 +7,7 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import type { LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
 import { isLedgerAccountIndex } from "@mc-wallet/wallet-model/ledger-path";
 import {
   isNonZeroStarkFieldElement,
@@ -14,7 +15,6 @@ import {
   isStarknetNetworkId,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
-import type { LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
 
 const isFeltString = (value: unknown): value is string =>
   typeof value === "string" && isStarkFieldElement(value);

@@ -44,7 +44,7 @@ const acknowledgeMainnetIfPresent = async (sidepanel: Page): Promise<void> => {
 /**
  * Fills backup-verification inputs using the same positions as onboarding UI.
  */
-export const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> => {
+const fillBackupVerify = async (sidepanel: Page, phrase: string): Promise<void> => {
   const words = phraseWords(phrase);
   await expect(sidepanel.getByRole("heading", { name: "Confirm your backup" })).toBeVisible();
   for (const [index, position] of BACKUP_VERIFY_POSITIONS.entries()) {
@@ -105,22 +105,6 @@ export const importWalletFromPhrase = async (sidepanel: Page, mnemonic: string):
   if (!new URL(sidepanel.url()).pathname.endsWith("/onboarding.html")) {
     await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible();
   }
-};
-
-/**
- * Unlocks a locked wallet in the side panel.
- */
-export const unlockWallet = async (sidepanel: Page): Promise<void> => {
-  await expect(sidepanel.getByRole("heading", { name: "Welcome back" })).toBeVisible();
-  await expect(async () => {
-    const passphraseInput = sidepanel.locator('input[name="vaultPassphrase"]');
-    await passphraseInput.fill(VAULT_PASSPHRASE);
-    await expect(passphraseInput).toHaveValue(VAULT_PASSPHRASE);
-    await sidepanel.getByRole("button", { name: "Unlock" }).click();
-    await expect(sidepanel.getByRole("button", { name: "Lock wallet" })).toBeVisible({
-      timeout: 2_000,
-    });
-  }).toPass({ timeout: 10_000 });
 };
 
 /**

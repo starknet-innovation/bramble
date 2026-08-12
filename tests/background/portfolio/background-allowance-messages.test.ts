@@ -10,7 +10,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
-import { flushHeld, latestApprovalId } from "../../support/held";
+import { flushHeld, latestApprovalId, reviewedApprovalFee } from "../../support/held";
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -105,7 +105,8 @@ const submitApprove = async (handler: ReturnType<typeof makeHarness>["handler"])
   );
   await flushHeld();
   const id = await latestApprovalId(handler, extensionSender);
-  await handler({ id, type: "wallet.approveOrigin" }, extensionSender);
+  const reviewedFee = await reviewedApprovalFee(handler, extensionSender, id);
+  await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, extensionSender);
   return held;
 };
 

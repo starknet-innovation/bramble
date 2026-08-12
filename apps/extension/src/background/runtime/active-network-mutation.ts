@@ -1,9 +1,8 @@
 /** Fail-closed coordination for preference-first encrypted-vault mutations. */
 import { WalletError } from "@mc-wallet/core/errors";
-import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import { heldSessionAuthorization, type UnlockSession } from "./session";
-
 
 /**
  * Commits a network preference and its matching vault mutation under one

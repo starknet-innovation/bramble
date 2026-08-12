@@ -17,8 +17,8 @@
  */
 
 import { bytesToHex } from "@mc-wallet/core/hex";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import type { Strk20AccountContext } from "@mc-wallet/privacy/service";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { Strk20SubaccountCommitmentResponse } from "./runtime-strk20-types";
 import { strk20ServiceForRuntime } from "./strk20-account-context";

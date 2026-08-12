@@ -174,7 +174,7 @@ const confirmationReview = (
   const canConfirmAndExecute = completesQuorum && proposal.call !== null;
   const initialMode = canConfirmAndExecute ? "confirm-and-execute" : "confirm-only";
   const effect = proposal.call
-    ? multisigProposalEffect(proposal.call, selected, preferences)
+    ? multisigProposalEffect(proposal.call, selected, preferences, record)
     : null;
   const network = STARKNET_NETWORKS[record.networkId];
   return `<section class="multisig-review-sheet" data-ms-confirm-panel="${escapeHtml(proposal.id)}" data-ms-confirm-mode="${initialMode}" role="dialog" aria-modal="true" aria-labelledby="confirm-${escapeHtml(proposal.id)}-title" tabindex="-1" hidden>
@@ -355,7 +355,9 @@ const proposalRow = (
   account: AccountRef | null,
   preferences: WalletPreferences | null,
 ): string => {
-  const effect = proposal.call ? multisigProposalEffect(proposal.call, account, preferences) : null;
+  const effect = proposal.call
+    ? multisigProposalEffect(proposal.call, account, preferences, record)
+    : null;
   return `<li class="allowance-row proposal-row">
     <div class="proposal-copy">
       <div class="proposal-head">

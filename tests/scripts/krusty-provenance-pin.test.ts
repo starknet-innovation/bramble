@@ -20,13 +20,14 @@
  * checkout, which offline sandboxes do not have.
  */
 import { describe, expect, test } from "bun:test";
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import {
   type VendorProvenance,
   vendorPinFailures,
   vendorProvenanceFailures,
   vendorRevisionPin,
 } from "../../scripts/vendor-pin-policy";
+import { readWorkflowSources } from "../../scripts/workflow-inventory";
 
 const revision = "fb0b274dd654f69a828dee653576416f5a650a01";
 const otherRevision = "0123456789abcdef0123456789abcdef01234567";
@@ -182,11 +183,8 @@ describe("the Krusty build pin", () => {
     const source = await readFile(vendorScript, "utf8");
     const toolchain = source.match(/const KRUSTY_KMS_TOOLCHAIN = "([\d.]+)";/)?.[1];
     expect(toolchain).toMatch(/^\d+\.\d+\.\d+$/);
-    const directory = ".github/workflows";
-    const workflows = (await readdir(directory)).filter((name) => name.endsWith(".yml"));
     const vendoring: string[] = [];
-    for (const workflow of workflows) {
-      const yaml = await readFile(`${directory}/${workflow}`, "utf8");
+    for (const [workflow, yaml] of Object.entries(await readWorkflowSources())) {
       if (yaml.includes("bun run vendor:krusty")) {
         vendoring.push(workflow);
         expect({ workflow, pinned: yaml.includes(`toolchain: ${toolchain}`) }).toEqual({

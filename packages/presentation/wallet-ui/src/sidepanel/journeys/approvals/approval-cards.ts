@@ -245,9 +245,9 @@ const watchAssetCard = (approval: PendingApproval): string => {
 // so the decoded calls and combined risk-flag/insight warnings stay compact.
 // The fee section renders through the shared `reviewFeeSection` — the same
 // renderer the Send review uses — so the two surfaces cannot drift (issue 189). The
-// retry button targets this approval by data attribute; a failed estimate
-// never disables Approve (deliberate divergence from Send, so a flaky RPC
-// cannot block dApp transactions).
+// retry button targets this approval by data attribute. A failed or absent fee
+// estimate disables Approve exactly as Send does: without a displayed amount
+// there is no fee ceiling for the user's consent to bind.
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -270,7 +270,10 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
     ${decisionRow(
       approval,
       "Approve",
-      status.locked || approval.feeEstimatePending === true,
+      status.locked ||
+        approval.feeEstimatePending === true ||
+        approval.feeEstimateFailed === true ||
+        approval.fee == null,
       approval.fee ?? undefined,
     )}
   </li>`;

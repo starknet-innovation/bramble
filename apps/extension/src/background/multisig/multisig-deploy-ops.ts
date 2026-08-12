@@ -5,7 +5,6 @@
  * fail closed across panels and service-worker restarts.
  */
 
-import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import {
   buildMultisigDeployCall,
   MULTISIG_CLASS_HASH,
@@ -13,9 +12,21 @@ import {
   predictMultisigAddress,
   requireMultisigContractClass,
 } from "@mc-wallet/multisig/deploy";
+import {
+  type MultisigRecord,
+  multisigId,
+  multisigOperationId,
+} from "@mc-wallet/multisig/repository";
 import { isUnresolvedActivityStatus } from "@mc-wallet/transactions/activity";
-import { type MultisigRecord, multisigId, multisigOperationId } from "@mc-wallet/multisig/repository";
+import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { signerForContext } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
+import {
+  activeAccountContext,
+  networkRpcUrls,
+  observedAccountContext,
+} from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
 import { readDeployMultisigInput } from "./multisig-inputs";
 import { type MultisigOpsDeps, multisigRpc } from "./multisig-ops";
 import {
@@ -24,10 +35,6 @@ import {
   recordClaimedMultisigSubmission,
   releaseMultisigOperation,
 } from "./multisig-submission";
-import { activeAccountContext, networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import { signerForContext } from "../accounts/wallet-ops";
-
 
 type MultisigDeployHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
@@ -257,6 +264,8 @@ export const handleMultisigDeployOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = DEPLOY_HANDLERS[messageType];
+  const handler = Object.hasOwn(DEPLOY_HANDLERS, messageType)
+    ? DEPLOY_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message) : null;
 };

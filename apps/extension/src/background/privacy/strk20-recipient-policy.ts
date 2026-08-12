@@ -15,11 +15,15 @@
  * recipient in the batch mimics an address this account trusts.
  */
 
-import type { Call } from "starknet";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
 import { strk20CallToInvoke } from "@mc-wallet/privacy/service";
-import { refuseOnPoisonedRecipient, verificationContext, verifyCalls } from "@mc-wallet/transactions/verify";
+import {
+  refuseOnPoisonedRecipient,
+  verificationContext,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import type { Call } from "starknet";
 
 /**
  * The preferences the trusted set is built from, taken from the shared
@@ -50,13 +54,9 @@ const recipientProbeCall = (target: Strk20RecipientTarget): Call => ({
 /**
  * Every call a batch of privacy actions is judged on, in batch order.
  *
- * A flat `invoke` action contributes none, and that is a policy decision rather
- * than an omission: its shape is `{type, contract, calldata}` with NO entry
- * point, so there is no selector to decode and no argument position that is
- * known to hold a recipient. The public dapp route cannot express such a call
- * either — `readProviderInvoke` rejects a call without an entrypoint — so
- * excluding it forfeits no parity, while reading a recipient out of an
- * unattributed calldata slot would be a guess, and this policy never guesses.
+ * A flat `invoke` has no entry point, so every concrete calldata felt is checked
+ * conservatively as a possible recipient. That can refuse an amount crafted to
+ * look like a saved address, but it cannot let an opaque call hide a recipient.
  *
  * A sixth action variant cannot slip past silently: the final branch narrows to
  * the recipient-bearing variants and reads `recipient`/`token` off them, so any
@@ -73,7 +73,9 @@ const strk20PolicyCalls = (actions: readonly Strk20Action[]): readonly Call[] =>
       return action.calls.map(strk20CallToInvoke);
     }
     if (action.type === "invoke") {
-      return [];
+      return action.calldata.map((recipient) =>
+        recipientProbeCall({ recipient, token: action.contract }),
+      );
     }
     return action.recipient === undefined
       ? []

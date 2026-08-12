@@ -4,11 +4,10 @@
  * payload that was reviewed.
  */
 import { WalletError } from "@mc-wallet/core/errors";
+import { bytesToHex } from "@mc-wallet/core/hex";
 import { JSON_BUDGETS, type Json, normalizeFeltBigints } from "@mc-wallet/core/json";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { bytesToHex } from "@mc-wallet/core/hex";
-
 
 /**
  * Exact wallet and payload context attached to a security-sensitive approval.

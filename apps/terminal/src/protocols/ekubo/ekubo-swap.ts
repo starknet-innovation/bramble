@@ -21,7 +21,7 @@ import { EKUBO_ADDRESSES } from "../constants";
 /**
  * Basis-points denominator (100% = 10_000 bps).
  */
-export const BPS_DENOMINATOR = 10_000n;
+const BPS_DENOMINATOR = 10_000n;
 
 /**
  * Default swap slippage tolerance (0.5%) applied when a caller omits one.
@@ -39,11 +39,11 @@ export const EKUBO_SKIP_AHEAD = "0";
  * when reading a quote and as clamps for the slippage-derived swap limit.
  * ⚠️ VERIFY against the deployed core contract constants.
  */
-export const MIN_SQRT_RATIO = 18446748437148339061n;
+const MIN_SQRT_RATIO = 18446748437148339061n;
 /**
  * Upper Ekubo sqrt-ratio bound (see MIN_SQRT_RATIO).
  */
-export const MAX_SQRT_RATIO = 6277100250585753475930931601400621808602321654880405518632n;
+const MAX_SQRT_RATIO = 6277100250585753475930931601400621808602321654880405518632n;
 
 /**
  * A single Ekubo pool key. token0 < token1 numerically; `fee` and `tickSpacing`

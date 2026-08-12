@@ -10,7 +10,8 @@
 import { isRecord } from "@mc-wallet/core/json";
 import type { KeyValueStore } from "@mc-wallet/store/kv";
 import { serializeStoreMutations } from "@mc-wallet/store/mutation";
-import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { isStarkFieldElement, sameFelt } from "@mc-wallet/wallet-model/networks";
+import { type AddressBookEntry, withAddressBookId } from "@mc-wallet/wallet-model/preferences";
 import {
   isMultisigOperationRecord,
   isMultisigProposalRecord,
@@ -54,10 +55,28 @@ const MAX_OPERATIONS = 100;
 const MAX_PROPOSALS = 100;
 
 /**
+ * Represents a watched multisig in the shared trusted-address set used by
+ * transaction review and recipient-poisoning enforcement.
+ */
+export const multisigAddressBookEntry = (record: MultisigRecord): AddressBookEntry =>
+  withAddressBookId({
+    address: record.address,
+    label: record.name ?? "Watched multisig",
+    networkId: record.networkId,
+  });
+
+/**
  * Multisig registry surface used by background message handling.
  */
 export type MultisigStore = {
   readonly claimOperation: (
+    record: MultisigOperationRecord,
+  ) => Promise<"claimed" | "exists" | "full">;
+  /**
+   * Atomically claims a proposal action against every conflicting action kind
+   * for the same signer, multisig, and transaction id.
+   */
+  readonly claimProposalOperation: (
     record: MultisigOperationRecord,
   ) => Promise<"claimed" | "exists" | "full">;
   readonly getOperation: (id: string) => Promise<MultisigOperationRecord | null>;
@@ -177,6 +196,41 @@ const removeMultisigIn = (shape: StoredShape, id: string): StoredShape => ({
   proposals: shape.proposals.filter((stored) => stored.multisigId !== id),
 });
 
+type OperationClaimResult = {
+  readonly result: "claimed" | "exists" | "full";
+  readonly shape: StoredShape;
+};
+
+const isProposalOperation = (record: MultisigOperationRecord): boolean =>
+  record.kind === "confirm" || record.kind === "execute" || record.kind === "revoke";
+
+const conflictsWithProposalClaim = (
+  stored: MultisigOperationRecord,
+  record: MultisigOperationRecord,
+): boolean =>
+  isProposalOperation(stored) &&
+  stored.accountId === record.accountId &&
+  stored.networkId === record.networkId &&
+  (stored.multisigId === undefined || stored.multisigId === record.multisigId) &&
+  sameFelt(stored.target, record.target);
+
+const claimOperationIn = (
+  shape: StoredShape,
+  record: MultisigOperationRecord,
+  conflicts: (stored: MultisigOperationRecord) => boolean,
+): OperationClaimResult => {
+  if (!isMultisigOperationRecord(record) || shape.operations.some(conflicts)) {
+    return { result: "exists", shape };
+  }
+  if (shape.operations.length >= MAX_OPERATIONS) {
+    return { result: "full", shape };
+  }
+  return {
+    result: "claimed",
+    shape: { ...shape, operations: [...shape.operations, record] },
+  };
+};
+
 /**
  * Creates the persistent multisig registry.
  */
@@ -184,18 +238,25 @@ export const createMultisigStore = ({ store }: { readonly store: KeyValueStore }
   serializeStoreMutations<MultisigStore>(
     {
       async claimOperation(record) {
-        if (!isMultisigOperationRecord(record)) {
+        const shape = await readShape(store);
+        const claim = claimOperationIn(shape, record, (stored) => stored.id === record.id);
+        if (claim.result === "claimed") {
+          await writeShape(store, claim.shape);
+        }
+        return claim.result;
+      },
+      async claimProposalOperation(record) {
+        if (!isProposalOperation(record) || record.multisigId === undefined) {
           return "exists";
         }
         const shape = await readShape(store);
-        if (shape.operations.some((stored) => stored.id === record.id)) {
-          return "exists";
+        const claim = claimOperationIn(shape, record, (stored) =>
+          conflictsWithProposalClaim(stored, record),
+        );
+        if (claim.result === "claimed") {
+          await writeShape(store, claim.shape);
         }
-        if (shape.operations.length >= MAX_OPERATIONS) {
-          return "full";
-        }
-        await writeShape(store, { ...shape, operations: [...shape.operations, record] });
-        return "claimed";
+        return claim.result;
       },
       async getOperation(id) {
         return (await readShape(store)).operations.find((record) => record.id === id) ?? null;
@@ -254,17 +315,19 @@ export const memoryMultisigStore = (): MultisigStore => {
   let shape: StoredShape = { multisigs: [], operations: [], proposals: [] };
   return {
     async claimOperation(record) {
-      if (
-        !isMultisigOperationRecord(record) ||
-        shape.operations.some((stored) => stored.id === record.id)
-      ) {
+      const claim = claimOperationIn(shape, record, (stored) => stored.id === record.id);
+      shape = claim.shape;
+      return claim.result;
+    },
+    async claimProposalOperation(record) {
+      if (!isProposalOperation(record) || record.multisigId === undefined) {
         return "exists";
       }
-      if (shape.operations.length >= MAX_OPERATIONS) {
-        return "full";
-      }
-      shape = { ...shape, operations: [...shape.operations, record] };
-      return "claimed";
+      const claim = claimOperationIn(shape, record, (stored) =>
+        conflictsWithProposalClaim(stored, record),
+      );
+      shape = claim.shape;
+      return claim.result;
     },
     async getOperation(id) {
       return shape.operations.find((record) => record.id === id) ?? null;

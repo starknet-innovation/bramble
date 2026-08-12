@@ -24,8 +24,8 @@ import { hash } from "starknet";
 
 /**
  * A uint256 amount at or above this threshold is treated as an effectively
- * unlimited allowance: any value that sets the high 128-bit word is far beyond
- * a real spend cap. The one shared cut-off — the pre-sign verifier's
+ * unlimited allowance: the conventional max-u128 sentinel, or any value that
+ * sets the high 128-bit word, is far beyond a real spend cap. The one shared cut-off — the pre-sign verifier's
  * unlimited-approval risk flag (@mc-wallet/transactions/verify) and the
  * allowance manager's display both read it here, so a transaction flagged
  * before signing is the same one the manager later lists as unlimited. Do not
@@ -33,7 +33,7 @@ import { hash } from "starknet";
  * `UINT128_LIMIT` in @mc-wallet/wallet-model/networks, the same bound the
  * shared uint256 join holds each limb to.
  */
-export const UNLIMITED_ALLOWANCE_THRESHOLD = UINT128_LIMIT;
+export const UNLIMITED_ALLOWANCE_THRESHOLD = UINT128_LIMIT - 1n;
 
 /**
  * The Starknet event selector emitted by an ERC20 `approve`.

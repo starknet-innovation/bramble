@@ -5,6 +5,11 @@
  */
 import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import {
+  readRemoveNftInput,
+  readSetNftIndexerUrlInput,
+  readSetNftSpamInput,
+} from "../portfolio/nft-inputs";
+import {
   readCreateGroupInput,
   readImportPreferencesInput,
   readRemoveAddressInput,
@@ -20,7 +25,6 @@ import {
   readSetStrk20NetworkConfigInput,
   readTypeOnlyInput,
 } from "../routing/message-inputs";
-import { readRemoveNftInput, readSetNftIndexerUrlInput, readSetNftSpamInput } from "../portfolio/nft-inputs";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 
 /**
@@ -138,6 +142,8 @@ export const handlePreferenceOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = PREFERENCE_HANDLERS[messageType];
+  const handler = Object.hasOwn(PREFERENCE_HANDLERS, messageType)
+    ? PREFERENCE_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(preferencesStore, message) : null;
 };

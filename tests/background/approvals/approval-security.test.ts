@@ -4,6 +4,10 @@
  * verification before any executor is reached.
  */
 import { describe, expect, test } from "bun:test";
+import {
+  memoryOriginHistory,
+  type OriginHistoryStore,
+} from "@mc-wallet/permissions/origin-history";
 import { defaultWalletPreferences } from "@mc-wallet/settings/preferences";
 import { memoryActivityLog } from "@mc-wallet/transactions/activity";
 import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
@@ -13,11 +17,13 @@ import {
   type ApprovalDecisionDeps,
   handleApprovalDecision,
 } from "../../../apps/extension/src/background/approvals/approval-decisions";
+import { enrichApprovals } from "../../../apps/extension/src/background/approvals/approval-insights";
 import { createApprovalQueue } from "../../../apps/extension/src/background/approvals/approvals";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 
 const ORIGIN = "https://secure-dapp.example";
 const PASSPHRASE = "correct horse battery staple";
+const REVIEWED_FEE = { overallFee: "1", unit: "FRI" as const };
 const account: AccountRef = {
   address: "0x1234",
   classHash: "0x5678",
@@ -32,11 +38,17 @@ const decision = (id: string, type: "wallet.approveOrigin" | "wallet.denyOrigin"
   id,
   type,
 });
+const invokeDecision = (id: string) => ({
+  id,
+  reviewedFee: REVIEWED_FEE,
+  type: "wallet.approveOrigin" as const,
+});
 
 const makeDeps = ({
   activeNetworkId = "SN_MAIN",
   blocked = false,
   granted = [account],
+  originHistory = memoryOriginHistory(),
   onUpsert = async () => undefined,
   submit = async () => ({ calls: [], transactionHash: "0x1" }),
 }: {
@@ -44,6 +56,7 @@ const makeDeps = ({
   readonly blocked?: boolean;
   /** What the origin may currently see; drives the account-drift cases. */
   readonly granted?: readonly AccountRef[];
+  readonly originHistory?: OriginHistoryStore;
   readonly onUpsert?: () => Promise<void>;
   readonly submit?: () => Promise<{
     readonly calls: readonly never[];
@@ -61,6 +74,7 @@ const makeDeps = ({
     allowanceStore: memoryAllowanceStore(),
     approvals,
     guard: { isBlocked: () => blocked },
+    originHistory,
     preferencesStore: {
       async read() {
         return { ...defaultWalletPreferences(), activeNetworkId };
@@ -93,6 +107,28 @@ const makeDeps = ({
 };
 
 describe("approval execution security", () => {
+  test("keeps first-seen warnings stable until the user decides", async () => {
+    let now = 1_000;
+    const originHistory = memoryOriginHistory(() => now);
+    const { approvals, deps } = makeDeps({ originHistory });
+    const approval = approvals.request(ORIGIN);
+
+    const warning = "First time this wallet has seen this site; you have no prior history with it.";
+    expect((await enrichApprovals(approvals.list(), originHistory))[0]?.insights).toContain(
+      warning,
+    );
+    now = 2_000;
+    expect((await enrichApprovals(approvals.list(), originHistory))[0]?.insights).toContain(
+      warning,
+    );
+    await handleApprovalDecision(
+      deps,
+      "wallet.denyOrigin",
+      decision(approval.id, "wallet.denyOrigin"),
+    );
+    expect(await originHistory.firstSeen(ORIGIN)).toBe(2_000);
+  });
+
   test("only one concurrent approve can claim and execute an approval", async () => {
     let release: (() => void) | undefined;
     const pause = new Promise<void>((resolve) => {
@@ -164,7 +200,7 @@ describe("approval execution security", () => {
     const { approvals, deps, submissions } = makeDeps({ activeNetworkId: "SN_SEPOLIA" });
     const { id } = approvals.requestInvoke({
       fee: {
-        fee: null,
+        fee: REVIEWED_FEE,
         feeAffordability: "unknown",
         feeEstimateFailed: false,
         feeEstimatePending: false,
@@ -178,7 +214,7 @@ describe("approval execution security", () => {
     });
 
     await expect(
-      handleApprovalDecision(deps, "wallet.approveOrigin", decision(id, "wallet.approveOrigin")),
+      handleApprovalDecision(deps, "wallet.approveOrigin", invokeDecision(id)),
     ).resolves.toEqual({ error: "approval context changed" });
     expect(submissions()).toBe(0);
   });
@@ -193,7 +229,7 @@ describe("approval execution security", () => {
     const { approvals, deps, settled, submissions } = makeDeps({ granted: [] });
     const { id } = approvals.requestInvoke({
       fee: {
-        fee: null,
+        fee: REVIEWED_FEE,
         feeAffordability: "unknown",
         feeEstimateFailed: false,
         feeEstimatePending: false,
@@ -207,7 +243,7 @@ describe("approval execution security", () => {
     });
 
     await expect(
-      handleApprovalDecision(deps, "wallet.approveOrigin", decision(id, "wallet.approveOrigin")),
+      handleApprovalDecision(deps, "wallet.approveOrigin", invokeDecision(id)),
     ).resolves.toEqual({ error: "approval context changed" });
     expect(submissions()).toBe(0);
     expect(settled).toEqual([{ error: "approval context changed" }]);
@@ -224,7 +260,7 @@ describe("approval execution security", () => {
     const { approvals, deps, submitted } = makeDeps({ granted: [other, account] });
     const { id } = approvals.requestInvoke({
       fee: {
-        fee: null,
+        fee: REVIEWED_FEE,
         feeAffordability: "unknown",
         feeEstimateFailed: false,
         feeEstimatePending: false,
@@ -238,7 +274,7 @@ describe("approval execution security", () => {
     });
 
     await expect(
-      handleApprovalDecision(deps, "wallet.approveOrigin", decision(id, "wallet.approveOrigin")),
+      handleApprovalDecision(deps, "wallet.approveOrigin", invokeDecision(id)),
     ).resolves.toMatchObject({ ok: true });
     expect(submitted).toEqual([account]);
     expect(context.accountId).toBe(account.id);
@@ -251,7 +287,7 @@ describe("approval execution security", () => {
     const { approvals, deps, submissions } = makeDeps();
     const { id } = approvals.requestInvoke({
       fee: {
-        fee: null,
+        fee: REVIEWED_FEE,
         feeAffordability: "unknown",
         feeEstimateFailed: false,
         feeEstimatePending: false,
@@ -265,7 +301,7 @@ describe("approval execution security", () => {
     });
 
     await expect(
-      handleApprovalDecision(deps, "wallet.approveOrigin", decision(id, "wallet.approveOrigin")),
+      handleApprovalDecision(deps, "wallet.approveOrigin", invokeDecision(id)),
     ).resolves.toEqual({ error: "approval payload changed" });
     expect(submissions()).toBe(0);
   });

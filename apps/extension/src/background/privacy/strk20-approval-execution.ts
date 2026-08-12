@@ -8,17 +8,26 @@
  * this boundary.
  */
 import { WalletError } from "@mc-wallet/core/errors";
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
-import { prepareStrk20CallAndProof, readStrk20Balances, readStrk20RegistrationStatus, registerStrk20Account, type Strk20SubmissionPlan, type Strk20SubmissionResult, submitStrk20Actions } from "@mc-wallet/privacy/service";
-import { verificationContext } from "@mc-wallet/transactions/verify";
+import {
+  prepareStrk20CallAndProof,
+  readStrk20Balances,
+  readStrk20RegistrationStatus,
+  registerStrk20Account,
+  type Strk20SubmissionPlan,
+  type Strk20SubmissionResult,
+  submitStrk20Actions,
+} from "@mc-wallet/privacy/service";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { verificationContext } from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
+import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { Strk20Action } from "@mc-wallet/wallet-protocol/strk20";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { ApprovalContext } from "../approvals/approval-context";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-recording";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
@@ -26,9 +35,11 @@ import type { PassiveUnlockSession } from "../runtime/session";
 import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
 import type { Strk20DisclosureRequest } from "./strk20-approval-types";
 import { assertPublicPoolSpendAffordable } from "./strk20-op-context";
-import { refusePoisonedStrk20Actions, type Strk20TrustedPreferences } from "./strk20-recipient-policy";
+import {
+  refusePoisonedStrk20Actions,
+  type Strk20TrustedPreferences,
+} from "./strk20-recipient-policy";
 import { bindStrk20ActionsToOrigin, strk20SubaccountCommitment } from "./strk20-subaccount";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
 
 /**
  * Dependencies needed to execute a held STRK20 invoke once the user approves.
@@ -129,6 +140,17 @@ const recordPoolAllowances = (
     owner: allowanceOwner(resolved.account),
     store: deps.allowanceStore,
   });
+
+const assertCurrentRecipientPolicy = async (
+  deps: Pick<Strk20ExecuteDeps, "preferencesStore">,
+  account: AccountRef,
+  actions: readonly Strk20Action[],
+): Promise<void> => {
+  const refusal = refusePoisonedStrk20Actions(account, await deps.preferencesStore.read(), actions);
+  if (refusal) {
+    throw new WalletError(refusal.error);
+  }
+};
 
 /**
  * Executes an approved private disclosure or proof request after re-validating
@@ -266,6 +288,7 @@ export const executeStrk20InvokeApproval = async (
     const result = await submitStrk20Actions(strk20ServiceForRuntime(deps.runtimeRpc), {
       ...strk20AccountContext(deps, resolved),
       actions: await bindStrk20ActionsToOrigin(approval.origin, approval.actions),
+      beforeProof: () => assertCurrentRecipientPolicy(deps, resolved.account, approval.actions),
       plan: approval.plan,
     });
     const actionCount = approval.actions.length;

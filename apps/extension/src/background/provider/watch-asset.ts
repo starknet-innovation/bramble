@@ -4,10 +4,8 @@
  * result is shaped for the preferences token store and the approval queue.
  */
 import { isSafeDecimals, isTokenSymbol } from "@mc-wallet/core/json";
-import { 
-  type StarknetNetworkId, canonicalAddress } from "@mc-wallet/wallet-model/networks";
+import { canonicalAddress, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { WatchAssetToken } from "../approvals/approvals";
-
 
 /**
  * Dapp-provided watch-asset options after bridge validation.

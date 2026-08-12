@@ -18,7 +18,8 @@ import {
   type MultisigProposalStatus,
 } from "@mc-wallet/multisig/chain";
 import { multisigProposalId } from "@mc-wallet/multisig/repository";
-
+import { signerForContext } from "../accounts/wallet-ops";
+import type { RuntimeResponse } from "../runtime/runtime-types";
 import { handleMultisigDeployOps } from "./multisig-deploy-ops";
 import {
   type ConfirmMultisigProposalInput,
@@ -32,11 +33,25 @@ import {
   type MultisigOpsDeps,
   multisigRpc,
 } from "./multisig-ops";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import { signerForContext } from "../accounts/wallet-ops";
-import { confirmGuard, executableCall, revokeGuard, revokeRecordGuardError } from "./multisig-proposal-guards";
-import { type ProposalActionPlan, type ResolvedProposal, freshProposalStatus, proposalById, recordGuardError, refreshAfterAction, refusePoisonedProposalRecipient, reserveProposalAction, resolveMultisigTarget, submitAndRecord, submitClaimedAndRecord } from "./multisig-tx-context";
-
+import {
+  confirmGuard,
+  executableCall,
+  revokeGuard,
+  revokeRecordGuardError,
+} from "./multisig-proposal-guards";
+import {
+  freshProposalStatus,
+  type ProposalActionPlan,
+  proposalById,
+  type ResolvedProposal,
+  recordGuardError,
+  refreshAfterAction,
+  refusePoisonedProposalRecipient,
+  reserveProposalAction,
+  resolveMultisigTarget,
+  submitAndRecord,
+  submitClaimedAndRecord,
+} from "./multisig-tx-context";
 
 type MultisigTxHandler = (deps: MultisigOpsDeps, message: unknown) => Promise<RuntimeResponse>;
 
@@ -306,6 +321,6 @@ export const handleMultisigTxOps = async (
   messageType: string,
   message: unknown,
 ): Promise<RuntimeResponse | null> => {
-  const handler = TX_HANDLERS[messageType];
+  const handler = Object.hasOwn(TX_HANDLERS, messageType) ? TX_HANDLERS[messageType] : undefined;
   return handler ? handler(deps, message) : handleMultisigDeployOps(deps, messageType, message);
 };

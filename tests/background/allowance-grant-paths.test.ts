@@ -10,7 +10,12 @@ import { describe, expect, test } from "bun:test";
 import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
 import { DEFAULT_TOKENS } from "@mc-wallet/wallet-model/networks";
 import { num } from "starknet";
-import { flushHeld, latestApprovalId, waitForPendingApprovals } from "../support/held";
+import {
+  flushHeld,
+  latestApprovalId,
+  reviewedApprovalFee,
+  waitForPendingApprovals,
+} from "../support/held";
 import {
   failingInvokeActivityLog,
   invokeContentSender,
@@ -68,7 +73,8 @@ describe("allowance recording covers every granting path", () => {
     );
     await flushHeld();
     const id = await latestApprovalId(handler, invokeExtensionSender);
-    await handler({ id, type: "wallet.approveOrigin" }, invokeExtensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, invokeExtensionSender, id);
+    await handler({ id, reviewedFee, type: "wallet.approveOrigin" }, invokeExtensionSender);
     await held;
 
     expect(invoked).toHaveLength(1);
@@ -282,8 +288,8 @@ describe("allowance recording covers every granting path", () => {
 
 /**
  * The log is not only a manager listing: it is what the NEXT review knows the
- * account has already allowed. A `2^128 - 1` grant plus a one-wei top-up is an
- * effectively unlimited allowance on chain, and while the review's running total
+ * account has already allowed. A `2^128 - 2` grant plus a one-wei top-up reaches
+ * the conventional max-u128 unlimited sentinel, and while the review's running total
  * started at zero the wallet said nothing about the second call — the whole
  * grant was hidden in the gap between the two transactions.
  *
@@ -292,7 +298,7 @@ describe("allowance recording covers every granting path", () => {
  * the wiring — a review that never asks the log is exactly as blind as one that
  * cannot.
  */
-const JUST_UNDER_UNLIMITED = `0x${((1n << 128n) - 1n).toString(16)}`;
+const JUST_UNDER_UNLIMITED = `0x${((1n << 128n) - 2n).toString(16)}`;
 
 const approvalCard = async (
   handler: ReturnType<typeof makeInvokeHarness>["handler"],
@@ -312,7 +318,7 @@ const approvalCard = async (
 };
 
 describe("the invoke review reads the allowance log it writes", () => {
-  test("a one-wei top-up on a standing 2^128-1 allowance is flagged as unlimited", async () => {
+  test("a one-wei top-up reaching the max-u128 sentinel is flagged as unlimited", async () => {
     const { handler } = makeInvokeHarness();
     const granted = handler(
       invokeMessage(undefined, [
@@ -328,7 +334,11 @@ describe("the invoke review reads the allowance log it writes", () => {
     // The grant itself stops one wei short of the threshold, so the card that
     // authorized it raised nothing — which is what makes the top-up invisible.
     expect(grantCard.flags?.map((flag) => flag.code) ?? []).not.toContain("unlimited-approval");
-    await handler({ id: grantCard.id, type: "wallet.approveOrigin" }, invokeExtensionSender);
+    const reviewedFee = await reviewedApprovalFee(handler, invokeExtensionSender, grantCard.id);
+    await handler(
+      { id: grantCard.id, reviewedFee, type: "wallet.approveOrigin" },
+      invokeExtensionSender,
+    );
     await granted;
 
     const topUp = handler(

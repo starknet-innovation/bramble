@@ -20,6 +20,7 @@
 import type { MultisigProposalStatus } from "@mc-wallet/multisig/chain";
 import { memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { FeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
@@ -30,7 +31,7 @@ import {
   createUnlockSession,
   type UnlockSession,
 } from "../../apps/extension/src/background/runtime/session";
-import { flushHeld, latestApprovalId } from "./held";
+import { flushHeld, latestApprovalId, reviewedApprovalFee } from "./held";
 import {
   ETH,
   type KeyBoundaryChainState,
@@ -131,7 +132,27 @@ export const makeKeyBoundaryHarness = async (
       }
       for (const approval of approvals.list()) {
         if (!known.has(approval.id)) {
-          await handler({ id: approval.id, type: "wallet.approveOrigin" }, extensionSender);
+          let reviewedFee: FeeEstimate | null = null;
+          if (approval.kind === "invoke") {
+            // This scan also exercises counterfactual deployment data, so the
+            // shared chain starts undeployed. Model its deployment before the
+            // invoke's explicit retry; only a priced card may be approved.
+            chainState.accountDeployed = true;
+            await handler({ id: approval.id, type: "wallet.retryApprovalFee" }, extensionSender);
+            reviewedFee = await reviewedApprovalFee(handler, extensionSender, approval.id);
+          }
+          try {
+            await handler(
+              {
+                id: approval.id,
+                ...(reviewedFee ? { reviewedFee } : {}),
+                type: "wallet.approveOrigin",
+              },
+              extensionSender,
+            );
+          } finally {
+            chainState.accountDeployed = false;
+          }
         }
       }
     }

@@ -1,17 +1,12 @@
 /**
  * Barrel for the trade terminal's protocol integrations. The five protocol
- * modules share function names (quoteSwap/buildSwapCalls across ekubo and avnu),
- * so each is re-exported as a namespace: import { ekubo, avnu, vesu, privacy,
- * extended } from "./index". Shared types and constants are
- * re-exported flat.
+ * modules share function names, so the two live swap integrations are exported
+ * under venue-specific names. Shared types and constants are re-exported flat.
  */
-export * as avnu from "./avnu/avnu";
+export { buildSwapCalls as buildAvnuSwapCalls, quoteSwap as quoteAvnuSwap } from "./avnu/avnu";
 export * from "./constants";
-export * as ekubo from "./ekubo/ekubo";
-export * as extended from "./extended/extended";
-export * as privacy from "./privacy/privacy";
+export { buildSwapCalls as buildEkuboSwapCalls, quoteSwap as quoteEkuboSwap } from "./ekubo/ekubo";
 export * from "./types";
-export * as vesu from "./vesu/vesu";
 export {
   buildVesuRewardClaimCalls,
   buildVesuVaultClaimCalls,
@@ -21,8 +16,6 @@ export {
 export {
   buildVesuMultiplyCloseCalls,
   buildVesuMultiplyIncreaseCalls,
-  parseVesuMultiplyExactOutQuote,
   quoteVesuMultiplyClose,
   quoteVesuMultiplyIncrease,
-  type VesuMultiplyExactOutQuote,
 } from "./vesu/vesu-multiply";

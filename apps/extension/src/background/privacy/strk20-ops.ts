@@ -11,17 +11,18 @@ import {
   summarizeStrk20Action,
   summarizeStrk20Plan,
 } from "@mc-wallet/privacy/service";
-import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import type { ActivityLog } from "@mc-wallet/transactions/activity";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { createApprovalContext } from "../approvals/approval-context";
+import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
+import type { SignatureWaiters } from "../approvals/signature-waiters";
+import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { PassiveUnlockSession } from "../runtime/session";
-import type { SignatureWaiters } from "../approvals/signature-waiters";
-
 import { strk20AccountContext, strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ResolvedAccount,
@@ -40,10 +41,7 @@ import {
   readStrk20RegisterMessage,
   readStrk20SubaccountMessage,
 } from "./strk20-provider-inputs";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { refusePoisonedStrk20Actions } from "./strk20-recipient-policy";
-
 
 /**
  * Dependencies shared by the STRK20 provider operation handlers.
@@ -340,6 +338,8 @@ export const handleStrk20Ops = async (
   message: unknown,
   sender: RuntimeSender | undefined,
 ): Promise<RuntimeResponse | null> => {
-  const handler = STRK20_OPS_HANDLERS[messageType];
+  const handler = Object.hasOwn(STRK20_OPS_HANDLERS, messageType)
+    ? STRK20_OPS_HANDLERS[messageType]
+    : undefined;
   return handler ? handler(deps, message, sender) : null;
 };

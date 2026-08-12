@@ -4,10 +4,10 @@
  * reaches the Krusty KMS boundary.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
-import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
 import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
+import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
+import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 
 const readOptionalIndex = (value: unknown): number | null | undefined => {
   if (value === undefined) {

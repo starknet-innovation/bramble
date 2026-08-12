@@ -67,7 +67,7 @@ describe("the uint128 limb bound has one definition", () => {
     // things, but they are the same number, and one of them drifting by an
     // exponent is a silent change to what counts as an unlimited allowance.
     expect(UINT128_LIMIT).toBe(2n ** 128n);
-    expect(UNLIMITED_ALLOWANCE_THRESHOLD).toBe(UINT128_LIMIT);
+    expect(UNLIMITED_ALLOWANCE_THRESHOLD).toBe(UINT128_LIMIT - 1n);
     expect(STRK20_MAX_POOL_FEE).toBe(UINT128_LIMIT - 1n);
   });
 });

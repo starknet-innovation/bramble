@@ -5,13 +5,14 @@
  */
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
-
+import { multisigCallMatchesId } from "@mc-wallet/multisig/chain";
 import {
   isMultisigProposalRecord,
   isMultisigRecord,
   type MultisigProposalCall,
   type MultisigProposalRecord,
   type MultisigRecord,
+  multisigAddressBookEntry,
 } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
 import { verifyCalls } from "@mc-wallet/transactions/verify";
@@ -62,6 +63,7 @@ export const multisigProposalEffect = (
   call: MultisigProposalCall,
   account: AccountRef | null,
   preferences: WalletPreferences | null,
+  multisig: MultisigRecord | null = null,
 ): MultisigProposalEffect => {
   const token = preferences?.tokens.find((stored) =>
     sameFelt(stored.address, call.contractAddress),
@@ -82,7 +84,10 @@ export const multisigProposalEffect = (
   const report = verifyCalls(
     [asCall(call)],
     verificationContext(account, {
-      addressBook: preferences?.addressBook ?? [],
+      addressBook: [
+        ...(preferences?.addressBook ?? []),
+        ...(multisig ? [multisigAddressBookEntry(multisig)] : []),
+      ],
       nfts: preferences?.nfts ?? [],
       tokens: preferences?.tokens ?? [],
     }),
@@ -124,7 +129,13 @@ export const parseMultisigReviewPackage = (raw: string): MultisigReviewPackage |
       value["version"] !== 1 ||
       !isMultisigRecord(value["multisig"]) ||
       !isMultisigProposalRecord(value["proposal"]) ||
-      value["proposal"].multisigId !== value["multisig"].id
+      value["proposal"].multisigId !== value["multisig"].id ||
+      (value["proposal"].call !== null &&
+        !multisigCallMatchesId(
+          value["proposal"].call,
+          value["proposal"].call.salt,
+          value["proposal"].txId,
+        ))
     ) {
       return null;
     }

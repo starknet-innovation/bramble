@@ -11,24 +11,15 @@
  * decision instead of substituting its own figure.
  */
 
-import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { OriginHistoryStore } from "@mc-wallet/permissions/origin-history";
+import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { type FeeEstimate, sameFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
-import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { executeAddChainApproval } from "../provider/add-chain-ops";
-
-import { approvalPayloadMatchesContext } from "./approval-context";
-import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
-import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
-import { executeDeclareApproval } from "../transactions/declare-ops";
+import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
-import { readApprovalIdInput } from "../routing/message-inputs";
-import { executeInvokeApproval } from "../provider/provider-ops";
-import type { RuntimeRpc } from "../runtime/runtime-rpc";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
-import type { SignatureWaiters } from "./signature-waiters";
 import {
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
@@ -37,19 +28,30 @@ import {
   matchesStrk20DisclosureKind,
   type Strk20DisclosureApprovalKind,
 } from "../privacy/strk20-approval-types";
-import type { WalletStatusReader } from "../accounts/wallet-reader";
-import { type FeeEstimate, sameFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
-
+import { executeAddChainApproval } from "../provider/add-chain-ops";
+import { executeInvokeApproval } from "../provider/provider-ops";
+import { readApprovalIdInput } from "../routing/message-inputs";
+import type { RuntimeRpc } from "../runtime/runtime-rpc";
+import type { ActiveStateCoordinator } from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import type { UnlockSession } from "../runtime/session";
+import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
+import { executeDeclareApproval } from "../transactions/declare-ops";
+import { approvalPayloadMatchesContext } from "./approval-context";
+import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
+import type { SignatureWaiters } from "./signature-waiters";
 
 /**
  * Dependencies for resolving a queued approval into its settled result.
  */
 export type ApprovalDecisionDeps = {
+  readonly activeStateCoordinator: ActiveStateCoordinator;
   readonly activity: ActivityLog;
   readonly allowanceStore: AllowanceStore;
   readonly approvals: ApprovalQueue;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue?: LedgerSignQueue;
+  readonly originHistory: OriginHistoryStore;
   readonly preferencesStore: WalletPreferencesStore;
   readonly runtimeRpc: RuntimeRpc;
   readonly session: UnlockSession;
@@ -58,6 +60,9 @@ export type ApprovalDecisionDeps = {
 };
 
 const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
+const FEE_REVIEW_REQUIRED: RuntimeResponse = {
+  error: "retry the fee estimate before approving this transaction",
+};
 
 /**
  * Outcome of applying an already-claimed approve decision. `reject` settles
@@ -114,6 +119,14 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
     return reject(NOT_FOUND);
   }
   const reviewedFee = decision.reviewedFee;
+  if (
+    !reviewedFee ||
+    !approval.fee ||
+    approval.feeEstimateFailed === true ||
+    approval.feeEstimatePending === true
+  ) {
+    return reject(FEE_REVIEW_REQUIRED);
+  }
   // The ceiling is the figure the clicking surface says it was displaying, and
   // it only binds if the queue still agrees with it. A fee slot can be replaced
   // between paint and click — a retry pressed on a second open wallet surface
@@ -138,11 +151,7 @@ const applyInvoke: ApproveApplier = async (deps, { approval, payload }, decision
       ...(approval.context === undefined ? {} : { context: approval.context }),
       origin: approval.origin,
       payload,
-      // No echo means the surface displayed no fee to consent to (still
-      // estimating, or the estimate failed), so the submission goes out unbound
-      // — honest, and the same treatment the panel send journeys give a review
-      // they could not price.
-      ...(reviewedFee ? { reviewedFee } : {}),
+      reviewedFee,
     },
   );
   return settleExecutor(result);
@@ -231,7 +240,12 @@ const applySwitchChain: ApproveApplier = async (deps, { approval, payload }) => 
   }
   const chainId = payload.chainId;
   const result = await executeSwitchChainApproval(
-    { preferencesStore: deps.preferencesStore, session: deps.session, wallet: deps.wallet },
+    {
+      activeStateCoordinator: deps.activeStateCoordinator,
+      preferencesStore: deps.preferencesStore,
+      session: deps.session,
+      wallet: deps.wallet,
+    },
     { networkId: payload.networkId, origin: approval.origin },
   );
   return {
@@ -363,6 +377,26 @@ const settleClaimError = (
   return response;
 };
 
+const pendingInvokeFeeRefusal = (
+  pending: PendingApproval | null,
+  reviewedFee: FeeEstimate | undefined,
+): RuntimeResponse | null => {
+  if (pending?.kind !== "invoke") {
+    return null;
+  }
+  if (
+    !reviewedFee ||
+    !pending.fee ||
+    pending.feeEstimateFailed === true ||
+    pending.feeEstimatePending === true
+  ) {
+    return FEE_REVIEW_REQUIRED;
+  }
+  return sameFeeEstimate(reviewedFee, pending.fee)
+    ? null
+    : { error: "the fee changed since this request was reviewed" };
+};
+
 const applyApproveDecision = async (
   deps: ApprovalDecisionDeps,
   message: unknown,
@@ -371,12 +405,20 @@ const applyApproveDecision = async (
   if (!input) {
     return { error: "invalid approval request" };
   }
+  // Extension messages are untrusted too. Refuse a missing or stale fee echo
+  // before consuming the queue entry, so the user can repaint and decide the
+  // same request later.
+  const feeRefusal = pendingInvokeFeeRefusal(deps.approvals.get(input.id), input.reviewedFee);
+  if (feeRefusal) {
+    return feeRefusal;
+  }
   // Claim synchronously before any awaited work. A concurrent approve/deny for
   // the same id now sees not-found and can never execute the payload twice.
   const claim = deps.approvals.claim(input.id);
   if (!claim) {
     return NOT_FOUND;
   }
+  await deps.originHistory.record(claim.approval.origin).catch(() => undefined);
   if (deps.guard.isBlocked(claim.approval.origin)) {
     return settleClaimError(deps, input.id, { error: "origin blocked" });
   }
@@ -404,7 +446,10 @@ const applyApproveDecision = async (
   return result.respond(() => deps.approvals.list());
 };
 
-const applyDenyDecision = (deps: ApprovalDecisionDeps, message: unknown): RuntimeResponse => {
+const applyDenyDecision = async (
+  deps: ApprovalDecisionDeps,
+  message: unknown,
+): Promise<RuntimeResponse> => {
   const input = readApprovalIdInput(message);
   if (!input) {
     return { error: "invalid approval request" };
@@ -412,6 +457,7 @@ const applyDenyDecision = (deps: ApprovalDecisionDeps, message: unknown): Runtim
   const denied = deps.approvals.claim(input.id)?.approval ?? null;
   // Reject the dapp's held request (if any) so it does not hang after a deny.
   if (denied) {
+    await deps.originHistory.record(denied.origin).catch(() => undefined);
     deps.waiters.settle(input.id, {
       error: denied.kind === "connect" ? "connection rejected" : "request rejected",
     });

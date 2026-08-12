@@ -6,12 +6,11 @@
  *
  * A parked response is only ever as bounded as the approval it waits on, so the
  * queue's TTL expiry must release it too — see
- * {@link releaseWaitersOnApprovalExpiry}, which the router context binds once.
+ * {@link releaseWaitersOnApprovalDrop}, which the router context binds once.
  */
 import { WalletError } from "@mc-wallet/core/errors";
-import { type ApprovalQueue } from "./approvals";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-
+import type { ApprovalQueue } from "./approvals";
 
 /**
  * Maximum held responses parked against a single approval id. A deduplicated
@@ -32,7 +31,7 @@ export const MAX_WAITERS_PER_APPROVAL = 8;
  * denial string that `src/shared/rpc-errors.ts` maps to the spec's
  * USER_REFUSED_OP (113) — identical on the wire to a deny, and never a hang.
  */
-export const EXPIRED_APPROVAL_RESPONSE: RuntimeResponse = { error: "request rejected" };
+export const DROPPED_APPROVAL_RESPONSE: RuntimeResponse = { error: "request rejected" };
 
 /**
  * Holds and settles the deferred response for a queued signature request.
@@ -88,8 +87,8 @@ export const createSignatureWaiters = (): SignatureWaiters => {
 };
 
 /**
- * Binds an approval queue's TTL expiry to a waiter registry, so dropping a
- * queue entry always releases the dapp response parked behind it.
+ * Binds an approval queue's expiry and capacity replacement to a waiter
+ * registry, so dropping a queue entry always releases its parked response.
  *
  * Trust boundary: the queue's per-origin cap is what stops an untrusted page
  * from flooding the wallet, and expiry is what frees those slots. Freeing a slot
@@ -99,21 +98,21 @@ export const createSignatureWaiters = (): SignatureWaiters => {
  * contract `./ledger-sign-queue` keeps for its injected timeout: a bounded wait
  * rejects the parked request rather than leaving a waiter behind.
  *
- * Failure behaviour: expired requests settle with
- * {@link EXPIRED_APPROVAL_RESPONSE} (spec USER_REFUSED_OP), never with a
+ * Failure behaviour: dropped requests settle with
+ * {@link DROPPED_APPROVAL_RESPONSE} (spec USER_REFUSED_OP), never with a
  * success; `onChange` then signals open surfaces so a panel still rendering the
  * swept card repaints instead of leaving the user a button that can only
  * report "approval not found". Registration replaces any previous observer, so
  * bind each queue exactly once.
  */
-export const releaseWaitersOnApprovalExpiry = (
-  approvals: Pick<ApprovalQueue, "observeExpiry">,
+export const releaseWaitersOnApprovalDrop = (
+  approvals: Pick<ApprovalQueue, "observeDrops">,
   waiters: SignatureWaiters,
   onChange: () => void,
 ): void => {
-  approvals.observeExpiry((ids) => {
+  approvals.observeDrops((ids) => {
     for (const id of ids) {
-      waiters.settle(id, EXPIRED_APPROVAL_RESPONSE);
+      waiters.settle(id, DROPPED_APPROVAL_RESPONSE);
     }
     onChange();
   });

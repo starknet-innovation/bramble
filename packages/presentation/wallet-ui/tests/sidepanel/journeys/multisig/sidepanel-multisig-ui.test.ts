@@ -232,19 +232,21 @@ describe("bindMultisigs", () => {
       quorum: 1,
       signers: ["0x123"],
     };
+    const call = {
+      calldata: ["0x1"],
+      contractAddress: "0x456",
+      entrypoint: "transfer",
+      salt: "0x2",
+    } as const;
+    const txId = multisigTransactionId(call, call.salt);
     const proposal: MultisigProposalRecord = {
-      call: {
-        calldata: ["0x1"],
-        contractAddress: "0x456",
-        entrypoint: "transfer",
-        salt: "0x2",
-      },
+      call,
       confirmations: 0,
-      id: `${multisig.id}:0x789`,
+      id: `${multisig.id}:${txId}`,
       multisigId: multisig.id,
       state: "pending",
       summary: "Pay contributor",
-      txId: "0x789",
+      txId,
     };
     const tracked: unknown[] = [];
     const app = mount(

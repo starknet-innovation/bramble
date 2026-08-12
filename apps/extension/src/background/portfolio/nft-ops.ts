@@ -5,16 +5,27 @@
  * preference mutations handled in preference-ops.ts.
  */
 
-import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { buildErc721TransferCall, buildErc1155TransferCall } from "@mc-wallet/portfolio/nft";
 import { unavailableNftIndexer } from "@mc-wallet/portfolio/nft-indexer";
 import type { DiscoveredNft } from "@mc-wallet/portfolio/nft-metadata";
 import type { NftStandard } from "@mc-wallet/starknet/rpc";
-import { verifyCalls, refuseOnPoisonedRecipient } from "@mc-wallet/transactions/verify";
-import { readStrkBalance } from "../transactions/fee-guard";
+import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
+import { refuseOnPoisonedRecipient, verifyCalls } from "@mc-wallet/transactions/verify";
+import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
+import {
+  resolveReviewFee,
+  signerForContext,
+  verificationContext,
+  type WalletOpsDeps,
+} from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
-
+import {
+  activeAccountContext,
+  networkRpcUrls,
+  observedAccountContext,
+} from "../runtime/runtime-state";
+import type { RuntimeResponse } from "../runtime/runtime-types";
+import { readStrkBalance } from "../transactions/fee-guard";
 import {
   type NftTarget,
   readAddNftInput,
@@ -22,15 +33,6 @@ import {
   readReviewNftTransferInput,
   readTransferNftInput,
 } from "./nft-inputs";
-import { activeAccountContext, networkRpcUrls, observedAccountContext } from "../runtime/runtime-state";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-
-import {
-  resolveReviewFee,
-  signerForContext,
-  verificationContext,
-  type WalletOpsDeps,
-} from "../accounts/wallet-ops";
 
 // Bounds how many on-chain ERC721 owner / ERC1155 balance re-proofs run at once
 // during discovery.

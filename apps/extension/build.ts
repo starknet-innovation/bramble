@@ -162,10 +162,9 @@ requireBuild(
 // `version` when present) so a side-by-side load is unambiguous. `version` stays
 // the numeric manifest value Chrome requires, and released builds — main, or a
 // detached tag checkout — are copied through untouched.
-const manifestJson = JSON.parse(await readFile(join(publicRoot, "manifest.json"), "utf8")) as Record<
-  string,
-  unknown
->;
+const manifestJson = JSON.parse(
+  await readFile(join(publicRoot, "manifest.json"), "utf8"),
+) as Record<string, unknown>;
 await writeFile(
   join(outdir, "manifest.json"),
   `${JSON.stringify(

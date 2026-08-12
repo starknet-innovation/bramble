@@ -36,7 +36,7 @@ export const reviewSummaryHtml = (fields: TransferFields): string => `
  * card — renders one wording and one formatting (issues 189 and 190). Dynamic
  * copy is escaped before rendering.
  */
-export const reviewFeeHtml = (review: TransferReview): string =>
+const reviewFeeHtml = (review: TransferReview): string =>
   reviewFeeSection(review, { id: "review-retry-fee" });
 
 /**

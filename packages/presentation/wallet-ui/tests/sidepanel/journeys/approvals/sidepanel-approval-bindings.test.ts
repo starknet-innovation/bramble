@@ -186,13 +186,13 @@ describe("bindApprovals echoes the fee the card painted", () => {
     ]);
   });
 
-  test("a card that priced nothing reports no fee rather than inventing one", async () => {
+  test("a card that priced nothing cannot dispatch an approval", async () => {
     const html = approvalCard(invokeApproval(), STATUS);
     expect(html).not.toContain("data-approval-fee");
+    expect(html).toContain('data-approval-action="approve"');
+    expect(html).toContain('type="button" disabled');
 
-    expect(await clickApprove(invokeApproval())).toEqual([
-      { approved: true, reviewedFee: undefined },
-    ]);
+    expect(await clickApprove(invokeApproval())).toEqual([]);
   });
 });
 

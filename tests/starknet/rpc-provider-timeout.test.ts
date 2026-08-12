@@ -42,7 +42,7 @@ describe("Starknet RPC request deadlines", () => {
   test("gives every provider a bounded transport by default", () => {
     const { baseFetch } = capturedOptions();
     expect(typeof baseFetch).toBe("function");
-    expect(RPC_REQUEST_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(RPC_REQUEST_TIMEOUT_MS).toBe(15_000);
   });
 
   test("lets a caller that needs a tighter deadline supply its own transport", () => {

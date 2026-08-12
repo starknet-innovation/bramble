@@ -7,7 +7,7 @@
  * predicate maps to "unknown" — a missing balance never blocks a transaction.
  */
 
-import { tokenConfigId } from "@mc-wallet/wallet-model/preferences";
+import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import {
   STARKNET_NETWORKS,
@@ -15,10 +15,9 @@ import {
   type StarknetNetworkId,
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
-import type { TokenConfig, WalletPreferences } from "@mc-wallet/settings/preferences";
+import { tokenConfigId } from "@mc-wallet/wallet-model/preferences";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
-
 
 // The canonical STRK token for a network: the user's tracked entry when one
 // exists, otherwise a synthetic config — fees are payable whether or not the

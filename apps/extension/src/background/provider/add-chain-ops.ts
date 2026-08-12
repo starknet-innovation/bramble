@@ -9,16 +9,16 @@
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
+import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
+import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
+import { type CustomNetwork, normalizeChainId } from "@mc-wallet/wallet-model/custom-network";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import { isProviderChain, type ProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
-import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
-import { type CustomNetwork, normalizeChainId } from "@mc-wallet/wallet-model/custom-network";
-import type { WalletPreferences, WalletPreferencesStore } from "@mc-wallet/settings/preferences";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
 import type { ApprovalQueue } from "../approvals/approvals";
-import type { RuntimeResponse } from "../runtime/runtime-types";
-import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
 import type { SignatureWaiters } from "../approvals/signature-waiters";
+import { isClaimedSenderOrigin, type RuntimeSender } from "../routing/senders";
+import type { RuntimeResponse } from "../runtime/runtime-types";
 
 /**
  * Dependencies for the dapp add-chain handler.
