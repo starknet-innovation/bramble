@@ -48,23 +48,35 @@ const option = (
     ${icon("chevronRight")}
   </button>`;
 
+/**
+ * Renders both recovery grids. Each cell states its 1-based position as content,
+ * not a placeholder, so it survives the cell holding a word; the span is
+ * `aria-hidden` because the input's `aria-label` already names the word.
+ *
+ * The cell must never carry `hidden` — the shell's global
+ * `[hidden] { display: none !important }` outranks any cell rule, so it could
+ * never be shown again. `:has(> input[hidden])` follows the input instead.
+ */
 const recoveryWordInputs = (kind: "generated" | "import"): string =>
-  Array.from({ length: 24 }, (_, index) =>
-    inputControl({
-      ariaLabel: `Recovery word ${index + 1}`,
-      attributes: {
-        "data-recovery-kind": kind,
-        "data-word-index": `${index}`,
-        hidden: index >= 12,
-      },
-      autocomplete: "off",
-      className: "recovery-word",
-      inputmode: "text",
-      name: `${kind}-word-${index}`,
-      placeholder: `${index + 1}`,
-      readonly: kind === "generated",
-      spellcheck: false,
-    }),
+  Array.from(
+    { length: 24 },
+    (_, index) =>
+      `<label class="recovery-word-cell"><span aria-hidden="true">${index + 1}</span>${inputControl(
+        {
+          ariaLabel: `Recovery word ${index + 1}`,
+          attributes: {
+            "data-recovery-kind": kind,
+            "data-word-index": `${index}`,
+            hidden: index >= 12,
+          },
+          autocomplete: "off",
+          className: "recovery-word",
+          inputmode: "text",
+          name: `${kind}-word-${index}`,
+          readonly: kind === "generated",
+          spellcheck: false,
+        },
+      )}</label>`,
   ).join("");
 
 const backupVerifyInputs = (): string =>
