@@ -228,16 +228,13 @@ export const ONBOARDING_STYLES = `
     gap: ${SPACE.sm};
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-  /* The cell tracks its input's own hidden state, so the 12/24 toggle keeps
-     driving the inputs and no wrapper is left behind as an empty grid slot. */
   .recovery-word-cell {
     align-items: center;
     display: flex;
     gap: ${SPACE.xs};
   }
   .recovery-word-cell:has(> input[hidden]) { display: none; }
-  /* The position is a static marker, not part of the phrase: keep it out of a
-     drag-selection so copying the grid never yields interleaved digits. */
+  /* user-select: the position is a marker, not phrase text to copy. */
   .recovery-word-cell > span:first-child {
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.micro.size};
@@ -246,10 +243,7 @@ export const ONBOARDING_STYLES = `
     text-align: right;
     user-select: none;
   }
-  /* The number takes width the field used to have, so the field claims the rest
-     explicitly and trades side padding for glyphs — centred text does not need
-     the inset. The longest BIP39 words then fit from 400px up, and land within a
-     pixel of the content box at the 320px floor. */
+  /* Trades side padding for glyphs so an 8-character word still fits at 320px. */
   .recovery-word {
     flex: 1;
     font-family: var(--mc-font-mono);
@@ -263,9 +257,8 @@ export const ONBOARDING_STYLES = `
     pointer-events: none;
     user-select: none;
   }
-  /* A label forwards clicks to its control even when the control itself is
-     pointer-events:none, so the cell must opt out too or the masked phrase
-     stays clickable through the number and the gap around it. */
+  /* A label forwards clicks to its control even when the control is
+     pointer-events:none, so the cell must opt out too. */
   .recovery-grid.is-masked .recovery-word-cell { pointer-events: none; }
   .onboarding-inline-action {
     background: transparent;

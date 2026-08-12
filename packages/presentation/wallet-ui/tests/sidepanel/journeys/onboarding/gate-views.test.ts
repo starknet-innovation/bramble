@@ -53,7 +53,6 @@ describe("onboarding gate view", () => {
     for (const kind of ["generated", "import"] as const) {
       const cells = cellsIn(kind);
       expect(cells.length).toBe(24);
-      // Each cell states its own 1-based position, ahead of its own input.
       expect(
         cells.map((cell) => cell.match(/^<span aria-hidden="true">(\d+)<\/span>/)?.[1]),
       ).toEqual(Array.from({ length: 24 }, (_, index) => `${index + 1}`));

@@ -49,17 +49,13 @@ const option = (
   </button>`;
 
 /**
- * Renders both recovery grids. Each cell carries its 1-based position as real
- * content rather than a placeholder, so the number survives the cell holding a
- * word — a generated phrase is written down in order, and a placeholder digit
- * disappears the moment `fillWords` assigns a value. The position span is
- * `aria-hidden` because the input's own `aria-label` already names the word.
+ * Renders both recovery grids. Each cell states its 1-based position as content,
+ * not a placeholder, so it survives the cell holding a word; the span is
+ * `aria-hidden` because the input's `aria-label` already names the word.
  *
- * The cell itself must never carry `hidden`: the 12/24 toggle owns visibility by
- * setting `hidden` on the inputs, and the shell's global
- * `[hidden] { display: none !important }` (styles-components.ts) outranks any
- * cell rule, so a wrapper marked hidden here could not be shown again.
- * `.recovery-word-cell:has(> input[hidden])` follows the input instead.
+ * The cell must never carry `hidden` — the shell's global
+ * `[hidden] { display: none !important }` outranks any cell rule, so it could
+ * never be shown again. `:has(> input[hidden])` follows the input instead.
  */
 const recoveryWordInputs = (kind: "generated" | "import"): string =>
   Array.from(

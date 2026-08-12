@@ -195,16 +195,13 @@ describe("staged onboarding", () => {
     click(flow.app, "#create-new-button");
     await tick();
 
-    // A filled cell still states its position — the number is content, not a
-    // placeholder the assigned value would suppress.
     const generated = cellsOf(flow.app, "generated");
     expect(generated.length).toBe(24);
     expect(generated.slice(0, 12).map(wordOf)).toEqual(MNEMONIC.split(" "));
     expect(generated.map(positionOf)).toEqual(Array.from({ length: 24 }, (_, index) => index + 1));
 
-    // The 12/24 toggle drives `hidden` on the inputs only. A cell carrying it
-    // could never be revealed again: the shell's global
-    // `[hidden] { display: none !important }` outranks every cell rule.
+    // The toggle drives `hidden` on the inputs only; a cell carrying it could
+    // never be revealed again (see recoveryWordInputs).
     click(flow.app, "#add-existing-button");
     click(flow.app, "#recovery-method-button");
     const imported = cellsOf(flow.app, "import");
