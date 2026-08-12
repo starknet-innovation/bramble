@@ -42,6 +42,19 @@ describe("onboarding gate view", () => {
     expect(html.match(/data-recovery-kind="import"/g)?.length).toBe(24);
   });
 
+  test("numbers every recovery word as content that survives a filled cell", () => {
+    const html = onboarding(status);
+
+    expect(html.match(/class="recovery-word-cell"/g)?.length).toBe(48);
+    // Visibility stays on the inputs: a `hidden` cell could not be revealed
+    // again, because the UA sheet marks `[hidden]` display:none !important.
+    expect(html).not.toContain('class="recovery-word-cell" hidden');
+    expect(html).toContain('<span aria-hidden="true">1</span><input class="recovery-word"');
+    expect(html).toContain('<span aria-hidden="true">12</span><input class="recovery-word"');
+    expect(html).toContain('<span aria-hidden="true">24</span><input class="recovery-word"');
+    expect(html).not.toContain('placeholder="1"');
+  });
+
   test("masks generated words until a deliberate reveal", () => {
     const html = onboarding(status);
 

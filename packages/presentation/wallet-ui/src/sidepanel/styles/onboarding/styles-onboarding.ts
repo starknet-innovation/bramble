@@ -228,6 +228,20 @@ export const ONBOARDING_STYLES = `
     gap: ${SPACE.sm};
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  /* The cell tracks its input's own hidden state, so the 12/24 toggle keeps
+     driving the inputs and no wrapper is left behind as an empty grid slot. */
+  .recovery-word-cell {
+    align-items: center;
+    display: flex;
+    gap: ${SPACE.xs};
+  }
+  .recovery-word-cell:has(> input[hidden]) { display: none; }
+  .recovery-word-cell > span:first-child {
+    font-size: ${TYPE.micro.size};
+    font-variant-numeric: tabular-nums;
+    min-width: 2ch;
+    text-align: right;
+  }
   .recovery-word {
     font-family: var(--mc-font-mono);
     font-size: ${TYPE.caption.size};

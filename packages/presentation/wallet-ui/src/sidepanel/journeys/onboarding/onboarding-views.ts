@@ -48,23 +48,38 @@ const option = (
     ${icon("chevronRight")}
   </button>`;
 
+/**
+ * Renders both recovery grids. Each cell carries its 1-based position as real
+ * content rather than a placeholder, so the number survives the cell holding a
+ * word — a generated phrase is written down in order, and a placeholder digit
+ * disappears the moment `fillWords` assigns a value. The position span is
+ * `aria-hidden` because the input's own `aria-label` already names the word.
+ *
+ * The cell itself must never carry `hidden`: the 12/24 toggle owns visibility by
+ * setting `hidden` on the inputs, and the UA sheet applies `display: none`
+ * `!important` to `[hidden]`, so a wrapper marked hidden here could not be shown
+ * again. `.recovery-word-cell:has(> input[hidden])` follows the input instead.
+ */
 const recoveryWordInputs = (kind: "generated" | "import"): string =>
-  Array.from({ length: 24 }, (_, index) =>
-    inputControl({
-      ariaLabel: `Recovery word ${index + 1}`,
-      attributes: {
-        "data-recovery-kind": kind,
-        "data-word-index": `${index}`,
-        hidden: index >= 12,
-      },
-      autocomplete: "off",
-      className: "recovery-word",
-      inputmode: "text",
-      name: `${kind}-word-${index}`,
-      placeholder: `${index + 1}`,
-      readonly: kind === "generated",
-      spellcheck: false,
-    }),
+  Array.from(
+    { length: 24 },
+    (_, index) =>
+      `<label class="recovery-word-cell"><span aria-hidden="true">${index + 1}</span>${inputControl(
+        {
+          ariaLabel: `Recovery word ${index + 1}`,
+          attributes: {
+            "data-recovery-kind": kind,
+            "data-word-index": `${index}`,
+            hidden: index >= 12,
+          },
+          autocomplete: "off",
+          className: "recovery-word",
+          inputmode: "text",
+          name: `${kind}-word-${index}`,
+          readonly: kind === "generated",
+          spellcheck: false,
+        },
+      )}</label>`,
   ).join("");
 
 const backupVerifyInputs = (): string =>
