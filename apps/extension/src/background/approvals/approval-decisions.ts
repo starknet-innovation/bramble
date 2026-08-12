@@ -71,10 +71,16 @@ const reject = (response: RuntimeResponse): ApplyResult => ({ response, status: 
 /**
  * Shared tail for executor-backed kinds: settle the executor result either way,
  * pass its error through on failure, and surface `{ ok, pending }` on success.
+ *
+ * The two destinations get different amounts of an error. `respond` goes to the
+ * panel and keeps any `detail` — the node's own reason, which is what makes a
+ * rejected transaction legible to the user. `settle` resolves the waiting dapp,
+ * so `detail` is dropped there: the curated `error` is the only thing that may
+ * cross that boundary.
  */
 const settleExecutor = (result: RuntimeResponse): ApplyResult => ({
   respond: (listPending) => ("error" in result ? result : { ok: true, pending: listPending() }),
-  settle: result,
+  settle: "error" in result ? { error: result.error } : result,
   status: "settle",
 });
 

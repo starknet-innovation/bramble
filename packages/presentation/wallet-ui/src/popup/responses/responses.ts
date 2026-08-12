@@ -112,6 +112,11 @@ export type AccountsResponse = {
  * Popup error response accepted from the background boundary.
  */
 export type ErrorResponse = {
+  /**
+   * Uncurated reason behind `error`, sent only to the extension's own surfaces.
+   * Optional: most errors are already self-explanatory and carry none.
+   */
+  readonly detail?: string;
   readonly error: string;
 };
 
@@ -287,9 +292,10 @@ export const isAccountsResponse = (value: unknown): value is AccountsResponse =>
  */
 export const isErrorResponse = (value: unknown): value is ErrorResponse =>
   isRecord(value) &&
-  hasOnlyKnownKeys(value, ["error"]) &&
+  hasOnlyKnownKeys(value, ["detail", "error"]) &&
   typeof value["error"] === "string" &&
-  value["error"].length > 0;
+  value["error"].length > 0 &&
+  (value["detail"] === undefined || typeof value["detail"] === "string");
 
 /**
  * Checks generated mnemonic responses before filling import forms.

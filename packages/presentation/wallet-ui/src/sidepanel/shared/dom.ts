@@ -181,7 +181,7 @@ const TOAST_SPRING = resolveSpring("momentum");
  * copy control. It springs in with a little momentum, can be swiped away, and
  * error toasts stay longer.
  */
-export const showToast = (message: string, tone: ToastTone): void => {
+export const showToast = (message: string, tone: ToastTone, detail?: string): void => {
   const stackId = "toast-stack";
   const stack = document.querySelector<HTMLElement>(`#${stackId}`) ?? document.createElement("div");
   if (!stack.id) {
@@ -202,8 +202,16 @@ export const showToast = (message: string, tone: ToastTone): void => {
   text.className = "toast-text";
   text.textContent = friendly ? friendly.message : message;
   toast.append(text);
-  if (friendly?.copyable) {
-    toast.append(toastCopyButton(friendly.message));
+  // The toast stays short and the clipboard carries everything: a node's
+  // rejection reason is far too long to read in a toast but is exactly what
+  // belongs in a bug report. A detail earns a copy control on its own, even when
+  // the message itself classified as a known, non-copyable condition.
+  if (friendly?.copyable === true || detail !== undefined) {
+    toast.append(
+      toastCopyButton(
+        detail === undefined ? (friendly?.message ?? message) : `${message}\n\n${detail}`,
+      ),
+    );
   }
   stack.append(toast);
   animate(

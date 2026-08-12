@@ -493,4 +493,7 @@ export type RuntimeResponse =
   | TransferResponse
   | WalletStatus
   | WatchAssetResponse
-  | { readonly error: string };
+  // `detail` is the uncurated reason behind `error`, for the panel's own status
+  // line and copy control. It must be stripped before an error is settled to a
+  // dapp — see `settleExecutor` in ../approvals/approval-decisions.
+  | { readonly detail?: string; readonly error: string };

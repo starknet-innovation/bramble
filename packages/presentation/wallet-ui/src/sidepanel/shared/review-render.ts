@@ -26,8 +26,13 @@ export type ReviewFeeState = {
   /**
    * Verdict of the shared fee-affordability predicate (issue 191). Only
    * "insufficient" renders a warning; "ok"/"unknown"/absent render nothing
-   * extra, and no surface gates a decision on it — the guard is warn-only and
-   * fails open.
+   * extra.
+   *
+   * "insufficient" is a positive verdict — the balance was read and cannot cover
+   * the transaction — so both confirm surfaces also disable their approve/send
+   * control on it, and the notice below says so. The predicate still fails open:
+   * an unreadable balance yields "unknown", which makes no claim and blocks
+   * nothing.
    */
   readonly feeAffordability?: "insufficient" | "ok" | "unknown";
   readonly feeEstimateFailed?: boolean;
@@ -35,11 +40,13 @@ export type ReviewFeeState = {
   readonly requiresDeployment?: boolean;
 };
 
-// Warn-only shortfall notice appended under the fee line when the shared
-// predicate says the STRK balance cannot cover the transaction (issue 191).
+// Shortfall notice appended under the fee line when the shared predicate says
+// the STRK balance cannot cover the transaction (issue 191). Names the blocked
+// control, because both surfaces disable it on this verdict — a notice that only
+// warned would leave the user staring at a dead button with no reason given.
 const shortfallHtml = (state: ReviewFeeState): string =>
   state.feeAffordability === "insufficient"
-    ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. The network will likely reject it.</p>`
+    ? `<p class="review-flag" role="alert">${icon("alert")}This account's STRK balance is less than this transaction needs, including the estimated network fee. Add STRK to continue — the network would reject it as it stands.</p>`
     : "";
 
 /**

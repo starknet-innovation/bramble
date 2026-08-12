@@ -6,7 +6,7 @@
  * origin gets nothing back even if it still holds an old connection grant.
  */
 
-import { walletErrorMessage } from "@mc-wallet/core/errors";
+import { errorDetail, walletErrorMessage } from "@mc-wallet/core/errors";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { canonicalFelt, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { Call } from "starknet";
@@ -132,6 +132,11 @@ const resolveOriginAccount = async (
   return { account, passphrase, preferences };
 };
 
+// Curated, dapp-safe message for a failed invoke. For a plain invoke the node's
+// own reason is carried separately as `detail` at the call site: an underfunded
+// fee collapses to "invoke request failed" here, which is right for the page and
+// useless to the user, and `settleExecutor` keeps `detail` from reaching the
+// dapp. A proof-bearing failure gets no `detail` at all — see the call site.
 const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
   if (!hasProof) {
     return walletErrorMessage(error, "invoke request failed");
@@ -486,6 +491,13 @@ export const executeInvokeApproval = async (
     await recordApproveAllowances(allowanceStore, calls, account);
     return { ok: true, transactionHash: result.transactionHash };
   } catch (error) {
-    return { error: invokeFailureMessage(error, approval.payload.proof !== undefined) };
+    const hasProof = approval.payload.proof !== undefined;
+    const message = invokeFailureMessage(error, hasProof);
+    // Only a plain invoke may carry the raw reason. A proof-bearing failure is
+    // sanitized by `mapStrk20StageError` precisely because the raw error can echo
+    // a private request body, so that text must not reach any surface — the
+    // structured reason it already produces is the whole story there.
+    const detail = hasProof ? null : errorDetail(error, message);
+    return detail === null ? { error: message } : { detail, error: message };
   }
 };

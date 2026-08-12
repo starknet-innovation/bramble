@@ -220,6 +220,13 @@ const watchAssetCard = (approval: PendingApproval): string => {
 // retry button targets this approval by data attribute; a failed estimate
 // never disables Approve (deliberate divergence from Send, so a flaky RPC
 // cannot block dApp transactions).
+//
+// A *known* shortfall is the one fee state that does disable it. The two are
+// different facts: an estimate that failed tells us nothing, while
+// "insufficient" means the balance was read and cannot cover the transaction, so
+// approving spends a device confirmation on something the network rejects. Only
+// that verdict gates — "unknown" stays approvable, so an unreadable balance can
+// never block a transaction that would have gone through.
 const invokeCard = (approval: PendingApproval, status: WalletStatus): string => `
   <li class="request-card">
     <div class="request-copy">
@@ -239,7 +246,13 @@ const invokeCard = (approval: PendingApproval, status: WalletStatus): string => 
       ${contextDisclosure(approval)}
     </div>
     ${reviewPanel([...riskFlagMessages(approval.flags ?? []), ...(approval.insights ?? [])])}
-    ${decisionRow(approval, "Approve", status.locked || approval.feeEstimatePending === true)}
+    ${decisionRow(
+      approval,
+      "Approve",
+      status.locked ||
+        approval.feeEstimatePending === true ||
+        approval.feeAffordability === "insufficient",
+    )}
   </li>`;
 
 const signCard = (approval: PendingApproval, status: WalletStatus): string => `

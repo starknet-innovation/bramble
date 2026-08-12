@@ -6,6 +6,7 @@
 
 import { readApprovalAction } from "../../popup/actions";
 import type { WalletStatus } from "../../popup/responses/responses";
+import { errorCause } from "../runtime/response-error";
 import type { SidepanelWallet } from "../runtime/runtime";
 import { buttonBusy, errorMessage, showToast } from "../shared/dom";
 
@@ -110,9 +111,14 @@ export const bindApprovals = ({ app, render, snoozeApproval, wallet }: BindingCo
           await render(await wallet.loadStatus());
         },
         (error: unknown) => {
-          showToast(errorMessage(error, "Approval failed"), "error");
+          const message = errorMessage(error, "Approval failed");
+          // The node's reason, when the background sent one. It goes in the
+          // card's own status line (which can wrap) and into the toast's
+          // clipboard, so the user can both read and report why it failed.
+          const detail = errorCause(error);
+          showToast(message, "error", detail);
           if (result) {
-            result.textContent = errorMessage(error, "Approval failed");
+            result.textContent = detail === undefined ? message : `${message}: ${detail}`;
           }
           // The background atomically consumes an approval before execution.
           // Repaint after any executor error so stale controls cannot decide the
