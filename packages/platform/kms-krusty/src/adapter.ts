@@ -12,6 +12,11 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 
 type Callable = (...args: unknown[]) => unknown;
+/**
+ * The counterfactual-address salt every account this wallet derives was created
+ * with. Held here, not left to the KMS, because a deployed address cannot change.
+ */
+const ZERO_SALT = "0x0";
 const MNEMONIC_WORD_COUNTS = [12, 15, 18, 21, 24] as const;
 const KRUSTY_RESULT_CLASSES = new Set(["WasmKeypair", "WasmStarkSignature"]);
 
@@ -123,7 +128,14 @@ export const createKrustyKms = (moduleValue: unknown): KmsPort => {
         throw new WalletError("Invalid Stark address derivation input");
       }
 
-      const result = await deriveOzAccountAddress(publicKeyX, classHash, salt);
+      // Salt 0 explicitly, never the KMS's default. An account's address is
+      // immutable once deployed, so the salt that produced it is a wallet
+      // invariant and cannot be inherited from a library default: upstream
+      // changed that default from 0 to the public key in 0.6.0 — same signature,
+      // different address — which silently re-derived every account to an
+      // address that had never been deployed. Callers that need another salt pass
+      // it; nobody may rely on what the KMS would have chosen.
+      const result = await deriveOzAccountAddress(publicKeyX, classHash, salt ?? ZERO_SALT);
       if (typeof result !== "string" || !isStarkFieldElement(result)) {
         throw new WalletError("Krusty KMS returned an invalid account address");
       }

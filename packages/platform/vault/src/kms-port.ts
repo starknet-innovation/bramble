@@ -17,6 +17,16 @@ export type StarkKeypair = {
  * implementations must validate every input and output and fail closed.
  */
 export type KmsPort = {
+  /**
+   * Derives the counterfactual OZ account address for a public key.
+   *
+   * Omitting `salt` means **salt 0** — the value every account this wallet has
+   * ever derived was created with — and implementations must pass it explicitly
+   * rather than defer to whatever the underlying KMS would default to. A deployed
+   * account's address is immutable, so this is a wallet invariant: an
+   * implementation that inherits a library default silently re-derives every
+   * existing account to an address that was never deployed.
+   */
   readonly deriveOzAccountAddress: (
     publicKeyX: string,
     classHash: string,

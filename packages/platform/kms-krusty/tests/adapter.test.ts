@@ -95,6 +95,29 @@ describe("createKrustyKms", () => {
     );
   });
 
+  test("pins the account-address salt to 0 instead of the KMS default", async () => {
+    // A deployed account's address is immutable, so the salt that produced it is
+    // a wallet invariant. Upstream 0.6.0 changed its own default from 0 to the
+    // public key with no signature change, which re-derived every account to an
+    // address that had never been deployed; the adapter must therefore always say
+    // which salt it means, and pass a caller's through untouched.
+    const seen: unknown[][] = [];
+    const kms = createKrustyKms({
+      ...createModule(),
+      deriveOzAccountAddress(...args: unknown[]) {
+        seen.push(args);
+        return "0xabc";
+      },
+    });
+
+    await expect(kms.deriveOzAccountAddress("0x1", "0x2")).resolves.toBe("0xabc");
+    await expect(kms.deriveOzAccountAddress("0x1", "0x2", "0x9")).resolves.toBe("0xabc");
+    expect(seen).toEqual([
+      ["0x1", "0x2", "0x0"],
+      ["0x1", "0x2", "0x9"],
+    ]);
+  });
+
   test("binds the scoped derivation and refuses a build offering only the unscoped one", async () => {
     // The KMS exports both `deriveStrk20ViewingKey` (private key only) and
     // `deriveScopedStrk20ViewingKey` (private key + chain + pool). Extra

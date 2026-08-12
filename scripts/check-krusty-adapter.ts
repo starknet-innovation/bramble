@@ -5,6 +5,7 @@
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
 import { deriveAccount } from "@mc-wallet/vault/accounts";
 import { DEFAULT_NETWORK, isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
+import { CallData, hash } from "starknet";
 
 const wasmPackage = "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm.js";
 const wasmBinary = "vendor/krusty-kms/crates/wasm/pkg/krusty_kms_wasm_bg.wasm";
@@ -99,4 +100,29 @@ try {
 }
 if (!rejectedForeignSigner) {
   throw new Error("Krusty KMS folded a viewing key from a signature it could not verify");
+}
+
+// The account address, cross-checked against an independent implementation.
+//
+// This is the guard whose absence let a KMS bump silently move every derived
+// address: upstream 0.6.0 changed `derive_oz_account_address`'s default salt from
+// 0 to the public key — same signature, no error — and the only assertion here was
+// that the address looked like a felt. A deployed address is immutable, so
+// "looks like a felt" is worthless; it has to be the RIGHT felt.
+//
+// starknet.js computes the same counterfactual address from the same inputs, so
+// agreement between two independent implementations pins the salt, the
+// constructor calldata, and the address hash at once — and unlike a hardcoded
+// constant it cannot be "fixed" by pasting in whatever the new build returned.
+const expectedAddress = hash.calculateContractAddressFromHash(
+  "0x0",
+  account.classHash,
+  CallData.compile([account.publicKeyX]),
+  0,
+);
+if (BigInt(account.address) !== BigInt(expectedAddress)) {
+  throw new Error(
+    `Krusty KMS derived ${account.address} for the salt-0 OZ account address; starknet.js derives ${expectedAddress}. ` +
+      "Every account already deployed by this wallet lives at the salt-0 address, so this mismatch would strand all of them.",
+  );
 }
