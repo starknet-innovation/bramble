@@ -20,6 +20,7 @@
     },
     "apps/terminal": {
       "entry": ["api/**/*.ts", "scripts/*.ts"],
+      "ignoreDependencies": ["@types/ws", "ws"],
       "project": ["api/**/*.ts", "scripts/**/*.ts", "src/**/*.{ts,tsx}"]
     },
     "apps/ui-lab": {
