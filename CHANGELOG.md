@@ -8,6 +8,57 @@ Sections are maintained on the active `release/vX.Y` branch during release prep
 (`bun run changelog`) and consumed as the GitHub Release notes when the release
 is cut. See DEVELOPMENT.md and RELEASING.md.
 
+## [0.9.1] - 2026-08-12
+
+Remediation of the 31 findings raised by the post-release deep adversarial audit
+of v0.9.0 (`MCW-V09-101`..`131`). No third-party dependency changes. Full
+detail, including the residual on `MCW-V09-127`, is in
+`docs/security-audit/releases/v0.9-deep.md`.
+
+### Security
+- SNIP-12 signing no longer accepts a type graph whose names can reassemble
+  `encodeType` into a different graph. A name carrying a separator let two
+  structures produce one message hash, so a site could obtain a signature over
+  an opaque payload that is valid against a structured order. Each revision is
+  now validated against its own vocabulary under a deny-by-default name grammar
+  (`MCW-V09-101`, High).
+- Multisig proposal ids are derived locally from the reviewed
+  `(to, selector, calldata, salt)` rather than taken from a node's
+  `hash_transaction` answer, which is now only a cross-check that must agree.
+  Stored proposals re-derive their id before confirm, revoke, and execute, so a
+  record written by an earlier version cannot be acted on if its id came from a
+  hostile answer (`MCW-V09-102`, High).
+- Inactivity auto-lock is alarm-driven and now fires in normal use.
+- Balances and history come from the configured Starknet RPC first; the explorer
+  gateway is a per-network opt-in, off by default once an RPC override is set.
+- The approval surface consults the phishing blocklist before opening and takes
+  a 1000 ms per-tab cooldown.
+- Removed `wallet.signHash` (an unapproved arbitrary-hash signing path with no
+  production caller) and `wallet.grantOrigin`. Neither was dapp-reachable.
+
+### Changed
+- SNIP-12 revision 0 remains signable and a numeric `revision: 1` is accepted.
+  Revision 0 is held to what its encoder resolves: preset field types, `enum`
+  fields, and tuple types are refused there, because the pinned library cannot
+  encode them. Preset *names* may now be declared as ordinary structs on
+  revision 0, a widening for legacy dapps.
+- A `merkletree` leaf must name a declared struct or preset on **both**
+  revisions; `contains: "felt"` is refused, because a raw-felt leaf is the value
+  the site supplied and could stand in for another structure's hash under the
+  same root. Dapps hashing their own allowlist or session leaves must declare
+  the leaf struct.
+- STRK20 sub-account commitments are separated by verified origin rather than a
+  caller-chosen label, so a site holding a commitment for a label sees a
+  different one.
+- Restoring a preferences backup applies only labels, groups, display, theme,
+  hidden tokens, and active network. Every trust-bearing field the review layer
+  reads as ground truth is ignored: RPC overrides, custom networks, token
+  metadata, NFT indexer, STRK20 network and prover endpoints, approval surface,
+  and explorer fallback. Address-book contacts are left untouched in both
+  directions, being the reference set behind the address-poisoning guard.
+- The sign-request card renders domain rows by the payload's actual revision;
+  rows that were never in the hash no longer appear as signed.
+
 ## [0.9.0] - 2026-08-10
 
 Account-safe upgrades, one coherent public/private Send journey, managed service
