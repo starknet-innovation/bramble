@@ -47,6 +47,7 @@ describe("createMessageHandler", () => {
     await expect(
       handler(
         {
+          accountContractType: "openzeppelin",
           accountIndex: 0,
           mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
           networkId: "SN_SEPOLIA",
@@ -79,6 +80,7 @@ describe("createMessageHandler", () => {
   test("previews only public account metadata for extension pages", async () => {
     const handler = createMessageHandler(createWallet(), "extension-id");
     const message = {
+      accountContractType: "openzeppelin",
       mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
       networkId: "SN_SEPOLIA",
       type: "wallet.previewAccount",

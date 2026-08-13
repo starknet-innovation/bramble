@@ -12,6 +12,7 @@ import { hardwareBadge } from "../../../../src/sidepanel/shared/parts";
 import { accountDrawer } from "../../../../src/sidepanel/shell/account-drawer";
 
 const ledgerAccount: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x55567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef0",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   derivation: {
@@ -26,6 +27,7 @@ const ledgerAccount: LedgerAccountRef = {
 };
 
 const importedAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: account.address,
   classHash: account.classHash,
   derivation: { kind: "imported-raw-key" },

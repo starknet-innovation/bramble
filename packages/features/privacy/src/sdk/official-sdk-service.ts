@@ -5,6 +5,7 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import { isJson } from "@mc-wallet/core/json";
+import { serializeAccountSignature } from "@mc-wallet/starknet/account-contracts";
 import { createRpcProvider } from "@mc-wallet/starknet/provider";
 import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
@@ -425,7 +426,7 @@ export const createOfficialStrk20Service = ({
                 input.account.address,
               );
               const signature = await input.signHash(messageHash);
-              return [signature.r, signature.s];
+              return serializeAccountSignature(input.account.accountContractType, signature);
             },
           })),
         }),

@@ -48,6 +48,18 @@ describe("STRK20 CallSet authorization", () => {
     ).toBe(true);
   });
 
+  test("keeps the privacy contract's raw Stark signature shape unchanged", async () => {
+    const signer = new Strk20CallSetSigner({
+      accountAddress: account,
+      chainId,
+      sign: async () => ["0x01", "0x02"],
+    });
+
+    await expect(
+      signer.signTransaction([...calls], {} as InvocationsSignerDetails),
+    ).resolves.toEqual(["0x01", "0x02"]);
+  });
+
   test("fails closed for unsupported signer operations", async () => {
     const signer = new Strk20CallSetSigner({
       accountAddress: account,

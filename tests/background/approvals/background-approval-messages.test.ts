@@ -10,6 +10,7 @@ import type { RuntimeSender } from "../../../apps/extension/src/background/routi
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: {

@@ -20,14 +20,6 @@ const STAGE_ORDER = {
 } as const;
 
 type SendStage = keyof typeof STAGE_ORDER;
-const PROPOSAL_STAGE_ORDER = {
-  advanced: 2,
-  amount: 1,
-  asset: 2,
-  recipient: 0,
-  review: 3,
-} as const;
-type ProposalStage = keyof typeof PROPOSAL_STAGE_ORDER;
 type ViewTransition = { readonly finished: Promise<void> };
 type ViewTransitionDocument = Document & {
   startViewTransition?: (callback: () => void) => ViewTransition;
@@ -43,8 +35,8 @@ const transitionStage = <Stage extends string>(
   previousStage: string | undefined,
   nextStage: Stage,
   order: Readonly<Record<Stage, number>>,
-  transitionKey: "proposalTransition" | "sendTransition",
-  transitionIdKey: "proposalTransitionId" | "sendTransitionId",
+  transitionKey: "sendTransition",
+  transitionIdKey: "sendTransitionId",
   update: () => void,
 ): void => {
   if (
@@ -113,23 +105,3 @@ export const transitionSendStage = (
     update,
   );
 };
-
-/**
- * Applies one multisig proposal-stage update with the same directional motion
- * language as Send while keeping its transition metadata independently scoped.
- */
-export const transitionProposalStage = (
-  doc: Document,
-  previousStage: string | undefined,
-  nextStage: ProposalStage,
-  update: () => void,
-): void =>
-  transitionStage(
-    doc,
-    previousStage,
-    nextStage,
-    PROPOSAL_STAGE_ORDER,
-    "proposalTransition",
-    "proposalTransitionId",
-    update,
-  );

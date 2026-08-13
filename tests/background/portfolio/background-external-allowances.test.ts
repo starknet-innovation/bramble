@@ -30,6 +30,7 @@ const UNTRACKED_TOKEN = `0x0666${"6".repeat(59)}1`;
 const SPENDER = `0x7${"5".repeat(62)}`;
 const UNLIMITED = ((1n << 128n) + 5n).toString();
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

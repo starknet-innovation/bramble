@@ -7,13 +7,14 @@ import { describe, expect, test } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
 import { createRpcProvider } from "@mc-wallet/starknet/provider";
 import { IndeterminateRpcWriteError, submitInvokeTransaction } from "@mc-wallet/starknet/rpc";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { type Call, logger, type RpcProvider } from "starknet";
 
 logger.setLogLevel("FATAL");
 
 const ACCOUNT_ADDRESS = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
-const account: AccountRef = {
+const account: DerivedAccountRef = {
+  accountContractType: "openzeppelin",
   address: ACCOUNT_ADDRESS,
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

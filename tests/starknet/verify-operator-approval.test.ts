@@ -21,6 +21,7 @@ const COLLECTION = "0x03ba1f0dd8b9b6f7c8d1d1d7f0a2b3c4d5e6f708192a3b4c5d6e7f8091
 const OPERATOR = "0x0111111111111111111111111111111111111111111111111111111111111111";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

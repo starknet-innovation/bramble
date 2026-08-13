@@ -30,6 +30,7 @@ const ORIGIN = "https://a.test";
 const vaultPassphrase = "correct horse battery staple";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -141,6 +142,30 @@ describe("handleProviderOps guards", () => {
       ),
     ).resolves.toEqual({ error: "wallet locked" });
   });
+
+  test("refuses dapp account self-calls before queuing an approval", async () => {
+    const deps = providerDeps(false);
+    const connectedWallet = {
+      ...wallet,
+      async getGrantedAccounts() {
+        return [account];
+      },
+    } as unknown as ProviderOpsDeps["wallet"];
+
+    await expect(
+      handleProviderOps(
+        { ...deps, wallet: connectedWallet },
+        "wallet.addInvokeTransaction",
+        {
+          calls: [{ calldata: ["0x1"], contractAddress: account.address, entrypoint: "upgrade" }],
+          origin: ORIGIN,
+          type: "wallet.addInvokeTransaction",
+        },
+        contentSender,
+      ),
+    ).resolves.toEqual({ error: "Dapps cannot call the wallet account contract itself" });
+    expect(deps.approvals.list()).toEqual([]);
+  });
 });
 
 describe("handleProviderOps dispatch", () => {
@@ -180,6 +205,7 @@ const LEDGER_KEY = "0x1234567890abcdef";
 const LEDGER_SIGN_HASH = "0x1e240";
 
 const ledgerAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: {

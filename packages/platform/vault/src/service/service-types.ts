@@ -8,6 +8,7 @@
 
 import type { ConnectedSite } from "@mc-wallet/core/origin";
 import type {
+  AccountContractType,
   AccountRef,
   DerivedAccountRef,
   ImportedAccountRef,
@@ -91,6 +92,7 @@ export type EnsureNetworkAccountInput = {
  * retained recovery phrase.
  */
 export type AddDerivedAccountInput = {
+  readonly accountContractType: AccountContractType;
   readonly networkId: StarknetNetworkId;
   readonly vaultPassphrase: string;
 };
@@ -101,6 +103,7 @@ export type AddDerivedAccountInput = {
  * plain preferences or logged.
  */
 export type ImportRawKeyAccountInput = {
+  readonly accountContractType: AccountContractType;
   readonly networkId: StarknetNetworkId;
   readonly privateKey: string;
   readonly vaultPassphrase: string;
@@ -111,6 +114,7 @@ export type ImportRawKeyAccountInput = {
  * No key material is accepted or retained; the device signs every transaction.
  */
 export type AddLedgerAccountInput = {
+  readonly accountContractType: AccountContractType;
   readonly accountIndex: number;
   readonly eip2645application?: string;
   readonly networkId: StarknetNetworkId;
@@ -153,6 +157,7 @@ export type ForgetLedgerStrk20ViewingKeyInput = Omit<
  * reads no secrets and writes nothing to the vault.
  */
 export type DeriveLedgerAccountsInput = {
+  readonly accountContractType: AccountContractType;
   readonly entries: readonly LedgerPubKeyEntry[];
   readonly networkId: StarknetNetworkId;
 };

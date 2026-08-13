@@ -4,6 +4,7 @@ import {
   type AccountRef,
   canonicalAccountId,
   canonicalAccountRef,
+  canonicalLegacyAccountRef,
   isAccountId,
   isAccountIdForNetwork,
   isAccountRef,
@@ -12,17 +13,19 @@ import {
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 
 const derived = {
+  accountContractType: "openzeppelin" as const,
   address: "0x123",
   classHash: "0xabc",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },
   id: "SN_MAIN:0x123",
-  networkId: "SN_MAIN",
+  networkId: "SN_MAIN" as const,
   publicKeyX: "0x456",
   publicKeyY: "0x789",
 };
 
 test("account identity, network scope, and Ledger provenance fail closed", () => {
   const ledger = {
+    accountContractType: "argent" as const,
     address: "0xdef",
     classHash: "0xabc",
     derivation: {
@@ -51,4 +54,12 @@ test("account identity, network scope, and Ledger provenance fail closed", () =>
   expect(
     isAccountRef({ ...ledger, derivation: { ...ledger.derivation, path: ledgerAccountPath(3) } }),
   ).toBe(false);
+});
+
+test("ordinary account contract semantics are explicit", () => {
+  expect(isAccountRef({ ...derived, accountContractType: undefined })).toBe(false);
+  expect(isAccountRef({ ...derived, accountContractType: "argent" })).toBe(true);
+  expect(isAccountRef({ ...derived, accountContractType: "argent-multisig" })).toBe(false);
+  const { accountContractType: _, ...legacy } = derived;
+  expect(canonicalLegacyAccountRef(legacy)).toEqual(legacy);
 });

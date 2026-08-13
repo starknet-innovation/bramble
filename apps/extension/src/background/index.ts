@@ -4,7 +4,6 @@
 
 import { untrustedFetch } from "@mc-wallet/core/http-json";
 import { createKrustyKms } from "@mc-wallet/kms-krusty/adapter";
-import { MULTISIG_CLASS_ARTIFACT } from "@mc-wallet/multisig/deploy";
 import { createMultisigStore } from "@mc-wallet/multisig/repository";
 import { createOriginGuard } from "@mc-wallet/permissions/blocklist";
 import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
@@ -234,20 +233,6 @@ const phishingFeed = (() => {
 })();
 const originGuard = createOriginGuard(() => phishingFeed?.blockedDomains() ?? new Set());
 void storageReady.then(() => phishingFeed?.refresh()).catch(() => undefined);
-// Loads the bundled multisig Sierra class for the explicit declare flow. The
-// artifact ships inside the extension package, so this fetch never leaves the
-// extension origin; the ops handler re-verifies its class hash before use.
-const loadMultisigClass = async (): Promise<unknown> => {
-  const url = runtime?.getURL?.(MULTISIG_CLASS_ARTIFACT);
-  if (!url) {
-    throw new Error("multisig class artifact unavailable");
-  }
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("multisig class artifact unavailable");
-  }
-  return response.json();
-};
 const strk20MaturityStore = (() => {
   try {
     return createStrk20MaturityStore(createBrowserSessionStore());
@@ -289,7 +274,6 @@ const handleMessage = createMessageHandler(walletReader, runtime?.id ?? "", {
   swap: swapService,
   ...(allowanceLog ? { allowanceStore: allowanceLog } : {}),
   ...(multisigLog ? { multisigStore: multisigLog } : {}),
-  loadMultisigClass,
 });
 
 // Background verification of submitted transactions. Runs on its own alarm

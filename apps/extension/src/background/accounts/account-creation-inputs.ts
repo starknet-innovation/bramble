@@ -6,6 +6,7 @@
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { AccountDerivationInput } from "@mc-wallet/vault/accounts";
 import type { CreateVaultAccountInput } from "@mc-wallet/vault/service";
+import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import { isStarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import {
   isMnemonicPassphrase,
@@ -31,10 +32,14 @@ const readDerivationFields = (
   if (!isMnemonicPassphrase(message["mnemonicPassphrase"])) {
     return null;
   }
+  if (!isAccountContractType(message["accountContractType"])) {
+    return null;
+  }
   if (message["networkId"] !== undefined && !isStarknetNetworkId(message["networkId"])) {
     return null;
   }
   return {
+    accountContractType: message["accountContractType"],
     ...(accountIndex === undefined ? {} : { accountIndex }),
     ...(addressIndex === undefined ? {} : { addressIndex }),
     ...(message["mnemonicPassphrase"] === undefined
@@ -53,6 +58,7 @@ export const readCreateAccountInput = (message: unknown): CreateVaultAccountInpu
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountIndex",
+      "accountContractType",
       "addressIndex",
       "mnemonic",
       "mnemonicPassphrase",
@@ -81,6 +87,7 @@ export const readPreviewAccountInput = (message: unknown): AccountDerivationInpu
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, [
       "accountIndex",
+      "accountContractType",
       "addressIndex",
       "mnemonic",
       "mnemonicPassphrase",

@@ -12,24 +12,33 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import { type Account, CallData, hash, type RpcProvider } from "starknet";
 import {
+  ARGENT_ACCOUNT_CONTRACT,
+  ARGENT_MULTISIG_CONTRACT,
+  argentAccountConstructorCalldata,
+  argentMultisigConstructorCalldata,
+} from "../accounts/account-contracts";
+import {
   authorizedSpendFor,
   exceedsReviewedFee,
   type FeeEstimate,
   reviewedSpendFor,
 } from "../rpc/fee-bounds";
 import {
+  type AccountHashSigner,
+  type AccountSignerOptions,
+  type ArgentMultisigAccountDescriptor,
   acceptedRpcWriteHash,
+  argentQueryAccount,
   IndeterminateRpcWriteError,
   isContractNotFoundError,
   isTransportRpcError,
   krustyAccount,
-  type StarkHashSigner,
   withRpcFallback,
   withRpcWrite,
 } from "../rpc/provider";
 
 /**
- * DEPLOY_ACCOUNT parameters for a counterfactual OpenZeppelin account.
+ * DEPLOY_ACCOUNT parameters for a counterfactual wallet account.
  */
 export type AccountDeployment = {
   readonly addressSalt: string;
@@ -39,18 +48,68 @@ export type AccountDeployment = {
 };
 
 /**
- * Builds OZ DEPLOY_ACCOUNT parameters and proves they reproduce the stored
- * address, so a deployment can never land at a different contract address.
- * Krusty derives counterfactual addresses with salt 0; the public-key salt is
- * also accepted for accounts imported from other derivations.
+ * Counterfactual constructor commitment retained by the multisig feature.
  */
-export const ozAccountDeployment = (account: AccountRef): AccountDeployment => {
-  const constructorCalldata = CallData.compile([account.publicKeyX]);
-  for (const addressSalt of ["0x0", account.publicKeyX]) {
+export type ArgentMultisigDeploymentAccount = ArgentMultisigAccountDescriptor & {
+  readonly deployment: {
+    readonly salt: string;
+    readonly signerPublicKeys: readonly string[];
+    readonly threshold: number;
+  } | null;
+};
+
+/**
+ * Any wallet account for which platform code can prove deployment parameters.
+ */
+export type DeployableAccount = AccountRef | ArgentMultisigDeploymentAccount;
+
+const signerOptions = (account: DeployableAccount): AccountSignerOptions =>
+  account.accountContractType === "argent-multisig" && account.deployment
+    ? {
+        multisig: {
+          signerPublicKeys: account.deployment.signerPublicKeys,
+          threshold: account.deployment.threshold,
+        },
+      }
+    : {};
+
+/**
+ * Builds contract-aware DEPLOY_ACCOUNT parameters and proves they reproduce
+ * the stored address. Argent Account 0.4 accepts only its upstream public-key
+ * salt; historical OpenZeppelin accounts retain salt-zero compatibility, and
+ * multisig parameters must be explicitly retained by the feature repository.
+ */
+export const accountDeployment = (account: DeployableAccount): AccountDeployment => {
+  let constructorCalldata: readonly string[];
+  let addressSalts: readonly string[];
+  if (account.accountContractType === "argent-multisig") {
+    if (!sameFelt(account.classHash, ARGENT_MULTISIG_CONTRACT.classHash)) {
+      throw new WalletError("Argent multisig class hash does not match the pinned release");
+    }
+    const deployment = account.deployment;
+    if (!deployment) {
+      throw new WalletError("Imported Argent multisig has no counterfactual deployment parameters");
+    }
+    constructorCalldata = argentMultisigConstructorCalldata({
+      signerPublicKeys: deployment.signerPublicKeys,
+      threshold: deployment.threshold,
+    });
+    addressSalts = [deployment.salt];
+  } else if (account.accountContractType === "argent") {
+    if (!sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)) {
+      throw new WalletError("Argent account class hash does not match the pinned release");
+    }
+    constructorCalldata = argentAccountConstructorCalldata(account.publicKeyX);
+    addressSalts = [account.publicKeyX];
+  } else {
+    constructorCalldata = CallData.compile([account.publicKeyX]);
+    addressSalts = ["0x0", account.publicKeyX];
+  }
+  for (const addressSalt of addressSalts) {
     const computed = hash.calculateContractAddressFromHash(
       addressSalt,
       account.classHash,
-      constructorCalldata,
+      [...constructorCalldata],
       0,
     );
     if (sameFelt(computed, account.address)) {
@@ -87,6 +146,38 @@ export const isAccountDeployed = async (
 };
 
 /**
+ * Reads deployment status and fails closed when a deployed Argent account no
+ * longer runs its pinned class. OpenZeppelin retains its historical existence-
+ * only behavior; malformed or mismatched Argent class responses never reach a
+ * query signature, private signer, or broadcast.
+ */
+export const isCompatibleAccountDeployed = async (
+  provider: RpcProvider,
+  account: DeployableAccount,
+): Promise<boolean> => {
+  try {
+    const classHash = await provider.getClassHashAt(account.address, "latest");
+    if (account.accountContractType !== "openzeppelin") {
+      if (sameFelt(classHash, "0x0")) {
+        return false;
+      }
+      if (!isNonZeroStarkFieldElement(classHash)) {
+        throw new WalletError("RPC returned an invalid Argent account class hash");
+      }
+      if (!sameFelt(classHash, account.classHash)) {
+        throw new WalletError("Deployed Argent account class does not match the pinned release");
+      }
+    }
+    return true;
+  } catch (error) {
+    if (isContractNotFoundError(error)) {
+      return false;
+    }
+    throw error;
+  }
+};
+
+/**
  * Refusal shown when a deployment would sign for more than the card that
  * offered it displayed. Separate wording from the invoke refusal because the
  * transaction being refused is one the user did not ask for directly — it is
@@ -106,14 +197,15 @@ export const REVIEWED_DEPLOYMENT_FEE_REQUIRED =
 // the estimate is taken here, the spend its bounds authorise is checked against
 // the reviewed figure, and those same bounds are then signed.
 const checkedDeploymentBounds = async (
-  starknetAccount: Account,
+  estimatingAccount: Account,
   payload: Parameters<Account["deployAccount"]>[0],
   reviewedFee: FeeEstimate | undefined,
+  skipValidate: boolean,
 ): Promise<Record<string, unknown>> => {
   if (!reviewedFee) {
     throw new WalletError(REVIEWED_DEPLOYMENT_FEE_REQUIRED);
   }
-  const estimate = await starknetAccount.estimateAccountDeployFee(payload);
+  const estimate = await estimatingAccount.estimateAccountDeployFee(payload, { skipValidate });
   const authorized = authorizedSpendFor(estimate, "standard");
   if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
     throw new WalletError(REVIEWED_DEPLOYMENT_FEE_EXCEEDED);
@@ -123,17 +215,24 @@ const checkedDeploymentBounds = async (
 
 const deployAccountContract = async (
   starknetAccount: Account,
-  account: AccountRef,
+  account: DeployableAccount,
   reviewedFee?: FeeEstimate,
+  estimatingAccount: Account = starknetAccount,
+  skipValidate = true,
 ): Promise<DeploySubmission> => {
-  const deployment = ozAccountDeployment(account);
+  const deployment = accountDeployment(account);
   const payload = {
     addressSalt: deployment.addressSalt,
     classHash: deployment.classHash,
     constructorCalldata: [...deployment.constructorCalldata],
     contractAddress: deployment.contractAddress,
   };
-  const bounds = await checkedDeploymentBounds(starknetAccount, payload, reviewedFee);
+  const bounds = await checkedDeploymentBounds(
+    estimatingAccount,
+    payload,
+    reviewedFee,
+    skipValidate,
+  );
   const submitted = await starknetAccount.deployAccount(
     payload,
     bounds as Parameters<Account["deployAccount"]>[1],
@@ -154,15 +253,25 @@ const deployAccountContract = async (
 export const ensureAccountDeployed = async (
   provider: RpcProvider,
   starknetAccount: Account,
-  account: AccountRef,
+  account: DeployableAccount,
   reviewedFee?: FeeEstimate,
 ): Promise<DeploySubmission | null> => {
-  if (await isAccountDeployed(provider, account.address)) {
+  if (await isCompatibleAccountDeployed(provider, account)) {
     return null;
   }
   let submitted: DeploySubmission | null = null;
   try {
-    submitted = await deployAccountContract(starknetAccount, account, reviewedFee);
+    const validateArgent = account.accountContractType !== "openzeppelin";
+    const estimatingAccount = validateArgent
+      ? argentQueryAccount(provider, account, signerOptions(account))
+      : starknetAccount;
+    submitted = await deployAccountContract(
+      starknetAccount,
+      account,
+      reviewedFee,
+      estimatingAccount,
+      !validateArgent,
+    );
     await provider.waitForTransaction(submitted.transactionHash);
     return submitted;
   } catch (error) {
@@ -205,14 +314,14 @@ export type DeploymentStatusInput = {
  * Inputs for submitting a DEPLOY_ACCOUNT transaction.
  */
 export type DeployAccountInput = {
-  readonly account: AccountRef;
+  readonly account: DeployableAccount;
   /**
    * The deployment fee a user reviewed. It is mandatory at every deployment
    * submit boundary and absent only on read-only estimate inputs.
    */
   readonly reviewedFee?: FeeEstimate;
   readonly rpcUrls: readonly string[];
-  readonly signHash: StarkHashSigner;
+  readonly signHash: AccountHashSigner;
 };
 
 /**
@@ -249,9 +358,9 @@ export const getDeploymentStatus = async (
 };
 
 /**
- * Estimates counterfactual account deployment with validation skipped. This
- * never signs or broadcasts and is safe to use while a dapp approval is still
- * pending.
+ * Estimates counterfactual deployment without private signing or broadcast.
+ * Argent uses a shape-correct query signature with validation enabled; OZ
+ * skips validation so a Ledger review never prompts the device.
  */
 export const estimateAccountDeploymentFee = async (
   { account, rpcUrls, signHash }: DeployAccountInput,
@@ -261,15 +370,22 @@ export const estimateAccountDeploymentFee = async (
   withRpcFallback(
     rpcUrls,
     async (provider) => {
-      const deployment = ozAccountDeployment(account);
-      const estimate = await makeAccount(provider, account, signHash).estimateAccountDeployFee(
+      if (account.accountContractType !== "openzeppelin") {
+        await isCompatibleAccountDeployed(provider, account);
+      }
+      const deployment = accountDeployment(account);
+      const validateArgent = account.accountContractType !== "openzeppelin";
+      const estimatingAccount = validateArgent
+        ? argentQueryAccount(provider, account, signerOptions(account))
+        : makeAccount(provider, account, signHash, signerOptions(account));
+      const estimate = await estimatingAccount.estimateAccountDeployFee(
         {
           addressSalt: deployment.addressSalt,
           classHash: deployment.classHash,
           constructorCalldata: [...deployment.constructorCalldata],
           contractAddress: deployment.contractAddress,
         },
-        { skipValidate: true },
+        { skipValidate: !validateArgent },
       );
       return reviewedSpendFor(estimate, "standard");
     },
@@ -289,10 +405,20 @@ export const submitAccountDeployment = async (
     rpcUrls,
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
-      if (await isAccountDeployed(provider, account.address)) {
+      if (await isCompatibleAccountDeployed(provider, account)) {
         throw new WalletError("Account is already deployed");
       }
-      return deployAccountContract(makeAccount(provider, account, signHash), account, reviewedFee);
+      const starknetAccount = makeAccount(provider, account, signHash, signerOptions(account));
+      const validateArgent = account.accountContractType !== "openzeppelin";
+      return deployAccountContract(
+        starknetAccount,
+        account,
+        reviewedFee,
+        validateArgent
+          ? argentQueryAccount(provider, account, signerOptions(account))
+          : starknetAccount,
+        !validateArgent,
+      );
     },
     makeProvider,
   );

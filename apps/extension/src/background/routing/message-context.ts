@@ -30,6 +30,10 @@ import {
   type LedgerSignQueueTimeout,
 } from "../ledger/ledger-sign-queue";
 import {
+  type ArgentMultisigDeploymentReviews,
+  createArgentMultisigDeploymentReviews,
+} from "../multisig/multisig-deployment-reviews";
+import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
 } from "../privacy/strk20-wallet-preparations";
@@ -57,7 +61,7 @@ export type RouterContext = {
   readonly extensionId: string;
   readonly guard: OriginGuard;
   readonly ledgerSignQueue: LedgerSignQueue;
-  readonly loadMultisigClass: (() => Promise<unknown>) | undefined;
+  readonly multisigDeploymentReviews: ArgentMultisigDeploymentReviews;
   readonly multisigStore: MultisigStore;
   readonly now: () => number;
   readonly originHistory: OriginHistoryStore;
@@ -82,7 +86,7 @@ export type MessageHandlerOptions = {
   readonly allowanceStore?: AllowanceStore;
   readonly approvals?: ApprovalQueue;
   readonly ledgerSignQueue?: LedgerSignQueue;
-  readonly loadMultisigClass?: () => Promise<unknown>;
+  readonly multisigDeploymentReviews?: ArgentMultisigDeploymentReviews;
   readonly multisigStore?: MultisigStore;
   /**
    * Wall-clock reader used to age transaction observation windows. Injected so
@@ -127,6 +131,10 @@ const activeStateCoordinatorFor = (
   provided: ActiveStateCoordinator | undefined,
 ): ActiveStateCoordinator => provided ?? createActiveStateCoordinator();
 
+const multisigDeploymentReviewsFor = (
+  provided: ArgentMultisigDeploymentReviews | undefined,
+): ArgentMultisigDeploymentReviews => provided ?? createArgentMultisigDeploymentReviews();
+
 const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): WatchAssetAdmission =>
   provided ?? createWatchAssetAdmission();
 
@@ -159,7 +167,7 @@ export const routerContext = (
     extensionId,
     guard: options.originGuard ?? DEFAULT_ORIGIN_GUARD,
     ledgerSignQueue: runtimeLedgerSignQueue(options.ledgerSignQueue, session),
-    loadMultisigClass: options.loadMultisigClass,
+    multisigDeploymentReviews: multisigDeploymentReviewsFor(options.multisigDeploymentReviews),
     multisigStore: options.multisigStore ?? memoryMultisigStore(),
     now: options.now ?? systemClock,
     originHistory: options.originHistory ?? memoryOriginHistory(),

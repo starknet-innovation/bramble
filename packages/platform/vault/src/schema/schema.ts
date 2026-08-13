@@ -7,9 +7,11 @@ import {
   type AccountRef,
   canonicalAccountId,
   canonicalAccountRef,
+  canonicalLegacyAccountRef,
   isAccountId,
   isAccountRef,
-  isKeylessAccount,
+  isLegacyAccountRef,
+  type LegacyAccountRef,
 } from "@mc-wallet/wallet-model/accounts";
 import { canonicalFelt, isStarkPrivateKey } from "@mc-wallet/wallet-model/networks";
 import { isMnemonicText } from "@mc-wallet/wallet-model/passphrase";
@@ -22,11 +24,12 @@ import {
 /**
  * Current vault schema version accepted by validators and writers.
  *
- * Version 5 canonicalizes account identities and their dependent references.
+ * Version 6 records account-contract semantics explicitly. Version 5
+ * canonicalized account identities and their dependent references.
  * Version 4 introduced optional account secrets separated from public
  * {@link AccountRef} metadata.
  */
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 /**
  * Encrypted-vault reference from an account id to its private key.
@@ -49,7 +52,7 @@ export type OriginGrant = {
  * through migration; new writes always use the current schema.
  */
 export type VaultV1 = {
-  readonly accounts: readonly AccountRef[];
+  readonly accounts: readonly LegacyAccountRef[];
   readonly activeAccountId: string | null;
   readonly originGrants: readonly OriginGrant[];
   readonly schemaVersion: 1;
@@ -63,7 +66,7 @@ export type VaultV1 = {
  * (null for vaults migrated from v1). New writes always use {@link VaultV4}.
  */
 export type VaultV2 = {
-  readonly accounts: readonly AccountRef[];
+  readonly accounts: readonly LegacyAccountRef[];
   readonly activeAccountId: string | null;
   readonly mnemonic: string | null;
   readonly originGrants: readonly OriginGrant[];
@@ -89,7 +92,7 @@ export type VaultV2 = {
  * rule cannot be a validator invariant.
  */
 export type VaultV3 = {
-  readonly accounts: readonly AccountRef[];
+  readonly accounts: readonly LegacyAccountRef[];
   readonly activeAccountId: string | null;
   readonly mnemonic: string | null;
   readonly originGrants: readonly OriginGrant[];
@@ -105,7 +108,7 @@ export type VaultV3 = {
  * optional secret.
  */
 export type VaultV4 = {
-  readonly accounts: readonly AccountRef[];
+  readonly accounts: readonly LegacyAccountRef[];
   readonly accountSecrets: readonly AccountSecretRef[];
   readonly activeAccountId: string | null;
   readonly mnemonic: string | null;
@@ -121,9 +124,18 @@ export type VaultV4 = {
 export type VaultV5 = Omit<VaultV4, "schemaVersion"> & { readonly schemaVersion: 5 };
 
 /**
+ * Current encrypted vault schema. Every account carries explicit contract
+ * semantics; historical accounts migrate deterministically to OpenZeppelin.
+ */
+export type VaultV6 = Omit<VaultV4, "accounts" | "schemaVersion"> & {
+  readonly accounts: readonly AccountRef[];
+  readonly schemaVersion: 6;
+};
+
+/**
  * Alias for the latest supported vault schema.
  */
-export type Vault = VaultV5;
+export type Vault = VaultV6;
 
 const isStoredAccountId = (value: unknown, canonical: boolean): value is string =>
   canonical ? isAccountId(value) : canonicalAccountId(value) !== null;
@@ -152,7 +164,7 @@ const isOriginGrant = (value: unknown, canonical: boolean): value is OriginGrant
 /**
  * Creates a deterministic empty current vault.
  */
-export const emptyVault = (): VaultV5 => ({
+export const emptyVault = (): VaultV6 => ({
   accounts: [],
   accountSecrets: [],
   activeAccountId: null,
@@ -171,18 +183,23 @@ const isRetainedMnemonic = (value: unknown): value is string | null =>
 // (v1/v2, where a Ledger account cannot appear) this is identical to a strict
 // bijection. Extracted so the main validator stays within the complexity budget.
 const hasValidKeyBindings = (
-  accounts: readonly AccountRef[],
+  accounts: readonly (AccountRef | LegacyAccountRef)[],
   signingKeys: readonly SigningKeyRef[],
 ): boolean =>
   signingKeys.every((key) => accounts.some((account) => account.id === key.accountId)) &&
   accounts.every(
     (account) =>
-      signingKeys.some((key) => key.accountId === account.id) === !isKeylessAccount(account),
+      signingKeys.some((key) => key.accountId === account.id) ===
+      (account.derivation.kind !== "ledger"),
   );
 
 const hasValidVaultReferences = (
   value: Record<string, unknown>,
-  options: { readonly canonical: boolean; readonly ledgerAllowed: boolean },
+  options: {
+    readonly canonical: boolean;
+    readonly currentAccounts: boolean;
+    readonly ledgerAllowed: boolean;
+  },
 ): boolean => {
   if (
     (!isStoredAccountId(value["activeAccountId"], options.canonical) &&
@@ -201,7 +218,13 @@ const hasValidVaultReferences = (
   return (
     accounts.every(
       (account) =>
-        (options.canonical ? isAccountRef(account) : canonicalAccountRef(account) !== null) &&
+        (options.currentAccounts
+          ? options.canonical
+            ? isAccountRef(account)
+            : canonicalAccountRef(account) !== null
+          : options.canonical
+            ? isLegacyAccountRef(account)
+            : canonicalLegacyAccountRef(account) !== null) &&
         (options.ledgerAllowed || account.derivation.kind !== "ledger"),
     ) &&
     hasUniqueStrings(accounts.map((account) => account.id)) &&
@@ -223,15 +246,19 @@ const hasValidVaultReferences = (
 
 const hasValidCurrentVaultReferences = (
   value: Record<string, unknown>,
-  canonical: boolean,
+  options: { readonly canonical: boolean; readonly currentAccounts: boolean },
 ): boolean =>
   Array.isArray(value["accounts"]) &&
   Array.isArray(value["accountSecrets"]) &&
   value["accountSecrets"].every(isAccountSecretRef) &&
   hasUniqueStrings(value["accountSecrets"].map((secret) => secret.accountId)) &&
   hasValidAccountSecretBindings(
-    value["accounts"].filter((account): account is AccountRef =>
-      canonical ? isAccountRef(account) : canonicalAccountRef(account) !== null,
+    value["accounts"].filter((account): account is AccountRef | LegacyAccountRef =>
+      options.currentAccounts
+        ? options.canonical
+          ? isAccountRef(account)
+          : canonicalAccountRef(account) !== null
+        : canonicalLegacyAccountRef(account) !== null,
     ),
     value["accountSecrets"],
   );
@@ -251,7 +278,11 @@ export const isVaultV1 = (value: unknown): value is VaultV1 =>
     "signingKeys",
   ]) &&
   value["schemaVersion"] === 1 &&
-  hasValidVaultReferences(value, { canonical: false, ledgerAllowed: false });
+  hasValidVaultReferences(value, {
+    canonical: false,
+    currentAccounts: false,
+    ledgerAllowed: false,
+  });
 
 const V2_V3_KEYS = [
   "accounts",
@@ -273,7 +304,11 @@ export const isVaultV2 = (value: unknown): value is VaultV2 =>
   hasOnlyKnownKeys(value, V2_V3_KEYS) &&
   value["schemaVersion"] === 2 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, { canonical: false, ledgerAllowed: false });
+  hasValidVaultReferences(value, {
+    canonical: false,
+    currentAccounts: false,
+    ledgerAllowed: false,
+  });
 
 /**
  * Validates the current vault schema and internal references, admitting the
@@ -285,7 +320,11 @@ export const isVaultV3 = (value: unknown): value is VaultV3 =>
   hasOnlyKnownKeys(value, V2_V3_KEYS) &&
   value["schemaVersion"] === 3 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, { canonical: false, ledgerAllowed: true });
+  hasValidVaultReferences(value, {
+    canonical: false,
+    currentAccounts: false,
+    ledgerAllowed: true,
+  });
 
 const V4_KEYS = [...V2_V3_KEYS, "accountSecrets"] as const;
 
@@ -299,8 +338,12 @@ export const isVaultV4 = (value: unknown): value is VaultV4 =>
   hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === 4 &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, { canonical: false, ledgerAllowed: true }) &&
-  hasValidCurrentVaultReferences(value, false);
+  hasValidVaultReferences(value, {
+    canonical: false,
+    currentAccounts: false,
+    ledgerAllowed: true,
+  }) &&
+  hasValidCurrentVaultReferences(value, { canonical: false, currentAccounts: false });
 
 /**
  * Validates the current canonical vault schema and all internal references.
@@ -309,7 +352,27 @@ export const isVaultV5 = (value: unknown): value is VaultV5 =>
   isRecord(value) &&
   isJson(value) &&
   hasOnlyKnownKeys(value, V4_KEYS) &&
+  value["schemaVersion"] === 5 &&
+  isRetainedMnemonic(value["mnemonic"]) &&
+  hasValidVaultReferences(value, {
+    canonical: true,
+    currentAccounts: false,
+    ledgerAllowed: true,
+  }) &&
+  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: false });
+
+/**
+ * Validates the current schema-v6 vault and all internal references.
+ */
+export const isVaultV6 = (value: unknown): value is VaultV6 =>
+  isRecord(value) &&
+  isJson(value) &&
+  hasOnlyKnownKeys(value, V4_KEYS) &&
   value["schemaVersion"] === CURRENT_SCHEMA_VERSION &&
   isRetainedMnemonic(value["mnemonic"]) &&
-  hasValidVaultReferences(value, { canonical: true, ledgerAllowed: true }) &&
-  hasValidCurrentVaultReferences(value, true);
+  hasValidVaultReferences(value, {
+    canonical: true,
+    currentAccounts: true,
+    ledgerAllowed: true,
+  }) &&
+  hasValidCurrentVaultReferences(value, { canonical: true, currentAccounts: true });

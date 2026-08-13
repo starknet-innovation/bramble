@@ -4,7 +4,8 @@
  * history while retaining a clear route to review them.
  */
 import { describe, expect, test } from "bun:test";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { account } from "@mc-wallet/testkit/sidepanel";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { PendingApproval, WalletStatus } from "../../../../src/popup/responses/responses";
@@ -43,13 +44,13 @@ const transaction: ActivityEntry = {
   summary: "Send 1 STRK",
 };
 
-const multisig: MultisigRecord = {
+const multisig: ArgentMultisigRecord = {
+  accountContractType: "argent-multisig",
   address: "0x999",
+  classHash: ARGENT_MULTISIG_CONTRACT.classHash,
   id: "SN_MAIN:0x999",
   name: "Treasury",
   networkId: "SN_MAIN",
-  quorum: 1,
-  signers: [account.address],
 };
 
 describe("activity journey boundaries", () => {

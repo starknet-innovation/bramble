@@ -2,7 +2,11 @@
  * Development-only Wallet UI surface consumed by UI Lab and integration tests.
  * Production extension entrypoints must import `@mc-wallet/wallet-ui/start` instead.
  */
-export type { MultisigClassState } from "./popup/responses/multisig-responses";
+
+/**
+ * Public Argent multisig view shape for deterministic UI Lab fixtures.
+ */
+export type { ArgentMultisigView } from "./popup/responses/multisig-responses";
 export * from "./popup/responses/responses";
 export * from "./sidepanel/app/screens/views";
 export * from "./sidepanel/journeys/approvals/approval-cards";
@@ -15,10 +19,7 @@ export * from "./sidepanel/journeys/ledger/sign-views";
 export * from "./sidepanel/journeys/multisig/multisig-management-views";
 export * from "./sidepanel/journeys/multisig/multisig-model";
 export * from "./sidepanel/journeys/multisig/multisig-portfolio";
-export * from "./sidepanel/journeys/multisig/multisig-proposal-ui";
-export * from "./sidepanel/journeys/multisig/multisig-review-ui";
 export * from "./sidepanel/journeys/multisig/multisig-runtime";
-export * from "./sidepanel/journeys/multisig/multisig-sync";
 export * from "./sidepanel/journeys/multisig/multisig-ui";
 export * from "./sidepanel/journeys/multisig/multisig-views";
 export * from "./sidepanel/journeys/onboarding/backup-verify";

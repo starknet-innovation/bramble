@@ -15,13 +15,14 @@ import type {
   SignHashInput,
   WalletStatus,
 } from "@mc-wallet/vault/service";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { AccountRef, DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /**
  * Single stub account used by the dispatcher suites.
  */
-export const account: AccountRef = {
+export const account: DerivedAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: {
@@ -41,7 +42,7 @@ export const account: AccountRef = {
  * names it, so making it active disconnects the granted origin — the state the
  * re-prompt behaviour is built on.
  */
-export const secondAccount: AccountRef = {
+export const secondAccount: DerivedAccountRef = {
   ...account,
   address: "0xfeedface",
   derivation: { accountIndex: 0, addressIndex: 1, kind: "starknet-bip44" },
@@ -105,7 +106,7 @@ export const createWallet = (options: WalletStubOptions = {}) => {
     activeAccountId: options.activeAccountId?.() ?? account.id,
     mnemonic: null,
     originGrants: [{ accountIds: [account.id], origin: grantedOrigin }],
-    schemaVersion: 5,
+    schemaVersion: 6,
     signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
   });
   return {

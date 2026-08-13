@@ -11,9 +11,11 @@
  * tests running concurrently.
  */
 import { describe, expect, test } from "bun:test";
+import { ARGENT_ACCOUNT_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { estimateDeclareFee, submitDeclareTransaction } from "@mc-wallet/starknet/declare";
+import type { StarknetAccountDescriptor } from "@mc-wallet/starknet/provider";
 import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
+import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { Account, RpcProvider } from "starknet";
 
 const declareCalls: Array<Record<string, unknown>> = [];
@@ -61,10 +63,11 @@ class FakeAccount {
 }
 
 const makeProvider = (): RpcProvider => new FakeRpcProvider() as unknown as RpcProvider;
-const makeAccount = (_provider: RpcProvider, stored: AccountRef): Account =>
+const makeAccount = (_provider: RpcProvider, stored: StarknetAccountDescriptor): Account =>
   new FakeAccount({ address: stored.address }) as unknown as Account;
 
-const account: AccountRef = {
+const account: DerivedAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -72,6 +75,11 @@ const account: AccountRef = {
   networkId: "SN_MAIN",
   publicKeyX: "0x3234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   publicKeyY: "0x4234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
+};
+const argentAccount: DerivedAccountRef = {
+  ...account,
+  accountContractType: "argent",
+  classHash: ARGENT_ACCOUNT_CONTRACT.classHash,
 };
 
 const contractClass = { entry_points_by_type: { EXTERNAL: [] }, sierra_program: ["0x1"] };
@@ -182,5 +190,29 @@ describe("submitDeclareTransaction", () => {
         malformedAccount,
       ),
     ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
+  });
+
+  test("Argent declare estimate and submission reject a different live class", async () => {
+    declareCalls.length = 0;
+    let signed = 0;
+    const input = {
+      account: argentAccount,
+      compiledClassHash: "0x6def",
+      contractClass,
+      rpcUrls: ["https://rpc.example"],
+      signHash: async () => {
+        signed += 1;
+        return { publicKey: account.publicKeyX, r: "0x1", s: "0x2" };
+      },
+    };
+
+    for (const operation of [
+      () => estimateDeclareFee(input, makeProvider, makeAccount),
+      () => submitDeclareTransaction(input, makeProvider, makeAccount),
+    ]) {
+      await expect(operation()).rejects.toThrow("class does not match the pinned release");
+    }
+    expect(signed).toBe(0);
+    expect(declareCalls).toHaveLength(0);
   });
 });

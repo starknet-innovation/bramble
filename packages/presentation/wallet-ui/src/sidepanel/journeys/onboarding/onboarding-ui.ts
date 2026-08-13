@@ -8,6 +8,7 @@
  * accepts the real-funds acknowledgement.
  */
 
+import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import { isVaultPassphrase } from "@mc-wallet/wallet-model/passphrase";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { SidepanelWallet } from "../../runtime/runtime";
@@ -66,6 +67,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   const reviewAccount = form.querySelector<HTMLButtonElement>("#review-account-button");
   const submitButton = form.querySelector<HTMLButtonElement>("#create-wallet-button");
   const accountButton = form.querySelector<HTMLButtonElement>("#account-preview");
+  const accountContractSelect = form.querySelector<HTMLSelectElement>(
+    'select[name="accountContractType"]',
+  );
   const previewAddress = form.querySelector<HTMLElement>("[data-preview-address]");
   const phraseToggle = form.querySelector<HTMLButtonElement>("#phrase-toggle");
   const generatedGrid = form.querySelector<HTMLElement>('[data-recovery-grid="generated"]');
@@ -77,6 +81,9 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
   let requiresVerification = false;
   let accountSelected = false;
   let previewMatchesInput = false;
+
+  const accountContractType = (): AccountContractType | null =>
+    isAccountContractType(accountContractSelect?.value) ? accountContractSelect.value : null;
 
   const stepFor = (id: string): HTMLElement | undefined =>
     steps.find((step) => step.dataset["onboardingStep"] === id);
@@ -345,6 +352,12 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     accountButton.setAttribute("aria-pressed", String(accountSelected));
     refreshAccountGate();
   });
+  accountContractSelect?.addEventListener("change", () => {
+    previewMatchesInput = false;
+    accountSelected = false;
+    accountButton?.setAttribute("aria-pressed", "false");
+    refreshAccountGate();
+  });
 
   reviewAccount?.addEventListener("click", () => {
     if (!passwordOk()) {
@@ -359,7 +372,13 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
     if (passphraseResult) {
       passphraseResult.textContent = "Deriving the public account address…";
     }
-    void wallet.previewAccount(mnemonic, selectedNetworkId()).then(
+    const contractType = accountContractType();
+    if (!contractType) {
+      showToast("Choose a supported account contract", "error");
+      buttonBusy(reviewAccount, false);
+      return;
+    }
+    void wallet.previewAccount(mnemonic, selectedNetworkId(), contractType).then(
       (account) => {
         previewMatchesInput = true;
         accountSelected = false;
@@ -404,20 +423,28 @@ export const bindOnboarding = (deps: OnboardingUiDeps): void => {
       return;
     }
     buttonBusy(submitButton, true);
-    void wallet.createAccount(mnemonic, selectedNetworkId(), passphraseInput?.value ?? "").then(
-      async () => {
-        showToast("Wallet created", "success");
-        await deps.render(await wallet.loadStatus());
-      },
-      (error: unknown) => {
-        const message = errorMessage(error, "Account import failed");
-        showToast(message, "error");
-        if (result) {
-          result.textContent = message;
-        }
-        buttonBusy(submitButton, false);
-      },
-    );
+    const contractType = accountContractType();
+    if (!contractType) {
+      showToast("Choose a supported account contract", "error");
+      buttonBusy(submitButton, false);
+      return;
+    }
+    void wallet
+      .createAccount(mnemonic, selectedNetworkId(), passphraseInput?.value ?? "", contractType)
+      .then(
+        async () => {
+          showToast("Wallet created", "success");
+          await deps.render(await wallet.loadStatus());
+        },
+        (error: unknown) => {
+          const message = errorMessage(error, "Account import failed");
+          showToast(message, "error");
+          if (result) {
+            result.textContent = message;
+          }
+          buttonBusy(submitButton, false);
+        },
+      );
   });
 
   syncNetworkGate();

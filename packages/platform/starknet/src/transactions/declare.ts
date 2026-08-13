@@ -4,9 +4,10 @@
  */
 
 import { WalletError } from "@mc-wallet/core/errors";
-import { ensureAccountDeployed } from "@mc-wallet/starknet/deployment";
+import { ensureAccountDeployed, isCompatibleAccountDeployed } from "@mc-wallet/starknet/deployment";
 import {
   acceptedRpcWriteHash,
+  argentQueryAccount,
   krustyAccount,
   type StarkHashSigner,
   withRpcFallback,
@@ -77,9 +78,9 @@ const declarePayload = ({
 });
 
 /**
- * Estimates a Cairo 1 declaration fee without broadcasting or signing. The
- * estimate explicitly skips account validation, so the Krusty signer remains
- * untouched until the user approves the queued declaration.
+ * Estimates a Cairo 1 declaration fee without broadcasting or private signing.
+ * Argent includes validation through a public query signature; OZ skips it so
+ * a Ledger review never prompts the device.
  */
 export const estimateDeclareFee = async (
   input: DeclareInput,
@@ -89,11 +90,16 @@ export const estimateDeclareFee = async (
   withRpcFallback(
     input.rpcUrls,
     async (provider) => {
-      const estimate = await makeAccount(
-        provider,
-        input.account,
-        input.signHash,
-      ).estimateDeclareFee(declarePayload(input), { skipValidate: true });
+      const validateArgent = input.account.accountContractType === "argent";
+      if (validateArgent) {
+        await isCompatibleAccountDeployed(provider, input.account);
+      }
+      const estimatingAccount = validateArgent
+        ? argentQueryAccount(provider, input.account)
+        : makeAccount(provider, input.account, input.signHash);
+      const estimate = await estimatingAccount.estimateDeclareFee(declarePayload(input), {
+        skipValidate: !validateArgent,
+      });
       return reviewedSpendFor(estimate, "standard");
     },
     makeProvider,
@@ -106,14 +112,18 @@ export const estimateDeclareFee = async (
 // same bounds are then PASSED to `declare`, so what is signed is what was
 // checked rather than a second quote the library takes moments later.
 const checkedDeclareBounds = async (
-  starknetAccount: Account,
+  estimatingAccount: Account,
   payload: ReturnType<typeof declarePayload>,
   reviewedFee: FeeEstimate | undefined,
+  skipValidate: boolean,
 ): Promise<Record<string, unknown>> => {
-  if (!reviewedFee) {
+  if (!reviewedFee && skipValidate) {
     return {};
   }
-  const estimate = await starknetAccount.estimateDeclareFee(payload);
+  const estimate = await estimatingAccount.estimateDeclareFee(payload, { skipValidate });
+  if (!reviewedFee) {
+    return { resourceBounds: estimate.resourceBounds };
+  }
   const authorized = authorizedSpendFor(estimate, "standard");
   if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
     throw new WalletError(
@@ -163,7 +173,13 @@ export const submitDeclareTransaction = async (
         contractClass,
         ...(classHash === undefined ? {} : { classHash }),
       });
-      const bounds = await checkedDeclareBounds(starknetAccount as Account, payload, reviewedFee);
+      const validateArgent = account.accountContractType === "argent";
+      const bounds = await checkedDeclareBounds(
+        validateArgent ? argentQueryAccount(provider, account) : (starknetAccount as Account),
+        payload,
+        reviewedFee,
+        !validateArgent,
+      );
       const result = await (starknetAccount as Account).declare(
         payload,
         bounds as Parameters<Account["declare"]>[1],

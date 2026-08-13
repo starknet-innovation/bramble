@@ -17,6 +17,7 @@ import { createUnlockSession } from "../../apps/extension/src/background/runtime
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 
 export const invokeAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -67,7 +68,7 @@ export const invokeWalletStub = (connected: readonly AccountRef[]) => ({
       activeAccountId: invokeAccount.id,
       mnemonic: null,
       originGrants: [{ accountIds: [invokeAccount.id], origin: invokeOrigin }],
-      schemaVersion: 5 as const,
+      schemaVersion: 6 as const,
       signingKeys: [{ accountId: invokeAccount.id, privateKey: "0x123456" }],
     };
   },

@@ -25,6 +25,7 @@ const pending = {
 };
 
 const ledgerAccount = {
+  accountContractType: "openzeppelin",
   address: ADDRESS,
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: {

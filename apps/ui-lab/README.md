@@ -83,7 +83,6 @@ The lab has 174 deterministic checkpoints across 15 scenario families:
 | Account-isolated Activity | Account switching, immediate clearing, refresh, restoration, and separation from dApp decisions. |
 | Assets and permissions | Receive, focused add/detect token journeys, token detail, address book, and ERC20 allowances. |
 | NFT loading and send | Metadata loading, gallery, hidden/watch management, recipient-first review, blocking, and submission. |
-| Multisig operations | Watch, signers, track, reviewed proposal creation, declare/deploy, quorum, untracked, executed, and stale data. |
 | Settings and security | Focused appearance, request, network/endpoint, account/import, connected-site, backup/export/restore, and security boundaries. |
 
 The `ProductionViewCoverage` interaction test derives its assertion from the production

@@ -14,6 +14,7 @@ import { createUnlockSession } from "../../../apps/extension/src/background/runt
 import { makeRuntimeRpc } from "../../support/runtime-rpc-stub";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -191,6 +192,7 @@ describe("background class-hash verification message", () => {
   // shared active-account context accepts both account variants.
   test("verifies an imported (publicKeyY-less) account like a derived one", async () => {
     const importedAccount: AccountRef = {
+      accountContractType: "openzeppelin",
       address: "0x5abc567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
       classHash: "0x6abc567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
       derivation: { kind: "imported-raw-key" },

@@ -16,6 +16,7 @@ const ADDRESS = hash.calculateContractAddressFromHash(
   0,
 );
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: ADDRESS,
   classHash: CLASS_HASH,
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

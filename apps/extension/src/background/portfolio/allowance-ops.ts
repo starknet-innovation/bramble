@@ -33,12 +33,9 @@ import { type ApprovedAssets, approvedAssetKind } from "@mc-wallet/transactions/
 import { verifyCalls } from "@mc-wallet/transactions/verify";
 import { isWatchedNftContract } from "@mc-wallet/transactions/verify-decode";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import {
-  STARKNET_NETWORKS,
-  type StarknetNetworkId,
-  sameFelt,
-} from "@mc-wallet/wallet-model/networks";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
+import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
   activeAccountContext,
@@ -105,24 +102,17 @@ const readTrackedAmounts = async (
 // authorizes a multisig scope with — a signer may see what the multisig it
 // belongs to granted, and nothing else. Read-only: a multisig-owned record is
 // never revokable from here (the revoke handler refuses any record the active
-// account does not own), because zeroing it requires a proposal the multisig's
-// own quorum executes. The address is what makes a multisig row correctable
+// account does not own), because zeroing it requires a separately reviewed
+// multisig intent and threshold authorization. The address is what makes a multisig row correctable
 // on-chain: `allowance(multisig, spender)` is a question only its own address
 // can answer.
 const allowanceScopeOwners = async (
   deps: WalletOpsDeps,
   context: { readonly account: AccountRef; readonly networkId: StarknetNetworkId },
 ): Promise<ReadonlyMap<string, string>> => {
-  const watched = await deps.multisigStore?.listMultisigs().catch(() => []);
   const owners = new Map<string, string>([[context.account.id, context.account.address]]);
-  for (const record of watched ?? []) {
-    if (
-      record.networkId === context.networkId &&
-      record.id !== context.account.id &&
-      record.signers.some((signer) => sameFelt(signer, context.account.address))
-    ) {
-      owners.set(record.id, record.address);
-    }
+  for (const record of await currentArgentSignerRecords(deps, context.account, context.networkId)) {
+    owners.set(record.id, record.address);
   }
   return owners;
 };

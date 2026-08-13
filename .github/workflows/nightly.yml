@@ -149,9 +149,6 @@ jobs:
           key: cargo-${{ runner.os }}-wasmpack0.13.1-${{ hashFiles('scripts/vendor-krusty.ts') }}
           restore-keys: |
             cargo-${{ runner.os }}-
-      - uses: software-mansion/setup-scarb@2a96b748888e3329ee44ac9ac073d930e692b3cd # v1.6.2
-        with:
-          scarb-version: 2.18.0
       - run: cargo install wasm-pack --locked --version 0.13.1
       - run: bun install --frozen-lockfile
 
@@ -160,7 +157,7 @@ jobs:
       - name: Vendor crypto, privacy, and contract toolchain
         id: vendor
         continue-on-error: true
-        run: bun run vendor:krusty && bun run vendor:multisig && bun run vendor:privacy
+        run: bun run vendor:krusty && bun run vendor:argent && bun run vendor:privacy
       - name: Build extension
         id: build
         continue-on-error: true
@@ -197,7 +194,7 @@ jobs:
         run: |
           set -euo pipefail
           declare -A GATES=(
-            ["Vendor toolchain (krusty+multisig)"]="$VENDOR"
+            ["Vendor toolchain (krusty+argent)"]="$VENDOR"
             ["Extension build"]="$BUILD"
             ["Dependency audit (bun audit)"]="$AUDIT"
             ["E2E browser install"]="$E2E_INSTALL"
@@ -291,7 +288,7 @@ jobs:
             const { owner, repo } = context.repo;
             const branch = process.env.BRANCH;
             const gates = [
-              ["Vendor toolchain (krusty+multisig)", process.env.VENDOR],
+              ["Vendor toolchain (krusty+argent)", process.env.VENDOR],
               ["Extension build", process.env.BUILD],
               ["Dependency audit (bun audit)", process.env.AUDIT],
               ["E2E browser install", process.env.E2E_INSTALL],

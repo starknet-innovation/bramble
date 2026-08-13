@@ -9,7 +9,7 @@ rules and `README.md` the feature-level docs. Treat every change as security-sen
 ```bash
 bun install --frozen-lockfile
 bun run vendor:krusty        # required once before check/build (clones + wasm-pack builds Krusty KMS)
-bun run vendor:multisig      # required once before check/build (scarb-builds contracts/multisig)
+bun run vendor:argent        # required once before check/build (verifies pinned official contracts)
 bun run vendor:privacy       # required once before check/build (builds pinned official privacy SDK)
 bun run check                # types + lint + standards + manifest + vendored pins + tests
 bun run test:e2e:install     # Playwright Chromium browser (once per machine/CI image)
@@ -19,10 +19,9 @@ bun run package:extension    # writes artifacts/*.zip + .sha256
 ```
 
 - `bun run vendor:krusty` needs network + `wasm-pack 0.13.1` + a Rust toolchain;
-  `bun run vendor:multisig` needs `scarb 2.18.0` exactly (the multisig class hash pin in
-  `packages/features/multisig/src/deploy.ts` is only reproducible on that version); and
+  `bun run vendor:argent` needs network access to the pinned official Argent release; and
   `bun run vendor:privacy` needs Node.js 24 + npm. Without the vendored outputs,
-  `check:krusty`/`check:multisig`/`check:privacy` and `build` fail — that is expected in offline
+  `check:krusty`/`check:argent`/`check:privacy` and `build` fail — that is expected in offline
   sandboxes; run the rest of the gates and say so.
 - Narrower loops while iterating: `bun test tests/<module>/<name>.test.ts`, `bun run check:types`,
   `bun run check:lint`, `bun run test:e2e:build` (build + extension E2E). Always finish with the

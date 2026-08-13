@@ -17,14 +17,19 @@
  * of granting an authority the real collaborator would not.
  */
 
-import type { MultisigProposalStatus } from "@mc-wallet/multisig/chain";
+import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
 import { memoryMultisigStore } from "@mc-wallet/multisig/repository";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
 import { type FeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { memoryAllowanceStore } from "@mc-wallet/transactions/allowance-store";
+import { ec } from "starknet";
 import { createApprovalQueue } from "../../apps/extension/src/background/approvals/approvals";
 import { createLedgerSignQueue } from "../../apps/extension/src/background/ledger/ledger-sign-queue";
+import type {
+  ArgentMultisigDeploymentReview,
+  ArgentMultisigIntentPackage,
+} from "../../apps/extension/src/background/multisig/multisig-inputs";
 import { createMessageHandler } from "../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 import {
@@ -35,7 +40,6 @@ import { isFeeReviewResponse } from "../../packages/presentation/wallet-ui/src/p
 import { flushHeld, latestApprovalId, reviewedApprovalFee } from "./held";
 import {
   ETH,
-  type KeyBoundaryChainState,
   makeChainState,
   runtimeRpcFor,
   SPENDER,
@@ -47,10 +51,12 @@ import {
   account,
   extensionSender,
   KEY_BOUNDARY_MULTISIG,
+  KEY_BOUNDARY_MULTISIG_CONFIG,
   KEY_BOUNDARY_NFT_CONTRACT,
   KEY_BOUNDARY_ORIGIN,
   KEY_BOUNDARY_RECIPIENT,
   SECRET_PASSPHRASE,
+  SECRET_PRIVATE_KEY,
 } from "./key-boundary-fixtures";
 import type { KeyBoundaryLiveIds } from "./key-boundary-types";
 
@@ -174,7 +180,7 @@ export const makeKeyBoundaryHarness = async (
   };
 
   const seeded = await seedStores({ allowanceStore, preferencesStore });
-  const proposals = await seedProposals(settle, chainState);
+  const multisig = await seedArgentMultisig(settle);
   let connectOrigins = 0;
 
   const liveIds: KeyBoundaryLiveIds = {
@@ -221,10 +227,26 @@ export const makeKeyBoundaryHarness = async (
       }
       return parked;
     },
-    multisigId: proposals.multisigId,
+    multisigDeploymentReview: async () => {
+      const response = (await settle(
+        {
+          networkId: "SN_MAIN",
+          salt: "0x9",
+          signerAccountId: account.id,
+          ...KEY_BOUNDARY_MULTISIG_CONFIG,
+          type: "wallet.reviewArgentMultisigDeployment",
+        },
+        extensionSender,
+      )) as { readonly deploymentReview?: ArgentMultisigDeploymentReview };
+      if (!response.deploymentReview) throw new Error("deployment review was not prepared");
+      return response.deploymentReview;
+    },
+    multisigId: multisig.multisigId,
+    multisigIntentPackage: multisig.intentPackage,
+    multisigSignatureImport: multisig.signatureImport,
+    multisigSignIntentId: multisig.signIntentId,
+    multisigSubmitIntentId: multisig.submitIntentId,
     nftId: seeded.nftId,
-    proposalId: (action) => proposals.byAction[action],
-    proposalTxId: proposals.untrackedTxId,
     async strk20PreparationId() {
       return preparationIdOf(
         await settle(
@@ -256,9 +278,6 @@ export const makeKeyBoundaryHarness = async (
       );
     },
     tokenId: ETH.id,
-    undeclareMultisigClass() {
-      chainState.multisigClassDeclared = false;
-    },
     unregisterStrk20Account() {
       chainState.strk20Registered = false;
     },
@@ -322,60 +341,88 @@ const seedStores = async (stores: {
   return { addressBookId, allowanceId: allowance.id, groupId, nftId };
 };
 
-type SeededProposals = {
-  readonly byAction: Record<"confirm" | "execute" | "prepare" | "revoke", string>;
+type SeededArgentMultisig = {
+  readonly intentPackage: ArgentMultisigIntentPackage;
   readonly multisigId: string;
-  readonly untrackedTxId: string;
+  readonly signatureImport: KeyBoundaryLiveIds["multisigSignatureImport"];
+  readonly signIntentId: string;
+  readonly submitIntentId: string;
 };
 
-// One proposal per signer-gated action, each proposed through the real handler
-// so its stored call hashes to its own id, then given the chain status that
-// action requires.
-const seedProposals = async (
+const preparedIntent = async (
   settle: KeyBoundaryHarness["settle"],
-  state: KeyBoundaryChainState,
-): Promise<SeededProposals> => {
+  marker: number,
+): Promise<{
+  readonly intent: ArgentMultisigSigningIntent;
+  readonly package: ArgentMultisigIntentPackage;
+}> => {
+  const response = (await settle(
+    {
+      calls: [
+        {
+          calldata: [`0x${marker.toString(16)}`],
+          contractAddress: account.address,
+          entrypoint: "transfer",
+        },
+      ],
+      multisigId: `SN_MAIN:${KEY_BOUNDARY_MULTISIG}`,
+      summary: `Key-boundary intent ${marker}`,
+      type: "wallet.prepareArgentMultisigIntent",
+    },
+    extensionSender,
+  )) as {
+    readonly intent?: ArgentMultisigSigningIntent;
+    readonly intentPackage?: ArgentMultisigIntentPackage;
+  };
+  if (!response.intent || !response.intentPackage)
+    throw new Error("Argent intent was not prepared");
+  return { intent: response.intent, package: response.intentPackage };
+};
+
+// Seeds distinct exact hashes for local sign, imported fragment, full package,
+// and submit so durable per-signer claims cannot make one catalog entry shadow
+// another.
+const seedArgentMultisig = async (
+  settle: KeyBoundaryHarness["settle"],
+): Promise<SeededArgentMultisig> => {
   await settle(
-    { address: KEY_BOUNDARY_MULTISIG, name: "Treasury", type: "wallet.addMultisig" },
+    {
+      address: KEY_BOUNDARY_MULTISIG,
+      networkId: "SN_MAIN",
+      signerAccountId: account.id,
+      ...KEY_BOUNDARY_MULTISIG_CONFIG,
+      type: "wallet.addMultisig",
+    },
     extensionSender,
   );
   const multisigId = `SN_MAIN:${KEY_BOUNDARY_MULTISIG}`;
-  const actions = ["confirm", "execute", "prepare", "revoke"] as const;
-  const byAction: Record<"confirm" | "execute" | "prepare" | "revoke", string> = {
-    confirm: "",
-    execute: "",
-    prepare: "",
-    revoke: "",
+  const signing = await preparedIntent(settle, 1);
+  const importing = await preparedIntent(settle, 2);
+  const packaged = await preparedIntent(settle, 3);
+  const submitting = await preparedIntent(settle, 4);
+  const raw = ec.starkCurve.sign(importing.intent.prepared.transactionHash, SECRET_PRIVATE_KEY);
+  const signatureImport = {
+    intentId: importing.intent.id,
+    signature: {
+      publicKey: account.publicKeyX,
+      r: `0x${raw.r.toString(16)}`,
+      s: `0x${raw.s.toString(16)}`,
+    },
   };
-  for (const [index, action] of actions.entries()) {
-    const response = (await settle(
-      {
-        calldata: [`0x${index + 1}`, "0x0"],
-        entrypoint: "transfer",
-        multisigId,
-        to: account.address,
-        type: "wallet.proposeMultisigTx",
-      },
-      extensionSender,
-    )) as { readonly proposal?: { readonly id: string; readonly txId: string } };
-    const proposal = response.proposal;
-    if (!proposal) {
-      throw new Error(`key-boundary harness could not propose for ${action}`);
-    }
-    byAction[action] = proposal.id;
-    state.proposalStatuses.set(proposal.txId, statusFor(action));
-  }
-  return { byAction, multisigId, untrackedTxId: `0x7${"a".repeat(62)}` };
-};
-
-const statusFor = (
-  action: "confirm" | "execute" | "prepare" | "revoke",
-): MultisigProposalStatus => {
-  if (action === "execute") {
-    return { confirmations: 2, confirmedBySigner: true, state: "confirmed" };
-  }
-  if (action === "revoke") {
-    return { confirmations: 1, confirmedBySigner: true, state: "pending" };
-  }
-  return { confirmations: 0, confirmedBySigner: false, state: "pending" };
+  const signed = (await settle(
+    {
+      intentId: submitting.intent.id,
+      signerAccountId: account.id,
+      type: "wallet.signArgentMultisigIntent",
+    },
+    extensionSender,
+  )) as { readonly intent?: ArgentMultisigSigningIntent };
+  if (signed.intent?.state !== "ready") throw new Error("Argent submit intent was not signed");
+  return {
+    intentPackage: packaged.package,
+    multisigId,
+    signatureImport,
+    signIntentId: signing.intent.id,
+    submitIntentId: signed.intent.id,
+  };
 };

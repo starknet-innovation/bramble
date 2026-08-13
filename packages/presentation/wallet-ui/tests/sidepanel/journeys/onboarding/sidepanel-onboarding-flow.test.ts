@@ -33,6 +33,7 @@ const status: WalletStatus = {
 };
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   classHash: "0x023456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

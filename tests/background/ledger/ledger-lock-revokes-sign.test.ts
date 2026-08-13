@@ -34,6 +34,7 @@ const publicKeyX = starkCurve.getStarkKey(LEDGER_KEY);
 const INVOKE_HASH = "0x1e240";
 
 const ledgerAccount: LedgerAccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabc111111",
   classHash: "0x111111",
   derivation: {

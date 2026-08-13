@@ -98,7 +98,6 @@ const privateDashboard = (privacy: PrivacyDisclosureState): string =>
     false,
     [],
     false,
-    null,
     { balances: [] },
     null,
     [],

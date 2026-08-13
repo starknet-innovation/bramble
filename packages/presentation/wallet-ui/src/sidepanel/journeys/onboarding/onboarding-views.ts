@@ -5,7 +5,7 @@
  */
 
 import { button, iconButton } from "@mc-wallet/ui-kit/controls";
-import { checkboxField, inputControl, textField } from "@mc-wallet/ui-kit/fields";
+import { checkboxField, inputControl, selectField, textField } from "@mc-wallet/ui-kit/fields";
 import type { WalletStatus } from "../../../popup/responses/responses";
 import { icon } from "../../shared/icons";
 import { BACKUP_VERIFY_POSITIONS } from "./backup-verify";
@@ -267,6 +267,16 @@ const accountStep = (): string => `
     ${flowBack("Back to passphrase")}
     ${stepHead("wallet", "Choose accounts to add", "Select the Starknet account you want available when setup finishes.")}
     <div class="onboarding-fields">
+      ${selectField({
+        hint: "Argent is recommended for new accounts. OpenZeppelin remains available for compatibility.",
+        label: "Account contract",
+        name: "accountContractType",
+        options: [
+          { label: "Argent Account", value: "argent" },
+          { label: "OpenZeppelin Account", value: "openzeppelin" },
+        ],
+        selected: "argent",
+      })}
       <button
         class="onboarding-account"
         id="account-preview"
@@ -302,6 +312,16 @@ const ledgerStep = (status: WalletStatus): string => `
     ${flowBack("Back to wallet methods")}
     ${stepHead("shield", "Secure this wallet with Ledger", "Set a local vault passphrase, then connect the device and choose accounts.")}
     <form id="ledger-setup-form" class="onboarding-fields">
+      ${selectField({
+        hint: "Argent is recommended for new accounts. OpenZeppelin remains available for compatibility.",
+        label: "Account contract",
+        name: "ledgerAccountContractType",
+        options: [
+          { label: "Argent Account", value: "argent" },
+          { label: "OpenZeppelin Account", value: "openzeppelin" },
+        ],
+        selected: "argent",
+      })}
       ${passwordFields("ledger")}
       <p id="ledger-passphrase-result" role="status"></p>
       ${mainnetAcknowledgement(

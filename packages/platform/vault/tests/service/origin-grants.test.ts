@@ -11,6 +11,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 const ORIGIN = "https://example.com";
 
 const accountAt = (suffix: string): AccountRef => ({
+  accountContractType: "openzeppelin",
   address: `0x${suffix}`,
   classHash: "0xabcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -33,7 +34,7 @@ const vaultWith = (
   activeAccountId,
   mnemonic: null,
   originGrants: accountIds === null ? [] : [{ accountIds, origin: ORIGIN }],
-  schemaVersion: 5,
+  schemaVersion: 6,
   signingKeys: [],
 });
 

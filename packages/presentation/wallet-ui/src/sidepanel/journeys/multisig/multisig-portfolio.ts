@@ -5,7 +5,7 @@
  */
 
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigRecord } from "@mc-wallet/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import { emptyState } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
@@ -42,7 +42,7 @@ export const EMPTY_MULTISIG_PORTFOLIO: MultisigPortfolioData = {
 };
 
 const portfolioHero = (
-  record: MultisigRecord,
+  record: ArgentMultisigRecord,
   preferences: WalletPreferences | null,
   data: MultisigPortfolioData,
 ): string => {
@@ -87,7 +87,7 @@ const tokenPanel = (preferences: WalletPreferences | null, data: MultisigPortfol
 };
 
 const collectiblesPanel = (
-  record: MultisigRecord,
+  record: ArgentMultisigRecord,
   preferences: WalletPreferences | null,
   data: MultisigPortfolioData,
 ): string => {
@@ -120,23 +120,23 @@ const collectiblesPanel = (
 
 /**
  * Renders the familiar wallet-home hierarchy for one multisig: portfolio,
- * multisig-specific primary actions, then Tokens, Collectibles, and Proposals.
+ * multisig-specific primary actions, then Tokens, Collectibles, and intents.
  */
 export const multisigPortfolio = (input: {
   readonly canSign: boolean;
   readonly data: MultisigPortfolioData;
   readonly openCount: number;
   readonly preferences: WalletPreferences | null;
-  readonly proposals: string;
-  readonly record: MultisigRecord;
+  readonly intents: string;
+  readonly record: ArgentMultisigRecord;
 }): string => `
   ${portfolioHero(input.record, input.preferences, input.data)}
   <section class="home-actions multisig-primary-actions" aria-label="Multisig actions">
     <div class="action-row">
-      ${actionTile("multisig-propose", "Propose", "plus", input.canSign)}
+      ${actionTile("multisig-propose", "Prepare", "plus", input.canSign)}
       ${actionTile("multisig-receive", "Receive", "qrCode", true)}
       ${actionTile("multisig-signers", "Signers", "users", true)}
-      ${actionTile("multisig-track", "Track", "search", true)}
+      ${actionTile("multisig-track", "Import", "search", true)}
     </div>
     ${input.canSign ? "" : '<p class="hint">This wallet does not own a current signer, so it can watch this account but cannot propose actions.</p>'}
   </section>
@@ -145,10 +145,10 @@ export const multisigPortfolio = (input: {
       <div class="tab-set" role="tablist" aria-label="Shared account sections">
         <button class="home-tab" data-ms-home-tab="assets" type="button" role="tab" aria-selected="true">Tokens</button>
         <button class="home-tab" data-ms-home-tab="collectibles" type="button" role="tab" aria-selected="false">Collectibles</button>
-        <button class="home-tab" data-ms-home-tab="proposals" type="button" role="tab" aria-selected="false" aria-label="Proposals, ${input.openCount} open">Proposals${input.openCount > 0 ? `<span class="home-tab-count">${input.openCount}</span>` : ""}</button>
+        <button class="home-tab" data-ms-home-tab="intents" type="button" role="tab" aria-selected="false" aria-label="Signing intents, ${input.openCount} open">Intents${input.openCount > 0 ? `<span class="home-tab-count">${input.openCount}</span>` : ""}</button>
       </div>
     </div>
     <div data-ms-home-panel="assets" role="tabpanel">${tokenPanel(input.preferences, input.data)}</div>
     <div data-ms-home-panel="collectibles" role="tabpanel" hidden>${collectiblesPanel(input.record, input.preferences, input.data)}</div>
-    <div data-ms-home-panel="proposals" role="tabpanel" hidden>${input.proposals}</div>
+    <div data-ms-home-panel="intents" role="tabpanel" hidden>${input.intents}</div>
   </section>`;

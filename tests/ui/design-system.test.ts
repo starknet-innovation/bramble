@@ -150,7 +150,18 @@ describe("design system", () => {
         label: "Create a new wallet",
       }),
     );
-    expect(markup).not.toContain("<select");
+    expect(markup).toContain(
+      selectField({
+        hint: "Argent is recommended for new accounts. OpenZeppelin remains available for compatibility.",
+        label: "Account contract",
+        name: "accountContractType",
+        options: [
+          { label: "Argent Account", value: "argent" },
+          { label: "OpenZeppelin Account", value: "openzeppelin" },
+        ],
+        selected: "argent",
+      }),
+    );
     expect(markup).toContain("Starknet Mainnet");
   });
 });

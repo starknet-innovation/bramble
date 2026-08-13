@@ -10,13 +10,13 @@
  * actions, a trusted Terminal handoff, then the Tokens/Collectibles section.
  */
 
-import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigSigningIntent } from "@mc-wallet/multisig/repository";
 import type { DisplayCurrency, WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { ClassHashVerification } from "@mc-wallet/starknet/class-hash-verify";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { AllowanceView } from "@mc-wallet/transactions/allowance-discovery";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import type { MultisigClassState } from "../../../popup/responses/multisig-responses";
+import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type {
   ConnectedSite,
   DiscoveredNft,
@@ -40,7 +40,6 @@ import {
   multisigWatchFlow,
 } from "../../journeys/multisig/multisig-management-views";
 import type { MultisigPortfolioData } from "../../journeys/multisig/multisig-portfolio";
-import type { MultisigSyncState } from "../../journeys/multisig/multisig-sync";
 import {
   multisigDeployFlow,
   multisigDetailFlow,
@@ -80,11 +79,10 @@ type JourneyContext = {
   readonly chart: readonly number[];
   readonly currency: DisplayCurrency;
   readonly discoveredNfts: readonly DiscoveredNft[];
-  readonly multisigClassDeclared: MultisigClassState | "error" | null;
+  readonly multisigClassDeclared: boolean | "error" | null;
   readonly multisigPortfolio: MultisigPortfolioData;
-  readonly multisigProposals: readonly MultisigProposalRecord[];
-  readonly multisigSync: MultisigSyncState;
-  readonly multisigs: readonly MultisigRecord[];
+  readonly multisigIntents: readonly ArgentMultisigSigningIntent[];
+  readonly multisigs: readonly ArgentMultisigView[];
   readonly multisigsError: boolean;
   readonly preferences: WalletPreferences | null;
   readonly prices: Readonly<Record<string, number>>;
@@ -99,10 +97,11 @@ type JourneyContext = {
   readonly trackedBalances: readonly TokenBalance[];
 };
 
-const selectedMultisig = (context: JourneyContext): MultisigRecord | null =>
+const selectedMultisig = (context: JourneyContext): ArgentMultisigView | null =>
   context.multisigs.find(
-    (record) =>
-      record.id === context.selectedMultisigId && record.networkId === context.status.networkId,
+    (view) =>
+      view.record.id === context.selectedMultisigId &&
+      view.record.networkId === context.status.networkId,
   ) ?? null;
 
 const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext): string | null => {
@@ -117,9 +116,8 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
       context.status,
       context.account,
       context.multisigs,
-      context.multisigProposals,
+      context.multisigIntents,
       context.multisigsError,
-      context.multisigSync,
     );
   }
   if (activeView === "multisig-watch") {
@@ -148,9 +146,8 @@ const multisigJourneyScreen = (activeView: WalletView, context: JourneyContext):
       context.status,
       context.account,
       selected,
-      context.multisigProposals,
+      context.multisigIntents,
       context.multisigsError,
-      context.multisigSync,
       context.preferences,
       activeView,
       context.multisigPortfolio,
@@ -271,10 +268,10 @@ export const dashboard = (
   allowances: readonly AllowanceView[] = [],
   selectedNftId: string | null = null,
   changes: Readonly<Record<string, number>> = {},
-  multisigs: readonly MultisigRecord[] = [],
-  multisigProposals: readonly MultisigProposalRecord[] = [],
+  multisigs: readonly ArgentMultisigView[] = [],
+  multisigIntents: readonly ArgentMultisigSigningIntent[] = [],
   selectedMultisigId: string | null = null,
-  multisigClassDeclared: MultisigClassState | "error" | null = null,
+  multisigClassDeclared: boolean | "error" | null = null,
   drawerGroupFilter: string | null = null,
   expandedGroupId: string | null = null,
   priceStale = false,
@@ -285,7 +282,6 @@ export const dashboard = (
   historyUnavailable = false,
   snoozedApprovalIds: readonly string[] = [],
   multisigsError = false,
-  multisigSync: MultisigSyncState = null,
   multisigBalances: BalanceState = { error: "multisig balances unavailable" },
   multisigBalanceId: string | null = null,
   multisigNfts: readonly DiscoveredNft[] = [],
@@ -319,8 +315,7 @@ export const dashboard = (
         selectedMultisigId !== null && multisigNftId === selectedMultisigId ? multisigNfts : null,
       prices,
     },
-    multisigProposals,
-    multisigSync,
+    multisigIntents,
     multisigs,
     multisigsError,
     preferences,
@@ -396,15 +391,14 @@ export const dashboard = (
           status,
           account,
           sharedIdentity,
-          multisigProposals,
+          multisigIntents,
           multisigsError,
-          multisigSync,
           preferences,
           "multisig-home",
           journeyContext.multisigPortfolio,
         )
       : activeView === "activity"
-        ? activityScreen(pending, status, transactions, historyUnavailable, sharedIdentity)
+        ? activityScreen(pending, status, transactions, historyUnavailable, sharedIdentity?.record)
         : activeView === "settings"
           ? settingsScreen(status, preferences)
           : homeScreen(
@@ -422,7 +416,7 @@ export const dashboard = (
               privacy,
             );
   return `
-    ${walletHeader(status, account, preferences, sharedIdentity)}
+    ${walletHeader(status, account, preferences, sharedIdentity?.record)}
     ${screen}
     ${walletDock(activeView, pending.length, sharedIdentity !== null)}
     ${accountDrawer(
@@ -432,7 +426,7 @@ export const dashboard = (
       drawerGroupFilter,
       openAssignId,
       multisigs,
-      multisigProposals,
+      multisigIntents,
       selectedMultisigId,
     )}`;
 };

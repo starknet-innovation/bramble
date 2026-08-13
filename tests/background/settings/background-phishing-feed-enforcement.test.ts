@@ -18,6 +18,7 @@ const CLEAN = "https://legit-starknet-dapp.xyz";
 const vaultPassphrase = "correct horse battery staple";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -55,7 +56,7 @@ const walletStub = {
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 5 as const,
+      schemaVersion: 6 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

@@ -156,6 +156,7 @@ export const emptyNetworkStatus: WalletStatus = {
 };
 
 const importedAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x6234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
   classHash: "0x111",
   derivation: { kind: "imported-raw-key" },

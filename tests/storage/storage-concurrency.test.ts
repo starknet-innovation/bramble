@@ -4,20 +4,16 @@
  * background events cannot silently overwrite one another.
  */
 import { describe, expect, test } from "bun:test";
-import {
-  createMultisigStore,
-  type MultisigRecord,
-  multisigId,
-} from "@mc-wallet/multisig/repository";
+import { type ArgentMultisigRecord, createMultisigStore } from "@mc-wallet/multisig/repository";
 import { createOriginHistoryStore } from "@mc-wallet/permissions/origin-history";
 import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { ARGENT_MULTISIG_CONTRACT } from "@mc-wallet/starknet/account-contracts";
 import { createMemoryStore } from "@mc-wallet/store/kv";
 import { createActivityLog } from "@mc-wallet/transactions/activity";
 import { createAllowanceStore } from "@mc-wallet/transactions/allowance-store";
 
 const ACCOUNT_ID = "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 const TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
-const SIGNER = "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde";
 
 describe("plain-store mutation serialization", () => {
   test("retains concurrent activity records", async () => {
@@ -86,12 +82,12 @@ describe("plain-store mutation serialization", () => {
   test("retains concurrent multisig records", async () => {
     const registry = createMultisigStore({ store: createMemoryStore() });
     const records = ["0x101", "0x202"].map(
-      (address): MultisigRecord => ({
+      (address): ArgentMultisigRecord => ({
+        accountContractType: "argent-multisig",
         address,
-        id: multisigId("SN_MAIN", address) ?? "",
+        classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+        id: `SN_MAIN:${address}`,
         networkId: "SN_MAIN",
-        quorum: 1,
-        signers: [SIGNER],
       }),
     );
 

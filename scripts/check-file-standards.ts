@@ -132,10 +132,27 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/onboarding/onboarding-views.ts",
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
+  // Privileged UI message client: credentials transit directly to the
+  // background and are never retained or rendered here.
+  "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime-accounts.ts",
+  // Public Argent multisig packages and verified signature fragments cross
+  // these UI boundaries; no private signing material is ever present.
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-model.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-runtime.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-ui.ts",
+  "packages/presentation/wallet-ui/src/sidepanel/journeys/multisig/multisig-views.ts",
   "packages/features/transactions/src/routing/ledger-verify.ts",
   // Pure public-key verification consolidated for Ledger and KMS probe
   // callers; it receives no private key or vault credential.
   "packages/platform/starknet/src/transactions/signature-verify.ts",
+  // Public account ABI serialization and signer façades. These files carry
+  // public keys/signature fragments; private-key operations remain in Krusty.
+  "packages/platform/starknet/src/accounts/account-contracts.ts",
+  "packages/platform/starknet/src/rpc/account-signer.ts",
+  "packages/platform/starknet/src/rpc/multisig-invoke.ts",
+  "packages/platform/starknet/src/rpc/rpc-estimate.ts",
+  "packages/platform/starknet/src/transactions/declare.ts",
+  "packages/platform/starknet/src/transactions/deployment.ts",
   "packages/platform/starknet/src/rpc/provider.ts",
   "packages/platform/starknet/src/rpc/rpc.ts",
   "packages/features/privacy/src/policy/call-set-signer.ts",
@@ -145,6 +162,15 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/features/privacy/src/sdk/official-sdk-transfers.ts",
   "packages/features/privacy/src/paymaster/paymaster.ts",
   "packages/features/privacy/src/service.ts",
+  // Argent multisig stores public signer identifiers and verified public
+  // signature fragments only. Private signing remains behind Krusty and the
+  // privileged background accountHashSigner boundary.
+  "packages/features/multisig/src/chain.ts",
+  "packages/features/multisig/src/deploy.ts",
+  "packages/features/multisig/src/repository-schema.ts",
+  "apps/extension/src/background/multisig/multisig-deploy-ops.ts",
+  "apps/extension/src/background/multisig/multisig-inputs.ts",
+  "apps/extension/src/background/multisig/multisig-tx-ops.ts",
   "packages/platform/vault/src/accounts/account-secrets.ts",
   "packages/platform/vault/src/encrypted-store.ts",
   "packages/platform/vault/src/kms-port.ts",

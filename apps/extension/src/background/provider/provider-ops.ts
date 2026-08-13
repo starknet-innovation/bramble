@@ -10,6 +10,7 @@ import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { standingAllowanceTotals } from "@mc-wallet/transactions/allowances";
 import {
+  refuseOnAccountSelfCall,
   refuseOnPoisonedRecipient,
   verificationContext,
   verifyCalls,
@@ -196,7 +197,9 @@ export const queueInvokeApproval = async (
     trusted,
   );
   const report = verifyCalls(input.calls, trusted, standing);
-  const refusal = refuseOnPoisonedRecipient(report);
+  const refusal =
+    refuseOnAccountSelfCall(input.calls, resolved.account.address) ??
+    refuseOnPoisonedRecipient(report);
   if (refusal) {
     return refusal;
   }
@@ -434,11 +437,11 @@ export const executeInvokeApproval = async (
   // above and as the post-consent check the STRK20 executor applies, so a
   // decision the user made against one trusted set is never carried out against
   // another. Refusal, not annotation — nothing is submitted.
-  const poisoned = refuseOnPoisonedRecipient(
-    verifyCalls(calls, verificationContext(account, preferences)),
-  );
-  if (poisoned) {
-    return poisoned;
+  const refusal =
+    refuseOnAccountSelfCall(calls, account.address) ??
+    refuseOnPoisonedRecipient(verifyCalls(calls, verificationContext(account, preferences)));
+  if (refusal) {
+    return refusal;
   }
   // A keyless Ledger account signs on the device (verified against publicKeyX),
   // every other account through the vault — the same seam the wallet-initiated

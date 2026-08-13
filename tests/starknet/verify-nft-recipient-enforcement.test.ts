@@ -6,7 +6,7 @@
  * data span) and every ERC1155 batch transfer decoded as opaque, and because the
  * recipient was only extracted from calls that had decoded as a transfer, the
  * address-poisoning hard refusal and the self-send warning never ran on them. A
- * dapp invoke or a stored multisig proposal could therefore move an NFT to a
+ * dapp invoke or a frozen multisig intent could therefore move an NFT to a
  * lookalike of a saved contact while the review card said only
  * "Call safe_transfer_from on 0x…".
  *

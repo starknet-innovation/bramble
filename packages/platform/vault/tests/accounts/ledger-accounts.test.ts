@@ -4,10 +4,15 @@
  * admits the keyless account only at the current schema.
  */
 import { describe, expect, test } from "bun:test";
+import {
+  ARGENT_ACCOUNT_CONTRACT,
+  argentAccountAddress,
+} from "@mc-wallet/starknet/account-contracts";
 import { fakeKms } from "@mc-wallet/testkit/fake-kms";
 import { deriveLedgerAccount, deriveLedgerAccountRefs } from "@mc-wallet/vault/accounts";
-import { isVaultV2, isVaultV5, type Vault } from "@mc-wallet/vault/schema";
+import { isVaultV2, isVaultV6, type Vault } from "@mc-wallet/vault/schema";
 import { isAccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
+import { sameFelt } from "@mc-wallet/wallet-model/networks";
 
 // The fake KMS derives address = 0x<publicKeyX-hex><classHash[2..8]>, so a fixed
 // public key and the SN_MAIN class hash 0x111111 pin a known counterfactual
@@ -18,11 +23,13 @@ const EXPECTED_ADDRESS = "0xabc111111";
 describe("deriveLedgerAccount", () => {
   test("derives a keyless Ledger account at a fixed known address", async () => {
     const account = await deriveLedgerAccount(fakeKms(), {
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       publicKeyX: PUBLIC_KEY_X,
     });
 
     expect(account).toEqual({
+      accountContractType: "openzeppelin",
       address: EXPECTED_ADDRESS,
       classHash: "0x111111",
       derivation: {
@@ -41,6 +48,7 @@ describe("deriveLedgerAccount", () => {
 
   test("stores the exact device path for the chosen index", async () => {
     const account = await deriveLedgerAccount(fakeKms(), {
+      accountContractType: "openzeppelin",
       accountIndex: 7,
       networkId: "SN_SEPOLIA",
       publicKeyX: "0x5",
@@ -50,15 +58,38 @@ describe("deriveLedgerAccount", () => {
     expect(account.address).toBe("0x5abcdef");
   });
 
+  test("preserves Argent contract semantics for a keyless account", async () => {
+    const account = await deriveLedgerAccount(fakeKms(), {
+      accountContractType: "argent",
+      accountIndex: 0,
+      publicKeyX: PUBLIC_KEY_X,
+    });
+
+    expect(account).toMatchObject({
+      accountContractType: "argent",
+      address: argentAccountAddress(PUBLIC_KEY_X, PUBLIC_KEY_X),
+    });
+    expect(sameFelt(account.classHash, ARGENT_ACCOUNT_CONTRACT.classHash)).toBe(true);
+  });
+
   test("rejects an invalid index, public key, or network", async () => {
     await expect(
-      deriveLedgerAccount(fakeKms(), { accountIndex: -1, publicKeyX: PUBLIC_KEY_X }),
+      deriveLedgerAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
+        accountIndex: -1,
+        publicKeyX: PUBLIC_KEY_X,
+      }),
     ).rejects.toThrow("Invalid Ledger account index");
     await expect(
-      deriveLedgerAccount(fakeKms(), { accountIndex: 0, publicKeyX: "0x0" }),
+      deriveLedgerAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
+        accountIndex: 0,
+        publicKeyX: "0x0",
+      }),
     ).rejects.toThrow("Invalid Ledger public key");
     await expect(
       deriveLedgerAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
         accountIndex: 0,
         networkId: "NOPE" as never,
         publicKeyX: PUBLIC_KEY_X,
@@ -70,6 +101,7 @@ describe("deriveLedgerAccount", () => {
 describe("deriveLedgerAccountRefs", () => {
   test("derives a batch of enumerated pairs on one network", async () => {
     const refs = await deriveLedgerAccountRefs(fakeKms(), {
+      accountContractType: "openzeppelin",
       entries: [
         { accountIndex: 0, publicKeyX: "0xabc" },
         { accountIndex: 1, publicKeyX: "0xde" },
@@ -83,13 +115,18 @@ describe("deriveLedgerAccountRefs", () => {
 
   test("rejects an invalid network before deriving", async () => {
     await expect(
-      deriveLedgerAccountRefs(fakeKms(), { entries: [], networkId: "NOPE" as never }),
+      deriveLedgerAccountRefs(fakeKms(), {
+        accountContractType: "openzeppelin",
+        entries: [],
+        networkId: "NOPE" as never,
+      }),
     ).rejects.toThrow("Invalid Starknet network");
   });
 });
 
 describe("keyless account in the vault schema", () => {
   const ledgerAccount = {
+    accountContractType: "openzeppelin" as const,
     address: EXPECTED_ADDRESS,
     classHash: "0x111111",
     derivation: {
@@ -112,8 +149,8 @@ describe("keyless account in the vault schema", () => {
   };
 
   test("a current vault admits a keyless Ledger account with no signing key", () => {
-    const vault: Vault = { ...base, schemaVersion: 5 };
-    expect(isVaultV5(vault)).toBe(true);
+    const vault: Vault = { ...base, schemaVersion: 6 };
+    expect(isVaultV6(vault)).toBe(true);
   });
 
   test("a Ledger account is rejected at the legacy v2 schema", () => {
@@ -122,9 +159,9 @@ describe("keyless account in the vault schema", () => {
 
   test("a Ledger account carrying a signing key is rejected", () => {
     expect(
-      isVaultV5({
+      isVaultV6({
         ...base,
-        schemaVersion: 5,
+        schemaVersion: 6,
         signingKeys: [{ accountId: ledgerAccount.id, privateKey: "0x1" }],
       }),
     ).toBe(false);
@@ -132,6 +169,7 @@ describe("keyless account in the vault schema", () => {
 
   test("a non-Ledger account still requires its signing key", () => {
     const hdAccount = {
+      accountContractType: "openzeppelin" as const,
       address: "0x1",
       classHash: "0x2",
       derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },
@@ -141,13 +179,13 @@ describe("keyless account in the vault schema", () => {
       publicKeyY: "0x4",
     };
     expect(
-      isVaultV5({
+      isVaultV6({
         accounts: [hdAccount],
         accountSecrets: [],
         activeAccountId: hdAccount.id,
         mnemonic: null,
         originGrants: [],
-        schemaVersion: 5,
+        schemaVersion: 6,
         signingKeys: [],
       }),
     ).toBe(false);

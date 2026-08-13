@@ -7,6 +7,12 @@
  * harness (which mints the identifiers) can both depend on the contract
  * without depending on each other.
  */
+
+import type { StarkSignature } from "@mc-wallet/wallet-model/signing";
+import type {
+  ArgentMultisigDeploymentReview,
+  ArgentMultisigIntentPackage,
+} from "../../apps/extension/src/background/multisig/multisig-inputs";
 import type { RuntimeSender } from "../../apps/extension/src/background/routing/senders";
 
 /**
@@ -32,16 +38,21 @@ export type KeyBoundaryLiveIds = {
   readonly ledgerSignId: () => Promise<string>;
   /** Id of the watched multisig seeded into the multisig registry. */
   readonly multisigId: string;
+  /** Fresh exact deploy review consumed by the matching submit request. */
+  readonly multisigDeploymentReview: () => Promise<ArgentMultisigDeploymentReview>;
+  /** Stored full intent package for cross-wallet import. */
+  readonly multisigIntentPackage: ArgentMultisigIntentPackage;
+  /** Collecting intent id reserved for local signing. */
+  readonly multisigSignIntentId: string;
+  /** Collecting intent id and valid fragment reserved for signature import. */
+  readonly multisigSignatureImport: {
+    readonly intentId: string;
+    readonly signature: StarkSignature;
+  };
+  /** Ready intent id reserved for exact-hash submission. */
+  readonly multisigSubmitIntentId: string;
   /** Id of the watched NFT seeded into the preferences store. */
   readonly nftId: string;
-  /**
-   * Ids of proposals seeded per action, each with the on-chain status that
-   * action requires. One shared proposal cannot serve them: confirm needs an
-   * unconfirmed proposal, revoke a confirmed one, execute a quorum-reached one.
-   */
-  readonly proposalId: (action: "confirm" | "execute" | "prepare" | "revoke") => string;
-  /** Chain-side transaction id of a proposal not yet in the local registry. */
-  readonly proposalTxId: string;
   /** Queues an unanswered dapp invoke approval and returns its id. */
   readonly invokeApprovalId: () => Promise<string>;
   /** Runs a private-send preparation and returns its one-time id. */
@@ -50,13 +61,6 @@ export type KeyBoundaryLiveIds = {
   readonly swapPreparationId: () => Promise<string>;
   /** Id of a token tracked for the active network. */
   readonly tokenId: string;
-  /**
-   * Makes the pinned multisig class read as not yet declared on this network.
-   * One-way and permanent: `wallet.declareMultisigClass` is the only entry that
-   * acts in that state, so it flips this and is ordered after every entry that
-   * needs the class declared.
-   */
-  readonly undeclareMultisigClass: () => void;
   /**
    * Makes the active account read as not yet registered with the privacy pool.
    * One-way and permanent, for the same reason: registration is the only STRK20

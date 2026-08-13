@@ -3,13 +3,18 @@
  * address-poisoning detection stay pure and predictable.
  */
 import { describe, expect, test } from "bun:test";
-import { isLookalikeAddress, verifyCalls } from "@mc-wallet/transactions/verify";
+import {
+  isLookalikeAddress,
+  refuseOnAccountSelfCall,
+  verifyCalls,
+} from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { AddressBookEntry, TokenConfig } from "@mc-wallet/wallet-model/preferences";
 
 const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -48,6 +53,27 @@ const UNLIMITED_U256_LIMBS = [
 ] as const;
 
 describe("verifyCalls", () => {
+  test("refuses account self-calls through felt aliases", () => {
+    expect(
+      refuseOnAccountSelfCall(
+        [
+          {
+            calldata: ["0x1"],
+            contractAddress: `0x0${account.address.slice(2)}`,
+            entrypoint: "upgrade",
+          },
+        ],
+        account.address,
+      ),
+    ).toEqual({ error: "Dapps cannot call the wallet account contract itself" });
+    expect(
+      refuseOnAccountSelfCall(
+        [{ calldata: [], contractAddress: ETH, entrypoint: "transfer" }],
+        account.address,
+      ),
+    ).toBeNull();
+  });
+
   test("decodes known ERC20 transfers into a human summary", () => {
     const report = verifyCalls(
       [

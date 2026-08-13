@@ -22,7 +22,7 @@ import {
 } from "@mc-wallet/core/json";
 import { isLedgerBrokerCommand, isLedgerBrokerResponse } from "@mc-wallet/ledger-protocol/broker";
 import { defaultWalletPreferences, type TokenConfig } from "@mc-wallet/settings/preferences";
-import { ozAccountDeployment } from "@mc-wallet/starknet/deployment";
+import { accountDeployment } from "@mc-wallet/starknet/deployment";
 import { parseTokenAmount } from "@mc-wallet/starknet/rpc";
 import { decodeUint256Response } from "@mc-wallet/starknet/rpc-assets";
 import {
@@ -59,6 +59,7 @@ const ETH = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7"
 const UNPADDED_ETH = "0x49d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -479,7 +480,7 @@ describe("felt comparison has one definition", () => {
     // The private `BigInt(a) === BigInt(b)` copies threw a SyntaxError out of the
     // address proof; the shared comparison never equates a non-felt, so the
     // caller reports its own domain refusal instead.
-    expect(() => ozAccountDeployment({ ...account, address: "not-a-felt" })).toThrow(
+    expect(() => accountDeployment({ ...account, address: "not-a-felt" })).toThrow(
       "Account deployment parameters do not match the stored address",
     );
   });

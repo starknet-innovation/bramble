@@ -9,7 +9,6 @@
       "!apps/terminal",
       "!apps/ui-lab",
       "!bun.lock",
-      "!contracts/multisig/target",
       "!dist",
       "!node_modules",
       "!output",

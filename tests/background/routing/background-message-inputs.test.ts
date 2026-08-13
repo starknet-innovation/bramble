@@ -253,7 +253,14 @@ describe("background message parsers", () => {
   });
 
   test("reads add-account messages carrying only a network", () => {
-    expect(readAddAccountInput({ networkId: "SN_MAIN", type: "wallet.addAccount" })).toEqual({
+    expect(
+      readAddAccountInput({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        type: "wallet.addAccount",
+      }),
+    ).toEqual({
+      accountContractType: "openzeppelin",
       networkId: "SN_MAIN",
     });
     expect(readAddAccountInput({ networkId: "SN_BAD", type: "wallet.addAccount" })).toBeNull();
@@ -314,12 +321,18 @@ describe("background message parsers", () => {
     const mnemonic = "habit hope tip crystal because grunt nation idea electric witness alert like";
     expect(
       readPreviewAccountInput({
+        accountContractType: "openzeppelin",
         accountIndex: 0,
         mnemonic,
         networkId: "SN_SEPOLIA",
         type: "wallet.previewAccount",
       }),
-    ).toEqual({ accountIndex: 0, mnemonic, networkId: "SN_SEPOLIA" });
+    ).toEqual({
+      accountContractType: "openzeppelin",
+      accountIndex: 0,
+      mnemonic,
+      networkId: "SN_SEPOLIA",
+    });
     expect(
       readPreviewAccountInput({
         mnemonic,

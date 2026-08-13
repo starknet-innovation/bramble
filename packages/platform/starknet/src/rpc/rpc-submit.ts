@@ -7,7 +7,7 @@ import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Account, Call, RpcProvider } from "starknet";
-import { ensureAccountDeployed, isAccountDeployed } from "../transactions/deployment";
+import { ensureAccountDeployed, isCompatibleAccountDeployed } from "../transactions/deployment";
 import {
   authorizedSpendFor,
   exceedsReviewedFee,
@@ -18,6 +18,7 @@ import {
 import { estimateExactInvokeFee } from "./invoke-fee";
 import {
   acceptedRpcWriteHash,
+  argentQueryAccount,
   krustyAccount,
   type StarkHashSigner,
   withRpcWrite,
@@ -90,24 +91,41 @@ export const REVIEWED_FEE_REQUIRED =
 // signed — checking before the scaling would compare a figure this lane has
 // already decided not to sign.
 const settledResourceBounds = async (
-  starknetAccount: Account,
+  estimatingAccount: Account,
   account: AccountRef,
   calls: readonly Call[],
   proof: Strk20Proof | undefined,
   deployed: boolean,
   speed: FeeSpeed,
   reviewedFee: FeeEstimate | undefined,
+  skipValidate: boolean,
 ): Promise<unknown> => {
   if (!reviewedFee) {
     throw new WalletError(REVIEWED_FEE_REQUIRED);
   }
-  const estimate = await estimateExactInvokeFee(starknetAccount, account, calls, proof, deployed);
+  const estimate = await estimateExactInvokeFee(
+    estimatingAccount,
+    account,
+    calls,
+    proof,
+    deployed,
+    skipValidate,
+  );
   const authorized = authorizedSpendFor(estimate, speed);
   if (!authorized || exceedsReviewedFee(reviewedFee, authorized)) {
     throw new WalletError(REVIEWED_FEE_EXCEEDED);
   }
   return speed === "fast" ? scaleFeeBounds(estimate.resourceBounds) : estimate.resourceBounds;
 };
+
+const invokeEstimatingAccount = (
+  provider: RpcProvider,
+  account: AccountRef,
+  submittingAccount: Account,
+): { readonly account: Account; readonly skipValidate: boolean } =>
+  account.accountContractType === "argent"
+    ? { account: argentQueryAccount(provider, account), skipValidate: false }
+    : { account: submittingAccount, skipValidate: true };
 
 /**
  * Signs and submits generic Starknet invoke calls exactly once after selecting
@@ -154,15 +172,17 @@ export const submitInvokeTransaction = async (
     STARKNET_NETWORKS[account.networkId].chainId,
     async (provider) => {
       const starknetAccount = krustyAccount(provider, account, signHash);
-      const deployed = await isAccountDeployed(provider, account.address);
+      const estimating = invokeEstimatingAccount(provider, account, starknetAccount);
+      const deployed = await isCompatibleAccountDeployed(provider, account);
       const resourceBounds = await settledResourceBounds(
-        starknetAccount,
+        estimating.account,
         account,
         calls,
         proof,
         deployed,
         speed,
         reviewedFee,
+        estimating.skipValidate,
       );
       const deployment = deployed
         ? null

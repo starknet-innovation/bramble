@@ -68,7 +68,7 @@ const renderSeam = (
     null, // selectedNftId
     {}, // changes
     [], // multisigs
-    [], // multisigProposals
+    [], // multisigIntents
     null, // selectedMultisigId
     null, // multisigClassDeclared
     null, // drawerGroupFilter

@@ -22,6 +22,7 @@ import {
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1",
   classHash: "0x2",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

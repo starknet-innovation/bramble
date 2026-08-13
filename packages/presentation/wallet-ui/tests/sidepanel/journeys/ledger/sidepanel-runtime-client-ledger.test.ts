@@ -15,6 +15,7 @@ import {
 } from "../../../support/runtime-client-fixtures";
 
 const ledgerAccount = {
+  accountContractType: "openzeppelin" as const,
   address: "0x123",
   classHash: "0xabc",
   derivation: {
@@ -31,8 +32,9 @@ const ledgerAccount = {
 describe("Ledger runtime wrappers", () => {
   test("addLedgerAccount sends index/network/pubkey and returns the id", async () => {
     const { sent, wallet } = captureRuntime({ account, ok: true });
-    expect(await wallet.addLedgerAccount("SN_MAIN", 2, "0xabc")).toBe(account.id);
+    expect(await wallet.addLedgerAccount("SN_MAIN", 2, "0xabc", "openzeppelin")).toBe(account.id);
     expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
       accountIndex: 2,
       networkId: "SN_MAIN",
       publicKeyX: "0xabc",
@@ -42,16 +44,23 @@ describe("Ledger runtime wrappers", () => {
 
   test("addLedgerAccount throws its fallback on an unrecognised reply", async () => {
     await expect(
-      runtimeReturning({ ok: true }).addLedgerAccount("SN_MAIN", 0, "0xabc"),
+      runtimeReturning({ ok: true }).addLedgerAccount("SN_MAIN", 0, "0xabc", "openzeppelin"),
     ).rejects.toThrow("add Ledger account failed");
   });
 
   test("createLedgerVault sends index/network/pubkey/passphrase and returns the id", async () => {
     const { sent, wallet } = captureRuntime({ account, ok: true });
-    expect(await wallet.createLedgerVault("SN_MAIN", 0, "0xabc", "correct horse battery")).toBe(
-      account.id,
-    );
+    expect(
+      await wallet.createLedgerVault(
+        "SN_MAIN",
+        0,
+        "0xabc",
+        "correct horse battery",
+        "openzeppelin",
+      ),
+    ).toBe(account.id);
     expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xabc",
@@ -62,7 +71,13 @@ describe("Ledger runtime wrappers", () => {
 
   test("createLedgerVault throws its fallback on an unrecognised reply", async () => {
     await expect(
-      runtimeReturning({ ok: true }).createLedgerVault("SN_MAIN", 0, "0xabc", "pass"),
+      runtimeReturning({ ok: true }).createLedgerVault(
+        "SN_MAIN",
+        0,
+        "0xabc",
+        "pass",
+        "openzeppelin",
+      ),
     ).rejects.toThrow("create Ledger wallet failed");
   });
 
@@ -89,8 +104,11 @@ describe("Ledger runtime wrappers", () => {
   test("deriveLedgerAccounts sends entries and returns the derived list", async () => {
     const entries = [{ accountIndex: 0, publicKeyX: "0xabc" }];
     const { sent, wallet } = captureRuntime({ accounts: [ledgerAccount], ok: true });
-    expect(await wallet.deriveLedgerAccounts("SN_SEPOLIA", entries)).toEqual([ledgerAccount]);
+    expect(await wallet.deriveLedgerAccounts("SN_SEPOLIA", entries, "openzeppelin")).toEqual([
+      ledgerAccount,
+    ]);
     expect(sent[0]).toEqual({
+      accountContractType: "openzeppelin",
       entries,
       networkId: "SN_SEPOLIA",
       type: "wallet.deriveLedgerAccounts",
@@ -99,7 +117,7 @@ describe("Ledger runtime wrappers", () => {
 
   test("deriveLedgerAccounts throws on an error envelope", async () => {
     await expect(
-      runtimeReturning(errorEnvelope).deriveLedgerAccounts("SN_MAIN", []),
+      runtimeReturning(errorEnvelope).deriveLedgerAccounts("SN_MAIN", [], "openzeppelin"),
     ).rejects.toThrow("boom");
   });
 

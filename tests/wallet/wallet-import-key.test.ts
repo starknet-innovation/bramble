@@ -19,6 +19,12 @@ const migrationKey = "mc-wallet:vault-migration";
 const vaultPassphrase = "correct horse battery staple";
 // Clearly-fake test vector; not a real key.
 const importedKey = "0xfeedface";
+const importedInput = {
+  accountContractType: "openzeppelin",
+  networkId: "SN_MAIN",
+  privateKey: importedKey,
+} as const;
+const serviceImportInput = { ...importedInput, vaultPassphrase };
 
 const importKms = () => ({
   ...fakeKms(),
@@ -46,10 +52,7 @@ const newService = () =>
 
 describe("deriveImportedAccount", () => {
   test("derives the OZ account through Krusty from a raw key", async () => {
-    const { account, privateKey } = await deriveImportedAccount(importKms(), {
-      networkId: "SN_MAIN",
-      privateKey: importedKey,
-    });
+    const { account, privateKey } = await deriveImportedAccount(importKms(), importedInput);
 
     const publicKeyX = ec.starkCurve.getStarkKey(importedKey);
     const address = `0x${publicKeyX.slice(-16)}111111`;
@@ -67,6 +70,7 @@ describe("deriveImportedAccount", () => {
   test("rejects a private key at or above the field prime", async () => {
     await expect(
       deriveImportedAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
         privateKey: "0x800000000000011000000000000000000000000000000000000000000000001",
       }),
     ).rejects.toThrow("Invalid private key");
@@ -79,6 +83,7 @@ describe("deriveImportedAccount", () => {
   test("rejects a private key equal to the curve order", async () => {
     await expect(
       deriveImportedAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
         privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2f",
       }),
     ).rejects.toThrow("Invalid private key");
@@ -87,6 +92,7 @@ describe("deriveImportedAccount", () => {
   test("rejects a private key inside the [curve order, field prime) gap", async () => {
     await expect(
       deriveImportedAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
         // curve order + 1: passes the field-prime check but is not a valid key.
         privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d30",
       }),
@@ -95,6 +101,7 @@ describe("deriveImportedAccount", () => {
 
   test("accepts a private key just below the curve order", async () => {
     const { account } = await deriveImportedAccount(importKms(), {
+      accountContractType: "openzeppelin",
       networkId: "SN_MAIN",
       // curve order - 1: the largest valid signing scalar.
       privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2e",
@@ -104,9 +111,12 @@ describe("deriveImportedAccount", () => {
   });
 
   test("rejects a zero private key", async () => {
-    await expect(deriveImportedAccount(fakeKms(), { privateKey: "0x0" })).rejects.toThrow(
-      "Invalid private key",
-    );
+    await expect(
+      deriveImportedAccount(fakeKms(), {
+        accountContractType: "openzeppelin",
+        privateKey: "0x0",
+      }),
+    ).rejects.toThrow("Invalid private key");
   });
 
   // Krusty owns crypto and must fail closed: if the KMS hands back a malformed
@@ -121,9 +131,9 @@ describe("deriveImportedAccount", () => {
         return { publicKey: "0x0", r: "0x1", s: "0x2" };
       },
     };
-    await expect(
-      deriveImportedAccount(badKms, { networkId: "SN_MAIN", privateKey: importedKey }),
-    ).rejects.toThrow("Krusty KMS returned invalid public key");
+    await expect(deriveImportedAccount(badKms, importedInput)).rejects.toThrow(
+      "Krusty KMS returned invalid public key",
+    );
   });
 
   test("rejects a well-shaped KMS probe that does not verify", async () => {
@@ -134,9 +144,9 @@ describe("deriveImportedAccount", () => {
         return { ...genuine, publicKey: ec.starkCurve.getStarkKey("0xdeadbeef") };
       },
     };
-    await expect(
-      deriveImportedAccount(badKms, { networkId: "SN_MAIN", privateKey: importedKey }),
-    ).rejects.toThrow("Krusty KMS public-key probe did not verify");
+    await expect(deriveImportedAccount(badKms, importedInput)).rejects.toThrow(
+      "Krusty KMS public-key probe did not verify",
+    );
   });
 });
 
@@ -149,11 +159,7 @@ describe("vault-service importRawKeyAccount", () => {
       migrationStore: createEncryptedStore(store, migrationKey),
     });
 
-    const account = await service.importRawKeyAccount({
-      networkId: "SN_MAIN",
-      privateKey: importedKey,
-      vaultPassphrase,
-    });
+    const account = await service.importRawKeyAccount(serviceImportInput);
     const raw = JSON.stringify(await store.get(vaultKey));
     const vault = await service.readVault(vaultPassphrase);
 
@@ -169,25 +175,22 @@ describe("vault-service importRawKeyAccount", () => {
 
   test("rejects a duplicate imported account", async () => {
     const service = newService();
-    await service.importRawKeyAccount({
-      networkId: "SN_MAIN",
-      privateKey: importedKey,
-      vaultPassphrase,
-    });
+    await service.importRawKeyAccount(serviceImportInput);
 
-    await expect(
-      service.importRawKeyAccount({
-        networkId: "SN_MAIN",
-        privateKey: importedKey,
-        vaultPassphrase,
-      }),
-    ).rejects.toThrow("Account already exists");
+    await expect(service.importRawKeyAccount(serviceImportInput)).rejects.toThrow(
+      "Account already exists",
+    );
   });
 
   test("rejects an invalid key without adding an account", async () => {
     const service = newService();
     await expect(
-      service.importRawKeyAccount({ networkId: "SN_MAIN", privateKey: "0x0", vaultPassphrase }),
+      service.importRawKeyAccount({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        privateKey: "0x0",
+        vaultPassphrase,
+      }),
     ).rejects.toThrow("Invalid private key");
 
     await expect(service.status()).resolves.toMatchObject({ hasVault: false });
@@ -200,11 +203,7 @@ describe("vault-service importRawKeyAccount", () => {
   // silently become HD-shaped, which isAccountRef would then reject).
   test("extends an imported account onto another network keeping imported provenance", async () => {
     const service = newService();
-    const mainnet = await service.importRawKeyAccount({
-      networkId: "SN_MAIN",
-      privateKey: importedKey,
-      vaultPassphrase,
-    });
+    const mainnet = await service.importRawKeyAccount(serviceImportInput);
 
     const sepolia = await service.ensureNetworkAccount({
       networkId: "SN_SEPOLIA",
@@ -232,19 +231,29 @@ describe("readImportAccountInput", () => {
   test("accepts and canonicalizes a valid key", () => {
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "0xFEEDFACE",
         type: "wallet.importAccount",
       }),
-    ).toEqual({ networkId: "SN_MAIN", privateKey: "0xfeedface" });
+    ).toEqual({
+      accountContractType: "openzeppelin",
+      networkId: "SN_MAIN",
+      privateKey: "0xfeedface",
+    });
   });
 
   test("rejects malformed or out-of-range messages", () => {
     expect(
-      readImportAccountInput({ networkId: "SN_MAIN", type: "wallet.importAccount" }),
+      readImportAccountInput({
+        accountContractType: "openzeppelin",
+        networkId: "SN_MAIN",
+        type: "wallet.importAccount",
+      }),
     ).toBeNull();
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "NOPE",
         privateKey: importedKey,
         type: "wallet.importAccount",
@@ -252,6 +261,7 @@ describe("readImportAccountInput", () => {
     ).toBeNull();
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "0x0",
         type: "wallet.importAccount",
@@ -259,6 +269,7 @@ describe("readImportAccountInput", () => {
     ).toBeNull();
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "not-a-felt",
         type: "wallet.importAccount",
@@ -266,6 +277,7 @@ describe("readImportAccountInput", () => {
     ).toBeNull();
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: importedKey,
         type: "wallet.addAccount",
@@ -276,11 +288,16 @@ describe("readImportAccountInput", () => {
   test("accepts a mixed-case 0x-hex key and canonicalizes it to lowercase", () => {
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_SEPOLIA",
         privateKey: "  0xFeEdFaCe  ",
         type: "wallet.importAccount",
       }),
-    ).toEqual({ networkId: "SN_SEPOLIA", privateKey: "0xfeedface" });
+    ).toEqual({
+      accountContractType: "openzeppelin",
+      networkId: "SN_SEPOLIA",
+      privateKey: "0xfeedface",
+    });
   });
 
   // Key material must be read only in the documented 0x-hex form. A base-
@@ -294,6 +311,7 @@ describe("readImportAccountInput", () => {
     // same key; the 0x-hex-only parser must reject the bare decimal spelling.
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "4276993742",
         type: "wallet.importAccount",
@@ -304,6 +322,7 @@ describe("readImportAccountInput", () => {
   test("rejects an octal- or binary-prefixed key", () => {
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "0o377",
         type: "wallet.importAccount",
@@ -311,6 +330,7 @@ describe("readImportAccountInput", () => {
     ).toBeNull();
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "0b1010",
         type: "wallet.importAccount",
@@ -323,6 +343,7 @@ describe("readImportAccountInput", () => {
     // decimal 10 to BigInt but a user may mean 0x10 — never silently pick one.
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "feedface",
         type: "wallet.importAccount",
@@ -330,6 +351,7 @@ describe("readImportAccountInput", () => {
     ).toBeNull();
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "10",
         type: "wallet.importAccount",
@@ -342,6 +364,7 @@ describe("readImportAccountInput", () => {
     // check would wrongly admit it; the curve-order check rejects it here.
     expect(
       readImportAccountInput({
+        accountContractType: "openzeppelin",
         networkId: "SN_MAIN",
         privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d30",
         type: "wallet.importAccount",
@@ -352,6 +375,7 @@ describe("readImportAccountInput", () => {
 
 describe("isAccountRef imported round-trip", () => {
   const imported = {
+    accountContractType: "openzeppelin",
     address: "0xabc111111",
     classHash: "0x111111",
     derivation: { kind: "imported-raw-key" },
@@ -397,6 +421,7 @@ const bip44Account = (
   addressIndex = 0,
   networkId: "SN_MAIN" | "SN_SEPOLIA" = "SN_MAIN",
 ): AccountRef => ({
+  accountContractType: "openzeppelin",
   address: `0x${publicKeyX.slice(2)}a`,
   classHash: "0x111111",
   derivation: { accountIndex, addressIndex, kind: "starknet-bip44" },
@@ -410,6 +435,7 @@ const importedAccount = (
   publicKeyX: string,
   networkId: "SN_MAIN" | "SN_SEPOLIA" = "SN_MAIN",
 ): AccountRef => ({
+  accountContractType: "openzeppelin",
   address: `0x${publicKeyX.slice(2)}b`,
   classHash: "0x111111",
   derivation: { kind: "imported-raw-key" },

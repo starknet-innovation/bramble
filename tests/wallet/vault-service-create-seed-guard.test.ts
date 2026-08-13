@@ -44,10 +44,18 @@ const makeService = (kms: KmsPort = fakeKms()) => {
 describe("createAccount seed guard", () => {
   test("refuses a different recovery phrase over an existing seeded wallet", async () => {
     const service = makeService(phraseBoundKms());
-    const first = await service.createAccount({ mnemonic, vaultPassphrase });
+    const first = await service.createAccount({
+      accountContractType: "openzeppelin",
+      mnemonic,
+      vaultPassphrase,
+    });
 
     await expect(
-      service.createAccount({ mnemonic: otherMnemonic, vaultPassphrase }),
+      service.createAccount({
+        accountContractType: "openzeppelin",
+        mnemonic: otherMnemonic,
+        vaultPassphrase,
+      }),
     ).rejects.toThrow("Wallet already exists");
 
     const vault = await service.readVault(vaultPassphrase);
@@ -59,15 +67,20 @@ describe("createAccount seed guard", () => {
   test("refuses to seed a phrase into an existing keyless Ledger vault", async () => {
     const service = makeService();
     const ledger = await service.createLedgerVault({
+      accountContractType: "openzeppelin",
       accountIndex: 0,
       networkId: "SN_MAIN",
       publicKeyX: "0xdef123",
       vaultPassphrase,
     });
 
-    await expect(service.createAccount({ mnemonic, vaultPassphrase })).rejects.toThrow(
-      "Wallet already exists",
-    );
+    await expect(
+      service.createAccount({
+        accountContractType: "openzeppelin",
+        mnemonic,
+        vaultPassphrase,
+      }),
+    ).rejects.toThrow("Wallet already exists");
 
     const vault = await service.readVault(vaultPassphrase);
     expect(vault.mnemonic).toBeNull();
@@ -79,11 +92,13 @@ describe("createAccount seed guard", () => {
     const service = makeService();
 
     const mainnet = await service.createAccount({
+      accountContractType: "openzeppelin",
       mnemonic,
       networkId: "SN_MAIN",
       vaultPassphrase,
     });
     const sepolia = await service.createAccount({
+      accountContractType: "openzeppelin",
       mnemonic,
       networkId: "SN_SEPOLIA",
       vaultPassphrase,

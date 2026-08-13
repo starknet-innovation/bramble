@@ -82,7 +82,7 @@ const buildOpsDeps = (ctx: RouterContext): WalletOpsDeps => ({
 
 const buildMultisigDeps = (ctx: RouterContext): MultisigOpsDeps => ({
   ...buildOpsDeps(ctx),
-  loadMultisigClass: ctx.loadMultisigClass,
+  multisigDeploymentReviews: ctx.multisigDeploymentReviews,
   multisigStore: ctx.multisigStore,
 });
 
@@ -121,7 +121,11 @@ const handleAddAccount: RouterHandler = async (ctx, messageType, message) => {
       ctx.preferencesStore,
       input.networkId,
       (vaultPassphrase) =>
-        ctx.wallet.addDerivedAccount({ networkId: input.networkId, vaultPassphrase }),
+        ctx.wallet.addDerivedAccount({
+          accountContractType: input.accountContractType,
+          networkId: input.networkId,
+          vaultPassphrase,
+        }),
     );
     return account ? { account, ok: true } : { error: "wallet locked" };
   });

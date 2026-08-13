@@ -15,12 +15,14 @@ import {
 } from "@mc-wallet/starknet/deployment";
 import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
 import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
-import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { type Account, CallData, hash, type RpcProvider } from "starknet";
+import type { DerivedAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { type Account, CallData, hash, logger, type RpcProvider } from "starknet";
+
+logger.setLogLevel("FATAL");
 
 const PUBLIC_KEY = "0x4718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const CLASS_HASH = "0x2b31e19e45c06f29234e06e2ee98a9966479ba3067f8785ed972794fdb0065c";
-// Krusty (salt 0) counterfactual address, so ozAccountDeployment resolves.
+// Krusty (salt 0) counterfactual address, so accountDeployment resolves.
 const DEPLOY_ADDRESS = hash.calculateContractAddressFromHash(
   "0x0",
   CLASS_HASH,
@@ -28,7 +30,8 @@ const DEPLOY_ADDRESS = hash.calculateContractAddressFromHash(
   0,
 );
 
-const account: AccountRef = {
+const account: DerivedAccountRef = {
+  accountContractType: "openzeppelin",
   address: DEPLOY_ADDRESS,
   classHash: CLASS_HASH,
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -37,7 +40,6 @@ const account: AccountRef = {
   publicKeyX: PUBLIC_KEY,
   publicKeyY: "0x5234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
 };
-
 // A "contract not found" RPC error the way starknet.js surfaces code 20.
 const notFoundError = (): Error =>
   Object.assign(new Error("Contract not found"), { baseError: { code: 20 } });
@@ -150,7 +152,7 @@ describe("ensureAccountDeployed", () => {
   });
 
   test("re-throws a WalletError from deployment as-is (address mismatch)", async () => {
-    const mismatched: AccountRef = { ...account, address: "0xdead" };
+    const mismatched: DerivedAccountRef = { ...account, address: "0xdead" };
     await expect(
       ensureAccountDeployed(
         provider({

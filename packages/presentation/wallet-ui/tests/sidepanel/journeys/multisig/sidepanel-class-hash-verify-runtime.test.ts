@@ -110,10 +110,12 @@ describe("emptyRenderCache (lock-reset single source)", () => {
     expect(empty.classHashVerification).toBeNull();
     expect(empty.transactions).toEqual([]);
     expect(empty.historyUnavailable).toBe(false);
-    // Previously omitted from the hand-written lock reset: multisig state must
-    // also reset so a prior session's proposals cannot linger post-lock.
-    expect(empty.multisigs).toEqual({ multisigs: [], proposals: [] });
+    // Frozen intents and watched shared accounts never survive the lock reset.
+    expect(empty.multisigs).toEqual({ intents: [], multisigs: [] });
     expect(empty.multisigClassDeclared).toBeNull();
+    expect(empty.multisigsError).toBe(false);
+    expect(empty.multisigBalanceId).toBeNull();
+    expect(empty.multisigBalances).toEqual({ error: "multisig balances unavailable" });
   });
 
   test("clears the remaining view-scoped lists and price fields", () => {
@@ -157,11 +159,7 @@ describe("updateRenderScope", () => {
       discoveredNfts: [nft],
       historyUnavailable: true,
       indexedNfts: [nft],
-      multisigClassDeclared: {
-        declarationPending: true,
-        declared: false,
-        transactionHash: "0xdec",
-      },
+      multisigClassDeclared: true,
       status: { ...cache.status, activeAccountId: ACCOUNT_ID, networkId: "SN_MAIN" as const },
       transactions: [transaction],
       watchedNfts: [nft],
@@ -171,11 +169,7 @@ describe("updateRenderScope", () => {
     expect(cache.discoveredNfts).toEqual([nft]);
     expect(cache.transactions).toEqual([transaction]);
     expect(cache.historyUnavailable).toBe(true);
-    expect(cache.multisigClassDeclared).toEqual({
-      declarationPending: true,
-      declared: false,
-      transactionHash: "0xdec",
-    });
+    expect(cache.multisigClassDeclared).toBe(true);
 
     expect(updateRenderScope(cache, { ...cache.status, activeAccountId: OTHER_ACCOUNT_ID })).toBe(
       "account",

@@ -10,7 +10,7 @@ import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
 import { DEFAULT_ORIGIN_GUARD, type OriginGuard } from "@mc-wallet/permissions/blocklist";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { ozAccountDeployment } from "@mc-wallet/starknet/deployment";
+import { accountDeployment } from "@mc-wallet/starknet/deployment";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import { API_VERSION_PATTERN } from "@mc-wallet/wallet-protocol/results";
 import { SUPPORTED_SPECS, SUPPORTED_WALLET_API } from "@mc-wallet/wallet-protocol/versions";
@@ -126,7 +126,7 @@ const handleDeploymentData: DiscoveryOpsHandler = async (deps, _messageType, mes
     return { error: "account already deployed" };
   }
   try {
-    const deployment = ozAccountDeployment(account);
+    const deployment = accountDeployment(account);
     return {
       deployment: {
         address: deployment.contractAddress,

@@ -1,228 +1,348 @@
-/**
- * Pure multisig screen templates: the watched-multisig list with add and
- * deploy entries, a multisig detail screen with signers and tracked
- * proposals, the propose form, and the deploy form. Logic-free string
- * builders; all bindings live in multisig-ui.ts.
- */
-
+/** Pure screens for stable Argent multisig accounts and frozen intents. */
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
+import {
+  type ArgentMultisigConfigReview,
+  reviewArgentMultisigConfigChange,
+} from "@mc-wallet/multisig/chain";
+import type {
+  ArgentMultisigRecord,
+  ArgentMultisigSigningIntent,
+} from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
-import { emptyState, pill } from "@mc-wallet/ui-kit/content";
+import { ARGENT_MULTISIG_CONTRACT, argentSignerGuid } from "@mc-wallet/starknet/account-contracts";
+import { preparedArgentMultisigFee } from "@mc-wallet/starknet/multisig-invoke";
+import { emptyState, pill, receipt } from "@mc-wallet/ui-kit/content";
 import { button } from "@mc-wallet/ui-kit/controls";
+import { selectField, textareaField } from "@mc-wallet/ui-kit/fields";
 import { menuRow } from "@mc-wallet/ui-kit/navigation";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { sameFelt } from "@mc-wallet/wallet-model/networks";
+import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import type { WalletStatus } from "../../../popup/responses/responses";
-import { icon } from "../../shared/icons";
 import {
-  accountLabel,
-  copyButton,
+  accountDisplayName,
   dockScreen,
   flowHeader,
   flowScreen,
-  hardwareBadge,
   noAccountEmpty,
   walletMenuRow,
 } from "../../shared/parts";
+import { formatFeeEstimate } from "../../shared/review-render";
 import { multisigDisplayName } from "./multisig-model";
 import {
   EMPTY_MULTISIG_PORTFOLIO,
   type MultisigPortfolioData,
   multisigPortfolio,
 } from "./multisig-portfolio";
-import { multisigProposalList } from "./multisig-proposal-view";
-import type { MultisigSyncState } from "./multisig-sync";
 
 export { multisigDeployFlow } from "./multisig-deploy-view";
 export { multisigDisplayName } from "./multisig-model";
 export { multisigProposeFlow } from "./multisig-propose-view";
 
-const multisigRow = (record: MultisigRecord, pendingCount: number): string => `
+const configLabel = (view: ArgentMultisigView): string =>
+  view.config
+    ? `${view.config.threshold} of ${view.config.signerGuids.length} signers`
+    : "Configuration unavailable";
+
+const multisigRow = (view: ArgentMultisigView, openCount: number): string => `
   <li class="allowance-row">
     ${menuRow({
-      attributes: { "data-multisig-open": record.id },
+      attributes: { "data-multisig-open": view.record.id },
       icon: "wallet",
-      label: multisigDisplayName(record),
-      supportingText: `${record.quorum} of ${record.signers.length} signers${pendingCount > 0 ? ` · ${pendingCount} open` : ""}`,
+      label: multisigDisplayName(view.record),
+      supportingText: `${configLabel(view)}${openCount > 0 ? ` · ${openCount} open` : ""}`,
     })}
   </li>`;
 
-const multisigSyncNotice = (
-  loadError: boolean,
-  sync: MultisigSyncState,
-  retryId: string,
-): string => {
-  const retry = button({
-    attributes: { id: retryId },
-    icon: "refresh",
-    label: "Retry",
-    size: "small",
-    variant: "secondary",
-  });
-  if (loadError) {
-    return `<div class="review-panel" role="alert">
-      <p class="review-flag">The wallet background could not load the watched multisig registry. The visible snapshot may be stale.</p>
-      <p><code>Support code · MC-MS-REGISTRY</code></p>${retry}
-    </div>`;
-  }
-  if (sync === "configuration-unavailable") {
-    return `<div class="review-panel" role="alert">
-      <p class="review-flag">The selected network did not return this multisig's current signer and quorum configuration.</p>
-      <p><code>Support code · MC-MS-CONFIG-RPC</code></p>${retry}
-    </div>`;
-  }
-  if (sync === "background-unavailable") {
-    return `<div class="review-panel" role="alert">
-      <p class="review-flag">The wallet background did not complete the multisig refresh.</p>
-      <p><code>Support code · MC-MS-BACKGROUND</code></p>${retry}
-    </div>`;
-  }
-  if (sync === "proposal-refresh-incomplete") {
-    return `<div class="review-panel" role="status">
-      <p>Signer and quorum configuration is current. At least one tracked proposal status remains cached.</p>
-      <p><code>Support code · MC-MS-PROPOSALS-RPC</code></p>${retry}
-    </div>`;
-  }
-  if (sync === "proposal-discovery-unavailable") {
-    return `<div class="review-panel" role="status">
-      <p>Account state and tracked proposals are current. Automatic proposal search is temporarily unavailable; you can still add a proposal by id.</p>
-      <p><code>Support code · MC-MS-DISCOVERY-RPC</code></p>${retry}
-    </div>`;
-  }
-  if (sync === "proposal-discovery-recent") {
-    return `<div class="multisig-sync-meta">
-      <details class="multisig-sync-info">
-        <summary aria-label="About proposal search coverage" title="About proposal search coverage">
-          ${icon("info")}<span class="multisig-sync-tooltip" role="tooltip">Proposal search coverage</span>
-        </summary>
-        <div class="multisig-sync-popover" role="note">
-          <strong>Recent proposals checked</strong>
-          <p>To review an older proposal, add its proposal id.</p>
-        </div>
-      </details>
-    </div>`;
-  }
-  return "";
-};
-
 /**
- * Renders the Multisigs overview. Watching and deployment are dedicated tasks
- * reached through the compact action group.
+ * Renders watched Argent multisigs for the active network.
  */
 export const multisigsFlow = (
   status: WalletStatus,
   account: AccountRef | null,
-  multisigs: readonly MultisigRecord[],
-  proposals: readonly MultisigProposalRecord[],
+  multisigs: readonly ArgentMultisigView[],
+  intents: readonly ArgentMultisigSigningIntent[],
   loadError = false,
-  sync: MultisigSyncState = null,
 ): string => {
-  const scoped = multisigs.filter((record) => record.networkId === status.networkId);
-  const openCount = (record: MultisigRecord): number =>
-    proposals.filter(
-      (proposal) => proposal.multisigId === record.id && proposal.state !== "executed",
+  const scoped = multisigs.filter((view) => view.record.networkId === status.networkId);
+  const openCount = (record: ArgentMultisigRecord): number =>
+    intents.filter(
+      (intent) =>
+        intent.accountId === record.id &&
+        (intent.state === "collecting" || intent.state === "ready"),
     ).length;
   return (
-    flowHeader("Multisigs", status, `${scoped.length} watched`) +
+    flowHeader("Argent multisigs", status, `${scoped.length} watched`) +
     flowScreen(
       "multisigs",
-      `${multisigSyncNotice(loadError, sync, "multisig-list-retry")}
+      `${
+        loadError
+          ? '<div class="review-panel" role="alert"><p class="review-flag">The background could not refresh the Argent multisig registry. Retry before signing.</p></div>'
+          : ""
+      }
       <section class="section">
-        <div class="menu-list" role="group" aria-label="Multisig actions">
-          ${walletMenuRow("multisig-watch", "Watch by address", "plus")}
+        <div class="menu-list" role="group" aria-label="Argent multisig actions">
+          ${walletMenuRow("multisig-watch", "Add existing multisig", "plus")}
           ${walletMenuRow("multisig-deploy", "Deploy new multisig", "users")}
         </div>
       </section>
       <section class="section">
-        <p class="eyebrow">Watched multisigs</p>
+        <p class="eyebrow">Watched accounts</p>
         ${
           account === null
             ? noAccountEmpty(status)
             : scoped.length === 0
-              ? emptyState("No multisigs are watched on this network yet.")
-              : `<ul class="allowance-list">${scoped.map((record) => multisigRow(record, openCount(record))).join("")}</ul>`
+              ? emptyState("No Argent multisigs are watched on this network yet.")
+              : `<ul class="allowance-list">${scoped.map((view) => multisigRow(view, openCount(view.record))).join("")}</ul>`
         }
-        <p id="multisig-list-result" role="status"></p>
+        ${loadError ? button({ attributes: { id: "multisig-list-retry" }, label: "Retry" }) : ""}
       </section>`,
     )
   );
 };
 
-/**
- * Renders one signer with local-account and Ledger provenance badges.
- */
-export const multisigSignerRow = (
-  signer: string,
-  account: AccountRef | null,
+const localSignerOptions = (
+  view: ArgentMultisigView,
   accounts: readonly AccountRef[],
+  preferences: WalletPreferences | null,
+): readonly { readonly label: string; readonly value: string }[] =>
+  view.config
+    ? accounts
+        .filter(
+          (account) =>
+            account.networkId === view.record.networkId &&
+            view.config?.signerGuids.includes(argentSignerGuid(account.publicKeyX)),
+        )
+        .map((account) => ({
+          label: accountDisplayName(account, preferences),
+          value: account.id,
+        }))
+    : [];
+
+const exactCalls = (intent: ArgentMultisigSigningIntent): string =>
+  intent.prepared.calls
+    .map(
+      (call, index) => `<li class="review-panel">
+        <p><strong>Call ${index + 1}</strong> · <code>${escapeHtml(call.entrypoint)}</code></p>
+        <p>Contract · <code>${escapeHtml(call.contractAddress)}</code></p>
+        <p>Calldata · <code>${escapeHtml(call.calldata.join(" ") || "none")}</code></p>
+      </li>`,
+    )
+    .join("");
+
+const configReviewFor = (
+  intent: ArgentMultisigSigningIntent,
+  view: ArgentMultisigView,
+): ArgentMultisigConfigReview | null => {
+  const current = view.record.currentConfig;
+  const call = intent.prepared.calls[0];
+  if (
+    !current ||
+    intent.prepared.calls.length !== 1 ||
+    !call ||
+    current.threshold !== intent.configSnapshot.threshold ||
+    current.signerPublicKeys.length !== intent.configSnapshot.signerGuids.length ||
+    current.signerPublicKeys
+      .map(argentSignerGuid)
+      .some((guid, index) => guid !== intent.configSnapshot.signerGuids[index])
+  ) {
+    return null;
+  }
+  try {
+    return reviewArgentMultisigConfigChange(view.record.address, current, call);
+  } catch {
+    return null;
+  }
+};
+
+const configReviewView = (review: ArgentMultisigConfigReview): string => {
+  const change = review.change;
+  const changedSigners =
+    change.kind === "replace_signer"
+      ? [`Remove ${change.removeSignerPublicKey}`, `Add ${change.addSignerPublicKey}`]
+      : change.kind === "change_threshold"
+        ? []
+        : change.signerPublicKeys.map(
+            (key) => `${change.kind === "add_signers" ? "Add" : "Remove"} ${key}`,
+          );
+  return `<section class="review-panel" aria-label="Signer authority change">
+    <p class="review-flag"><strong>${escapeHtml(review.summary)}</strong></p>
+    ${changedSigners.map((line) => `<p><code>${escapeHtml(line)}</code></p>`).join("")}
+    <p>Resulting threshold · <strong>${review.nextConfig.threshold} of ${review.nextConfig.signerPublicKeys.length}</strong></p>
+    <p>Resulting signers</p>
+    <ol>${review.nextConfig.signerPublicKeys.map((key) => `<li><code>${escapeHtml(key)}</code></li>`).join("")}</ol>
+  </section>`;
+};
+
+const intentCard = (
+  intent: ArgentMultisigSigningIntent,
+  view: ArgentMultisigView,
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
 ): string => {
-  // Badge a signer that is a Ledger account in THIS wallet, so a co-signer can
-  // see at a glance which signers are hardware-backed here.
-  const local = accounts.find((stored) => sameFelt(stored.address, signer));
-  return `
-  <li class="address-line">
-    <code>${escapeHtml(accountLabel(signer))}</code>
-    ${account && sameFelt(signer, account.address) ? pill("You") : ""}
-    ${local ? hardwareBadge(local) : ""}
-    ${copyButton(signer, "Copy signer address")}
-  </li>`;
+  const options = localSignerOptions(view, status.accounts, preferences);
+  const canCollect = intent.state === "collecting" || intent.state === "ready";
+  const fee = preparedArgentMultisigFee(intent.prepared);
+  const configReview = configReviewFor(intent, view);
+  return `<article class="allowance-row" data-ms-intent="${escapeHtml(intent.id)}">
+    <div class="row"><strong>${escapeHtml(intent.summary || "Unsigned transaction")}</strong>${pill(intent.state)}</div>
+    ${receipt([
+      {
+        label: "Transaction hash",
+        action: {
+          attributes: { "data-copy": intent.prepared.transactionHash },
+          icon: "copy",
+          label: "Copy transaction hash",
+        },
+        value: intent.prepared.transactionHash,
+        valueStyle: "code",
+      },
+      { label: "Sender", value: intent.prepared.senderAddress, valueStyle: "code" },
+      { label: "Chain ID", value: intent.prepared.chainId, valueStyle: "code" },
+      { label: "Nonce", value: intent.prepared.nonce, valueStyle: "code" },
+      { label: "Maximum network fee", value: formatFeeEstimate(fee) },
+      {
+        label: "Signatures",
+        value: `${intent.signatures.length} of ${intent.configSnapshot.threshold}`,
+      },
+      { label: "Calls", value: String(intent.prepared.calls.length) },
+    ])}
+    ${configReview ? configReviewView(configReview) : ""}
+    <details><summary>Review exact calls</summary><ol class="allowance-list">${exactCalls(intent)}</ol></details>
+    <p class="hint">The note above is not signed authority. Verify the exact calls, sender, nonce, fee ceiling, and transaction hash.</p>
+    ${
+      options.length > 0 && canCollect
+        ? selectField({
+            label: "Signer in this wallet",
+            name: "signerAccountId",
+            options,
+          })
+        : ""
+    }
+    <div class="row">
+      ${button({
+        attributes: { "data-ms-copy-package": intent.id },
+        label: "Copy intent package",
+        size: "small",
+        variant: "secondary",
+      })}
+      ${
+        options.length > 0 && canCollect
+          ? button({
+              attributes: { "data-ms-sign": intent.id },
+              label: "Sign exact hash",
+              size: "small",
+            })
+          : ""
+      }
+      ${
+        intent.state === "ready"
+          ? button({
+              attributes: { "data-ms-submit": intent.id },
+              label: "Submit",
+              size: "small",
+            })
+          : ""
+      }
+    </div>
+    ${
+      intent.signatures.length > 0
+        ? `<div class="row">${intent.signatures
+            .map((_, index) =>
+              button({
+                attributes: {
+                  "data-ms-copy-signature": intent.id,
+                  "data-ms-signature-index": String(index),
+                },
+                label: `Copy signature ${index + 1}`,
+                size: "small",
+                variant: "ghost",
+              }),
+            )
+            .join("")}</div>`
+        : ""
+    }
+    ${
+      canCollect
+        ? `<details><summary>Import signature fragment</summary>
+          <form data-ms-signature-form="${escapeHtml(intent.id)}">
+            ${textareaField({ label: "Signature fragment", name: "signature", placeholder: '{"publicKey":"0x…","r":"0x…","s":"0x…"}', required: true, rows: 3, spellcheck: false })}
+            ${button({ label: "Verify and import", size: "small", type: "submit", variant: "secondary" })}
+          </form>
+        </details>`
+        : ""
+    }
+  </article>`;
+};
+
+const intentList = (
+  record: ArgentMultisigRecord,
+  view: ArgentMultisigView,
+  intents: readonly ArgentMultisigSigningIntent[],
+  status: WalletStatus,
+  preferences: WalletPreferences | null,
+): string => {
+  const scoped = intents.filter((intent) => intent.accountId === record.id);
+  return scoped.length === 0
+    ? emptyState("No frozen signing intents are stored for this account.")
+    : `<div class="allowance-list">${scoped
+        .map((intent) => intentCard(intent, view, status, preferences))
+        .join("")}</div><p id="multisig-intent-result" role="status"></p>`;
 };
 
 /**
- * Renders one multisig's detail screen: on-chain config, tracked proposals
- * with lifecycle actions, and the track-by-id form.
+ * Renders one shared account, its portfolio, and exact frozen intents.
  */
 export const multisigDetailFlow = (
   status: WalletStatus,
-  account: AccountRef | null,
-  record: MultisigRecord | null,
-  proposals: readonly MultisigProposalRecord[],
+  _account: AccountRef | null,
+  view: ArgentMultisigView | null,
+  intents: readonly ArgentMultisigSigningIntent[],
   loadError = false,
-  sync: MultisigSyncState = null,
   preferences: WalletPreferences | null = null,
-  view: "multisig-detail" | "multisig-home" = "multisig-detail",
+  screen: "multisig-detail" | "multisig-home" = "multisig-detail",
   portfolio: MultisigPortfolioData = EMPTY_MULTISIG_PORTFOLIO,
 ): string => {
-  if (!record) {
+  if (!view) {
     return (
-      (view === "multisig-home" ? "" : flowHeader("Multisig", status)) +
-      (view === "multisig-home" ? dockScreen : flowScreen)(
-        view,
-        loadError
-          ? multisigSyncNotice(true, "background-unavailable", "multisig-list-retry")
-          : emptyState("This multisig is no longer watched."),
+      (screen === "multisig-home" ? "" : flowHeader("Argent multisig", status)) +
+      (screen === "multisig-home" ? dockScreen : flowScreen)(
+        screen,
+        emptyState("This Argent multisig is no longer watched."),
       )
     );
   }
-  const tracked = proposals.filter((proposal) => proposal.multisigId === record.id);
-  const canSign = status.accounts.some(
-    (stored) =>
-      stored.networkId === record.networkId &&
-      record.signers.some((signer) => sameFelt(signer, stored.address)),
-  );
-  const openCount = tracked.filter((proposal) => proposal.state !== "executed").length;
+  const { record } = view;
+  const options = localSignerOptions(view, status.accounts, preferences);
+  const openCount = intents.filter(
+    (intent) =>
+      intent.accountId === record.id && (intent.state === "collecting" || intent.state === "ready"),
+  ).length;
   return (
-    (view === "multisig-home"
+    (screen === "multisig-home"
       ? ""
-      : flowHeader(
-          multisigDisplayName(record),
-          status,
-          `${record.quorum} of ${record.signers.length} signers`,
-        )) +
-    (view === "multisig-home" ? dockScreen : flowScreen)(
-      view,
-      `${multisigSyncNotice(loadError, sync, "multisig-list-retry")}
+      : flowHeader(multisigDisplayName(record), status, configLabel(view))) +
+    (screen === "multisig-home" ? dockScreen : flowScreen)(
+      screen,
+      `${
+        loadError || view.config === null
+          ? '<div class="review-panel" role="alert"><p class="review-flag">Current on-chain signer authority is unavailable. Signing is disabled.</p></div>'
+          : ""
+      }
       ${multisigPortfolio({
-        canSign,
+        canSign: options.length > 0 && view.config !== null,
         data: portfolio,
+        intents: intentList(record, view, intents, status, preferences),
         openCount,
         preferences,
-        proposals: `${multisigProposalList(record, tracked, status.accounts, account, preferences)}
-          <p id="multisig-proposal-result" role="status"></p>`,
         record,
       })}
       <p id="multisig-detail-result" role="status"></p>`,
     )
   );
 };
+
+/**
+ * Stable contract identity shown beside configuration and review surfaces.
+ */
+export const argentMultisigContractLabel = (): string =>
+  `Argent Multisig ${ARGENT_MULTISIG_CONTRACT.version}`;

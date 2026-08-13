@@ -8,7 +8,6 @@
 
 import type { WalletStatus } from "../../../popup/responses/responses";
 import type { MultisigClient } from "../../journeys/multisig/multisig-runtime";
-import { mostImportantMultisigSync } from "../../journeys/multisig/multisig-sync";
 import type { SidepanelWallet } from "../../runtime/runtime";
 import type { RenderData } from "../rendering/render-cache";
 import type { WalletView } from "../screens/views";
@@ -36,14 +35,14 @@ const hydrateMultisigs = async (
   selectedMultisigId: string | null,
   cached: RenderData["multisigs"],
   multisig: MultisigClient,
-): Promise<Pick<RenderData, "multisigs" | "multisigsError" | "multisigSync">> => {
+): Promise<Pick<RenderData, "multisigs" | "multisigsError">> => {
   const loaded = await multisig.loadMultisigs();
   if (loaded === "error") {
-    return { multisigs: cached, multisigsError: true, multisigSync: "background-unavailable" };
+    return { multisigs: cached, multisigsError: true };
   }
   const ids =
     activeView === "multisigs"
-      ? loaded.multisigs.map((record) => record.id)
+      ? loaded.multisigs.map((view) => view.record.id)
       : (activeView === "multisig-home" ||
             activeView === "multisig-detail" ||
             activeView === "multisig-signers" ||
@@ -60,19 +59,16 @@ const hydrateMultisigs = async (
     activeView !== "multisig-track" &&
     activeView !== "multisig-receive"
   ) {
-    return { multisigs: loaded, multisigsError: false, multisigSync: null };
+    return { multisigs: loaded, multisigsError: false };
   }
-  const refreshed = await Promise.all(
-    ids.map((id) => multisig.refreshMultisig(id).catch(() => "background-unavailable" as const)),
-  );
+  await Promise.all(ids.map((id) => multisig.refreshMultisig(id).catch(() => null)));
   const reloaded = await multisig.loadMultisigs();
   if (reloaded === "error") {
-    return { multisigs: loaded, multisigsError: true, multisigSync: "background-unavailable" };
+    return { multisigs: loaded, multisigsError: true };
   }
   return {
     multisigs: reloaded,
     multisigsError: false,
-    multisigSync: mostImportantMultisigSync(refreshed),
   };
 };
 

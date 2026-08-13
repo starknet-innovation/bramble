@@ -14,6 +14,7 @@ const ON_CHAIN = "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a
 // A compact guard-valid account used by response-wrapper tests. It remains
 // separate from the rendering fixture so these envelopes stay easy to read.
 export const account = {
+  accountContractType: "openzeppelin" as const,
   address: "0x123",
   classHash: "0xabc",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },

@@ -4,19 +4,11 @@
  */
 
 import { untrustedFetch } from "@mc-wallet/core/http-json";
+import { type ArgentMultisigConfigInput, getArgentMultisigConfig } from "@mc-wallet/multisig/chain";
 import {
-  computeMultisigTransactionId,
-  getMultisigConfig,
-  getMultisigProposalStatus,
-  type MultisigConfigInput,
-  type MultisigProposalStatusInput,
-  type MultisigTransactionIdInput,
-} from "@mc-wallet/multisig/chain";
-import { isMultisigClassDeclared, type MultisigClassStatusInput } from "@mc-wallet/multisig/deploy";
-import {
-  discoverMultisigProposalIds,
-  type MultisigProposalDiscoveryInput,
-} from "@mc-wallet/multisig/discovery";
+  type ArgentMultisigClassStatusInput,
+  isArgentMultisigClassDeclared,
+} from "@mc-wallet/multisig/deploy";
 import {
   createHttpNftIndexer,
   type NftIndexerHttp,
@@ -33,6 +25,13 @@ import {
   type VerifyClassHashInput,
   verifyAccountClassHash,
 } from "@mc-wallet/starknet/class-hash-verify";
+import {
+  type PrepareArgentMultisigInvokeV3Input,
+  prepareArgentMultisigInvokeV3,
+  type SubmitPreparedArgentMultisigInvokeV3Input,
+  submitPreparedArgentMultisigInvokeV3,
+} from "@mc-wallet/starknet/multisig-invoke";
+import { withRpcFallback } from "@mc-wallet/starknet/provider";
 import {
   type BalanceInput,
   type DeclareInput,
@@ -75,30 +74,42 @@ import type {
   scanTransactionHistory,
   TransactionHistoryScan,
 } from "@mc-wallet/transactions/tx-history-scan";
+import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 import type { ExplorerLanePreferences } from "@mc-wallet/wallet-model/preferences";
 
 /**
  * Injectable multisig read operations used by the multisig message handlers.
  */
 type MultisigRpc = {
-  readonly computeTransactionId: (
-    input: MultisigTransactionIdInput,
-  ) => ReturnType<typeof computeMultisigTransactionId>;
-  readonly getConfig: (input: MultisigConfigInput) => ReturnType<typeof getMultisigConfig>;
-  readonly getProposalStatus: (
-    input: MultisigProposalStatusInput,
-  ) => ReturnType<typeof getMultisigProposalStatus>;
-  /**
-   * Discovers proposal ids submitted by other signers. Optional for narrow
-   * test doubles; production always wires the bounded event scan.
-   */
-  readonly discoverProposalIds?: (
-    input: MultisigProposalDiscoveryInput,
-  ) => ReturnType<typeof discoverMultisigProposalIds>;
+  readonly getConfig: (
+    input: ArgentMultisigConfigInput,
+  ) => ReturnType<typeof getArgentMultisigConfig>;
+  readonly getNonce: (input: {
+    readonly address: string;
+    readonly rpcUrls: readonly string[];
+  }) => Promise<string>;
   readonly isClassDeclared: (
-    input: MultisigClassStatusInput,
-  ) => ReturnType<typeof isMultisigClassDeclared>;
+    input: ArgentMultisigClassStatusInput,
+  ) => ReturnType<typeof isArgentMultisigClassDeclared>;
+  readonly prepareInvoke: (
+    input: PrepareArgentMultisigInvokeV3Input,
+  ) => ReturnType<typeof prepareArgentMultisigInvokeV3>;
+  readonly submitPreparedInvoke: (
+    input: SubmitPreparedArgentMultisigInvokeV3Input,
+  ) => ReturnType<typeof submitPreparedArgentMultisigInvokeV3>;
 };
+
+const getArgentMultisigNonce = async (input: {
+  readonly address: string;
+  readonly rpcUrls: readonly string[];
+}): Promise<string> =>
+  withRpcFallback(input.rpcUrls, async (provider) => {
+    const nonce = canonicalFelt(await provider.getNonceForAddress(input.address, "latest"));
+    if (nonce === null) {
+      throw new Error("Invalid Argent multisig nonce response");
+    }
+    return nonce;
+  });
 
 /**
  * Injectable Starknet RPC operations used by the message handler.
@@ -251,11 +262,11 @@ export const createDefaultRuntimeRpc = ({ readPreferences }: RuntimeRpcOptions):
   getTransactionHistory: createRpcFirstHistory({ client: starkscanClient, readPreferences }),
   getTransactionStatuses,
   multisig: {
-    computeTransactionId: computeMultisigTransactionId,
-    discoverProposalIds: discoverMultisigProposalIds,
-    getConfig: getMultisigConfig,
-    getProposalStatus: getMultisigProposalStatus,
-    isClassDeclared: isMultisigClassDeclared,
+    getConfig: getArgentMultisigConfig,
+    getNonce: getArgentMultisigNonce,
+    isClassDeclared: isArgentMultisigClassDeclared,
+    prepareInvoke: prepareArgentMultisigInvokeV3,
+    submitPreparedInvoke: submitPreparedArgentMultisigInvokeV3,
   },
   nftIndexer: createHttpNftIndexer(nftIndexerHttp),
   submitAccountDeployment,

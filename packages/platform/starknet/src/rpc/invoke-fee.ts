@@ -4,13 +4,14 @@ import { WalletError } from "@mc-wallet/core/errors";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import type { Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import { type Account, type Call, TransactionType } from "starknet";
-import { ozAccountDeployment } from "../transactions/deployment";
+import { accountDeployment } from "../transactions/deployment";
 
 /**
  * Estimates the exact invocation without signing. For an undeployed account,
  * the node simulates DEPLOY_ACCOUNT followed by INVOKE as one ordered batch so
  * the invocation is estimated against the state in which it will execute.
- * Missing/malformed bulk results fail closed.
+ * `skipValidate` is false only with a shape-correct query signer; missing or
+ * malformed bulk results fail closed.
  */
 export const estimateExactInvokeFee = async (
   starknetAccount: Account,
@@ -18,15 +19,16 @@ export const estimateExactInvokeFee = async (
   calls: readonly Call[],
   proof: Strk20Proof | undefined,
   deployed: boolean,
+  skipValidate = true,
 ): ReturnType<Account["estimateInvokeFee"]> => {
   const details = {
     ...(proof ? { proof: proof.data, proofFacts: [...proof.proof_facts] } : {}),
-    skipValidate: true,
+    skipValidate,
   } as Parameters<Account["estimateInvokeFee"]>[1];
   if (deployed) {
     return starknetAccount.estimateInvokeFee([...calls], details);
   }
-  const deployment = ozAccountDeployment(account);
+  const deployment = accountDeployment(account);
   const estimates = await starknetAccount.estimateFeeBulk(
     [
       {

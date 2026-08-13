@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./account-contracts": "./src/accounts/account-contracts.ts",
     "./class-hash-verify": "./src/transactions/class-hash-verify.ts",
     "./declare": "./src/transactions/declare.ts",
     "./deployment": "./src/transactions/deployment.ts",
     "./fee-bounds": "./src/rpc/fee-bounds.ts",
+    "./multisig-invoke": "./src/rpc/multisig-invoke.ts",
     "./provider": "./src/rpc/provider.ts",
     "./rpc": "./src/rpc/rpc.ts",
     "./rpc-assets": "./src/rpc/rpc-assets.ts",

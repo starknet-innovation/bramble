@@ -25,6 +25,7 @@ const ORIGIN = "https://secure-dapp.example";
 const PASSPHRASE = "correct horse battery staple";
 const REVIEWED_FEE = { overallFee: "1", unit: "FRI" as const };
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234",
   classHash: "0x5678",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },

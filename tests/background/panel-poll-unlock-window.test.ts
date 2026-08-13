@@ -65,7 +65,7 @@ const EXPIRES_AT = UNLOCKED_AT + TTL_MS;
 const HYDRATED_CALL_MESSAGES: Readonly<Record<string, string>> = {
   "deployment.load": "wallet.deploymentStatus",
   "multisig.loadBalances": "wallet.multisigBalances",
-  "multisig.loadClassStatus": "wallet.multisigClassStatus",
+  "multisig.loadClassStatus": "wallet.argentMultisigClassStatus",
   "multisig.loadMultisigs": "wallet.multisigs",
   "multisig.refreshMultisig": "wallet.refreshMultisig",
   "wallet.connectedSites": "wallet.connectedSites",

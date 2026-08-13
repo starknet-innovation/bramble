@@ -47,6 +47,7 @@ const enumerateClient: LedgerDeviceClient = {
 };
 
 const candidate = (index: number): LedgerAccountRef => ({
+  accountContractType: "openzeppelin",
   address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   derivation: {
@@ -290,14 +291,16 @@ describe("Ledger onboarding runtime (DOM)", () => {
     const h = mountRuntime();
     h.runtime.startAddAccount();
     expect(h.mount.hidden).toBe(false);
-    expect(h.mount.querySelector('[data-add-kind="hd"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="argent"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="openzeppelin"]')).not.toBeNull();
     expect(h.mount.querySelector('[data-add-kind="import"]')).not.toBeNull();
-    expect(h.mount.querySelector('[data-add-kind="ledger"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="ledger-argent"]')).not.toBeNull();
+    expect(h.mount.querySelector('[data-add-kind="ledger-openzeppelin"]')).not.toBeNull();
 
     expect(h.mount.querySelector('[data-add-kind="multisig"]')).not.toBeNull();
 
     // Selection stays reversible until Continue confirms the route.
-    click(h.mount, '[data-add-kind="ledger"]');
+    click(h.mount, '[data-add-kind="ledger-argent"]');
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).toBeNull();
     click(h.mount, "[data-add-continue]");
     expect(h.mount.querySelector("[data-ledger-onboard-connect]")).not.toBeNull();
@@ -311,7 +314,7 @@ describe("Ledger onboarding runtime (DOM)", () => {
 
     // "New account" derives an HD account, then dismisses on success.
     h.runtime.startAddAccount();
-    click(h.mount, '[data-add-kind="hd"]');
+    click(h.mount, '[data-add-kind="argent"]');
     click(h.mount, "[data-add-continue]");
     await tick();
     expect(h.hdAdds()).toBe(1);

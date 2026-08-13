@@ -461,7 +461,7 @@ export const SPEC_METHODS: readonly SpecMethod[] = [
     ],
     request: { id: REQUEST_ID, method: "wallet_signTypedData", params: { typed_data: TYPED_DATA } },
     expectedRuntime: { origin: ORIGIN, typedData: TYPED_DATA, type: "wallet.signTypedData" },
-    backgroundResult: { ok: true, signature: { publicKey: "0xabc", r: "0x1", s: "0x2" } },
+    backgroundResult: { ok: true, signature: ["0x1", "0x2"] },
     validateResult: (r) =>
       Array.isArray(r) && r.length === 2 && r.every((f) => isString(f) && SIGNATURE_FELT.test(f)),
   },

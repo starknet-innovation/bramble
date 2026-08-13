@@ -4,6 +4,8 @@
  * the signature returns through the request's own channel. Deny rejects it.
  */
 import { describe, expect, test } from "bun:test";
+import { createPreferencesStore } from "@mc-wallet/settings/preferences";
+import { createMemoryStore } from "@mc-wallet/store/kv";
 import type { Vault } from "@mc-wallet/vault/schema";
 import type { AccountRef, LedgerAccountRef } from "@mc-wallet/wallet-model/accounts";
 import { ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
@@ -13,10 +15,12 @@ import type { LedgerSignQueue } from "../../../apps/extension/src/background/led
 import { createMessageHandler } from "../../../apps/extension/src/background/routing/messages";
 import type { RuntimeSender } from "../../../apps/extension/src/background/routing/senders";
 import { createUnlockSession } from "../../../apps/extension/src/background/runtime/session";
+import { executeSignApproval } from "../../../apps/extension/src/background/transactions/chain-ops";
 import { flushHeld, waitForPendingApprovals } from "../../support/held";
 
 const PASSPHRASE = "correct horse battery staple";
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -31,7 +35,7 @@ const vault = {
   activeAccountId: account.id,
   mnemonic: null,
   originGrants: [{ accountIds: [account.id], origin: "https://dapp.example" }],
-  schemaVersion: 5,
+  schemaVersion: 6,
   signingKeys: [{ accountId: account.id, privateKey: "0x7e5" }],
 } as unknown as Vault;
 
@@ -106,6 +110,31 @@ const signMessage = {
 };
 
 describe("signTypedData approval gate", () => {
+  test("returns the standard Argent account signature for approved typed data", async () => {
+    const argentAccount = { ...account, accountContractType: "argent" as const };
+    const session = createUnlockSession();
+    session.unlock(PASSPHRASE);
+
+    await expect(
+      executeSignApproval(
+        {
+          preferencesStore: createPreferencesStore({ store: createMemoryStore() }),
+          session,
+          wallet: {
+            ...wallet,
+            async getGrantedAccounts() {
+              return [argentAccount];
+            },
+          },
+        },
+        { origin: "https://dapp.example", typedData: MESSAGE },
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      signature: ["1", "0", account.publicKeyX, "0x1", "0x2"],
+    });
+  });
+
   test("valid request never auto-signs — it queues and holds until approval", async () => {
     const handler = makeHandler();
     let settled = false;
@@ -128,7 +157,7 @@ describe("signTypedData approval gate", () => {
     const result = await held;
     expect(result).toEqual({
       ok: true,
-      signature: { publicKey: account.publicKeyX, r: "0x1", s: "0x2" },
+      signature: ["0x1", "0x2"],
     });
   });
 
@@ -162,6 +191,7 @@ describe("signTypedData approval gate", () => {
     const { starkCurve } = ec;
     const ledgerPublicKeyX = starkCurve.getStarkKey("0x1234567890abcdef");
     const ledgerAccount: LedgerAccountRef = {
+      accountContractType: "openzeppelin",
       address: "0xabc111111",
       classHash: "0x111111",
       derivation: {

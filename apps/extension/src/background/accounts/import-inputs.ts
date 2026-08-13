@@ -5,6 +5,7 @@
  * message carries only the target network and the private key.
  */
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
+import { type AccountContractType, isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import {
   isStarknetNetworkId,
   isStarkPrivateKey,
@@ -28,11 +29,16 @@ import {
  */
 export const readImportAccountInput = (
   message: unknown,
-): { readonly networkId: StarknetNetworkId; readonly privateKey: string } | null => {
+): {
+  readonly accountContractType: AccountContractType;
+  readonly networkId: StarknetNetworkId;
+  readonly privateKey: string;
+} | null => {
   if (
     !isRecord(message) ||
-    !hasOnlyKnownKeys(message, ["networkId", "privateKey", "type"]) ||
+    !hasOnlyKnownKeys(message, ["accountContractType", "networkId", "privateKey", "type"]) ||
     message["type"] !== "wallet.importAccount" ||
+    !isAccountContractType(message["accountContractType"]) ||
     !isStarknetNetworkId(message["networkId"]) ||
     typeof message["privateKey"] !== "string"
   ) {
@@ -44,5 +50,9 @@ export const readImportAccountInput = (
     return null;
   }
 
-  return { networkId: message["networkId"], privateKey };
+  return {
+    accountContractType: message["accountContractType"],
+    networkId: message["networkId"],
+    privateKey,
+  };
 };

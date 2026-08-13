@@ -33,12 +33,12 @@ export {
 export {
   type AccountDeployment,
   type AccountDeploymentFeeEstimate,
+  accountDeployment,
   type DeployAccountInput,
   type DeploymentStatusInput,
   type DeploySubmission,
   estimateAccountDeploymentFee,
   getDeploymentStatus,
-  ozAccountDeployment,
   submitAccountDeployment,
 } from "../transactions/deployment";
 /**

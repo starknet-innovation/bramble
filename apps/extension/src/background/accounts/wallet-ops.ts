@@ -30,6 +30,7 @@ import {
 } from "@mc-wallet/wallet-model/networks";
 import { accountHashSigner } from "../ledger/account-hash-signer";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
+import { currentArgentSignerRecords } from "../multisig/multisig-membership";
 import {
   readActivityInput,
   readFeeReviewInput,
@@ -471,11 +472,8 @@ const activityTarget = async (
       scope: { accountId: context.account.id, networkId: context.networkId },
     };
   }
-  const record = (await deps.multisigStore?.listMultisigs())?.find(
-    (stored) =>
-      stored.id === requestedAccountId &&
-      stored.networkId === context.networkId &&
-      stored.signers.some((signer) => sameFelt(signer, context.account.address)),
+  const record = (await currentArgentSignerRecords(deps, context.account, context.networkId)).find(
+    (stored) => stored.id === requestedAccountId,
   );
   return record
     ? {

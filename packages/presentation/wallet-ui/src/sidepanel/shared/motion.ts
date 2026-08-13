@@ -24,15 +24,6 @@ export const prefersReducedMotion = (): boolean =>
   typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
- * Reads one computed compositor property at the browser-motion boundary. Empty
- * values are returned when computed styles are unavailable in a test runtime.
- */
-export const currentMotionStyle = (
-  element: HTMLElement,
-  property: "opacity" | "transform",
-): string => (typeof getComputedStyle === "function" ? getComputedStyle(element)[property] : "");
-
-/**
  * Options for {@link animate}: standard WAAPI timing plus an optional id used to
  * scope interruption (only animations sharing the id are cancelled).
  */

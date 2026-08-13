@@ -1,10 +1,14 @@
-import { multisigTransactionId } from "@mc-wallet/multisig/chain";
-import type { MultisigProposalRecord, MultisigRecord } from "@mc-wallet/multisig/repository";
 import type { WalletPreferences } from "@mc-wallet/settings/preferences";
+import {
+  ARGENT_MULTISIG_CONTRACT,
+  argentSignerGuid,
+  normalizeArgentMultisigConfig,
+} from "@mc-wallet/starknet/account-contracts";
 import type { ActivityEntry } from "@mc-wallet/transactions/activity";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { LEDGER_EIP2645_APPLICATION, ledgerAccountPath } from "@mc-wallet/wallet-model/ledger-path";
 import type {
+  ArgentMultisigView,
   DiscoveredNft,
   PendingApproval,
   TokenBalance,
@@ -19,6 +23,7 @@ export const USDC_ADDRESS = "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47
 export const NFT_CONTRACT = "0x31075ef90ad626dc13fb97cdc7e04499ee5fa1007f2c4e1a9439b22fc3755b9";
 
 export const softwareAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: SOFTWARE_ADDRESS,
   classHash: "0x111",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -29,6 +34,7 @@ export const softwareAccount: AccountRef = {
 };
 
 export const ledgerAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: LEDGER_ADDRESS,
   classHash: "0x111",
   derivation: {
@@ -183,31 +189,24 @@ export const watchAssetApproval: PendingApproval = {
   },
 };
 
-export const multisig: MultisigRecord = {
-  address: "0x71234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
-  id: "SN_MAIN:0x71234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
-  name: "Operations treasury",
-  networkId: "SN_MAIN",
-  quorum: 2,
-  signers: [softwareAccount.address, ledgerAccount.address, secondAccount.address],
-};
+const argentSigners = normalizeArgentMultisigConfig({
+  signerPublicKeys: [softwareAccount.publicKeyX, ledgerAccount.publicKeyX],
+  threshold: 2,
+});
 
-const pendingProposalCall = {
-  calldata: [RECIPIENT_ADDRESS, "0x5f5e100", "0x0"],
-  contractAddress: USDC_ADDRESS,
-  entrypoint: "transfer",
-  salt: "0x2",
-} as const;
-const pendingProposalId = multisigTransactionId(pendingProposalCall, pendingProposalCall.salt);
-
-export const pendingProposal: MultisigProposalRecord = {
-  call: pendingProposalCall,
-  confirmations: 1,
-  confirmedBySigner: false,
-  confirmedBySignerAddress: softwareAccount.address,
-  id: `${multisig.id}:${pendingProposalId}`,
-  multisigId: multisig.id,
-  state: "pending",
-  summary: "Pay 100 USDC to research treasury",
-  txId: pendingProposalId,
+export const argentMultisig: ArgentMultisigView = {
+  config: {
+    classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+    signerGuids: argentSigners.signerPublicKeys.map(argentSignerGuid),
+    threshold: argentSigners.threshold,
+  },
+  record: {
+    accountContractType: "argent-multisig",
+    address: "0x71234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
+    classHash: ARGENT_MULTISIG_CONTRACT.classHash,
+    currentConfig: argentSigners,
+    id: "SN_MAIN:0x71234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd",
+    name: "Operations treasury",
+    networkId: "SN_MAIN",
+  },
 };

@@ -257,8 +257,9 @@ Public account, network, token, address-book, preference, passphrase-policy, Led
 and account-selection values plus their pure parsers and smart constructors. Persistent versioned
 vault envelopes and feature-owned activity, allowance, and NFT records do not belong here.
 
-Account selection and signing authority remain separate. A multisig can be a first-class selectable
-wallet account without pretending to own one signing key.
+Single-signer account selection and signing authority remain in the vault. Argent multisigs live in
+the dedicated public feature repository and never enter `AccountRef`, so an ordinary signing path
+cannot mistake a shared account for one locally controlled key.
 
 ### `foundation/wallet-protocol`
 
@@ -313,8 +314,8 @@ Each feature owns its domain-specific types, use cases, repository contract and 
 - `portfolio`: token balances, registry, prices, NFTs, and portfolio discovery.
 - `transactions`: activity and transaction history, allowance discovery, route and fee checks,
   AVNU quote/call adaptation, Ledger call verification, and explorer parsing.
-- `multisig`: on-chain configuration and proposal parsing, deployment construction, discovery,
-  repository persistence, synchronization, and confirmation-mode values.
+- `multisig`: pinned Argent configuration reads, deployment construction, exact-hash signing-intent
+  validation, signature collection, and public repository persistence.
 - `privacy`: STRK20 schemas, official SDK adapter, note-discovery/proving service, registration,
   recipient policy, preparation, and proof-boundary submission.
 - `settings`: account groups, public preferences, network overrides, and their validated stores.
@@ -360,12 +361,12 @@ reject responses whose independent account or network fields do not match that i
 wrapper type is not introduced where the existing validated `AccountRef` already carries the
 invariant.
 
-### First-class wallet accounts
+### Shared account selection
 
-A selectable wallet account is a discriminated union of signer and multisig account references.
-Portfolio and navigation operations accept either. Signing operations require an owned signer
-reference. Multisig proposal operations require a multisig reference plus an eligible owned signer.
-Capabilities are derived from those types and chain state rather than stored as unrelated booleans.
+The vault's `AccountRef` union contains only locally controlled single-signer accounts, each tagged
+with its OpenZeppelin or Argent contract type. A selected Argent multisig is a feature-owned public
+record with a distinct runtime path. Its transaction submission requires a frozen V3 transaction
+plus enough independently verified member signatures; it cannot call the ordinary account signer.
 
 ### Public protocol registry
 
@@ -435,7 +436,7 @@ The release gate remains authoritative and comprehensive:
 
 ```bash
 bun run vendor:krusty
-bun run vendor:multisig
+bun run vendor:argent
 bun run vendor:privacy
 bun run check
 bun run build

@@ -5,7 +5,7 @@
  * vault's active signing account.
  */
 import { escapeHtml } from "@mc-wallet/core/html";
-import type { MultisigRecord } from "@mc-wallet/multisig/repository";
+import type { ArgentMultisigView } from "../../../popup/responses/multisig-responses";
 import { icon } from "../../shared/icons";
 import { accountAvatar, accountLabel } from "../../shared/parts";
 import { multisigDisplayName } from "./multisig-model";
@@ -14,21 +14,21 @@ import { multisigDisplayName } from "./multisig-model";
  * Renders multisig identities inside the common Accounts & groups picker.
  */
 export const multisigAccountOptions = (
-  records: readonly MultisigRecord[],
+  records: readonly ArgentMultisigView[],
   selectedMultisigId: string | null,
 ): string =>
   records
     .map(
       (
-        record,
-      ) => `<button class="option-row" data-multisig-open="${escapeHtml(record.id)}" type="button" aria-pressed="${record.id === selectedMultisigId}">
-        <span class="option-avatar">${accountAvatar(record.address)}</span>
+        view,
+      ) => `<button class="option-row" data-multisig-open="${escapeHtml(view.record.id)}" type="button" aria-pressed="${view.record.id === selectedMultisigId}">
+        <span class="option-avatar">${accountAvatar(view.record.address)}</span>
         <span class="option-copy">
-          <strong>${escapeHtml(multisigDisplayName(record))}</strong>
-          <code>${escapeHtml(accountLabel(record.address))}</code>
-          <span class="option-sub">Multisig · ${record.quorum} of ${record.signers.length} signers</span>
+          <strong>${escapeHtml(multisigDisplayName(view.record))}</strong>
+          <code>${escapeHtml(accountLabel(view.record.address))}</code>
+          <span class="option-sub">Argent Multisig · ${view.config ? `${view.config.threshold} of ${view.config.signerGuids.length}` : "authority unavailable"}</span>
         </span>
-        ${record.id === selectedMultisigId ? `<span class="option-mark">${icon("check")}</span>` : ""}
+        ${view.record.id === selectedMultisigId ? `<span class="option-mark">${icon("check")}</span>` : ""}
       </button>`,
     )
     .join("");

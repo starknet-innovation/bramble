@@ -4,6 +4,7 @@
  * straight to the privileged background import request (which routes it to the
  * encrypted vault) and is never logged, echoed, or stored in preferences.
  */
+import { isAccountContractType } from "@mc-wallet/wallet-model/accounts";
 import { buttonBusy, errorMessage, showToast } from "../../shared/dom";
 import type { SettingsUiDeps } from "./settings-ui";
 
@@ -19,16 +20,20 @@ export const bindImportKey = (deps: SettingsUiDeps): void => {
 
   form?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const privateKey = String(new FormData(form).get("rawKey") ?? "").trim();
-    if (!privateKey) {
+    const data = new FormData(form);
+    const privateKey = String(data.get("rawKey") ?? "").trim();
+    const accountContractType = data.get("accountContractType");
+    if (!privateKey || !isAccountContractType(accountContractType)) {
       if (result) {
-        result.textContent = "Enter a private key to import";
+        result.textContent = privateKey
+          ? "Choose a supported account contract"
+          : "Enter a private key to import";
       }
       return;
     }
 
     buttonBusy(submitButton, true);
-    void deps.wallet.importAccount(deps.networkId(), privateKey).then(
+    void deps.wallet.importAccount(deps.networkId(), privateKey, accountContractType).then(
       async () => {
         form.reset();
         showToast("Account imported", "success");

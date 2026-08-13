@@ -168,6 +168,7 @@ const enumerateClient: LedgerDeviceClient = {
 };
 
 const candidate = (index: number): LedgerAccountRef => ({
+  accountContractType: "openzeppelin",
   address: `0x${(index + 10).toString(16)}5567890abcdef1234567890abcdef1234567890abcdef1234567890ab`,
   classHash: "0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
   derivation: {
@@ -238,7 +239,7 @@ describe("createLedgerOnboardEntry", () => {
 
   test("first-run setup creates a brand-new Ledger vault with the passphrase", async () => {
     const h = entryHarness();
-    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE);
+    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE, "openzeppelin");
     expect(h.mount.hidden).toBe(false);
 
     click(h.mount, "[data-ledger-onboard-connect]");
@@ -294,7 +295,7 @@ describe("createLedgerOnboardEntry", () => {
 
   test("cancelling first-run setup clears the captured passphrase from the stash", async () => {
     const h = entryHarness();
-    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE);
+    h.entry.startLedgerSetup("SN_MAIN", PASSPHRASE, "openzeppelin");
     expect(h.mount.hidden).toBe(false);
 
     // Dismiss the overlay from the connect stage via the rendered cancel control.

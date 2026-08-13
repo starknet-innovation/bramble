@@ -11,6 +11,7 @@ export const STRK20_POOL_ADDRESS = "0x123";
 export const STRK20_REVIEWED_FEE = { overallFee: "1000", unit: "FRI" } as const;
 export const STRK20_SDK_TOKEN = "0x456";
 export const STRK20_SDK_ACCOUNT = {
+  accountContractType: "openzeppelin" as const,
   address: "0xabc",
   classHash: "0xdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" as const },

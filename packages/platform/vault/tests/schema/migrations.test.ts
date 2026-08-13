@@ -7,7 +7,7 @@ import {
   migrateVault,
   VAULT_MIGRATIONS,
 } from "@mc-wallet/vault/migrations";
-import { isVaultV1, isVaultV5 } from "@mc-wallet/vault/schema";
+import { isVaultV1, isVaultV6 } from "@mc-wallet/vault/schema";
 
 const legacyVault = {
   accounts: [
@@ -43,7 +43,15 @@ const legacyVault = {
 
 const legacyV3 = { ...legacyVault, mnemonic: null, schemaVersion: 3 as const };
 const legacyV4 = { ...legacyV3, accountSecrets: [], schemaVersion: 4 as const };
-const currentVault = { ...legacyV4, schemaVersion: 5 as const };
+const legacyV5 = { ...legacyV4, schemaVersion: 5 as const };
+const currentVault = {
+  ...legacyV5,
+  accounts: legacyV5.accounts.map((account) => ({
+    accountContractType: "openzeppelin" as const,
+    ...account,
+  })),
+  schemaVersion: 6 as const,
+};
 
 describe("migrateVault", () => {
   test("declares contiguous migration steps to the current schema", () => {
@@ -74,9 +82,13 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV5(migrated)).toBe(true);
+    expect(isVaultV6(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
+      accounts: legacyVault.accounts.map((account) => ({
+        accountContractType: "openzeppelin",
+        ...account,
+      })),
       accountSecrets: [],
       mnemonic: null,
       schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -85,9 +97,18 @@ describe("migrateVault", () => {
   });
 
   test("returns valid current vaults for every supported source shape", () => {
-    for (const source of [undefined, null, {}, legacyVault, legacyV3, legacyV4, currentVault]) {
+    for (const source of [
+      undefined,
+      null,
+      {},
+      legacyVault,
+      legacyV3,
+      legacyV4,
+      legacyV5,
+      currentVault,
+    ]) {
       const migrated = migrateVault(source);
-      expect(isVaultV5(migrated)).toBe(true);
+      expect(isVaultV6(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
   });
@@ -111,8 +132,9 @@ describe("migrateVault", () => {
       signingKeys: [{ accountId: aliasedId, privateKey: "0x0456" }],
     });
 
-    expect(isVaultV5(migrated)).toBe(true);
+    expect(isVaultV6(migrated)).toBe(true);
     expect(migrated.accounts[0]).toMatchObject({
+      accountContractType: "openzeppelin",
       address: "0x123",
       classHash: "0xabc",
       id: "SN_SEPOLIA:0x123",

@@ -69,7 +69,7 @@ const changeKind = (entrypoint: string): AllowanceChangeKind | null => {
  * into its spender, amount, and {@link AllowanceChangeKind}.
  *
  * Trust boundary: the call is untrusted input (a dapp request, an aggregator
- * build, or a stored multisig proposal). Returns null — never a guess — for any
+ * build, or a frozen multisig intent). Returns null — never a guess — for any
  * other entrypoint and for calldata that is not a well-formed spender plus
  * uint256 limb pair, so a malformed or unknown call is tracked as nothing
  * rather than as an allowance the token never granted.

@@ -4,9 +4,9 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { isRecord } from "@mc-wallet/core/json";
 import {
-  type AccountRef,
   canonicalAccountId,
-  canonicalAccountRef,
+  canonicalLegacyAccountRef,
+  type LegacyAccountRef,
 } from "@mc-wallet/wallet-model/accounts";
 import { canonicalFelt } from "@mc-wallet/wallet-model/networks";
 import {
@@ -16,8 +16,10 @@ import {
   isVaultV3,
   isVaultV4,
   isVaultV5,
+  isVaultV6,
   type Vault,
   type VaultV4,
+  type VaultV5,
 } from "./schema";
 
 /**
@@ -106,6 +108,19 @@ export const VAULT_MIGRATIONS: readonly VaultMigrationStep[] = [
     },
     toVersion: 5,
   },
+  {
+    fromVersion: 5,
+    // Every historical account was derived, deployed, and signed with
+    // OpenZeppelin account semantics. Preserve every identity and dependent
+    // reference while making that previously implicit invariant explicit.
+    migrate(value) {
+      if (!isVaultV5(value)) {
+        throw new WalletError("Unsupported vault schema");
+      }
+      return withAccountContractTypes(value);
+    },
+    toVersion: 6,
+  },
 ];
 
 const requiredAccountId = (value: string): string => {
@@ -116,13 +131,22 @@ const requiredAccountId = (value: string): string => {
   return canonical;
 };
 
-const requiredAccount = (value: AccountRef): AccountRef => {
-  const canonical = canonicalAccountRef(value);
+const requiredAccount = (value: LegacyAccountRef): LegacyAccountRef => {
+  const canonical = canonicalLegacyAccountRef(value);
   if (canonical === null) {
     throw new WalletError("Unsupported vault schema");
   }
   return canonical;
 };
+
+const withAccountContractTypes = (value: VaultV5): unknown => ({
+  ...value,
+  accounts: value.accounts.map((account) => ({
+    accountContractType: "openzeppelin" as const,
+    ...account,
+  })),
+  schemaVersion: 6,
+});
 
 const canonicalVault = (value: VaultV4): unknown => ({
   ...value,
@@ -170,7 +194,7 @@ const migrationFrom = (version: number): VaultMigrationStep | undefined =>
  * Migrates unknown decrypted vault data to the current schema or fails closed.
  */
 export const migrateVault = (value: unknown): Vault => {
-  if (isVaultV5(value)) {
+  if (isVaultV6(value)) {
     return value;
   }
 
@@ -188,7 +212,7 @@ export const migrateVault = (value: unknown): Vault => {
     migrated = migration.migrate(migrated);
   }
 
-  if (!isVaultV5(migrated)) {
+  if (!isVaultV6(migrated)) {
     throw new WalletError("Unsupported vault schema");
   }
 

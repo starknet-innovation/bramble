@@ -109,7 +109,7 @@ export type AllowanceDelta = {
  * The account an allowance belongs to: the scope every id, retention bound, and
  * manager query is keyed by. Named separately from `AllowanceInput` because the
  * owner is not always a vault account — a multisig execution grants from the
- * multisig contract's own scope (`MultisigRecord.id`, which shares the
+ * multisig contract's own scope (`ArgentMultisigRecord.id`, which shares the
  * `<networkId>:<address>` shape), not from the signer that broadcast it.
  */
 export type AllowanceOwner = Pick<AllowanceInput, "accountId" | "networkId">;

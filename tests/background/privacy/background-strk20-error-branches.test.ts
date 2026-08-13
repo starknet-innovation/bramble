@@ -30,6 +30,7 @@ const origin = "https://example.com";
 const vaultPassphrase = "correct horse battery staple";
 
 const account: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xabcabcdef",
   classHash: "0xabcdef",
   derivation: { accountIndex: 0, addressIndex: 0, kind: "starknet-bip44" },
@@ -43,6 +44,7 @@ const { starkCurve } = ec;
 // real Stark public x-coordinate so a good device signature verifies.
 const LEDGER_KEY = "0x1234567890abcdef";
 const ledgerAccount: AccountRef = {
+  accountContractType: "openzeppelin",
   address: "0xfedfed",
   classHash: "0xabcdef",
   derivation: {
@@ -112,7 +114,7 @@ const walletStub = (
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [{ accountIds: [account.id], origin }],
-      schemaVersion: 5 as const,
+      schemaVersion: 6 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },
