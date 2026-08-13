@@ -21,7 +21,7 @@
   "dependencies": {
     "@avnu/avnu-sdk": "4.2.0",
     "lightweight-charts": "5.2.0",
-    "lucide-react": "0.469.0",
+    "lucide-react": "1.31.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "starknet": "10.0.2"
