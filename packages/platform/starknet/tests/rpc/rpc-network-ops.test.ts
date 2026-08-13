@@ -11,7 +11,6 @@ import {
   getTokenBalances,
   getTokenMetadata,
   getTransactionStatuses,
-  parseTokenAmount,
   submitErc20Transfer,
   submitInvokeTransaction,
   TRANSACTION_STATUS_CONCURRENCY,
@@ -414,7 +413,13 @@ describe("estimateInvokeFee", () => {
 describe("submitInvokeTransaction", () => {
   test("signs and submits a standard-speed invoke", async () => {
     const result = await submitInvokeTransaction(
-      { account, calls: [...oneCall], rpcUrls: RPC_URLS, signHash },
+      {
+        account,
+        calls: [...oneCall],
+        reviewedFee: { overallFee: "9999999", unit: "FRI" },
+        rpcUrls: RPC_URLS,
+        signHash,
+      },
       accountProvider,
     );
     expect(result.transactionHash).toBe("0xdeadbeef");
@@ -425,7 +430,14 @@ describe("submitInvokeTransaction", () => {
     // The fast path estimates first and feeds the bounds through scaledBounds,
     // then executes; the same canned channel serves both round trips.
     const result = await submitInvokeTransaction(
-      { account, calls: [...oneCall], rpcUrls: RPC_URLS, signHash, speed: "fast" },
+      {
+        account,
+        calls: [...oneCall],
+        reviewedFee: { overallFee: "9999999", unit: "FRI" },
+        rpcUrls: RPC_URLS,
+        signHash,
+        speed: "fast",
+      },
       accountProvider,
     );
     expect(result.transactionHash).toBe("0xdeadbeef");
@@ -445,6 +457,7 @@ describe("submitErc20Transfer", () => {
         account,
         amount: "1.5",
         recipient: "0x0777000000000000000000000000000000000000000000000000000000000abc",
+        reviewedFee: { overallFee: "9999999", unit: "FRI" },
         rpcUrls: RPC_URLS,
         signHash,
         token: eth,
@@ -477,16 +490,5 @@ describe("submitErc20Transfer", () => {
       ),
     ).rejects.toThrow("Invalid transfer amount");
     expect(touched).toBe(false);
-  });
-});
-
-describe("parseTokenAmount format guard", () => {
-  test("rejects a non-numeric amount string", () => {
-    expect(() => parseTokenAmount("not-a-number", 18)).toThrow("Invalid transfer amount");
-  });
-
-  test("rejects an out-of-range decimals argument", () => {
-    expect(() => parseTokenAmount("1.0", 37)).toThrow("Invalid transfer amount");
-    expect(() => parseTokenAmount("1.0", -1)).toThrow("Invalid transfer amount");
   });
 });

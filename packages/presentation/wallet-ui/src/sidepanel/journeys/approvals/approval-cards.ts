@@ -310,7 +310,7 @@ const strk20Card = (approval: PendingApproval, status: WalletStatus): string => 
   <li class="request-card">
     <div class="request-copy">
       ${requestIdentity(approval.origin, "Private transaction request")}
-      <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action and the frozen execution call. The prover cannot change it after approval."}</p>
+      <p class="hint">${status.locked ? "Unlock the wallet to review this private transaction." : "Review each private action and the frozen execution call. The prover cannot change it after approval. Wallet-funded public routes get a second exact-call network-fee review; sponsored private-relay routes submit after this approval."}</p>
       ${reviewCallsList(approval.summaries ?? [])}
       ${strk20ActionReview(approval)}
       ${contextDisclosure(approval)}
@@ -414,7 +414,7 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
     case "strk20-register":
       return strk20DisclosureCard(approval, status, {
         action: "Activate",
-        hint: "This submits a public, one-time registration transaction. It publishes a viewing-key commitment, never the viewing key or private notes.",
+        hint: "This consent prepares the one-time public registration commitment and proof; it does not submit yet. A separate exact-call network-fee approval follows before the wallet publishes the commitment. The viewing key and private notes are never published.",
         lockedHint: "Unlock the wallet to review this private-balance activation.",
         title: "Activate private balances",
       });
@@ -431,7 +431,7 @@ export const approvalCard = (approval: PendingApproval, status: WalletStatus): s
       return addChainCard(approval);
     case "declare":
       return declareCard(approval, status);
-    default:
+    case "connect":
       return connectCard(approval, status);
   }
 };

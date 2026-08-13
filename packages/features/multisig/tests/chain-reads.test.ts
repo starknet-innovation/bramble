@@ -79,6 +79,25 @@ describe("getMultisigConfig", () => {
     );
   });
 
+  test("throws when quorum exceeds the signer count", async () => {
+    stubContract({ get_quorum: ["0x2"], get_signers: ["0x1", SIGNER_A] });
+    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
+      "Invalid multisig signers response",
+    );
+  });
+
+  test("throws when the RPC repeats or zeroes a signer", async () => {
+    stubContract({ get_quorum: ["0x1"], get_signers: ["0x2", SIGNER_A, SIGNER_A] });
+    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
+      "Invalid multisig signers response",
+    );
+
+    stubContract({ get_quorum: ["0x1"], get_signers: ["0x1", "0x0"] });
+    await expect(getMultisigConfig({ address: MULTISIG, rpcUrls: RPC })).rejects.toThrow(
+      "Invalid multisig signers response",
+    );
+  });
+
   test("turns an aborted RPC read into an actionable verification error", async () => {
     const timeout = new Error("The operation was aborted due to timeout");
     timeout.name = "TimeoutError";

@@ -15,117 +15,33 @@ import {
   isSafeDecimals,
   isTokenSymbol,
   JSON_BUDGETS,
-  type Json,
 } from "@mc-wallet/core/json";
 import { isWalletOrigin } from "@mc-wallet/core/origin";
-import { type FeeEstimate, isFeeEstimate as isFee } from "@mc-wallet/starknet/fee-bounds";
+import { isFeeEstimate as isFee } from "@mc-wallet/starknet/fee-bounds";
 import { isAccountIdForNetwork } from "@mc-wallet/wallet-model/accounts";
 import {
   isStarkFieldElement,
   isStarknetNetworkId,
   STARKNET_NETWORKS,
 } from "@mc-wallet/wallet-model/networks";
-import {
-  readStrk20Action,
-  readStrk20Actions,
-  type Strk20Action,
-  type Strk20WithdrawAction,
-} from "@mc-wallet/wallet-protocol/strk20";
+import type {
+  ApprovalContext,
+  ApprovalRiskFlag,
+  ConnectedSite,
+  DeclarationReview,
+  PendingApproval,
+  WatchAssetToken,
+} from "@mc-wallet/wallet-protocol/extension-responses";
+import { readStrk20Action, readStrk20Actions } from "@mc-wallet/wallet-protocol/strk20";
 
 /**
- * ERC20 token metadata carried by a watch-asset approval.
+ * Shared approval and connected-site wire shapes after runtime validation.
  */
-export type WatchAssetToken = {
-  readonly address: string;
-  readonly decimals: number;
-  readonly name: string;
-  readonly networkId: string;
-  readonly symbol: string;
-};
-
-/**
- * One decoded risk flag surfaced on an invoke approval card.
- */
-type ApprovalRiskFlag = {
-  readonly code: string;
-  readonly message: string;
-};
-
-/**
- * Display-safe declaration facts returned without exposing the contract class.
- */
-type DeclarationReview = {
-  readonly abiEntryCount: number;
-  readonly accountDeployment: "deployed" | "undeployed" | "unknown";
-  readonly classHash?: string;
-  readonly compiledClassHash: string;
-  readonly deploymentFee: FeeEstimate | null;
-  readonly deploymentFeeEstimateFailed: boolean;
-  readonly entryPointCount: number;
-  readonly fee: FeeEstimate | null;
-  readonly feeEstimateFailed: boolean;
-  readonly sierraProgramLength: number;
-};
-
-/**
- * Exact account, network, chain, and private-payload digest reviewed by the
- * user for a security-sensitive approval.
- */
-type ApprovalContext = {
-  readonly accountId: string;
-  readonly chainId: string;
-  readonly networkId: string;
-  readonly payloadDigest: string;
-};
-
-/**
- * Pending dapp approval item shown in the popup. `kind` defaults to a
- * connection prompt when absent; watch-asset prompts also carry `token`; invoke
- * prompts carry decoded call `summaries`, risk `flags`, and the fee review
- * (`fee`/`feeEstimateFailed`/`requiresDeployment`, classified like the Send
- * review); `blocked`/`insights` carry phishing and site-reputation signals.
- */
-export type PendingApproval = {
-  readonly actionReviews?: readonly Strk20Action[];
-  readonly blocked?: boolean;
-  readonly context?: ApprovalContext;
-  readonly declaration?: DeclarationReview;
-  readonly fee?: FeeEstimate | null;
-  readonly feeAffordability?: "insufficient" | "ok" | "unknown";
-  readonly feeEstimateFailed?: boolean;
-  readonly feeEstimatePending?: boolean;
-  readonly flags?: readonly ApprovalRiskFlag[];
-  readonly id: string;
-  readonly insights?: readonly string[];
-  readonly kind?:
-    | "add-chain"
-    | "connect"
-    | "declare"
-    | "invoke"
-    | "sign-typed-data"
-    | "strk20-balances"
-    | "strk20-invoke"
-    | "strk20-prepare"
-    | "strk20-register"
-    | "strk20-subaccount"
-    | "switch-chain"
-    | "watch-asset";
-  readonly origin: string;
-  readonly relayFeeAction?: Strk20WithdrawAction;
-  readonly requiresDeployment?: boolean;
-  readonly summaries?: readonly string[];
-  readonly token?: WatchAssetToken;
-  readonly typedData?: Json;
-};
-
-/**
- * A site with an active connection grant plus the number of accounts it can
- * see, shown in the connected-sites manager.
- */
-export type ConnectedSite = {
-  readonly accountCount: number;
-  readonly origin: string;
-};
+export type {
+  ConnectedSite,
+  PendingApproval,
+  WatchAssetToken,
+} from "@mc-wallet/wallet-protocol/extension-responses";
 
 /**
  * Connected-sites response accepted from the background boundary.
@@ -261,8 +177,7 @@ const isPendingApproval = (value: unknown): value is PendingApproval => {
     typeof value["origin"] !== "string" ||
     !isWalletOrigin(value["origin"]) ||
     (value["typedData"] !== undefined && !isJson(value["typedData"])) ||
-    (value["kind"] !== undefined &&
-      value["kind"] !== "add-chain" &&
+    (value["kind"] !== "add-chain" &&
       value["kind"] !== "connect" &&
       value["kind"] !== "declare" &&
       value["kind"] !== "invoke" &&
@@ -352,8 +267,7 @@ const readApprovalSlot = (pending: readonly unknown[], index: number): PendingAp
 
 // Only connection prompts dedupe per origin; watch-asset and invoke prompts
 // legitimately queue multiple entries for the same site.
-const dedupesByOrigin = (approval: PendingApproval): boolean =>
-  approval.kind === undefined || approval.kind === "connect";
+const dedupesByOrigin = (approval: PendingApproval): boolean => approval.kind === "connect";
 
 const parsePendingApprovals = (value: unknown): ParsedPendingApprovals | null => {
   // Budgeting each entry on its own replaced the whole-envelope `isJson` gate,

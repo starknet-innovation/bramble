@@ -31,7 +31,11 @@ describe("approval takeover views", () => {
     // plus the "Not now" snooze, and the dock is hidden so the decision is the
     // one task in front of the user.
     const pending = [
-      { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },
+      {
+        id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+        kind: "connect" as const,
+        origin: "https://dapp.example",
+      },
     ];
     const home = dashboard("home", status, pending, preferences, { balances: [] });
     const quiet = dashboard("home", status, [], preferences, { balances: [] });
@@ -54,7 +58,11 @@ describe("approval takeover views", () => {
 
   test("a pending request supersedes an in-progress wallet flow", () => {
     const pending = [
-      { id: "d03e7ff3-75bb-4d9d-83d4-2b2c20f2bb36", origin: "https://swap.example" },
+      {
+        id: "d03e7ff3-75bb-4d9d-83d4-2b2c20f2bb36",
+        kind: "connect" as const,
+        origin: "https://swap.example",
+      },
     ];
 
     const tokens = dashboard("tokens", status, pending, preferences, { balances: [] });
@@ -66,8 +74,16 @@ describe("approval takeover views", () => {
 
   test("snoozed requests release the takeover and stay in Activity", () => {
     const pending = [
-      { id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14", origin: "https://dapp.example" },
-      { id: "c92d6ee2-64aa-4c8c-b282-1a1b19f1aa25", origin: "https://other.example" },
+      {
+        id: "b81c5dd1-53ff-4b7b-a171-0f0a08e0ff14",
+        kind: "connect" as const,
+        origin: "https://dapp.example",
+      },
+      {
+        id: "c92d6ee2-64aa-4c8c-b282-1a1b19f1aa25",
+        kind: "connect" as const,
+        origin: "https://other.example",
+      },
     ];
     const snoozedFirst = dashboard(
       "home",

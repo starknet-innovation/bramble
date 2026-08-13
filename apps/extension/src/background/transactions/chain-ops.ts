@@ -33,7 +33,11 @@ import {
   switchActiveNetwork,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { PassiveUnlockSession, UnlockSession } from "../runtime/session";
+import {
+  captureSessionAuthorization,
+  type PassiveUnlockSession,
+  type UnlockSession,
+} from "../runtime/session";
 
 /**
  * Dependencies for the provider chain and signing operations.
@@ -283,7 +287,8 @@ export const executeSwitchChainApproval = async (
   const { preferencesStore, session, wallet } = deps;
   return runActiveStateMutation(deps.activeStateCoordinator, async () => {
     const passphrase = session.peekPassphrase();
-    if (!passphrase) {
+    const authorized = captureSessionAuthorization(session);
+    if (!passphrase || !authorized.isCurrent()) {
       return { error: "wallet locked" };
     }
     // A switch-chain approval carries no account context, so the shared claim
@@ -297,13 +302,20 @@ export const executeSwitchChainApproval = async (
       return { error: "origin not connected" };
     }
     const account = await switchActiveNetwork(wallet, session, preferencesStore, input.networkId);
+    if (!authorized.isCurrent()) {
+      return { error: "wallet locked" };
+    }
     const granted = await wallet.getGrantedAccounts(input.origin, passphrase);
     if (account && !granted.some((item) => item.id === account.id)) {
       await wallet.grantOrigin({
         accountId: account.id,
+        isAuthorized: authorized.isCurrent,
         origin: input.origin,
         vaultPassphrase: passphrase,
       });
+    }
+    if (!authorized.isCurrent()) {
+      return { error: "wallet locked" };
     }
     return { chainId: STARKNET_NETWORKS[input.networkId].chainId, ok: true };
   });

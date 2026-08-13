@@ -11,7 +11,9 @@ import type { Strk20Service } from "@mc-wallet/privacy/service";
 import {
   approveHeldStrk20,
   buildStrk20Handler,
+  STRK20_CALL_AND_PROOF,
   STRK20_ORIGIN,
+  STRK20_TOKEN,
 } from "../../support/strk20-background";
 
 // Every method the register path does not reach shares one rejecting stub, so
@@ -28,6 +30,19 @@ const registerRejectedBy = (error: unknown): Strk20Service => ({
   async poolFee() {
     return "0x1";
   },
+  async prepareRegistration() {
+    return {
+      allowanceGrants: [],
+      calls: [
+        {
+          calldata: [...STRK20_CALL_AND_PROOF.call.calldata],
+          contractAddress: STRK20_TOKEN,
+          entrypoint: "apply_actions",
+        },
+      ],
+      proof: STRK20_CALL_AND_PROOF.proof,
+    };
+  },
   quoteActions: offPath,
   async register() {
     return mapStrk20StageError("submission", error);
@@ -37,7 +52,9 @@ const registerRejectedBy = (error: unknown): Strk20Service => ({
   },
   subaccountCommitment: offPath,
   submitActions: offPath,
-  submitPrepared: offPath,
+  async submitPrepared() {
+    return mapStrk20StageError("submission", error);
+  },
 });
 
 const registerError = async (error: unknown): Promise<string> => {

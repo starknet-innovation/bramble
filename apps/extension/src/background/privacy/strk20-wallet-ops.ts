@@ -8,9 +8,9 @@
 
 import { WalletError } from "@mc-wallet/core/errors";
 import {
+  prepareStrk20Registration,
   readStrk20Balances,
   readStrk20RegistrationStatus,
-  registerStrk20Account,
   type Strk20SubmissionResult,
   submitStrk20Actions,
 } from "@mc-wallet/privacy/service";
@@ -26,11 +26,13 @@ import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, observedAccountContext } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { strk20ServiceForRuntime } from "./strk20-account-context";
 import {
   type ActivePrivacyContext,
   assertPublicPoolSpendAffordable,
   errorText,
+  estimatePublicStrk20Fee,
   resolvePrivacyContext,
   type Strk20WalletOpsDeps,
 } from "./strk20-op-context";
@@ -188,8 +190,15 @@ const registrationPreparation = async (deps: Strk20WalletOpsDeps): Promise<Runti
     }
     const poolFeeFri = await service.poolFee(context.accountContext);
     await assertPublicPoolSpendAffordable(deps, context, poolFeeFri);
+    const prepared = await prepareStrk20Registration(service, {
+      ...context.accountContext,
+      poolFeeFri,
+    });
+    const networkFee = await estimatePublicStrk20Fee(deps, context, prepared.calls, prepared.proof);
     const unsigned = {
+      ...prepared,
       kind: "register" as const,
+      networkFee,
       poolAddress: config.poolAddress,
       poolFeeFri,
       summaries: [
@@ -310,7 +319,7 @@ const executePreparation = async (
       owner: allowanceOwner(context.accountContext.account),
       store: deps.allowanceStore,
     });
-    await deps.activity.record({
+    await recordSubmittedActivity(deps.activity, {
       accountId: context.accountContext.account.id,
       ...(preparation.kind === "register" ? {} : { amount: preparation.amount }),
       hash: result.transactionHash,
@@ -345,10 +354,13 @@ const submitPreparation = async (
     throw new Error("Private balances are already active");
   }
   await assertPublicPoolSpendAffordable(deps, context, preparation.poolFeeFri);
-  return registerStrk20Account(service, {
+  const result = await service.submitPrepared({
     ...context.accountContext,
-    poolFeeFri: preparation.poolFeeFri,
+    calls: preparation.calls,
+    proof: preparation.proof,
+    reviewedFee: preparation.networkFee,
   });
+  return { allowanceGrants: preparation.allowanceGrants, ...result };
 };
 
 // A third-party private credit can only be encoded for a recipient whose
@@ -446,15 +458,15 @@ const submitPreparedDeposit = async (
   if (registration !== "registered") {
     throw new Error("Private registration is no longer active");
   }
-  return submitStrk20Actions(service, {
+  await assertRecipientRegistration(service, preparation.recipient, context);
+  await assertCurrentRecipientPolicy(deps, preparation, context);
+  const result = await service.submitPrepared({
     ...context.accountContext,
-    actions: preparation.actions,
-    beforeProof: async () => {
-      await assertRecipientRegistration(service, preparation.recipient, context);
-      await assertCurrentRecipientPolicy(deps, preparation, context);
-    },
-    plan: preparation.plan,
+    calls: preparation.calls,
+    proof: preparation.proof,
+    reviewedFee: preparation.networkFee,
   });
+  return { allowanceGrants: preparation.allowanceGrants, ...result };
 };
 
 /**

@@ -293,6 +293,21 @@ describe("background message parsers", () => {
         vaultPassphrase,
       }),
     ).toBeNull();
+    expect(
+      readCreateAccountInput({
+        mnemonic: "habit hope tip crystal because grunt nation idea electric witness alert like",
+        mnemonicPassphrase: "x".repeat(1_025),
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
+    expect(
+      readCreateAccountInput({
+        mnemonic: "x".repeat(513),
+        type: "wallet.createAccount",
+        vaultPassphrase,
+      }),
+    ).toBeNull();
   });
 
   test("reads exact account previews without accepting a vault passphrase", () => {

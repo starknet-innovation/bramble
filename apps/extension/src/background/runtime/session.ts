@@ -177,11 +177,31 @@ const isSessionState = (value: unknown): value is UnlockSessionState =>
 
 const REVOKED_MIRROR_ENTRY: UnlockSessionRevocation = { revoked: true };
 
+const isRevokedMirrorEntry = (value: unknown): value is UnlockSessionRevocation =>
+  isRecord(value) && hasOnlyKnownKeys(value, ["revoked"]) && value["revoked"] === true;
+
 const succeeds = (operation: () => Promise<void>): Promise<boolean> =>
   operation().then(
     () => true,
     () => false,
   );
+
+const clearAndVerifyMirror = (mirror: UnlockSessionStore): Promise<boolean> =>
+  succeeds(async () => {
+    await mirror.clear();
+    const stored = await mirror.load();
+    if (stored !== null && stored !== undefined && !isRevokedMirrorEntry(stored)) {
+      throw new WalletError("Unlock session mirror not cleared");
+    }
+  });
+
+const revokeAndVerifyMirror = (mirror: UnlockSessionStore): Promise<boolean> =>
+  succeeds(async () => {
+    await mirror.save(REVOKED_MIRROR_ENTRY);
+    if (!isRevokedMirrorEntry(await mirror.load())) {
+      throw new WalletError("Unlock session mirror not revoked");
+    }
+  });
 
 // Proves the plaintext is gone from the mirror, or throws. A single retry
 // absorbs a transient session-storage failure. If the entry still cannot be
@@ -189,13 +209,13 @@ const succeeds = (operation: () => Promise<void>): Promise<boolean> =>
 // passphrase just as effectively and, unlike an in-memory latch, survives the
 // MV3 worker that wrote it, so the next worker cannot restore the session.
 const eraseMirror = async (mirror: UnlockSessionStore): Promise<void> => {
-  if (await succeeds(() => mirror.clear())) {
+  if (await clearAndVerifyMirror(mirror)) {
     return;
   }
-  if (await succeeds(() => mirror.clear())) {
+  if (await clearAndVerifyMirror(mirror)) {
     return;
   }
-  if (await succeeds(() => mirror.save(REVOKED_MIRROR_ENTRY))) {
+  if (await revokeAndVerifyMirror(mirror)) {
     return;
   }
   throw new WalletError("Unlock session mirror not cleared");

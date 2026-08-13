@@ -11,6 +11,7 @@ import { createEncryptedStore } from "@mc-wallet/vault/encrypted-store";
 import { createWalletVaultService } from "@mc-wallet/vault/service";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { isAccountRef } from "@mc-wallet/wallet-model/accounts";
+import { ec } from "starknet";
 import { readImportAccountInput } from "../../apps/extension/src/background/accounts/import-inputs";
 
 const vaultKey = "mc-wallet:vault";
@@ -19,26 +20,45 @@ const vaultPassphrase = "correct horse battery staple";
 // Clearly-fake test vector; not a real key.
 const importedKey = "0xfeedface";
 
+const importKms = () => ({
+  ...fakeKms(),
+  async deriveOzAccountAddress(publicKeyX: string, classHash: string) {
+    // Deterministic, in-range test address; production address derivation
+    // remains owned by Krusty.
+    return `0x${publicKeyX.slice(-16)}${classHash.slice(-6)}`;
+  },
+  async signStarkHash(privateKey: string, messageHash: string) {
+    const signature = ec.starkCurve.sign(messageHash, privateKey);
+    return {
+      publicKey: ec.starkCurve.getStarkKey(privateKey),
+      r: `0x${signature.r.toString(16)}`,
+      s: `0x${signature.s.toString(16)}`,
+    };
+  },
+});
+
 const newService = () =>
   createWalletVaultService({
     encryptedStore: createEncryptedStore(createMemoryStore(), vaultKey),
-    kms: fakeKms(),
+    kms: importKms(),
     migrationStore: createEncryptedStore(createMemoryStore(), migrationKey),
   });
 
 describe("deriveImportedAccount", () => {
   test("derives the OZ account through Krusty from a raw key", async () => {
-    const { account, privateKey } = await deriveImportedAccount(fakeKms(), {
+    const { account, privateKey } = await deriveImportedAccount(importKms(), {
       networkId: "SN_MAIN",
       privateKey: importedKey,
     });
 
-    // publicKeyX comes from the Krusty signature's public key; the address is
-    // derived the same way HD accounts are (deriveOzAccountAddress).
+    const publicKeyX = ec.starkCurve.getStarkKey(importedKey);
+    const address = `0x${publicKeyX.slice(-16)}111111`;
+    // publicKeyX comes from a verified Krusty probe signature; the address is
+    // then derived the same way HD accounts are (deriveOzAccountAddress).
     expect(account.derivation).toEqual({ kind: "imported-raw-key" });
-    expect(account.publicKeyX).toBe("0xabc");
-    expect(account.address).toBe("0xabc111111");
-    expect(account.id).toBe("SN_MAIN:0xabc111111");
+    expect(account.publicKeyX).toBe(publicKeyX);
+    expect(account.address).toBe(address);
+    expect(account.id).toBe(`SN_MAIN:${address}`);
     expect(account).not.toHaveProperty("publicKeyY");
     expect(privateKey).toBe(importedKey);
     expect(isAccountRef(account)).toBe(true);
@@ -74,7 +94,7 @@ describe("deriveImportedAccount", () => {
   });
 
   test("accepts a private key just below the curve order", async () => {
-    const { account } = await deriveImportedAccount(fakeKms(), {
+    const { account } = await deriveImportedAccount(importKms(), {
       networkId: "SN_MAIN",
       // curve order - 1: the largest valid signing scalar.
       privateKey: "0x0800000000000010ffffffffffffffffb781126dcae7b2321e66a241adc64d2e",
@@ -105,6 +125,19 @@ describe("deriveImportedAccount", () => {
       deriveImportedAccount(badKms, { networkId: "SN_MAIN", privateKey: importedKey }),
     ).rejects.toThrow("Krusty KMS returned invalid public key");
   });
+
+  test("rejects a well-shaped KMS probe that does not verify", async () => {
+    const genuine = await importKms().signStarkHash(importedKey, "0x1");
+    const badKms = {
+      ...fakeKms(),
+      async signStarkHash() {
+        return { ...genuine, publicKey: ec.starkCurve.getStarkKey("0xdeadbeef") };
+      },
+    };
+    await expect(
+      deriveImportedAccount(badKms, { networkId: "SN_MAIN", privateKey: importedKey }),
+    ).rejects.toThrow("Krusty KMS public-key probe did not verify");
+  });
 });
 
 describe("vault-service importRawKeyAccount", () => {
@@ -112,7 +145,7 @@ describe("vault-service importRawKeyAccount", () => {
     const store = createMemoryStore();
     const service = createWalletVaultService({
       encryptedStore: createEncryptedStore(store, vaultKey),
-      kms: fakeKms(),
+      kms: importKms(),
       migrationStore: createEncryptedStore(store, migrationKey),
     });
 

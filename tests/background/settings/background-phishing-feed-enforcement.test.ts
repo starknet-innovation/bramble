@@ -55,7 +55,7 @@ const walletStub = {
       activeAccountId: account.id,
       mnemonic: null,
       originGrants: [],
-      schemaVersion: 4 as const,
+      schemaVersion: 5 as const,
       signingKeys: [{ accountId: account.id, privateKey: "0x123456" }],
     };
   },

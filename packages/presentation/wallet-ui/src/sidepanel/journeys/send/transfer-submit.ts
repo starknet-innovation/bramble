@@ -90,9 +90,9 @@ export const preparationFailure = (route: SendRoute): string => {
  */
 export const preparedReview = (preparation: PrivacyPreparation): TransferReview =>
   ({
-    fee: null,
+    fee: preparation.networkFee ?? null,
     feeAffordability: "unknown",
-    feeEstimateFailed: false,
+    feeEstimateFailed: preparation.route === "public-account" && !preparation.networkFee,
     flags: [],
     requiresDeployment: false,
     summaries: [...preparation.summaries],

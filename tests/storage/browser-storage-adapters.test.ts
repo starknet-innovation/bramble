@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   createBrowserLocalStore,
   createBrowserSessionStore,
+  createBrowserSyncStore,
 } from "../../apps/extension/src/browser-storage";
 
 type MutableGlobal = { chrome?: unknown };
@@ -15,6 +16,13 @@ const globalWithChrome = globalThis as unknown as MutableGlobal;
 
 afterEach(() => {
   globalWithChrome.chrome = undefined;
+});
+
+describe("createBrowserSyncStore", () => {
+  test("throws when the sync storage area is unavailable", () => {
+    globalWithChrome.chrome = { storage: {} };
+    expect(() => createBrowserSyncStore()).toThrow(/chrome\.storage\.sync is unavailable/);
+  });
 });
 
 describe("createBrowserLocalStore", () => {

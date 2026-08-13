@@ -46,8 +46,10 @@ import {
   observedAccountContext,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { requiredFeeReview } from "../transactions/fee-review";
 import { readRevokeAllowanceInput } from "./allowance-inputs";
+import { allowanceOwner, recordApproveAllowances } from "./allowance-recording";
 
 /**
  * Discovers ERC20 allowances granted outside this wallet for the active
@@ -287,14 +289,13 @@ const handleRevokeAllowance: AllowanceOpsHandler = async (deps, message) => {
   // Written before the activity line: the log is what makes a residual grant
   // visible and revokable, so it must not depend on a second store's write
   // succeeding.
-  await deps.allowanceStore.record({
-    accountId: context.account.id,
-    amount: "0",
-    networkId: context.networkId,
-    spender: target.spender,
-    token: target.token,
+  await recordApproveAllowances({
+    assets: trusted,
+    calls: [call],
+    owner: allowanceOwner(context.account),
+    store: deps.allowanceStore,
   });
-  await deps.activity.record({
+  await recordSubmittedActivity(deps.activity, {
     accountId: context.account.id,
     hash: result.transactionHash,
     kind: "invoke",

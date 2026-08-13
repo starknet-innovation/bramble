@@ -30,7 +30,7 @@ const ids = [
 const context = {
   accountId: "SN_MAIN:0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcde",
   chainId: STARKNET_NETWORKS.SN_MAIN.chainId,
-  networkId: "SN_MAIN",
+  networkId: "SN_MAIN" as const,
   payloadDigest: `sha256:${"a".repeat(64)}`,
 };
 
@@ -107,7 +107,7 @@ describe("pending approval queue per-entry validation (MCW-V09-106)", () => {
     const duplicateId = { ...invokeApproval(ids[0]), summaries: ["Send 1 unit"] };
     expect(readPendingApprovals(queue(first, duplicateId))).toEqual([first]);
 
-    const connect = { id: ids[1], origin: ORIGIN };
+    const connect = { id: ids[1], kind: "connect" as const, origin: ORIGIN };
     const sameOrigin = { id: ids[2], kind: "connect", origin: ORIGIN };
     expect(readPendingApprovals(queue(connect, sameOrigin))).toEqual([connect]);
   });
@@ -177,7 +177,7 @@ describe("add-chain prompt summaries (MCW-V09-106)", () => {
   // the popup's 300-character summary cap can reject the add-chain entry. That
   // entry is dropped, but the honest prompt queued beside it stays reviewable.
   test("an over-long add-chain host drops only its own prompt", () => {
-    const honest = { id: ids[0], origin: "https://honest.example" };
+    const honest = { id: ids[0], kind: "connect" as const, origin: "https://honest.example" };
     const longHost = {
       id: ids[1],
       kind: "add-chain",

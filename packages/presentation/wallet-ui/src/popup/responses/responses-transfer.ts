@@ -11,6 +11,8 @@ import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/starknet/fee-bounds"
 export type TransferReviewResponse = {
   readonly ok: true;
   readonly review: {
+    readonly deploymentFee?: FeeEstimate | null;
+    readonly deploymentFeeEstimateFailed?: boolean;
     readonly fee: FeeEstimate | null;
     /**
      * Fee-affordability verdict from the shared predicate (issue 191).
@@ -70,6 +72,8 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     !isRecord(value["review"]) ||
     !hasOnlyKnownKeys(value["review"], [
       "fee",
+      "deploymentFee",
+      "deploymentFeeEstimateFailed",
       "feeAffordability",
       "feeEstimateFailed",
       "flags",
@@ -80,7 +84,11 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     return false;
   }
   const review = value["review"];
+  const deploymentFee = review["deploymentFee"];
+  const deploymentFailed = review["deploymentFeeEstimateFailed"];
   return (
+    (deploymentFee === undefined || deploymentFee === null || isFeeShape(deploymentFee)) &&
+    (deploymentFailed === undefined || typeof deploymentFailed === "boolean") &&
     (review["fee"] === null || isFeeShape(review["fee"])) &&
     (review["feeAffordability"] === "insufficient" ||
       review["feeAffordability"] === "ok" ||
@@ -91,6 +99,10 @@ export const isTransferReviewResponse = (value: unknown): value is TransferRevie
     Array.isArray(review["flags"]) &&
     review["flags"].every(isRiskFlagShape) &&
     typeof review["requiresDeployment"] === "boolean" &&
+    (review["requiresDeployment"] !== true ||
+      (typeof deploymentFailed === "boolean" &&
+        ((deploymentFailed && deploymentFee === null) ||
+          (!deploymentFailed && isFeeShape(deploymentFee))))) &&
     Array.isArray(review["summaries"]) &&
     review["summaries"].every(
       (summary) => typeof summary === "string" && summary.length > 0 && summary.length <= 300,

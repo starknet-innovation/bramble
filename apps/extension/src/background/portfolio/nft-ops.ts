@@ -12,12 +12,7 @@ import type { NftStandard } from "@mc-wallet/starknet/rpc";
 import { resolveFeeAffordability } from "@mc-wallet/transactions/fee-funds";
 import { refuseOnPoisonedRecipient, verifyCalls } from "@mc-wallet/transactions/verify";
 import { STARKNET_NETWORKS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import {
-  resolveReviewFee,
-  signerForContext,
-  verificationContext,
-  type WalletOpsDeps,
-} from "../accounts/wallet-ops";
+import { signerForContext, verificationContext, type WalletOpsDeps } from "../accounts/wallet-ops";
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import {
   activeAccountContext,
@@ -25,7 +20,10 @@ import {
   observedAccountContext,
 } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
 import { readStrkBalance } from "../transactions/fee-guard";
+import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
+import { reviewWalletFundedFees } from "../transactions/transfer-fee-review";
 import {
   type NftTarget,
   readAddNftInput,
@@ -292,38 +290,34 @@ const handleReviewNftTransfer = async (
     return { error: prepared.error };
   }
   const { call, context, report, rpcUrls } = prepared;
-  const deployed = await deps.runtimeRpc
-    .getDeploymentStatus({ accountAddress: context.account.address, rpcUrls })
-    .catch(() => true);
-  const estimated = deployed
-    ? await deps.runtimeRpc
-        .estimateInvokeFee({
-          account: context.account,
-          calls: [call],
-          rpcUrls,
-          signHash: signerForContext(deps, context),
-        })
-        .catch(() => null)
-    : null;
-  const { fee, feeEstimateFailed } = resolveReviewFee({ deployed, fee: estimated });
+  const fees = await reviewWalletFundedFees(deps.runtimeRpc, {
+    account: context.account,
+    calls: [call],
+    rpcUrls,
+    signHash: signerForContext(deps, context),
+  });
   // Fee-affordability guard (issue 191): the NFT itself never spends STRK, so
   // only the estimate is compared against the balance. Warn-only, fail-open.
   const feeAffordability = resolveFeeAffordability({
     balance:
-      fee === null ? null : await readStrkBalance(deps, context.account, prepared.preferences),
-    fee,
+      fees.totalFee === null
+        ? null
+        : await readStrkBalance(deps, context.account, prepared.preferences),
+    fee: fees.totalFee,
   });
   return {
     ok: true,
     review: {
-      fee,
+      deploymentFee: fees.deploymentFee,
+      deploymentFeeEstimateFailed: fees.deploymentFeeEstimateFailed,
+      fee: fees.fee,
       feeAffordability,
-      feeEstimateFailed,
+      feeEstimateFailed: fees.feeEstimateFailed,
       // The target is an on-chain ownership-proven NFT contract, so the generic
       // "unknown token contract" warning is inapplicable. Recipient warnings
       // remain intact, including the submission-blocking poisoning check.
       flags: report.flags.filter((flag) => flag.code !== "unknown-contract"),
-      requiresDeployment: !deployed,
+      requiresDeployment: fees.requiresDeployment,
       summaries: report.calls.map((decoded) => decoded.summary),
     },
   };
@@ -349,16 +343,20 @@ const handleTransferNft = async (
   if (refusal) {
     return refusal;
   }
+  if (!input.reviewedFee) {
+    return FEE_REVIEW_REQUIRED;
+  }
   // Same bind as the ERC20 send: the fee the review step rendered is the
   // ceiling this send may sign under (MCW-V09-119).
   const result = await deps.runtimeRpc.submitInvokeTransaction({
     account: context.account,
     calls: [call],
-    ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
+    ...(input.reviewedDeploymentFee ? { reviewedDeploymentFee: input.reviewedDeploymentFee } : {}),
+    reviewedFee: input.reviewedFee,
     rpcUrls,
     signHash: signerForContext(deps, context),
   });
-  await deps.activity.record({
+  await recordSubmittedActivity(deps.activity, {
     accountId: context.account.id,
     hash: result.transactionHash,
     kind: "invoke",

@@ -9,6 +9,8 @@
     "./declare": "./src/transactions/declare.ts",
     "./deployment": "./src/transactions/deployment.ts",
     "./events": "./src/provider/events.ts",
+    "./extension-responses": "./src/provider/extension-responses.ts",
+    "./fee-estimate": "./src/transactions/fee-estimate.ts",
     "./invoke-limits": "./src/transactions/invoke-limits.ts",
     "./invoke": "./src/transactions/invoke.ts",
     "./methods": "./src/provider/methods.ts",

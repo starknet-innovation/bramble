@@ -133,6 +133,9 @@ const SECRET_MATERIAL_FILES = new Set([
   "packages/presentation/wallet-ui/src/sidepanel/journeys/settings/reveal-ui.ts",
   "packages/presentation/wallet-ui/src/sidepanel/runtime/runtime.ts",
   "packages/features/transactions/src/routing/ledger-verify.ts",
+  // Pure public-key verification consolidated for Ledger and KMS probe
+  // callers; it receives no private key or vault credential.
+  "packages/platform/starknet/src/transactions/signature-verify.ts",
   "packages/platform/starknet/src/rpc/provider.ts",
   "packages/platform/starknet/src/rpc/rpc.ts",
   "packages/features/privacy/src/policy/call-set-signer.ts",

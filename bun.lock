@@ -260,6 +260,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@mc-wallet/core": "workspace:*",
+        "@mc-wallet/starknet": "workspace:*",
         "@mc-wallet/store": "workspace:*",
         "@mc-wallet/wallet-model": "workspace:*",
       },

@@ -172,4 +172,27 @@ describe("unlock session restore after an unprovable erase", () => {
     expect(session.isUnlocked()).toBe(false);
     expect(session.getPassphrase()).toBeNull();
   });
+
+  test("detects a silent no-op clear and verifies the revocation overwrite", async () => {
+    let state: UnlockSessionMirrorEntry | null = {
+      expiresAt: Date.now() + 60_000,
+      passphrase: PASSPHRASE,
+    };
+    const store: UnlockSessionStore = {
+      async clear() {},
+      async load() {
+        return state;
+      },
+      async save(next) {
+        state = next;
+      },
+    };
+    const session = createUnlockSession({ store });
+    session.unlock(PASSPHRASE);
+    await flush();
+    session.lock();
+    await session.mirrorCleared();
+
+    expect(state as UnlockSessionMirrorEntry | null).toEqual({ revoked: true });
+  });
 });

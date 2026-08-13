@@ -5,28 +5,12 @@
  * reachable from content scripts.
  */
 import { isUuid } from "@mc-wallet/core/ids";
-import { hasOnlyKnownKeys, isRecord, isSafeDecimals } from "@mc-wallet/core/json";
+import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import { normalizeWalletOrigin } from "@mc-wallet/core/origin";
-import type { WatchAssetRequest } from "./watch-asset";
-
-const readWatchAssetOptions = (value: unknown): WatchAssetRequest | null => {
-  if (
-    !isRecord(value) ||
-    !hasOnlyKnownKeys(value, ["address", "decimals", "name", "symbol"]) ||
-    typeof value["address"] !== "string" ||
-    (value["decimals"] !== undefined && !isSafeDecimals(value["decimals"])) ||
-    (value["name"] !== undefined && typeof value["name"] !== "string") ||
-    (value["symbol"] !== undefined && typeof value["symbol"] !== "string")
-  ) {
-    return null;
-  }
-  return {
-    address: value["address"],
-    ...(value["decimals"] === undefined ? {} : { decimals: value["decimals"] }),
-    ...(value["name"] === undefined ? {} : { name: value["name"] }),
-    ...(value["symbol"] === undefined ? {} : { symbol: value["symbol"] }),
-  };
-};
+import {
+  isProviderWatchAsset,
+  type ProviderWatchAsset,
+} from "@mc-wallet/wallet-protocol/watch-asset";
 
 /**
  * Parses dapp permission queries from content-script traffic.
@@ -48,7 +32,7 @@ export const readGetPermissionsInput = (message: unknown): { readonly origin: st
  */
 export const readWatchAssetInput = (
   message: unknown,
-): { readonly asset: WatchAssetRequest; readonly origin: string } | null => {
+): { readonly asset: ProviderWatchAsset; readonly origin: string } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["asset", "origin", "type"]) ||
@@ -57,7 +41,7 @@ export const readWatchAssetInput = (
     return null;
   }
   const origin = normalizeWalletOrigin(message["origin"]);
-  const asset = readWatchAssetOptions(message["asset"]);
+  const asset = isProviderWatchAsset(message["asset"]) ? message["asset"] : null;
   return origin && asset ? { asset, origin } : null;
 };
 

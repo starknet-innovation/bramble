@@ -47,7 +47,7 @@ describe("unlockFailureError", () => {
 
     const mapped = unlockFailureError(caught);
     expect(mapped).toBeInstanceOf(WalletError);
-    expect(mapped.message).toBe("Invalid encrypted store envelope");
+    expect(mapped.message).toBe("Encrypted store commit state missing");
   });
 
   test("passes an unrelated error through unchanged", () => {

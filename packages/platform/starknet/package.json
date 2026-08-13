@@ -12,6 +12,7 @@
     "./rpc": "./src/rpc/rpc.ts",
     "./rpc-assets": "./src/rpc/rpc-assets.ts",
     "./rpc-submit": "./src/rpc/rpc-submit.ts",
+    "./signature-verify": "./src/transactions/signature-verify.ts",
     "./snip12-merkle": "./src/transactions/snip12-merkle.ts",
     "./snip12-scalars": "./src/transactions/snip12-scalars.ts",
     "./snip12-vocabulary": "./src/transactions/snip12-vocabulary.ts",

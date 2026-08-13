@@ -7,26 +7,15 @@ import type { Strk20SubmissionPlan } from "@mc-wallet/privacy/service";
 import type { StarknetNetworkId } from "@mc-wallet/wallet-model/networks";
 import type { ProviderChain } from "@mc-wallet/wallet-protocol/add-chain";
 import type { ProviderDeclare } from "@mc-wallet/wallet-protocol/declare";
+import type { ApprovalKind } from "@mc-wallet/wallet-protocol/extension-responses";
 import type { Strk20Action, Strk20Proof } from "@mc-wallet/wallet-protocol/strk20";
 import type { Call } from "starknet";
-import type {
-  Strk20DisclosureApprovalKind,
-  Strk20DisclosureRequest,
-} from "../privacy/strk20-approval-types";
+import type { Strk20DisclosureRequest } from "../privacy/strk20-approval-types";
 
 /**
- * Every user-decision category supported by the in-memory approval queue.
+ * Every approval kind admitted by the background approval queue.
  */
-export type ApprovalKind =
-  | "add-chain"
-  | "connect"
-  | "declare"
-  | "invoke"
-  | "sign-typed-data"
-  | Strk20DisclosureApprovalKind
-  | "strk20-invoke"
-  | "switch-chain"
-  | "watch-asset";
+export type { ApprovalKind } from "@mc-wallet/wallet-protocol/extension-responses";
 
 /**
  * Private execution data retained until the corresponding approval is claimed.

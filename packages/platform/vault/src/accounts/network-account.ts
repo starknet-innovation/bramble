@@ -8,6 +8,7 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { type AccountRef, isKeylessAccount } from "@mc-wallet/wallet-model/accounts";
 import {
+  canonicalFelt,
   isNonZeroStarkFieldElement,
   type StarknetNetworkId,
 } from "@mc-wallet/wallet-model/networks";
@@ -58,10 +59,11 @@ export const deriveNetworkAccount = async (
     throw new WalletError("Signing key unavailable");
   }
   const classHash = await getOzAccountClassHash(kms, networkId);
-  const address = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
-  if (!isNonZeroStarkFieldElement(address)) {
+  const addressInput = await kms.deriveOzAccountAddress(source.publicKeyX, classHash);
+  if (!isNonZeroStarkFieldElement(addressInput)) {
     throw new WalletError("Krusty KMS returned invalid account address");
   }
+  const address = canonicalFelt(addressInput) as string;
   const account: AccountRef = {
     ...source,
     address,

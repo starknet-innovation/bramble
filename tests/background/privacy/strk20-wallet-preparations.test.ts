@@ -27,9 +27,13 @@ const token: TokenConfig = {
 
 const registration = async (suffix = ""): Promise<Strk20RegistrationPreparation> => {
   const unsigned = {
+    allowanceGrants: [],
+    calls: [{ calldata: ["0x1"], contractAddress: `0x123${suffix}`, entrypoint: "apply_actions" }],
     kind: "register" as const,
+    networkFee: { overallFee: "1", unit: "FRI" },
     poolAddress: `0x123${suffix}`,
     poolFeeFri: "0x1",
+    proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
     summaries: ["Register private balances"],
     token,
   };
@@ -40,25 +44,15 @@ const registration = async (suffix = ""): Promise<Strk20RegistrationPreparation>
 const privateDeposit = async (): Promise<Strk20DepositPreparation> => {
   const unsigned = {
     actions: [{ amount: "0x1", token: token.address, type: "deposit" as const }],
+    allowanceGrants: [],
     amount: "1",
     amountRaw: "1",
+    calls: [{ calldata: ["0x1"], contractAddress: "0x123", entrypoint: "apply_actions" }],
     kind: "deposit" as const,
-    plan: {
-      authorization: {
-        caller: "0x99",
-        executeAfter: "0x1",
-        executeBefore: "0x100",
-        publicCallCount: 1,
-      },
-      feeAction: {
-        amount: "0x2",
-        recipient: "0x3",
-        token: "0x4",
-        type: "withdraw" as const,
-      },
-      mode: "private-relay" as const,
-    },
+    networkFee: { overallFee: "2", unit: "FRI" },
+    plan: { mode: "account" as const, poolFeeFri: "0x1" },
     poolAddress: "0x123",
+    proof: { data: "proof", output: ["0x1"], proof_facts: ["0x2"] },
     recipient: account.address,
     summaries: ["Shield 1 ETH"],
     token,
@@ -75,6 +69,7 @@ describe("STRK20 wallet preparation store", () => {
     expect(store.put(value)).toEqual({
       id: value.id,
       kind: "register",
+      networkFee: value.networkFee,
       payloadDigest: value.id,
       poolAddress: value.poolAddress,
       poolFeeFri: "0x1",
@@ -104,21 +99,12 @@ describe("STRK20 wallet preparation store", () => {
     );
   });
 
-  test("exposes the exact relay fee and public authorization capability", async () => {
+  test("exposes the exact public network fee", async () => {
     const store = createStrk20WalletPreparationStore();
     const value = await privateDeposit();
-    if (!("feeAction" in value.plan)) {
-      throw new Error("private relay fixture expected");
-    }
-
     expect(store.put(value)).toMatchObject({
-      authorization: value.plan.authorization,
-      relayFee: {
-        amount: value.plan.feeAction.amount,
-        recipient: value.plan.feeAction.recipient,
-        token: value.plan.feeAction.token,
-      },
-      route: "private-relay",
+      networkFee: value.networkFee,
+      route: "public-account",
     });
   });
 

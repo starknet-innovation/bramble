@@ -62,6 +62,9 @@ const preparationDetails = (
       ...(preparation.poolFeeFri
         ? [{ label: "Pool fee", value: `${formatFri(preparation.poolFeeFri)} from public STRK` }]
         : []),
+      ...(preparation.networkFee
+        ? [{ label: "Network fee", value: formatFri(preparation.networkFee.overallFee) }]
+        : []),
       { label: "Privacy pool", value: shortAddress(preparation.poolAddress), valueStyle: "code" },
     ])}
     <ul class="privacy-facts">

@@ -193,7 +193,10 @@ describe("the fee shape has one definition", () => {
     // harmless duplication: a reviewed fee is carried across four layers as a
     // ceiling, and a layer that describes the shape itself is a layer that can
     // quietly stop meaning the same thing by it.
-    const definition = join(REPO_DIR, "packages/platform/starknet/src/rpc/fee-bounds.ts");
+    const definition = join(
+      REPO_DIR,
+      "packages/foundation/wallet-protocol/src/transactions/fee-estimate.ts",
+    );
     const offenders: string[] = [];
     for (const file of workspaceSourceFiles()) {
       if (file === definition) {

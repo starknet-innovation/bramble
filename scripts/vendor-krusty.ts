@@ -30,6 +30,7 @@ const KRUSTY_KMS_REVISION = "fb0b274dd654f69a828dee653576416f5a650a01";
 // rustc release across every builder is what makes two builds of the pinned
 // revision comparable at all, so this pin and those workflow pins move together.
 const KRUSTY_KMS_TOOLCHAIN = "1.96.1";
+const KRUSTY_WASM_PACK_VERSION = "0.13.1";
 
 const run = async (cmd: string[], cwd = ".", env: Record<string, string> = {}): Promise<void> => {
   const child = Bun.spawn(cmd, {
@@ -57,6 +58,14 @@ if (!version.startsWith(`rustc ${KRUSTY_KMS_TOOLCHAIN} `)) {
     `rustc ${KRUSTY_KMS_TOOLCHAIN} required for a comparable wasm build ` +
       `(rustup toolchain install ${KRUSTY_KMS_TOOLCHAIN} --target wasm32-unknown-unknown); ` +
       `found: ${version.split("\n")[0] ?? "none"}`,
+  );
+}
+
+const wasmPackVersion = Bun.spawnSync(["wasm-pack", "--version"]).stdout.toString().trim();
+if (wasmPackVersion !== `wasm-pack ${KRUSTY_WASM_PACK_VERSION}`) {
+  throw new Error(
+    `wasm-pack ${KRUSTY_WASM_PACK_VERSION} required for a comparable wasm build; ` +
+      `found: ${wasmPackVersion.split("\n")[0] ?? "none"}`,
   );
 }
 

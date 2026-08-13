@@ -358,7 +358,8 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         .then(
           (review) => {
             if (epoch !== transferEpoch) return;
-            const feeFailed = review.feeEstimateFailed;
+            const feeFailed =
+              review.feeEstimateFailed || review.deploymentFeeEstimateFailed === true;
             // Address poisoning is a refusal here, not a notice, matching the
             // NFT send screen (nft-ui.ts) and the background's own refusal on
             // submit: leaving the key unreviewed means the next click re-reviews
@@ -393,6 +394,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
     const epoch = ++transferEpoch;
     const requiresDeployment = transferState.requiresDeployment;
     const reviewedFee = transferState.review?.fee ?? null;
+    const reviewedDeploymentFee = transferState.review?.deploymentFee ?? null;
     const privatePreparation = transferState.privatePreparation;
     transferState = { ...transferState, error: "", fields, stage: "authorizing" };
     repaint();
@@ -447,6 +449,7 @@ export const bindTransfer = (deps: TransferUiDeps): void => {
         // the background refuse a send whose fee has moved since the user read
         // it, instead of signing at a price they never saw.
         reviewedFee,
+        reviewedDeploymentFee,
       )
       .then(
         (transactionHash) => {

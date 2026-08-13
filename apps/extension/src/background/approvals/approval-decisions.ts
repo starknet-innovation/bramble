@@ -14,15 +14,18 @@
 import type { OriginGuard } from "@mc-wallet/permissions/blocklist";
 import type { OriginHistoryStore } from "@mc-wallet/permissions/origin-history";
 import type { WalletPreferencesStore } from "@mc-wallet/settings/preferences";
-import { type FeeEstimate, sameFeeEstimate, sumFeeEstimates } from "@mc-wallet/starknet/fee-bounds";
+import { type FeeEstimate, sameFeeEstimate } from "@mc-wallet/starknet/fee-bounds";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
 import type { AllowanceStore } from "@mc-wallet/transactions/allowance-store";
 import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import type { LedgerSignQueue } from "../ledger/ledger-sign-queue";
 import {
+  type DeferredStrk20Approval,
   executeStrk20DisclosureApproval,
   executeStrk20InvokeApproval,
+  stageApprovedStrk20Deposit,
+  stageApprovedStrk20Registration,
 } from "../privacy/strk20-approval-execution";
 import {
   matchesStrk20DisclosureKind,
@@ -34,16 +37,18 @@ import { readApprovalIdInput } from "../routing/message-inputs";
 import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import type { ActiveStateCoordinator } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
-import type { UnlockSession } from "../runtime/session";
+import { captureSessionAuthorization, type UnlockSession } from "../runtime/session";
 import { executeSignApproval, executeSwitchChainApproval } from "../transactions/chain-ops";
 import { executeDeclareApproval } from "../transactions/declare-ops";
 import { FEE_REVIEW_REQUIRED } from "../transactions/fee-review";
 import { approvalPayloadMatchesContext } from "./approval-context";
+import { pendingFeeRefusal } from "./approval-fee-refusal";
 import type { ApprovalClaim, ApprovalKind, ApprovalQueue, PendingApproval } from "./approvals";
 import type { SignatureWaiters } from "./signature-waiters";
 
 /**
- * Dependencies for resolving a queued approval into its settled result.
+ * Dependencies for resolving a queued approval into its settled result. These
+ * collaborators stay inside the privileged background boundary.
  */
 export type ApprovalDecisionDeps = {
   readonly activeStateCoordinator: ActiveStateCoordinator;
@@ -65,6 +70,7 @@ const NOT_FOUND: RuntimeResponse = { error: "approval not found" };
  * Outcome of applying an already-claimed approve decision.
  */
 type ApplyResult =
+  | DeferredStrk20Approval
   | { readonly status: "reject"; readonly response: RuntimeResponse }
   | {
       readonly status: "settle";
@@ -156,6 +162,8 @@ const applyStrk20Invoke: ApproveApplier = async (deps, { approval, payload }) =>
   if (!payload?.actions || !payload.strk20Plan) {
     return reject(NOT_FOUND);
   }
+  const staged = await stageApprovedStrk20Deposit(deps, { approval, payload });
+  if (staged) return staged;
   const result = await executeStrk20InvokeApproval(
     {
       activity: deps.activity,
@@ -189,6 +197,11 @@ const applyStrk20Disclosure: ApproveApplier = async (deps, { approval, payload }
     !matchesStrk20DisclosureKind(approval.kind, payload.strk20Request)
   ) {
     return reject(NOT_FOUND);
+  }
+  if (payload.strk20Request.type === "register") {
+    return (
+      (await stageApprovedStrk20Registration(deps, { approval, payload })) ?? reject(NOT_FOUND)
+    );
   }
   const result = await executeStrk20DisclosureApproval(
     {
@@ -294,21 +307,25 @@ const applyDeclare: ApproveApplier = async (deps, { approval, payload }, decisio
 };
 
 const applyConnect: ApproveApplier = async (deps, { approval }) => {
-  const passphrase = deps.session.getPassphrase();
-  if (!passphrase) {
-    return reject({ error: "wallet locked" });
-  }
-  // Deliver the granted accounts back through the dapp's held requestAccounts
-  // channel (if any) so enable() resolves after approval.
-  const accounts = await deps.wallet.grantOrigin({
-    origin: approval.origin,
-    vaultPassphrase: passphrase,
+  return deps.activeStateCoordinator.run(async () => {
+    const passphrase = deps.session.getPassphrase();
+    const authorized = captureSessionAuthorization(deps.session);
+    if (!passphrase || !authorized.isCurrent()) {
+      return reject({ error: "wallet locked" });
+    }
+    // Explicit lock shares this coordinator; alarm expiry is checked across
+    // the durable write by the vault's isAuthorized hook.
+    const accounts = await deps.wallet.grantOrigin({
+      isAuthorized: authorized.isCurrent,
+      origin: approval.origin,
+      vaultPassphrase: passphrase,
+    });
+    return {
+      respond: () => ({ accounts, ok: true }),
+      settle: { accounts, ok: true },
+      status: "settle",
+    };
   });
-  return {
-    respond: () => ({ accounts, ok: true }),
-    settle: { accounts, ok: true },
-    status: "settle",
-  };
 };
 
 /**
@@ -372,50 +389,6 @@ const settleClaimError = (
   return response;
 };
 
-const pendingDeclareFeeRefusal = (
-  pending: PendingApproval,
-  reviewedFee: FeeEstimate | undefined,
-): RuntimeResponse | null => {
-  const declaration = pending.declaration;
-  if (
-    !declaration?.fee ||
-    declaration.feeEstimateFailed ||
-    !reviewedFee ||
-    declaration.accountDeployment === "unknown" ||
-    (declaration.accountDeployment === "undeployed" &&
-      (!declaration.deploymentFee || declaration.deploymentFeeEstimateFailed))
-  ) {
-    return FEE_REVIEW_REQUIRED;
-  }
-  const total = declaration.deploymentFee
-    ? sumFeeEstimates(declaration.fee, declaration.deploymentFee)
-    : declaration.fee;
-  return total && sameFeeEstimate(reviewedFee, total)
-    ? null
-    : { error: "the fee changed since this request was reviewed" };
-};
-
-function pendingFeeRefusal(
-  pending: PendingApproval | null,
-  reviewedFee: FeeEstimate | undefined,
-): RuntimeResponse | null {
-  if (pending?.kind === "declare") return pendingDeclareFeeRefusal(pending, reviewedFee);
-  if (pending?.kind !== "invoke") {
-    return null;
-  }
-  if (
-    !reviewedFee ||
-    !pending.fee ||
-    pending.feeEstimateFailed === true ||
-    pending.feeEstimatePending === true
-  ) {
-    return FEE_REVIEW_REQUIRED;
-  }
-  return sameFeeEstimate(reviewedFee, pending.fee)
-    ? null
-    : { error: "the fee changed since this request was reviewed" };
-}
-
 const applyApproveDecision = async (
   deps: ApprovalDecisionDeps,
   message: unknown,
@@ -458,6 +431,9 @@ const applyApproveDecision = async (
   }
   if (result.status === "reject") {
     return settleClaimError(deps, input.id, result.response);
+  }
+  if (result.status === "defer") {
+    return result.respond(() => deps.approvals.list());
   }
   deps.waiters.settle(input.id, result.settle);
   return result.respond(() => deps.approvals.list());

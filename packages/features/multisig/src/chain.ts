@@ -300,6 +300,7 @@ export const getMultisigConfig = async ({
         if (
           quorum === 0 ||
           count === 0 ||
+          quorum > count ||
           count > MAX_SIGNERS ||
           signersResponse.length !== count + 1
         ) {
@@ -308,6 +309,12 @@ export const getMultisigConfig = async ({
         const signers = Array.from({ length: count }, (_, index) =>
           canonicalFelt(`0x${feltAt(signersResponse, index + 1, "signers").toString(16)}`),
         );
+        if (
+          signers.some((signer) => !isNonZeroStarkFieldElement(signer)) ||
+          new Set(signers).size !== signers.length
+        ) {
+          throw new WalletError("Invalid multisig signers response");
+        }
         return { quorum, signers };
       },
       multisigReadProvider,

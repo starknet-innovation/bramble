@@ -40,6 +40,8 @@ export const DROPPED_APPROVAL_RESPONSE: RuntimeResponse = { error: "request reje
  * `register` throws a {@link WalletError} once an id is at capacity.
  */
 export type SignatureWaiters = {
+  /** Moves held callers to a replacement approval without settling them. */
+  readonly move: (fromId: string, toId: string) => void;
   readonly pending: () => number;
   readonly register: (id: string) => Promise<RuntimeResponse>;
   readonly settle: (id: string, response: RuntimeResponse) => void;
@@ -57,6 +59,21 @@ export type SignatureWaiters = {
 export const createSignatureWaiters = (): SignatureWaiters => {
   const waiters = new Map<string, ((response: RuntimeResponse) => void)[]>();
   return {
+    move(fromId, toId) {
+      if (fromId === toId) {
+        return;
+      }
+      const moving = waiters.get(fromId);
+      if (!moving) {
+        return;
+      }
+      const destination = waiters.get(toId) ?? [];
+      if (destination.length + moving.length > MAX_WAITERS_PER_APPROVAL) {
+        throw new WalletError("Too many pending approvals");
+      }
+      waiters.delete(fromId);
+      waiters.set(toId, [...destination, ...moving]);
+    },
     pending() {
       let held = 0;
       for (const resolvers of waiters.values()) {

@@ -14,6 +14,7 @@
 import { hasOnlyKnownKeys, hasUniqueStrings, isJson, isRecord } from "@mc-wallet/core/json";
 import { isWatchedNft } from "@mc-wallet/portfolio/watched-nft";
 import { isStrk20NetworkConfigs } from "@mc-wallet/privacy/config";
+import { canonicalAccountId } from "@mc-wallet/wallet-model/accounts";
 import {
   isCustomNetwork,
   isCustomRpcUrl,
@@ -220,6 +221,38 @@ const remapHiddenTokens = (
       }
     : {};
 
+const normalizedAccountLabels = (value: unknown): unknown => {
+  if (!isRecord(value)) {
+    return value;
+  }
+  const normalized: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    const accountId = canonicalAccountId(key) ?? key;
+    if (!Object.hasOwn(normalized, accountId)) {
+      normalized[accountId] = value[key];
+    }
+  }
+  return normalized;
+};
+
+const normalizedAccountGroups = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map((group) =>
+        isRecord(group) && Array.isArray(group["accountIds"])
+          ? {
+              ...group,
+              accountIds: [
+                ...new Set(
+                  group["accountIds"].map(
+                    (accountId) => canonicalAccountId(accountId) ?? accountId,
+                  ),
+                ),
+              ],
+            }
+          : group,
+      )
+    : value;
+
 /**
  * Brings a stored preferences record to the current entry shape without any
  * user action: token and contact addresses are canonicalized, ids re-derived
@@ -239,11 +272,16 @@ export const normalizeStoredPreferences = (value: unknown): unknown => {
   }
   const tokens = rebuildCollection(value["tokens"], rebuiltToken);
   const addressBook = rebuildCollection(value["addressBook"], rebuiltContact);
-  if (!tokens && !addressBook) {
+  const hasAccountAliases = value["accountLabels"] !== undefined || value["groups"] !== undefined;
+  if (!tokens && !addressBook && !hasAccountAliases) {
     return value;
   }
   return {
     ...value,
+    ...(value["accountLabels"] === undefined
+      ? {}
+      : { accountLabels: normalizedAccountLabels(value["accountLabels"]) }),
+    ...(value["groups"] === undefined ? {} : { groups: normalizedAccountGroups(value["groups"]) }),
     ...(addressBook ? { addressBook: addressBook.entries } : {}),
     ...(tokens
       ? { ...remapHiddenTokens(value["hiddenTokens"], tokens.renames), tokens: tokens.entries }

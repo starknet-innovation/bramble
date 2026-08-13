@@ -7,7 +7,7 @@ import {
   migrateVault,
   VAULT_MIGRATIONS,
 } from "@mc-wallet/vault/migrations";
-import { isVaultV1, isVaultV4 } from "@mc-wallet/vault/schema";
+import { isVaultV1, isVaultV5 } from "@mc-wallet/vault/schema";
 
 const legacyVault = {
   accounts: [
@@ -42,7 +42,8 @@ const legacyVault = {
 };
 
 const legacyV3 = { ...legacyVault, mnemonic: null, schemaVersion: 3 as const };
-const currentVault = { ...legacyV3, accountSecrets: [], schemaVersion: 4 as const };
+const legacyV4 = { ...legacyV3, accountSecrets: [], schemaVersion: 4 as const };
+const currentVault = { ...legacyV4, schemaVersion: 5 as const };
 
 describe("migrateVault", () => {
   test("declares contiguous migration steps to the current schema", () => {
@@ -73,7 +74,7 @@ describe("migrateVault", () => {
     expect(isVaultV1(legacyVault)).toBe(true);
     const migrated = migrateVault(legacyVault);
 
-    expect(isVaultV4(migrated)).toBe(true);
+    expect(isVaultV5(migrated)).toBe(true);
     expect(migrated).toEqual({
       ...legacyVault,
       accountSecrets: [],
@@ -84,11 +85,46 @@ describe("migrateVault", () => {
   });
 
   test("returns valid current vaults for every supported source shape", () => {
-    for (const source of [undefined, null, {}, legacyVault, legacyV3, currentVault]) {
+    for (const source of [undefined, null, {}, legacyVault, legacyV3, legacyV4, currentVault]) {
       const migrated = migrateVault(source);
-      expect(isVaultV4(migrated)).toBe(true);
+      expect(isVaultV5(migrated)).toBe(true);
       expect(migrateVault(migrated)).toBe(migrated);
     }
+  });
+
+  test("canonicalizes schema-v4 account aliases and every dependent reference", () => {
+    const aliasedId = "SN_SEPOLIA:0x0123";
+    const migrated = migrateVault({
+      ...legacyV4,
+      accounts: [
+        {
+          ...legacyV4.accounts[0],
+          address: "0x0123",
+          classHash: "0x0abc",
+          id: aliasedId,
+          publicKeyX: "0x0abc",
+          publicKeyY: "0x0def",
+        },
+      ],
+      activeAccountId: aliasedId,
+      originGrants: [{ accountIds: [aliasedId], origin: "https://example.com" }],
+      signingKeys: [{ accountId: aliasedId, privateKey: "0x0456" }],
+    });
+
+    expect(isVaultV5(migrated)).toBe(true);
+    expect(migrated.accounts[0]).toMatchObject({
+      address: "0x123",
+      classHash: "0xabc",
+      id: "SN_SEPOLIA:0x123",
+      publicKeyX: "0xabc",
+      publicKeyY: "0xdef",
+    });
+    expect(migrated.activeAccountId).toBe("SN_SEPOLIA:0x123");
+    expect(migrated.originGrants[0]?.accountIds).toEqual(["SN_SEPOLIA:0x123"]);
+    expect(migrated.signingKeys[0]).toEqual({
+      accountId: "SN_SEPOLIA:0x123",
+      privateKey: "0x456",
+    });
   });
 
   test("ignores inherited schema versions for legacy empty vaults", () => {

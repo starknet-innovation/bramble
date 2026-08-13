@@ -24,6 +24,7 @@ const account: AccountRef = {
 };
 const call: Call = { calldata: [], contractAddress: "0x123", entrypoint: "transfer" };
 const signHash = async () => ({ publicKey: account.publicKeyX, r: "0x1", s: "0x2" });
+const reviewedFee = { overallFee: "1000", unit: "FRI" } as const;
 const feeEstimate = {
   data_gas_consumed: "0x1",
   data_gas_price: "0x1",
@@ -109,7 +110,7 @@ const submitWithFailure = async (
 ): Promise<{ readonly fetches: readonly string[]; readonly rejection: unknown }> => {
   const fetches: string[] = [];
   const rejection = await submitInvokeTransaction(
-    { account, calls: [call], rpcUrls: ["https://rpc.example"], signHash },
+    { account, calls: [call], reviewedFee, rpcUrls: ["https://rpc.example"], signHash },
     () => accountProvider(failAt, fetches),
   ).catch((error: unknown) => error);
   return { fetches, rejection };

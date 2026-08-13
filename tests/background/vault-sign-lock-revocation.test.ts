@@ -32,6 +32,27 @@ describe("vault hash signer is bound to its unlock session", () => {
     });
   });
 
+  test("rejects a KMS signature for a different public key", async () => {
+    const session = createUnlockSession({ now: () => UNLOCKED_AT, ttlMs: TTL_MS });
+    session.unlock(vaultPassphrase);
+    const wallet = createWallet();
+    const signHash = accountHashSigner(
+      {
+        session,
+        wallet: {
+          ...wallet,
+          async signHash() {
+            return { publicKey: "0xdef", r: "0x1", s: "0x2" };
+          },
+        },
+      },
+      account,
+      vaultPassphrase,
+    );
+
+    await expect(signHash(MESSAGE_HASH)).rejects.toThrow("Krusty KMS signature key mismatch");
+  });
+
   test("refuses to touch the vault after an explicit lock", async () => {
     const session = createUnlockSession({ now: () => UNLOCKED_AT, ttlMs: TTL_MS });
     session.unlock(vaultPassphrase);

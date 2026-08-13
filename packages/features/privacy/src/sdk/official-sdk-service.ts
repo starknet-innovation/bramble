@@ -6,13 +6,14 @@
 import { WalletError } from "@mc-wallet/core/errors";
 import { isJson } from "@mc-wallet/core/json";
 import { createRpcProvider } from "@mc-wallet/starknet/provider";
-import { submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
+import { REVIEWED_FEE_REQUIRED, submitInvokeTransaction } from "@mc-wallet/starknet/rpc-submit";
 import { STARKNET_NETWORKS, STRK_TOKEN_ADDRESS, sameFelt } from "@mc-wallet/wallet-model/networks";
-import type { RpcProvider, TypedData } from "starknet";
+import type { Call, RpcProvider, TypedData } from "starknet";
 import { num, typedData } from "starknet";
 import { buildStrk20PaymasterPlan, submitStrk20PaymasterPlan } from "../paymaster/paymaster";
 import type { Strk20MaturityScope, Strk20MaturityStore } from "../policy/maturity";
 import {
+  type PreparedStrk20AccountSubmission,
   STRK20_PRIVACY_LEAK,
   STRK20_SERVICE_UNAVAILABLE,
   STRK20_SUBMISSION_UNAVAILABLE,
@@ -100,6 +101,21 @@ export const createOfficialStrk20Service = ({
     const scope = maturityScope(input, config.poolAddress);
     return maturity.submitAccepted(provider, scope, () => prepare(provider, scope), broadcast);
   };
+  const publicBatch = (
+    poolAddress: string,
+    allowanceGrants: readonly Call[],
+    callAndProof: Awaited<ReturnType<Strk20Service["prepare"]>>,
+  ): PreparedStrk20AccountSubmission => {
+    const calls: Call[] = [
+      ...allowanceGrants,
+      {
+        calldata: [...callAndProof.call.calldata],
+        contractAddress: poolAddress,
+        entrypoint: "apply_actions",
+      },
+    ];
+    return { allowanceGrants, calls, proof: callAndProof.proof };
+  };
   return {
     async prepare(input) {
       return prepareWith(sdk, input, maturity, providerFor, pauseForServiceRetry);
@@ -136,6 +152,55 @@ export const createOfficialStrk20Service = ({
       } catch (error) {
         return mapStrk20ProtocolError(error);
       }
+    },
+    async prepareRegistration(input) {
+      const config = requireStrk20Config(input);
+      const reviewedPoolFee = await requireReviewedStrk20PoolFee(
+        providerFor,
+        input.rpcUrls,
+        config.poolAddress,
+        input.poolFeeFri,
+      );
+      const callAndProof = await prepareWith(
+        sdk,
+        { ...input, actions: [], simulate: false },
+        maturity,
+        providerFor,
+        pauseForServiceRetry,
+        undefined,
+        strk20RegistrationBuilderFor,
+        "registration",
+      );
+      return publicBatch(
+        config.poolAddress,
+        approveCalls([], config.poolAddress, reviewedPoolFee),
+        callAndProof,
+      );
+    },
+    async prepareAccountActions(input) {
+      const config = requireStrk20Config(input);
+      if (input.actions.length === 0 || input.actions.some((action) => action.type !== "deposit")) {
+        throw new WalletError(STRK20_PRIVACY_LEAK);
+      }
+      const reviewedPoolFee = await requireReviewedStrk20PoolFee(
+        providerFor,
+        input.rpcUrls,
+        config.poolAddress,
+        input.poolFeeFri,
+      );
+      const callAndProof = await prepareWith(
+        sdk,
+        { ...input, simulate: false },
+        maturity,
+        providerFor,
+        pauseForServiceRetry,
+        input.beforeProof,
+      );
+      return publicBatch(
+        config.poolAddress,
+        approveCalls(input.actions, config.poolAddress, reviewedPoolFee),
+        callAndProof,
+      );
     },
     async register(input) {
       const config = requireStrk20Config(input);
@@ -248,6 +313,10 @@ export const createOfficialStrk20Service = ({
       const config = requireStrk20Config(input);
       if (input.plan.mode === "account") {
         const accountPlan = input.plan;
+        const reviewedFee = accountPlan.reviewedFee;
+        if (!reviewedFee) {
+          throw new WalletError(REVIEWED_FEE_REQUIRED);
+        }
         if (
           input.actions.length === 0 ||
           input.actions.some((action) => action.type !== "deposit")
@@ -294,6 +363,7 @@ export const createOfficialStrk20Service = ({
                   },
                 ],
                 proof: callAndProof.proof,
+                reviewedFee,
                 rpcUrls: input.rpcUrls,
                 signHash: async (messageHash) => {
                   const signature = await input.signHash(messageHash);
@@ -363,12 +433,18 @@ export const createOfficialStrk20Service = ({
     },
     async submitPrepared(input) {
       const config = requireStrk20Config(input);
+      const calls = input.calls ?? (input.call ? [input.call] : []);
+      const applyActions = calls.filter(
+        (call) =>
+          sameFelt(call.contractAddress, config.poolAddress) && call.entrypoint === "apply_actions",
+      );
       if (
         input.proof.data.length === 0 ||
         input.proof.output.length === 0 ||
         input.proof.proof_facts.length === 0 ||
-        !sameFelt(input.call.contractAddress, config.poolAddress) ||
-        input.call.entrypoint !== "apply_actions"
+        applyActions.length !== 1 ||
+        calls.at(-1) !== applyActions[0] ||
+        calls.slice(0, -1).some((call) => call.entrypoint !== "approve")
       ) {
         throw new WalletError(STRK20_SUBMISSION_UNAVAILABLE);
       }
@@ -381,7 +457,7 @@ export const createOfficialStrk20Service = ({
         async (prepared) => {
           const result = await submitInvoke({
             account: prepared.account,
-            calls: [prepared.call],
+            calls,
             proof: prepared.proof,
             ...(input.reviewedFee ? { reviewedFee: input.reviewedFee } : {}),
             rpcUrls: prepared.rpcUrls,

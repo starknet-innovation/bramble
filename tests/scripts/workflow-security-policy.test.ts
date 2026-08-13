@@ -164,6 +164,14 @@ describe("workflow security policy", () => {
         ".github/workflows/ui-lab.yml must reference the Chromatic token only in its scoped step environment",
     },
     {
+      name: "rejects failing main when optional Chromatic publishing is not configured",
+      workflow: "ui-lab.yml",
+      search: 'if [ -z "' + "$" + '{CHROMATIC_PROJECT_TOKEN:-}" ]; then',
+      replacement: 'if [ -n "' + "$" + '{CHROMATIC_PROJECT_TOKEN:-}" ]; then',
+      failure:
+        ".github/workflows/ui-lab.yml must expose the Chromatic token only to the main-push publish step",
+    },
+    {
       name: "rejects release builds without the pinned privacy SDK",
       workflow: "release-build.yml",
       search: "- run: bun run vendor:privacy",
@@ -245,7 +253,7 @@ describe("workflow security policy", () => {
     {
       name: "rejects an unconstrained nightly branch",
       workflow: "nightly.yml",
-      search: '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+$ ]]',
+      search: '[[ ! "$candidate" =~ ^release/v[0-9]+\\.[0-9]+(\\.[0-9]+)?$ ]]',
       replacement: '[[ -z "$candidate" ]]',
       failure: "nightly must constrain configured refs to canonical release branches",
     },

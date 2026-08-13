@@ -20,6 +20,7 @@ import {
   sameFelt,
 } from "@mc-wallet/wallet-model/networks";
 import { isTokenId } from "@mc-wallet/wallet-model/preferences";
+import { type FeeEstimate, isFeeEstimate } from "@mc-wallet/wallet-protocol/fee-estimate";
 import { STRK20_LIMITS } from "@mc-wallet/wallet-protocol/strk20";
 import { responseError } from "../../runtime/runtime-errors";
 
@@ -63,6 +64,7 @@ export type PrivacyPreparation = {
   readonly authorization?: PaymasterAuthorizationReview;
   readonly id: string;
   readonly kind: "deposit" | "register" | "transfer" | "withdraw";
+  readonly networkFee?: FeeEstimate;
   readonly payloadDigest: string;
   readonly poolAddress: string;
   readonly poolFeeFri?: string;
@@ -154,6 +156,9 @@ type ExpectedPreparation = {
   readonly tokenId?: string;
 };
 
+const hasRouteFee = (route: unknown, fee: unknown): boolean =>
+  route === "public-account" ? isFeeEstimate(fee) : fee === undefined;
+
 const readPreparation = (
   response: unknown,
   expected: ExpectedPreparation,
@@ -176,6 +181,7 @@ const readPreparation = (
       "authorization",
       "id",
       "kind",
+      "networkFee",
       "payloadDigest",
       "poolAddress",
       "poolFeeFri",
@@ -187,6 +193,7 @@ const readPreparation = (
       "tokenId",
     ]) ||
     value["kind"] !== expected.kind ||
+    !hasRouteFee(value["route"], value["networkFee"]) ||
     (value["route"] !== "private-relay" && value["route"] !== "public-account") ||
     !isSha256Digest(value["id"]) ||
     typeof value["payloadDigest"] !== "string" ||
@@ -235,6 +242,7 @@ const readPreparation = (
     ...(authorization ? { authorization } : {}),
     id: value["id"],
     kind: expected.kind,
+    ...(isFeeEstimate(value["networkFee"]) ? { networkFee: value["networkFee"] } : {}),
     payloadDigest: value["payloadDigest"],
     poolAddress: value["poolAddress"],
     ...(typeof value["poolFeeFri"] === "string" ? { poolFeeFri: value["poolFeeFri"] } : {}),

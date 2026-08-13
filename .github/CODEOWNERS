@@ -1,23 +1,25 @@
 # CODEOWNERS — reviewers auto-requested on PRs, and the set GitHub can *require*
-# once branch protection's "Require review from Code Owners" is enabled
-# (see DEVELOPMENT.md → "Branch protection & repo settings to apply by hand").
+# through the active main ruleset's required code-owner review.
 #
-# Owner derived from git history: @teddyjfpender is the repository maintainer
-# and the sole committer on `main` at the time this file was added.
-#
-# RECOMMENDED: replace the individual handle with a GitHub team once one exists
-# (e.g. `@starknet-innovation/wallet-maintainers`), so ownership survives
-# personnel changes and a single reviewer is never a bottleneck. This file is a
-# no-op for enforcement until the branch-protection rule above is turned on.
+# Existing push-authorized maintainers supply independent review coverage and
+# avoid making the PR author the only possible code owner.
 
 # Default owner for everything in the repo.
-*                       @teddyjfpender
+*                       @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
 
 # Security-sensitive boundaries — wallet crypto, encrypted storage, privileged
-# background state, the CI/release pipeline, and the vendoring/standards scripts
+# background and provider ingress, value-moving features, the CI/release
+# pipeline, and the vendoring/standards scripts
 # — always warrant maintainer review, even as the team grows.
-/src/crypto/            @teddyjfpender
-/src/storage/           @teddyjfpender
-/src/background/        @teddyjfpender
-/.github/workflows/     @teddyjfpender
-/scripts/               @teddyjfpender
+/.github/CODEOWNERS      @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/.github/workflows/     @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/apps/extension/src/background/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/apps/extension/src/content/    @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/apps/extension/src/provider/   @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/contracts/             @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/features/privacy/     @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/features/transactions/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/foundation/wallet-protocol/ @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/platform/kms-krusty/  @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/packages/platform/vault/       @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1
+/scripts/               @omarespejel @adrienlacombe @l-henri @robertkodra @Ryun1

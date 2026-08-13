@@ -18,6 +18,11 @@
  */
 export const LEDGER_EIP2645_APPLICATION = "LedgerW";
 
+/**
+ * Maximum public accounts accepted in one Ledger enumeration response.
+ */
+export const MAX_LEDGER_ACCOUNT_BATCH = 5;
+
 // Hardened purpose/coin-type/application/change prefix and the trailing
 // non-hardened leaf, verified byte-identical to starknet.js
 // getLedgerPathBuffer221(index, "LedgerW"). The account index is spliced

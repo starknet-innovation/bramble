@@ -9,7 +9,7 @@ name: Nightly
 #
 # Active-branch resolution order:
 #   1. repo variable `vars.ACTIVE_RELEASE_BRANCH` if set;
-#   2. otherwise the highest-semver `release/vX.Y` branch;
+#   2. otherwise the highest-semver `release/vX.Y[.Z]` branch;
 #   3. if neither exists, exit cleanly with a note (nothing to run).
 on:
   schedule:
@@ -57,7 +57,7 @@ jobs:
             candidate="$ACTIVE_RELEASE_BRANCH"
           else
             echo "Auto-resolving the highest-semver release/* branch ..."
-            branches="$(printf '%s\n' "$available" | grep -E '^release/v[0-9]+\.[0-9]+$' || true)"
+            branches="$(printf '%s\n' "$available" | grep -E '^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$' || true)"
             if [ -z "$branches" ]; then
               echo "No release/* branch found and vars.ACTIVE_RELEASE_BRANCH is unset — nothing to run."
               {
@@ -69,15 +69,15 @@ jobs:
               echo "branch=" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            best="$(printf '%s\n' "$branches" | sed 's#^release/v##' | sort -t. -k1,1n -k2,2n | tail -1)"
+            best="$(printf '%s\n' "$branches" | sed 's#^release/v##' | sort -V | tail -1)"
             candidate="release/v$best"
           fi
 
           # A workflow input or repo variable is untrusted configuration. Permit
           # only the canonical release namespace and require an exact branch in
           # this repository before any self-hosted runner checks it out.
-          if [[ ! "$candidate" =~ ^release/v[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Nightly branch must match release/vX.Y exactly."
+          if [[ ! "$candidate" =~ ^release/v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Nightly branch must match release/vX.Y or release/vX.Y.Z exactly."
             exit 1
           fi
           if ! grep -Fxq -- "$candidate" <<< "$available"; then

@@ -2,6 +2,8 @@
 import { expect, test } from "bun:test";
 import {
   type AccountRef,
+  canonicalAccountId,
+  canonicalAccountRef,
   isAccountId,
   isAccountIdForNetwork,
   isAccountRef,
@@ -38,6 +40,11 @@ test("account identity, network scope, and Ledger provenance fail closed", () =>
   expect(isAccountId(derived.id)).toBe(true);
   expect(isAccountIdForNetwork(derived.id, derived.networkId)).toBe(true);
   expect(isAccountIdForNetwork(derived.id, "SN_SEPOLIA")).toBe(false);
+  expect(isAccountId("SN_MAIN:0x0123")).toBe(false);
+  expect(canonicalAccountId("SN_MAIN:0x0123")).toBe("SN_MAIN:0x123");
+  expect(
+    canonicalAccountRef({ ...derived, address: "0x0123", id: "SN_MAIN:0x0123" }),
+  ).toMatchObject(derived);
   expect(isAccountRef(ledger)).toBe(true);
   expect(isKeylessAccount(ledger as AccountRef)).toBe(true);
   expect(isAccountRef({ ...derived, id: "SN_SEPOLIA:0x123" })).toBe(false);

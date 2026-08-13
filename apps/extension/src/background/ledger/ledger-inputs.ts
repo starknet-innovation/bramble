@@ -8,7 +8,10 @@
 
 import { hasOnlyKnownKeys, isRecord } from "@mc-wallet/core/json";
 import type { LedgerPubKeyEntry } from "@mc-wallet/wallet-model/accounts";
-import { isLedgerAccountIndex } from "@mc-wallet/wallet-model/ledger-path";
+import {
+  isLedgerAccountIndex,
+  MAX_LEDGER_ACCOUNT_BATCH,
+} from "@mc-wallet/wallet-model/ledger-path";
 import {
   isNonZeroStarkFieldElement,
   isStarkFieldElement,
@@ -147,6 +150,7 @@ export const readDeriveLedgerAccountsInput = (
     message["type"] !== "wallet.deriveLedgerAccounts" ||
     !isStarknetNetworkId(message["networkId"]) ||
     !Array.isArray(message["entries"]) ||
+    message["entries"].length > MAX_LEDGER_ACCOUNT_BATCH ||
     !message["entries"].every(isPubKeyEntry)
   ) {
     return null;

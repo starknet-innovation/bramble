@@ -33,6 +33,7 @@ import * as privacySdkModule from "/vendor/starknet-privacy/sdk/starknet-sdk.min
 import {
   createBrowserLocalStore,
   createBrowserSessionStore,
+  createBrowserSyncStore,
   requireTrustedStorageAccess,
 } from "../browser-storage";
 import { createWalletReader } from "./accounts/wallet-reader";
@@ -122,9 +123,10 @@ const vaultStores: { readonly primary: EncryptedStore; readonly staging: Encrypt
   (() => {
     try {
       const store = createBrowserLocalStore();
+      const freshnessStore = createBrowserSyncStore();
       return {
-        primary: createEncryptedStore(store, VAULT_STORE_KEY),
-        staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY),
+        primary: createEncryptedStore(store, VAULT_STORE_KEY, freshnessStore),
+        staging: createEncryptedStore(store, VAULT_MIGRATION_STORE_KEY, freshnessStore),
       };
     } catch {
       return null;
@@ -310,18 +312,22 @@ if (activityLog) {
   });
 }
 
+let broadcastQueue: Promise<void> = Promise.resolve();
 const broadcastEvent = (event: WalletEventMessage): void => {
-  void runtime?.sendMessage?.(event).catch(() => undefined);
-  void tabs
-    ?.query({})
-    .then((openTabs) => {
-      for (const tab of openTabs) {
-        if (typeof tab.id === "number") {
-          void tabs.sendMessage(tab.id, event).catch(() => undefined);
-        }
-      }
-    })
-    .catch(() => undefined);
+  broadcastQueue = broadcastQueue.then(async () => {
+    await runtime?.sendMessage?.(event).catch(() => undefined);
+    const openTabs = await tabs?.query({}).catch(() => []);
+    await Promise.all(
+      (openTabs ?? []).map((tab) =>
+        typeof tab.id === "number"
+          ? tabs?.sendMessage(tab.id, event).then(
+              () => undefined,
+              () => undefined,
+            )
+          : undefined,
+      ),
+    );
+  });
 };
 
 const broadcastWalletEvents = (message: unknown, response: unknown): void => {

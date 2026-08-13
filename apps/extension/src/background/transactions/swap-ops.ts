@@ -35,6 +35,7 @@ import { allowanceOwner, recordApproveAllowances } from "../portfolio/allowance-
 import { readTypeOnlyInput } from "../routing/message-inputs";
 import { activeAccountContext, networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
+import { recordSubmittedActivity } from "./activity-recording";
 import { buildPolicy } from "./swap-build-policy";
 import { readSwapExecuteInput, readSwapPrepareInput, readSwapQuoteInput } from "./swap-inputs";
 import { type SwapPreparationStore, swapPreparationPayload } from "./swap-preparations";
@@ -303,7 +304,7 @@ const swapExecuteResponse = async (
       owner: allowanceOwner(context.account),
       store: deps.allowanceStore,
     });
-    await deps.activity.record({
+    await recordSubmittedActivity(deps.activity, {
       accountId: context.account.id,
       amount: preparation.amount,
       hash: result.transactionHash,

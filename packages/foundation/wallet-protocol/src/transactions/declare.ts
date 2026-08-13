@@ -10,6 +10,7 @@ import {
   JSON_BUDGETS,
   type Json,
 } from "@mc-wallet/core/json";
+import { isStarkFieldElement } from "@mc-wallet/wallet-model/networks";
 
 /**
  * A declare transaction a dapp asks the wallet to submit, after bridge
@@ -22,7 +23,7 @@ export type ProviderDeclare = {
 };
 
 const isFelt = (value: unknown): value is string =>
-  typeof value === "string" && /^0x[0-9a-fA-F]{1,64}$/.test(value);
+  typeof value === "string" && isStarkFieldElement(value);
 
 /**
  * Parses a `{ declare_transaction: { compiled_class_hash, contract_class, ... } }`

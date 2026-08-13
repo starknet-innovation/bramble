@@ -56,7 +56,12 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
-        run: bun run --filter @mc-wallet/ui-lab chromatic
+        run: |
+          if [ -z "${CHROMATIC_PROJECT_TOKEN:-}" ]; then
+            echo "::notice::Chromatic is not configured; GitHub Pages remains the published UI Lab."
+            exit 0
+          fi
+          bun run --filter @mc-wallet/ui-lab chromatic
 
   deploy-pages:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'

@@ -8,6 +8,7 @@ import {
   isVaultV1,
   isVaultV3,
   isVaultV4,
+  isVaultV5,
 } from "@mc-wallet/vault/schema";
 import {
   type AccountRef,
@@ -40,21 +41,36 @@ const vault = {
 };
 
 const legacyV3 = { ...vault, mnemonic: null, schemaVersion: 3 as const };
-const currentVault = { ...legacyV3, accountSecrets: [], schemaVersion: 4 as const };
+const legacyV4 = { ...legacyV3, accountSecrets: [], schemaVersion: 4 as const };
+const currentVault = { ...legacyV4, schemaVersion: 5 as const };
 
-describe("isVaultV4 (current schema)", () => {
+describe("isVaultV5 (current schema)", () => {
   test("accepts current vaults with or without a stored phrase", () => {
-    expect(isVaultV4(currentVault)).toBe(true);
-    expect(isVaultV4({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
+    expect(isVaultV5(currentVault)).toBe(true);
+    expect(isVaultV5({ ...currentVault, mnemonic: "correct horse battery staple" })).toBe(true);
     expect(emptyVault().schemaVersion).toBe(CURRENT_SCHEMA_VERSION);
-    expect(isVaultV4(emptyVault())).toBe(true);
+    expect(isVaultV5(emptyVault())).toBe(true);
   });
 
   test("rejects legacy v1 vaults and version mismatches", () => {
-    expect(isVaultV4(vault)).toBe(false);
-    expect(isVaultV4({ ...currentVault, schemaVersion: 1 })).toBe(false);
+    expect(isVaultV5(vault)).toBe(false);
+    expect(isVaultV5({ ...currentVault, schemaVersion: 1 })).toBe(false);
     expect(isVaultV1(currentVault)).toBe(false);
     expect(isVaultV3(legacyV3)).toBe(true);
+    expect(isVaultV4(legacyV4)).toBe(true);
+  });
+
+  test("rejects non-canonical account aliases in the current schema", () => {
+    const alias = "SN_SEPOLIA:0x0123";
+    expect(
+      isVaultV5({
+        ...currentVault,
+        accounts: [{ ...account, address: "0x0123", id: alias }],
+        activeAccountId: alias,
+        originGrants: [{ accountIds: [alias], origin: "https://example.com" }],
+        signingKeys: [{ accountId: alias, privateKey: "0x0456" }],
+      }),
+    ).toBe(false);
   });
 
   test("rejects a missing or malformed recovery phrase", () => {
@@ -63,17 +79,17 @@ describe("isVaultV4 (current schema)", () => {
       accountSecrets: currentVault.accountSecrets,
       activeAccountId: currentVault.activeAccountId,
       originGrants: currentVault.originGrants,
-      schemaVersion: 4 as const,
+      schemaVersion: 5 as const,
       signingKeys: currentVault.signingKeys,
     };
 
-    expect(isVaultV4(withoutMnemonic)).toBe(false);
-    expect(isVaultV4({ ...currentVault, mnemonic: "" })).toBe(false);
-    expect(isVaultV4({ ...currentVault, mnemonic: 42 })).toBe(false);
+    expect(isVaultV5(withoutMnemonic)).toBe(false);
+    expect(isVaultV5({ ...currentVault, mnemonic: "" })).toBe(false);
+    expect(isVaultV5({ ...currentVault, mnemonic: 42 })).toBe(false);
   });
 
   test("rejects unexpected keys", () => {
-    expect(isVaultV4({ ...currentVault, label: "unexpected" })).toBe(false);
+    expect(isVaultV5({ ...currentVault, label: "unexpected" })).toBe(false);
   });
 });
 
@@ -97,20 +113,20 @@ const ledgerOnlyVault = {
   activeAccountId: ledgerAccount.id,
   mnemonic: null,
   originGrants: [],
-  schemaVersion: 4 as const,
+  schemaVersion: 5 as const,
   signingKeys: [],
 };
 
 describe("mnemonic-less Ledger-only vault", () => {
   test("validates a keyless Ledger vault that stores no recovery phrase", () => {
-    expect(isVaultV4(ledgerOnlyVault)).toBe(true);
+    expect(isVaultV5(ledgerOnlyVault)).toBe(true);
     expect(isKeylessAccount(ledgerAccount as AccountRef)).toBe(true);
   });
 
   test("still accepts the grandfathered legacy null-phrase seed vault", () => {
     // A v1-migrated wallet carries seed accounts with a null mnemonic; that shape
     // stays valid so those wallets never fail closed.
-    expect(isVaultV4(currentVault)).toBe(true);
+    expect(isVaultV5(currentVault)).toBe(true);
     expect(currentVault.mnemonic).toBeNull();
   });
 
@@ -131,15 +147,15 @@ describe("mnemonic-less Ledger-only vault", () => {
       ],
     };
 
-    expect(isVaultV4(withSecret)).toBe(true);
+    expect(isVaultV5(withSecret)).toBe(true);
     expect(
-      isVaultV4({
+      isVaultV5({
         ...withSecret,
         accountSecrets: [{ ...withSecret.accountSecrets[0], accountId: "SN_MAIN:0x999" }],
       }),
     ).toBe(false);
     expect(
-      isVaultV4({
+      isVaultV5({
         ...withSecret,
         accountSecrets: [
           {
@@ -150,7 +166,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       }),
     ).toBe(false);
     expect(
-      isVaultV4({
+      isVaultV5({
         ...withSecret,
         accountSecrets: [
           {
@@ -170,7 +186,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       viewingKey: "0x654321",
     };
     expect(
-      isVaultV4({
+      isVaultV5({
         ...currentVault,
         accountSecrets: [
           {
@@ -181,7 +197,7 @@ describe("mnemonic-less Ledger-only vault", () => {
       }),
     ).toBe(false);
     expect(
-      isVaultV4({
+      isVaultV5({
         ...ledgerOnlyVault,
         accountSecrets: [
           {

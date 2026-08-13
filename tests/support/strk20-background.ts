@@ -4,7 +4,11 @@
  */
 import { expect } from "bun:test";
 import { WalletError } from "@mc-wallet/core/errors";
-import { STRK20_NOT_REGISTERED, type Strk20Service } from "@mc-wallet/privacy/service";
+import {
+  STRK20_NOT_REGISTERED,
+  type Strk20PreparedSubmissionInput,
+  type Strk20Service,
+} from "@mc-wallet/privacy/service";
 import { defaultWalletPreferences, type WalletPreferences } from "@mc-wallet/settings/preferences";
 import type { InvokeInput } from "@mc-wallet/starknet/rpc";
 import type { ActivityLog } from "@mc-wallet/transactions/activity";
@@ -18,7 +22,7 @@ import {
   extensionSender,
   vaultPassphrase,
 } from "./background-wallet-stub";
-import { flushHeld, latestApprovalId, waitForPendingApprovals } from "./held";
+import { flushHeld, latestApprovalId, reviewedApprovalFee, waitForPendingApprovals } from "./held";
 import { makeRuntimeRpc } from "./runtime-rpc-stub";
 
 export const STRK20_TOKEN = "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7";
@@ -53,6 +57,7 @@ export type Strk20HarnessOptions = {
    * precedence over `preferences`.
    */
   readonly preferencesRead?: () => WalletPreferences;
+  readonly preparedSubmissions?: Strk20PreparedSubmissionInput[];
   readonly proveCalls?: { value: number };
   readonly publicBalance?: string;
   readonly registerCalls?: { value: number };
@@ -78,6 +83,38 @@ export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Ser
         proveCalls.value += 1;
       }
       return STRK20_CALL_AND_PROOF;
+    },
+    async prepareAccountActions() {
+      if (proveCalls) {
+        proveCalls.value += 1;
+      }
+      return {
+        allowanceGrants: [],
+        calls: [
+          {
+            calldata: [...STRK20_CALL_AND_PROOF.call.calldata],
+            contractAddress: STRK20_TOKEN,
+            entrypoint: "apply_actions",
+          },
+        ],
+        proof: STRK20_CALL_AND_PROOF.proof,
+      };
+    },
+    async prepareRegistration() {
+      if (proveCalls) {
+        proveCalls.value += 1;
+      }
+      return {
+        allowanceGrants: [],
+        calls: [
+          {
+            calldata: [...STRK20_CALL_AND_PROOF.call.calldata],
+            contractAddress: STRK20_TOKEN,
+            entrypoint: "apply_actions",
+          },
+        ],
+        proof: STRK20_CALL_AND_PROOF.proof,
+      };
     },
     async privateBalances({ tokens }) {
       if (balanceCalls) {
@@ -123,7 +160,11 @@ export const makeStrk20Service = (options: Strk20HarnessOptions = {}): Strk20Ser
       }
       return { transactionHash: "0x123" };
     },
-    async submitPrepared() {
+    async submitPrepared(input) {
+      options.preparedSubmissions?.push(input);
+      if (registerCalls) {
+        registerCalls.value += 1;
+      }
       return { transactionHash: "0x123" };
     },
   };
@@ -204,5 +245,20 @@ export const approveHeldStrk20 = async (
   beforeApprove?.();
   const id = await latestApprovalId(handler, STRK20_EXTENSION_SENDER);
   await handler({ id, type: "wallet.approveOrigin" }, STRK20_EXTENSION_SENDER);
+  if (kind === "strk20-register") {
+    const next = await waitForPendingApprovals<{ readonly id: string; readonly kind?: string }>(
+      handler,
+      STRK20_EXTENSION_SENDER,
+    );
+    const invoke = next.find((approval) => approval.kind === "invoke");
+    if (!invoke) {
+      throw new Error("registration fee approval missing");
+    }
+    const reviewedFee = await reviewedApprovalFee(handler, STRK20_EXTENSION_SENDER, invoke.id);
+    await handler(
+      { id: invoke.id, reviewedFee, type: "wallet.approveOrigin" },
+      STRK20_EXTENSION_SENDER,
+    );
+  }
   return held;
 };

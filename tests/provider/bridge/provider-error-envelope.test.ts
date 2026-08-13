@@ -103,12 +103,10 @@ describe("provider bridge decomposition invariants", () => {
     ).toEqual({ error: unknownError() });
   });
 
-  test("readProviderResponse drops a bare false result that providerResponse keeps", () => {
-    // The result reader treats a falsy result as absent (original behavior),
-    // while the content-side builder passes a literal `false` through.
+  test("readProviderResponse preserves a bare false result", () => {
     const built = providerResponse(request, { result: false });
     expect(built).toEqual({ id: requestId, result: false, target: PAGE_TARGET });
-    expect(readProviderResponse({ id: requestId, result: false, target: PAGE_TARGET })).toBeNull();
+    expect(readProviderResponse(built)).toEqual(built);
   });
 
   test("a chain-id-shaped result under a fall-through method yields the chain id", () => {

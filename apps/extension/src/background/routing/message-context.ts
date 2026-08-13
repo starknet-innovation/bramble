@@ -33,6 +33,7 @@ import {
   createStrk20WalletPreparationStore,
   type Strk20WalletPreparationStore,
 } from "../privacy/strk20-wallet-preparations";
+import { createWatchAssetAdmission, type WatchAssetAdmission } from "../provider/watch-asset";
 import { defaultRuntimeRpc, type RuntimeRpc } from "../runtime/runtime-rpc";
 import {
   type ActiveStateCoordinator,
@@ -69,6 +70,7 @@ export type RouterContext = {
   readonly strk20Preparations: Strk20WalletPreparationStore;
   readonly waiters: SignatureWaiters;
   readonly wallet: WalletStatusReader;
+  readonly watchAssetAdmission: WatchAssetAdmission;
 };
 
 /**
@@ -96,6 +98,7 @@ export type MessageHandlerOptions = {
   readonly swap?: SwapService;
   readonly swapPreparations?: SwapPreparationStore;
   readonly strk20Preparations?: Strk20WalletPreparationStore;
+  readonly watchAssetAdmission?: WatchAssetAdmission;
 };
 
 // Abandon a parked sign after a generous timeout interval.
@@ -123,6 +126,9 @@ const strk20PreparationsFor = (
 const activeStateCoordinatorFor = (
   provided: ActiveStateCoordinator | undefined,
 ): ActiveStateCoordinator => provided ?? createActiveStateCoordinator();
+
+const watchAssetAdmissionFor = (provided: WatchAssetAdmission | undefined): WatchAssetAdmission =>
+  provided ?? createWatchAssetAdmission();
 
 /**
  * Resolves every optional collaborator into the fully wired router context.
@@ -166,5 +172,6 @@ export const routerContext = (
     strk20Preparations: strk20PreparationsFor(options.strk20Preparations),
     waiters,
     wallet,
+    watchAssetAdmission: watchAssetAdmissionFor(options.watchAssetAdmission),
   };
 };

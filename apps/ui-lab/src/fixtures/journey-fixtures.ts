@@ -176,7 +176,7 @@ const approvalContext = {
   chainId: "0x534e5f4d41494e",
   networkId: "SN_MAIN",
   payloadDigest: `sha256:${"c".repeat(64)}`,
-};
+} satisfies NonNullable<PendingApproval["context"]>;
 
 const approvalId = (suffix: string): string => `00000000-0000-4000-8000-000000000${suffix}`;
 

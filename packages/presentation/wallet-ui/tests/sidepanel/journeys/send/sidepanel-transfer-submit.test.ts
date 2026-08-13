@@ -118,6 +118,7 @@ describe("preparedReview", () => {
   const preparation = {
     id: `sha256:${"a".repeat(64)}`,
     kind: "deposit",
+    networkFee: { overallFee: "1", unit: "FRI" },
     payloadDigest: `sha256:${"a".repeat(64)}`,
     poolAddress: "0x123",
     route: "public-account",
@@ -126,13 +127,11 @@ describe("preparedReview", () => {
     tokenId: "SN_MAIN:STRK:0x1",
   } as unknown as PrivacyPreparation;
 
-  test("carries the preparation's summaries with no fee verdict of its own", () => {
+  test("carries the preparation's exact public-account network fee", () => {
     const review = preparedReview(preparation);
 
-    // "unknown" renders no notice: the public STRK guard has nothing to say
-    // about a route whose fee the relay or the account estimate already covers.
     expect(review).toEqual({
-      fee: null,
+      fee: { overallFee: "1", unit: "FRI" },
       feeAffordability: "unknown",
       feeEstimateFailed: false,
       flags: [],

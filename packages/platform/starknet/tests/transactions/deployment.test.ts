@@ -14,6 +14,7 @@ import {
   submitAccountDeployment,
 } from "@mc-wallet/starknet/deployment";
 import { IndeterminateRpcWriteError } from "@mc-wallet/starknet/provider";
+import type { FeeEstimate } from "@mc-wallet/starknet/rpc";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
 import { type Account, CallData, hash, type RpcProvider } from "starknet";
 
@@ -56,7 +57,18 @@ const provider = (over: Partial<FakeProvider>): RpcProvider =>
   }) as unknown as RpcProvider;
 
 const starknetAccount = (deployAccount: () => Promise<{ transaction_hash: string }>): Account =>
-  ({ deployAccount }) as unknown as Account;
+  ({
+    deployAccount,
+    async estimateAccountDeployFee() {
+      return {
+        overall_fee: 1n,
+        resourceBounds: { l1_gas: { max_amount: 1n, max_price_per_unit: 1n } },
+        unit: "FRI",
+      };
+    },
+  }) as unknown as Account;
+
+const REVIEWED_DEPLOYMENT = { overallFee: "1000", unit: "FRI" } as const;
 
 describe("ensureAccountDeployed", () => {
   test("returns without deploying when the account class hash resolves", async () => {
@@ -72,6 +84,7 @@ describe("ensureAccountDeployed", () => {
         return { transaction_hash: "0x1" };
       }),
       account,
+      REVIEWED_DEPLOYMENT,
     );
     expect(deployed).toBe(false);
   });
@@ -93,6 +106,7 @@ describe("ensureAccountDeployed", () => {
         return { transaction_hash: "0xdeadbeef" };
       }),
       account,
+      REVIEWED_DEPLOYMENT,
     );
     expect(deployed).toBe(true);
     expect(waited).toBe(true);
@@ -112,6 +126,7 @@ describe("ensureAccountDeployed", () => {
           });
         }),
         account,
+        REVIEWED_DEPLOYMENT,
       ),
     ).rejects.toThrow("automatic deployment failed");
   });
@@ -127,6 +142,7 @@ describe("ensureAccountDeployed", () => {
         throw new IndeterminateRpcWriteError("safe inner deployment ambiguity");
       }),
       account,
+      REVIEWED_DEPLOYMENT,
     ).catch((error: unknown) => error);
 
     expect(rejection).not.toBeInstanceOf(IndeterminateRpcWriteError);
@@ -251,6 +267,7 @@ describe("submitAccountDeployment", () => {
       submitAccountDeployment(
         {
           account,
+          reviewedFee: REVIEWED_DEPLOYMENT,
           rpcUrls: ["https://rpc.example"],
           signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
         },
@@ -264,11 +281,20 @@ describe("submitAccountDeployment", () => {
       submitAccountDeployment(
         {
           account,
+          reviewedFee: REVIEWED_DEPLOYMENT,
           rpcUrls: ["https://rpc.example"],
           signHash: async () => ({ publicKey: PUBLIC_KEY, r: "0x1", s: "0x2" }),
         },
         () => makeProvider(false),
-        () => ({ deployAccount: async () => ({}) }) as unknown as Account,
+        () =>
+          ({
+            deployAccount: async () => ({}),
+            estimateAccountDeployFee: async () => ({
+              overall_fee: 1n,
+              resourceBounds: { l1_gas: { max_amount: 1n, max_price_per_unit: 1n } },
+              unit: "FRI",
+            }),
+          }) as unknown as Account,
       ),
     ).rejects.toBeInstanceOf(IndeterminateRpcWriteError);
   });
@@ -287,7 +313,7 @@ describe("a reviewed deployment fee is a ceiling on the deployment", () => {
     l1_gas: { max_amount: 10n, max_price_per_unit: 3n },
     l2_gas: { max_amount: 100n, max_price_per_unit: 2n },
   };
-  const runDeployment = async (reviewedFee?: { overallFee: string; unit: string }) => {
+  const runDeployment = async (reviewedFee?: FeeEstimate) => {
     const seen: Seen = { bounds: undefined, deploys: 0, estimates: 0 };
     const deploying = {
       async deployAccount(_payload: unknown, details?: { readonly resourceBounds?: unknown }) {
@@ -332,13 +358,11 @@ describe("a reviewed deployment fee is a ceiling on the deployment", () => {
     expect(seen.bounds).toEqual(deployBounds);
   });
 
-  test("stays unbound, and estimates nothing, when no deployment fee was shown", async () => {
+  test("refuses before signing when no deployment fee was shown", async () => {
     const { error, seen } = await runDeployment();
-    expect(error).toBeNull();
-    expect(seen.deploys).toBe(1);
+    expect((error as Error).message).toContain("deployment fee was not reviewed");
+    expect(seen.deploys).toBe(0);
     expect(seen.estimates).toBe(0);
-    // Absent means no user reviewed a deployment fee. Inventing a ceiling here
-    // would be worse than the honest absence of one.
     expect(seen.bounds).toBeUndefined();
   });
 });

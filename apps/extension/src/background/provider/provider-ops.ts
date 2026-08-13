@@ -15,13 +15,13 @@ import {
   verifyCalls,
 } from "@mc-wallet/transactions/verify";
 import type { AccountRef } from "@mc-wallet/wallet-model/accounts";
-import { canonicalAddress, STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
+import { STARKNET_NETWORKS } from "@mc-wallet/wallet-model/networks";
 import type { Call } from "starknet";
 import type { WalletStatusReader } from "../accounts/wallet-reader";
 import { type ApprovalContext, createApprovalContext } from "../approvals/approval-context";
 import { requireApprovalAdmission } from "../approvals/approval-limits";
 import { notifyApprovalsChanged } from "../approvals/approval-notifier";
-import type { ApprovalPayload, ApprovalQueue } from "../approvals/approvals";
+import type { ApprovalPayload, ApprovalQueue, PendingApproval } from "../approvals/approvals";
 import {
   estimateInvokeApprovalFee,
   FAILED_INVOKE_FEE,
@@ -38,12 +38,13 @@ import type { RuntimeRpc } from "../runtime/runtime-rpc";
 import { networkRpcUrls } from "../runtime/runtime-state";
 import type { RuntimeResponse } from "../runtime/runtime-types";
 import type { PassiveUnlockSession } from "../runtime/session";
+import { recordSubmittedActivity } from "../transactions/activity-recording";
 import {
   readGetPermissionsInput,
   readRetryApprovalFeeInput,
   readWatchAssetInput,
 } from "./provider-inputs";
-import { watchAssetToken } from "./watch-asset";
+import { trackWatchAsset, type WatchAssetAdmission } from "./watch-asset";
 
 /**
  * Dependencies shared by the dapp provider operation handlers.
@@ -74,6 +75,8 @@ export type ProviderOpsDeps = {
   readonly session: PassiveUnlockSession;
   readonly wallet: WalletStatusReader;
   readonly waiters: SignatureWaiters;
+  /** Bounds and deduplicates metadata work before a watch-asset approval exists. */
+  readonly watchAssetAdmission: WatchAssetAdmission;
 };
 
 /**
@@ -101,7 +104,7 @@ export type InvokeExecuteDeps = {
  * The active-network account resolved for an origin's live connection grant,
  * together with the passphrase and preferences read while resolving it.
  */
-type ResolvedOriginAccount = {
+export type ResolvedOriginAccount = {
   readonly account: AccountRef;
   readonly passphrase: string;
   readonly preferences: WalletPreferences;
@@ -159,12 +162,77 @@ const feeReviewTarget = (
   deps: Pick<ProviderOpsDeps, "ledgerSignQueue" | "session" | "wallet">,
   resolved: ResolvedOriginAccount,
   calls: readonly Call[],
+  proof?: ApprovalPayload["proof"],
 ) => ({
   account: resolved.account,
   calls,
   preferences: resolved.preferences,
+  ...(proof ? { proof } : {}),
   signer: () => accountHashSigner(deps, resolved.account, resolved.passphrase),
 });
+
+/**
+ * Queues an exact invoke/proof batch and starts its fail-closed fee review.
+ * Used both by wallet_addInvokeTransaction and the second stage of approved
+ * public STRK20 operations so their reviewed and submitted calls cannot drift.
+ */
+export const queueInvokeApproval = async (
+  deps: Pick<
+    ProviderOpsDeps,
+    "allowanceStore" | "approvals" | "ledgerSignQueue" | "runtimeRpc" | "session" | "wallet"
+  >,
+  resolved: ResolvedOriginAccount,
+  input: {
+    readonly calls: readonly Call[];
+    readonly origin: string;
+    readonly proof?: ApprovalPayload["proof"];
+  },
+): Promise<{ readonly approval: PendingApproval } | RuntimeResponse> => {
+  requireApprovalAdmission(deps.approvals, input.origin);
+  const trusted = verificationContext(resolved.account, resolved.preferences);
+  const standing = standingAllowanceTotals(
+    await deps.allowanceStore.list().catch(() => []),
+    allowanceOwner(resolved.account),
+    trusted,
+  );
+  const report = verifyCalls(input.calls, trusted, standing);
+  const refusal = refuseOnPoisonedRecipient(report);
+  if (refusal) {
+    return refusal;
+  }
+  const approval = deps.approvals.requestInvoke({
+    calls: input.calls,
+    context: await createApprovalContext(resolved.account, {
+      calls: input.calls,
+      ...(input.proof === undefined ? {} : { proof: input.proof }),
+    }),
+    fee: PENDING_INVOKE_FEE,
+    flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
+    origin: input.origin,
+    ...(input.proof === undefined ? {} : { proof: input.proof }),
+    summaries: report.calls.map((call) => call.summary),
+  });
+  notifyApprovalsChanged();
+  const revision = deps.approvals.beginFeeEstimate(approval.id);
+  if (revision) {
+    void estimateInvokeApprovalFee(
+      deps,
+      feeReviewTarget(deps, resolved, input.calls, input.proof),
+    ).then(
+      (fee) => {
+        if (deps.approvals.updateFee(revision, { kind: "invoke", review: fee })) {
+          notifyApprovalsChanged();
+        }
+      },
+      () => {
+        if (deps.approvals.updateFee(revision, { kind: "invoke", review: FAILED_INVOKE_FEE })) {
+          notifyApprovalsChanged();
+        }
+      },
+    );
+  }
+  return { approval };
+};
 
 const invokeFailureMessage = (error: unknown, hasProof: boolean): string => {
   if (!hasProof) {
@@ -228,29 +296,17 @@ const handleWatchAsset: ProviderOpsHandler = async (deps, message, sender) => {
   if (gate) {
     return gate;
   }
-  const preferences = await deps.preferencesStore.read();
-  const networkId = preferences.activeNetworkId;
-  const normalizedAddress = canonicalAddress(input.asset.address);
-  const alreadyTracked = preferences.tokens.some(
-    (token) =>
-      token.networkId === networkId && canonicalAddress(token.address) === normalizedAddress,
+  const approval = await trackWatchAsset(
+    {
+      admission: deps.watchAssetAdmission,
+      approvals: deps.approvals,
+      preferencesStore: deps.preferencesStore,
+      runtimeRpc: deps.runtimeRpc,
+    },
+    input,
   );
-  if (alreadyTracked) {
-    return { ok: true, watched: true };
-  }
-  const metadata = await deps.runtimeRpc
-    .getTokenMetadata({
-      address: input.asset.address,
-      rpcUrls: networkRpcUrls(STARKNET_NETWORKS[networkId], preferences),
-    })
-    .catch(() => null);
-  const token = watchAssetToken(input.asset, metadata, networkId);
-  if (!token) {
-    return { error: "invalid watch asset metadata" };
-  }
-  const approval = deps.approvals.requestWatchAsset({ origin: input.origin, token });
-  notifyApprovalsChanged();
-  return deps.waiters.register(approval.id);
+  if (approval === true) return { ok: true, watched: true };
+  return approval ? deps.waiters.register(approval.id) : { error: "invalid watch asset metadata" };
 };
 
 const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sender) => {
@@ -270,65 +326,8 @@ const handleAddInvokeTransaction: ProviderOpsHandler = async (deps, message, sen
   if ("error" in resolved) {
     return resolved;
   }
-  if (input.proof && input.calls.length !== 1) {
-    return { error: "invalid invoke request" };
-  }
-  const trusted = verificationContext(resolved.account, resolved.preferences);
-  // The reviewer's unlimited-approval total starts from what this account has
-  // already allowed, not from zero: `increase_allowance(spender, 1)` on top of a
-  // standing 2^128-1 grant crosses the threshold on chain, and a total that
-  // began at zero read it as one wei and said nothing. The log is bookkeeping,
-  // not authority — a read failure seeds nothing and the rule falls back to the
-  // network-free reading, which can miss a flag but never invent one.
-  const standing = standingAllowanceTotals(
-    await deps.allowanceStore.list().catch(() => []),
-    allowanceOwner(resolved.account),
-    trusted,
-  );
-  const report = verifyCalls(input.calls, trusted, standing);
-  // Refused before the prompt is ever queued: a site asking the wallet to pay an
-  // address that mimics one of the user's saved contacts is not a request the
-  // user should be given a confirm button for. Same shared policy the in-wallet
-  // ERC20 send, NFT send, swap, and pool routes apply.
-  const refusal = refuseOnPoisonedRecipient(report);
-  if (refusal) {
-    return refusal;
-  }
-  // Queue and foreground the request before any network work. Fee estimation
-  // can involve deployment, fee, and balance RPCs; awaiting those
-  // here previously left the dapp on "Waiting for wallet" with no visible
-  // request. Approval remains disabled while this initial estimate is pending.
-  const approval = deps.approvals.requestInvoke({
-    calls: input.calls,
-    context: await createApprovalContext(resolved.account, {
-      calls: input.calls,
-      ...(input.proof === undefined ? {} : { proof: input.proof }),
-    }),
-    fee: PENDING_INVOKE_FEE,
-    flags: report.flags.map((flag) => ({ code: flag.code, message: flag.message })),
-    origin: input.origin,
-    ...(input.proof === undefined ? {} : { proof: input.proof }),
-    summaries: report.calls.map((call) => call.summary),
-  });
-  notifyApprovalsChanged();
-  // Claimed before the estimate starts, so a retry pressed while this first
-  // estimate is still running supersedes it rather than being overwritten by it.
-  const revision = deps.approvals.beginFeeEstimate(approval.id);
-  if (revision) {
-    void estimateInvokeApprovalFee(deps, feeReviewTarget(deps, resolved, input.calls)).then(
-      (fee) => {
-        if (deps.approvals.updateFee(revision, { kind: "invoke", review: fee })) {
-          notifyApprovalsChanged();
-        }
-      },
-      () => {
-        if (deps.approvals.updateFee(revision, { kind: "invoke", review: FAILED_INVOKE_FEE })) {
-          notifyApprovalsChanged();
-        }
-      },
-    );
-  }
-  return deps.waiters.register(approval.id);
+  const queued = await queueInvokeApproval(deps, resolved, input);
+  return "approval" in queued ? deps.waiters.register(queued.approval.id) : queued;
 };
 
 // Re-estimates a queued invoke against its pinned account and network.
@@ -360,7 +359,7 @@ const handleRetryApprovalFee: ProviderOpsHandler = async (deps, message) => {
   notifyApprovalsChanged();
   const fee = await estimateInvokeApprovalFee(
     deps,
-    feeReviewTarget(deps, resolved, payload.calls),
+    feeReviewTarget(deps, resolved, payload.calls, payload.proof),
   ).catch(() => FAILED_INVOKE_FEE);
   if (!deps.approvals.updateFee(revision, { kind: "invoke", review: fee })) {
     return { error: "a newer fee estimate replaced this one" };
@@ -428,10 +427,6 @@ export const executeInvokeApproval = async (
     return resolved;
   }
   const { account, preferences } = resolved;
-  const preparedCall = calls.length === 1 ? calls[0] : undefined;
-  if (approval.payload.proof && !preparedCall) {
-    return { error: "invalid prepared strk20 invocation" };
-  }
   // The recipient policy is re-applied to the exact calls that are about to be
   // broadcast, not only to the ones that were queued: the address book can gain
   // a contact while the prompt sits open, and a payee that mimics it becomes a
@@ -466,7 +461,7 @@ export const executeInvokeApproval = async (
     const result = approval.payload.proof
       ? await strk20.submitPrepared({
           ...context,
-          call: preparedCall as Call,
+          calls,
           proof: approval.payload.proof,
           ...ceiling,
         })
@@ -484,7 +479,7 @@ export const executeInvokeApproval = async (
       owner: allowanceOwner(account),
       store: allowanceStore,
     });
-    await activity.record({
+    await recordSubmittedActivity(activity, {
       accountId: account.id,
       hash: result.transactionHash,
       kind: "invoke",
