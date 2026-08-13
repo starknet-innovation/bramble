@@ -61,6 +61,51 @@ const CATEGORY_MARKERS: readonly (readonly [RegExp, Strk20ErrorCategory])[] = [
 ];
 
 const REVERT_KEYS = ["revert_error", "execution_error"] as const;
+// The retry policy makes at most two pauses for one read, so this keeps a
+// single private-service read from waiting longer than ten seconds in total.
+const RETRY_AFTER_MAX_MS = 5_000;
+
+const retryAfterField = (value: Record<string, unknown>): unknown =>
+  value["retry-after"] ?? value["retry_after"] ?? value["retryAfter"];
+
+const propertyOf = (value: unknown, key: string): unknown => {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) {
+    return undefined;
+  }
+  try {
+    return (value as Record<string, unknown>)[key];
+  } catch {
+    // The SDK error is untrusted: a proxy or accessor must not turn parsing a
+    // retry hint into a new failure.
+    return undefined;
+  }
+};
+
+const retryAfterHeader = (headers: unknown): unknown => {
+  if (isRecord(headers)) {
+    return retryAfterField(headers);
+  }
+  const get = propertyOf(headers, "get");
+  if (typeof get !== "function") {
+    return undefined;
+  }
+  try {
+    return get.call(headers, "retry-after");
+  } catch {
+    return undefined;
+  }
+};
+
+const retryAfterValue = (value: unknown): unknown => {
+  if (isRecord(value)) {
+    const direct = retryAfterField(value);
+    if (direct !== undefined) {
+      return direct;
+    }
+    return retryAfterHeader(value["headers"]);
+  }
+  return retryAfterHeader(propertyOf(value, "headers"));
+};
 
 // Structured revert text carried by an RPC error's `data`. Only plain strings
 // are read; a nested trace object contributes nothing rather than being walked.
@@ -132,11 +177,40 @@ const markerFor = <T>(text: string, markers: readonly (readonly [RegExp, T])[]):
  * envelopes are read structurally so starknet.js request bodies stay ignored.
  */
 export const isRetryableStrk20ServiceError = (error: unknown): boolean => {
+  // WalletError is already a reviewed terminal result from an inner boundary.
+  // Retrying it here would re-enter a larger operation after its own bounded
+  // service retry has already been exhausted.
+  if (error instanceof WalletError) {
+    return false;
+  }
   const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
   if (isRecord(baseError) && baseError["code"] === -32_005) {
     return true;
   }
   return /rate limit|too many requests|\bHTTP 429\b/i.test(failureText(error));
+};
+
+/**
+ * Reads a bounded delta-seconds retry hint from a structured SDK failure. The
+ * service response is untrusted, so date values and excessively long waits are
+ * ignored rather than delaying private reads indefinitely.
+ */
+export const strk20RetryAfterMilliseconds = (error: unknown): number | undefined => {
+  const baseError = (error as { readonly baseError?: unknown } | null | undefined)?.baseError;
+  const response = propertyOf(error, "response");
+  for (const value of [error, baseError, response]) {
+    const retryAfter = retryAfterValue(value);
+    const seconds =
+      typeof retryAfter === "number"
+        ? retryAfter
+        : typeof retryAfter === "string" && /^(?:0|[1-9][0-9]*)$/.test(retryAfter)
+          ? Number(retryAfter)
+          : Number.NaN;
+    if (Number.isSafeInteger(seconds) && seconds >= 0) {
+      return Math.min(seconds * 1_000, RETRY_AFTER_MAX_MS);
+    }
+  }
+  return undefined;
 };
 
 /**
@@ -146,6 +220,9 @@ export const isRetryableStrk20ServiceError = (error: unknown): boolean => {
 export const mapStrk20ProtocolError = (error: unknown): never => {
   if (error instanceof WalletError) {
     throw error;
+  }
+  if (isRetryableStrk20ServiceError(error)) {
+    throw new WalletError(`${STRK20_SERVICE_UNAVAILABLE} (rate limited; retry shortly)`);
   }
   const message = error instanceof Error ? error.message : "";
   throw new WalletError(markerFor(message, BASE_MARKERS) ?? STRK20_SERVICE_UNAVAILABLE);
