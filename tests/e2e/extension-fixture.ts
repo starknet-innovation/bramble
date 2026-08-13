@@ -31,7 +31,17 @@ const isWalletServiceWorker = (worker: Worker): boolean =>
 export const launchExtension = async (): Promise<LoadedExtension> => {
   const userDataDir = await mkdtemp(resolve(tmpdir(), "mc-wallet-e2e-"));
   const context = await chromium.launchPersistentContext(userDataDir, {
-    args: [`--disable-extensions-except=${distPath}`, `--load-extension=${distPath}`],
+    args: [
+      `--disable-extensions-except=${distPath}`,
+      `--load-extension=${distPath}`,
+      // A fresh profile defaults to SN_MAIN, so an unblocked run polls the
+      // production RPC gateway; no test here reads chain state. The resolver,
+      // not context.route, which misses service-worker fetches. Chromium maps
+      // IP literals, hence the loopback exclusions, and routes around resolver
+      // rules through any ambient proxy, hence --no-proxy-server.
+      "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
+      "--no-proxy-server",
+    ],
     channel: "chromium",
     headless: true,
   });
