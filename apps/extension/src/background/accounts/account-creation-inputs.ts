@@ -133,7 +133,9 @@ export const readPreviewAccountInput = (message: unknown): AccountDerivationInpu
  * Parses the privileged mnemonic-validity check. Accepts only the phrase and
  * type; never a vault passphrase or derivation fields.
  */
-export const readValidateMnemonicInput = (message: unknown): { readonly mnemonic: string } | null => {
+export const readValidateMnemonicInput = (
+  message: unknown,
+): { readonly mnemonic: string } | null => {
   if (
     !isRecord(message) ||
     !hasOnlyKnownKeys(message, ["mnemonic", "type"]) ||
